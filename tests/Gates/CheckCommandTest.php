@@ -76,6 +76,17 @@ final class CheckCommandTest extends SandboxTestCase
         self::assertSame(0, $run->exitCode(), $run->output());
     }
 
+    public function testTheEnvironmentGatePassesThroughTheCheckWhenThePhpLoadsTheProfile(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('composer.json', '{"require":{}}');
+        $sandbox->write('config/gates/php/check.ini', (string) file_get_contents(dirname(__DIR__, 2).'/config/gates/php/check.ini'));
+
+        $run = $sandbox->checkWith(['PHP_INI_SCAN_DIR' => getenv('PHP_INI_SCAN_DIR').':'.$sandbox->root.'/config/gates/php'], '--only=environment');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+    }
+
     public function testSkipLeavesOutTheNamedGates(): void
     {
         $output = $this->emptySandbox()->check('--only=audit,secrets', '--skip=audit')->output();

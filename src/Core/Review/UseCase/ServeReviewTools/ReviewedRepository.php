@@ -8,6 +8,7 @@ use Closure;
 use DomainException;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
@@ -33,6 +34,7 @@ final readonly class ReviewedRepository
         private Security $security,
         private Fence $fence,
         private RoundToolCalls $calls,
+        private RoundUpdates $updates,
         private ?Closure $fileSearched = null,
     ) {
     }
@@ -52,7 +54,7 @@ final readonly class ReviewedRepository
         $real = $this->refusedAsCall($round, ReadFileTool::NAME, static fn (): string => $head->resolve($path));
         $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => new ReadFile($head)->contentAt($real, $path));
         // Recorded as the checkout resolved it, so two spellings of one file count as one file read.
-        $this->calls->read($round, ReadFileTool::NAME, $head->relative($real));
+        $this->recordedRead($round, $head->relative($real));
 
         return $answer;
     }
@@ -62,7 +64,7 @@ final readonly class ReviewedRepository
         $round = $this->round();
         $head = $this->head($round);
         $answer = $this->answer($round, ListDirectoryTool::NAME, static fn (): string => (new ListDirectory($head))($path));
-        $this->calls->called($round, ListDirectoryTool::NAME);
+        $this->recordedCall($round, ListDirectoryTool::NAME);
 
         return $answer;
     }
@@ -72,9 +74,22 @@ final readonly class ReviewedRepository
         $round = $this->round();
         $head = $this->head($round);
         $answer = $this->answer($round, SearchFilesTool::NAME, fn (): string => (new SearchFiles($head, $this->fileSearched))($text, $path));
-        $this->calls->called($round, SearchFilesTool::NAME);
+        $this->recordedCall($round, SearchFilesTool::NAME);
 
         return $answer;
+    }
+
+    // Announced after the record, because the summary is computed from what is stored and would lag one call behind if it were announced before.
+    private function recordedRead(ReviewRound $round, string $path): void
+    {
+        $this->calls->read($round, ReadFileTool::NAME, $path);
+        $this->updates->summaryChanged($round->id());
+    }
+
+    private function recordedCall(ReviewRound $round, string $tool): void
+    {
+        $this->calls->called($round, $tool);
+        $this->updates->summaryChanged($round->id());
     }
 
     private function round(): ReviewRound
@@ -125,7 +140,7 @@ final readonly class ReviewedRepository
         try {
             return $step();
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
-            $this->calls->called($round, $tool);
+            $this->recordedCall($round, $tool);
 
             throw new ToolCallException($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage()), $refused->getCode(), previous: $refused);
         }
