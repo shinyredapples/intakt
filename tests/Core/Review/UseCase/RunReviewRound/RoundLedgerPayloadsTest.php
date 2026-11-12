@@ -19,7 +19,6 @@ use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
-use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHeld;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -28,7 +27,6 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(ReviewStarted::class)]
-#[CoversClass(ShadowRoundHeld::class)]
 #[CoversClass(ReviewerStarted::class)]
 #[CoversClass(VerdictReceived::class)]
 #[CoversClass(CatchUpOwed::class)]
@@ -64,13 +62,6 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $started = new ReviewStarted(self::ROUND, 'alpha', 1, 'feat/x', 1, 'T7');
 
         self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":1,"change":"feat\/x","number":1,"task":"T7"}', $this->written($started));
-    }
-
-    public function testAHeldShadowRoundIsWrittenWithTodaysProviderValue(): void
-    {
-        $held = new ShadowRoundHeld('alpha', 'feat/x', Provider::Anthropic, 'at-ceiling');
-
-        self::assertSame('{"project":"alpha","change":"feat\/x","provider":"anthropic","reason":"at-ceiling"}', $this->written($held));
     }
 
     public function testAStartedReviewerIsWrittenWithItsIdentity(): void

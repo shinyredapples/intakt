@@ -3,3 +3,7 @@ services:
     test.intakt.start_guard:
         alias: Intakt\Core\Budget\Contract\StartGuard
         public: true
+    # Public under a test name, because the review round no longer takes the shadow guard and its own removal is a later part of the same change.
+    test.intakt.shadow_start_guard:
+        alias: Intakt\Core\Budget\Contract\ShadowStartGuard
+        public: true
