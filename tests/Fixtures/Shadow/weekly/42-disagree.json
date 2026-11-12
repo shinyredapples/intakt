@@ -1,0 +1,11 @@
+{
+ "pullRequest": 42,
+ "loop": "loop-bot",
+ "intakt": "intakt-app[bot]",
+ "comments": [
+  {"author": "loop-bot", "head": "bbb000", "postedAt": "2026-10-28T15:00:00Z", "body": "Reviewer: gpt\n\n```json\n{\"verdict\": \"approve\"}\n```"},
+  {"author": "intakt-app[bot]", "head": "bbb000", "postedAt": "2026-10-28T15:05:00Z", "body": "**Review by Intakt** (head bbb000)\n\n```json\n{\"verdict\":\"approve\",\"head\":\"bbb000\",\"summary\":\"Fine.\"}\n```"},
+  {"author": "loop-bot", "head": "bbb222", "postedAt": "2026-11-05T11:00:00Z", "body": "Reviewer: gpt\n\n[P1] `src/Order.php:40` the total is read before the guard\n\n```json\n{\"verdict\": \"changes\"}\n```"},
+  {"author": "intakt-app[bot]", "head": "bbb222", "postedAt": "2026-11-05T11:04:00Z", "body": "**Review by Intakt** (head bbb222)\n\nFollow-ups:\n[P2] src/Order.php:90: the log line repeats the order id\n\n```json\n{\"verdict\":\"approve\",\"head\":\"bbb222\",\"summary\":\"Fine.\"}\n```"}
+ ]
+}

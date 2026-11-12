@@ -1,0 +1,59 @@
+name: highlights
+# Publishes the page bin/highlights assembles from docs/highlights.d/ to GitHub Pages; it is never committed.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+concurrency:
+  group: highlights
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # jekyll-build-pages reads the repository's Pages settings (jekyll-github-metadata): without pages: read its token
+    # gets 403 and the build fails
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Build or restore the CI image
+        uses: $/.github/actions/ci-image
+      - name: Assemble the page
+        run: |
+          set -eu
+          mkdir _highlights
+          chmod 777 _highlights
+          docker run --rm --user 1000:1000 \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$GITHUB_WORKSPACE/_highlights:/page" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/highlights && cp docs/highlights.md /page/index.md'
+      - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
+        with:
+          source: ./_highlights
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+  publish:
+    needs: build
+    if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pages: &pages-write write
+      # The same value through the alias on its own line, so no value follows a key named like a credential.
+      id-token:
+        *pages-write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\PhpStan\NoNestedTryRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -21,9 +22,21 @@ final class NoNestedTryRuleTest extends PhpStanRuleTestCase
         return new NoNestedTryRule();
     }
 
-    public function testATryInsideACatchFailsStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
     {
-        $this->assertRejectedBy('phpstan', 'nested-try', 'intakt.nestedTry');
+        return self::casesOfOnePhpstanRun([
+            'ATryInsideACatchFailsStaticAnalysis' => ['nested-try', 'src/Report.php:16 intakt.nestedTry'],
+            'TriesInSeparateMethodsPassStaticAnalysis' => ['sibling-tries'],
+        ]);
+    }
+
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
+    {
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testATryInsideATryFailsStaticAnalysis(): void
@@ -39,10 +52,5 @@ final class NoNestedTryRuleTest extends PhpStanRuleTestCase
     public function testATryInAClosureInsideATryPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('try-in-closure');
-    }
-
-    public function testTriesInSeparateMethodsPassStaticAnalysis(): void
-    {
-        $this->assertAcceptedBy('phpstan', 'sibling-tries');
     }
 }

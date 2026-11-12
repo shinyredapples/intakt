@@ -1,0 +1,23 @@
+# Build clone
+
+A build works in a fresh clone of the project made from its [bare mirror](mirror.md), never from the remote. The clone holds main and the task's branch and no other ref: no other branch, no tag, no remote and no remote-tracking ref, and no commit only another branch reaches.
+
+`php bin/console intakt:build:clone <project> <branch> <directory>` (`MakeBuildCloneCommand`) calls the use case. On success it prints `clone <directory>` and exits with 0; on an `InvalidArgumentException` or a `ReportableFailure` (such as `BuildCloneNotMade`) it prints the message in an error block and exits with 1. Any other exception (Symfony's `IOException`, `RepositoryAttributesRefused`) is left to the console, which prints it and exits with 1 as well.
+
+`MakeBuildClone::make($project, $branch, $directory)` in `src/Core/Git/UseCase/MakeBuildClone/` makes it:
+
+1. The mirror is `var/mirrors/<project>.git` (`Intakt\Core\Git\Domain\Mirrors`, the one home of the project-name rule that `UpdateMirror` uses too). A project whose mirror has no `HEAD` file has no mirror yet, and the clone is refused.
+2. Main is the branch the mirror's `HEAD` names (`git --git-dir=<mirror> symbolic-ref --quiet HEAD`), because the mirror's `HEAD` follows the remote's default branch. A mirror whose `HEAD` is detached, or names a ref outside `refs/heads/` (a tag, for example), has no main, and the clone is refused.
+3. The branch must pass `git check-ref-format --branch <branch>`, and git's answer must be the name itself, because git expands a name such as `@{-1}` to another branch. A branch that is main itself is refused.
+4. The mirror's object format is read (`rev-parse --show-object-format`), because a fetch from a SHA-256 mirror into a SHA-1 repository fails.
+5. The folder is reserved: its parent folders are made, and the clone is refused when anything (a folder, a file or a link, even a dangling one) is already at the path (`is_link() || file_exists()`, because a thread-safe PHP, the build CI and the image use, follows a link inside `mkdir` and would create a dangling link's target). Then the folder itself is made with a single `mkdir`, which fails when a folder or a file is at the path by then (a dangling link that appears between the check and the `mkdir` is still followed on a thread-safe PHP). A clone therefore never mixes with what a folder already holds, and of two calls for the same folder only the one whose `mkdir` succeeds goes on; the other is refused with `the folder already exists`.
+6. `git init --initial-branch=<branch> --object-format=<format>` makes the clone in that folder, with the mirror's object format.
+7. `git fetch --quiet --no-tags --no-write-fetch-head --update-head-ok -- <mirror> +refs/heads/<main>:refs/heads/<main>` fetches main. Init and fetch replace `git clone`, because a clone would add a remote, remote-tracking refs and tags. `--update-head-ok` lets the fetch write the task's branch, which is the branch `HEAD` names.
+8. When the mirror holds the task's branch (`show-ref --verify --quiet refs/heads/<branch>`), it is fetched the same way; otherwise the branch starts at main (`update-ref`).
+9. `git checkout --force --quiet` fills the work tree from the task's branch. It writes no `ORIG_HEAD`.
+
+Every call is built by `HardenedGit`. The calls in the mirror carry `--git-dir=<mirror>` and unset `GIT_WORK_TREE`, as in `UpdateMirror`; `init` unsets it too, because git refuses a work tree without a git folder. The fetches allow the `file` transport only (`GIT_ALLOW_PROTOCOL=file`), because git reads a local path as that transport. The fetches are local, so they are not retried ([Retried network git calls](network-git.md) are for the remote).
+
+A step that fails throws `BuildCloneNotMade` with git's message, except that parent folders that cannot be made (a file in the way, for example) throw Symfony's `IOException`. When the folder was already reserved by this call, it is removed, so a clone that failed half-way is never taken for a build clone. A project name that is not a safe folder name, and a branch that is unsafe or main, throw `InvalidArgumentException`.
+
+The build job (plan task T49) is not built yet, so only the console command calls the use case. The `Source:` line of a task, which adds one verified commit as a read-only ref, is the third part of plan task T46 and not built yet.

@@ -29,19 +29,34 @@ final readonly class ReviewComparison
     #[NoDiscard('a comparison that is not read reports nothing')]
     public function compare(string $head, LoopReviews $loop, array $shadowRounds): HeadComparison
     {
-        $loopFindings = $this->mergedBySpot(array_map(static fn (LoopReview $review): array => $review->findings, $loop->reviews));
-        $intaktFindings = $this->mergedBySpot($this->countingFindings($shadowRounds));
-        [$matches, $loopOnly, $intaktOnly] = $this->match($loopFindings, $intaktFindings);
+        $loopFindings = array_map(static fn (LoopReview $review): array => $review->findings, $loop->reviews);
+        [$pairs, $loopOnly, $intaktOnly] = $this->matchedSpots($loopFindings, $this->countingFindings($shadowRounds));
 
         return new HeadComparison(
             head: $head,
             loopDecisions: array_map($this->loopDecision(...), $loop->reviews),
             intaktDecisions: $this->intaktDecisions($shadowRounds),
-            matches: $matches,
+            matches: array_map(static fn (array $pair): FindingMatch => new FindingMatch($pair[0], $pair[1]), $pairs),
             loopOnly: $loopOnly,
             intaktOnly: $intaktOnly,
             intaktTokens: array_sum(array_map(static fn (ChangeReview $round): int => $round->tokens->total, $shadowRounds)),
         );
+    }
+
+    // Shared with the weekly report, so the loop's findings meet Intakt's published ones by the same spots as its shadow verdicts.
+    /**
+     * @template L of LoopFinding|Finding
+     * @template I of LoopFinding|Finding
+     *
+     * @param list<list<L>> $loopReviews
+     * @param list<list<I>> $intaktReviews
+     *
+     * @return array{list<array{L, I}>, list<L>, list<I>}
+     */
+    #[NoDiscard('a match that is not read reports nothing')]
+    public function matchedSpots(array $loopReviews, array $intaktReviews): array
+    {
+        return $this->match($this->mergedBySpot($loopReviews), $this->mergedBySpot($intaktReviews));
     }
 
     /**
@@ -135,10 +150,13 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @param list<MergedSpot<LoopFinding>> $loopSpots
-     * @param list<MergedSpot<Finding>>     $intaktSpots
+     * @template L of LoopFinding|Finding
+     * @template I of LoopFinding|Finding
      *
-     * @return array{list<FindingMatch>, list<LoopFinding>, list<Finding>}
+     * @param list<MergedSpot<L>> $loopSpots
+     * @param list<MergedSpot<I>> $intaktSpots
+     *
+     * @return array{list<array{L, I}>, list<L>, list<I>}
      */
     private function match(array $loopSpots, array $intaktSpots): array
     {
@@ -151,16 +169,19 @@ final readonly class ReviewComparison
                 continue;
             }
 
-            $matches[] = new FindingMatch($loopSpot->finding, $intaktSpots[$index]->finding);
+            $matches[] = [$loopSpot->finding, $intaktSpots[$index]->finding];
             unset($intaktSpots[$index]);
         }
 
-        return [$matches, $loopOnly, array_map(static fn (MergedSpot $spot): Finding => $spot->finding, array_values($intaktSpots))];
+        return [$matches, $loopOnly, array_map(static fn (MergedSpot $spot): LoopFinding|Finding => $spot->finding, array_values($intaktSpots))];
     }
 
     /**
-     * @param MergedSpot<LoopFinding>         $loopSpot
-     * @param array<int, MergedSpot<Finding>> $intaktSpots
+     * @template L of LoopFinding|Finding
+     * @template I of LoopFinding|Finding
+     *
+     * @param MergedSpot<L>             $loopSpot
+     * @param array<int, MergedSpot<I>> $intaktSpots
      */
     private function closest(MergedSpot $loopSpot, array $intaktSpots): ?int
     {

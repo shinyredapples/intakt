@@ -18,7 +18,7 @@ final class DependabotImageGroupsTest extends TestCase
     {
         $group = $this->dockerGroupOfEveryImage();
 
-        self::assertContains($this->gitleaksImage(), $group['exclude-patterns'] ?? []);
+        self::assertSame([$this->gitleaksImage()], $group['exclude-patterns'] ?? null, 'The exclude-patterns of the docker group with patterns [\'*\'] in .github/dependabot.yml must hold the gitleaks image and nothing else.');
     }
 
     public function testTheGitleaksImageHasADockerGroupOfItsOwn(): void

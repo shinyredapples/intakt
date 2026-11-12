@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Watcher\UseCase\FindChangedPullRequests;
 
 use Intakt\Core\Watcher\Contract\ListingInProgress;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Intakt\Plugin\Forge\Contract\OpenChanges;
@@ -33,6 +34,7 @@ final readonly class FindChangedPullRequests
      * @return list<OpenChange>
      *
      * @throws ForgeReadFailed
+     * @throws ForgeRateLimited
      */
     private function listChanged(string $project): array
     {

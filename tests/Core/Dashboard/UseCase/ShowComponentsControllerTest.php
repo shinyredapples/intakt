@@ -55,6 +55,9 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'forced card focus' => ['a.card.is-focus'];
         yield 'forced input focus' => ['input.input.is-focus[aria-label]'];
         yield 'forced sub-tab focus' => ['.subtabs a.is-focus'];
+        yield 'search results' => ['.palette.static [role="group"] > .grp svg.i'];
+        yield 'selected search result' => ['.palette.static .res[role="option"][aria-selected="true"]'];
+        yield 'no search results' => ['.palette.static .none button[data-search-action="clear-search"]'];
         yield 'toast' => ['.toast'];
         yield 'skeleton' => ['.skel-card'];
         yield 'empty state' => ['.empty'];
@@ -100,6 +103,15 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         self::assertSame('Switch theme', $page->filter('.page-head button[data-theme-toggle]')->text());
         self::assertCount(1, $page->filter('.topbar button[data-theme-toggle]'));
         self::assertGreaterThan(0, $page->filter('script[type="importmap"]')->count());
+    }
+
+    public function testEveryResultOfTheSearchExampleSitsInAListBox(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        $options = $page->filter('#c-search [role="option"]');
+        self::assertGreaterThan(0, $options->count());
+        self::assertCount($options->count(), $page->filter('#c-search [role="listbox"][aria-label] [role="option"]'));
     }
 
     public function testEveryControlOfTheComponentsPageHasAnAccessibleName(): void

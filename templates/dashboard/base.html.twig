@@ -25,8 +25,8 @@
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
     {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
     {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
-    {# Imported by its own address, not through the import map, so a danger button asks first also on a page without one. After the import map, which a browser ignores once a module has started to load. #}
-    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; holdBackDangerButtons(document);</script>
+    {# Imported by their own address, not through the import map, so a danger button asks first and the search opens also on a page without one. After the import map, which a browser ignores once a module has started to load. #}
+    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; import { offerSearch } from '{{ asset('search.js') }}'; holdBackDangerButtons(document); offerSearch(document);</script>
 </head>
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
@@ -34,6 +34,7 @@
 {# Only the items whose page is built; the others arrive with their page. History and Settings, once built, go under More, which a phone shows instead of them. #}
 {{ include('dashboard/_rail.html.twig', {
     rail_items: [
+        {key: 'board', label: 'Board', icon: 'board', route: constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')},
         {key: 'projects', label: 'Projects', icon: 'projects', route: constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS')},
     ],
     more_items: [],
@@ -43,15 +44,16 @@
 {# One listener for the shell topic and the page's own. The cookie it sets also carries listener_grants, the same on every page, because every tab shares it. It sits here, not beside the rail, because any child of the shell takes a cell of its two-column grid. #}
 {% if live|default(false) %}{% do mercure(null, {subscribe: listener_grants}) %}{{ turbo_stream_from([constant('Intakt\\Core\\Dashboard\\Contract\\DashboardTopics::SHELL')]|merge(topics|default([])), true) }}{% endif %}
 <header class="topbar">
-    <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::OPEN_DASHBOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
-    <button class="search-trigger" type="button" aria-disabled="true" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
+    <a class="brand-m" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}" aria-label="Intakt home"><img class="logo-light" src="{{ asset('images/intakt-lockup.svg') }}" alt="Intakt"><img class="logo-dark" src="{{ asset('images/intakt-lockup-dark.svg') }}" alt="Intakt"></a>
+    <button class="search-trigger" type="button" aria-haspopup="dialog" aria-controls="search" aria-keyshortcuts="Control+K Meta+K">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<span class="ph">Search tasks, pull requests, settings…</span><span class="ph-short">Search</span><kbd>Ctrl K</kbd></button>
     <div class="grow"></div>
     {# The empty value is All projects, because no project name is empty, while a project may be named "all". A page linked to one project marks it selected, and the script below prefers it to the stored choice. #}
     {{ include('dashboard/components/select.html.twig', {id: 'projfilter', name: 'project', aria_label: 'Project', selected: linked_project ?? '', options: [{value: '', label: 'All projects'}]|merge(filter_projects()|map(name => {value: name, label: name}))}, with_context = false) }}
     <button class="icon-btn theme-toggle" type="button" aria-label="Switch light or dark theme" data-theme-toggle>{{ include('dashboard/components/icon.html.twig', {name: 'moon', extra: 'moon'}, with_context = false) }}{{ include('dashboard/components/icon.html.twig', {name: 'sun', extra: 'sun'}, with_context = false) }}</button>
     {{ include('dashboard/components/offline.html.twig', {live: true}, with_context = false) }}
 </header>
-<main class="content">
+{# A page whose content runs side by side, as the board's columns do, takes the full width with ` wide`. #}
+<main class="content{% block content_width %}{% endblock %}">
 {{ include('dashboard/components/connection.html.twig', {live: true}, with_context = false) }}
 {% for line in app.flashes('success') %}
 <p class="flash flash-success">{{ line }}</p>
@@ -61,6 +63,14 @@
 {% endfor %}
 {% block body %}{% endblock %}
 </main>
+</div>
+</div>
+{# Outside the shell, because any child of it takes a cell of its grid, and because the search script makes the shell inert while this is open. assets/search.js opens it and fills the list box with the results fragment of the search route. #}
+<div class="overlay" id="search" role="dialog" aria-modal="true" aria-label="Search" data-search-url="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SEARCH')) }}" hidden>
+<div class="palette">
+    <div class="q">{{ include('dashboard/components/icon.html.twig', {name: 'search'}, with_context = false) }}<input id="search-q" type="text" placeholder="Search tasks, pull requests, settings…" autocomplete="off" role="combobox" aria-label="Search" aria-autocomplete="list" aria-expanded="true" aria-controls="search-results"><kbd>Esc</kbd><button class="btn quiet" type="button" data-search-cancel>Cancel</button></div>
+    <div class="results" id="search-results" role="listbox" aria-label="Results"></div>
+    <footer><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></footer>
 </div>
 </div>
 {# Listens on the body, because Turbo replaces it on a visit and runs this script again, so no listener is left twice. #}
@@ -85,12 +95,17 @@
             return null;
         }
     };
+    // Looks the select up when called, because a listener bound once calls it after a visit has replaced the body.
     const showProject = () => {
-        const chosen = phone.matches ? '' : projectFilter.value;
+        const shownFilter = document.querySelector('#projfilter');
+        if (!shownFilter) {
+            return;
+        }
+        const chosen = phone.matches ? '' : shownFilter.value;
         document.querySelectorAll('[data-project]').forEach((item) => {
             item.hidden = chosen !== '' && item.dataset.project !== chosen;
         });
-        projectFilter.title = projectFilter.selectedOptions[0].textContent;
+        shownFilter.title = shownFilter.selectedOptions[0].textContent;
     };
     const showMore = (open) => {
         moreSheet.hidden = !open;
@@ -127,26 +142,26 @@
         projectFilter.value = storedProject;
     }
     showProject();
-    // The width outlives the body Turbo replaces, so the listener of a page left behind does nothing.
-    phone.addEventListener('change', () => {
-        if (projectFilter.isConnected) {
-            showProject();
-        }
-    });
-    // Turbo appends a stream to the document element, so only the document sees it; a page left behind does nothing.
-    document.addEventListener('turbo:before-stream-render', (event) => {
-        if (event.target.getAttribute('target') !== 'projfilter' || !projectFilter.isConnected) {
-            return;
-        }
-        const render = event.detail.render;
-        // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
-        event.detail.render = (stream) => {
-            const chosen = projectFilter.value;
-            render(stream);
-            projectFilter.value = [...projectFilter.options].some((option) => option.value === chosen) ? chosen : '';
-            showProject();
-        };
-    });
+    // The width and the document outlive the body Turbo replaces, so their listeners are bound on the first run only and act on whichever page is shown.
+    if (!('shellBound' in root.dataset)) {
+        root.dataset.shellBound = '';
+        phone.addEventListener('change', showProject);
+        // Turbo appends a stream to the document element, so only the document sees it.
+        document.addEventListener('turbo:before-stream-render', (event) => {
+            const shownFilter = document.querySelector('#projfilter');
+            if (event.target.getAttribute('target') !== 'projfilter' || !shownFilter) {
+                return;
+            }
+            const render = event.detail.render;
+            // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
+            event.detail.render = (stream) => {
+                const chosen = shownFilter.value;
+                render(stream);
+                shownFilter.value = [...shownFilter.options].some((option) => option.value === chosen) ? chosen : '';
+                showProject();
+            };
+        });
+    }
     if (more) {
         more.addEventListener('click', () => showMore(moreSheet.hidden));
         // A tap beside the sheet's pages lands on its backdrop.
@@ -173,10 +188,6 @@
         if (event.key === 'Escape' && more && !moreSheet.hidden) {
             showMore(false);
             more.focus();
-        }
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-            event.preventDefault();
-            search.focus();
         }
     });
 })();</script>

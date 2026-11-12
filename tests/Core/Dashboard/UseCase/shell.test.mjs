@@ -65,38 +65,12 @@ test('the rail still collapses when storage refuses access', () => {
     assert.equal(page.rail(), 'collapsed');
 });
 
-test('ctrl k moves the focus to the search field instead of the browser', () => {
+// The search script answers it (search.test.mjs), so the shell script must not take the key first.
+test('ctrl k is left to the search script', () => {
     const page = new Browser('light').open();
 
     const key = page.press('k', { ctrlKey: true });
 
-    assert.ok(page.searchHasFocus());
-    assert.ok(key.defaultPrevented);
-});
-
-test('cmd k moves the focus to the search field', () => {
-    const page = new Browser('light', { platform: 'MacIntel' }).open();
-
-    page.press('K', { metaKey: true });
-
-    assert.ok(page.searchHasFocus());
-});
-
-test('k without a modifier is left to the page', () => {
-    const page = new Browser('light').open();
-
-    const key = page.press('k');
-
-    assert.ok(!page.searchHasFocus());
-    assert.ok(!key.defaultPrevented);
-});
-
-test('another shortcut with ctrl is left to the browser', () => {
-    const page = new Browser('light').open();
-
-    const key = page.press('l', { ctrlKey: true });
-
-    assert.ok(!page.searchHasFocus());
     assert.ok(!key.defaultPrevented);
 });
 
@@ -293,6 +267,46 @@ test('a page left behind by a visit leaves its rows alone when the width changes
     page.resize(true);
 
     assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
+test('several visits leave one width listener and one stream listener of the shell', () => {
+    const page = new Browser('light').open();
+
+    const visited = page.visit().visit().visit();
+
+    assert.deepEqual(visited.listeners(), { streamRender: 1, widthChange: 1 });
+});
+
+test('after several visits a window that narrows to a phone and widens again filters the current page', () => {
+    const page = new Browser('light').open().visit().visit();
+    page.chooseProject('alpha');
+
+    page.resize(true);
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+
+    page.resize(false);
+    assert.deepEqual(page.shownRows(), ['alpha']);
+});
+
+test('after several visits a pushed project list keeps the project the current page chose', () => {
+    const page = new Browser('light').open().visit().visit();
+    page.chooseProject('beta');
+
+    page.pushStream('projfilter', ['alpha', 'beta', 'gamma']);
+
+    assert.equal(page.projectFilter.value, 'beta');
+    assert.deepEqual(page.shownRows(), ['beta', 'beta']);
+    assert.equal(page.projectFilter.title, 'beta');
+});
+
+test('after several visits a pushed list without the chosen project falls back to all projects', () => {
+    const page = new Browser('light').open().visit().visit();
+    page.chooseProject('beta');
+
+    page.pushStream('projfilter', ['alpha', 'gamma']);
+
+    assert.equal(page.projectFilter.value, '');
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
 });
 
 test('a page without pages under more runs the shell without a more item', () => {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
@@ -40,7 +41,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool}> */
+    /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable}> */
     private array $judged = [];
 
     private readonly LedgerTokens $tokens;
@@ -94,6 +95,27 @@ final class LedgerRounds
         return new Review(array_map($this->completed(...), $rounds));
     }
 
+    // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review. The ids come from the rounds, not the keys, because PHP turns a key of digits into an integer.
+    /**
+     * @return list<Review>
+     */
+    public function reviews(): array
+    {
+        $reviews = [];
+        $seen = [];
+
+        foreach ($this->started as $started) {
+            $review = isset($seen[$started->round]) ? null : $this->reviewOf($started->round);
+
+            if ($review instanceof Review) {
+                $reviews[] = $review;
+                $seen += array_fill_keys(array_map(static fn (ReviewedRound $member): string => $member->round, $review->rounds), true);
+            }
+        }
+
+        return $reviews;
+    }
+
     private function addUsage(RecordedEvent $recorded): void
     {
         $usage = $this->payloads->usageOf($recorded);
@@ -120,7 +142,7 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'textRecorded' => null !== $findings]];
+            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt]];
         }
     }
 
@@ -183,8 +205,8 @@ final class LedgerRounds
 
         return match (true) {
             null === $judged => $completed,
-            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'])),
-            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'])),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])),
+            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])),
         };
     }
 

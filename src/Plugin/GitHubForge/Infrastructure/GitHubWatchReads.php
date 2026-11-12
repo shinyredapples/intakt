@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CiState;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\HeadChecks;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -37,12 +38,18 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         private WatchedRepositories $repositories,
         private GitHubCiRuns $runs,
         private GitHubMoments $moments,
+        private BudgetReserve $reserve,
     ) {
     }
 
+    /**
+     * @throws ForgeRateLimited
+     */
     public function listOpen(string $project, ?string $validator): OpenChangeListing
     {
         $repository = $this->repositories->addressOf($project);
+        // Only the listing asks, because the reads of a waiting head's CI are essential and always go on.
+        $this->reserve->admitListing($project);
         $first = $this->read($repository->path().'/pulls', ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => 1], $validator);
         if (self::NOT_MODIFIED === $first['status']) {
             return OpenChangeListing::unchanged();

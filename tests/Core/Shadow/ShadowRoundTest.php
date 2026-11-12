@@ -138,14 +138,14 @@ final class ShadowRoundTest extends KernelTestCase
         self::assertSame(['live', 'live'], $this->recordedVerdictModes());
     }
 
-    public function testAShadowProjectsApprovingVerdictsAreNotCountedForAMerge(): void
+    public function testAShadowProjectsApprovingVerdictsAreCountedForAMerge(): void
     {
         $review = $this->reviewChange()->review($this->request('alpha'));
 
         $verdicts = $this->countedFor($review);
 
         self::assertSame(Standing::Current, $verdicts->standing->standing);
-        self::assertSame([], $verdicts->counting);
+        self::assertCount(2, $verdicts->counting);
     }
 
     public function testALiveProjectsApprovingVerdictsAreCountedForAMerge(): void

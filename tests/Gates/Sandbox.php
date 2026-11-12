@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use FilesystemIterator;
 use Intakt\Gates\Gate;
+use Intakt\Gates\GateResult;
 use Intakt\Gates\Mode;
 use Intakt\Gates\ProcessResult;
 use Intakt\Gates\ProcessRunner;
@@ -52,10 +53,15 @@ final readonly class Sandbox
 
     public static function withFixturesInFolders(string ...$names): self
     {
+        return self::withFixturesInFoldersUnder('', ...$names);
+    }
+
+    public static function withFixturesInFoldersUnder(string $parent, string ...$names): self
+    {
         $sandbox = self::empty();
 
         foreach ($names as $name) {
-            $sandbox->copyFixture(self::FIXTURES.'/'.$name, $name.'/');
+            $sandbox->copyFixture(self::FIXTURES.'/'.$name, $parent.$name.'/');
         }
 
         return $sandbox;
@@ -164,11 +170,17 @@ final readonly class Sandbox
     }
 
     // Because starting bin/check costs more than a gate that spawns no tool, its tests run it here and read the line bin/check would print for it.
-    public function runGate(Gate $gate): CheckRun
+    public function runGate(Gate $gate, ?string $base = null): CheckRun
     {
-        $result = $gate->run(new Workspace($this->root, dirname(__DIR__, 2), Mode::Full, null));
+        $result = $this->gateResult($gate, $base);
 
         return new CheckRun(new ProcessResult($result->isPassing() ? 0 : 1, $result->toJson()."\n", ''));
+    }
+
+    // Because the line bin/check prints shows only a gate's first ten findings, a run that answers more cases than that reads them all here.
+    public function gateResult(Gate $gate, ?string $base = null): GateResult
+    {
+        return $gate->run(new Workspace($this->root, dirname(__DIR__, 2), Mode::Full, $base));
     }
 
     public function remove(): void

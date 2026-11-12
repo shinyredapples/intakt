@@ -102,40 +102,23 @@ final class WorkerModeTest extends TestCase
     }
 
     #[DataProvider('runnerModes')]
-    public function testARequestDoesNotSeeTheUmaskTheRequestBeforeSet(string $resetKernel): void
-    {
-        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
-        $browser = $this->browserOn($this->bootedKernel(new Kernel('test', true)));
-
-        $this->requestThatRuns($browser, static fn (): int => umask(0o077));
-
-        self::assertSame($this->processBefore->umask, $this->nextRequestSeesProcess($browser)->umask);
-    }
-
-    #[DataProvider('runnerModes')]
-    public function testARequestDoesNotSeeTheLocaleTheRequestBeforeSet(string $resetKernel): void
-    {
-        $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
-        $browser = $this->browserOn($this->bootedKernel(new Kernel('test', true)));
-
-        $this->requestThatRuns($browser, $this->otherLocale(...));
-
-        self::assertSame($this->processBefore->locale, $this->nextRequestSeesProcess($browser)->locale);
-    }
-
-    #[DataProvider('runnerModes')]
-    public function testARequestDoesNotSeeTheEnvironmentVariableTheRequestBeforeSet(string $resetKernel): void
+    public function testARequestDoesNotSeeTheProcessSettingsTheRequestBeforeSet(string $resetKernel): void
     {
         $_SERVER['FRANKENPHP_RESET_KERNEL'] = $resetKernel;
         $browser = $this->browserOn($this->bootedKernel(new Kernel('test', true)));
         // After the boot, because FrameworkBundle adds DOCTRINE_DEPRECATIONS while booting, and a worker starts from its booted kernel.
         $booted = ProcessSettings::now();
 
-        $this->requestThatRuns($browser, static function (): void {
+        $this->requestThatRuns($browser, function (): void {
+            umask(0o077);
+            $this->otherLocale();
             $_ENV[self::LEFTOVER] = 'set by the request before';
         });
+        $seen = $this->nextRequestSeesProcess($browser);
 
-        self::assertSame($booted->env, $this->nextRequestSeesProcess($browser)->env);
+        self::assertSame($this->processBefore->umask, $seen->umask);
+        self::assertSame($this->processBefore->locale, $seen->locale);
+        self::assertSame($booted->env, $seen->env);
     }
 
     // Also with a kernel cloned per request, because the clone shares the process: FRANKENPHP_RESET_KERNEL does not hide these leaks.

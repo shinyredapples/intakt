@@ -4,21 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Override;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Mercure\HubInterface;
-use Symfony\Component\Mercure\Update;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 use Twig\Environment;
 
-// Through the hub's endpoint, not mercure_publish(), because consumers and the console have no FrankenPHP function; one path serves every process.
 final readonly class MercureRoundUpdates implements RoundUpdates
 {
     public function __construct(
-        private HubInterface $hub,
+        private LiveUpdates $live,
         private Environment $twig,
         private LoggerInterface $logger,
     ) {
@@ -59,12 +58,14 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     private function publish(Uuid $round, RoundStream $stream, array $context): void
     {
         try {
-            $data = $this->twig->render($stream->template(), $context);
-            // Private, because the text is model output about private code; only a subscriber the dashboard authorizes may read it.
-            $this->hub->publish(new Update(self::topicOf($round->toRfc4122()), $data, true));
+            $turboStream = $this->twig->render($stream->template(), $context);
         } catch (Throwable $failure) {
             // Swallowed after a log, because a live update is best effort and must never change a verdict or a round.
-            $this->logger->warning('A live round update was not published.', ['round' => $round->toRfc4122(), 'stream' => $stream->value, 'exception' => $failure]);
+            $this->logger->warning('A live round update was not rendered.', ['round' => $round->toRfc4122(), 'stream' => $stream->value, 'exception' => $failure]);
+
+            return;
         }
+
+        $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $turboStream));
     }
 }

@@ -32,7 +32,7 @@ final readonly class ModeGuardedForgeWrites implements ForgeWrites
         $this->forge->postReview($project, $change, $comment);
     }
 
-    // A shadow project publishes nothing, because its verdicts never count.
+    // A shadow project publishes nothing, because it runs beside an existing review process that must not see its verdicts.
     public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
     {
         if (ProjectMode::Shadow === $this->modes->of($project)) {

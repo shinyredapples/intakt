@@ -190,7 +190,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 
 ### T20 Dashboard of reviews
 - **Description:** A small server-rendered dashboard (Twig) lists projects and reviews; a review page shows each round, its reviewers, verdicts, findings with ids, the judge's call, tokens and cost. A button starts a review of a listed change.
-- **Acceptance:** pages render from the ledger alone; functional tests cover each page; no page polls.
+- **Acceptance:** pages render from the ledger alone (since #677, apart from the forge budget on `/reviews`, read from the forge's recorded readings without a forge call); functional tests cover each page; no page polls.
 - **Evidence:** screenshots of a completed two-round review.
 - **Waits for:** T13. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 

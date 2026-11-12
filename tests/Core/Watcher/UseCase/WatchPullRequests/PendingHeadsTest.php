@@ -75,6 +75,30 @@ final class PendingHeadsTest extends KernelTestCase
         self::assertSame([str_repeat('b', 40)], $this->dueHeads());
     }
 
+    public function testAHeadMadeToWaitUntilAMomentIsNotDueBeforeItAndCountsNoFailure(): void
+    {
+        $head = RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z');
+        $this->pending->enqueue('alpha', [$head]);
+
+        $this->pending->waitUntil('alpha', $head, $this->clock->now()->modify('+30 minutes'));
+
+        self::assertSame([], $this->pending->dueFor('alpha'));
+        self::assertSame(0, $this->pending->failuresOf('alpha', $head));
+        $this->clock->modify('+30 minutes');
+        self::assertSame([str_repeat('a', 40)], $this->dueHeads());
+    }
+
+    public function testANewerHeadQueuedBeforeAnOlderOneIsMadeToWaitStaysDueNow(): void
+    {
+        $old = RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z');
+        $this->pending->enqueue('alpha', [$old]);
+        $this->pending->enqueue('alpha', [RecordedForge::change('7', 'b', '2026-11-02T09:30:00Z')]);
+
+        $this->pending->waitUntil('alpha', $old, $this->clock->now()->modify('+30 minutes'));
+
+        self::assertSame([str_repeat('b', 40)], $this->dueHeads());
+    }
+
     public function testABackedOffHeadKeepsItsFailuresAndWaitsUntilItsNextTry(): void
     {
         $head = RecordedForge::change('7', 'a', '2026-11-02T09:00:00Z');

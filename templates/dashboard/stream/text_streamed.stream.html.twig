@@ -1,1 +1,2 @@
 {{ include('dashboard/stream/_reviewer_placed.stream.html.twig') }}<turbo-stream action="append" target="reviewer-{{ reviewer }}-text"><template>{{ text }}</template></turbo-stream>
+{{ include('dashboard/stream/_now_reviewer_placed.stream.html.twig', {round: round, reviewer: reviewer, state: 'running'}, with_context = false) }}
