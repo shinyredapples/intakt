@@ -10,6 +10,7 @@ Code and conventions:
 - [Bare mirror](mirror.md)
 - [Build clone](build-clone.md)
 - [Upstream reproductions](upstream-reproductions.md)
+- [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
 - [Development diagnostics (Mate)](development-diagnostics.md)
 
 Checks, CI and releases:
