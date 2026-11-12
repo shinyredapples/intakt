@@ -43,6 +43,9 @@ projects:
         # the task text is given to every round until the pull request text is read from the forge.
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
         watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha }
+        # Optional: the files and folders (everything below one counts) a change may only touch with an approval, from the repository's root;
+        # .gitmodules and submodules always count. `php bin/console intakt:protected:list alpha <head>` lists what a head touches.
+        protected_paths: [bin/check, config/gates/, .github, AGENTS.md]
     beta:
         # Optional: reviewer-for-loop reviews the existing loop's heads, its verdicts count and it only publishes its verdict on each head
         # (a commit status and a comment); live is the default.
