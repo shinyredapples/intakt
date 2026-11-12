@@ -51,12 +51,12 @@ final class JourneysWorkflowTest extends TestCase
         self::assertSame(['alarm'], $writers);
     }
 
-    public function testTheAlarmRunsAfterTheJourneysOnlyWhenTheirStepFailed(): void
+    public function testTheAlarmRunsAfterTheJourneysOnlyWhenTheirStepFailedOrTimedOut(): void
     {
         $jobs = $this->workflow()['jobs'];
 
         self::assertSame('journeys', $jobs['alarm']['needs'] ?? null);
-        self::assertSame("failure() && needs.journeys.outputs.outcome == 'failure'", $jobs['alarm']['if'] ?? null);
+        self::assertSame("failure() && (needs.journeys.outputs.outcome == 'failure' || needs.journeys.outputs.outcome == 'cancelled')", $jobs['alarm']['if'] ?? null);
         self::assertSame('${{ steps.journeys.outcome }}', $jobs['journeys']['outputs']['outcome'] ?? null);
     }
 

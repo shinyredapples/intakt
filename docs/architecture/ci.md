@@ -24,14 +24,17 @@
 - **Docker Hub login:** before a job pulls from Docker Hub (the `check`, `persistence`, `image`, `first-start` and `journeys` jobs), `.github/ci/docker-hub-login.sh` logs Docker in with the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` when they are set, and does nothing when they are not. A hosted runner service shares its IP addresses among its customers, and Docker Hub allows few anonymous pulls per address; GitHub's own runners are not limited this way. The token must be read-only, because a same-repository pull request's job can read it. The `persistence` job's database services pull their images anonymously: GitHub rejects a job whose service `credentials` are empty, so they cannot take the optional secrets.
 - **`journeys.yml`:** the `journeys` job checks out main and runs `bin/check --journeys` in the CI image with the `check` job's container options (the seccomp profile, `systempaths=unconfined`, the Docker Hub login, and on discarded runners `apparmor=unconfined` and the sysctl) and `/home/ci` and `/tmp` on tmpfs, but without the Composer cache volume.
   It pipes the output through `tee` into the runner's temporary folder.
-  It keeps the output as the `journeys-output` artifact when the step fails.
+  It keeps the output as the `journeys-output` artifact when the step fails or ends `cancelled`.
+  A job stopped at `timeout-minutes` ends `failure` with its journeys step `cancelled`.
   It passes the step's outcome and the checked-out commit to `alarm`.
   Its limit of 40 minutes holds the image build and, one after another, each journey file's run: the gate's 300 seconds cover one file's whole contained run (`bin/instance`'s boot and stop plus the PHPUnit run of that file), not each journey test in it.
   One run at a time (`concurrency: journeys`, never cancelled).
   The `alarm` job needs `journeys`.
-  It runs only when its journeys step failed.
+  It runs only when its journeys step failed, or ended `cancelled` while `failure()` is true (a timeout).
+  A run cancelled by hand ends the `journeys` job `cancelled`, so `failure()` is false and `alarm` is skipped.
   It runs on GitHub's `ubuntu-24.04`, never on `CI_RUNS_ON`, because it uses that runner's `gh`, which the CI image lacks.
   It checks out the same commit, downloads the artifact, builds or reuses the CI image and runs `bin/journey-alarm --run=<run link>` on the saved output in it, with the host's `gh` mounted read-only at `/usr/local/bin/gh`.
+  When the journeys step ended `cancelled`, it adds `--timed-out`.
   It does not use the shared container rules: `/home/ci` is on tmpfs, but `/tmp` is not, and it gets no seccomp profile or other security option.
   The top-level token is `contents: read`; the whole `alarm` job holds `issues: write` (GitHub has no per-step permissions), and only its last step puts the token in its environment (`GH_TOKEN`, passed into the container with `GITHUB_REPOSITORY`).
   `tests/Gates/JourneysWorkflowTest.php` pins the triggers, the permissions, the alarm's condition and where `GH_TOKEN` appears.
