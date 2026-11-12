@@ -1,0 +1,31 @@
+{
+    "interactions": [
+        {
+            "request": {
+                "method": "POST",
+                "url": "https://localhost/v1/chat/completions",
+                "signature": "1edd819ae888713e14f71a413129dfeb",
+                "signature_v2": "92a8812e568018cb71f2d151d23cc5a2",
+                "headers": {
+                    "content-type": [
+                        "application/json"
+                    ],
+                    "authorization": [
+                        "[redacted]"
+                    ]
+                },
+                "body": "{\"messages\":[{\"role\":\"user\",\"content\":\"Review the change.\"}],\"model\":\"local-model\"}"
+            },
+            "response": {
+                "status": 200,
+                "headers": {
+                    "content-type": [
+                        "application/json"
+                    ]
+                },
+                "body_format": "json",
+                "body": "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"model\":\"local-model\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"answer of the second account\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":5,\"total_tokens\":17}}"
+            }
+        }
+    ]
+}
