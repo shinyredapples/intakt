@@ -43,7 +43,7 @@ services:
         decorates: Intakt\Plugin\Forge\Contract\ForgeWrites
         decoration_on_invalid: ignore
 
-    # Wired here, because a Domain class carries no container attributes; its ceiling guards are wired in config/packages/ai.php.
+    # Wired here, because a Domain class carries no container attributes; its ceiling guard is wired in config/packages/ai.php.
     Intakt\Core\Budget\Contract\StartGuard: '@Intakt\Core\Budget\Domain\BudgetGuard'
 
     # Semaphores over file locks, because every worker runs on this host; Symfony's other semaphore store needs Redis.

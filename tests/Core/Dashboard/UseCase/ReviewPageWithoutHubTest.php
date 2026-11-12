@@ -36,6 +36,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertSame([['correctness', 'standard', 'running', '', '', '', 'Stop this reviewer']], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text())));
     }
 
+    public function testThePlainPageStillShowsTheLiveLogBesideTheTimeline(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('Live log of round 1', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame('correctness (standard) live', $crawler->filter('.log-pane #reviewer-round-1-correctness h3')->text());
+    }
+
     public function testThePlainPageStillLoadsTheScriptThatHoldsBackTheFirstClickOnStop(): void
     {
         $this->givenARunningRound();
