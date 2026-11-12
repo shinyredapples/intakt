@@ -52,6 +52,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewServerHttpClient;
 use Intakt\Core\Review\Infrastructure\StopRequests;
+use Intakt\Core\Review\Infrastructure\StreamedAnswer;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
@@ -59,6 +60,7 @@ use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Core\Review\Infrastructure\ToolsOfRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Kernel;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AccountLimitedVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
@@ -83,6 +85,7 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use JsonException;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
@@ -162,6 +165,8 @@ use Throwable;
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(StrictVerdictConverter::class)]
 #[UsesClass(StrictVerdictStreamListener::class)]
+#[UsesClass(StreamedAnswer::class)]
+#[UsesClass(AccountLimitedVendor::class)]
 #[UsesClass(FinalStreamedUsage::class)]
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(ReviewerRuns::class)]
@@ -483,28 +488,65 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([110, 120], array_column($usages, 'prompt'));
     }
 
-    public function testAServerErrorMidStreamAfterAToolRoundFailsTheReviewTransientlyAndLeavesOneUnsettledRowWithBothRounds(): void
+    /**
+     * @return iterable<string, array{Throwable}>
+     */
+    public static function midStreamOutages(): iterable
+    {
+        yield 'a cut stream' => [new IncompleteStreamException('Stream cut.')];
+        yield 'a server error' => [new ServerException(503)];
+        yield 'a server error event' => [new ServerException(errorMessage: 'Overloaded')];
+        yield 'a rate limit' => [new RateLimitExceededException(30)];
+    }
+
+    #[DataProvider('midStreamOutages')]
+    public function testEveryOutageMidStreamAfterAToolRoundBlocksTheReviewWithAReasonAndLeavesOneUnsettledRowWithBothRounds(Throwable $outage): void
     {
         $ledger = new InMemoryLedger();
-        $outage = static function (): Generator {
-            yield new TokenUsage(
-                promptTokens: 120,
-                model: 'big',
-            );
-            yield new TextDelta('{"verdict":');
+
+        $verdict = $this->vendor($this->toolRoundThen($this->brokenMidText($outage)), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
+        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
+        /** @var list<array<string, int>> $usages */
+        $usages = $ledger->payloads()[1]['usages'];
+        self::assertSame([110, 120], array_column($usages, 'prompt'));
+    }
+
+    public function testAServerErrorMidStreamGivesTheReasonThatTheProviderFailedAfterTheAnswerStarted(): void
+    {
+        $verdict = $this->vendor($this->toolRoundThen($this->brokenMidText(new ServerException(503))))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertStringContainsString('The provider failed after the answer had started streaming.', $verdict->findings[0]->text);
+        self::assertSame(Severity::P1, $verdict->findings[0]->severity);
+    }
+
+    public function testAServerErrorMidStreamReachesTheRoundAsTheBlockedVerdictThroughTheAccountLimitedVendor(): void
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
+        $vendor = new AccountLimitedVendor($this->vendor($this->toolRoundThen($this->brokenMidText(new ServerException(503)))), $resolver, new NoCooldowns());
+
+        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Blocked, Verdict::INCOMPLETE_STREAM], [$verdict->verdict, $verdict->findings[0]->id]);
+    }
+
+    public function testAServerErrorBeforeTheStreamsFirstDeltaStillFailsTheReviewTransientlySoAnotherAccountCanTakeIt(): void
+    {
+        $ledger = new InMemoryLedger();
+        $beforeAnyDelta = static function (): Generator {
+            yield from [];
 
             throw new ServerException(503);
         };
 
-        $failure = $this->thrownBy(fn (): VendorReview => $this->vendor($this->toolRoundThen($outage), $ledger)->review('alpha', Tier::Strong, $this->request()));
+        $failure = $this->thrownBy(fn (): VendorReview => $this->vendor($this->toolRoundThen($beforeAnyDelta), $ledger)->review('alpha', Tier::Strong, $this->request()));
 
-        // Asked again once, then parked, because the round never ended; never a verdict.
         self::assertInstanceOf(ProviderFailedTransiently::class, $failure);
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame(ServerException::class, $ledger->payloads()[1]['failure']);
-        /** @var list<array<string, int>> $usages */
-        $usages = $ledger->payloads()[1]['usages'];
-        self::assertSame([110, 120], array_column($usages, 'prompt'));
     }
 
     private function thrownBy(Closure $call): ?Throwable
@@ -551,6 +593,22 @@ final class SymfonyAiVendorTest extends KernelTestCase
         yield new TextDelta('{"verdict":"approve",');
 
         throw new IncompleteStreamException('The stream ended before its terminal event.');
+    }
+
+    /**
+     * @return Closure(): Generator<mixed, DeltaInterface, mixed, mixed>
+     */
+    private function brokenMidText(Throwable $outage): Closure
+    {
+        return static function () use ($outage): Generator {
+            yield new TokenUsage(
+                promptTokens: 120,
+                model: 'big',
+            );
+            yield new TextDelta('{"verdict":');
+
+            throw $outage;
+        };
     }
 
     public function testACallThatFailsIsLeftUnsettledOnce(): void

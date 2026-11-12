@@ -6,6 +6,8 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Generator;
 use Override;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Result\MultiPartResult;
 use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
@@ -22,6 +24,8 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final class StreamedAnswer extends AbstractStreamListener
 {
+    private const string BROKEN_MID_STREAM = 'The provider failed after the answer had started streaming.';
+
     private ?TextDelta $answer = null;
 
     public function __construct(
@@ -38,7 +42,7 @@ final class StreamedAnswer extends AbstractStreamListener
         $firstBlock = null;
         $asksForTools = false;
 
-        foreach ($stream->getContent() as $delta) {
+        foreach ($this->cutWhereItBroke($stream) as $delta) {
             $asksForTools = $asksForTools || $delta instanceof ToolCallStart || $delta instanceof ToolCallComplete;
 
             if ($delta instanceof TextDelta) {
@@ -59,6 +63,25 @@ final class StreamedAnswer extends AbstractStreamListener
         }
 
         yield $this->answer = new TextDelta($text);
+    }
+
+    // A transient failure once the stream has started is a cut answer, because the provider cannot resume it and asking again would start the review over; before the first delta it stays the provider's failure, so another account or a substitute can take the call.
+    /**
+     * @return Generator<DeltaInterface>
+     */
+    private function cutWhereItBroke(StreamResult $stream): Generator
+    {
+        $started = false;
+
+        try {
+            foreach ($stream->getContent() as $delta) {
+                $started = true;
+
+                yield $delta;
+            }
+        } catch (RetryableExceptionInterface $broken) {
+            throw $started ? new IncompleteStreamException(self::BROKEN_MID_STREAM, 0, $broken) : $broken;
+        }
     }
 
     #[Override]
