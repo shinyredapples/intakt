@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Build\Domain;
+namespace Intakt\Core\Build\Contract;
 
 use Intakt\Core\Review\Contract\Finding;
 

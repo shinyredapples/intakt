@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Build\Domain;
+namespace Intakt\Core\Build\Contract;
 
 final readonly class BuildBrief
 {

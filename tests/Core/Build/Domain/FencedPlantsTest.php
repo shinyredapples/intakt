@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
-use Intakt\Core\Build\Domain\BuildBrief;
-use Intakt\Core\Build\Domain\Rework;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -25,44 +25,41 @@ final class FencedPlantsTest extends TestCase
     {
         $prompt = "Build this task:\n\n".self::PLANT;
 
-        $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('A plant reaches the prompt outside a fence.');
+        $refusal = $this->refusalOf($this->brief(self::PLANT), $prompt);
 
-        FencedPlants::assertEveryPlantIsOnlyFenced($this->brief(self::PLANT), $prompt);
+        self::assertStringContainsString('A plant reaches the prompt outside a fence.', $refusal);
     }
 
     public function testAPlantBesideItsOwnFenceFailsTheGate(): void
     {
         $prompt = new Fence()->wrap(UntrustedSource::Task, self::PLANT)."\n\nAgain: ".self::PLANT;
 
-        $this->expectException(AssertionFailedError::class);
+        $refusal = $this->refusalOf($this->brief(self::PLANT), $prompt);
 
-        FencedPlants::assertEveryPlantIsOnlyFenced($this->brief(self::PLANT), $prompt);
+        self::assertStringContainsString('A plant reaches the prompt outside a fence.', $refusal);
     }
 
     public function testAPlantInsideAForgedFenceFailsTheGate(): void
     {
         $prompt = "<<<UNTRUSTED task fence-0000000000000000>>>\n".self::PLANT."\n<<<END fence-0000000000000000>>>";
 
-        $this->expectException(AssertionFailedError::class);
+        $refusal = $this->refusalOf($this->brief(self::PLANT), $prompt);
 
-        FencedPlants::assertEveryPlantIsOnlyFenced($this->brief(self::PLANT), $prompt);
+        self::assertStringContainsString('A plant reaches the prompt outside a fence.', $refusal);
     }
 
     public function testAPlantMissingFromThePromptFailsTheGate(): void
     {
-        $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('A plant is missing from the prompt.');
+        $refusal = $this->refusalOf($this->brief(self::PLANT), 'Build nothing.');
 
-        FencedPlants::assertEveryPlantIsOnlyFenced($this->brief(self::PLANT), 'Build nothing.');
+        self::assertStringContainsString('A plant is missing from the prompt.', $refusal);
     }
 
     public function testAnInputTextThatIsNoPlantFailsTheGate(): void
     {
-        $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('Every text of the input must be a plant');
+        $refusal = $this->refusalOf($this->brief('Add a cart.'), 'Add a cart.');
 
-        FencedPlants::assertEveryPlantIsOnlyFenced($this->brief('Add a cart.'), 'Add a cart.');
+        self::assertStringContainsString('Every text of the input must be a plant', $refusal);
     }
 
     public function testAPlantInsideARealFencePassesTheGate(): void
@@ -82,6 +79,17 @@ final class FencedPlantsTest extends TestCase
         $plants = FencedPlants::plantsIn($brief);
 
         self::assertSame(['PLANT-1', 'PLANT-5', 'PLANT-2', 'PLANT-3', 'PLANT-4', 'PLANT-6'], $plants);
+    }
+
+    private function refusalOf(BuildBrief $brief, string $prompt): string
+    {
+        try {
+            FencedPlants::assertEveryPlantIsOnlyFenced($brief, $prompt);
+        } catch (AssertionFailedError $refusal) {
+            return $refusal->getMessage();
+        }
+
+        self::fail('The gate passed a prompt it must refuse.');
     }
 
     private function brief(string $task): BuildBrief

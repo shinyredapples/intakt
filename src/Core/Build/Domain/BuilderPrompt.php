@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\Domain;
 
+use Intakt\Core\Review\Contract\Evidence;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -58,7 +61,7 @@ final readonly class BuilderPrompt
      */
     private function closingOf(?Rework $rework): array
     {
-        if (null === $rework) {
+        if (!$rework instanceof Rework) {
             return [self::FIRST_BUILD];
         }
 
@@ -86,7 +89,7 @@ final readonly class BuilderPrompt
 
     private function actEntryOf(Finding $finding): string
     {
-        if (null === $finding->evidence) {
+        if (!$finding->evidence instanceof Evidence) {
             return $finding->listEntry();
         }
 

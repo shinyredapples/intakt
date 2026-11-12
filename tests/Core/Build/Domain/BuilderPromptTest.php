@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\Domain;
 
-use Intakt\Core\Build\Domain\BuildBrief;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Build\Domain\BuilderPrompt;
-use Intakt\Core\Build\Domain\Rework;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
