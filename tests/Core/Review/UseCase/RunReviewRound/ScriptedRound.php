@@ -72,7 +72,7 @@ use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
 
-// A round run end to end for the provider-failure cases: the real vendor stack down to scripted providers (the tier's own on Anthropic, its substitute on OpenAI, one account each), workers that take the queued reviewer messages in turn, and the outcome as intakt:review reports it.
+// Runs a round end to end on the real vendor stack down to scripted providers, because a provider-failure case must show the round's end and usage rows an install records (docs/architecture/provider-failure-cases.md).
 final class ScriptedRound
 {
     // Far more than any scripted case needs, so a round that would never settle fails the test instead of looping.
@@ -140,7 +140,7 @@ final class ScriptedRound
         }
     }
 
-    // The tier's own provider and its substitute behind the account failover, the cooldowns and the vendor's limit on parallel calls, as the container wires them.
+    // Wired as the container wires it, so the failover, the cooldowns and the limit on parallel calls all take part in each case.
     public function vendor(PlatformInterface $own, PlatformInterface $substitute): Vendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => [['provider' => 'openai', 'model' => 'other']]]]]], []);
@@ -156,13 +156,13 @@ final class ScriptedRound
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
     }
 
-    // Limited as an HTTP provider reports a 429, when the answer is read, after the next reviewer's call has gone out.
+    // Failing when read, because an HTTP provider reports its 429 then, after the next reviewer's call has gone out.
     public function limitedTogether(int $resetInSeconds): InFlightTogether
     {
         return new InFlightTogether($this->deliverNext(...), new FailingWhenRead(new RateLimitExceededException($resetInSeconds)));
     }
 
-    // Answers the first call, which is still in flight when the next reviewer's call goes out, and limits every later one.
+    // The first call answers while the next reviewer's call is in flight, so a limit can end a round beside a verdict.
     public function answeringThenLimitedTogether(string $decision, int $resetInSeconds): InFlightTogether
     {
         return new InFlightTogether($this->deliverNext(...), $this->answering($decision), new FailingWhenRead(new RateLimitExceededException($resetInSeconds)));
@@ -185,8 +185,6 @@ final class ScriptedRound
     }
 
     /**
-     * The phases each vendor call went through, in order, keyed by the call.
-     *
      * @return array<string, list<string>>
      */
     public function usagePhasesByCall(): array
@@ -194,7 +192,9 @@ final class ScriptedRound
         $phases = [];
 
         foreach ($this->payloads(LedgerEventKind::UsageRecorded) as $payload) {
-            $phases[(string) $payload['call']][] = (string) $payload['phase'];
+            ['call' => $call, 'phase' => $phase] = $payload;
+            assert(is_string($call) && is_string($phase));
+            $phases[$call][] = $phase;
         }
 
         return $phases;

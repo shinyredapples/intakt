@@ -99,7 +99,8 @@ final class SharedRateLimitTest extends KernelTestCase
         self::assertCount(3, $reasons);
 
         foreach ($reasons as $reason) {
-            self::assertMatchesRegularExpression('/^Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', (string) $reason);
+            self::assertIsString($reason);
+            self::assertMatchesRegularExpression('/^Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $reason);
         }
     }
 
