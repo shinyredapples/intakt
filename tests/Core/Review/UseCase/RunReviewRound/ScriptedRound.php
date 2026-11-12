@@ -56,6 +56,8 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
@@ -181,6 +183,22 @@ final class ScriptedRound
             ));
 
             return $answer;
+        }, eventDispatcher: ScriptedReviewer::in($this->container)->dispatcher);
+    }
+
+    // Each call asks for one more tool round, so a run that stays on this platform is a long conversation without any waiting.
+    public function askingForTools(): PlatformInterface
+    {
+        return MockPlatformFactory::createPlatform(static function (): ToolCallResult {
+            $asked = new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'composer.json'])]);
+            $asked->getMetadata()->add('token_usage', new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+                model: 'big',
+            ));
+
+            return $asked;
         }, eventDispatcher: ScriptedReviewer::in($this->container)->dispatcher);
     }
 
