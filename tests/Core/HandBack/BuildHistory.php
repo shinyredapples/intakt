@@ -8,7 +8,7 @@ use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// A bare repository in the role of the project's mirror, and a work repository in the role of the build clone that writes the bundle.
+// Two repositories, because the check reads a bare mirror while the bundle comes from a build clone.
 final readonly class BuildHistory
 {
     // Because CI runs as a user without a git identity, and git refuses a commit or a merge without one.

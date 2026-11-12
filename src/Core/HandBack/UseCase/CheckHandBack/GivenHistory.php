@@ -45,7 +45,7 @@ final readonly class GivenHistory
     }
 
     /**
-     * @return list<list<string>> the parents of each merge commit
+     * @return list<list<string>>
      *
      * @throws HandBackNotChecked
      */
@@ -58,7 +58,7 @@ final readonly class GivenHistory
     }
 
     /**
-     * @return list<string> oldest first, each after its parents
+     * @return list<string>
      *
      * @throws HandBackNotChecked
      */
@@ -73,13 +73,13 @@ final readonly class GivenHistory
     }
 
     /**
-     * @return list<non-empty-list<string>> each commit followed by its parents
+     * @return list<non-empty-list<string>>
      *
      * @throws HandBackNotChecked
      */
     private function newCommitsWithParents(string $head, string $option): array
     {
-        // Main's commits are not new: a merge of main brings them in as they are.
+        // Because a merge of main brings main's commits in as they are, they are never new.
         $output = $this->git->output($this->repository, ['rev-list', '--topo-order', '--parents', $option, $head, '^'.$this->base, '^'.$this->main]);
 
         return '' === $output ? [] : array_map(static fn (string $line): array => explode(' ', $line), explode("\n", $output));

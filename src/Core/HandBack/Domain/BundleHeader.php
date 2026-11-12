@@ -13,7 +13,7 @@ final readonly class BundleHeader
 
     /**
      * @param list<string>          $prerequisites
-     * @param array<string, string> $references    the id each ref name points at
+     * @param array<string, string> $references
      */
     private function __construct(
         public array $prerequisites,
@@ -21,7 +21,7 @@ final readonly class BundleHeader
     ) {
     }
 
-    // The header's lines without the empty line that ends it; anything else than what git writes is no header, including a filtered bundle, which would leave objects out.
+    // A filtered bundle is refused like anything else git does not write, because it would leave objects out.
     public static function parse(string $header): ?self
     {
         $lines = explode("\n", $header);

@@ -28,6 +28,6 @@ final readonly class BundleFile
 
         $end = false === $start ? false : strpos($start, "\n\n");
 
-        return false === $end || '' === $start ? null : BundleHeader::parse(substr($start, 0, $end));
+        return false === $end ? null : BundleHeader::parse(substr($start, 0, $end));
     }
 }

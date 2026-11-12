@@ -322,7 +322,7 @@ final class CheckHandBackTest extends TestCase
         return $main;
     }
 
-    // A header of a prerequisite the repository does not hold, padded to the length, followed by the empty line and a pack that is never read.
+    // A prerequisite the repository does not hold, so a header the limit lets through is refused one step later, before the pack is read.
     private function headerOfLength(int $length): string
     {
         $signature = "# v2 git bundle\n";

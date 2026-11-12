@@ -10,7 +10,7 @@ use Intakt\Core\HandBack\Domain\AttributionLines;
 
 final readonly class StrippedCommits
 {
-    // A signature over the old content would not match the new one; the orchestrator signs the commits itself before the push.
+    // Because a signature over the old content would not match the new one; the orchestrator signs the commits itself before the push.
     private const array SIGNATURE_HEADERS = ['gpgsig', 'gpgsig-sha256'];
 
     public function __construct(
@@ -37,7 +37,7 @@ final readonly class StrippedCommits
     }
 
     /**
-     * @param array<string, string> $replaced the new id of each commit rewritten so far
+     * @param array<string, string> $replaced
      *
      * @throws HandBackNotChecked
      */
@@ -84,7 +84,7 @@ final readonly class StrippedCommits
         $inSignature = false;
 
         foreach ($headerLines as $line) {
-            // A header's value continues on the lines that start with a space.
+            // Because a header's value continues on the lines that start with a space.
             if (!str_starts_with($line, ' ')) {
                 $inSignature = in_array(explode(' ', $line, 2)[0], self::SIGNATURE_HEADERS, true);
             }

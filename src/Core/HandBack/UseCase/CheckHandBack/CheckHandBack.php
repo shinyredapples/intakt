@@ -69,7 +69,7 @@ final readonly class CheckHandBack
             throw new InvalidArgumentException(sprintf('the task\'s branch "%s" is main itself', $handBack->branch));
         }
 
-        // A branch not pushed yet starts at main, as the build clone does.
+        // Because a branch not pushed yet starts at main in the build clone, it is checked against main.
         $base = $this->git->answer($repository, ['rev-parse', '--verify', '--quiet', $branch.'^{commit}'])
             ?? $this->git->output($repository, ['rev-parse', '--verify', $main.'^{commit}']);
 
@@ -121,7 +121,7 @@ final readonly class CheckHandBack
 
     private function refusalToUnbundle(HandBack $handBack, GivenHistory $history): ?HandBackRefusal
     {
-        // Unbundling writes the objects only, never a ref.
+        // Unbundling writes the objects only, never a ref, so a refused bundle moves no branch.
         return $history->unbundle($handBack->bundle) ? null : HandBackRefusal::Unreadable;
     }
 
@@ -142,7 +142,7 @@ final readonly class CheckHandBack
             return HandBackRefusal::HoldsMerge;
         }
 
-        // The first parent is the branch's side of a merge of main, as "git merge main" on the branch writes it.
+        // The parents after the first only, because the first is the branch's side of a merge of main, as "git merge main" on the branch writes it.
         foreach ($merges as $parents) {
             foreach (array_slice($parents, 1) as $merged) {
                 if (!$history->isOnMain($merged)) {
