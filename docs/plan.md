@@ -23,8 +23,8 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 | After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T75 to T80, T81, T32 (optional) | after the deadline |
-| M6 Shadow | see [Replacing the existing loop](#replacing-the-existing-loop) | T37 to T46 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
-| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T47 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
@@ -298,7 +298,7 @@ The demo works on a local repository, so these tasks wait until after the deadli
 
 T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T80 switches a category on, every protected change still goes to the owner.
 
-### T75 Hard floors and the approval decision in shadow mode
+### T75 Hard floors and the approval decision in dry-run mode
 - **Description:** The decision for a protected head in the design's order (floors, mechanical checks, security review, attacker test), each step a typed result. The hard floors are deterministic rules over the whole change: secrets and credentials handling, every workflow file, existing gate tests, the protected-path list, the approval rules, agent instructions, and a panel reviewer's loosening or missing class. Every protected head still goes to the owner; the computed decision is recorded in the ledger and the request names the first floor or check that failed. A replay command computes the decision for a repository's past approvals.
 - **Acceptance:** each floor has a test that it sends a change to the owner and one that a neighboring change passes it; a request names its floor or check; no path approves by a timer, a veto window or a missing answer; a step that fails or cannot run sends the change to the owner; the replay reads recorded forge responses.
 - **Evidence:** the replay's report over a temporary repository with recorded approvals; the replay over this repository's 32 approvals (owner provides).
@@ -330,7 +330,7 @@ T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.m
 - **Waits for:** T7, T78. **Size:** M. **Labels:** `class:process`, `priority:normal`.
 
 ### T80 Canaries, earned autonomy and containment
-- **Description:** Owner-known canary changes, each category with its own ([Merge](design/05-architecture/08-merge.md#earned-autonomy-per-category)), run through the decision on a schedule. Per category, the dashboard shows canary detection and agreement with the owner; the owner switches a category on in the owner's config once both meet the bar, and it falls back to shadow mode on its own when a canary is missed or the owner overrules it. After an automatic approval merges, a failing canary or corpus fixture on main reverts it at once only when it is the one automatic approval merged since they last passed and no later merge touched its files; otherwise Intakt reverts nothing on its own, asks the owner naming every candidate merge, and gives no automatic approval in that project until the owner answers. A daily cap per project bounds automatic approvals, and each one is listed on the dashboard for a week. The code that applies the approval rules joins the protected paths, and the owner narrows `.github/CODEOWNERS` to the owner-only files.
+- **Description:** Owner-known canary changes, each category with its own ([Merge](design/05-architecture/08-merge.md#earned-autonomy-per-category)), run through the decision on a schedule. Per category, the dashboard shows canary detection and agreement with the owner; the owner switches a category on in the owner's config once both meet the bar, and it falls back to dry-run mode on its own when a canary is missed or the owner overrules it. After an automatic approval merges, a failing canary or corpus fixture on main reverts it at once only when it is the one automatic approval merged since they last passed and no later merge touched its files; otherwise Intakt reverts nothing on its own, asks the owner naming every candidate merge, and gives no automatic approval in that project until the owner answers. A daily cap per project bounds automatic approvals, and each one is listed on the dashboard for a week. The code that applies the approval rules joins the protected paths, and the owner narrows `.github/CODEOWNERS` to the owner-only files.
 - **Acceptance:** detection is counted per category over its own canaries; a category below 100% detection, or with fewer canaries than the minimum, cannot be switched on; a missed canary switches it off; a failing fixture on main after exactly one automatic approval, with no later merge on its files, produces a revert of exactly that merge; two candidate approvals, or a later merge on the same files, produce an owner request naming the candidates and no revert; the cap holds under two concurrent approvals (forced order); the dashboard line names the head, the category and its checks.
 - **Evidence:** a canary run and an automatic revert on a temporary repository; the narrowed `.github/CODEOWNERS` (owner provides).
 - **PHP 8.5:** the pipe operator for the canary run's steps.
@@ -373,7 +373,7 @@ Conventions, in addition to the ones above:
   2. While both run, Intakt opens its pull requests under its own GitHub App identity; the existing loop leaves every pull request that identity opened and handles only its own.
   3. New GitHub Apps serve Intakt while both run; at takeover Intakt switches to the loop's Apps and the new ones are removed.
   4. The two watchdogs trust each other's signed merges by a peer signing key in each one's settings, with no push notice per merge.
-  5. Shadow work stays below 70% of the five-hour window and on weekly pace; the shadow exits after at least seven days and 40 compared heads with fewer than 5% failed reviews and at most one head in ten where the loop raised a P1 the builder then fixed and Intakt approved.
+  5. Intakt's work beside the existing loop stays below 70% of the five-hour window and on weekly pace; M6 exits after at least seven days and 40 compared heads with fewer than 5% failed reviews and at most one head in ten where the loop raised a P1 the builder then fixed and Intakt approved. Since the [reviewer for the loop](#reviewer-for-the-loop-issue-1251) stage (D6 of #1434), Intakt replaces one of the loop's reviewers instead of adding one, so the lower ceiling no longer applies; the exit bar stays.
   6. A project at weekly share 0 is paused (no builds, no reviews); the switch needs no work on it.
   7. Design decision 9 changes to signed fast-forwards of main by a non-force ref update (T62).
   8. The owner's dashboard reads Intakt's status JSON (T68) until Intakt's own dashboard replaces it.
@@ -382,13 +382,13 @@ Conventions, in addition to the ones above:
 
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
-| M6 Shadow | Intakt reviews every new green head of the owner's two projects alongside the existing loop, posts nothing that counts, and a report compares the verdicts | T37 to T46 | tasks 2026-11-25; report after one week of shadow, 2026-12-03 |
-| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M6 Reviewer for the loop | Intakt's review takes the place of the existing loop's Claude reviewer on the owner's two projects and counts, and a weekly report compares its published verdicts with the loop's GPT reviews | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
-## M6 Shadow
+## M6 Reviewer for the loop
 
-T44 to T46 run in M6 alongside T37 to T43 (owner decision 2026-11-09, to start the builder chain early); their sections are under M7 Builder half.
+T44 to T46 run in M6 alongside T37, T38, T40 and T43 (owner decision 2026-11-09, to start the builder chain early); their sections are under M7 Builder half. The [reviewer for the loop](#reviewer-for-the-loop-issue-1251) stage replaces the comparison-only tasks of the first plan (#323 and #324, closed as superseded; D4 and D6 of #1434); T40 stays here because that stage depends on it.
 
 ### T37 GitHub App identity
 - **Description:** `Plugin/GitHubForge` authenticates as Intakt's own GitHub App: a short-lived installation token per forge call and per git fetch or push, minted from the App's private key; a failed exchange stops the call and never falls back to another credential. At start the installation is read back and its repositories and permissions are compared with the configured ones. Trust checks (write access through the permission API, bot accounts never steer except Intakt's own identity and its maintainer's) use this identity.
@@ -405,13 +405,6 @@ T44 to T46 run in M6 alongside T37 to T43 (owner decision 2026-11-09, to start t
 - **Evidence:** the ledger of a tick over two recorded pull requests, one pending and one green.
 - **Waits for:** T37, T9. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
-### T39 A Codex subscription reviewer
-- **Description:** A reviewer role runs through the Codex platform bridge on a subscription login: the login file is kept per account in the orchestrator, refreshed there, and given to the call read-only; the model and effort are pinned in config. The vendor's structured errors (usage limit, model not available for the plan, login lost) become an account cooldown or an account error with one owner notice, never a failed review or `changes`; the measured use it reports is recorded per account. The package is a new dependency the owner approves.
-- **Reference:** `test_reviewer_accounts.py` (only a closed set of codes is an account error; a reviewer's own text never is), `test_gpt_probes.py` (the usage line), `test_agents.py` (any other reviewer failure is a failed review).
-- **Acceptance:** recorded streams drive the tests; a complete stream yields a typed verdict; each structured error maps to its outcome; text that only mentions a limit is a failed review; usage is counted once.
-- **Evidence:** a real review of the sample branch with its usage line `(owner provides)`.
-- **Waits for:** T33, T14. **Size:** M. **Labels:** `class:feature`, `priority:high`.
-
 ### T40 Measured use and the start ceiling
 - **Description:** `Core/Budget` keeps per account the measured use of each window (Claude's five-hour and weekly windows from its rate-limit events, Codex's from its token counts; T81 later adds a best-effort read of Codex's own usage endpoint) with the reading's age and the reset time. A call starts only while the measured use is below the window's ceiling (five-hour default 90%, the weekly one paced over the week); a second parallel start needs a fresher reading and a margin; without a trusted reading only one call runs at a time, and after a long outage the owner is told once. A structured usage-limit answer puts the account in cooldown until its reset; a shared back-off still lets approved heads merge. Ceilings are owner config.
 - **Reference:** `test_limits.py`, `test_guard.py` (back-off, pause and drain blocks, merge-only refusal), `test_admission.py`, `test_claude_account.py` (back-off per account, a crash back-off blocks all), `test_budget_174.py` (probe outage notice once, measured use decides, never the estimate).
@@ -420,32 +413,18 @@ T44 to T46 run in M6 alongside T37 to T43 (owner decision 2026-11-09, to start t
 - **PHP 8.5:** the pipe operator for the ceiling chain.
 - **Waits for:** T14. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`.
 
-### T41 Shadow mode per project
-- **Description:** A project in `shadow` mode runs its panel on every head T38 admits, records the verdicts in the ledger marked as shadow, posts nothing to the forge and never counts a verdict for a merge. Shadow work starts only below a lower ceiling the owner sets (default 70% of the five-hour window and on weekly pace), so it never takes capacity the existing loop needs on the same accounts.
-- **Reference:** the design's adoption stages ([Goals](design/03-goals-and-non-goals.md), milestone 5).
-- **Acceptance:** a shadow project makes no forge write (a test forge refuses every write); its verdicts are marked shadow; above the shadow ceiling no round starts and the reason is recorded.
-- **Evidence:** a shadow round on the GitHub test repository and the forge's empty write log.
-- **Waits for:** T38, T40. **Size:** S. **Labels:** `class:core`, `priority:high`.
-
-### T42 Comparison with the existing loop's reviews
-- **Description:** For each shadow head, Intakt reads the existing loop's reviews of the same head from the pull request (comments by the loop's identity: its final JSON verdict and its tagged finding lines, read with the loop's documented rules, only for this report) and compares: approve or changes per reviewer, findings matched by file and a line window, findings only one side raised, severity disagreements, Intakt failed reviews, and tokens per review. `intakt:shadow:report` prints the period's summary and per-head table, or JSON.
-- **Reference:** the loop's verdict reading rules in `test_agents.py` (an unparsable verdict is no approval; fenced and quoted lines are not findings).
-- **Acceptance:** recorded pull requests with known loop reviews give the expected matches; a loop review that cannot be read is counted as such, never as agreement; the report holds no limits or reset times.
-- **Evidence:** the report over the recorded set.
-- **Waits for:** T41. **Size:** M. **Labels:** `class:feature`, `priority:high`.
-
-### T43 The owner's shadow install
-- **Description:** The image runs in its own container with nesting on the owner's host (Docker inside, fenced from the local network) with both projects in shadow mode, the Claude automation tokens and the Codex login, the shadow ceiling, and Home Assistant as the notifier for owner actions only. `docs/user/` gets the shadow setup page.
+### T43 The owner's install
+- **Description:** The image runs in its own container with nesting on the owner's host (Docker inside, fenced from the local network) with both projects in `reviewer-for-loop` mode, the Claude automation tokens and the Codex login, and Home Assistant as the notifier for owner actions only. `docs/user/` gets the setup page.
 - **Acceptance:** the install answers, both projects list their panels, a tick runs without error.
-- **Evidence:** `(owner provides)` the first day's shadow report.
-- **Waits for:** T42. **Size:** S. **Labels:** `class:tooling`, `priority:high`.
+- **Evidence:** `(owner provides)` the first weekly report.
+- **Waits for:** the [reviewer for the loop](#reviewer-for-the-loop-issue-1251). **Size:** S. **Labels:** `class:tooling`, `priority:high`.
 
-**Exit (owner's go):** at least seven days and 40 compared heads, fewer than 5% failed reviews, and no more than one in ten heads where the loop raised a P1 the builder then fixed and Intakt approved.
+**Exit (owner's go):** over the weekly reports, at least seven days and 40 compared heads, fewer than 5% failed reviews, and no more than one in ten heads where the loop raised a P1 the builder then fixed and Intakt approved.
 
 ### Reviewer for the loop (issue #1251)
-- **Description:** Intakt does real review work before the builder half exists. A project mode `reviewer-for-loop` replaces `shadow`: for every head the existing loop pushes on a pull request of the project, Intakt runs its Claude panel, and its review takes the place of the loop's Claude reviewer and counts for the merge, while the loop's GPT reviewer stays a required second vote (D1). Intakt never merges, pushes, labels or approves protected heads in this stage; the loop keeps building, merging and asking the owner (D2). Measured use and the start ceiling (T40) and the forge budget work stay as they are; the shadow ceiling does not apply, because Intakt replaces a reviewer instead of adding one (D5).
-- **Parts:** 1 (#1318, built): the mode, a round for each loop head without the shadow ceiling, verdicts marked `reviewer-for-loop` that count, and the project mode guard that lets none of the project's writes reach the forge. 2 (#1319, built): once a round of such a project is judged, or its judging failed for good (published as `error`), Intakt publishes its verdict on that exact head under its App identity: the commit status `intakt/review` (`success` for approve, `failure` for changes, `error` when it could not review) and, for approve and changes, one pull request comment headed `**Review by Intakt** (head <12-hex>)` with the act list as `[P1|P2|P3] file:line: text` lines and a final fenced JSON block `{"verdict": "approve"|"changes", "head": "<40-hex>", "summary": "..."}`, followed only by an invisible marker of the round so a retried publication posts no second comment (only a comment of Intakt's own App counts, and one worker at a time publishes a round); this is the whole contract with the loop. The status and the comment tell the verdict the loop reads: an approval whose act list holds a P1 is published as changes, and an approval lists its other findings under a `Follow-ups:` line. A round reviewed in shadow mode before the switch is published only as `error`, so a shadow verdict never counts. 3: the shadow code is removed and the weekly report is built; until then `shadow` keeps working.
-- **Rollback:** the loop switches back to its own Claude reviewer, and the project's mode goes back to `shadow` or `live`.
+- **Description:** Intakt does real review work before the builder half exists. In the project mode `reviewer-for-loop`, for every head the existing loop pushes on a pull request of the project, Intakt runs its Claude panel, and its review takes the place of the loop's Claude reviewer and counts for the merge, while the loop's GPT reviewer stays a required second vote (D1). Intakt never merges, pushes, labels or approves protected heads in this stage; the loop keeps building, merging and asking the owner (D2). Measured use and the start ceiling (T40) and the forge budget work stay as they are; no lower ceiling applies, because Intakt replaces a reviewer instead of adding one (D5). This stage replaces the comparison-only tasks of the first plan (#323 and #324, closed as superseded; D4 and D6 of #1434).
+- **Parts:** 1 (#1318, built): the mode, a round for each loop head, verdicts marked `reviewer-for-loop` that count, and the project mode guard that lets none of the project's writes reach the forge. 2 (#1319, built): once a round of such a project is judged, or its judging failed for good (published as `error`), Intakt publishes its verdict on that exact head under its App identity: the commit status `intakt/review` (`success` for approve, `failure` for changes, `error` when it could not review) and, for approve and changes, one pull request comment headed `**Review by Intakt** (head <12-hex>)` with the act list as `[P1|P2|P3] file:line: text` lines and a final fenced JSON block `{"verdict": "approve"|"changes", "head": "<40-hex>", "summary": "..."}`, followed only by an invisible marker of the round so a retried publication posts no second comment (only a comment of Intakt's own App counts, and one worker at a time publishes a round); this is the whole contract with the loop. The status and the comment tell the verdict the loop reads: an approval whose act list holds a P1 is published as changes, and an approval lists its other findings under a `Follow-ups:` line. 3 (#1433 and #1434, built): the earlier side-by-side mode, which counted nothing, is gone, and the mode guard on forge writes with it: a file that still sets `mode: shadow` stops the boot as an unknown value, ledger rows of its removed event kind are skipped on read, and verdict rows it marked keep their mark, which the dashboard reads as `live`; the weekly report `intakt:reviewer-for-loop:weekly-report` compares the loop's GPT review with Intakt's published review on the same heads ([Weekly report](architecture/weekly-report.md)).
+- **Rollback:** the loop switches back to its own Claude reviewer, and the project's mode goes back to `live`.
 - **Acceptance (part 1):** tests cover the mode selection and that a round runs for a loop head.
 - **Evidence (part 1):** on a running install on SQLite, the mode set and a round started for a head.
 - **Acceptance (part 2):** a test publishes a verdict for a head and asserts the status, the comment heading, the finding lines and the JSON block; the design, the plan, the user docs and the architecture docs describe that contract and the rollback.
@@ -453,7 +432,14 @@ T44 to T46 run in M6 alongside T37 to T43 (owner decision 2026-11-09, to start t
 
 ## M7 Builder half
 
-T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); M7 holds T47 to T69, and their sections stay here.
+M7 holds T39, T47 to T69 and T82. T39 moved here from M6 with D5 of #1434, while T43 stays in M6. T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); their sections stay here.
+
+### T39 A Codex subscription reviewer
+- **Description:** A reviewer role runs through the Codex platform bridge on a subscription login: the login file is kept per account in the orchestrator, refreshed there, and given to the call read-only; the model and effort are pinned in config. The vendor's structured errors (usage limit, model not available for the plan, login lost) become an account cooldown or an account error with one owner notice, never a failed review or `changes`; the measured use it reports is recorded per account. The package is a new dependency the owner approves.
+- **Reference:** `test_reviewer_accounts.py` (only a closed set of codes is an account error; a reviewer's own text never is), `test_gpt_probes.py` (the usage line), `test_agents.py` (any other reviewer failure is a failed review).
+- **Acceptance:** recorded streams drive the tests; a complete stream yields a typed verdict; each structured error maps to its outcome; text that only mentions a limit is a failed review; usage is counted once.
+- **Evidence:** a real review of the sample branch with its usage line `(owner provides)`.
+- **Waits for:** T33, T14. **Size:** M. **Labels:** `class:feature`, `priority:high`.
 
 ### T44 Job containers through the Docker Engine API
 - **Description:** A new `Core/Job` module starts each job in a fresh container: read-only root, a tmpfs work area, inputs mounted read-only, one output directory read after exit, memory and CPU limits, no forge credential or signing key, and an egress allowlist through a per-job proxy (vendor API and package registries only; `none` for check and probe jobs). Each job checks at start that what it was told it can do works (a probe file written and read back, the vendor reachable through the proxy) and runs in a reduced mode that says so otherwise. Creates `docs/architecture/differences-from-the-existing-loop.md`.
@@ -655,7 +641,7 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - **Waits for:** T63, T47. **Size:** S. **Labels:** `class:core`, `priority:high`.
 
 ### T71 Stage 2: Intakt's verdicts count
-- **Description:** For the pull requests handed to Intakt (those opened under Intakt's App identity, which the loop leaves), Intakt reviews, posts its review with the round's one-time token, asks the owner for protected heads and merges. The shadow report keeps running on the loop's own heads.
+- **Description:** For the pull requests handed to Intakt (those opened under Intakt's App identity, which the loop leaves), Intakt reviews, posts its review with the round's one-time token, asks the owner for protected heads and merges. The weekly report keeps running on the loop's own heads.
 - **Acceptance:** a handed-over pull request merges through Intakt alone; the loop makes no review or merge on it.
 - **Evidence:** `(owner provides)` one week of counted reviews and merges.
 - **Waits for:** T70, T65, M6 exit. **Size:** M. **Labels:** `class:core`, `priority:high`.
@@ -685,8 +671,8 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 ## Parallel paths (M6 to M8)
 
-- From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
-- The shadow week (after T43) runs while M7 is built.
-- M6: T45 and T46 after T44, alongside T37 to T43.
-- M7: T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
-- M8: T70 after T63; T71 after the shadow exit; T72 after M7; T73 after T69; T74 last.
+- From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37.
+- The first weeks of the weekly report (after T43) run while M7 is built.
+- M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
+- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
+- M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.
