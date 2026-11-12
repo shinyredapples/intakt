@@ -122,7 +122,8 @@ final readonly class StoredFindings
         // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
         $resolved = array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true));
 
-        return array_values(array_map(static fn (TrackedFinding $tracked): Finding => $tracked->latest, $resolved));
+        // Under the ledger's id, because reviewers name findings by it and two findings may read alike.
+        return array_values(array_map(static fn (TrackedFinding $tracked): Finding => $tracked->latest->withId($tracked->id), $resolved));
     }
 
     private function locked(string $project, string $change): ChangeFindings

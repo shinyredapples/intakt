@@ -48,8 +48,10 @@ final readonly class ReviewedRepository
     public function readFile(string $path): string
     {
         $round = $this->round();
-        $answer = $this->answer($round, ReadFileTool::NAME, static fn (Checkout $head): string => (new ReadFile($head))($path));
-        $this->calls->read($round, ReadFileTool::NAME, $path);
+        $head = $this->head($round);
+        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => (new ReadFile($head))($path));
+        // Recorded as the checkout resolved it, so two spellings of one file count as one file read.
+        $this->calls->read($round, ReadFileTool::NAME, $head->relative($head->resolve($path)));
 
         return $answer;
     }
@@ -57,7 +59,8 @@ final readonly class ReviewedRepository
     public function listDirectory(string $path): string
     {
         $round = $this->round();
-        $answer = $this->answer($round, ListDirectoryTool::NAME, static fn (Checkout $head): string => (new ListDirectory($head))($path));
+        $head = $this->head($round);
+        $answer = $this->answer($round, ListDirectoryTool::NAME, static fn (): string => (new ListDirectory($head))($path));
         $this->calls->called($round, ListDirectoryTool::NAME);
 
         return $answer;
@@ -66,7 +69,8 @@ final readonly class ReviewedRepository
     public function searchFiles(string $text, string $path): string
     {
         $round = $this->round();
-        $answer = $this->answer($round, SearchFilesTool::NAME, fn (Checkout $head): string => (new SearchFiles($head, $this->fileSearched))($text, $path));
+        $head = $this->head($round);
+        $answer = $this->answer($round, SearchFilesTool::NAME, fn (): string => (new SearchFiles($head, $this->fileSearched))($text, $path));
         $this->calls->called($round, SearchFilesTool::NAME);
 
         return $answer;
@@ -104,14 +108,12 @@ final readonly class ReviewedRepository
 
     // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose. A refusal is still recorded as a call, because the reviewer made it.
     /**
-     * @param Closure(Checkout): string $read
+     * @param Closure(): string $read
      */
     private function answer(ReviewRound $round, string $tool, Closure $read): string
     {
-        $head = $this->head($round);
-
         try {
-            return $this->fence->wrap(UntrustedSource::ToolResult, $read($head));
+            return $this->fence->wrap(UntrustedSource::ToolResult, $read());
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
             $this->calls->called($round, $tool);
 

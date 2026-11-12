@@ -85,6 +85,17 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertSame(['RoundFixture.php', 'RecordingBus.php'], $this->summaries()->ofRound($round)->filesRead);
     }
 
+    public function testOneFileReadUnderTwoSpellingsIsListedOnce(): void
+    {
+        $round = $this->fixture->start(1)->id()->toRfc4122();
+        $server = $this->serverFor($round);
+
+        $this->call($server, 'read_file', ['path' => 'RoundFixture.php']);
+        $this->call($server, 'read_file', ['path' => './RoundFixture.php']);
+
+        self::assertSame(['RoundFixture.php'], $this->summaries()->ofRound($round)->filesRead);
+    }
+
     public function testARefusedReadCountsAsACallButNotAsAFileRead(): void
     {
         $round = $this->fixture->start(1)->id()->toRfc4122();
@@ -162,6 +173,17 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertSame(['F2'], $this->ids($summary->resolved));
     }
 
+    public function testOnlyTheResolvedOfTwoOpenFindingsThatReadAlikeIsListedAsResolved(): void
+    {
+        $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Same text'), $this->finding('b', 'Same text')], [], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+
+        $summary = $this->summaries()->ofRound($round);
+
+        self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
+        self::assertSame(['F1'], $this->ids($summary->resolved));
+    }
+
     public function testAnUnknownRoundIsReportedAsNotFound(): void
     {
         $this->expectException(RoundNotFound::class);
@@ -206,9 +228,9 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
     }
 
-    private function finding(string $id): Finding
+    private function finding(string $id, ?string $text = null): Finding
     {
-        return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
+        return new Finding($id, Severity::P2, 'src/A.php', 3, null, $text ?? 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 
     /**
