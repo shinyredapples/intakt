@@ -25,7 +25,7 @@ The failed execution's metadata holds the usage of every round it read, each onc
 
 ## Effect in Intakt
 
-None today. Intakt does not read the usage from the execution: `TierRoutedPlatform` keeps each round's `DeferredResult`, and `UsageLedger` leaves a cut call `unsettled` with the usage of each round, read from the round's own `StreamResult` (`docs/architecture/vendor.md`). Settling that usage once is plan T25's next part.
+None today. Intakt does not read the usage from the execution: `TierRoutedPlatform` keeps each round's `DeferredResult`, and `UsageLedger` leaves a cut call `unsettled` with the usage of each round, read from the round's own `StreamResult` (`docs/architecture/vendor.md`). A scripted run of that case (a tool round, then a stream cut mid-text) leaves one `unsettled` row holding both rounds' usage and blocks the review (`tests/Plugin/SymfonyAiVendor/SymfonyAiVendorTest.php`).
 
 ## Upstream status
 
