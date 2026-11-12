@@ -11,7 +11,7 @@ final readonly class CiDefinition
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/';
     private const string WORKING_DIRECTORY = '/working-directory:[ \t]*(\S*)/';
-    // Only a relative folder without a parent step reads plainly; anything else (an expression, quotes, ..) may point anywhere.
+    // Kept this strict because any other folder (an expression, quotes, a parent step) may point anywhere, so it must widen the match.
     private const string PLAIN_DIRECTORY = '#^(?!.*(?:^|/)\.\.(?:/|$))[\w.-]+(?:/[\w.-]+)*/?$#';
 
     /**

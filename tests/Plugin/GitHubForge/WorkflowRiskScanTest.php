@@ -204,7 +204,7 @@ final class WorkflowRiskScanTest extends TestCase
         yield 'an escaped letter in a double-quoted value' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: \"\${{ sec\\u0072ets.DEPLOY_KEY }}\"\n", 7];
         yield 'an escaped letter in a double-quoted list item' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: [\"self-hoste\\u0064\"]\n", 5];
         yield 'a doubled quote in a single-quoted value' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: '\${{ format(''}}'', secrets.DEPLOY_KEY) }}'\n", 7];
-        yield 'invalid UTF-8' =>["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-\xC3\x28latest\n", 0];
+        yield 'invalid UTF-8' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-\xC3\x28latest\n", 0];
     }
 
     #[DataProvider('formsTheScanDoesNotRead')]
