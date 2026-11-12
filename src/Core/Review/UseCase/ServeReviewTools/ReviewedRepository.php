@@ -51,9 +51,10 @@ final readonly class ReviewedRepository
     {
         $round = $this->round();
         $head = $this->head($round);
-        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => (new ReadFile($head))($path));
+        $real = $this->refusedAsCall($round, ReadFileTool::NAME, static fn (): string => $head->resolve($path));
+        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => new ReadFile($head)->contentAt($real, $path));
         // Recorded as the checkout resolved it, so two spellings of one file count as one file read.
-        $this->recordedRead($round, $head->relative($head->resolve($path)));
+        $this->recordedRead($round, $head->relative($real));
 
         return $answer;
     }
@@ -121,14 +122,23 @@ final readonly class ReviewedRepository
         return $reviewer->getUserIdentifier();
     }
 
-    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose. A refusal is still recorded as a call, because the reviewer made it.
+    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose.
     /**
      * @param Closure(): string $read
      */
     private function answer(ReviewRound $round, string $tool, Closure $read): string
     {
+        return $this->refusedAsCall($round, $tool, fn (): string => $this->fence->wrap(UntrustedSource::ToolResult, $read()));
+    }
+
+    // A refusal is still recorded as a call, because the reviewer made it.
+    /**
+     * @param Closure(): string $step
+     */
+    private function refusedAsCall(ReviewRound $round, string $tool, Closure $step): string
+    {
         try {
-            return $this->fence->wrap(UntrustedSource::ToolResult, $read());
+            return $step();
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
             $this->recordedCall($round, $tool);
 
