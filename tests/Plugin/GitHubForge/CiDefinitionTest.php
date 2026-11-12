@@ -36,6 +36,20 @@ final class CiDefinitionTest extends TestCase
         self::assertSame([], $this->ciPaths(['scripts/test.sh.bak', 'tools/linter', 'old-scripts/test.sh', 'docs/Dockerfiles.md']));
     }
 
+    public function testAScriptRunFromAWorkingDirectoryIsACiChange(): void
+    {
+        $workflow = "jobs:\n  t:\n    steps:\n      - run: ./test.sh\n        working-directory: ./scripts/ # the scripts\n";
+
+        self::assertSame(['scripts/test.sh'], $this->ciPathsOf($workflow, ['scripts/test.sh', 'tools/test.sh', 'test.sh.bak']));
+    }
+
+    public function testAScriptRunFromAWorkingDirectoryOfAnExpressionIsACiChangeInAnyFolder(): void
+    {
+        $workflow = "defaults:\n  run:\n    working-directory: \${{ github.workspace }}/scripts\njobs:\n  t:\n    steps:\n      - run: ./test.sh\n";
+
+        self::assertSame(['scripts/test.sh', 'tools/test.sh'], $this->ciPathsOf($workflow, ['scripts/test.sh', 'tools/test.sh', 'scripts/old-test.sh']));
+    }
+
     public function testEveryChangedPathIsACiChangeWhenAWorkflowCannotBeRead(): void
     {
         $paths = new CiDefinition()->changedAmong([new WorkflowFile('.github/workflows/ci.yml', null)], ['src/App.php']);
@@ -50,6 +64,16 @@ final class CiDefinitionTest extends TestCase
      */
     private function ciPaths(array $changed): array
     {
-        return new CiDefinition()->changedAmong([new WorkflowFile('.github/workflows/ci.yml', self::WORKFLOW)], $changed);
+        return $this->ciPathsOf(self::WORKFLOW, $changed);
+    }
+
+    /**
+     * @param list<string> $changed
+     *
+     * @return list<string>
+     */
+    private function ciPathsOf(string $workflow, array $changed): array
+    {
+        return new CiDefinition()->changedAmong([new WorkflowFile('.github/workflows/ci.yml', $workflow)], $changed);
     }
 }

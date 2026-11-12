@@ -143,6 +143,11 @@ final class WorkflowRiskScanTest extends TestCase
         self::assertSame([], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          GH_TOKEN: \${{ secrets.GITHUB_TOKEN }}\n        run: gh pr view\n"));
     }
 
+    public function testAStringInAnExpressionThatClosesBeforeItsBracesIsRead(): void
+    {
+        self::assertSame([], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    if: \${{ github.ref == 'refs/heads/main' && 'it''s' != '' }}\n    env:\n      K: \"plain \${{ github.sha }}\"\n"));
+    }
+
     public function testPassingSecretsOnAsks(): void
     {
         self::assertSame(['6 unreadable', '7 secret'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    uses: ./.github/workflows/build.yml\n    secrets: inherit\n"));
@@ -193,7 +198,13 @@ final class WorkflowRiskScanTest extends TestCase
         yield 'a second document' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n---\njobs: {}\n", 6];
         yield 'a block scalar with an indentation indicator' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |2\n          true\n", 7];
         yield 'a dash alone' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      -\n        run: true\n", 7];
-        yield 'invalid UTF-8' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-\xC3\x28latest\n", 0];
+        yield 'closing braces inside a string of an expression' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"\${{ format('}}', secrets.DEPLOY_KEY) }}\"\n", 7];
+        yield 'closing braces and a placeholder inside a string of an expression' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"\${{ format('}}{0}', secrets.DEPLOY_KEY) }}\"\n", 7];
+        yield 'an escaped dollar in a double-quoted value' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          K: \"\\x24{{ secrets.DEPLOY_KEY }}\"\n        run: true\n", 8];
+        yield 'an escaped letter in a double-quoted value' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: \"\${{ sec\\u0072ets.DEPLOY_KEY }}\"\n", 7];
+        yield 'an escaped letter in a double-quoted list item' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: [\"self-hoste\\u0064\"]\n", 5];
+        yield 'a doubled quote in a single-quoted value' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    env:\n      K: '\${{ format(''}}'', secrets.DEPLOY_KEY) }}'\n", 7];
+        yield 'invalid UTF-8' =>["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-\xC3\x28latest\n", 0];
     }
 
     #[DataProvider('formsTheScanDoesNotRead')]

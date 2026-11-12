@@ -10,6 +10,9 @@ final readonly class CiDefinition
     private const string GITHUB_FOLDER = '.github/';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/';
+    private const string WORKING_DIRECTORY = '/working-directory:[ \t]*(\S*)/';
+    // Only a relative folder without a parent step reads plainly; anything else (an expression, quotes, ..) may point anywhere.
+    private const string PLAIN_DIRECTORY = '#^(?!.*(?:^|/)\.\.(?:/|$))[\w.-]+(?:/[\w.-]+)*/?$#';
 
     /**
      * @param list<WorkflowFile> $workflows
@@ -39,6 +42,36 @@ final readonly class CiDefinition
             return true;
         }
 
-        return 1 === preg_match('/(?<![\w.-])'.preg_quote($path, '/').'(?![\w.\/-])/', $workflow->content);
+        return array_any(
+            $this->namesFor($workflow->content, $path),
+            static fn (string $name): bool => 1 === preg_match('/(?<![\w.-])'.preg_quote($name, '/').'(?![\w.\/-])/', $workflow->content),
+        );
+    }
+
+    // A step run from a working directory names its files relative to it; a directory this cannot read could be any folder of the path.
+    /** @return list<string> */
+    private function namesFor(string $content, string $path): array
+    {
+        preg_match_all(self::WORKING_DIRECTORY, $content, $directories);
+        $names = [$path];
+        foreach ($directories[1] as $directory) {
+            if (1 !== preg_match(self::PLAIN_DIRECTORY, $directory)) {
+                return [...$names, ...$this->suffixes($path)];
+            }
+            $prefix = trim(preg_replace('#^(\./)+#', '', $directory) ?? $directory, '/').'/';
+            if (str_starts_with($path, $prefix)) {
+                $names[] = substr($path, strlen($prefix));
+            }
+        }
+
+        return $names;
+    }
+
+    /** @return list<string> */
+    private function suffixes(string $path): array
+    {
+        $parts = explode('/', $path);
+
+        return array_map(static fn (int $start): string => implode('/', array_slice($parts, $start)), array_keys($parts));
     }
 }

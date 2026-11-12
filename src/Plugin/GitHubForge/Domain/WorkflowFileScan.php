@@ -61,7 +61,16 @@ final class WorkflowFileScan
             $this->findings->report($line->number, WorkflowRiskKind::Unreadable, 'an expression that does not close on its line');
         }
         foreach ($expressions[1] as $expression) {
+            $this->checkStrings($line->number, $expression);
             $this->checkSecret($line->number, $expression);
+        }
+    }
+
+    // GitHub skips a }} inside a string literal, so an odd count of quotes means the expression goes on past the braces this scan stopped at.
+    private function checkStrings(int $number, string $expression): void
+    {
+        if (1 === substr_count($expression, "'") % 2) {
+            $this->findings->report($number, WorkflowRiskKind::Unreadable, 'an expression with closing braces inside a string');
         }
     }
 
