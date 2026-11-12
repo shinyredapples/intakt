@@ -292,7 +292,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $held->resume();
     }
 
-    // The tool call's publisher is paused inside its read, holding the lock, when the judge arrives: the order that published its summary after the judged state.
+    // The tool call's publisher is paused inside its read, holding the lock, so the judge arrives while it is mid-publish: the order that published its summary after the judged state.
     public function testAJudgedStateWaitsForTheToolCallPublishingItsSummaryAndStaysTheLastUpdate(): void
     {
         $updates = $this->updates(null, $this->summariesJudgedAfterTheFirstRead(), new FiberYieldingLockStore());
@@ -312,7 +312,7 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('Judged.', array_last($this->published)?->getData() ?? '');
     }
 
-    // The judge is paused inside its read, holding the lock, when a tool call's publisher arrives: it leaves the summary to the judge, whose state nothing may follow.
+    // The judge is paused inside its read, holding the lock, so the tool call's publisher finds it busy and leaves the summary to the judge, because nothing may follow the judged state.
     public function testAToolCallThatFindsTheJudgePublishingLeavesItsSummaryToTheJudge(): void
     {
         $updates = $this->updates(null, $this->summariesJudgedAfterTheFirstRead());
@@ -363,8 +363,12 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('Judged.', $this->published[0]->getData());
         $logs = $this->log->cleanLogs();
         self::assertCount(1, $logs);
-        self::assertSame(['warning', 'A live session summary was not published.'], [$logs[0][0], $logs[0][1]]);
-        self::assertInstanceOf(LockAcquiringException::class, $logs[0][2]['exception']);
+        $log = $logs[0];
+        self::assertIsArray($log);
+        self::assertSame(['warning', 'A live session summary was not published.'], [$log[0], $log[1]]);
+        $context = $log[2];
+        self::assertIsArray($context);
+        self::assertInstanceOf(LockAcquiringException::class, $context['exception']);
     }
 
     /**
@@ -381,7 +385,7 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
-    // The first read pauses its fiber before the judge committed and answers a running round; every later read finds the round judged.
+    // The first read pauses its fiber and answers a running round, because it stands for a read taken before the judge committed; every later one finds the round judged, since the judge commits before it publishes.
     private function summariesJudgedAfterTheFirstRead(): SessionSummaries
     {
         $reads = 0;
