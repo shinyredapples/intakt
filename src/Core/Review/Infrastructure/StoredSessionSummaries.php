@@ -38,7 +38,7 @@ final readonly class StoredSessionSummaries implements SessionSummaries
         );
     }
 
-    // Taken from the open findings the round checked, by ledger id, because a round completed before resolved findings were kept under that id names them by its reviewer's id, which names no finding of the ledger.
+    // Taken from the open findings the round checked when one equals a kept finding in id and content, because a round completed before resolved findings were kept under ledger ids kept them under its reviewer's ids, and such an id can be another open finding's ledger id.
     /**
      * @param list<Finding> $checking
      * @param list<Finding> $resolved
@@ -47,8 +47,8 @@ final readonly class StoredSessionSummaries implements SessionSummaries
      */
     private function resolvedAmong(array $checking, array $resolved): array
     {
-        $ids = array_map(static fn (Finding $kept): string => $kept->id, $resolved);
+        $kept = array_map(static fn (Finding $finding): string => json_encode($finding, JSON_THROW_ON_ERROR), $resolved);
 
-        return array_values(array_filter($checking, static fn (Finding $open): bool => in_array($open->id, $ids, true)));
+        return array_values(array_filter($checking, static fn (Finding $open): bool => in_array(json_encode($open, JSON_THROW_ON_ERROR), $kept, true)));
     }
 }

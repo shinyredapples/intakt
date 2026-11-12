@@ -28,6 +28,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Serializer\SerializerInterface;
 
 // Calls go through the review server over HTTP, because that is where every reviewer's tool calls are served and recorded, whichever vendor runs it.
 #[Group('persistence')]
@@ -184,6 +185,21 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertSame(['F1'], $this->ids($summary->resolved));
     }
 
+    // A round completed before resolved findings were kept under ledger ids kept them as its reviewer wrote them, and a reviewer's id may be another finding's ledger id.
+    public function testALegacyRoundKeptUnderAReviewerIdThatNamesAnotherLedgerFindingListsNoneAsResolved(): void
+    {
+        $first = $this->finding('F2');
+        $this->completedRound(new Verdict(Decision::Changes, [$first, $this->finding('x')], [], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $this->fixture->transactions()->stored($round)->keepResolvedFindings($this->storedSerializer()->serialize([$first], 'json'));
+        $this->fixture->entities->flush();
+
+        $summary = $this->summaries()->ofRound($round);
+
+        self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
+        self::assertSame([], $summary->resolved);
+    }
+
     public function testAnUnknownRoundIsReportedAsNotFound(): void
     {
         $this->expectException(RoundNotFound::class);
@@ -210,6 +226,14 @@ final class StoredSessionSummariesTest extends KernelTestCase
         }
 
         return $round;
+    }
+
+    private function storedSerializer(): SerializerInterface
+    {
+        $serializer = self::getContainer()->get('serializer.stored');
+        self::assertInstanceOf(SerializerInterface::class, $serializer);
+
+        return $serializer;
     }
 
     private function serverFor(string $round): McpServerClient
