@@ -22,15 +22,21 @@ final readonly class ChangedFile
     ) {
     }
 
-    // Not for an added file or a submodule, because the one had nothing to lose and the other's entry is a commit, not content.
+    // Not for an added file or a former submodule, because the one had nothing to lose and the other's entry was a commit, not content.
     public function couldLoseContent(): bool
     {
-        return !$this->isAdded() && self::GITLINK !== $this->oldMode && self::GITLINK !== $this->newMode;
+        return !$this->isAdded() && self::GITLINK !== $this->oldMode;
     }
 
-    public function isRemoved(): bool
+    // A file a submodule replaced keeps none of its content, because the new entry is a commit id.
+    public function isGone(): bool
     {
-        return str_starts_with($this->status, 'D');
+        return str_starts_with($this->status, 'D') || self::GITLINK === $this->newMode;
+    }
+
+    public function isRenamed(): bool
+    {
+        return str_starts_with($this->status, 'R');
     }
 
     /**

@@ -321,6 +321,40 @@ final class RunCheckJobTest extends TestCase
         self::assertSame(CheckVerdict::Passed, $outcome instanceof CheckJobOutcome ? $outcome->verdict : null);
     }
 
+    public function testAFileReplacedByASubmoduleHasLostItsContent(): void
+    {
+        $this->givenMainHolds('docs/guide.md', $this->lines(120));
+        $this->history->commitSubmodule('docs/guide.md', str_repeat('a', 40));
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"]);
+
+        self::assertInstanceOf(CheckJobOutcome::class, $outcome);
+        self::assertSame([['docs/guide.md', 120, 0]], $this->lostIn($outcome));
+    }
+
+    public function testAMovedFileRewrittenBeyondRecognitionPassesWhenThePlanNamesItsNewPath(): void
+    {
+        $this->givenMainHolds('docs/old.md', $this->lines(120));
+        $this->history->moveFile('docs/old.md', 'docs/new.md', 'Move the guide');
+        $this->history->commitFile('docs/new.md', "1\n", 'Rewrite the guide');
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), null, ['docs/new.md']));
+
+        self::assertSame(CheckVerdict::Passed, $outcome instanceof CheckJobOutcome ? $outcome->verdict : null);
+    }
+
+    public function testAMovedFileRewrittenBeyondRecognitionFailsWhenThePlanDoesNotNameIt(): void
+    {
+        $this->givenMainHolds('docs/old.md', $this->lines(120));
+        $this->history->moveFile('docs/old.md', 'docs/new.md', 'Move the guide');
+        $this->history->commitFile('docs/new.md', "1\n", 'Rewrite the guide');
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), null, ['docs/other.md']));
+
+        self::assertInstanceOf(CheckJobOutcome::class, $outcome);
+        self::assertSame([['docs/old.md', 120, 0]], $this->lostIn($outcome));
+    }
+
     private function givenMainHolds(string $path, string $content): void
     {
         $this->history->checkout('main');

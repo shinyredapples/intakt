@@ -24,10 +24,14 @@ final readonly class LostContentCheck
      */
     public function of(string $repository, string $head, array $namedByThePlan): array
     {
+        // Against the merge base, because a file main shrank after the branch started is not this change's loss; renames are followed, so a moved file is not read as removed.
+        $main = $this->git->output($repository, ['symbolic-ref', '--quiet', 'HEAD']);
+        $base = $this->git->output($repository, ['merge-base', $main, $head]);
+        $named = $this->withEarlierPaths($namedByThePlan, $this->movesOnTheBranch($repository, $base, $head));
         $lost = [];
 
-        foreach ($this->changedFiles($repository, $head) as $file) {
-            $content = $this->unnamedLoss($repository, $file, $namedByThePlan);
+        foreach ($this->changedFiles($repository, $base, $head) as $file) {
+            $content = $this->unnamedLoss($repository, $file, $named);
 
             if ($content instanceof LostContent) {
                 $lost[] = $content;
@@ -42,14 +46,47 @@ final readonly class LostContentCheck
      *
      * @throws HandBackNotChecked
      */
-    private function changedFiles(string $repository, string $head): array
+    private function changedFiles(string $repository, string $base, string $head): array
     {
-        // Against the merge base, because a file main shrank after the branch started is not this change's loss; renames are followed, so a moved file is not read as removed.
-        $main = $this->git->output($repository, ['symbolic-ref', '--quiet', 'HEAD']);
-        $base = $this->git->output($repository, ['merge-base', $main, $head]);
         $raw = $this->git->exactOutput($repository, ['diff', '--raw', '-z', '-M', '--no-abbrev', $base, $head, '--']);
 
         return $this->parsed(explode("\0", $raw));
+    }
+
+    /**
+     * @return list<ChangedFile>
+     *
+     * @throws HandBackNotChecked
+     */
+    private function movesOnTheBranch(string $repository, string $base, string $head): array
+    {
+        // Commit by commit, because a file moved and then rewritten below git's similarity threshold reads as removed in the diff of the whole branch.
+        $raw = $this->git->exactOutput($repository, ['log', '--raw', '-z', '-M', '--no-abbrev', '--format=', $base.'..'.$head, '--']);
+        $fields = array_values(array_filter(explode("\0", $raw), static fn (string $field): bool => '' !== $field));
+
+        return array_values(array_filter($this->parsed($fields), static fn (ChangedFile $file): bool => $file->isRenamed()));
+    }
+
+    /**
+     * @param list<string>      $named
+     * @param list<ChangedFile> $moves
+     *
+     * @return list<string>
+     */
+    private function withEarlierPaths(array $named, array $moves): array
+    {
+        // A path the plan names covers every path the file had earlier on the branch, so a move before the rewrite keeps the exemption.
+        do {
+            $before = count($named);
+
+            foreach ($moves as $move) {
+                if (in_array($move->paths[1] ?? null, $named, true) && !in_array($move->paths[0], $named, true)) {
+                    $named[] = $move->paths[0];
+                }
+            }
+        } while (count($named) !== $before);
+
+        return $named;
     }
 
     /**
@@ -85,7 +122,7 @@ final readonly class LostContentCheck
         }
 
         $before = $this->git->exactOutput($repository, ['cat-file', 'blob', $file->oldBlob]);
-        $after = $file->isRemoved() ? '' : $this->git->exactOutput($repository, ['cat-file', 'blob', $file->newBlob]);
+        $after = $file->isGone() ? '' : $this->git->exactOutput($repository, ['cat-file', 'blob', $file->newBlob]);
 
         return LostContent::in($file->path(), $before, $after);
     }
