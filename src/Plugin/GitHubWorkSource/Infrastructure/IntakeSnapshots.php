@@ -12,17 +12,16 @@ use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
-use InvalidArgumentException;
+use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Symfony\Component\Lock\LockFactory;
 
 // The tick's one listing of a project, kept as rows: an item the listing shows unchanged is not read again, and a listing that comes back unchanged is answered from them.
 final readonly class IntakeSnapshots
 {
-    private const string IDEA = 'idea';
-
     public function __construct(
         private EntityManagerInterface $entities,
         private LockFactory $locks,
@@ -62,7 +61,7 @@ final readonly class IntakeSnapshots
     {
         $this->forgetRowsOf($project);
         $row = $this->entities->find(QueuedIssue::class, ['project' => $project, 'number' => $number])
-            ?? throw new InvalidArgumentException(sprintf('Project "%s" has no open task #%d.', $project, $number));
+            ?? throw TaskNotQueued::named($project, $number);
         $row->failForGood($reason);
         $this->entities->flush();
     }
@@ -119,7 +118,7 @@ final readonly class IntakeSnapshots
      */
     private function trustOf(string $project, ListedIssue $listed): array
     {
-        $isTask = !$listed->isPullRequest && in_array($this->labels->of($project), $listed->labels, true) && !in_array(self::IDEA, $listed->labels, true);
+        $isTask = !$listed->isPullRequest && in_array($this->labels->of($project), $listed->labels, true) && !in_array(WorkLabels::IDEA, $listed->labels, true);
         if (!$isTask) {
             return [null, false];
         }

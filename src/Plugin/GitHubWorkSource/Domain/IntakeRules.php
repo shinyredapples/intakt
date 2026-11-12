@@ -4,29 +4,23 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
-// Eligible, then ready, then ordered: docs/design/05-architecture/03-choosing-work.md
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
+
+// The steps of docs/design/05-architecture/03-choosing-work.md: eligible, then ready, then ordered.
 final readonly class IntakeRules
 {
-    private const string IDEA = 'idea';
-
     public function __construct(
         private string $eligibilityLabel,
     ) {
     }
 
     /**
-     * @param list<QueuedIssue> $items every open issue and pull request of one complete listing
+     * @param list<QueuedIssue> $items
      */
     public function planOf(array $items): IntakePlan
     {
-        $open = [];
-        $withPullRequest = [];
-        foreach ($items as $item) {
-            $open[$item->number()] = $item;
-            foreach ($item->isPullRequest() ? $item->closedBy() : [] as $closed) {
-                $withPullRequest[$closed] = true;
-            }
-        }
+        $open = $this->byNumber($items);
+        $withPullRequest = $this->closedByOpenPullRequests($items);
 
         $ready = [];
         $held = [];
@@ -46,9 +40,41 @@ final readonly class IntakeRules
         return new IntakePlan($ready, $held);
     }
 
+    /**
+     * @param list<QueuedIssue> $items
+     *
+     * @return array<int, QueuedIssue>
+     */
+    private function byNumber(array $items): array
+    {
+        $open = [];
+        foreach ($items as $item) {
+            $open[$item->number()] = $item;
+        }
+
+        return $open;
+    }
+
+    /**
+     * @param list<QueuedIssue> $items
+     *
+     * @return array<int, true>
+     */
+    private function closedByOpenPullRequests(array $items): array
+    {
+        $closed = [];
+        foreach (array_filter($items, static fn (QueuedIssue $item): bool => $item->isPullRequest()) as $pullRequest) {
+            foreach ($pullRequest->closedBy() as $number) {
+                $closed[$number] = true;
+            }
+        }
+
+        return $closed;
+    }
+
     private function isEligible(QueuedIssue $item): bool
     {
-        return !$item->isPullRequest() && $item->hasLabel($this->eligibilityLabel) && !$item->hasLabel(self::IDEA) && $item->isTrusted();
+        return !$item->isPullRequest() && $item->hasLabel($this->eligibilityLabel) && !$item->hasLabel(WorkLabels::IDEA) && $item->isTrusted();
     }
 
     /**
@@ -60,6 +86,22 @@ final readonly class IntakeRules
             return 'failed for good: '.$task->failedReason();
         }
 
+        $targets = $this->waitedFor($task, $open);
+        $failed = array_find($targets, static fn (QueuedIssue $target): bool => null !== $target->failedReason());
+        if (null !== $failed) {
+            return sprintf('depends on #%d, which failed for good: %s', $failed->number(), $failed->failedReason());
+        }
+
+        return [] === $targets ? null : 'waits for '.implode(', ', array_map(static fn (QueuedIssue $target): string => '#'.$target->number(), $targets));
+    }
+
+    /**
+     * @param array<int, QueuedIssue> $open
+     *
+     * @return list<QueuedIssue>
+     */
+    private function waitedFor(QueuedIssue $task, array $open): array
+    {
         // A number the listing does not show open counts as closed, because only a complete listing gets here.
         $targets = [];
         foreach ($task->waitsFor() as $number) {
@@ -68,13 +110,7 @@ final readonly class IntakeRules
             }
         }
 
-        foreach ($targets as $target) {
-            if (null !== $target->failedReason()) {
-                return sprintf('depends on #%d, which failed for good: %s', $target->number(), $target->failedReason());
-            }
-        }
-
-        return [] === $targets ? null : 'waits for '.implode(', ', array_map(static fn (QueuedIssue $target): string => '#'.$target->number(), $targets));
+        return $targets;
     }
 
     /**

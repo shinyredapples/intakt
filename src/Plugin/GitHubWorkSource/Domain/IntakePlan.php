@@ -7,7 +7,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 final readonly class IntakePlan
 {
     /**
-     * @param list<QueuedIssue> $ready in pick order
+     * @param list<QueuedIssue> $ready
      * @param list<HeldIssue>   $held
      */
     public function __construct(

@@ -40,7 +40,7 @@ final readonly class GitHubIssueReads implements IssueReads
         $repository = $this->repositories->addressOf($project);
         // A slot of its own, because the watcher's listing of the same tick already took the project's.
         $this->reserve->admitListing('issues:'.$project);
-        $first = $this->read('GET', $repository->path().'/issues', $this->page(1), $validator);
+        $first = $this->get($repository->path().'/issues', $this->page(1), $validator);
         if (self::NOT_MODIFIED === $first['status']) {
             return IssueListing::unchanged();
         }
@@ -55,22 +55,20 @@ final readonly class GitHubIssueReads implements IssueReads
 
     public function lastEditorOf(string $project, int $number): string
     {
-        $address = $this->repositories->addressOf($project);
-        [$owner, $name] = explode('/', $address->fullName(), 2);
+        [$owner, $name] = explode('/', $this->repositories->addressOf($project)->fullName(), 2);
         $body = json_encode(['query' => self::EDITOR_QUERY, 'variables' => ['owner' => $owner, 'name' => $name, 'number' => $number]], JSON_THROW_ON_ERROR);
-        $answer = $this->decode($this->read('POST', '/graphql', ['body' => $body])['body']);
+        $answer = $this->decode($this->send('POST', '/graphql', ['body' => $body])['body']);
 
-        $issue = $answer['data']['repository']['issue'] ?? null;
+        $issue = $this->at($answer, 'data', 'repository', 'issue');
         if (!is_array($issue)) {
             throw new ForgeReadFailed('GitHub answered without the issue.');
         }
 
         // An account GitHub no longer knows (a deleted one) has no login, and a text nobody can name is not trusted.
-        $login = $issue['editor']['login'] ?? $issue['author']['login'] ?? null;
+        $login = $this->at($issue, 'editor', 'login') ?? $this->at($issue, 'author', 'login');
 
         return is_string($login) && '' !== $login ? $login : throw new ForgeReadFailed('GitHub answered an issue without an editor.');
     }
-
     /**
      * @return array<string, int|string>
      */
@@ -86,7 +84,7 @@ final readonly class GitHubIssueReads implements IssueReads
     {
         $issues = [];
         for ($page = 2; $page <= self::MAX_PAGES; ++$page) {
-            $more = $this->issuesOf($this->read('GET', $repository->path().'/issues', $this->page($page))['body']);
+            $more = $this->issuesOf($this->get($repository->path().'/issues', $this->page($page))['body']);
             $issues = [...$issues, ...$more];
             if (count($more) < self::PAGE_SIZE) {
                 return $issues;
@@ -117,7 +115,7 @@ final readonly class GitHubIssueReads implements IssueReads
     {
         $number = $issue['number'] ?? null;
         $body = $issue['body'] ?? '';
-        $due = $issue['milestone']['due_on'] ?? null;
+        $due = $this->at($issue, 'milestone', 'due_on');
         if (!is_int($number) || $number < 1 || !is_string($body)) {
             throw new ForgeReadFailed('GitHub listed an issue this forge cannot read.');
         }
@@ -152,12 +150,22 @@ final readonly class GitHubIssueReads implements IssueReads
     /**
      * @param array<mixed> $data
      */
-    private function text(array $data, string ...$keys): string
+    private function at(array $data, string ...$keys): mixed
     {
         $value = $data;
         foreach ($keys as $key) {
             $value = is_array($value) ? ($value[$key] ?? null) : null;
         }
+
+        return $value;
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $this->at($data, ...$keys);
 
         return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
@@ -177,42 +185,51 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
+     * @param array<string, int|string> $query
+     *
+     * @return array{status: int, body: string, etag: ?string}
+     */
+    private function get(string $path, array $query, ?string $validator = null): array
+    {
+        $headers = null === $validator ? [] : ['If-None-Match' => $validator];
+        $answer = $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
+
+        return self::NOT_MODIFIED === $answer['status'] && null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator] : $answer;
+    }
+
+    /**
      * @param array<string, mixed> $options
      *
      * @return array{status: int, body: string, etag: ?string}
      *
      * @throws ForgeRateLimited
      */
-    private function read(string $method, string $path, array $options, ?string $validator = null): array
+    private function send(string $method, string $path, array $options): array
     {
-        $headers = ['Accept' => 'application/vnd.github+json'];
-        if (null !== $validator) {
-            $headers['If-None-Match'] = $validator;
-        }
-
-        $request = ['auth_bearer' => $this->bearer(), 'headers' => $headers] + (isset($options['body']) ? $options : ['query' => $options]);
+        $options['auth_bearer'] = $this->bearer();
+        $options['headers'] = ['Accept' => 'application/vnd.github+json', ...(is_array($options['headers'] ?? null) ? $options['headers'] : [])];
 
         try {
-            $response = $this->calls->asInstallation($method, $path, $request);
+            $response = $this->calls->asInstallation($method, $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
             $etag = $response->getHeaders(false)['etag'][0] ?? null;
         } catch (ExceptionInterface $failure) {
-            // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
-        if (self::NOT_MODIFIED === $status && null !== $validator) {
-            return ['status' => $status, 'body' => '', 'etag' => $validator];
-        }
-
-        if ($status < 200 || $status >= 300) {
+        if (self::NOT_MODIFIED !== $status && ($status < 200 || $status >= 300)) {
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
         return ['status' => $status, 'body' => $body, 'etag' => $etag];
     }
 
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
     private function bearer(): string
     {
         try {

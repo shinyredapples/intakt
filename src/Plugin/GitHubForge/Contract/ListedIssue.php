@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubForge\Contract;
 
 use DateTimeImmutable;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// An open issue or pull request as the forge's one listing shows it; GitHub lists both together.
+// Because GitHub lists issues and pull requests together, one value holds both and says which it is.
+#[Exclude]
 final readonly class ListedIssue
 {
     /**

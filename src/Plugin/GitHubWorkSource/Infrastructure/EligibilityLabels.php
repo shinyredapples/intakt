@@ -5,13 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Plugin\GitHubWorkSource\Infrastructure;
 
 use Intakt\Core\Watcher\Contract\WatcherServices;
+use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// The label is the project's own to name; without one the default family name of docs/design/05-architecture/04-labels.md applies.
+// Because the label is the project's own to name, and a project that names none gets the default of the design.
 final readonly class EligibilityLabels
 {
-    private const string DEFAULT = 'intakt';
-
     /**
      * @param array<string, array{eligibility_label?: string}> $projects
      */
@@ -23,6 +22,6 @@ final readonly class EligibilityLabels
 
     public function of(string $project): string
     {
-        return $this->projects[$project]['eligibility_label'] ?? self::DEFAULT;
+        return $this->projects[$project]['eligibility_label'] ?? WorkLabels::ELIGIBILITY;
     }
 }

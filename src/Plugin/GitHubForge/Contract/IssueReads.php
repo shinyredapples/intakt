@@ -9,17 +9,15 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 
 interface IssueReads
 {
+    // Every page or a failure, because a listing that comes back short would sort the wrong task first and close waits that are still open.
     /**
-     * Every page of the open issues and pull requests, or a failure: a listing that comes back short is never returned.
-     *
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
      */
     public function listOpen(string $project, ?string $validator): IssueListing;
 
+    // The author when nobody edited the text, because the author wrote it then.
     /**
-     * The account that last saved the issue's text, which is its author when nobody edited it.
-     *
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
      */

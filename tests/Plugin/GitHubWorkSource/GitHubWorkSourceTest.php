@@ -22,12 +22,12 @@ use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeSnapshots;
 use Intakt\Plugin\WorkSource\Contract\HeldTask;
 use Intakt\Plugin\WorkSource\Contract\NothingPicked;
 use Intakt\Plugin\WorkSource\Contract\Task;
+use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Intakt\Plugin\WorkSource\Contract\WorkerState;
 use Intakt\Plugin\WorkSource\Contract\WorkPick;
 use Intakt\Plugin\WorkSource\Contract\WorkQueue;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
-use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
@@ -51,6 +51,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(TrustNotChecked::class)]
 #[UsesClass(Task::class)]
+#[UsesClass(TaskNotQueued::class)]
 #[UsesClass(HeldTask::class)]
 #[UsesClass(WorkPick::class)]
 #[UsesClass(WorkQueue::class)]
@@ -198,7 +199,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testAFailureIsRecordedOnlyForATaskTheListingShowed(): void
     {
-        $this->expectException(InvalidArgumentException::class);
+        $this->expectException(TaskNotQueued::class);
 
         $this->source->failedForGood('alpha', 99, 'unknown');
     }
