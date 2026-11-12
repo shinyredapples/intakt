@@ -121,7 +121,7 @@ On top, a separate **security reviewer**, which never sees what the builder wrot
 
 - Intakt merges **exactly the version that was reviewed and passed CI**. If anything was pushed in between, the merge refuses. The only shortcut: a merge of main without conflicts, or a change that touches only documentation, keeps the reviews for the parts it did not touch, and the touched parts are reviewed again.
 - Main is **protected on GitHub**: no force-pushes, no deletion, required checks. A watchdog also checks that main's history was never rewritten.
-- If a CI change could reach more than a throwaway machine with read-only access, Intakt **asks you before pushing it**, because GitHub runs a pushed CI setup straight away.
+- If a CI change could reach more than a throwaway machine with read-only access, Intakt **asks you before pushing it**, because GitHub runs a pushed CI setup straight away. The check that finds such a change is built: it reads the CI setup line by line, and anything it cannot read for certain counts as risky, including a choice of machine kept in a GitHub setting, since that setting can change without anyone editing the files. A script or Dockerfile the CI runs counts as part of the CI setup. Holding the push until you approve is planned.
 
 ## When something still goes wrong
 

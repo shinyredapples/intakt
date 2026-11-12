@@ -34,6 +34,7 @@ Running Intakt:
 Forges and identity:
 - [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
 - [GitHub App identity](github-app-identity.md)
+- [Workflow risk scan](workflow-risk-scan.md): the strict line scan of GitHub workflows for CI risk, the files that make up the CI definition, and `intakt:forge:workflow-risk`
 
 Models and budget:
 - [AI providers](ai-providers.md)
