@@ -107,6 +107,11 @@ final readonly class TemporaryRepository
         unlink($this->path.'/.git/objects/'.substr($hash, 0, 2).'/'.substr($hash, 2));
     }
 
+    public function cutHistoryBelow(string $commit): void
+    {
+        file_put_contents($this->path.'/.git/shallow', $commit."\n");
+    }
+
     public function writeHook(string $name, string $script): string
     {
         $path = $this->path.'/.git/hooks/'.$name;
@@ -154,6 +159,27 @@ final readonly class TemporaryRepository
         $this->git('add', '--all');
 
         return $this->commit('Merge '.$branch);
+    }
+
+    // Written by hand, because git merge refuses a second parent the branch already holds, which is how a crafted merge hides a revert or a deletion.
+    public function craftMerge(string $secondParent, string $path, ?string $content): string
+    {
+        if (null === $content) {
+            unlink($this->path.'/'.$path);
+        } else {
+            file_put_contents($this->path.'/'.$path, $content);
+        }
+        $this->git('add', '--all');
+        $merge = $this->git(...self::IDENTITY, ...['commit-tree', $this->git('write-tree'), '-p', 'HEAD', '-p', $secondParent, '-m', 'Merge']);
+        $this->git('update-ref', 'HEAD', $merge);
+
+        return $merge;
+    }
+
+    public function checkoutOrphan(string $name): void
+    {
+        $this->git('checkout', '--quiet', '--orphan', $name);
+        $this->git('rm', '--quiet', '-r', '-f', '.');
     }
 
     public function tag(string $name): void
