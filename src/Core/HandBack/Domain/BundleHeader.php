@@ -33,7 +33,7 @@ final readonly class BundleHeader
 
         $format = 'sha1';
         while ('v3' === $version && str_starts_with($lines[0] ?? '', '@')) {
-            $format = self::objectFormat((string) array_shift($lines));
+            $format = self::objectFormat(array_shift($lines));
 
             if (null === $format) {
                 return null;

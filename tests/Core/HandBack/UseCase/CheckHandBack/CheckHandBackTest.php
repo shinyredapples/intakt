@@ -296,21 +296,21 @@ final class CheckHandBackTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        (void) $this->checker()->check(new HandBack($this->history->mirror, 'main',$this->history->file(''), false));
+        (void) $this->checker()->check(new HandBack($this->history->mirror, 'main', $this->history->file(''), false));
     }
 
     public function testABranchNameGitRefusesIsAnInvalidArgument(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        (void) $this->checker()->check(new HandBack($this->history->mirror, 'a..b',$this->history->file(''), false));
+        (void) $this->checker()->check(new HandBack($this->history->mirror, 'a..b', $this->history->file(''), false));
     }
 
     public function testAFolderThatIsNoRepositoryIsNotChecked(): void
     {
         $this->expectException(HandBackNotChecked::class);
 
-        (void) $this->checker()->check(new HandBack($this->history->folder,'task', $this->history->file(''), false));
+        (void) $this->checker()->check(new HandBack($this->history->folder, 'task', $this->history->file(''), false));
     }
 
     private function movedMain(): string
