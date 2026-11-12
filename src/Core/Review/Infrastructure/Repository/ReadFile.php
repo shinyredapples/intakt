@@ -22,8 +22,12 @@ final readonly class ReadFile
 
     public function __invoke(#[Schema(description: 'Path of the file, relative to the repository root.')] string $path): string
     {
-        $real = $this->checkout->resolve($path);
+        return $this->contentAt($this->checkout->resolve($path), $path);
+    }
 
+    // Takes the path the checkout resolved, so a caller that records the file reads the very file it records; the asked path is the one a refusal names.
+    public function contentAt(string $real, string $path): string
+    {
         if (!is_file($real)) {
             throw new RuntimeException(sprintf('"%s" is not a file.', $path));
         }

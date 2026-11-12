@@ -8,6 +8,7 @@ return [
     'Core/Build',
     'Core/Dashboard',
     'Core/Git',
+    'Core/HandBack',
     'Core/Job',
     'Core/Ledger',
     'Core/Mcp',
