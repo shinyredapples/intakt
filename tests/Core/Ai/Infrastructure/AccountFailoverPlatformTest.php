@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Closure;
+use Generator;
 use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
@@ -13,6 +15,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\AccountStreamFailures;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -23,12 +26,15 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\AI\Platform\Exception\AuthenticationException;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RuntimeException as PlatformRuntimeException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
+use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -44,6 +50,7 @@ use Throwable;
 // On the native clock, because the cooldowns are RateLimiter windows, which read the system time themselves.
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
+#[CoversClass(AccountStreamFailures::class)]
 #[CoversClass(SendFailures::class)]
 #[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
@@ -418,6 +425,105 @@ final class AccountFailoverPlatformTest extends TestCase
         $first = $this->answering('first');
 
         self::assertSame($first->getModelCatalog(), $this->accounts($first, $this->answering('second'))->getModelCatalog());
+    }
+
+    public function testALimitThatArrivesBeforeTheFirstDeltaOfAStreamCoolsTheAccountDownOnce(): void
+    {
+        $cooldowns = $this->createMock(AccountCooldowns::class);
+        $cooldowns->expects(self::once())->method('coolDown')->with($this->account(Account::DEFAULT), 300);
+        $failures = new SendFailures();
+
+        $this->readStream($this->streamed(static function (): Generator {
+            yield from [];
+
+            throw new RateLimitExceededException(300);
+        }, $cooldowns, $failures));
+
+        self::assertFalse($failures->wasRejected($this->account(Account::DEFAULT)));
+    }
+
+    public function testALimitThatArrivesAfterTheFirstDeltaOfAStreamCoolsTheAccountDownOnceWithTheProvidersRetryAfter(): void
+    {
+        $cooldowns = $this->createMock(AccountCooldowns::class);
+        $cooldowns->expects(self::once())->method('coolDown')->with($this->account(Account::DEFAULT), 300);
+
+        $this->readStream($this->streamed(static function (): Generator {
+            yield new TextDelta('Looks');
+
+            // Wrapped like this because StreamedAnswer does so once the answer has started.
+            throw new IncompleteStreamException('Cut off.', 0, new RateLimitExceededException(300));
+        }, $cooldowns, new SendFailures()));
+    }
+
+    public function testAnAuthenticationFailureMidStreamMarksTheAccountAsRejected(): void
+    {
+        $cooldowns = $this->createMock(AccountCooldowns::class);
+        $cooldowns->expects(self::once())->method('coolDownRejected')->with($this->account(Account::DEFAULT));
+        $failures = new SendFailures();
+
+        $this->readStream($this->streamed(static function (): Generator {
+            yield new TextDelta('Looks');
+
+            throw new AuthenticationException('revoked');
+        }, $cooldowns, $failures));
+
+        self::assertTrue($failures->wasRejected($this->account(Account::DEFAULT)));
+    }
+
+    public function testAStreamCutWithoutACauseLeavesTheAccountFree(): void
+    {
+        $cooldowns = $this->createMock(AccountCooldowns::class);
+        $cooldowns->expects(self::never())->method('coolDown');
+
+        $this->readStream($this->streamed(static function (): Generator {
+            yield new TextDelta('Looks');
+
+            throw new IncompleteStreamException('Cut off.');
+        }, $cooldowns, new SendFailures()));
+    }
+
+    public function testAFailureRecordedTwiceForOneAccountIsNewOnlyTheFirstTime(): void
+    {
+        $failures = new SendFailures();
+        $failure = new RateLimitExceededException(300);
+
+        self::assertTrue($failures->record($this->account(Account::DEFAULT), $failure));
+        self::assertFalse($failures->record($this->account(Account::DEFAULT), $failure));
+    }
+
+    public function testAFailureAlreadyRecordedForOneAccountIsNewForAnotherAccount(): void
+    {
+        $failures = new SendFailures();
+        $failure = new RateLimitExceededException(300);
+
+        self::assertTrue($failures->record($this->account(Account::DEFAULT), $failure));
+        self::assertTrue($failures->record($this->account('team'), $failure));
+    }
+
+    private function readStream(DeferredResult $result): void
+    {
+        $failure = null;
+
+        try {
+            foreach ($result->asStream() as $delta) {
+                self::assertInstanceOf(TextDelta::class, $delta);
+            }
+        } catch (Throwable $caught) {
+            $failure = $caught;
+        }
+
+        self::assertNotNull($failure, 'The stream was expected to fail when read.');
+    }
+
+    /**
+     * @param Closure(): Generator<TextDelta> $deltas
+     */
+    private function streamed(Closure $deltas, AccountCooldowns $cooldowns, SendFailures $failures): DeferredResult
+    {
+        $platform = $this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult($deltas()));
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NullLogger(), $failures);
+
+        return $account->invoke('big', 'Review.');
     }
 
     private function read(DeferredResult $result): void
