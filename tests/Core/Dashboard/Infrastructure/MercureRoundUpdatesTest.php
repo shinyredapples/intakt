@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Fiber;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
@@ -12,7 +13,6 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\ToolCallCount;
-use Fiber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
