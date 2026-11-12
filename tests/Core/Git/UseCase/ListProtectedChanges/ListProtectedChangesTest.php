@@ -129,8 +129,8 @@ final class ListProtectedChangesTest extends TestCase
         $next = $this->repository->commitFile('bin/check', 'two');
         $this->repository->checkout('main');
 
-        // Forced order: main advances to the same content as the undone commit right when that commit is compared with its parent.
-        $changes = $this->whileMainAdvancesTo($next, 'diff-tree', $this->base.' '.$changed, fn (): ProtectedChanges => $this->whenTheHeadIsListed($head));
+        // Main moves to the undone commit's content while that commit is compared with its parent, because a main read again from its branch would then find nothing new in it.
+        $changes = $this->whileMainAdvancesTo($next, $this->base.' '.$changed, fn (): ProtectedChanges => $this->whenTheHeadIsListed($head));
 
         self::assertSame(['bin/check'], $changes->paths);
         self::assertNull($changes->unreadable);
@@ -335,9 +335,9 @@ final class ListProtectedChangesTest extends TestCase
     /**
      * @param callable(): ProtectedChanges $check
      */
-    private function whileMainAdvancesTo(string $commit, string $command, string $arguments, callable $check): ProtectedChanges
+    private function whileMainAdvancesTo(string $commit, string $comparedPair, callable $check): ProtectedChanges
     {
-        // A git on PATH that moves main before it runs the named call, as a mirror update beside the check would.
+        // A git on PATH that moves main before it runs the diff-tree of the pair, as a mirror update beside the check would.
         $path = (string) getenv('PATH');
         $shim = sys_get_temp_dir().'/intakt-git-shim-'.bin2hex(random_bytes(6));
         mkdir($shim);
@@ -345,7 +345,7 @@ final class ListProtectedChangesTest extends TestCase
             '#!/bin/sh',
             'PATH='.escapeshellarg($path),
             'export PATH',
-            'case " $* " in *" '.$command.' "*" '.$arguments.' ") git --git-dir='.escapeshellarg($this->repository->path.'/.git').' update-ref refs/heads/main '.$commit.';; esac',
+            'case " $* " in *" diff-tree "*" '.$comparedPair.' ") git --git-dir='.escapeshellarg($this->repository->path.'/.git').' update-ref refs/heads/main '.$commit.';; esac',
             'exec git "$@"',
             '',
         ]));
