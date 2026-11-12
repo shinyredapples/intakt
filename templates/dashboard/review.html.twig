@@ -106,7 +106,7 @@
     {% endfor %}
     </div>
     </div>
-    {{ include('dashboard/_session_summary.html.twig', {summary: summary, review_cost: review.cost}, with_context = false) }}
+    {{ include('dashboard/_session_summary.html.twig', {round: active.round, summary: summary, review_cost: review.cost}, with_context = false) }}
 </aside>
 {% endif %}
 </div>
