@@ -62,6 +62,7 @@ final class LongRunTest extends KernelTestCase
         $this->stillAskingForTools();
 
         self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
+        self::assertSame([ReviewerRuns::MAX_ROUNDS + 1], $this->usageRowsOfEndingEvents());
     }
 
     public function testAProviderLimitAfterManyToolRoundsOnTheTierAndItsSubstituteEndsTheRoundBlockedWithTheReasonOfTheReviewer(): void
@@ -93,6 +94,8 @@ final class LongRunTest extends KernelTestCase
         foreach ($calls as $phases) {
             self::assertSame(['started', 'unsettled'], $phases);
         }
+
+        self::assertSame([self::TOOL_ROUNDS, self::TOOL_ROUNDS], $this->usageRowsOfEndingEvents());
     }
 
     public function testALongRunThatAnswersAfterManyToolRoundsEndsWithTheVerdictAndSettlesItsCallOnce(): void
@@ -105,6 +108,25 @@ final class LongRunTest extends KernelTestCase
         self::assertSame(Decision::Approve, $review->decision);
         self::assertSame([], $review->reasons);
         self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
+        self::assertSame([self::TOOL_ROUNDS + 1], $this->usageRowsOfEndingEvents());
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function usageRowsOfEndingEvents(): array
+    {
+        $phases = $this->run->payloadValues(LedgerEventKind::UsageRecorded, 'phase');
+        $usages = $this->run->payloadValues(LedgerEventKind::UsageRecorded, 'usages');
+        $rows = [];
+
+        foreach ($phases as $index => $phase) {
+            if ('started' !== $phase) {
+                $rows[] = count((array) $usages[$index]);
+            }
+        }
+
+        return $rows;
     }
 
     private function stillAskingForTools(): ChangeReview
