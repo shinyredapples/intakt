@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -41,6 +42,7 @@ final readonly class StoredSessionSummaries implements SessionSummaries
             $checking,
             $this->findings->reportedIn($round),
             $this->resolvedAmong($checking, $this->findings->resolvedIdsOf($round)),
+            RoundState::Judged === $round->state(),
         );
     }
 

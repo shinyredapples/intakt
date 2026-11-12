@@ -18,7 +18,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
@@ -290,18 +292,111 @@ final class MercureRoundUpdatesTest extends TestCase
         $held->resume();
     }
 
+    // The tool call's publisher is paused inside its read, holding the lock, when the judge arrives: the order that published its summary after the judged state.
+    public function testAJudgedStateWaitsForTheToolCallPublishingItsSummaryAndStaysTheLastUpdate(): void
+    {
+        $updates = $this->updates(null, $this->summariesJudgedAfterTheFirstRead(), new FiberYieldingLockStore());
+        $toolCall = new Fiber(static fn () => $updates->summaryChanged(Uuid::fromString(self::ROUND)));
+        $judge = new Fiber(static fn () => $updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true)));
+
+        $toolCall->start();
+        $judge->start();
+        self::assertTrue($judge->isSuspended(), 'the judge waits for the tool call to finish');
+        $toolCall->resume();
+        $judge->resume();
+
+        self::assertTrue($toolCall->isTerminated());
+        self::assertTrue($judge->isTerminated());
+        $summary = 'replace round-'.self::ROUND.'-summary-tools';
+        self::assertSame([$summary, $summary, 'replace round-'.self::ROUND.'-state'], array_map($this->actionAndTargetOf(...), $this->published));
+        self::assertStringContainsString('Judged.', array_last($this->published)?->getData() ?? '');
+    }
+
+    // The judge is paused inside its read, holding the lock, when a tool call's publisher arrives: it leaves the summary to the judge, whose state nothing may follow.
+    public function testAToolCallThatFindsTheJudgePublishingLeavesItsSummaryToTheJudge(): void
+    {
+        $updates = $this->updates(null, $this->summariesJudgedAfterTheFirstRead());
+        $judge = new Fiber(static fn () => $updates->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true)));
+
+        $judge->start();
+        $updates->summaryChanged(Uuid::fromString(self::ROUND));
+        $judge->resume();
+
+        self::assertTrue($judge->isTerminated());
+        self::assertSame(['replace round-'.self::ROUND.'-summary-tools', 'replace round-'.self::ROUND.'-state'], array_map($this->actionAndTargetOf(...), $this->published));
+        self::assertStringContainsString('Judged.', array_last($this->published)?->getData() ?? '');
+    }
+
+    public function testAToolCallRecordedAfterTheRoundWasJudgedPublishesNoSummary(): void
+    {
+        $judged = new SessionSummary([new ToolCallCount('read_file', 2)], Cost::none(), [], [], [], [], true);
+
+        $this->updates(null, $this->summaries($judged))->summaryChanged(Uuid::fromString(self::ROUND));
+
+        self::assertSame([], $this->published);
+    }
+
+    public function testAJudgedRoundWhoseSummaryCannotBeComputedStillPublishesItsJudgedState(): void
+    {
+        $failure = new RuntimeException('the store is gone');
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willThrowException($failure);
+
+        $this->updates(null, $summaries)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('Judged.', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'A live session summary was not published.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
+    public function testAJudgedStateGoesOutWhenTheSummaryLockCannotBeTaken(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('the lock store is gone'));
+
+        $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), [], [], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('Judged.', $this->published[0]->getData());
+        $logs = $this->log->cleanLogs();
+        self::assertCount(1, $logs);
+        self::assertSame(['warning', 'A live session summary was not published.'], [$logs[0][0], $logs[0][1]]);
+        self::assertInstanceOf(LockAcquiringException::class, $logs[0][2]['exception']);
+    }
+
     /**
      * @param (callable(Update): string)|null $publisher
      */
-    private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null): MercureRoundUpdates
+    private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null, ?PersistingStoreInterface $locks = null): MercureRoundUpdates
     {
         return new MercureRoundUpdates(
             $this->live($publisher),
             new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')),
             $summaries ?? self::createStub(SessionSummaries::class),
-            new LockFactory(new InMemoryStore()),
+            new LockFactory($locks ?? new InMemoryStore()),
             $this->log,
         );
+    }
+
+    // The first read pauses its fiber before the judge committed and answers a running round; every later read finds the round judged.
+    private function summariesJudgedAfterTheFirstRead(): SessionSummaries
+    {
+        $reads = 0;
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturnCallback(static function () use (&$reads): SessionSummary {
+            if (0 !== $reads++) {
+                return new SessionSummary([new ToolCallCount('read_file', 2)], Cost::none(), [], [], [], [], true);
+            }
+
+            Fiber::suspend();
+
+            return new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], []);
+        });
+
+        return $summaries;
     }
 
     private function summaries(?SessionSummary $summary): SessionSummaries

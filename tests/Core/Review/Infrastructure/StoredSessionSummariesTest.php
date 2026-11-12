@@ -9,6 +9,9 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JudgedFinding;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummary;
@@ -18,11 +21,13 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\RoundToolCall;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Kernel;
 use Intakt\Tests\Core\Mcp\Contract\McpServerClient;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RecordingBus;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
@@ -275,6 +280,21 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->finish($earlier, new Verdict(Decision::Changes, [], ['F1'], []));
 
         self::assertSame([], $this->summaryOf($earlier['round'])->resolved);
+    }
+
+    public function testTheSummaryOfARoundStillUnderReviewIsNotJudged(): void
+    {
+        $round = $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a')], [], []));
+
+        self::assertFalse($this->summaryOf($round)->judged);
+    }
+
+    public function testTheSummaryOfAJudgedRoundIsJudged(): void
+    {
+        $round = $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a')], [], []));
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))(new JudgeRound($round));
+
+        self::assertTrue($this->summaryOf($round)->judged);
     }
 
     public function testAnUnknownRoundHasNoSummary(): void
