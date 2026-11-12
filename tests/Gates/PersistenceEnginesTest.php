@@ -84,7 +84,7 @@ final class PersistenceEnginesTest extends SandboxTestCase
         return $sandbox;
     }
 
-    // Under the runner's shell options (bash -e, pipefail) and with registry paths in the images, as each once hid an exit code.
+    // Under the runner's own shell options (bash -e with pipefail), because under -e a failing engine once lost its exit code.
     private function runEngines(Sandbox $sandbox): ProcessResult
     {
         return $sandbox->runScript(
