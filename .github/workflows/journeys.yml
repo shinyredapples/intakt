@@ -48,14 +48,16 @@ jobs:
             --tmpfs /tmp:rw,exec,size=1g \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check --journeys 2>&1 | tee "$RUNNER_TEMP/journeys.out"
-      - if: failure() && steps.journeys.outcome == 'failure'
+      # A run that reaches timeout-minutes ends its journeys step as cancelled.
+      - if: always() && (steps.journeys.outcome == 'failure' || steps.journeys.outcome == 'cancelled')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: journeys-output
           path: ${{ runner.temp }}/journeys.out
   alarm:
     needs: journeys
-    if: failure() && needs.journeys.outputs.outcome == 'failure'
+    # A cancel by hand makes failure() false: only a timeout gets here as cancelled.
+    if: failure() && (needs.journeys.outputs.outcome == 'failure' || needs.journeys.outputs.outcome == 'cancelled')
     # GitHub's image has gh; the CI image lacks it.
     runs-on: ubuntu-24.04
     permissions:
@@ -77,11 +79,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          JOURNEYS_OUTCOME: ${{ needs.journeys.outputs.outcome }}
         run: |
+          timed_out=
+          if [ "$JOURNEYS_OUTCOME" = cancelled ]; then timed_out=--timed-out; fi
           docker run --rm --user 1000:1000 \
             --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$RUNNER_TEMP/journeys.out:/journeys.out:ro" \
             --volume "$(command -v gh):/usr/local/bin/gh:ro" \
             --env GH_TOKEN --env GITHUB_REPOSITORY \
-            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/journey-alarm --run="$RUN_LINK" /journeys.out
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/journey-alarm --run="$RUN_LINK" $timed_out /journeys.out

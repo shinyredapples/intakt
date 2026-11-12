@@ -11,7 +11,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 - [ ] A split creates its parts in order with `Waits for` lines, and the original becomes an umbrella. `test_sizing.py::test_split_creates_the_parts_in_order_with_waits_for_lines` [T48]
 - [ ] A task is never split twice; an interrupted split ends on the first part once. `test_sizing.py::test_an_issue_that_was_split_is_never_split_again`, `test_lanes.py::test_a_split_interrupted_anywhere_ends_on_the_first_part_once` [T48]
 - [ ] An umbrella closes only on trusted notes when its parts close. `test_unblock.py::test_an_umbrella_closes_only_on_trusted_waits_for_notes` [T48]
-- [ ] A `Source:` line gives the builder one verified commit, read-only. `test_source.py::test_the_builders_clone_resolves_the_source_ref_at_the_verified_sha_only` [T46]
+- [x] A `Source:` line gives the builder one verified commit, read-only. `test_source.py::test_the_builders_clone_resolves_the_source_ref_at_the_verified_sha_only` [T46]; Intakt: `MakeBuildCloneTest::testTheCloneResolvesTheSourceRefAtTheVerifiedCommitOnlyAndHoldsNoLaterCommitOfItsBranch` (in the build clone; the build job that hands it to a builder is T49)
 
 ## Build and hand-back
 - [x] The builder has no forge credential or signing key; each session gets a clean home and its own caches. `test_build_slot_ops.py` [T44]; Intakt: `ContainerJobRunnerTest::testAJobGetsAWipedHomeAndNoEnvironmentFromTheOrchestrator`
