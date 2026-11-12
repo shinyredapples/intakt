@@ -50,7 +50,7 @@ final readonly class ReviewedRepository
         $round = $this->round();
         $head = $this->head($round);
         $real = $this->refusedAsCall($round, ReadFileTool::NAME, static fn (): string => $head->resolve($path));
-        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => (new ReadFile($head))->contentAt($real, $path));
+        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => new ReadFile($head)->contentAt($real, $path));
         // Recorded as the checkout resolved it, so two spellings of one file count as one file read.
         $this->calls->read($round, ReadFileTool::NAME, $head->relative($real));
 
