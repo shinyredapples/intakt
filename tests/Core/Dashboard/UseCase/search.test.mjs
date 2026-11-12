@@ -38,6 +38,7 @@ class FakeNode {
             '[data-search-action]': this.attributes.has('data-search-action'),
             '[data-search-cancel]': this.attributes.has('data-search-cancel'),
             '#search-results a[href]': this.tag === 'a' && this.attributes.has('href'),
+            '#search-results [role="option"]': this.attributes.get('role') === 'option',
         };
 
         return matches[selector] ? this : null;
@@ -155,6 +156,17 @@ class FakePage {
         let defaultPrevented = false;
 
         return this.dispatch('click', { target, preventDefault: () => (defaultPrevented = true), get defaultPrevented() { return defaultPrevented; } });
+    }
+
+    // As in a browser, a press the page does not hold back moves the focus to the pressed element, which an option with tabindex -1 takes.
+    mousedown(target) {
+        let defaultPrevented = false;
+        this.dispatch('mousedown', { target, preventDefault: () => (defaultPrevented = true) });
+        if (!defaultPrevented) {
+            target.focus();
+        }
+
+        return { defaultPrevented };
     }
 
     type(text) {
@@ -532,6 +544,36 @@ test('clicking an action runs it instead of following the row', async () => {
 
     assert.ok(click.defaultPrevented);
     assert.equal(page.themeClicks, 1);
+});
+
+test('pressing the mouse on a result keeps the focus in the field, so the arrows still move the selection', async () => {
+    const { page } = await openWithRecent();
+
+    const press = page.mousedown(page.results.options[2]);
+
+    assert.ok(press.defaultPrevented);
+    assert.equal(page.activeElement, page.field);
+    page.press('ArrowDown');
+    assert.equal(page.selected().getAttribute('href'), '/reviews/round-1');
+});
+
+test('pressing the mouse outside the results is left to the browser', async () => {
+    const { page } = await openWithRecent();
+
+    const press = page.mousedown(page.overlay);
+
+    assert.ok(!press.defaultPrevented);
+});
+
+test('pressing the mouse on a result while the search is closed is left to the browser', async () => {
+    const { page } = await openWithRecent();
+    const option = page.results.options[2];
+    page.press('Escape');
+
+    const press = page.mousedown(option);
+
+    assert.ok(!page.isOpen());
+    assert.ok(!press.defaultPrevented);
 });
 
 test('escape closes the search and gives the focus back to where it was', async () => {

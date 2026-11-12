@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
-use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Account;
@@ -16,11 +15,8 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Budget\Contract\BudgetServices;
-use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\MeasuredUse;
 use Intakt\Core\Budget\Contract\ReadingOutcome;
-use Intakt\Core\Budget\Contract\ShadowStartGuard;
-use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Budget\Contract\StartGuard;
 use Intakt\Core\Budget\Contract\Usage;
@@ -29,16 +25,11 @@ use Intakt\Core\Budget\Contract\WindowReading;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
-use Intakt\Core\Shadow\Contract\ProjectMode;
-use Intakt\Core\Shadow\Contract\ProjectModes;
-use Intakt\Core\Shadow\Infrastructure\ModeGuardedForgeWrites;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Intakt\Core\Watcher\Contract\WatcherServices;
-use Intakt\Plugin\Forge\Contract\ForgeWrites;
-use Intakt\Tests\Core\Shadow\ReviewToPost;
-use Intakt\Tests\Core\Shadow\WriteRefusingForge;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
-use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
@@ -86,7 +77,7 @@ final class ProjectTiersTest extends KernelTestCase
         file_put_contents($this->file, <<<'YAML'
             projects:
                 alpha-one:
-                    mode: shadow
+                    mode: reviewer-for-loop
                     tiers:
                         strong: { provider: anthropic, model: big }
                         light: { provider: anthropic, model: small }
@@ -169,29 +160,6 @@ final class ProjectTiersTest extends KernelTestCase
         $this->bootedContainer();
     }
 
-    public function testAShadowProjectsReviewNeverReachesTheForgeTheContainerWritesTo(): void
-    {
-        $forge = $this->bootedContainer()->get(ForgeWrites::class);
-        self::assertInstanceOf(ForgeWrites::class, $forge);
-
-        $forge->postReview('alpha-one', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
-
-        self::assertInstanceOf(ModeGuardedForgeWrites::class, $forge);
-        $refusing = self::getContainer()->get(WriteRefusingForge::class);
-        self::assertInstanceOf(WriteRefusingForge::class, $refusing);
-        self::assertSame([], $refusing->writeLog);
-    }
-
-    public function testAProjectWithoutAModeWritesToTheForgeTheContainerWritesTo(): void
-    {
-        $forge = $this->bootedContainer()->get(ForgeWrites::class);
-        self::assertInstanceOf(ForgeWrites::class, $forge);
-
-        $this->expectExceptionObject(new LogicException('The test forge refuses every write.'));
-
-        $forge->postReview('beta', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
-    }
-
     public function testAProjectWatchSectionLoadsAsAWatchedProjectBesideItsTiers(): void
     {
         $container = $this->bootedContainer();
@@ -216,6 +184,16 @@ final class ProjectTiersTest extends KernelTestCase
 
         $this->expectException(LoaderLoadException::class);
         $this->expectExceptionMessageMatches('/"quiet" is not allowed for path "intakt\.projects\.beta\.mode"/');
+
+        $this->bootedContainer();
+    }
+
+    public function testAShadowModeStopsTheBootAsAnUnknownMode(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        mode: shadow\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/"shadow" is not allowed for path "intakt\.projects\.beta\.mode"/');
 
         $this->bootedContainer();
     }
@@ -274,45 +252,14 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame(StartDecision::Start, $guard->decide(new Account(Provider::Anthropic, 'default'), 0));
     }
 
-    public function testTheShadowCeilingsDefaultToSeventyPercentAndTheOwnerLowersOneWindow(): void
+    public function testAShadowCeilingsSectionStopsTheBoot(): void
     {
-        file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\nprojects:\n    beta:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+        file_put_contents($this->file, "budget:\n    shadow_ceilings:\n        weekly: 50\n");
 
-        self::assertEqualsCanonicalizing(['five-hour' => 70.0, 'weekly' => 50.0], $this->bootedContainer()->getParameter(BudgetServices::SHADOW_CEILINGS));
-    }
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/Unrecognized option "shadow_ceilings" under "intakt\.budget"/');
 
-    public function testTheShadowGuardOfTheContainerHoldsAProviderWhileTheOwnerPausedTheInstall(): void
-    {
-        $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
-        self::assertInstanceOf(ShadowStartGuard::class, $guard);
-        $this->pauseTheInstall();
-
-        self::assertSame(StartDecision::Paused, $guard->decide(Provider::Anthropic));
-    }
-
-    public function testTheShadowGuardOfTheContainerStartsAProviderWhileNothingHoldsIt(): void
-    {
-        $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
-        self::assertInstanceOf(ShadowStartGuard::class, $guard);
-        $this->emptyDatabase();
-
-        self::assertSame(StartDecision::Start, $guard->decide(Provider::Anthropic));
-    }
-
-    public function testTheShadowGuardOfTheContainerHoldsAProviderAtTheShadowCeilingWhereTheStartGuardStarts(): void
-    {
-        $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
-        self::assertInstanceOf(ShadowStartGuard::class, $guard);
-        $this->emptyDatabase();
-        $start = self::getContainer()->get('test.intakt.start_guard');
-        self::assertInstanceOf(StartGuard::class, $start);
-
-        $this->measureBothWindowsAt(75.0);
-
-        self::assertSame([StartDecision::AtCeiling, StartDecision::Start], [$guard->decide(Provider::Anthropic), $start->decide(new Account(Provider::Anthropic, 'default'), 0)]);
+        $this->bootedContainer();
     }
 
     public function testTheCodexProbeOfTheContainerUsesTheOwnersCodexSection(): void
@@ -415,14 +362,6 @@ final class ProjectTiersTest extends KernelTestCase
 
         self::assertInstanceOf(AccountFailoverPlatform::class, $platform);
         self::assertSame($model, $platform->getModelCatalog()->getModel($model)->getName());
-    }
-
-    private function pauseTheInstall(): void
-    {
-        $this->emptyDatabase();
-        $holds = self::getContainer()->get(Holds::class);
-        self::assertInstanceOf(Holds::class, $holds);
-        $holds->hold(SharedHold::Pause, new DateTimeImmutable('2999-01-01T00:00:00Z'));
     }
 
     private function bootedStartGuard(): StartGuard

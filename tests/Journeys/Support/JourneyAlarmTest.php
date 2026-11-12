@@ -8,7 +8,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
+use Uri\Rfc3986\Uri;
 
 #[CoversClass(JourneyAlarm::class)]
 #[CoversClass(GitHubIssues::class)]
@@ -61,8 +64,21 @@ final class JourneyAlarmTest extends TestCase
 
     private string $directory = '';
 
+    private string|false $tokenBefore = false;
+
+    /** @var list<array<string, mixed>> */
+    private array $issues = [];
+
+    /** @var array<string, mixed>|null */
+    private ?array $rival = null;
+
+    /** @var list<array{arguments: list<string>, input: string}> */
+    private array $recorded = [];
+
     protected function setUp(): void
     {
+        $this->tokenBefore = getenv('GH_TOKEN');
+        putenv('GH_TOKEN=in-process-token');
         $this->directory = sys_get_temp_dir().'/intakt-journey-alarm-'.bin2hex(random_bytes(6));
         new Filesystem()->dumpFile($this->directory.'/gh', self::FAKE_GH."\n");
         chmod($this->directory.'/gh', 0o755);
@@ -71,6 +87,7 @@ final class JourneyAlarmTest extends TestCase
 
     protected function tearDown(): void
     {
+        putenv(false === $this->tokenBefore ? 'GH_TOKEN' : 'GH_TOKEN='.$this->tokenBefore);
         new Filesystem()->remove($this->directory);
     }
 
@@ -88,15 +105,14 @@ final class JourneyAlarmTest extends TestCase
 
     public function testASecondRedRunEditsTheOpenTaskAndCreatesNone(): void
     {
-        $this->alarm([$this->fixture()]);
-        $second = (string) file_get_contents($this->fixture());
-        $second = str_replace('read the second page', 'read the third page', $second);
+        $this->raise();
+        $second = str_replace('read the second page', 'read the third page', $this->fixtureOutput());
 
-        $alarm = $this->alarm(['--run=https://github.com/example/repo/actions/runs/2'], $second);
+        $raised = $this->raise($second, 'https://github.com/example/repo/actions/runs/2');
 
-        self::assertSame("updated #7\n", $alarm->getOutput(), $alarm->getErrorOutput());
-        self::assertCount(1, $this->callsOf('create'));
-        $edit = $this->callsOf('edit');
+        self::assertSame('updated #7', $raised);
+        self::assertCount(1, $this->recordedCallsOf('create'));
+        $edit = $this->recordedCallsOf('edit');
         self::assertCount(1, $edit);
         self::assertSame(['issue', 'edit', '7', '--body-file', '-', '--repo', self::REPOSITORY], $edit[0]['arguments']);
         self::assertStringContainsString('failed at step "read the third page"', $edit[0]['input']);
@@ -106,16 +122,16 @@ final class JourneyAlarmTest extends TestCase
 
     public function testTheOldestOfSeveralMarkedOpenIssuesIsUpdated(): void
     {
-        $this->openIssues($this->issues([12, JourneyAlarmTask::MARKER."\nold"], [5, "first\r\n".JourneyAlarmTask::MARKER."\r\nold"]));
+        $this->issues = $this->issues([12, JourneyAlarmTask::MARKER."\nold"], [5, "first\r\n".JourneyAlarmTask::MARKER."\r\nold"]);
 
-        self::assertSame("updated #5\n", $this->alarm([$this->fixture()])->getOutput());
+        self::assertSame('updated #5', $this->raise());
     }
 
     public function testAnOpenIssueThatOnlyQuotesTheMarkerInsideALineIsNotTheTask(): void
     {
-        $this->openIssues($this->issues([3, 'see '.JourneyAlarmTask::MARKER.' in the alarm']));
+        $this->issues = $this->issues([3, 'see '.JourneyAlarmTask::MARKER.' in the alarm']);
 
-        self::assertSame("filed https://github.com/example/repo/issues/8\n", $this->alarm([$this->fixture()])->getOutput());
+        self::assertSame('filed https://github.com/example/repo/issues/8', $this->raise());
     }
 
     public function testAGreenRunFilesNothingAndCallsNoGh(): void
@@ -134,6 +150,52 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame(1, $alarm->getExitCode());
         self::assertStringContainsString('no failing journey and no pass', $alarm->getErrorOutput());
         self::assertSame([], $this->calls());
+    }
+
+    public function testACutOffRunThatTimedOutFilesTheTaskNamingTheTimeoutAndTheRunLink(): void
+    {
+        $alarm = $this->alarm(['--timed-out', '--run=https://github.com/example/repo/actions/runs/3'], "Building the instance\n{\"gate\":\"jour");
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        $create = $this->callsOf('create');
+        self::assertSame('fix(journeys): the journeys run timed out on main', $create[0]['arguments'][3]);
+        self::assertStringContainsString('The journeys run on `main` timed out', $create[0]['input']);
+        self::assertStringContainsString('Run: https://github.com/example/repo/actions/runs/3', $create[0]['input']);
+        self::assertStringContainsString("Building the instance\n{\"gate\":\"jour\n```", $create[0]['input']);
+    }
+
+    public function testAnEmptyOutputOfARunThatTimedOutFilesTheTask(): void
+    {
+        $alarm = $this->alarm(['--timed-out']);
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertSame('fix(journeys): the journeys run timed out on main', $this->callsOf('create')[0]['arguments'][3]);
+    }
+
+    public function testARunThatTimedOutReplacesTheBodyOfTheOpenTaskAndKeepsItsTitle(): void
+    {
+        $this->openIssues((string) json_encode([['number' => 5, 'body' => JourneyAlarmTask::MARKER."\nThe journeys failed on `main`."]]));
+
+        $alarm = $this->alarm(['--timed-out'], "Building the instance\n");
+
+        self::assertSame("updated #5\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertSame([], $this->callsOf('create'));
+        $edit = $this->callsOf('edit');
+        self::assertSame(['issue', 'edit', '5', '--body-file', '-', '--repo', self::REPOSITORY], $edit[0]['arguments']);
+        self::assertStringContainsString('The journeys run on `main` timed out', $edit[0]['input']);
+        self::assertStringNotContainsString('The journeys failed on `main`.', $edit[0]['input']);
+    }
+
+    public function testARunThatTimedOutFilesTheTaskEvenWhenItsOutputHoldsAPassLine(): void
+    {
+        $github = new GitHubIssues(self::REPOSITORY, $this->fakeGh(...));
+        $alarm = new JourneyAlarm($github, new LockFactory(new InMemoryStore()));
+
+        $result = $alarm->raise(JourneyRun::timedOut(JourneyRunTest::PASS), null);
+
+        self::assertSame('filed https://github.com/example/repo/issues/7', $result);
+        $create = array_values(array_filter($this->recorded, static fn (array $call): bool => 'create' === ($call['arguments'][1] ?? null)));
+        self::assertSame('fix(journeys): the journeys run timed out on main', $create[0]['arguments'][3]);
     }
 
     public function testAnAnswerOfGhThatIsNoIssueListFailsAndFilesNothing(): void
@@ -191,49 +253,43 @@ final class JourneyAlarmTest extends TestCase
 
     public function testARunThatMeetsAnOlderTaskFiledMeanwhileClosesItsOwnAndUpdatesTheOlder(): void
     {
-        new Filesystem()->dumpFile($this->directory.'/rival.json', json_encode(['number' => 2, 'body' => JourneyAlarmTask::MARKER."\nrival"], JSON_THROW_ON_ERROR));
+        $this->rival = ['number' => 2, 'body' => JourneyAlarmTask::MARKER."\nrival"];
 
-        $alarm = $this->alarm([$this->fixture()]);
-
-        self::assertSame("updated #2, closed #7 as its duplicate\n", $alarm->getOutput(), $alarm->getErrorOutput());
-        self::assertSame([['issue', 'close', '7', '--comment', 'Duplicate of #2', '--repo', self::REPOSITORY]], array_column($this->callsOf('close'), 'arguments'));
-        self::assertSame(['issue', 'edit', '2', '--body-file', '-', '--repo', self::REPOSITORY], $this->callsOf('edit')[0]['arguments']);
+        self::assertSame('updated #2, closed #7 as its duplicate', $this->raise());
+        self::assertSame([['issue', 'close', '7', '--comment', 'Duplicate of #2', '--repo', self::REPOSITORY]], array_column($this->recordedCallsOf('close'), 'arguments'));
+        self::assertSame(['issue', 'edit', '2', '--body-file', '-', '--repo', self::REPOSITORY], $this->recordedCallsOf('edit')[0]['arguments']);
     }
 
     public function testARunWhoseTaskIsOlderThanOneFiledMeanwhileKeepsIt(): void
     {
-        new Filesystem()->dumpFile($this->directory.'/rival.json', json_encode(['number' => 9, 'body' => JourneyAlarmTask::MARKER."\nrival"], JSON_THROW_ON_ERROR));
+        $this->rival = ['number' => 9, 'body' => JourneyAlarmTask::MARKER."\nrival"];
 
-        $alarm = $this->alarm([$this->fixture()]);
-
-        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
-        self::assertSame([], $this->callsOf('close'));
-        self::assertSame([], $this->callsOf('edit'));
+        self::assertSame('filed https://github.com/example/repo/issues/7', $this->raise());
+        self::assertSame([], $this->recordedCallsOf('close'));
+        self::assertSame([], $this->recordedCallsOf('edit'));
     }
 
     public function testAMarkedTaskBehindAThousandNewerOpenIssuesIsUpdated(): void
     {
         $newer = array_map(static fn (int $number): array => [$number, 'ordinary'], range(1002, 2));
-        $this->openIssues($this->issues(...[...$newer, [1, JourneyAlarmTask::MARKER]]));
+        $this->issues = $this->issues(...[...$newer, [1, JourneyAlarmTask::MARKER]]);
 
-        $alarm = $this->alarm([$this->fixture()]);
-
-        self::assertSame("updated #1\n", $alarm->getOutput(), $alarm->getErrorOutput());
-        self::assertSame([], $this->callsOf('create'));
+        self::assertSame('updated #1', $this->raise());
+        self::assertSame([], $this->recordedCallsOf('create'));
     }
 
     public function testAPullRequestWhoseBodyHoldsTheMarkerIsNotTheTask(): void
     {
-        $this->openIssues(json_encode([['number' => 4, 'body' => JourneyAlarmTask::MARKER, 'pull_request' => ['url' => 'https://api.github.com/repos/example/repo/pulls/4']]], JSON_THROW_ON_ERROR));
+        $this->issues = [['number' => 4, 'body' => JourneyAlarmTask::MARKER, 'pull_request' => ['url' => 'https://api.github.com/repos/example/repo/pulls/4']]];
 
-        self::assertSame("filed https://github.com/example/repo/issues/8\n", $this->alarm([$this->fixture()])->getOutput());
+        self::assertSame('filed https://github.com/example/repo/issues/8', $this->raise());
     }
 
     public function testAnOpenIssueWithAnEmptyBodyIsNotTheTask(): void
     {
-        $this->openIssues('[{"number":3,"body":null}]');
+        $this->issues = [['number' => 3, 'body' => null]];
 
-        self::assertSame("filed https://github.com/example/repo/issues/8\n", $this->alarm([$this->fixture()])->getOutput());
+        self::assertSame('filed https://github.com/example/repo/issues/8', $this->raise());
     }
 
     public function testARedRunWithoutATokenInTheEnvironmentFailsBeforeCallingGh(): void
@@ -327,10 +383,75 @@ final class JourneyAlarmTest extends TestCase
 
     /**
      * @param array{int, string} ...$issues
+     *
+     * @return list<array{number: int, body: string}>
      */
-    private function issues(array ...$issues): string
+    private function issues(array ...$issues): array
     {
-        return json_encode(array_map(static fn (array $issue): array => ['number' => $issue[0], 'body' => $issue[1]], $issues), JSON_THROW_ON_ERROR);
+        return array_map(static fn (array $issue): array => ['number' => $issue[0], 'body' => $issue[1]], array_values($issues));
+    }
+
+    private function fixtureOutput(): string
+    {
+        return (string) file_get_contents($this->fixture());
+    }
+
+    private function raise(?string $output = null, ?string $run = null): string
+    {
+        $github = new GitHubIssues(self::REPOSITORY, $this->fakeGh(...));
+        $alarm = new JourneyAlarm($github, new LockFactory(new InMemoryStore()));
+
+        return $alarm->raise(JourneyRun::fromOutput($output ?? $this->fixtureOutput()), null === $run ? null : Uri::parse($run));
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function fakeGh(array $arguments, string $input): string
+    {
+        $this->recorded[] = ['arguments' => $arguments, 'input' => $input];
+
+        return match ('api' === $arguments[0] ? 'api' : $arguments[1]) {
+            'api' => json_encode(array_chunk($this->issues, 100), JSON_THROW_ON_ERROR),
+            'create' => $this->fakeCreate($input),
+            'edit' => $this->fakeEdit((int) $arguments[2], $input),
+            default => $this->fakeClose((int) $arguments[2]),
+        };
+    }
+
+    private function fakeCreate(string $body): string
+    {
+        $number = count($this->issues) + 7;
+        $this->issues[] = ['number' => $number, 'body' => $body];
+        // A rival opens its issue at the same moment, as a run on another machine would.
+        if (null !== $this->rival) {
+            $this->issues[] = $this->rival;
+            $this->rival = null;
+        }
+
+        return 'https://github.com/example/repo/issues/'.$number;
+    }
+
+    private function fakeEdit(int $number, string $body): string
+    {
+        $this->issues = array_map(static fn (array $issue): array => $issue['number'] === $number ? ['number' => $number, 'body' => $body] : $issue, $this->issues);
+
+        return 'https://github.com/example/repo/issues/'.$number;
+    }
+
+    private function fakeClose(int $number): string
+    {
+        $this->issues = array_values(array_filter($this->issues, static fn (array $issue): bool => $issue['number'] !== $number));
+
+        return '';
+    }
+
+    /**
+     * @return list<array{arguments: list<string>, input: string}>
+     */
+    private function recordedCallsOf(string $action): array
+    {
+        return array_values(array_filter($this->recorded, static fn (array $call): bool => $action === ('api' === $call['arguments'][0] ? 'api' : $call['arguments'][1] ?? null)));
     }
 
     /**

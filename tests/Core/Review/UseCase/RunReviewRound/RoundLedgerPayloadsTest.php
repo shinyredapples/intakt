@@ -19,16 +19,14 @@ use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
-use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHeld;
-use Intakt\Core\Shadow\Contract\ProjectMode;
-use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(ReviewStarted::class)]
-#[CoversClass(ShadowRoundHeld::class)]
 #[CoversClass(ReviewerStarted::class)]
 #[CoversClass(VerdictReceived::class)]
 #[CoversClass(CatchUpOwed::class)]
@@ -66,13 +64,6 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":1,"change":"feat\/x","number":1,"task":"T7"}', $this->written($started));
     }
 
-    public function testAHeldShadowRoundIsWrittenWithTodaysProviderValue(): void
-    {
-        $held = new ShadowRoundHeld('alpha', 'feat/x', Provider::Anthropic, 'at-ceiling');
-
-        self::assertSame('{"project":"alpha","change":"feat\/x","provider":"anthropic","reason":"at-ceiling"}', $this->written($held));
-    }
-
     public function testAStartedReviewerIsWrittenWithItsIdentity(): void
     {
         self::assertSame(self::IDENTITY.'}', $this->written(new ReviewerStarted(self::ROUND, self::REVIEWER, 'security', Tier::Strong)));
@@ -80,9 +71,9 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAReceivedVerdictIsWrittenWithTodaysDecisionAndModeValues(): void
     {
-        $received = new VerdictReceived(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Decision::Changes, 2, ProjectMode::Shadow);
+        $received = new VerdictReceived(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Decision::Changes, 2, ProjectMode::ReviewerForLoop);
 
-        self::assertSame(self::IDENTITY.',"decision":"changes","findings":2,"mode":"shadow"}', $this->written($received));
+        self::assertSame(self::IDENTITY.',"decision":"changes","findings":2,"mode":"reviewer-for-loop"}', $this->written($received));
     }
 
     public function testAnOwedCatchUpIsWrittenWithItsSubstitute(): void

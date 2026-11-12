@@ -23,7 +23,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -81,7 +81,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         );
     }
 
-    public function testTheReviewPageMarksAShadowVerdictAndLeavesAnOrdinaryOneUnmarked(): void
+    public function testTheReviewPageShowsAVerdictRecordedInTheRemovedShadowModeLikeAnOrdinaryOne(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
@@ -92,7 +92,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
-        self::assertSame(['approve (shadow)', 'approve'], [$rows[0][3], $rows[1][3]]);
+        self::assertSame(['approve', 'approve'], [$rows[0][3], $rows[1][3]]);
     }
 
     public function testAFailedReviewerAnsweredByASubstituteShowsBothNotesSeparated(): void
@@ -323,6 +323,175 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews');
 
         self::assertSame('/reviews/round-1', $crawler->filter('tbody td:first-child a')->attr('href'));
+    }
+
+    public function testTheHeaderShowsTheMetaLineWithProjectChangeAndLatestStart(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['alpha', 'feat/thing', 'Latest round started 2026-10-28 12:00:00 UTC'], $crawler->filter('.page-head p.meta span')->each(static fn (Crawler $fact): string => $fact->text()));
+    }
+
+    public function testACompletedRoundFoldsToOneLineWithOutcomeFindingCountAndTimeSpan(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
+        self::assertSelectorNotExists('#round-round-1 details[open]');
+    }
+
+    public function testAFoldedRoundJudgedBeforeTheFindingsWereKeptSaysTheyWereNotRecordedInsteadOfZero(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answer('round-1', 'correctness', 3);
+        $this->ledger->judgeMarksOnly('round-1', [], []);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertResponseIsSuccessful();
+        $summary = $crawler->filter('#round-round-1 details.ev > summary')->text();
+        self::assertStringContainsString('outcome not recorded, findings not recorded', $summary);
+        self::assertStringNotContainsString('0 findings', $summary);
+        self::assertStringContainsString('findings were not recorded', $crawler->filter('#round-round-1 details.ev')->text());
+    }
+
+    public function testAFoldedRoundJudgedBeforeTheFindingsWereKeptShowsTheJudgesMarksAsMarksNotAsTheFindingCount(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answer('round-1', 'correctness', 5);
+        $this->ledger->judgeMarksOnly('round-1', ['F1'], ['F2']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $summary = $crawler->filter('#round-round-1 details.ev > summary')->text();
+        self::assertStringContainsString('findings not recorded, 2 marked by the judge', $summary);
+        self::assertStringNotContainsString('2 findings', $summary);
+    }
+
+    public function testTheActiveRoundStaysOpenInTheTimelineAndCompletedOnesFold(): void
+    {
+        $this->givenARoundJudgedAndASecondRunning();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(1, $crawler->filter('details.ev'));
+        self::assertCount(0, $crawler->filter('#round-round-2 details'));
+        self::assertCount(1, $crawler->filter('#round-round-2-state'));
+    }
+
+    public function testTheCurrentStateBlockListsEachReviewersStatusOfTheActiveRound(): void
+    {
+        $this->givenARoundJudgedAndASecondRunning();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSelectorTextContains('.state-block h2', 'Now: round 2 in review');
+        self::assertSame(['correctness (standard): verdict, approve', 'security (standard): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSelectorTextContains('.state-block', 'The judge has not judged this round yet.');
+    }
+
+    public function testAnOpenFindingLinksToItsRowInTheTimeline(): void
+    {
+        $this->givenARoundJudgedAndASecondRunning();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        $links = $crawler->filter('.state-block a.sb-finding');
+        self::assertCount(1, $links);
+        self::assertSame('#round-round-1-finding-F1', $links->attr('href'));
+        self::assertCount(1, $crawler->filter('td#round-round-1-finding-F1'));
+    }
+
+    public function testAReviewWithEveryRoundJudgedShowsNoCurrentStateBlock(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSelectorNotExists('.state-block');
+    }
+
+    public function testTheLiveLogOfTheRunningRoundSitsBesideTheTimeline(): void
+    {
+        $this->givenARoundJudgedAndASecondRunning();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(2, $crawler->filter('.task-grid > .tl-pane .round'));
+        self::assertSame('Live log of round 2', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame(['correctness (standard) live', 'security (standard) live'], $crawler->filter('.log-pane #round-round-2-live .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
+        self::assertCount(0, $crawler->filter('.tl-pane .live'));
+    }
+
+    public function testAReviewWithEveryRoundJudgedShowsNoLiveLog(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSelectorNotExists('.log-pane');
+        self::assertSelectorExists('.task-grid > .tl-pane #round-round-2');
+    }
+
+    public function testTheLiveLogOfARoundNoReviewerStartedSaysWhatWillAppear(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+        $this->ledger->startRoundOf('feat/thing', 'round-3', 3);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-3');
+
+        self::assertSame('Each reviewer\'s tool calls and text appear here as it works.', $crawler->filter('.log-pane .log-empty')->text());
+        self::assertCount(0, $crawler->filter('#round-round-3-live .live'));
+    }
+
+    public function testOnlyTheLatestOfTwoUnjudgedRoundsGetsTheLiveLog(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'correctness');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(1, $crawler->filter('.log-pane'));
+        self::assertCount(1, $crawler->filter('#round-round-2-live'));
+        self::assertCount(0, $crawler->filter('#round-round-1-live'));
+        self::assertSame('Live log of round 2', $crawler->filter('.log-pane h2')->text());
+    }
+
+    public function testALongChangeNameIsShownWhole(): void
+    {
+        $change = 'feat/'.str_repeat('a-very-long-branch-name-', 8);
+        $this->ledger->startRoundOf($change, 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame($change, $crawler->filter('.page-head p.meta span.mono')->text());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function partsOf(Crawler $summary): array
+    {
+        return $summary->children()->each(static fn (Crawler $part): string => trim(preg_replace('/\s+/', ' ', $part->text()) ?? ''));
+    }
+
+    private function givenARoundJudgedAndASecondRunning(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'defer']);
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'correctness');
+        $this->ledger->startReviewer('round-2', 'security');
+        $this->ledger->answer('round-2', 'correctness', 0);
     }
 
     private function priceModelA(): void

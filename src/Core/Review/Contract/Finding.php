@@ -37,4 +37,24 @@ final readonly class Finding
     {
         return clone ($this, ['severity' => $severity]);
     }
+
+    public function withId(string $id): self
+    {
+        return clone ($this, ['id' => $id]);
+    }
+
+    // One home for how a prompt lists a finding, so the reviewer's open findings and the builder's act list read alike.
+    public function listEntry(): string
+    {
+        return sprintf(
+            "%s [%s] %s:%s%s\nrequirement: %s\n%s",
+            $this->id,
+            $this->severity->value,
+            $this->file ?? '-',
+            $this->line ?? '-',
+            null === $this->symbol ? '' : ' '.$this->symbol,
+            $this->requirement ?? '-',
+            $this->text,
+        );
+    }
 }

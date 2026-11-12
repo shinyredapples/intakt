@@ -12,4 +12,8 @@ enum UntrustedSource: string
     case EarlierFindings = 'earlier findings';
     case FindingsToJudge = 'findings to judge';
     case ProjectMemory = 'project memory';
+    case Decisions = 'decisions';
+    case ActList = 'act list';
+    case CiLog = 'ci log';
+    case PullRequestText = 'pull request text';
 }

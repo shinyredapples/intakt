@@ -4,10 +4,19 @@
 
 {% block body %}
 {% set total = review.tokens %}
+{% set latest = review.rounds|last %}
+{% set active = review.activeRound %}
+{% set judged = review.lastJudgedRound %}
+{% set open = review.openFindings %}
 {% set can_start = review.source is not null and review.nextNumber is not null %}
 <div class="page-head">
     <div>
         <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
+        {{ include('dashboard/components/meta.html.twig', {facts: [
+            {text: review.project},
+            {text: review.change ?: 'round ' ~ round, mono: true},
+            {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
+        ]}, with_context = false) }}
         <p class="lead summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }}, {{ total.total }} tokens in all. Cost: {{ review.cost.reading }}.</p>
         {% if not can_start %}
         <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
@@ -23,102 +32,82 @@
     </div>
     {% endif %}
 </div>
+{% if active is not null %}
+<section class="state-block" aria-labelledby="state-block-title">
+    <div class="sb-head">
+        <h2 id="state-block-title">Now: round {{ active.number ?? '(number not recorded)' }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>    </div>
+    <div class="sb-grid">
+        <div>
+            <h3>Reviewers</h3>
+            <p class="muted" id="round-{{ active.round }}-now-progress">{{ active.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ active.reviewers }} reviewers finished.</p>
+            <ul class="sb-list" id="round-{{ active.round }}-now-reviewers">
+                {% for outcome in active.outcomes %}
+                <li><span><strong>{{ outcome.role }}</strong> ({{ outcome.tier }}): <span id="round-{{ active.round }}-now-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</span>{% if outcome.decision is not null %}, {{ outcome.decision }}{% endif %}</span></li>
+                {% else %}
+                <li class="muted" id="round-{{ active.round }}-now-none">No reviewer has started yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div>
+            <h3>Open findings</h3>
+            {% if open is empty %}
+            <p class="muted">No finding is open.</p>
+            {% else %}
+            {% for finding in open %}
+            <a class="sb-finding" href="#round-{{ judged.round }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span><span class="mono">{{ finding.id }}</span> {{ finding.text ?? 'Text not recorded.' }}</span></a>
+            {% endfor %}
+            {% endif %}
+        </div>
+        <div>
+            <h3>The judge's call</h3>
+            <p class="muted" id="round-{{ active.round }}-now-judge">The judge has not judged this round yet.</p>
+        </div>
+    </div>
+</section>
+{% endif %}
+<div class="task-grid">
+<section class="tl-pane" aria-labelledby="timeline-title">
+<h2 class="timeline-title" id="timeline-title">Timeline</h2>
 {% for reviewed in review.rounds %}
+{% if reviewed.isJudged %}
+<section class="section round" id="round-{{ reviewed.round }}">
+    <details class="ev">
+        <summary class="ev-head">
+            <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+            {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
+            {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. #}
+            <span class="muted small">{{ reviewed.outcome is not null ? reviewed.outcome.value : 'outcome not recorded' }}, {% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
+            {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
+            <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
+        </summary>
+        {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
+    </details>
+</section>
+{% else %}
 <section class="section round" id="round-{{ reviewed.round }}">
     <div class="round-head">
         <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
         {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
     </div>
-    {{ include('dashboard/components/meta.html.twig', {facts: [
-        {text: reviewed.round, mono: true},
-        {icon: 'clock', text: 'Started ' ~ reviewed.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
-    ]}, with_context = false) }}
-
-    {% set unfinished = reviewed.state.name != 'Judged' %}
-    <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
-    {% if not unfinished %}
-    {% set failed = reviewed.failedReviewers %}
-    <p class="outcome" id="round-{{ reviewed.round }}-outcome">{% if reviewed.outcome is not null %}Outcome: {{ reviewed.outcome.value }}, decided by the quorum policy {{ reviewed.quorum.value }} over all {{ reviewed.reviewers }} reviewers.{% if failed > 0 %} {{ failed }} of {{ reviewed.reviewers }} reviewers failed, and a failed reviewer gives no approval.{% endif %}{% else %}No outcome shown: this round was started before Intakt recorded its quorum policy.{% endif %}</p>
-    {% endif %}
-
-    <h3>Reviewers</h3>
-    <p class="muted">{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
-    {% if reviewed.outcomes is not empty %}
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Reviewers of round {{ reviewed.round }}">
-    <table class="ledger reviewers">
-        <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th class="num">Findings</th><th>Note</th><th>Stop</th></tr></thead>
-        <tbody>
-        {% for outcome in reviewed.outcomes %}
-            <tr>
-                <td>{{ outcome.role }}</td>
-                <td>{{ outcome.tier }}</td>
-                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</td>
-                <td>{{ outcome.decision ?? '' }}{% if outcome.decision is not null and outcome.mode.name == 'Shadow' %} (shadow){% endif %}</td>
-                <td class="num">{{ outcome.findings ?? '' }}</td>
-                <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
-                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if unfinished and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
-                    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">
-                    {{ include('dashboard/components/button.html.twig', {kind: 'danger', small: true, type: 'submit', label: 'Stop this reviewer', confirm: 'Click again to stop'}, with_context = false) }}
-                </form>{% endif %}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
-    {% endif %}
-    {% if unfinished %}
-    <div class="live-reviewers" id="round-{{ reviewed.round }}-live">
-    {% for outcome in reviewed.outcomes %}
+    {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
+</section>
+{% endif %}
+{% endfor %}
+</section>
+{% if active is not null %}
+<aside class="log log-pane" aria-labelledby="live-log-title">
+    <h2 id="live-log-title">Live log of round {{ active.number ?? '(number not recorded)' }}</h2>
+    <div class="log-main">
+    {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}
+    <p class="muted log-empty">Each reviewer's tool calls and text appear here as it works.</p>
+    <div class="live-reviewers" id="round-{{ active.round }}-live">
+    {% for outcome in active.outcomes %}
         {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.tier ~ ')'}) }}
     {% endfor %}
     </div>
-    {% endif %}
-
-    <h3>Findings and the judge's call</h3>
-    {% if reviewed.state.name != 'Judged' %}
-    <p class="muted">The judge has not judged this round yet.</p>
-    {% elseif reviewed.findings is empty and reviewed.findingTextRecorded %}
-    <p class="muted">The reviewers reported no findings, so the judge had nothing to mark.</p>
-    {% elseif reviewed.findings is empty %}
-    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
-    {% else %}
-    {% if not reviewed.findingTextRecorded %}
-    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
-    {% endif %}
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Findings of round {{ reviewed.round }}">
-    <table class="ledger findings">
-        <thead><tr><th>Id</th><th>Severity</th><th>Finding</th><th>Judge's call</th></tr></thead>
-        <tbody>
-        {% for finding in reviewed.findings %}
-            <tr>
-                <td class="mono">{{ finding.id }}</td>
-                <td>{{ finding.severity ?? 'not recorded' }}</td>
-                <td>{{ finding.text ?? 'not recorded' }}</td>
-                <td>{{ finding.call.value }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
     </div>
-    {% endif %}
-
-    <h3>Tokens and cost</h3>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Tokens and cost of round {{ reviewed.round }}">
-    <table class="ledger tokens">
-        <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost</th></tr></thead>
-        <tbody>
-            <tr>
-                <td class="num">{{ reviewed.tokens.prompt }}</td>
-                <td class="num">{{ reviewed.tokens.cacheRead }}</td>
-                <td class="num">{{ reviewed.tokens.cacheWrite }}</td>
-                <td class="num">{{ reviewed.tokens.cached }}</td>
-                <td class="num">{{ reviewed.tokens.completion }}</td>
-                <td class="num">{{ reviewed.tokens.total }}</td>
-                <td>{{ reviewed.cost.reading }}</td>
-            </tr>
-        </tbody>
-    </table>
-    </div>
-</section>
-{% endfor %}
+    {{ include('dashboard/_session_summary.html.twig', {summary: summary, review_cost: review.cost}, with_context = false) }}
+</aside>
+{% endif %}
+</div>
 {% endblock %}

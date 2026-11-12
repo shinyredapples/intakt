@@ -86,16 +86,12 @@ export class Browser {
         this.linked = linked;
     }
 
+    // The document element, the width query and the document's own listeners outlive a Turbo visit; the body and everything in it do not.
     open() {
         const page = { focused: null };
         const root = { dataset: {} };
-        const kbd = new FakeElement(page, 'Ctrl K');
-        const search = new FakeElement(page, '', { kbd });
-        const railToggle = new FakeElement(page);
-        const themeToggles = [new FakeElement(page), new FakeElement(page)];
-        const body = new FakeElement(page);
-        // The server marks the project of the address selected when the install lists it; a test may name the marked options itself.
-        const projectFilter = new FakeSelect(page, this.projects, this.linked ?? [new URL(this.address).searchParams.get('project')]);
+        const phoneWidth = Object.assign(new FakeElement(page), { matches: this.phone });
+        const documentListeners = new Map();
         const history = {
             state: { turbo: { restorationIdentifier: 'visit' } },
             replaceState: (state, unused, address) => {
@@ -103,19 +99,14 @@ export class Browser {
                 this.address = String(address);
             },
         };
-        const rows = this.rows.map((project) => Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
-        // The layout renders the More item and its sheet only for a page that has pages under More.
-        const more = this.more ? new FakeElement(page) : null;
-        const sheet = this.more ? Object.assign(new FakeElement(page), { hidden: true }) : null;
-        const sheetLink = new FakeElement(page);
-        const phoneWidth = Object.assign(new FakeElement(page), { matches: this.phone });
-        const documentListeners = new Map();
+        let shown = {};
+        let shownAll = {};
         const document = {
             documentElement: root,
-            body,
+            body: null,
             addEventListener: (type, listener) => documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener]),
-            querySelector: (selector) => ({ '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet })[selector] ?? null,
-            querySelectorAll: (selector) => ({ '[data-theme-toggle]': themeToggles, '[data-project]': rows })[selector] ?? [],
+            querySelector: (selector) => shown[selector] ?? null,
+            querySelectorAll: (selector) => shownAll[selector] ?? [],
         };
         const context = {
             document,
@@ -126,8 +117,45 @@ export class Browser {
             history,
             URL,
         };
+        const window = {
+            page,
+            root,
+            phoneWidth,
+            documentListeners,
+            history,
+            context,
+            show: (body, all) => {
+                document.body = body['body'] ?? null;
+                shown = body;
+                shownAll = all;
+            },
+        };
 
         runInNewContext(headScript, context);
+
+        return this.render(window);
+    }
+
+    render(window) {
+        const { page, root, phoneWidth, documentListeners, history, context, show } = window;
+        const kbd = new FakeElement(page, 'Ctrl K');
+        const search = new FakeElement(page, '', { kbd });
+        const railToggle = new FakeElement(page);
+        const themeToggles = [new FakeElement(page), new FakeElement(page)];
+        const body = new FakeElement(page);
+        // The server marks the project of the address selected when the install lists it; a test may name the marked options itself.
+        const projectFilter = new FakeSelect(page, this.projects, this.linked ?? [new URL(this.address).searchParams.get('project')]);
+        const rows = this.rows.map((project) => Object.assign(new FakeElement(page), { dataset: { project }, hidden: false }));
+        // The layout renders the More item and its sheet only for a page that has pages under More.
+        const more = this.more ? new FakeElement(page) : null;
+        const sheet = this.more ? Object.assign(new FakeElement(page), { hidden: true }) : null;
+        const sheetLink = new FakeElement(page);
+
+        show(
+            { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet },
+            { '[data-theme-toggle]': themeToggles, '[data-project]': rows },
+        );
+        context.location.href = this.address;
         runInNewContext(shellScript, context);
 
         return {
@@ -158,7 +186,18 @@ export class Browser {
             moreHasFocus: () => page.focused === more,
             leave: () => {
                 projectFilter.isConnected = false;
+                show({}, {});
             },
+            // What Turbo does on a visit: replace the body with the next page's and run the shell script again, leaving the document element and the document's listeners as they are.
+            visit: () => {
+                projectFilter.isConnected = false;
+
+                return this.render(window);
+            },
+            listeners: () => ({
+                streamRender: (documentListeners.get('turbo:before-stream-render') ?? []).length,
+                widthChange: (phoneWidth.listeners.get('change') ?? []).length,
+            }),
             // What Turbo does with a stream: tell the document, then run the render, which for an update replaces the select's options and leaves the value at the first one.
             pushStream: (target, projects) => {
                 const stream = new FakeElement(page);

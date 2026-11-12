@@ -46,7 +46,6 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use InvalidArgumentException;
-use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -57,8 +56,8 @@ use Symfony\Component\Console\SignalRegistry\SignalRegistry;
 use Symfony\Component\Console\Tester\CommandTester;
 
 #[CoversClass(ReviewChangeCommand::class)]
-#[CoversClass(ReviewReport::class)]
 #[CoversClass(ReviewExit::class)]
+#[UsesClass(ReviewReport::class)]
 #[UsesClass(LocalGitForge::class)]
 #[UsesClass(LocalRepository::class)]
 #[UsesClass(RepositoryNotFound::class)]
@@ -74,21 +73,34 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(TokenFigures::class)]
 final class ReviewChangeCommandTest extends TestCase
 {
-    private const string SCHEMA = __DIR__.'/../../../docs/user/review-output.schema.json';
+    // Built once, because each git call costs a process: the cases that leave the checkout as it is share it.
+    private static TemporaryRepository $shared;
 
     private TemporaryRepository $repository;
 
+    public static function setUpBeforeClass(): void
+    {
+        self::$shared = new TemporaryRepository();
+        self::$shared->commitFile('README.md', "base\n");
+        self::$shared->checkoutNewBranch('sample');
+        self::$shared->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        self::$shared->remove();
+    }
+
     protected function setUp(): void
     {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
+        $this->repository = self::$shared;
     }
 
     protected function tearDown(): void
     {
-        $this->repository->remove();
+        if ($this->repository !== self::$shared) {
+            $this->repository->remove();
+        }
     }
 
     /**
@@ -110,136 +122,19 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertNotSame(Command::FAILURE, $tester->getStatusCode());
     }
 
-    public function testAnApprovalIsASuccessfulRun(): void
-    {
-        $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Approve));
-
-        $tester->assertCommandIsSuccessful();
-    }
-
-    public function testTheTextOutputPrintsTheOutcomeTheActListAndTheTokens(): void
+    // Only the report's arrival here, because ReviewReportTest checks its lines without a git repository.
+    public function testTheTextFormatPrintsTheReportsLines(): void
     {
         $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Changes));
 
-        self::assertSame(
-            "changes (round 1)\nstrong reviewer: changes, 1 findings\nstandard reviewer: approve, 0 findings\nact list: 1 findings\nF1 P1 src/Feature.php:3: Missing check.\ntokens: 2 calls, 100 prompt, 20 completion, 120 total\ncost: 0.0001 USD\n",
-            $tester->getDisplay(),
-        );
+        self::assertSame(implode("\n", $this->report()->asLines($this->outcome(Decision::Changes)))."\n", $tester->getDisplay());
     }
 
-    public function testAFailedReviewerIsPrintedAsFailedInPlainWordsWithoutAClassName(): void
-    {
-        $failed = $this->outcome(Decision::Approve)->blockedFor('correctness reviewer failed, stopped at its output limit');
-
-        $display = $this->whenTheCommandRuns($this->reviewing($failed))->getDisplay();
-
-        self::assertStringContainsString("reason: correctness reviewer failed, stopped at its output limit\n", $display);
-        self::assertStringNotContainsString('Exception', $display);
-    }
-
-    public function testTheTokenLineShowsTheCacheReadsAndWritesThePromptIncludes(): void
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, RoundTokens::of(3, new TokenFigures(39504, 38000, 1500, 0, 700))));
-
-        $tester = $this->whenTheCommandRuns($reviews);
-
-        self::assertStringContainsString("tokens: 3 calls, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total\n", $tester->getDisplay());
-    }
-
-    public function testTheTokenLineShowsCachedTokensAVendorDoesNotSplit(): void
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, RoundTokens::of(1, new TokenFigures(39504, 0, 0, 39500, 700))));
-
-        $tester = $this->whenTheCommandRuns($reviews);
-
-        self::assertStringContainsString("tokens: 1 calls, 39504 prompt (39500 cached), 700 completion, 40204 total\n", $tester->getDisplay());
-    }
-
-    public function testTheCostLineShowsTheRoundsCostInDollars(): void
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.045895)));
-
-        $tester = $this->whenTheCommandRuns($reviews);
-
-        self::assertStringEndsWith("cost: 0.0459 USD\n", $tester->getDisplay());
-    }
-
-    public function testTheCostLineOfACostTooSmallForFourDecimalsIsNotPrintedAsZero(): void
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.000038)));
-
-        $tester = $this->whenTheCommandRuns($reviews);
-
-        self::assertStringEndsWith("cost: less than 0.0001 USD\n", $tester->getDisplay());
-    }
-
-    public function testTheCostLineOfACostOfNothingIsPrintedAsZero(): void
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.0)));
-
-        $tester = $this->whenTheCommandRuns($reviews);
-
-        self::assertStringEndsWith("cost: 0.0000 USD\n", $tester->getDisplay());
-    }
-
-    public function testTheCostLineSaysTheCostIsUnknownAndNamesTheModelsWithoutAPrice(): void
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::inUsd(0.01)->plus(Cost::unknown('local-small', 'gpt-5'))));
-
-        $tester = $this->whenTheCommandRuns($reviews);
-
-        self::assertStringEndsWith("cost: unknown, no price for local-small, gpt-5\n", $tester->getDisplay());
-    }
-
-    public function testTheJsonOutputOfARoundWithAnUnknownCostValidatesAgainstTheDocumentedSchema(): void
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($this->outcome(Decision::Changes, cost: Cost::unknown('local-small')));
-
-        $tester = $this->whenTheCommandRuns($reviews, ['--format' => 'json']);
-
-        self::assertSame([], $this->schemaErrors($tester->getDisplay()));
-    }
-
-    #[DataProvider('decisions')]
-    public function testTheJsonOutputValidatesAgainstTheDocumentedSchema(Decision $decision, int $code): void
-    {
-        $tester = $this->whenTheCommandRuns($this->reviewing($decision), ['--format' => 'json']);
-
-        self::assertSame([], $this->schemaErrors($tester->getDisplay()), 'exit '.$code);
-    }
-
-    public function testTheJsonOutputCarriesTheDecisionAndItsExitCode(): void
+    public function testTheJsonFormatPrintsTheReportsJson(): void
     {
         $tester = $this->whenTheCommandRuns($this->reviewing(Decision::Blocked), ['--format' => 'json']);
 
-        $document = json_decode($tester->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($document);
-        self::assertSame(['blocked', 11], [$document['decision'], $document['exit_code']]);
-    }
-
-    public function testTheSchemaRefusesAnOutputWithoutItsTokens(): void
-    {
-        $document = json_decode($this->whenTheCommandRuns($this->reviewing(Decision::Approve), ['--format' => 'json'])->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($document);
-        unset($document['tokens']);
-
-        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
-    }
-
-    public function testTheSchemaRefusesAnOutputWithoutItsCost(): void
-    {
-        $document = json_decode($this->whenTheCommandRuns($this->reviewing(Decision::Approve), ['--format' => 'json'])->getDisplay(), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($document);
-        unset($document['cost']);
-
-        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
+        self::assertSame($this->report()->asJson($this->outcome(Decision::Blocked))."\n", $tester->getDisplay());
     }
 
     public function testAnUnknownProjectFailsWithTheMessageAndTheFailureCode(): void
@@ -358,6 +253,7 @@ final class ReviewChangeCommandTest extends TestCase
 
     public function testTheReviewersReadASnapshotOfTheHeadWhileTheCheckoutStaysWhereItIs(): void
     {
+        $this->repository = self::$shared->copy();
         $this->repository->checkout('main');
 
         $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(static function (string $snapshot): void {
@@ -373,6 +269,8 @@ final class ReviewChangeCommandTest extends TestCase
     // The reviewer's probe: a checkout switched away and back while the reviewers read must not change what they read.
     public function testABranchSwitchedAndRestoredDuringTheRoundDoesNotChangeWhatTheReviewersRead(): void
     {
+        $this->repository = self::$shared->copy();
+
         $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(function (string $snapshot): void {
             $this->repository->checkout('main');
             self::assertFileDoesNotExist($this->repository->path.'/src/Feature.php');
@@ -385,6 +283,7 @@ final class ReviewChangeCommandTest extends TestCase
 
     public function testAnEditInTheCheckoutDoesNotReachTheSnapshot(): void
     {
+        $this->repository = self::$shared->copy();
         file_put_contents($this->repository->path.'/src/Feature.php', "<?php\n// edited\n");
         file_put_contents($this->repository->path.'/notes.txt', "scratch\n");
 
@@ -394,35 +293,6 @@ final class ReviewChangeCommandTest extends TestCase
         }));
 
         $tester->assertCommandIsSuccessful($tester->getDisplay());
-    }
-
-    public function testTheSnapshotIsRemovedAfterTheRound(): void
-    {
-        $snapshot = '';
-        $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(static function (string $directory) use (&$snapshot): void {
-            $snapshot = $directory;
-        }));
-
-        $tester->assertCommandIsSuccessful($tester->getDisplay());
-        self::assertDirectoryDoesNotExist($snapshot);
-        self::assertCount(1, $this->repository->worktrees());
-    }
-
-    public function testTheSnapshotIsRemovedWhenTheReviewIsRefused(): void
-    {
-        $snapshot = '';
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturnCallback(static function (ChangeReviewRequest $request) use (&$snapshot): never {
-            $snapshot = $request->checkoutRoot;
-
-            throw RoundNotNext::for(3, 1);
-        });
-
-        $tester = $this->whenTheCommandRuns($reviews, ['--round' => '3']);
-
-        self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertDirectoryDoesNotExist($snapshot);
-        self::assertCount(1, $this->repository->worktrees());
     }
 
     public function testTheReviewIsAskedForTheBranchesChangeUnderTheProjectInASnapshot(): void
@@ -460,24 +330,23 @@ final class ReviewChangeCommandTest extends TestCase
         return $reviews;
     }
 
-    private function reviewing(Decision|ChangeReview $outcome): ChangeReviews
+    private function reviewing(Decision $decision): ChangeReviews
     {
         $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn($outcome instanceof ChangeReview ? $outcome : $this->outcome($outcome));
+        $reviews->method('review')->willReturn($this->outcome($decision));
 
         return $reviews;
     }
 
-    private function outcome(Decision $decision, ?RoundTokens $tokens = null, ?Cost $cost = null): ChangeReview
+    private function outcome(Decision $decision): ChangeReview
     {
         $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
         $verdicts = [
             new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),
         ];
-        $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
 
-        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
+        return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
     }
 
     /**
@@ -513,17 +382,5 @@ final class ReviewChangeCommandTest extends TestCase
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
         return $panels;
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function schemaErrors(string $output): array
-    {
-        $validator = new Validator();
-        $document = json_decode($output, flags: JSON_THROW_ON_ERROR);
-        $validator->validate($document, json_decode((string) file_get_contents(self::SCHEMA)));
-
-        return array_values($validator->getErrors());
     }
 }

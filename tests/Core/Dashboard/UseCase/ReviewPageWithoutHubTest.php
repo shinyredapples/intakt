@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\SessionSummaries;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Asset\Packages;
@@ -34,6 +35,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertSame('0 of 2 reviewers finished.', $crawler->filter('#round-round-1-state')->text());
         self::assertSame([['correctness', 'standard', 'running', '', '', '', 'Stop this reviewer']], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text())));
+    }
+
+    public function testThePlainPageStillShowsTheLiveLogBesideTheTimeline(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('Live log of round 1', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame('correctness (standard) live', $crawler->filter('.log-pane #reviewer-round-1-correctness h3')->text());
     }
 
     public function testThePlainPageStillLoadsTheScriptThatHoldsBackTheFirstClickOnStop(): void
@@ -113,6 +125,6 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertInstanceOf(LedgerReviewPages::class, $reviews);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return new ShowReviewController($reviews, new LivePageRendering($twig, $log));
+        return new ShowReviewController($reviews, new LivePageRendering($twig, $log), self::createStub(SessionSummaries::class));
     }
 }

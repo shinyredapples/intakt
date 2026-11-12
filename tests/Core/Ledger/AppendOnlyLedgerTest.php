@@ -143,7 +143,7 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 
     private function storedEvent(): EventRecord
     {
-        $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted, '{}', new DateTimeImmutable('2026-10-28 12:00:00'));
+        $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted->value, '{}', new DateTimeImmutable('2026-10-28 12:00:00'));
         $this->manager->persist($record);
         $this->manager->flush();
 

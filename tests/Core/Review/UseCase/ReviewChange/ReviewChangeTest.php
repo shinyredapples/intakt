@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -157,7 +158,9 @@ final class ReviewChangeTest extends KernelTestCase
 
         $this->reviewChange($work)->review($this->request(), $progress);
 
-        self::assertEquals(new RoundProgress(2, 2, true), array_last($progress->reported));
+        $last = array_last($progress->reported);
+        self::assertInstanceOf(RoundProgress::class, $last);
+        self::assertSame([2, 2, true, [FinishedState::Verdict, FinishedState::Verdict]], [$last->reviewersFinished, $last->reviewers, $last->judged, array_values($last->finished)]);
     }
 
     public function testTheTokensOfTheCallsMadeForTheRoundAreAddedAndNoOthers(): void

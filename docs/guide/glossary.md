@@ -63,7 +63,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Review panel** | the reviewers for a change: the core panel plus specialists | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Review server** | the read-only server through which a reviewer reads the head under review | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Reviewer-for-loop mode** | a project setting: Intakt reviews an existing loop's changes in place of one of its reviewers, its verdicts count, and the only thing it writes to the forge is its verdict on each head (a status and a comment) | [costs](accounts-and-costs.md#reviewer-for-the-loop-intakts-review-takes-a-reviewers-place) |
-| **Shadow mode** | a project setting: Intakt reviews alongside your existing process, never writes to the forge, and its verdicts never count | [costs](accounts-and-costs.md#shadow-mode-trying-intakt-alongside-your-process) |
+| **Shadow mode** | a former project setting, no longer available: a configuration that still sets it stops Intakt from starting | [costs](accounts-and-costs.md#the-former-shadow-mode) |
 | **Share** | a project's part of the week's AI allowance | [several projects](several-projects.md) |
 | **Sidecar** | an extra container a job needs, such as a database | [containers](containers-and-services.md) |
 | **Skill (reviewer)** | a reviewer role's own checklist and test recipes | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
