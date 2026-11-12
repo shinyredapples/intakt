@@ -5,70 +5,55 @@ declare(strict_types=1);
 namespace DoctrineMigrations;
 
 use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Schema\ForeignKeyConstraint;
+use Doctrine\DBAL\Schema\Index;
 use Doctrine\DBAL\Schema\Name\UnqualifiedName;
 use Doctrine\DBAL\Schema\PrimaryKeyConstraint;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\Migrations\AbstractMigration;
+use Symfony\Bridge\Doctrine\Types\UuidType;
 
 final class Version20261112100000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Create the work intake tables of the listing validator per project and the open issues and pull requests the last complete listing showed';
+        return 'Create the round_tool_call table, one row per tool call the review server answered, for the session summary';
     }
 
     public function up(Schema $schema): void
     {
-        foreach ([$this->validator(), $this->issue()] as $table) {
-            foreach ($this->platform->getCreateTableSQL($table) as $sql) {
-                $this->addSql($sql);
-            }
+        foreach ($this->platform->getCreateTableSQL($this->roundToolCall()) as $sql) {
+            $this->addSql($sql);
         }
     }
 
     public function down(Schema $schema): void
     {
-        $this->addSql($this->platform->getDropTableSQL('work_source_issue'));
-        $this->addSql($this->platform->getDropTableSQL('work_source_validator'));
+        $this->addSql($this->platform->getDropTableSQL('round_tool_call'));
     }
 
-    private function validator(): Table
+    private function roundToolCall(): Table
     {
         return Table::editor()
-            ->setUnquotedName('work_source_validator')
+            ->setUnquotedName('round_tool_call')
             ->setColumns(
-                Column::editor()->setUnquotedName('project')->setTypeName(Types::STRING)->setLength(255)->create(),
-                Column::editor()->setUnquotedName('validator')->setTypeName(Types::TEXT)->create(),
+                Column::editor()->setUnquotedName('position')->setTypeName(Types::INTEGER)->setAutoincrement(true)->create(),
+                Column::editor()->setUnquotedName('round_id')->setTypeName(UuidType::NAME)->create(),
+                Column::editor()->setUnquotedName('tool')->setTypeName(Types::STRING)->setLength(64)->create(),
+                Column::editor()->setUnquotedName('file_read')->setTypeName(Types::TEXT)->setNotNull(false)->create(),
             )
-            ->setPrimaryKeyConstraint(
-                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'))->create(),
+            ->setPrimaryKeyConstraint(PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('position'))->create())
+            ->setIndexes(
+                Index::editor()->setUnquotedName('round_tool_call_round')->setUnquotedColumnNames('round_id')->create(),
             )
-            ->create();
-    }
-
-    private function issue(): Table
-    {
-        return Table::editor()
-            ->setUnquotedName('work_source_issue')
-            ->setColumns(
-                Column::editor()->setUnquotedName('project')->setTypeName(Types::STRING)->setLength(255)->create(),
-                Column::editor()->setUnquotedName('number')->setTypeName(Types::INTEGER)->create(),
-                Column::editor()->setUnquotedName('title')->setTypeName(Types::STRING)->setLength(255)->create(),
-                Column::editor()->setUnquotedName('labels')->setTypeName(Types::JSON)->create(),
-                Column::editor()->setUnquotedName('author')->setTypeName(Types::STRING)->setLength(255)->create(),
-                Column::editor()->setUnquotedName('updated_at')->setTypeName(Types::STRING)->setLength(26)->create(),
-                Column::editor()->setUnquotedName('milestone_due')->setTypeName(Types::STRING)->setLength(19)->setNotNull(false)->create(),
-                Column::editor()->setUnquotedName('editor')->setTypeName(Types::STRING)->setLength(255)->setNotNull(false)->create(),
-                Column::editor()->setUnquotedName('trusted')->setTypeName(Types::BOOLEAN)->create(),
-                Column::editor()->setUnquotedName('waits_for')->setTypeName(Types::JSON)->create(),
-                Column::editor()->setUnquotedName('closed_by')->setTypeName(Types::JSON)->create(),
-                Column::editor()->setUnquotedName('failed_reason')->setTypeName(Types::TEXT)->setNotNull(false)->create(),
-                Column::editor()->setUnquotedName('pull_request')->setTypeName(Types::BOOLEAN)->create(),
-            )
-            ->setPrimaryKeyConstraint(
-                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'), UnqualifiedName::unquoted('number'))->create(),
+            ->setForeignKeyConstraints(
+                ForeignKeyConstraint::editor()
+                    ->setUnquotedReferencingColumnNames('round_id')
+                    ->setUnquotedReferencedTableName('review_round')
+                    ->setUnquotedReferencedColumnNames('id')
+                    ->create(),
             )
             ->create();
     }
