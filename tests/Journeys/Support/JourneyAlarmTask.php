@@ -23,6 +23,10 @@ final readonly class JourneyAlarmTask
 
     public function title(): string
     {
+        if ($this->run->timedOut) {
+            return 'fix(journeys): the journeys run timed out on main';
+        }
+
         $journeys = array_unique(array_map(static fn (JourneyFailure $failure): string => $failure->journey, $this->run->failures));
 
         if (1 === count($journeys)) {
@@ -52,7 +56,11 @@ final readonly class JourneyAlarmTask
         );
         $link = $this->link instanceof Uri ? "\nRun: ".$this->link->toString()."\n" : '';
 
-        return self::MARKER."\nThe journeys failed on `main`.\n\n".implode("\n", $failures)."\n".$link
+        $what = $this->run->timedOut ? 'The journeys run on `main` timed out, so its output may be cut off.' : 'The journeys failed on `main`.';
+
+        $list = [] === $failures ? '' : "\n".implode("\n", $failures)."\n";
+
+        return self::MARKER."\n".$what."\n".$list.$link
             ."\nLast ".self::TAIL_LINES." lines of the output:\n\n";
     }
 

@@ -284,7 +284,7 @@ final class ProjectTiersTest extends KernelTestCase
     public function testTheShadowGuardOfTheContainerHoldsAProviderWhileTheOwnerPausedTheInstall(): void
     {
         $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
+        $guard = $this->bootedContainer()->get('test.intakt.shadow_start_guard');
         self::assertInstanceOf(ShadowStartGuard::class, $guard);
         $this->pauseTheInstall();
 
@@ -294,7 +294,7 @@ final class ProjectTiersTest extends KernelTestCase
     public function testTheShadowGuardOfTheContainerStartsAProviderWhileNothingHoldsIt(): void
     {
         $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
+        $guard = $this->bootedContainer()->get('test.intakt.shadow_start_guard');
         self::assertInstanceOf(ShadowStartGuard::class, $guard);
         $this->emptyDatabase();
 
@@ -304,7 +304,7 @@ final class ProjectTiersTest extends KernelTestCase
     public function testTheShadowGuardOfTheContainerHoldsAProviderAtTheShadowCeilingWhereTheStartGuardStarts(): void
     {
         $this->listAccounts('anthropic: [default]');
-        $guard = $this->bootedContainer()->get(ShadowStartGuard::class);
+        $guard = $this->bootedContainer()->get('test.intakt.shadow_start_guard');
         self::assertInstanceOf(ShadowStartGuard::class, $guard);
         $this->emptyDatabase();
         $start = self::getContainer()->get('test.intakt.start_guard');
