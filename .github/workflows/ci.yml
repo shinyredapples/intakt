@@ -121,7 +121,7 @@ jobs:
       - id: databases
         run: |
           declare -A images
-          while read -r line; do
+          while read -r line || [[ -n $line ]]; do
             if [[ $line =~ ^FROM\ ([^ ]+)\ AS\ (mysql|mariadb|postgresql)$ ]]; then images[${BASH_REMATCH[2]}]+="${BASH_REMATCH[1]} "; fi
           done < .github/ci/databases.Dockerfile
           for service in mysql mariadb postgresql; do
@@ -214,9 +214,9 @@ jobs:
           POSTGRESQL_NETWORK: ${{ job.services.postgresql.network }}
         run: >-
           .github/ci/persistence-engines.sh
-          "$MYSQL_IMAGE|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
-          "$MARIADB_IMAGE|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
-          "$POSTGRESQL_IMAGE|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
+          "mysql|$MYSQL_IMAGE|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
+          "mariadb|$MARIADB_IMAGE|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
+          "postgresql|$POSTGRESQL_IMAGE|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
   # The app image, built here and never pushed, then docker/smoke-test.sh on it; every check is in the script.
   image:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'

@@ -8,7 +8,10 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\ReviewerBlocked;
+use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStopped;
+use Intakt\Core\Review\Contract\VerdictReceived;
 use Symfony\Component\Uid\Uuid;
 
 // Read by place in the ledger, never by time, because a request and its answer can share a second, and a request made before the run began must still stop it.
@@ -26,6 +29,42 @@ final readonly class StopRequests
     public function pendingFor(Uuid $round, Uuid $reviewer): bool
     {
         return LedgerEventKind::ReviewerStopRequested === $this->lastRowFor($round, $reviewer);
+    }
+
+    // Only while a reviewer_stopped row is a reviewer's last answer, because a stop rolled back with its lease can be followed by another run's verdict.
+    /**
+     * @return list<string>
+     */
+    public function stoppedIn(Uuid $round): array
+    {
+        $id = $round->toRfc4122();
+
+        if (!array_any(iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopped)), fn (RecordedEvent $row): bool => $id === ($this->stoppedPairOf($row)[0] ?? null))) {
+            return [];
+        }
+
+        $last = [];
+
+        foreach ($this->ledger->readInOrder() as $row) {
+            $answer = $this->answerOf($row);
+
+            if ($answer instanceof ReviewerStopped || $answer instanceof VerdictReceived || $answer instanceof ReviewerFailed || $answer instanceof ReviewerBlocked) {
+                $last[$answer->round][$answer->reviewer] = $row->event->kind;
+            }
+        }
+
+        return array_map(strval(...), array_keys(array_filter($last[$id] ?? [], static fn (LedgerEventKind $kind): bool => LedgerEventKind::ReviewerStopped === $kind)));
+    }
+
+    private function answerOf(RecordedEvent $row): ?object
+    {
+        return match ($row->event->kind) {
+            LedgerEventKind::VerdictReceived => $this->payloads->of($row, VerdictReceived::class),
+            LedgerEventKind::ReviewerFailed => $this->payloads->of($row, ReviewerFailed::class),
+            LedgerEventKind::ReviewerBlocked => $this->payloads->of($row, ReviewerBlocked::class),
+            LedgerEventKind::ReviewerStopped => $this->payloads->of($row, ReviewerStopped::class),
+            default => null,
+        };
     }
 
     private function lastRowFor(Uuid $round, Uuid $reviewer): ?LedgerEventKind

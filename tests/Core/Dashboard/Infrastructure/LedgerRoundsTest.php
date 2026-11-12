@@ -379,6 +379,26 @@ final class LedgerRoundsTest extends TestCase
         self::assertTrue($review?->rounds[0]->findingTextRecorded);
     }
 
+    public function testAJudgedRoundIsJudgedAtTheTimeTheJudgesEventWasRecorded(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START, new DateTimeImmutable('2026-10-28T12:00:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"r1-a","role":"correctness","tier":"standard"}', new DateTimeImmutable('2026-10-28T12:05:00+00:00')),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":[],"follow_ups":[],"findings":[]}', new DateTimeImmutable('2026-10-28T12:41:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"r1-b","role":"security","tier":"standard"}', new DateTimeImmutable('2026-10-28T12:50:00+00:00')),
+        );
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:41:00+00:00'), $review?->rounds[0]->judgedAt);
+    }
+
+    public function testARoundTheJudgeHasNotJudgedHasNoJudgedTime(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
+
+        self::assertNull($review?->rounds[0]->judgedAt);
+    }
+
     public function testASecondJudgeDoneOfARoundChangesNothing(): void
     {
         $review = $this->reviewOf(
@@ -550,9 +570,9 @@ final class LedgerRoundsTest extends TestCase
         return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], []));
     }
 
-    private function event(LedgerEventKind $kind, string $payload): RecordedEvent
+    private function event(LedgerEventKind $kind, string $payload, ?DateTimeImmutable $at = null): RecordedEvent
     {
-        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 
     // Serialized as the writers do, so the reader is shown the row it meets in production.

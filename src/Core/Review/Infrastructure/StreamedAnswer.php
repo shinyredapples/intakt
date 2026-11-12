@@ -74,6 +74,7 @@ final class StreamedAnswer extends AbstractStreamListener
         }
 
         if ($delta instanceof TextDelta) {
+            // Wrapped in a generator, because the listeners after this one then see no text delta and take only the answer, while the stream still yields the text as written.
             $event->setDelta($this->passedOn($delta));
         }
     }

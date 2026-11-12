@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Dashboard\Domain\JudgeCall;
 use Intakt\Core\Dashboard\Domain\Review;
@@ -40,7 +41,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool}> */
+    /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable}> */
     private array $judged = [];
 
     private readonly LedgerTokens $tokens;
@@ -141,7 +142,7 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'textRecorded' => null !== $findings]];
+            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt]];
         }
     }
 
@@ -204,8 +205,8 @@ final class LedgerRounds
 
         return match (true) {
             null === $judged => $completed,
-            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'])),
-            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'])),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])),
+            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])),
         };
     }
 

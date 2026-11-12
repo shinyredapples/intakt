@@ -8,4 +8,9 @@ enum ReviewState: string
 {
     case InProgress = 'in progress';
     case Judged = 'judged';
+
+    public function isJudged(): bool
+    {
+        return self::Judged === $this;
+    }
 }
