@@ -112,7 +112,7 @@ final readonly class MakeBuildClone
 
     private function verifiedSource(string $mirror, ?SourceLine $source, string $directory): ?string
     {
-        if (null === $source) {
+        if (!$source instanceof SourceLine) {
             return null;
         }
 

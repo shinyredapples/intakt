@@ -31,7 +31,7 @@ final class SourceLineTest extends TestCase
 
     public function testALineWithAWindowsLineEndingOrTrailingSpaceIsASource(): void
     {
-        self::assertSame('feat/big', SourceLine::in("Source: feat/big@".self::SHA1." \r\nMore text")?->branch);
+        self::assertSame('feat/big', SourceLine::in('Source: feat/big@'.self::SHA1." \r\nMore text")?->branch);
     }
 
     public function testABranchThatHoldsAnAtSignKeepsItAndTheCommitIsAfterTheLastOne(): void
