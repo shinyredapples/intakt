@@ -53,19 +53,41 @@ final class MakeBuildCloneCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove([$this->mirrors, $this->clone]);
+        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone', $this->mirrors.'-clone-<info>literal<']);
         $this->remote->remove();
     }
 
     public function testTheCommandPrintsThePathOfTheBuildCloneAndExitsWithZero(): void
     {
-        $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update('alpha', $this->remote->path);
+        $this->givenTheProjectHasAMirror();
 
         $tester = $this->whenTheCommandRuns('alpha', 'feat/task');
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertStringContainsString('clone '.$this->clone, $tester->getDisplay());
+    }
+
+    public function testTheCommandPrintsADirectoryWithFormattingTagsLiterally(): void
+    {
+        $this->clone = $this->mirrors.'-clone-<info>literal</info>';
+        $this->givenTheProjectHasAMirror();
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task');
+
+        self::assertDirectoryExists($this->clone.'/.git');
+        self::assertStringContainsString('clone '.$this->clone, $tester->getDisplay());
+    }
+
+    public function testTheCommandPrintsADirectoryWithFormattingTagsLiterallyInTheReason(): void
+    {
+        $this->clone = $this->mirrors.'-clone-<info>literal</info>';
+        new Filesystem()->mkdir($this->clone);
+        $this->givenTheProjectHasAMirror();
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task');
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('-clone-<info>literal</info> was not made', $this->displayOnOneLine($tester));
     }
 
     public function testTheCommandPrintsTheReasonForAProjectWithoutAMirrorAndExitsWithOne(): void
@@ -82,6 +104,12 @@ final class MakeBuildCloneCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('is not a project name that can be a folder name', $this->displayOnOneLine($tester));
+    }
+
+    private function givenTheProjectHasAMirror(): void
+    {
+        $network = new NetworkGit(new RecordingClock(), new NullLogger());
+        new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), new Mirrors($this->mirrors))->update('alpha', $this->remote->path);
     }
 
     private function displayOnOneLine(CommandTester $tester): string

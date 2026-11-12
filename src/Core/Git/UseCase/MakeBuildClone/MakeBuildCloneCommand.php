@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(name: 'intakt:build:clone', description: 'Clone main and the task\'s branch, and no other ref, from the project\'s bare mirror into a new folder')]
@@ -29,7 +30,7 @@ final readonly class MakeBuildCloneCommand
             return Command::FAILURE;
         }
 
-        $io->writeln('clone '.$input->directory);
+        $io->writeln('clone '.OutputFormatter::escape($input->directory));
 
         return Command::SUCCESS;
     }
