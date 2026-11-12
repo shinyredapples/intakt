@@ -5,6 +5,7 @@ declare(strict_types=1);
 return [
     'Core/Ai',
     'Core/Budget',
+    'Core/Build',
     'Core/Dashboard',
     'Core/Git',
     'Core/Job',

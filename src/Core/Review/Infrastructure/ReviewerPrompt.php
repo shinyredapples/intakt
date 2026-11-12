@@ -84,19 +84,7 @@ final readonly class ReviewerPrompt
      */
     private function listOf(array $open): string
     {
-        return implode("\n\n", array_map(
-            static fn (Finding $finding): string => sprintf(
-                "%s [%s] %s:%s%s\nrequirement: %s\n%s",
-                $finding->id,
-                $finding->severity->value,
-                $finding->file ?? '-',
-                $finding->line ?? '-',
-                null === $finding->symbol ? '' : ' '.$finding->symbol,
-                $finding->requirement ?? '-',
-                $finding->text,
-            ),
-            $open,
-        ));
+        return implode("\n\n", array_map(static fn (Finding $finding): string => $finding->listEntry(), $open));
     }
 
     public function cutsInputOf(ReviewBrief $brief): bool

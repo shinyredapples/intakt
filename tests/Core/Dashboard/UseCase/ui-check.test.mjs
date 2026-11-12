@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
-const { jobsFor, measureFloors, report, failed } = createRequire(import.meta.url)('../../../../bin/ui-check');
+const { PAGES, jobsFor, measureFloors, report, failed } = createRequire(import.meta.url)('../../../../bin/ui-check');
 
 const floors = { text: 15, target: 44 };
 
@@ -72,6 +72,13 @@ function pageSelecting(elements) {
 function run(overrides) {
     return { page: 'projects', theme: 'light', width: 390, errors: [], violations: [], floors: [], ...overrides };
 }
+
+test('the run for the board at / is named board', () => {
+    assert.deepEqual(
+        PAGES.filter((page) => page.path === '/').map((page) => page.name),
+        ['board'],
+    );
+});
 
 test('every page is checked in both themes at 1440, 1920 and 390 wide', () => {
     const jobs = jobsFor([{ name: 'projects', path: '/projects' }]);

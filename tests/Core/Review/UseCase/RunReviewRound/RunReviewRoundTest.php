@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\RoundOpened;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\ReviewerTransition;
 use Intakt\Core\Review\Domain\RoundState;
@@ -158,6 +159,23 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
         self::assertSame(ProviderFailedTransiently::class, $stored->reviewers()[0]->failure());
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[1]->state());
+    }
+
+    public function testAReviewerWhoseStreamWasCutMidAnswerIsStoredAsABlockedVerdictWithTheCutAsItsReasonAndNeverApproves(): void
+    {
+        $round = $this->fixture->start(1);
+        $cut = new ScriptedVendor(verdict: Verdict::incompleteStream('The stream ended before its terminal event.'));
+
+        $this->fixture->deliver($this->fixture->bus->messages[0], $cut);
+
+        $stored = $this->fixture->round($round->id()->toRfc4122());
+        self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
+        self::assertSame(RoundState::Complete, $stored->state());
+        /** @var array{verdict: string, findings: list<array{id: string, text: string}>} $verdict */
+        $verdict = json_decode((string) $stored->reviewers()[0]->verdictJson(), true, 16, JSON_THROW_ON_ERROR);
+        self::assertSame('blocked', $verdict['verdict']);
+        self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict['findings'][0]['id']);
+        self::assertStringContainsString('The stream ended before its terminal event.', $verdict['findings'][0]['text']);
     }
 
     public function testAVendorFailureOutsideTheContractIsRecordedAsThatFailureAndTheRoundStillCompletes(): void

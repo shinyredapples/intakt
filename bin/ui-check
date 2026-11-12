@@ -21,7 +21,7 @@ const FLOORS = { text: 15, target: 44 };
 const IMPACTS = ['critical', 'serious', 'moderate', 'minor'];
 const FAILING_IMPACTS = ['critical', 'serious'];
 const PAGES = [
-  { name: 'shell', path: '/' },
+  { name: 'board', path: '/' },
   { name: 'components', path: '/components' },
   { name: 'projects', path: '/projects' },
   { name: 'reviews', path: '/reviews' },
@@ -197,7 +197,7 @@ function failed(runs) {
   return runs.some((run) => run.errors.length > 0 || run.floors.length > 0 || run.violations.some((violation) => FAILING_IMPACTS.includes(violation.impact)));
 }
 
-module.exports = { jobsFor, measureFloors, report, failed };
+module.exports = { PAGES, jobsFor, measureFloors, report, failed };
 
 if (require.main === module) {
   main(process.argv.slice(2)).then(
