@@ -119,8 +119,7 @@ final class PersistenceEnginesTest extends SandboxTestCase
         return $sandbox;
     }
 
-    // Under the runner's own shell options (bash -e with pipefail), because under -e a failing engine once lost its exit code.
-    // umask 077 as on a strict runner, so the cache directory's mode comes from the script.
+    // The runner's shell options (bash -e, pipefail; under -e a failing engine once lost its exit code), umask 077 so the script sets the cache mode.
     private function runEngines(Sandbox $sandbox): ProcessResult
     {
         return $sandbox->runScript(
