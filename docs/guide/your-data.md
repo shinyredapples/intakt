@@ -1,4 +1,4 @@
-# Your data: backups, moving and uninstalling
+# Your data: backups, upgrading, moving and uninstalling
 
 Everything Intakt knows lives in one place, so it is easy to back up, move or remove. Intakt is still being built, so this describes the decided design ([overview](../design/05-architecture/01-overview.md), [setup](../design/05-architecture/11-setup.md)); the exact commands arrive with the container image (plan task T22).
 
@@ -32,6 +32,19 @@ Back up the data volume. Two ways:
 - **Without pausing:** take a consistent copy of the database with SQLite's own backup command, and copy the config file, the keys and the secrets vault next to it.
 
 Treat the backup like a password manager's file: it holds keys. Store it encrypted.
+
+## Upgrading
+
+A new version of Intakt may change how its database is laid out. It does that by itself when it starts, and it only goes forward: an older version cannot read data a newer one has changed. So keep a copy from before the update.
+
+1. Pause Intakt and wait until nothing is running.
+2. Stop the container (`docker stop intakt`) and copy the data volume, as in [Backing up](#backing-up).
+3. Update to the new version and start it on the volume. It updates the data on its first start.
+4. Keep the copy until the new version has run a normal day.
+
+**If something is wrong:** stop the new version and go back to the previous version on the copy you made in step 2. Never start the previous version on the data the new version has already updated.
+
+Every change that could affect your data is checked this way before it is merged: the version before it writes data, the new version starts on a copy of that data and must read the same, and the version before it starts again on the untouched original.
 
 ## Moving to another machine
 

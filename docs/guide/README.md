@@ -19,7 +19,7 @@ Guides that explain Intakt without assuming you know how it is built. Each one d
 | [Using Intakt from your assistant](using-intakt-from-your-assistant.md) | MCP, the console command and the local API |
 | [Several projects](several-projects.md) | shares, the shared view, and projects that depend on each other |
 | [Why the AI can't wreck your project](why-the-ai-cant-wreck-your-project.md) | the safety layers |
-| [Your data](your-data.md) | what it stores, backups, moving, uninstalling |
+| [Your data](your-data.md) | what it stores, backups, upgrading, moving, uninstalling |
 | [Writing a plugin](writing-a-plugin.md) | adding a forge, an AI company or a notifier |
 | [Testing a new check](testing-a-new-check.md) | how a rule of Intakt's own checks is tested, and switched on before the code is clean |
 | [Checking the whole product](checking-the-whole-product.md) | what the journey checks cover and how to run one |

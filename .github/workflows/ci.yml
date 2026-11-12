@@ -217,21 +217,43 @@ jobs:
           "mysql|$MYSQL_IMAGE|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
           "mariadb|$MARIADB_IMAGE|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
           "postgresql|$POSTGRESQL_IMAGE|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
-  # The app image, built once here and never pushed, then docker/smoke-test.sh and docker/verify-first-start.sh on it;
-  # every check is in the scripts. One job, because each job on an ephemeral runner is a full machine reset and a build.
+  # The app image, built once here and never pushed, then docker/smoke-test.sh, docker/verify-first-start.sh and, when
+  # needed, docker/verify-upgrade.sh on it; every check is in the scripts. One job, because each job on an ephemeral runner
+  # is a full machine reset and a build. The full history is fetched for the upgrade check's base commit.
   image:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Log in to Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
+      # Decided in a step, not by a paths filter, so the job reports on every pull request. The base is the pull request's
+      # merge base, or on main the commit before the push; every push to main runs the check. A failing git fails the step.
+      - name: Decide whether the change needs the upgrade check
+        id: upgrade
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = push ]; then
+            base=$(git rev-parse HEAD~1)
+            needed=yes
+          else
+            base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
+            needed=$(.github/ci/upgrade-needed.sh "$base" "$HEAD_SHA")
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          echo "upgrade check needed: $needed (base $base)"
       - name: Build the app image
         id: build
         run: docker build --tag intakt:ci .
@@ -241,3 +263,9 @@ jobs:
       - name: Start the image on an empty volume and show the seeded panel
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: bash docker/verify-first-start.sh intakt:ci
+      # Runs after a failed smoke test too, for the same reason.
+      - name: Start this image on a copy of the base's data, then the base on the original
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.upgrade.outputs.needed == 'yes' }}
+        env:
+          BASE: ${{ steps.upgrade.outputs.base }}
+        run: bash docker/verify-upgrade.sh intakt:ci "$BASE"
