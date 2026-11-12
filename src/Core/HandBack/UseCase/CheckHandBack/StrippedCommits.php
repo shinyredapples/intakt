@@ -9,6 +9,8 @@ use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
+use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 
 final readonly class StrippedCommits
 {
@@ -18,12 +20,13 @@ final readonly class StrippedCommits
     /**
      * @throws HandBackNotChecked
      */
-    public function of(GivenHistory $history, string $head): AcceptedHandBack|RefusedHandBack
+    public function of(GivenHistory $history, string $head, JobCredentials $credentials): AcceptedHandBack|RefusedHandBack
     {
         $replaced = [];
+        $redaction = $this->redactionOf($credentials);
 
         foreach ($history->newCommits($head) as $commit) {
-            $stripped = $this->stripped($history, $commit, $replaced);
+            $stripped = $this->stripped($history, $commit, $replaced, $redaction);
 
             if (null === $stripped) {
                 return new RefusedHandBack(HandBackRefusal::Malformed);
@@ -38,19 +41,29 @@ final readonly class StrippedCommits
     }
 
     /**
+     * @return array<string, string>
+     */
+    private function redactionOf(JobCredentials $credentials): array
+    {
+        // For strtr(), which tries the longest value first, so a credential that contains another is redacted whole.
+        return array_fill_keys($credentials->values, Redaction::MARKER);
+    }
+
+    /**
      * @param array<string, string> $replaced
+     * @param array<string, string> $redaction
      *
      * @throws HandBackNotChecked
      */
-    private function stripped(GivenHistory $history, string $commit, array $replaced): ?string
+    private function stripped(GivenHistory $history, string $commit, array $replaced, array $redaction): ?string
     {
         $git = $history->git;
         $repository = $history->repository;
         $raw = $git->exactOutput($repository, ['cat-file', 'commit', $commit]);
         [$headers, $message] = explode("\n\n", $raw, 2) + [1 => ''];
         $headerLines = explode("\n", $headers);
-        $reparented = $this->reparented($headerLines, $replaced);
-        $strippedMessage = AttributionLines::strippedFrom($message);
+        $reparented = $this->redactedHeaders($this->reparented($headerLines, $replaced), $redaction);
+        $strippedMessage = strtr(AttributionLines::strippedFrom($message), $redaction);
 
         // Every new commit passes git's own format check, because unbundling checks none and a crafted bundle may hold a commit git would never write.
         if ($reparented === $headerLines && $strippedMessage === $message) {
@@ -74,6 +87,21 @@ final readonly class StrippedCommits
     {
         return array_map(
             static fn (string $line): string => str_starts_with($line, 'parent ') ? 'parent '.($replaced[substr($line, 7)] ?? substr($line, 7)) : $line,
+            $headerLines,
+        );
+    }
+
+    /**
+     * @param list<string>          $headerLines
+     * @param array<string, string> $redaction
+     *
+     * @return list<string>
+     */
+    private function redactedHeaders(array $headerLines, array $redaction): array
+    {
+        // Every header but the object ids, because a credential can be in an author's or committer's name as well as in the message.
+        return array_map(
+            static fn (string $line): string => str_starts_with($line, 'tree ') || str_starts_with($line, 'parent ') ? $line : strtr($line, $redaction),
             $headerLines,
         );
     }

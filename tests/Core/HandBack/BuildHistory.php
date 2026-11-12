@@ -47,6 +47,13 @@ final readonly class BuildHistory
         return $this->commit($message);
     }
 
+    public function commitByAuthor(string $author, string $message): string
+    {
+        $this->git('commit', '--quiet', '--allow-empty', '--author='.$author, '-m', $message);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
     public function commitWithASignatureHeader(string $message): string
     {
         // A literal block, because a test has no signing key; nothing here verifies the signature.

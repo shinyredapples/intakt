@@ -14,6 +14,7 @@ use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackCommand;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackInput;
@@ -21,6 +22,7 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -37,6 +39,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(IncomingObjects::class)]
 #[UsesClass(RepositoryGit::class)]
 #[UsesClass(StrippedCommits::class)]
+#[UsesClass(BundleSecretScan::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(RefusedHandBack::class)]
 #[UsesClass(HandBack::class)]
@@ -48,6 +52,8 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(GitCall::class)]
 final class CheckHandBackCommandTest extends TestCase
 {
+    private const string CREDENTIAL = 'INTAKT_TEST_MOUNTED_CREDENTIAL';
+
     private BuildHistory $history;
 
     protected function setUp(): void
@@ -125,13 +131,52 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertStringContainsString('could not be checked', $this->flat($tester));
     }
 
+    public function testACredentialNamedByItsVariableIsRedactedFromTheCommits(): void
+    {
+        $credential = 'mounted-'.bin2hex(random_bytes(8));
+        $this->history->commit("Read with {$credential}");
+        $_SERVER[self::CREDENTIAL] = $credential;
+
+        try {
+            $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), '--credential-env' => [self::CREDENTIAL]]);
+        } finally {
+            unset($_SERVER[self::CREDENTIAL]);
+        }
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringEndsWith("rewritten 1\n", $tester->getDisplay());
+        self::assertStringNotContainsString($credential, $this->history->inMirror('log', '--format=%B', explode(' ', explode("\n", $tester->getDisplay())[0])[1]));
+    }
+
+    public function testACredentialVariableThatIsUnsetFailsWithItsName(): void
+    {
+        $this->history->commit('First');
+
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), '--credential-env' => [self::CREDENTIAL]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('the credential variable "'.self::CREDENTIAL.'" is unset or empty', $this->flat($tester));
+    }
+
+    public function testASecretInTheBundlePrintsTheRefusalWithoutTheSecret(): void
+    {
+        $key = 'sk_'.'live_'.bin2hex(random_bytes(12));
+        $this->history->commit('Use the key '.$key);
+
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task')]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('refused: '.HandBackRefusal::HoldsSecret->reason(), $this->flat($tester));
+        self::assertStringNotContainsString($key, $tester->getDisplay());
+    }
+
     /**
-     * @param array<string, string|bool> $input
+     * @param array<string, string|bool|list<string>> $input
      */
     private function executed(array $input): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new CheckHandBackCommand(new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects())));
+        $application->addCommand(new CheckHandBackCommand(new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks'))));
         $tester = new CommandTester($application->find('intakt:hand-back:check'));
         $tester->execute($input);
 

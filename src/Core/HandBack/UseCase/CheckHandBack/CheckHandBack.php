@@ -23,6 +23,7 @@ final readonly class CheckHandBack
         private BundleFile $bundles,
         private StrippedCommits $stripped,
         private IncomingObjects $incoming,
+        private BundleSecretScan $secrets,
     ) {
     }
 
@@ -76,7 +77,20 @@ final readonly class CheckHandBack
             return new RefusedHandBack($refusal);
         }
 
-        return $this->stripped->of($history, $head);
+        $stripped = $this->stripped->of($history, $head, $handBack->mountedCredentials);
+
+        return $stripped instanceof AcceptedHandBack ? $this->scanned($stripped, $handBack, $history) : $stripped;
+    }
+
+    /**
+     * @throws HandBackNotChecked
+     */
+    private function scanned(AcceptedHandBack $stripped, HandBack $handBack, GivenHistory $history): AcceptedHandBack|RefusedHandBack
+    {
+        // The stripped and redacted commits, because they are what the push sends.
+        $refusal = $this->secrets->refusalOf($history, $stripped->head, $handBack->mountedCredentials);
+
+        return null === $refusal ? $stripped : new RefusedHandBack($refusal);
     }
 
     private function givenHistory(HandBack $handBack): GivenHistory
