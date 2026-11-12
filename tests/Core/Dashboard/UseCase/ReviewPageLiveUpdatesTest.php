@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -13,14 +15,34 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\ToolCallCount;
+use Intakt\Core\Review\Infrastructure\RoundToolCalls;
+use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
+use Intakt\Kernel;
+use Intakt\Tests\Core\Mcp\Contract\McpServerClient;
+use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
+use Symfony\Component\Mercure\MockHub;
+use Symfony\Component\Mercure\Update;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
@@ -36,11 +58,25 @@ use Twig\Environment;
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(FinishedState::class)]
+#[UsesClass(SessionSummary::class)]
+#[UsesClass(ToolCallCount::class)]
+#[UsesClass(Cost::class)]
+#[UsesClass(MercureRoundUpdates::class)]
+#[UsesClass(MercureLiveUpdates::class)]
+#[UsesClass(LiveEvent::class)]
+#[UsesClass(StoredSessionSummaries::class)]
+#[UsesClass(RoundToolCalls::class)]
+#[UsesClass(ReviewedRepository::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
 
     private ?string $secretBefore = null;
+
+    /**
+     * @var list<Update>
+     */
+    private array $published = [];
 
     #[Override]
     protected function setUp(): void
@@ -269,6 +305,53 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
     }
 
+    public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
+    {
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [], [], false)]);
+
+        $targets = new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
+        self::assertCount(4, $targets);
+        foreach ($targets as $target) {
+            self::assertCount(1, $page->filter('#'.$target), $target);
+        }
+    }
+
+    // From the review server's tool call to the page, because that is the whole path a reviewer's call takes; only the hub is a stand-in and Turbo is applied by hand.
+    #[Group('persistence')]
+    public function testAToolCallTheReviewServerRecordsChangesTheSessionSummaryOnThePageThroughTheUpdateItPublishes(): void
+    {
+        $this->browser->disableReboot();
+        $this->givenTheHubRecordsWhatIsPublished();
+        $round = new RoundFixture(self::getContainer())->start(1)->id()->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $round, 1);
+        $this->ledger->startReviewer($round, 'correctness');
+        $page = $this->browser->request('GET', '/reviews/'.$round);
+        self::assertSame('No file read yet.', $page->filter('#round-'.$round.'-summary-files .muted')->text());
+
+        $this->reviewServerFor($round)->call('tools/call', ['name' => 'read_file', 'arguments' => ['path' => 'RoundFixture.php']], 3);
+
+        self::assertCount(1, $this->published);
+        self::assertSame(['review/rounds/'.$round], $this->published[0]->getTopics());
+        $updated = $this->replaced($page, $this->published[0]->getData());
+        self::assertSame([['read_file', '1'], ['Total', '1']], $this->pairsOf($updated->filter('#round-'.$round.'-summary-tools .ls-tools')));
+        self::assertSame(['RoundFixture.php'], $updated->filter('#round-'.$round.'-summary-files .mono')->each(static fn (Crawler $file): string => $file->text()));
+    }
+
+    public function testASummaryPushedToThePageLeavesTheReviewWideCostAlone(): void
+    {
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $before = $page->filter('.ls-cost dd')->eq(1)->text();
+
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [], false)]));
+
+        self::assertSame('0.9000 USD', $updated->filter('.ls-cost dd')->first()->text());
+        self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
+    }
+
     // Nothing listens at MERCURE_URL in the test environment, so this is the page of an install whose hub is stopped.
     public function testThePageRendersFullyWhileTheHubIsStopped(): void
     {
@@ -383,6 +466,48 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         }
 
         self::fail('The page set no subscriber cookie.');
+    }
+
+    private function givenTheHubRecordsWhatIsPublished(): void
+    {
+        $container = self::getContainer();
+        $hub = new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), function (Update $update): string {
+            $this->published[] = $update;
+
+            return 'id-'.count($this->published);
+        });
+        $twig = $container->get(Environment::class);
+        $summaries = $container->get(SessionSummaries::class);
+        self::assertInstanceOf(Environment::class, $twig);
+        self::assertInstanceOf(SessionSummaries::class, $summaries);
+        $container->set(RoundUpdates::class, new MercureRoundUpdates(new MercureLiveUpdates($hub, new NullLogger()), $twig, $summaries, new LockFactory(new InMemoryStore()), new NullLogger()));
+    }
+
+    private function reviewServerFor(string $round): McpServerClient
+    {
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        self::assertInstanceOf(Kernel::class, self::$kernel);
+        $server = new McpServerClient(self::$kernel, '/mcp/review', $credential->issueFor($round));
+        $server->initialize('2025-11-25');
+
+        return $server;
+    }
+
+    private function givenARunningRoundWithTheSummary(SessionSummary $summary): void
+    {
+        $this->givenARunningRound();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn($summary);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function pairsOf(Crawler $list): array
+    {
+        return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), $term->nextAll()->first()->text()]);
     }
 
     private function givenARunningRound(): void

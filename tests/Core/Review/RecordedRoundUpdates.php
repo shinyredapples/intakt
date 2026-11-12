@@ -47,6 +47,12 @@ final class RecordedRoundUpdates implements RoundUpdates
     }
 
     #[Override]
+    public function summaryChanged(Uuid $round): void
+    {
+        $this->seen[] = sprintf('summary %s', $round->toRfc4122());
+    }
+
+    #[Override]
     public function roundChanged(Uuid $round, RoundProgress $progress): void
     {
         $meanwhile = $this->whilePublishingNextRoundChange;
