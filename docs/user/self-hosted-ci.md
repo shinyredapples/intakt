@@ -35,6 +35,8 @@ Why: a pull request from a branch of the repository runs its own version of the 
 
 The package is private while the repository is. To pull it, log in to `ghcr.io` with a token that has `read:packages` and access to the package (for example `docker login ghcr.io --username <account> --password-stdin`, the token on stdin), then `docker pull ghcr.io/<owner>/<repository>-ci:<hash>`.
 
+A baked image is used only while its tag matches that hash, so bake it again whenever main changes one of those files. The CI image installs a fixed list of PHP extensions, so a new `ext-*` entry in `composer.json` also needs a change to `.github/ci/Dockerfile`; without it the image build fails, naming the extension.
+
 ## Keeping the runner usable
 
 The script that registers your ephemeral runner should do three things before each registration, so a runner that died mid-job does not block CI until someone cleans up by hand:
