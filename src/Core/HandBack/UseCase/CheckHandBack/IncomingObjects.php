@@ -36,46 +36,12 @@ final readonly class IncomingObjects
     }
 
     /**
-     * The objects the bundle's pack holds itself, because unbundling a thin pack appends the objects its deltas build on, from anywhere in the repository.
-     *
-     * @return array<string, int>
-     *
-     * @throws HandBackNotChecked
-     */
-    public function shipped(GivenHistory $history, string $folder, int $count): array
-    {
-        $indexes = glob($folder.'/pack/*.idx') ?: [];
-
-        if ([] === $indexes) {
-            return [];
-        }
-
-        $index = 1 === count($indexes) ? file_get_contents($indexes[0]) : false;
-        $listing = false === $index ? null : $history->git->answerWithInput($history->repository, ['show-index'], $index);
-
-        if (null === $listing) {
-            throw HandBackNotChecked::in($history->repository, 'the unbundled pack could not be listed');
-        }
-
-        $offsets = [];
-        foreach ('' === $listing ? [] : explode("\n", $listing) as $line) {
-            [$offset, $object] = explode(' ', $line, 3) + [1 => ''];
-            $offsets[$object] = (int) $offset;
-        }
-
-        // The appended objects come last in the pack, after the count its header states.
-        asort($offsets, SORT_NUMERIC);
-
-        return array_flip(array_slice(array_keys($offsets), 0, $count));
-    }
-
-    /**
      * @throws HandBackNotChecked
      */
     public function keep(string $folder): void
     {
         $objects = dirname($folder);
-        $files = [...(glob($folder.'/[0-9a-f][0-9a-f]/*') ?: []), ...(glob($folder.'/pack/*') ?: [])];
+        $files = [...$this->files($folder.'/[0-9a-f][0-9a-f]/*'), ...$this->files($folder.'/pack/*')];
         // An index last, because git finds a pack through its index, which must never name a pack file not there yet.
         usort($files, static fn (string $one, string $other): int => str_ends_with($one, '.idx') <=> str_ends_with($other, '.idx'));
         $filesystem = new Filesystem();
@@ -105,5 +71,15 @@ final readonly class IncomingObjects
         } catch (IOException) {
             throw HandBackNotChecked::in(dirname($folder, 2), 'its quarantine could not be removed');
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function files(string $pattern): array
+    {
+        $files = glob($pattern);
+
+        return false === $files ? [] : $files;
     }
 }

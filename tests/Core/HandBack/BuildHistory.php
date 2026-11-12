@@ -105,10 +105,9 @@ final readonly class BuildHistory
         return $this->file("# v2 git bundle\n-".$this->git('rev-parse', 'HEAD^')."\n".$head." refs/heads/task\n\n".$pack);
     }
 
+    // By hand, because "git bundle create" lists every prerequisite and packs every object the head needs; only a crafted bundle leaves one out.
+    // With --shallow, because then every excluded commit's objects serve as delta bases, not only those of the head's own ancestors.
     /**
-     * By hand, because "git bundle create" lists every prerequisite and packs every object the head needs; only a crafted bundle leaves one out.
-     * With --shallow, because then every excluded commit's objects serve as delta bases, not only those of the head's own ancestors.
-     *
      * @param list<string> $prerequisites
      */
     public function bundleByHand(string $head, array $prerequisites, string ...$revisions): string

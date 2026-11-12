@@ -50,7 +50,7 @@ final readonly class CheckHandBack
         $quarantine = $this->incoming->open($history->repository);
 
         try {
-            $result = $this->checkedIn($history->withObjectsIn($quarantine), $handBack, $header->references[$history->branch], $quarantine);
+            $result = $this->checkedIn($history->withObjectsIn($quarantine), $handBack, $header->references[$history->branch]);
 
             if ($result instanceof AcceptedHandBack) {
                 $this->incoming->keep($quarantine);
@@ -65,10 +65,10 @@ final readonly class CheckHandBack
     /**
      * @throws HandBackNotChecked
      */
-    private function checkedIn(GivenHistory $history, HandBack $handBack, string $head, string $quarantine): AcceptedHandBack|RefusedHandBack
+    private function checkedIn(GivenHistory $history, HandBack $handBack, string $head): AcceptedHandBack|RefusedHandBack
     {
         $refusal = $this->refusalToUnbundle($handBack, $history)
-            ?? $this->refusalOfUnshipped($handBack, $head, $history, $quarantine)
+            ?? $this->refusalOfUnshipped($handBack, $head, $history)
             ?? $this->refusalOfFastForward($head, $history)
             ?? $this->refusalOfMerges($handBack, $head, $history);
 
@@ -158,7 +158,7 @@ final readonly class CheckHandBack
     /**
      * @throws HandBackNotChecked
      */
-    private function refusalOfUnshipped(HandBack $handBack, string $head, GivenHistory $history, string $quarantine): ?HandBackRefusal
+    private function refusalOfUnshipped(HandBack $handBack, string $head, GivenHistory $history): ?HandBackRefusal
     {
         $count = $this->bundles->packedObjectCount($handBack->bundle);
 
@@ -167,7 +167,7 @@ final readonly class CheckHandBack
         }
 
         // Only what the bundle's own pack holds counts, because the header's prerequisites are the bundle's word, and the repository also holds other branches the build was never given.
-        $shipped = $this->incoming->shipped($history, $quarantine, $count);
+        $shipped = $history->shippedObjects($count);
         $commits = $history->reachedCommits($head);
 
         if (null !== $commits && [] !== array_diff_key(array_flip($commits), $shipped)) {

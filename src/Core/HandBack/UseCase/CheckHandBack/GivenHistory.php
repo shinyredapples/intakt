@@ -17,12 +17,13 @@ final readonly class GivenHistory
         public string $main,
         public string $branch,
         public ?string $pushed,
+        private ?string $quarantine = null,
     ) {
     }
 
     public function withObjectsIn(string $quarantine): self
     {
-        return new self($this->git->withObjectsIn($quarantine), $this->repository, $this->main, $this->branch, $this->pushed);
+        return new self($this->git->withObjectsIn($quarantine), $this->repository, $this->main, $this->branch, $this->pushed, $quarantine);
     }
 
     public function holds(string $commit): bool
@@ -43,8 +44,39 @@ final readonly class GivenHistory
     }
 
     /**
-     * The commits the head reaches that main and the pushed branch do not, or null when one of them is missing.
+     * @return array<string, int>
      *
+     * @throws HandBackNotChecked
+     */
+    public function shippedObjects(int $count): array
+    {
+        // Only the quarantine's pack, because the repository's own objects were never shipped.
+        $indexes = null === $this->quarantine ? false : glob($this->quarantine.'/pack/*.idx');
+
+        if (false === $indexes || [] === $indexes) {
+            return [];
+        }
+
+        $index = 1 === count($indexes) ? file_get_contents($indexes[0]) : false;
+        $listing = false === $index ? null : $this->git->answerWithInput($this->repository, ['show-index'], $index);
+
+        if (null === $listing) {
+            throw HandBackNotChecked::in($this->repository, 'the unbundled pack could not be listed');
+        }
+
+        $offsets = [];
+        foreach ('' === $listing ? [] : explode("\n", $listing) as $line) {
+            [$offset, $object] = explode(' ', $line, 3) + [1 => ''];
+            $offsets[$object] = (int) $offset;
+        }
+
+        // By offset and cut at the pack's own count, because unbundling a thin pack appends the objects its deltas build on, from any branch of the repository, after the objects the bundle ships.
+        asort($offsets, SORT_NUMERIC);
+
+        return array_flip(array_slice(array_keys($offsets), 0, $count));
+    }
+
+    /**
      * @return list<string>|null
      */
     public function reachedCommits(string $head): ?array
@@ -53,8 +85,6 @@ final readonly class GivenHistory
     }
 
     /**
-     * The commits, trees and blobs the head reaches that main and the pushed branch do not, or null when one of them is missing, because unbundling checks no connectivity.
-     *
      * @return list<string>|null
      */
     public function reachedObjects(string $head): ?array
@@ -110,6 +140,7 @@ final readonly class GivenHistory
      */
     private function reached(array $revisions): ?array
     {
+        // Null when an object is missing, because unbundling checks no connectivity.
         $output = $this->git->answer($this->repository, ['rev-list', ...$revisions, '--not', ...$this->known()]);
 
         if (null === $output || '' === $output) {
