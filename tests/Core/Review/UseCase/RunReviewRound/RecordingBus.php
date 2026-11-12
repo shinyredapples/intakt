@@ -19,9 +19,14 @@ final class RecordingBus implements MessageBusInterface
     /** @var list<RoundOpened> */
     public array $announced = [];
 
+    /** @var list<object> */
+    public array $dispatched = [];
+
     #[Override]
     public function dispatch(object $message, array $stamps = []): Envelope
     {
+        $this->dispatched[] = $message;
+
         if ($message instanceof RoundOpened) {
             $this->announced[] = $message;
 
