@@ -8,6 +8,7 @@ Code and conventions:
 - [Sample repository](sample-repository.md)
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
+- [Build clone](build-clone.md)
 - [Upstream reproductions](upstream-reproductions.md)
 - [Development diagnostics (Mate)](development-diagnostics.md)
 
