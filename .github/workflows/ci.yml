@@ -83,7 +83,7 @@ jobs:
           cache="$RUNNER_TEMP/composer-cache"
           mkdir -p "$cache"
           cache_mode=:ro read_only=1
-          cache_mode= read_only=0
+          if [ "$EVENT" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then cache_mode= read_only=0; fi
           chmod -R a+rX "$cache"
           if [ "$read_only" = 0 ]; then chmod -R a+w "$cache"; fi
           docker run --rm --user 1000:1000 \
@@ -96,7 +96,7 @@ jobs:
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
       - name: Save Composer's cache
-        if: ${{ !cancelled() && steps.composer-cache.outputs.cache-hit != 'true' }}
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.composer-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/composer-cache
