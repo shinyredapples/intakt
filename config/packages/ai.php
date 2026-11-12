@@ -86,7 +86,7 @@ return static function (ContainerConfigurator $container): void {
     /** @var array<string, mixed> $contents */
     $contents = is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : [];
     $contentProjects = $contents['projects'] ?? [];
-    // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the shadow tree only; a projects value that is no map stays as written for the projects tree to refuse.
+    // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the mode tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
     $modes = [];
     $watches = [];
