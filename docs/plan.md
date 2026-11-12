@@ -24,7 +24,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 | After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T75 to T80, T81, T32 (optional) | after the deadline |
 | M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46 | tasks 2026-11-25; weekly report after one week, 2026-12-03 |
-| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T47 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
@@ -383,7 +383,7 @@ Conventions, in addition to the ones above:
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
 | M6 Reviewer for the loop | Intakt reviews every new green head of the owner's two projects in place of the loop's Claude reviewer, its verdict counts, and a weekly report compares its reviews with the loop's | T37, T38, T40, T43 to T46 | tasks 2026-11-25; weekly report after one week, 2026-12-03 |
-| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M6 Reviewer for the loop
