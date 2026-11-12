@@ -217,7 +217,8 @@ jobs:
           "mysql|$MYSQL_IMAGE|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
           "mariadb|$MARIADB_IMAGE|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
           "postgresql|$POSTGRESQL_IMAGE|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
-  # The app image, built here and never pushed, then docker/smoke-test.sh on it; every check is in the script.
+  # The app image, built once here and never pushed, then docker/smoke-test.sh and docker/verify-first-start.sh on it;
+  # every check is in the scripts. One job, because each job on an ephemeral runner is a full machine reset and a build.
   image:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
@@ -232,6 +233,11 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
       - name: Build the app image
+        id: build
         run: docker build --tag intakt:ci .
       - name: Smoke-test the app image
         run: docker/smoke-test.sh intakt:ci
+      # Runs after a failed smoke test too, so a run reports both checks of the image, as two workflows did before.
+      - name: Start the image on an empty volume and show the seeded panel
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: bash docker/verify-first-start.sh intakt:ci
