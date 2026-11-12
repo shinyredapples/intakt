@@ -193,7 +193,7 @@ final class WeeklyReportCommandTest extends TestCase
     {
         $folder = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(4));
         mkdir($folder);
-        foreach (RecordedFolder::jsonFiles(self::RECORDED) ?? [] as $file) {
+        foreach (glob(self::RECORDED.'/*.json') ?: [] as $file) {
             copy($file, $folder.'/'.basename($file));
         }
 
