@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -16,6 +17,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Hub;
 use Symfony\Component\Mercure\Jwt\Grant;
 use Symfony\Component\Mercure\Jwt\LcobucciFactory;
@@ -105,6 +108,8 @@ final class MercureHubTest extends TestCase
         $this->updates = new MercureRoundUpdates(
             new MercureLiveUpdates(new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
             new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates')),
+            self::createStub(SessionSummaries::class),
+            new LockFactory(new InMemoryStore()),
             $logger,
         );
     }

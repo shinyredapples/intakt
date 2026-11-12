@@ -1,59 +1,19 @@
+{% import 'dashboard/_session_summary_parts.html.twig' as part %}
 <section class="log-summary" aria-label="Session summary">
 {% if summary is null %}
     <p class="muted">No session summary: Intakt holds no record of this round's tool calls and findings.</p>
 {% else %}
     <div class="ls-grid">
-        <div>
-            <h3>Tool calls</h3>
-            {% if summary.toolCalls is empty %}
-            <p class="muted">No tool call yet.</p>
-            {% else %}
-                <dl class="ls-dl ls-tools">
-                    {% for kind in summary.toolCalls %}
-                    <dt>{{ kind.tool }}</dt><dd>{{ kind.count }}</dd>
-                    {% endfor %}
-                    <dt>Total</dt><dd>{{ summary.totalToolCalls }}</dd>
-                </dl>
-            {% endif %}
-        </div>
+        {{ part.tools(round, summary) }}
         <div>
             <h3>Cost</h3>
             <dl class="ls-dl ls-cost">
-                <dt>This round</dt><dd>{{ summary.cost.reading }}</dd>
+                <dt>This round</dt>{{ part.round_cost(round, summary) }}
                 <dt>Review so far</dt><dd>{{ review_cost.reading }}</dd>
             </dl>
         </div>
     </div>
-    <div>
-        <h3>Files read</h3>
-        {% if summary.filesRead is empty %}
-        <p class="muted">No file read yet.</p>
-        {% else %}
-        <ul class="ls-list ls-files">
-            {% for file in summary.filesRead %}
-            <li><span class="mono">{{ file }}</span></li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-    </div>
-    <div>
-        <h3>Findings this round</h3>
-        {% set checked = summary.checking|map(f => f.id) %}
-        {% set resolved = summary.resolved|map(f => f.id) %}
-        {# A finding the round checked and reported again is listed once, as the round checked it. #}
-        {% set reported = summary.reported|filter(f => f.id not in checked) %}
-        {% if summary.checking is empty and reported is empty %}
-        <p class="muted">No finding to check, and none reported yet. Reported findings appear once every reviewer is in.</p>
-        {% else %}
-        <ul class="ls-list ls-findings">
-            {% for finding in summary.checking %}
-            <li><span class="mono">{{ finding.id }}</span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">{{ finding.id in resolved ? 'Checked, resolved' : 'Open' }}</span></li>
-            {% endfor %}
-            {% for finding in reported %}
-            <li><span class="mono">{{ finding.id }}</span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">Reported</span></li>
-            {% endfor %}
-        </ul>
-        {% endif %}
-    </div>
+    {{ part.files(round, summary) }}
+    {{ part.findings(round, summary) }}
 {% endif %}
 </section>

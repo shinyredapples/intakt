@@ -1,0 +1,5 @@
+{% import 'dashboard/_session_summary_parts.html.twig' as part %}
+<turbo-stream action="replace" target="round-{{ round }}-summary-tools"><template>{{ part.tools(round, summary)|trim }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-summary-cost"><template>{{ part.round_cost(round, summary)|trim }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-summary-files"><template>{{ part.files(round, summary)|trim }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-summary-findings"><template>{{ part.findings(round, summary)|trim }}</template></turbo-stream>

@@ -8,6 +8,7 @@ enum RoundStream: string
 {
     case ToolCalled = 'tool_called';
     case TextStreamed = 'text_streamed';
+    case SummaryChanged = 'summary_changed';
     case RoundChanged = 'round_changed';
     case ReviewerStopped = 'reviewer_stopped';
 
