@@ -136,6 +136,25 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame([], $this->calls());
     }
 
+    public function testACutOffRunThatTimedOutFilesTheTaskNamingTheTimeoutAndTheRunLink(): void
+    {
+        $alarm = $this->alarm(['--timed-out', '--run=https://github.com/example/repo/actions/runs/3'], "Building the instance\n{\"gate\":\"jour");
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        $create = $this->callsOf('create');
+        self::assertSame('fix(journeys): the journeys run timed out on main', $create[0]['arguments'][3]);
+        self::assertStringContainsString('The journeys run on `main` timed out', $create[0]['input']);
+        self::assertStringContainsString('Run: https://github.com/example/repo/actions/runs/3', $create[0]['input']);
+        self::assertStringContainsString("Building the instance\n{\"gate\":\"jour\n```", $create[0]['input']);
+    }
+
+    public function testACutOffRunThatTimedOutUpdatesTheOpenTask(): void
+    {
+        $this->openIssues($this->issues([5, JourneyAlarmTask::MARKER."\nold"]));
+
+        self::assertSame("updated #5\n", $this->alarm(['--timed-out'], "Building the instance\n")->getOutput());
+    }
+
     public function testAnAnswerOfGhThatIsNoIssueListFailsAndFilesNothing(): void
     {
         $this->openIssues('{"message":"Bad credentials"}');

@@ -18,9 +18,9 @@ final readonly class JourneyAlarm
     ) {
     }
 
-    public function raise(string $output, ?Uri $link): string
+    public function raise(string $output, ?Uri $link, bool $timedOut = false): string
     {
-        $run = JourneyRun::fromOutput($output);
+        $run = $timedOut ? JourneyRun::timedOut($output) : JourneyRun::fromOutput($output);
 
         if (!$run->isRed()) {
             return 'no journey failed: nothing filed';

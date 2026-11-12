@@ -11,7 +11,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\FlockStore;
 use Uri\Rfc3986\Uri;
 
-const USAGE = "usage: bin/journey-alarm [--run=<https link to the run>] [<file with the output of bin/check --journeys>]\n";
+const USAGE = "usage: bin/journey-alarm [--run=<https link to the run>] [--timed-out] [<file with the output of bin/check --journeys>]\n";
 
 $autoload = __DIR__.'/../vendor/autoload.php';
 
@@ -23,9 +23,16 @@ if (!is_file($autoload)) {
 require $autoload;
 
 $link = null;
+$timedOut = false;
 $files = [];
 
 foreach (array_slice($argv, 1) as $argument) {
+    if ('--timed-out' === $argument) {
+        $timedOut = true;
+
+        continue;
+    }
+
     if (str_starts_with($argument, '--run=')) {
         $link = Uri::parse(substr($argument, 6));
 
@@ -60,7 +67,7 @@ if (false === $output) {
 
 try {
     $alarm = new JourneyAlarm(new GitHubIssues((string) getenv('GITHUB_REPOSITORY')), new LockFactory(new FlockStore()));
-    fwrite(STDOUT, $alarm->raise($output, $link)."\n");
+    fwrite(STDOUT, $alarm->raise($output, $link, $timedOut)."\n");
 } catch (UnreadableJourneyRun|GitHubCallFailed $failure) {
     fwrite(STDERR, $failure->getMessage()."\n");
     exit(1);
