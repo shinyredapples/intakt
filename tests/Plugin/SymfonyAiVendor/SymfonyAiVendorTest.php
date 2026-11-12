@@ -106,6 +106,7 @@ use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\DeltaInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\StreamResult;
@@ -131,6 +132,7 @@ use Symfony\Component\Semaphore\Store\LockStore;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Symfony\Contracts\Service\ResetInterface;
+use Throwable;
 
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(UsageLedger::class)]
@@ -468,7 +470,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $verdict = $this->vendor($this->toolRoundThen(self::cutMidText(...)), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
+        $verdict = $this->vendor($this->toolRoundThen($this->cutMidText(...)), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
@@ -485,19 +487,19 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
         $outage = static function (): Generator {
-            yield new TokenUsage(promptTokens: 120, model: 'big');
+            yield new TokenUsage(
+                promptTokens: 120,
+                model: 'big',
+            );
             yield new TextDelta('{"verdict":');
 
             throw new ServerException(503);
         };
 
-        try {
-            $this->vendor($this->toolRoundThen($outage), $ledger)->review('alpha', Tier::Strong, $this->request());
-            self::fail('A transport failure must not become a verdict.');
-        } catch (ProviderFailedTransiently) {
-            // Expected, because the round never ended and the review is asked again once, then parked.
-        }
+        $failure = $this->thrownBy(fn (): VendorReview => $this->vendor($this->toolRoundThen($outage), $ledger)->review('alpha', Tier::Strong, $this->request()));
 
+        // Asked again once, then parked, because the round never ended; never a verdict.
+        self::assertInstanceOf(ProviderFailedTransiently::class, $failure);
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame(ServerException::class, $ledger->payloads()[1]['failure']);
         /** @var list<array<string, int>> $usages */
@@ -505,28 +507,47 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([110, 120], array_column($usages, 'prompt'));
     }
 
+    private function thrownBy(Closure $call): ?Throwable
+    {
+        try {
+            $call();
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
+    }
+
     /**
-     * @param callable(): Generator $lastRound
+     * @param callable(): Generator<mixed, DeltaInterface, mixed, mixed> $lastRound
      */
     private function toolRoundThen(callable $lastRound): Closure
     {
-        $calls = 0;
+        /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
+        $rounds = [$this->toolRound(...), $lastRound];
 
-        return static function () use (&$calls, $lastRound): StreamResult {
-            if (1 === ++$calls) {
-                return new StreamResult((static function (): Generator {
-                    yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
-                    yield new TokenUsage(promptTokens: 110, model: 'big');
-                })());
-            }
+        return static function () use (&$rounds): StreamResult {
+            $round = array_shift($rounds) ?? self::fail('The script has no round left.');
 
-            return new StreamResult($lastRound());
+            return new StreamResult($round());
         };
     }
 
-    private static function cutMidText(): Generator
+    private function toolRound(): Generator
     {
-        yield new TokenUsage(promptTokens: 120, model: 'big');
+        yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+        yield new TokenUsage(
+            promptTokens: 110,
+            model: 'big',
+        );
+    }
+
+    private function cutMidText(): Generator
+    {
+        yield new TokenUsage(
+            promptTokens: 120,
+            model: 'big',
+        );
         yield new TextDelta('{"verdict":"approve",');
 
         throw new IncompleteStreamException('The stream ended before its terminal event.');

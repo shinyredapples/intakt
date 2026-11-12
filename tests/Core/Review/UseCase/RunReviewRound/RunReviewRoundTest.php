@@ -171,6 +171,7 @@ final class RunReviewRoundTest extends KernelTestCase
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
         self::assertSame(RoundState::Complete, $stored->state());
+        /** @var array{verdict: string, findings: list<array{id: string, text: string}>} $verdict */
         $verdict = json_decode((string) $stored->reviewers()[0]->verdictJson(), true, 16, JSON_THROW_ON_ERROR);
         self::assertSame('blocked', $verdict['verdict']);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict['findings'][0]['id']);
