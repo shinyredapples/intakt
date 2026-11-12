@@ -93,7 +93,7 @@ final class AppImageWorkflowTest extends TestCase
     {
         $run = $this->decision()['run'] ?? '';
 
-        self::assertStringContainsString("image=yes\n", $run);
+        self::assertStringContainsString("image=yes\n  upgrade=yes\n", $run);
         self::assertStringContainsString('image=$(.github/ci/image-needed.sh "$base" "$HEAD_SHA")', $run);
         self::assertStringContainsString('echo "image=$image" >> "$GITHUB_OUTPUT"', $run);
     }

@@ -50,7 +50,7 @@ The script that registers your ephemeral runner should do three things before ea
 
 | Need | Why |
 |---|---|
-| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | the `check`, `persistence` and `journeys` jobs build or reuse the CI image and run the code in it; the `image` job builds the application image from the repository's `Dockerfile` on the host once, runs `docker/smoke-test.sh` against it, then `docker/verify-first-start.sh`, which creates a Docker volume and runs the same image on it, and when the change needs it `docker/verify-upgrade.sh`, which builds the base commit's image as well and starts both on copies of one volume (a pull request that changes only `docs/`, `tests/` or `upstream/` skips these image steps); the `persistence` job starts a service container for each database engine |
+| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | the `check`, `persistence` and `journeys` jobs build or reuse the CI image and run the code in it; the `image` job builds the application image from the repository's `Dockerfile` on the host once, runs `docker/smoke-test.sh` against it, then `docker/verify-first-start.sh`, which creates a Docker volume and runs the same image on it, and when the change needs it `docker/verify-upgrade.sh`, which builds the base commit's image as well and starts both on copies of one volume; the `persistence` job starts a service container for each database engine |
 | `bash`, `git`, `grep`, `sh`, `sha256sum`, `cut`, `mktemp` and `rm` | the `changes` job reads the diff on the host in a temporary folder; `build-image.sh` hashes the Dockerfile, `composer.json` and the check ini (the image loads that ini by itself) |
 | Docker's `buildx` plugin, and network access to Docker Hub from the host | `docker/smoke-test.sh` (the `image` job) runs `docker buildx imagetools inspect` on the `Dockerfile`'s base image tag to print its digest, which asks the registry |
 | `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `dirname`, `env`, `timeout` and `sleep` | `docker/smoke-test.sh` (the `image` job) checks the started container over HTTP with `curl`, reads the `FROM` tag, the base image digest and the published port with `awk`, makes the run's random secrets with `od` and `tr`, and limits each wait |
@@ -59,6 +59,8 @@ The script that registers your ephemeral runner should do three things before ea
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; `journeys` gets the same container settings; the workflows lift AppArmor only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, never on other runners of yours |
 
 The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: they set the sysctl and `apparmor=unconfined` only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, both thrown away after the job. Prepare the clean state so the host meets them.
+
+A pull request that changes only `docs/`, `tests/` or `upstream/` does not use Docker in the `image` job: the job skips the build and the image checks, and still reports.
 
 ## When it goes wrong
 
