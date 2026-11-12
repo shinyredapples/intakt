@@ -65,7 +65,9 @@
     </div>
 </section>
 {% endif %}
-<h2 class="timeline-title">Timeline</h2>
+<div class="task-grid">
+<section class="tl-pane" aria-labelledby="timeline-title">
+<h2 class="timeline-title" id="timeline-title">Timeline</h2>
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
 <section class="section round" id="round-{{ reviewed.round }}">
@@ -91,4 +93,18 @@
 </section>
 {% endif %}
 {% endfor %}
+</section>
+{% if active is not null %}
+<aside class="log log-pane" aria-labelledby="live-log-title">
+    <h2 id="live-log-title">Live log of round {{ active.number ?? '(number not recorded)' }}</h2>
+    {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}
+    <p class="muted log-empty">Each reviewer's tool calls and text appear here as it works.</p>
+    <div class="live-reviewers" id="round-{{ active.round }}-live">
+    {% for outcome in active.outcomes %}
+        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.tier ~ ')'}) }}
+    {% endfor %}
+    </div>
+</aside>
+{% endif %}
+</div>
 {% endblock %}

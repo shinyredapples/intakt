@@ -418,6 +418,39 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorNotExists('.state-block');
     }
 
+    public function testTheLiveLogOfTheRunningRoundSitsBesideTheTimeline(): void
+    {
+        $this->givenARoundJudgedAndASecondRunning();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(2, $crawler->filter('.task-grid > .tl-pane .round'));
+        self::assertSame('Live log of round 2', $crawler->filter('.task-grid > aside.log-pane h2')->text());
+        self::assertSame(['correctness (standard) live', 'security (standard) live'], $crawler->filter('.log-pane #round-round-2-live .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
+        self::assertCount(0, $crawler->filter('.tl-pane .live'));
+    }
+
+    public function testAReviewWithEveryRoundJudgedShowsNoLiveLog(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSelectorNotExists('.log-pane');
+        self::assertSelectorExists('.task-grid > .tl-pane #round-round-2');
+    }
+
+    public function testTheLiveLogOfARoundNoReviewerStartedSaysWhatWillAppear(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+        $this->ledger->startRoundOf('feat/thing', 'round-3', 3);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-3');
+
+        self::assertSame('Each reviewer\'s tool calls and text appear here as it works.', $crawler->filter('.log-pane .log-empty')->text());
+        self::assertCount(0, $crawler->filter('#round-round-3-live .live'));
+    }
+
     public function testALongChangeNameIsShownWhole(): void
     {
         $change = 'feat/'.str_repeat('a-very-long-branch-name-', 8);

@@ -35,13 +35,6 @@
     </table>
     </div>
     {% endif %}
-    {% if unfinished %}
-    <div class="live-reviewers" id="round-{{ reviewed.round }}-live">
-    {% for outcome in reviewed.outcomes %}
-        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.tier ~ ')'}) }}
-    {% endfor %}
-    </div>
-    {% endif %}
 
     <h3>Findings and the judge's call</h3>
     {% if reviewed.state.name != 'Judged' %}
