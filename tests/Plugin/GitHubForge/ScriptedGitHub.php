@@ -92,14 +92,23 @@ final class ScriptedGitHub
      */
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
-        if ('GET' === $method && str_ends_with(parse_url($url, PHP_URL_PATH) ?: '', '/pulls')) {
+        return 'GET' === $method ? $this->read($url) : $this->write($method, $url, $options);
+    }
+
+    private function read(string $url): ResponseInterface
+    {
+        if (str_ends_with((string) parse_url($url, PHP_URL_PATH), '/pulls')) {
             return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
 
-        if ('GET' === $method) {
-            return new MockResponse(json_encode(str_contains($url, 'page=1') ? $this->comments : [], JSON_THROW_ON_ERROR), ['http_code' => 200]);
-        }
+        return new MockResponse(json_encode(str_contains($url, 'page=1') ? $this->comments : [], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+    }
 
+    /**
+     * @param array<mixed> $options
+     */
+    private function write(string $method, string $url, array $options): ResponseInterface
+    {
         $body = $options['body'] ?? '';
         $payload = (array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR);
         $this->writes[] = [$method.' '.$url, $payload];
@@ -117,14 +126,15 @@ final class ScriptedGitHub
             $this->comments[] = [...$payload, 'performed_via_github_app' => ['id' => (int) self::APP_ID]];
         }
 
-        if (str_ends_with($url, '/pulls')) {
-            return new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]);
-        }
+        return $this->created($method, $url);
+    }
 
-        if ('PATCH' === $method) {
-            return new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]);
-        }
-
-        return new MockResponse('{}', ['http_code' => 201]);
+    private function created(string $method, string $url): ResponseInterface
+    {
+        return match (true) {
+            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]),
+            'PATCH' === $method => new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]),
+            default => new MockResponse('{}', ['http_code' => 201]),
+        };
     }
 }

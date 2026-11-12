@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
+use LogicException;
 use Override;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\Uuid;
@@ -59,7 +60,7 @@ final class RecordingLedger implements Ledger
      */
     public function payloadOf(LedgerEventKind $kind): array
     {
-        $event = array_first(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind));
+        $event = array_first(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind)) ?? throw new LogicException('No such event was recorded.');
         /** @var array<string, string> $payload */
         $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
 

@@ -103,10 +103,7 @@ final class GitHubChangeOpenerTest extends TestCase
     {
         $github = new ScriptedGitHub();
 
-        $this->expectException(ForgeWriteFailed::class);
-        $this->expectExceptionMessage('has no GitHub repository');
-
-        $github->opener()->openOrUpdate(new ProposedChange('unknown', 'task', 'main', new ChangeText('T', 'B')));
+        $this->assertWriteFailsWith('has no GitHub repository', fn () => $github->opener()->openOrUpdate(new ProposedChange('unknown', 'task', 'main', new ChangeText('T', 'B'))));
     }
 
     public function testAnOpenPullRequestWithoutANumberIsRefused(): void
@@ -124,9 +121,16 @@ final class GitHubChangeOpenerTest extends TestCase
         $github = new ScriptedGitHub();
         $github->refuseOnce('/pulls', 422);
 
-        $this->expectException(ForgeWriteFailed::class);
-        $this->expectExceptionMessage('422');
+        $this->assertWriteFailsWith('422', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
+    }
 
-        $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+    private function assertWriteFailsWith(string $reason, callable $write): void
+    {
+        try {
+            $write();
+            self::fail('The write must fail.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertStringContainsString($reason, $failed->getMessage());
+        }
     }
 }

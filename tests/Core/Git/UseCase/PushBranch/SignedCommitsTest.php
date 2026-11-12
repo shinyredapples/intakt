@@ -44,10 +44,7 @@ final class SignedCommitsTest extends TestCase
 
     public function testTheCheckRefusesACommitThatIsNotSigned(): void
     {
-        $this->expectException(UnsignedCommitRefused::class);
-        $this->expectExceptionMessage('it has no signature');
-
-        $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $this->scenario->head, self::MAIN);
+        $this->assertRefusedBecause('it has no signature', fn () => $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $this->scenario->head, self::MAIN));
     }
 
     public function testTheCheckRefusesACommitSignedByAnotherKey(): void
@@ -55,10 +52,7 @@ final class SignedCommitsTest extends TestCase
         $other = PushScenario::generateKey($this->scenario->key.'-other');
         $signedByOther = $this->scenario->signedCommits($other)->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $this->scenario->head, 0), self::MAIN);
 
-        $this->expectException(UnsignedCommitRefused::class);
-        $this->expectExceptionMessage('its signature does not verify');
-
-        $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signedByOther, self::MAIN);
+        $this->assertRefusedBecause('its signature does not verify', fn () => $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signedByOther, self::MAIN));
     }
 
     public function testTheCheckAcceptsCommitsTheOrchestratorSigned(): void
@@ -86,5 +80,15 @@ final class SignedCommitsTest extends TestCase
         $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack($base, $this->scenario->head, 0), self::MAIN);
 
         self::assertSame($base, $this->scenario->repository->objectAt($signed.'^'));
+    }
+
+    private function assertRefusedBecause(string $reason, callable $check): void
+    {
+        try {
+            $check();
+            self::fail('The check must refuse the commit.');
+        } catch (UnsignedCommitRefused $refused) {
+            self::assertStringContainsString($reason, $refused->getMessage());
+        }
     }
 }
