@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
-// One entry of "git diff --raw -z": the modes and blob ids before and after, the status letter and its paths.
+// One entry of "git diff --raw -z", typed so the loss check reads the modes, blob ids, status and paths by name.
 final readonly class ChangedFile
 {
     private const string GITLINK = '160000';
@@ -22,7 +22,7 @@ final readonly class ChangedFile
     ) {
     }
 
-    // An added file had nothing to lose, and a submodule's entry is a commit, not content.
+    // Not for an added file or a submodule, because the one had nothing to lose and the other's entry is a commit, not content.
     public function couldLoseContent(): bool
     {
         return !$this->isAdded() && self::GITLINK !== $this->oldMode && self::GITLINK !== $this->newMode;

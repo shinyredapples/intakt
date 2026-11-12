@@ -103,7 +103,7 @@ final readonly class RunCheckJob
         try {
             return $this->jobs->run($this->specOf($job, $repository, $accepted));
         } catch (JobOutputRefused) {
-            // The job wrote what the runner refuses to read, which says nothing for the change.
+            // No result, because the job wrote what the runner refuses to read, which says nothing for the change.
             return null;
         }
     }

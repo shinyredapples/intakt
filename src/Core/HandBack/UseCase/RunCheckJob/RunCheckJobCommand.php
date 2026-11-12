@@ -50,7 +50,7 @@ final readonly class RunCheckJobCommand
             new HandBack($input->repository, $input->branch, $input->bundle, $input->mergeMain),
             $input->image,
             $input->checkCommand,
-            array_values($input->rewritten),
+            $input->rewritten,
         );
     }
 

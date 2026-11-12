@@ -64,7 +64,7 @@ final readonly class LostContentCheck
 
         while (str_starts_with($fields[$index] ?? '', ':')) {
             [$oldMode, $newMode, $oldBlob, $newBlob, $status] = explode(' ', substr($fields[$index], 1), 5) + ['', '', '', '', ''];
-            // A rename or a copy names the old path and then the new one.
+            // Two paths for a rename or a copy, because git names the old path and then the new one.
             $count = str_starts_with($status, 'R') || str_starts_with($status, 'C') ? 2 : 1;
             $files[] = new ChangedFile($status, $oldMode, $newMode, $oldBlob, $newBlob, array_slice($fields, $index + 1, $count));
             $index += $count + 1;

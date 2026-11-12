@@ -31,7 +31,7 @@ final readonly class LostContent
 
     private static function linesOf(string $content): int
     {
-        // A last line without its line break still counts, as an editor shows it.
+        // A last line without its line break still counts, because an editor shows it as a line.
         return substr_count($content, "\n") + ('' === $content || str_ends_with($content, "\n") ? 0 : 1);
     }
 }
