@@ -58,7 +58,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `sudo sysctl` | the `check` and `journeys` jobs, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
 | `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from a hash of the Dockerfile, `composer.json` and the check ini | yes |
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
-| `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
+| `bash`, `mktemp`, `mkdir`, `chmod`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | creating the restored Composer cache folder when the cache missed and making it readable by the engines' uid 1000 user, running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
