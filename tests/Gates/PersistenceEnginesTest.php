@@ -15,10 +15,12 @@ final class PersistenceEnginesTest extends SandboxTestCase
     // A barrier, because wall-clock times prove nothing: each fake engine waits until all three started, so a serial run times out.
     private const string FAKE_DOCKER = <<<'BASH'
         #!/usr/bin/env bash
+        arguments=("$@")
         while [ "$#" -gt 0 ]; do
           if [ "$1" = --network ]; then network=$2; fi
           shift
         done
+        printf '%s\n' "${arguments[@]}" > "$MARKS/arguments.$network"
         : > "$MARKS/start.$network"
         for _ in $(seq 1 100); do [ "$(ls "$MARKS" | grep -c '^start\.')" -ge 3 ] && break; sleep 0.1; done
         [ "$(ls "$MARKS" | grep -c '^start\.')" -ge 3 ] || { echo "not all engines started"; exit 99; }
@@ -61,6 +63,39 @@ final class PersistenceEnginesTest extends SandboxTestCase
         self::assertFileExists($sandbox->root.'/marks/end.three');
     }
 
+    // No locked package carries a checksum, so an engine that could write to Composer's cache could plant an archive the others install.
+    public function testEveryEngineReadsTheOneRestoredComposerCacheReadOnly(): void
+    {
+        $sandbox = $this->sandboxWithFakeDocker();
+
+        $result = $this->runEngines($sandbox);
+
+        self::assertTrue($result->succeeded(), $result->output.$result->errors);
+        foreach (['one', 'two', 'three'] as $network) {
+            $arguments = explode("\n", trim((string) file_get_contents($sandbox->root.'/marks/arguments.'.$network)));
+            self::assertContains($sandbox->root.'/temp/composer-cache:/composer-cache:ro', $arguments);
+            self::assertContains('COMPOSER_CACHE_DIR=/composer-cache', $arguments);
+            self::assertContains('COMPOSER_CACHE_READ_ONLY=1', $arguments);
+            self::assertNotContains('intakt-composer-cache:/composer-cache:ro', $arguments);
+        }
+        clearstatcache();
+        self::assertSame('0755', substr(sprintf('%o', fileperms($sandbox->root.'/temp/composer-cache')), -4));
+    }
+
+    public function testACallWithoutTheComposerCacheFailsBeforeAnyEngineRuns(): void
+    {
+        $sandbox = $this->sandboxWithFakeDocker();
+
+        $result = $sandbox->runScript(
+            'set -eo pipefail; PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT).' "one|registry.example/db/one:1|one|sqlite:///one"',
+            ['CI_IMAGE' => 'intakt-ci:test', 'GITHUB_WORKSPACE' => $sandbox->root, 'MARKS' => $sandbox->root.'/marks'],
+        );
+
+        self::assertNotSame(0, $result->exitCode, $result->output.$result->errors);
+        self::assertStringContainsString('COMPOSER_CACHE must name the restored Composer cache directory', $result->errors);
+        self::assertFileDoesNotExist($sandbox->root.'/marks/start.one');
+    }
+
     public function testACallWithoutEnginesFailsInsteadOfPassingSilently(): void
     {
         $sandbox = $this->sandboxWithFakeDocker();
@@ -85,13 +120,14 @@ final class PersistenceEnginesTest extends SandboxTestCase
     }
 
     // Under the runner's own shell options (bash -e with pipefail), because under -e a failing engine once lost its exit code.
+    // umask 077 as on a strict runner, so the cache directory's mode comes from the script.
     private function runEngines(Sandbox $sandbox): ProcessResult
     {
         return $sandbox->runScript(
-            'set -eo pipefail; PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT)
+            'set -eo pipefail; umask 077; PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT)
             .' "one|registry.example/db/one:1|one|sqlite:///one" "two|registry.example/db/two:1|two|sqlite:///two"'
             .' "three|registry.example/db/three:1|three|sqlite:///three"',
-            ['CI_IMAGE' => 'intakt-ci:test', 'GITHUB_WORKSPACE' => $sandbox->root, 'MARKS' => $sandbox->root.'/marks'],
+            ['CI_IMAGE' => 'intakt-ci:test', 'GITHUB_WORKSPACE' => $sandbox->root, 'MARKS' => $sandbox->root.'/marks', 'COMPOSER_CACHE' => $sandbox->root.'/temp/composer-cache'],
         );
     }
 }
