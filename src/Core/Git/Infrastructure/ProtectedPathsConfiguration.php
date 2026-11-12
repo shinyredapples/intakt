@@ -17,18 +17,12 @@ final class ProtectedPathsConfiguration implements ConfigurationInterface
         $tree->getRootNode()->children()->arrayNode('projects')->useAttributeAsKey('name')->normalizeKeys(false)
             ->arrayPrototype()->children()
             ->arrayNode('protected_paths')->stringPrototype()->end()
-            // Checked here with the rule the check itself applies, so a malformed entry fails at boot instead of protecting nothing.
-            ->validate()->always(
-                /**
-                 * @param array<string> $entries
-                 *
-                 * @return array<string>
-                 */
-                static function (array $entries): array {
-                    new ProtectedPaths(array_values($entries));
+            // Checked here with the rule the check itself applies, so a malformed entry fails at boot instead of protecting nothing; the string prototype has refused any other value before.
+            ->validate()->always(static function (array $entries): array {
+                new ProtectedPaths(array_values(array_filter($entries, is_string(...))));
 
-                    return $entries;
-                })->end();
+                return $entries;
+            })->end();
 
         return $tree;
     }
