@@ -25,8 +25,8 @@ use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
-use Intakt\Core\Shadow\Contract\ShadowServices;
-use Intakt\Core\Shadow\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
+use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
@@ -279,7 +279,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
-    $container->parameters()->set(ShadowServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
+    $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
