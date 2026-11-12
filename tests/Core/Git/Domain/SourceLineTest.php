@@ -69,6 +69,37 @@ final class SourceLineTest extends TestCase
         yield 'a fence that is never closed' => ["```\nSource: feat/big@".self::SHA1];
         yield 'a shorter fence inside a longer one' => ["````\n```\nSource: feat/big@".self::SHA1."\n````"];
         yield 'a fence of the other character inside one' => ["```\n~~~\nSource: feat/big@".self::SHA1."\n```"];
+        yield 'a closed external block' => ["Fix the crash a user reported.\n\n<!-- external -->\nSource: feat/other@".self::SHA1."\n<!-- /external -->\n"];
+        yield 'an external block that is never closed' => ["<!-- external -->\nPasted report:\nSource: feat/other@".self::SHA1."\n"];
+        yield 'a whole text inside an external block' => ["<!-- external -->\nPlease build this.\n\nSource: feat/other@".self::SHA1."\n<!-- /external -->"];
+        yield 'an external block that opens inside a fence' => ["```\n<!-- external -->\n```\nSource: feat/other@".self::SHA1];
+        yield 'a closing external marker inside a fence' => ["```\n<!-- /external -->\nSource: feat/other@".self::SHA1];
+    }
+
+    public function testTheAuthorsOwnLineBesideAnExternalOneIsTheOneSource(): void
+    {
+        $task = "Part 2.\n<!-- external -->\nSource: feat/other@".self::SHA1."\n<!-- /external -->\nSource: feat/big@".self::SHA1."\n";
+
+        self::assertSame('feat/big', SourceLine::in($task)?->branch);
+    }
+
+    public function testAFenceInsideAnExternalBlockChangesNothing(): void
+    {
+        $task = "<!-- external -->\n```\n<!-- /external -->\nSource: feat/big@".self::SHA1;
+
+        self::assertSame('feat/big', SourceLine::in($task)?->branch);
+    }
+
+    public function testExternalMarkersMayHaveSurroundingWhitespaceAndWindowsLineEndings(): void
+    {
+        $task = "  <!-- external -->  \r\nSource: feat/other@".self::SHA1."\r\n\t<!-- /external -->\r\nSource: feat/big@".self::SHA1."\r\n";
+
+        self::assertSame('feat/big', SourceLine::in($task)?->branch);
+    }
+
+    public function testAnExternalMarkerWithTextAfterItOpensNoBlock(): void
+    {
+        self::assertSame('feat/big', SourceLine::in("<!-- external --> see below\nSource: feat/big@".self::SHA1)?->branch);
     }
 
     public function testASourceLineAfterAClosedFenceIsASource(): void

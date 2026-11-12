@@ -16,6 +16,10 @@ final readonly class SourceLine
 
     private const string FENCE_CLOSES = '/^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/';
 
+    private const string EXTERNAL_OPENS = '/^[ \t]*<!-- external -->[ \t]*\r?$/';
+
+    private const string EXTERNAL_CLOSES = '/^[ \t]*<!-- \/external -->[ \t]*\r?$/';
+
     private function __construct(
         public string $branch,
         public string $commit,
@@ -51,10 +55,18 @@ final readonly class SourceLine
     {
         $lines = [];
         $fence = null;
+        $external = false;
 
         foreach (explode("\n", $text) as $line) {
-            // Because a code example shows the syntax and must not steer the clone, and an unclosed fence runs to the end of the text.
-            if (null !== $fence) {
+            // Because text copied into an external block is untrusted even in a trusted task (the threat model), so nothing in it,
+            // not even a fence, counts, and an unclosed block runs to the end of the text; the marker is read before the fence
+            // state, so a block the author opens inside a code example still hides what follows, and its end never closes a fence.
+            if ($external) {
+                $external = 1 !== preg_match(self::EXTERNAL_CLOSES, $line);
+            } elseif (1 === preg_match(self::EXTERNAL_OPENS, $line)) {
+                $external = true;
+            } elseif (null !== $fence) {
+                // Because a code example shows the syntax and must not steer the clone, and an unclosed fence runs to the end of the text.
                 $fence = self::closes($fence, $line) ? null : $fence;
             } elseif (1 === preg_match(self::FENCE_OPENS, $line, $opening)) {
                 $fence = $opening[1];

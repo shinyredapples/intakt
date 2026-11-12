@@ -52,7 +52,7 @@ You can ask Intakt which reviewers a change would get, before any review runs an
 | Line | What it does |
 |---|---|
 | `Waits for #12` | don't start until #12 is done |
-| `Source: <branch>@<sha>` | build from an earlier piece of work (for a task split from a bigger change); counts only from someone with write access, and only when that commit is on that branch |
+| `Source: <branch>@<sha>` | build from an earlier piece of work (for a task split from a bigger change); counts only from someone with write access, and only when that commit is on that branch; a line inside an `<!-- external -->` block (text copied from outside) never counts |
 
 ## Answering a question
 
