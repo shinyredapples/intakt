@@ -156,9 +156,13 @@ The time of every test file, not only the ten slowest, is kept in `tests/duratio
 
 ## The PHP profile and the environment gate
 
-The profile of the PHP that builds, reviews and CI use is in the repository: `config.platform.php` and the `ext-*` entries under `require` in `composer.json`, and the ini settings in `config/gates/php/check.ini` (for example `zend.assertions=1`). Load the settings by adding `config/gates/php` to `PHP_INI_SCAN_DIR`, after the directories PHP already scans.
+The profile of the PHP that builds, reviews and CI use is in the repository: `config.platform.php` and the `ext-*` entries under `require` in `composer.json`, and the ini settings in `config/gates/php/check.ini` (for example `zend.assertions=1`). Load the settings by adding `config/gates/php` to `PHP_INI_SCAN_DIR`, after the directories PHP already scans. A leading `:` keeps PHP's own directory first, so from the project folder:
 
-The `EnvironmentGate` class checks the running PHP against that profile: it names a PHP older than the platform version, a missing extension, a setting that differs from the check ini, and a setting in the check ini that the gate does not allow. `bin/check` runs it as its first gate, in a full run and with `--fast` (not with `--journeys`), so run `bin/check` with the profile loaded.
+```
+PHP_INI_SCAN_DIR=":$(pwd)/config/gates/php" bin/check
+```
+
+`bin/check` runs the `environment` gate first in every run, the full one and `--fast` (not `--journeys`, which keeps its own selection). The gate (the `EnvironmentGate` class) checks the running PHP against that profile. `bin/check` neither restarts PHP nor changes its ini scan path, so a run without the profile loaded fails the `environment` gate as soon as your PHP differs from it. Each finding names one difference: a PHP older than the platform version, a missing extension, a setting that differs from the check ini (for example `PHP setting zend.assertions is -1 but config/gates/php/check.ini says 1`), or a setting in the check ini that the gate does not allow. When a setting differs, the gate also says how to load the profile.
 
 ## Running the tests in parallel
 
