@@ -57,20 +57,27 @@ final readonly class DoctrineLedger implements Ledger
 
     public function readOfKind(LedgerEventKind $kind): RecordedEvents
     {
-        return $this->recordedEventsOf(['kind' => $kind]);
+        return $this->recordedEventsOf(['kind' => $kind->value]);
     }
 
     /**
-     * @param array<string, LedgerEventKind> $criteria
+     * @param array<string, string> $criteria
      */
     private function recordedEventsOf(array $criteria): RecordedEvents
     {
         $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']);
 
-        return new RecordedEvents(array_map(
-            static fn (EventRecord $record): RecordedEvent => new RecordedEvent($record->id(), new LedgerEvent($record->kind(), $record->payload()), $record->recordedAt()),
-            $records,
-        ));
+        $events = [];
+        foreach ($records as $record) {
+            $kind = $record->kind();
+            if (!$kind instanceof LedgerEventKind) {
+                continue;
+            }
+
+            $events[] = new RecordedEvent($record->id(), new LedgerEvent($kind, $record->payload()), $record->recordedAt());
+        }
+
+        return new RecordedEvents($events);
     }
 
     // The id takes its time from the same moment, so the id of an event carries when it was stored.
@@ -78,6 +85,6 @@ final readonly class DoctrineLedger implements Ledger
     {
         $now = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
 
-        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind, $event->payload, $now);
+        return new EventRecord(new UuidV7(UuidV7::generate($now)), $event->kind->value, $event->payload, $now);
     }
 }
