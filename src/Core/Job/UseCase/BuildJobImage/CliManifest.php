@@ -12,8 +12,8 @@ final readonly class CliManifest
 {
     // The one home of the Claude Code and Codex versions, so a Dependabot pull request that bumps them is all a bump takes.
     public const string PATH = __DIR__.'/../../../../../docker/job/cli/package.json';
-    private const string PACKAGE = '#^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$#';
-    private const string EXACT_VERSION = '/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/';
+    private const string PACKAGE = '#\A(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*\z#';
+    private const string EXACT_VERSION = '/\A\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?\z/';
 
     /**
      * @return list<string>

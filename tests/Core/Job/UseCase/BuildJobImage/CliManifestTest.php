@@ -93,6 +93,7 @@ final class CliManifestTest extends TestCase
         yield 'tag' => ['latest'];
         yield 'url' => ['https://example.com/tool.tgz'];
         yield 'shell word' => ['1.2.3; id'];
+        yield 'trailing newline' => ["1.2.3\n"];
         yield 'not text' => [123];
     }
 
@@ -115,6 +116,7 @@ final class CliManifestTest extends TestCase
         yield 'uppercase' => ['Tool'];
         yield 'scope without name' => ['@scope/'];
         yield 'number' => ['7'];
+        yield 'trailing newline' => ["tool\n"];
     }
 
     private function givenTheManifest(string $json): void
