@@ -34,7 +34,9 @@ final class RecordedIssueApi
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
     public bool $notModified = false;
-    public string $editorAnswer = '{"data":{"repository":{"issue":{"author":{"login":"ana"},"editor":null}}}}';
+    public string $historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"__typename":"User","login":"ana"},"editor":null,"timelineItems":{"nodes":[{"actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}},{"actor":{"__typename":"User","login":"ana"},"label":{"name":"priority:urgent"}}]}}}}}';
+    // GitHub names the next page in a Link header; off, a test sees what a listing does when the header is missing.
+    public bool $links = true;
     /** @var list<string> */
     public array $conditions = [];
 
@@ -81,7 +83,7 @@ final class RecordedIssueApi
         $this->keepConditions($options);
 
         if ('POST' === $method) {
-            return new MockResponse($this->editorAnswer);
+            return new MockResponse($this->historyAnswer);
         }
 
         if ($this->notModified) {
@@ -91,6 +93,11 @@ final class RecordedIssueApi
         $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
         $body = $this->pages[$page] ?? '[]';
 
-        return 1 === preg_match('/^\d{3}$/', $body) ? new MockResponse('{}', ['http_code' => (int) $body]) : new MockResponse($body, ['response_headers' => ['ETag' => $this->etag]]);
+        $headers = ['ETag' => $this->etag];
+        if ($this->links && isset($this->pages[$page + 1])) {
+            $headers['Link'] = sprintf('<https://api.github.com/repositories/1/issues?state=open&per_page=100&page=%d>; rel="next"', $page + 1);
+        }
+
+        return 1 === preg_match('/^\d{3}$/', $body) ? new MockResponse('{}', ['http_code' => (int) $body]) : new MockResponse($body, ['response_headers' => $headers]);
     }
 }

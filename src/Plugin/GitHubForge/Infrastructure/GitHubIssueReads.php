@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -24,7 +25,10 @@ final readonly class GitHubIssueReads implements IssueReads
     private const int MAX_PAGES = 10;
     private const int NOT_MODIFIED = 304;
     private const int UNAUTHORIZED = 401;
-    private const string EDITOR_QUERY = 'query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issue(number: $number) { author { login } editor { login } } } }';
+    private const string NEXT_LINK = '/<[^>]*>\s*;\s*rel="?next"?/';
+    // The last hundred label events, because the label that counts is the one applied last; an older application is not trusted unseen.
+    private const string HISTORY_FIELDS = 'author { __typename login } editor { __typename login } timelineItems(last: 100, itemTypes: [LABELED_EVENT]) { nodes { ... on LabeledEvent { actor { __typename login } label { name } } } }';
+    private const string HISTORY_QUERY = 'query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issueOrPullRequest(number: $number) { ... on Issue { '.self::HISTORY_FIELDS.' } ... on PullRequest { '.self::HISTORY_FIELDS.' } } } }';
 
     public function __construct(
         private GitHubCalls $calls,
@@ -45,29 +49,72 @@ final readonly class GitHubIssueReads implements IssueReads
             return IssueListing::unchanged();
         }
 
-        $issues = $this->issuesOf($first['body']);
-        $complete = count($issues) < self::PAGE_SIZE;
+        $issues = $this->issuesOf($first);
+        $complete = $this->isLastPage($first, $issues);
         $later = $complete ? [] : $this->laterIssues($repository);
 
         // The validator belongs to the first page only, so a list of several pages has none and the next listing is full.
         return IssueListing::listed(array_map($this->listed(...), [...$issues, ...$later]), $complete ? $first['etag'] : null);
     }
 
-    public function lastEditorOf(string $project, int $number): string
+    public function historyOf(string $project, int $number): IssueHistory
     {
         [$owner, $name] = explode('/', $this->repositories->addressOf($project)->fullName(), 2);
-        $body = json_encode(['query' => self::EDITOR_QUERY, 'variables' => ['owner' => $owner, 'name' => $name, 'number' => $number]], JSON_THROW_ON_ERROR);
+        $body = json_encode(['query' => self::HISTORY_QUERY, 'variables' => ['owner' => $owner, 'name' => $name, 'number' => $number]], JSON_THROW_ON_ERROR);
         $answer = $this->decode($this->send('POST', '/graphql', ['body' => $body])['body']);
 
-        $issue = $this->at($answer, 'data', 'repository', 'issue');
-        if (!is_array($issue)) {
+        // GitHub answers a field it could not resolve with null beside an error, and a null editor would then pass for the author.
+        if ([] !== ($answer['errors'] ?? [])) {
+            throw new ForgeReadFailed('GitHub answered the history of an item with errors.');
+        }
+
+        $item = $this->at($answer, 'data', 'repository', 'issueOrPullRequest');
+        if (!is_array($item) || [] === $item) {
             throw new ForgeReadFailed('GitHub answered without the issue.');
         }
 
         // Refused without a login, because a text nobody can name is not trusted and a deleted account has none.
-        $login = $this->at($issue, 'editor', 'login') ?? $this->at($issue, 'author', 'login');
+        $editor = $this->loginOf($this->at($item, 'editor')) ?? $this->loginOf($this->at($item, 'author'));
 
-        return is_string($login) && '' !== $login ? $login : throw new ForgeReadFailed('GitHub answered an issue without an editor.');
+        return new IssueHistory($editor ?? throw new ForgeReadFailed('GitHub answered an issue without an editor.'), $this->labelAppliersOf($item));
+    }
+
+    /**
+     * @param array<mixed> $item
+     *
+     * @return array<string, ?string>
+     */
+    private function labelAppliersOf(array $item): array
+    {
+        $events = $this->at($item, 'timelineItems', 'nodes');
+        if (!is_array($events)) {
+            throw new ForgeReadFailed('GitHub answered without the label history.');
+        }
+
+        $appliers = [];
+        foreach ($events as $event) {
+            $label = is_array($event) ? $this->at($event, 'label', 'name') : null;
+            if (!is_string($label) || !is_array($event)) {
+                throw new ForgeReadFailed('GitHub answered a label event this forge cannot read.');
+            }
+
+            // Moved to the end, because the order of the list is the order of the last applications.
+            unset($appliers[$label]);
+            $appliers[$label] = $this->loginOf($this->at($event, 'actor'));
+        }
+
+        return $appliers;
+    }
+
+    private function loginOf(mixed $account): ?string
+    {
+        $login = is_array($account) ? $this->at($account, 'login') : null;
+        if (!is_array($account) || !is_string($login) || '' === $login) {
+            return null;
+        }
+
+        // GraphQL names an app without the suffix the permission check knows it by.
+        return 'Bot' === $this->at($account, '__typename') ? $login.'[bot]' : $login;
     }
 
     /**
@@ -85,9 +132,10 @@ final readonly class GitHubIssueReads implements IssueReads
     {
         $issues = [];
         for ($page = 2; $page <= self::MAX_PAGES; ++$page) {
-            $more = $this->issuesOf($this->get($repository->path().'/issues', $this->page($page))['body']);
+            $answer = $this->get($repository->path().'/issues', $this->page($page));
+            $more = $this->issuesOf($answer);
             $issues = [...$issues, ...$more];
-            if (count($more) < self::PAGE_SIZE) {
+            if ($this->isLastPage($answer, $more)) {
                 return $issues;
             }
         }
@@ -96,17 +144,34 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
+     * @param array{status: int, body: string, etag: ?string, next: bool} $answer
+     *
      * @return list<array<mixed>>
      */
-    private function issuesOf(string $body): array
+    private function issuesOf(array $answer): array
     {
-        $issues = $this->decode($body);
+        $issues = $this->decode($answer['body']);
         // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        if (!array_is_list($issues) || !str_starts_with(ltrim($body), '[')) {
+        if (!array_is_list($issues) || !str_starts_with(ltrim($answer['body']), '[')) {
             throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
         }
 
+        // Every page before the last one is full, so a short one that names a next page lost issues on the way.
+        if ($answer['next'] && count($issues) < self::PAGE_SIZE) {
+            throw new ForgeReadFailed('GitHub answered a short page before the last one.');
+        }
+
         return array_map(static fn (mixed $issue): array => is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub listed an issue that is not an object.'), $issues);
+    }
+
+    // Read on after a full page even without a next link, because only a short page proves that nothing follows.
+    /**
+     * @param array{status: int, body: string, etag: ?string, next: bool} $answer
+     * @param list<array<mixed>>                                          $issues
+     */
+    private function isLastPage(array $answer, array $issues): bool
+    {
+        return !$answer['next'] && count($issues) < self::PAGE_SIZE;
     }
 
     /**
@@ -188,20 +253,20 @@ final readonly class GitHubIssueReads implements IssueReads
     /**
      * @param array<string, int|string> $query
      *
-     * @return array{status: int, body: string, etag: ?string}
+     * @return array{status: int, body: string, etag: ?string, next: bool}
      */
     private function get(string $path, array $query, ?string $validator = null): array
     {
         $headers = null === $validator ? [] : ['If-None-Match' => $validator];
         $answer = $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
 
-        return self::NOT_MODIFIED === $answer['status'] && null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator] : $answer;
+        return self::NOT_MODIFIED === $answer['status'] && null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false] : $answer;
     }
 
     /**
      * @param array<string, mixed> $options
      *
-     * @return array{status: int, body: string, etag: ?string}
+     * @return array{status: int, body: string, etag: ?string, next: bool}
      *
      * @throws ForgeRateLimited
      */
@@ -214,7 +279,7 @@ final readonly class GitHubIssueReads implements IssueReads
             $response = $this->calls->asInstallation($method, $path, $options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
-            $etag = $response->getHeaders(false)['etag'][0] ?? null;
+            $headers = $response->getHeaders(false);
         } catch (ExceptionInterface $failure) {
             throw $this->unreachable($failure::class);
         }
@@ -223,7 +288,7 @@ final readonly class GitHubIssueReads implements IssueReads
             throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
         }
 
-        return ['status' => $status, 'body' => $body, 'etag' => $etag];
+        return ['status' => $status, 'body' => $body, 'etag' => $headers['etag'][0] ?? null, 'next' => 1 === preg_match(self::NEXT_LINK, implode(',', $headers['link'] ?? []))];
     }
 
     // Not chained to the client's exception, because its trace holds the request options with the bearer token.

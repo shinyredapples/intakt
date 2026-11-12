@@ -24,9 +24,9 @@ final class Issues
         return new ListedIssue($number, 'Task '.$number, $with['body'] ?? '', $labels, $with['author'] ?? 'ana', self::moment($with['updatedAt'] ?? '2026-11-10T10:00:00Z'), null === $due ? null : self::moment($due), false);
     }
 
-    public static function pullRequest(int $number, string $body): ListedIssue
+    public static function pullRequest(int $number, string $body, string $author = 'ana'): ListedIssue
     {
-        return new ListedIssue($number, 'Pull '.$number, $body, [], 'ana', self::moment('2026-11-10T10:00:00Z'), null, true);
+        return new ListedIssue($number, 'Pull '.$number, $body, [], $author, self::moment('2026-11-10T10:00:00Z'), null, true);
     }
 
     private static function moment(string $text): DateTimeImmutable

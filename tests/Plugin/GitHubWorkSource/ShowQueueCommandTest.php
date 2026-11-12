@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
@@ -15,6 +16,8 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\EligibilityLabels;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\GitHubWorkSource;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeSnapshots;
@@ -46,6 +49,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
 #[UsesClass(ItemReading::class)]
+#[UsesClass(Vouching::class)]
+#[UsesClass(TaskFailure::class)]
+#[UsesClass(IssueHistory::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(Task::class)]
 #[UsesClass(HeldTask::class)]
@@ -68,7 +74,7 @@ final class ShowQueueCommandTest extends KernelTestCase
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame(
-            "1. #4 Task 4\n2. #1 Task 1\n3. #3 Task 3\n4. #2 Task 2\nheld #5 Task 5 (waits for #6)\n",
+            "1. #4 Task 4\n2. #1 Task 1 (rework of #50)\n3. #3 Task 3\n4. #2 Task 2\nheld #5 Task 5 (waits for #6)\n",
             $tester->getDisplay(),
         );
     }

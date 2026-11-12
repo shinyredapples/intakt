@@ -16,10 +16,10 @@ interface IssueReads
      */
     public function listOpen(string $project, ?string $validator): IssueListing;
 
-    // The author when nobody edited the text, because the author wrote it then.
+    // Of an issue or a pull request; the editor is the author when nobody edited the text, because the author wrote it then.
     /**
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
      */
-    public function lastEditorOf(string $project, int $number): string;
+    public function historyOf(string $project, int $number): IssueHistory;
 }

@@ -37,13 +37,13 @@ final readonly class GitHubWorkSource implements WorkSource
             return WorkPick::nothing(NothingPicked::WorkerNotTakingWork);
         }
 
-        $plan = $this->planOf($project);
-        if (!$plan instanceof IntakePlan) {
+        $items = $this->itemsOf($project);
+        if (null === $items) {
             return WorkPick::nothing(NothingPicked::ListingIncomplete);
         }
 
         try {
-            return $this->firstStillTrusted($project, $plan->ready);
+            return $this->firstPickable($project, $items);
         } catch (TrustNotChecked $failure) {
             $this->logger->error('Write access of a task writer could not be checked, so no task is picked.', ['project' => $project, 'exception' => $failure]);
 
@@ -53,14 +53,16 @@ final readonly class GitHubWorkSource implements WorkSource
 
     public function queue(string $project): WorkQueue
     {
-        $plan = $this->planOf($project);
-        if (!$plan instanceof IntakePlan) {
+        $items = $this->itemsOf($project);
+        if (null === $items) {
             return WorkQueue::incomplete();
         }
 
+        $plan = $this->planOf($project, $items);
+
         return WorkQueue::listed(
-            array_map($this->taskOf(...), $plan->ready),
-            array_map(fn (HeldIssue $held): HeldTask => new HeldTask($this->taskOf($held->issue), $held->reason), $plan->held),
+            array_map(fn (QueuedIssue $task): Task => $this->taskOf($task, $plan), $plan->ready),
+            array_map(fn (HeldIssue $held): HeldTask => new HeldTask($this->taskOf($held->issue, $plan), $held->reason), $plan->held),
         );
     }
 
@@ -69,41 +71,56 @@ final readonly class GitHubWorkSource implements WorkSource
         $this->snapshots->failForGood($project, $number, $reason);
     }
 
-    private function planOf(string $project): ?IntakePlan
+    /**
+     * @return list<QueuedIssue>|null
+     */
+    private function itemsOf(string $project): ?array
     {
         try {
-            $items = $this->snapshots->current($project);
+            return $this->snapshots->current($project);
         } catch (ForgeReadFailed|ForgeRateLimited|TrustNotChecked $failure) {
             // Nothing is picked and no wait is closed, because an order over part of the listing would put the wrong task first.
             $this->logger->error('The open issues of the project were not listed completely, so no task is picked.', ['project' => $project, 'exception' => $failure]);
 
             return null;
         }
-
-        return new IntakeRules($this->labels->of($project))->planOf($items);
     }
 
     /**
-     * @param list<QueuedIssue> $ready
+     * @param list<QueuedIssue> $items
+     */
+    private function planOf(string $project, array $items): IntakePlan
+    {
+        return new IntakeRules($this->labels->of($project))->planOf($items, $this->snapshots->failuresOf($project));
+    }
+
+    /**
+     * @param list<QueuedIssue> $items
      *
      * @throws TrustNotChecked
      */
-    private function firstStillTrusted(string $project, array $ready): WorkPick
+    private function firstPickable(string $project, array $items): WorkPick
     {
-        foreach ($ready as $task) {
+        foreach ($this->planOf($project, $items)->ready as $task) {
             // Asked again before each build, because write access can be taken away after the task became eligible.
-            if ($this->accounts->steers($project, $task->author()) && $this->accounts->steers($project, $task->editor() ?? $task->author())) {
-                return WorkPick::picked($this->taskOf($task));
+            if (!$this->accounts->steers($project, $task->author()) || !$this->accounts->steers($project, $task->editor() ?? $task->author())) {
+                $this->logger->warning('A task writer lost write access, so the task is skipped.', ['project' => $project, 'task' => $task->number()]);
+
+                continue;
             }
 
-            $this->logger->warning('A task writer lost write access, so the task is skipped.', ['project' => $project, 'task' => $task->number()]);
+            // Planned again after the checks, because a failure another worker recorded since must keep this task, and the tasks that wait on it, from the pick.
+            $now = $this->planOf($project, $items);
+            if (in_array($task, $now->ready, true)) {
+                return WorkPick::picked($this->taskOf($task, $now));
+            }
         }
 
         return WorkPick::nothing(NothingPicked::NoTaskReady);
     }
 
-    private function taskOf(QueuedIssue $issue): Task
+    private function taskOf(QueuedIssue $issue, IntakePlan $plan): Task
     {
-        return new Task($issue->number(), $issue->title());
+        return new Task($issue->number(), $issue->title(), $plan->pullRequests[$issue->number()] ?? null);
     }
 }

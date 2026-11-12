@@ -18,9 +18,9 @@ enum Priority: string
      */
     public static function of(array $labels): self
     {
-        $named = array_filter(self::cases(), static fn (self $priority): bool => in_array(WorkLabels::PRIORITY_PREFIX.$priority->value, $labels, true));
+        $named = array_filter(array_map(static fn (string $label): ?self => str_starts_with($label, WorkLabels::PRIORITY_PREFIX) ? self::tryFrom(substr($label, strlen(WorkLabels::PRIORITY_PREFIX))) : null, $labels));
 
-        // Two values of the family cannot be told apart by age in one listing, so the less urgent one counts and a label never jumps the queue by accident.
+        // The labels come in the order they were applied, and of two values of the family the one applied last is the owner's latest word.
         return array_last($named) ?? self::Normal;
     }
 

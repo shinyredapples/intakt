@@ -7,7 +7,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Because what one read of an item yields belongs together: the listing's item and what intake derived from it.
+// Because what the listing shows of an item belongs together: the item and the numbers its text names.
 #[Exclude]
 final readonly class ItemReading
 {
@@ -17,8 +17,6 @@ final readonly class ItemReading
      */
     public function __construct(
         public ListedIssue $listed,
-        public ?string $editor,
-        public bool $trusted,
         public array $waitsFor,
         public array $closedBy,
     ) {

@@ -34,11 +34,16 @@ final class QueuedIssue
     #[ORM\Column(length: 19, nullable: true)]
     private ?string $milestoneDue;
 
+    // Null until the item's history was read, which happens only for an item that can steer the queue.
     #[ORM\Column(nullable: true)]
     private ?string $editor;
 
     #[ORM\Column]
     private bool $trusted;
+
+    /** @var list<string> */
+    #[ORM\Column(type: 'json')]
+    private array $vouchedLabels;
 
     /** @var list<int> */
     #[ORM\Column(type: 'json')]
@@ -47,9 +52,6 @@ final class QueuedIssue
     /** @var list<int> */
     #[ORM\Column(type: 'json')]
     private array $closedBy;
-
-    #[ORM\Column(type: 'text', nullable: true)]
-    private ?string $failedReason = null;
 
     #[ORM\Column]
     private bool $pullRequest;
@@ -67,6 +69,7 @@ final class QueuedIssue
         $this->see($reading);
     }
 
+    // A changed item forgets what its history said, because the edit may be by someone else.
     public function see(ItemReading $reading): void
     {
         $listed = $reading->listed;
@@ -74,11 +77,25 @@ final class QueuedIssue
         $this->labels = $listed->labels;
         $this->author = $listed->author;
         $this->updatedAt = $this->moment($listed->updatedAt);
-        $this->milestoneDue = $listed->milestoneDue?->setTimezone(new DateTimeZone('UTC'))->format(self::DUE);
-        $this->editor = $reading->editor;
-        $this->trusted = $reading->trusted;
         $this->waitsFor = $reading->waitsFor;
         $this->closedBy = $reading->closedBy;
+        $this->editor = null;
+        $this->trusted = false;
+        $this->vouchedLabels = [];
+        $this->dueOn($listed->milestoneDue);
+    }
+
+    // Taken from every full listing, because a milestone's due date moves without moving the update time of its issues.
+    public function dueOn(?DateTimeImmutable $due): void
+    {
+        $this->milestoneDue = $due?->setTimezone(new DateTimeZone('UTC'))->format(self::DUE);
+    }
+
+    public function vouch(Vouching $vouching): void
+    {
+        $this->editor = $vouching->editor;
+        $this->trusted = $vouching->trusted;
+        $this->vouchedLabels = $vouching->labels;
     }
 
     public function isStillAt(ListedIssue $listed): bool
@@ -86,9 +103,9 @@ final class QueuedIssue
         return $this->updatedAt === $this->moment($listed->updatedAt) && $this->pullRequest === $listed->isPullRequest;
     }
 
-    public function failForGood(string $reason): void
+    public function hasHistory(): bool
     {
-        $this->failedReason = $reason;
+        return null !== $this->editor;
     }
 
     public function project(): string
@@ -111,14 +128,28 @@ final class QueuedIssue
         return $this->pullRequest;
     }
 
+    /**
+     * @return list<string>
+     */
+    public function labels(): array
+    {
+        return $this->labels;
+    }
+
     public function hasLabel(string $label): bool
     {
         return in_array($label, $this->labels, true);
     }
 
+    // Only a label an account with write access applied last steers, because a triage account can set labels too.
+    public function hasVouchedLabel(string $label): bool
+    {
+        return $this->hasLabel($label) && in_array($label, $this->vouchedLabels, true);
+    }
+
     public function priority(): Priority
     {
-        return Priority::of($this->labels);
+        return Priority::of(array_values(array_filter($this->vouchedLabels, $this->hasLabel(...))));
     }
 
     public function author(): string
@@ -156,11 +187,6 @@ final class QueuedIssue
     public function closedBy(): array
     {
         return $this->closedBy;
-    }
-
-    public function failedReason(): ?string
-    {
-        return $this->failedReason;
     }
 
     private function moment(DateTimeImmutable $moment): string

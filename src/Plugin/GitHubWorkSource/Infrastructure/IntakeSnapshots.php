@@ -12,11 +12,13 @@ use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Contract\SteeringAccounts;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
-use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Symfony\Component\Lock\LockFactory;
 
@@ -51,9 +53,14 @@ final readonly class IntakeSnapshots
         try {
             $this->forgetRowsOf($project);
             $listing = $this->reads->listOpen($project, $this->entities->find(IntakeValidator::class, $project)?->value());
+            $rows = $listing->isUnchanged() ? $this->rowsOf($project) : $this->record($project, $listing);
+            $this->readHistories($project, $rows);
+            $this->entities->flush();
 
-            return $listing->isUnchanged() ? $this->rowsOf($project) : $this->record($project, $listing);
+            return $rows;
         } finally {
+            // Detached on every way out, so a read that failed midway leaves nothing of this listing for a later flush to write.
+            $this->forgetRowsOf($project);
             $lock->release();
         }
     }
@@ -61,10 +68,33 @@ final readonly class IntakeSnapshots
     public function failForGood(string $project, int $number, string $reason): void
     {
         $this->forgetRowsOf($project);
-        $row = $this->entities->find(QueuedIssue::class, ['project' => $project, 'number' => $number])
-            ?? throw TaskNotQueued::named($project, $number);
-        $row->failForGood($reason);
+        if (!$this->entities->find(QueuedIssue::class, ['project' => $project, 'number' => $number]) instanceof QueuedIssue) {
+            throw TaskNotQueued::named($project, $number);
+        }
+
+        $failure = $this->entities->find(TaskFailure::class, ['project' => $project, 'number' => $number]);
+        if ($failure instanceof TaskFailure) {
+            $failure->replace($reason);
+        } else {
+            $this->entities->persist(new TaskFailure($project, $number, $reason));
+        }
+
         $this->entities->flush();
+    }
+
+    // Read from the database on each call, because another worker may record a failure while this one plans.
+    /**
+     * @return array<int, string>
+     */
+    public function failuresOf(string $project): array
+    {
+        $this->forgetRowsOf($project);
+        $failures = [];
+        foreach ($this->entities->getRepository(TaskFailure::class)->findBy(['project' => $project]) as $failure) {
+            $failures[$failure->number()] = $failure->reason();
+        }
+
+        return $failures;
     }
 
     /**
@@ -78,21 +108,8 @@ final readonly class IntakeSnapshots
         }
 
         $kept = [];
-        $readings = [];
         foreach ($this->uniqueByNumber($listing->issues()) as $listed) {
-            $row = $rows[$listed->number] ?? null;
-            if (null !== $row && $row->isStillAt($listed)) {
-                $kept[$listed->number] = $row;
-
-                continue;
-            }
-
-            $readings[] = $this->reading($project, $listed);
-        }
-
-        // Written only once every read and trust check passed, so a failure midway leaves the rows as the last complete listing left them.
-        foreach ($readings as $reading) {
-            $kept[$reading->listed->number] = $this->store($project, $rows[$reading->listed->number] ?? null, $reading);
+            $kept[$listed->number] = $this->seen($project, $rows[$listed->number] ?? null, $listed);
         }
 
         foreach (array_diff_key($rows, $kept) as $closed) {
@@ -100,38 +117,65 @@ final readonly class IntakeSnapshots
         }
 
         $this->recordValidator($project, $listing->validator);
-        $this->entities->flush();
 
         return array_values($kept);
     }
 
-    private function store(string $project, ?QueuedIssue $row, ItemReading $reading): QueuedIssue
+    private function seen(string $project, ?QueuedIssue $row, ListedIssue $listed): QueuedIssue
     {
         if (!$row instanceof QueuedIssue) {
-            $row = new QueuedIssue($project, $reading->listed->number, $reading);
+            $row = new QueuedIssue($project, $listed->number, $this->reading($listed));
             $this->entities->persist($row);
 
             return $row;
         }
 
-        $row->see($reading);
+        if ($row->isStillAt($listed)) {
+            $row->dueOn($listed->milestoneDue);
+
+            return $row;
+        }
+
+        $row->see($this->reading($listed));
 
         return $row;
     }
 
-    private function reading(string $project, ListedIssue $listed): ItemReading
+    private function reading(ListedIssue $listed): ItemReading
     {
-        $waits = $this->references->waitsFor($listed->body);
-        $closes = $this->references->closedBy($listed->body);
-        $isTask = !$listed->isPullRequest && in_array($this->labels->of($project), $listed->labels, true) && !in_array(WorkLabels::IDEA, $listed->labels, true);
-        if (!$isTask) {
-            return new ItemReading($listed, null, false, $waits, $closes);
+        return new ItemReading($listed, $this->references->waitsFor($listed->body), $this->references->closedBy($listed->body));
+    }
+
+    // Also for a row the listing shows unchanged, because a project that names another eligibility label makes candidates of items read before as none.
+    /**
+     * @param list<QueuedIssue> $rows
+     */
+    private function readHistories(string $project, array $rows): void
+    {
+        $rules = new IntakeRules($this->labels->of($project));
+        foreach ($rows as $row) {
+            if (!$row->hasHistory() && $rules->needsHistory($row->isPullRequest(), $row->labels(), $row->closedBy())) {
+                $row->vouch($this->vouchingOf($project, $row));
+            }
+        }
+    }
+
+    private function vouchingOf(string $project, QueuedIssue $row): Vouching
+    {
+        $history = $this->reads->historyOf($project, $row->number());
+        $asked = [];
+        // Asked once per account and item, and logins compared without case, because GitHub treats them so.
+        $steers = function (string $login) use ($project, &$asked): bool {
+            return $asked[mb_strtolower($login)] ??= $this->accounts->steers($project, $login);
+        };
+
+        if (!$steers($row->author()) || !$steers($history->editor)) {
+            return new Vouching($history->editor, false, []);
         }
 
-        $editor = $this->reads->lastEditorOf($project, $listed->number);
-        $trusted = $this->accounts->steers($project, $listed->author) && (0 === strcasecmp($editor, $listed->author) || $this->accounts->steers($project, $editor));
+        $vouched = array_filter($history->labelAppliers, static fn (?string $login): bool => null !== $login && $steers($login));
 
-        return new ItemReading($listed, $editor, $trusted, $waits, $closes);
+        return new Vouching($history->editor, true, array_map(strval(...), array_keys($vouched)));
     }
 
     /**
@@ -183,7 +227,7 @@ final readonly class IntakeSnapshots
     {
         foreach ($this->entities->getUnitOfWork()->getIdentityMap() as $managed) {
             foreach ($managed as $entity) {
-                if (($entity instanceof QueuedIssue || $entity instanceof IntakeValidator) && $entity->project() === $project) {
+                if (($entity instanceof QueuedIssue || $entity instanceof IntakeValidator || $entity instanceof TaskFailure) && $entity->project() === $project) {
                     $this->entities->detach($entity);
                 }
             }

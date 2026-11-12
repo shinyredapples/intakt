@@ -12,6 +12,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
 #[UsesClass(ItemReading::class)]
+#[UsesClass(Vouching::class)]
 final class IntakeRulesTest extends TestCase
 {
     public function testAnOpenTrustedTaskWithTheEligibilityLabelIsReady(): void
@@ -80,13 +82,97 @@ final class IntakeRulesTest extends TestCase
 
     public function testATaskWaitingOnATaskThatFailedForGoodIsHeldWithTheReason(): void
     {
-        $failed = $this->row(Issues::task(2));
-        $failed->failForGood('the build ran out of rework rounds');
-
-        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2'])), $failed]);
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2'])), $this->row(Issues::task(2))], [2 => 'the build ran out of rework rounds']);
 
         self::assertSame([], $this->numbers($plan->ready));
         self::assertSame(['depends on #2, which failed for good: the build ran out of rework rounds', 'failed for good: the build ran out of rework rounds'], array_map(static fn (HeldIssue $held): string => $held->reason, $plan->held));
+    }
+
+    public function testATaskWaitingOnAClosedTaskThatFailedForGoodIsHeldWithTheReason(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']))], [2 => 'cannot build']);
+
+        self::assertSame('depends on #2, which failed for good: cannot build', $plan->held[0]->reason);
+    }
+
+    public function testATaskWaitingOnItsOwnPullRequestIsNotHeld(): void
+    {
+        self::assertSame([1], $this->readyOf([
+            $this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])),
+            $this->row(Issues::pullRequest(50, 'Closes #1')),
+        ]));
+    }
+
+    public function testAWaitOnAPullRequestIsAWaitOnTheTaskItCloses(): void
+    {
+        $waiting = $this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50']));
+        $pullRequest = $this->row(Issues::pullRequest(50, 'Closes #3'));
+
+        self::assertSame('waits for #3', $this->plan([$waiting, $pullRequest, $this->row(Issues::task(3, ['bug']))])->held[0]->reason);
+        self::assertSame([1], $this->readyOf([$waiting, $pullRequest]));
+    }
+
+    public function testAWaitOnAPullRequestWhoseTaskFailedForGoodIsHeldWithTheReason(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #3'))], [3 => 'cannot build']);
+
+        self::assertSame('depends on #3, which failed for good: cannot build', $plan->held[0]->reason);
+    }
+
+    public function testAWaitOnAPullRequestOfAnAccountWithoutWriteAccessLastsUntilThePullRequestCloses(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #1', 'mallory'), trusted: false)]);
+
+        self::assertSame('waits for #50', $plan->held[0]->reason);
+    }
+
+    public function testAWaitOnAPullRequestWithoutAClosingKeywordLastsUntilThePullRequestCloses(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'A refactoring.'))]);
+
+        self::assertSame('waits for #50', $plan->held[0]->reason);
+    }
+
+    public function testTheLowestTrustedOpenPullRequestClosingATaskIsItsRework(): void
+    {
+        $plan = $this->plan([
+            $this->row(Issues::task(1)),
+            $this->row(Issues::pullRequest(52, 'Fixes #1')),
+            $this->row(Issues::pullRequest(51, 'Fixes #1')),
+            $this->row(Issues::pullRequest(50, 'Fixes #1', 'mallory'), trusted: false),
+        ]);
+
+        self::assertSame([1 => 51], $plan->pullRequests);
+    }
+
+    public function testAnEligibilityLabelAnAccountWithoutWriteAccessAppliedMakesNoTask(): void
+    {
+        self::assertSame([], $this->readyOf([$this->row(Issues::task(1), vouched: [])]));
+    }
+
+    public function testAPriorityLabelAnAccountWithoutWriteAccessAppliedDoesNotCount(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:urgent']), vouched: ['intakt']),
+            $this->row(Issues::task(2, ['intakt', 'priority:high'])),
+        ]);
+
+        self::assertSame([2, 1], $ready);
+    }
+
+    public function testThePriorityLabelAppliedLastCounts(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:urgent', 'priority:low']), vouched: ['intakt', 'priority:low', 'priority:urgent']),
+        ]);
+
+        self::assertSame([2, 1], $ready);
+    }
+
+    public function testAVouchedLabelTheItemNoLongerCarriesDoesNotCount(): void
+    {
+        self::assertSame(Priority::Normal, $this->row(Issues::task(1), vouched: ['intakt', 'priority:urgent'])->priority());
     }
 
     public function testAnUrgentTaskGoesBeforeATaskWhoseChangeIsOpen(): void
@@ -111,6 +197,17 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([2, 1], $ready);
     }
 
+    public function testAPullRequestOfAnAccountWithoutWriteAccessDoesNotReorderTheQueue(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:low'])),
+            $this->row(Issues::pullRequest(50, 'Fixes #2', 'mallory'), trusted: false),
+        ]);
+
+        self::assertSame([1, 2], $ready);
+    }
+
     public function testPriorityThenMilestoneDueDateThenNumberOrderTheRest(): void
     {
         $ready = $this->readyOf([
@@ -125,17 +222,34 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([5, 4, 3, 2, 6, 1], $ready);
     }
 
-    public function testTwoPriorityLabelsCountAsTheLessUrgentOne(): void
+    public function testOfTwoPriorityLabelsTheOneAppliedLastCounts(): void
     {
+        self::assertSame(Priority::Urgent, Priority::of(['priority:low', 'priority:urgent']));
         self::assertSame(Priority::Low, Priority::of(['priority:urgent', 'priority:low']));
-        self::assertSame(Priority::Normal, Priority::of(['intakt']));
+        self::assertSame(Priority::Normal, Priority::of(['intakt', 'priority:unknown']));
     }
 
     public function testAnotherEligibilityLabelIsTheProjectsOwn(): void
     {
-        $plan = new IntakeRules('build')->planOf([$this->row(Issues::task(1, ['intakt'])), $this->row(Issues::task(2, ['build']))]);
+        $plan = new IntakeRules('build')->planOf([$this->row(Issues::task(1, ['intakt'])), $this->row(Issues::task(2, ['build']))], []);
 
         self::assertSame([2], $this->numbers($plan->ready));
+    }
+
+    public function testOnlyATaskCandidateOrAPullRequestThatClosesATaskNeedsItsHistory(): void
+    {
+        $rules = new IntakeRules('intakt');
+
+        self::assertSame(
+            [true, false, false, true, false],
+            [
+                $rules->needsHistory(false, ['intakt'], []),
+                $rules->needsHistory(false, ['intakt', 'idea'], []),
+                $rules->needsHistory(false, ['bug'], []),
+                $rules->needsHistory(true, [], [4]),
+                $rules->needsHistory(true, ['intakt'], []),
+            ],
+        );
     }
 
     /**
@@ -149,11 +263,12 @@ final class IntakeRulesTest extends TestCase
     }
 
     /**
-     * @param list<QueuedIssue> $rows
+     * @param list<QueuedIssue>  $rows
+     * @param array<int, string> $failures
      */
-    private function plan(array $rows): IntakePlan
+    private function plan(array $rows, array $failures = []): IntakePlan
     {
-        return new IntakeRules('intakt')->planOf($rows);
+        return new IntakeRules('intakt')->planOf($rows, $failures);
     }
 
     /**
@@ -166,10 +281,15 @@ final class IntakeRulesTest extends TestCase
         return array_map(static fn (QueuedIssue $row): int => $row->number(), $rows);
     }
 
-    private function row(ListedIssue $listed, bool $trusted = true): QueuedIssue
+    /**
+     * @param list<string>|null $vouched the labels an account with write access applied last, by default every label
+     */
+    private function row(ListedIssue $listed, bool $trusted = true, ?array $vouched = null): QueuedIssue
     {
         $references = new IssueReferences();
+        $row = new QueuedIssue('alpha', $listed->number, new ItemReading($listed, $references->waitsFor($listed->body), $references->closedBy($listed->body)));
+        $row->vouch(new Vouching($listed->author, $trusted, $vouched ?? $listed->labels));
 
-        return new QueuedIssue('alpha', $listed->number, new ItemReading($listed, $listed->author, $trusted, $references->waitsFor($listed->body), $references->closedBy($listed->body)));
+        return $row;
     }
 }

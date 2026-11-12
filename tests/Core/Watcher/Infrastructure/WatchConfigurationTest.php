@@ -42,6 +42,20 @@ final class WatchConfigurationTest extends TestCase
         $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => '']);
     }
 
+    public function testAWhitespaceEligibilityLabelIsRefused(): void
+    {
+        $this->expectExceptionMessage('The "eligibility_label" key must not be blank.');
+
+        $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => " \u{00A0}\t"]);
+    }
+
+    public function testAnEligibilityLabelWithSpacesInsideIsAccepted(): void
+    {
+        $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'ready to build']);
+
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'ready to build']], $projects);
+    }
+
     #[DataProvider('misspelledRepositories')]
     public function testAGitHubRepositoryThatIsNotOwnerSlashNameIsRefused(string $name): void
     {

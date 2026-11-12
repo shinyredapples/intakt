@@ -31,7 +31,7 @@ final readonly class ShowQueueCommand
         }
 
         foreach ($queue->ready() as $position => $task) {
-            $io->writeln(sprintf('%d. #%d %s', $position + 1, $task->number, $task->title));
+            $io->writeln(sprintf('%d. #%d %s%s', $position + 1, $task->number, $task->title, null === $task->reworkOf ? '' : sprintf(' (rework of #%d)', $task->reworkOf)));
         }
 
         foreach ($queue->held() as $held) {

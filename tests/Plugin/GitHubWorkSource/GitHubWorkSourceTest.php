@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubWorkSource;
 
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
@@ -17,6 +19,8 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\EligibilityLabels;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\GitHubWorkSource;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeSnapshots;
@@ -48,6 +52,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
 #[UsesClass(ItemReading::class)]
+#[UsesClass(Vouching::class)]
+#[UsesClass(TaskFailure::class)]
+#[UsesClass(IssueHistory::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(ForgeReadFailed::class)]
@@ -199,6 +206,96 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertSame([], $this->source->queue('alpha')->ready());
     }
 
+    public function testClosingAFailedTaskKeepsItsDependentHeldWithTheReason(): void
+    {
+        $waiting = Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']);
+        $this->reads->lists([$waiting, Issues::task(2)]);
+        $this->source->queue('alpha');
+        $this->source->failedForGood('alpha', 2, 'cannot build');
+
+        $this->reads->lists([$waiting]);
+        $queue = $this->source->queue('alpha');
+
+        self::assertSame([], $queue->ready());
+        self::assertSame('depends on #2, which failed for good: cannot build', $queue->held()[0]->reason);
+    }
+
+    public function testAFailureRecordedWhileTheListingIsReadKeepsThatTaskFromThePick(): void
+    {
+        $other = new IntakeSnapshots(new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration()), new LockFactory(new InMemoryStore()), $this->reads, $this->accounts, new IssueReferences(), new EligibilityLabels([]));
+        $this->reads->lists([Issues::task(1)]);
+        $this->source->queue('alpha');
+        $this->reads->lists([Issues::task(1), Issues::task(2)]);
+        $this->accounts->during = static fn () => $other->failForGood('alpha', 1, 'cannot build');
+
+        self::assertSame(2, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testAnEligibilityLabelAppliedByAnAccountWithoutWriteAccessMakesNoTask(): void
+    {
+        $this->reads->labelAppliers[7] = ['intakt' => 'mallory'];
+        $this->reads->lists([Issues::task(7)]);
+
+        self::assertSame([], $this->source->queue('alpha')->ready());
+    }
+
+    public function testAPriorityLabelAppliedByAnAccountWithoutWriteAccessDoesNotReorderTheQueue(): void
+    {
+        $this->reads->labelAppliers[2] = ['intakt' => 'ana', 'priority:urgent' => 'mallory'];
+        $this->reads->lists([Issues::task(1, ['intakt', 'priority:high']), Issues::task(2, ['intakt', 'priority:urgent'])]);
+
+        self::assertSame(1, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testAMilestoneDueDateMovedWithoutAnEditOfItsIssuesReordersTheQueue(): void
+    {
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['due' => '2026-12-01T00:00:00Z']), Issues::task(2, ['intakt'], with: ['due' => '2026-12-10T00:00:00Z'])]);
+        self::assertSame(1, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
+
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['due' => '2026-12-01T00:00:00Z']), Issues::task(2, ['intakt'], with: ['due' => '2026-11-20T00:00:00Z'])]);
+
+        self::assertSame(2, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testAnotherEligibilityLabelMakesTasksOfStoredItemsTheListingShowsUnchanged(): void
+    {
+        $this->reads->lists([Issues::task(1, ['build'])], 'W/"one"');
+        self::assertSame([], $this->source->queue('alpha')->ready());
+
+        $this->reads->listsUnchanged();
+        $source = $this->sourceWith(new EligibilityLabels(['alpha' => ['eligibility_label' => 'build']]));
+
+        self::assertSame(1, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testAnotherEligibilityLabelMakesTasksOfStoredItemsAFullListingShowsUnchanged(): void
+    {
+        $this->reads->lists([Issues::task(1, ['build'])]);
+        self::assertSame([], $this->source->queue('alpha')->ready());
+
+        $source = $this->sourceWith(new EligibilityLabels(['alpha' => ['eligibility_label' => 'build']]));
+
+        self::assertSame(1, $source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
+    public function testATaskWithAnOpenPullRequestIsPickedAsAReworkOfItAfterItsQueueRecordIsGone(): void
+    {
+        $this->reads->lists([Issues::task(1, ['intakt', 'priority:low']), Issues::task(2, ['intakt', 'priority:high']), Issues::pullRequest(50, 'Closes #1')]);
+        $this->source->queue('alpha');
+        $this->entities->getConnection()->executeStatement('DELETE FROM work_source_issue');
+
+        $pick = $this->source->nextWork('alpha', WorkerState::Free);
+
+        self::assertSame([1, 50], [$pick->task?->number, $pick->task?->reworkOf]);
+    }
+
+    public function testATaskWaitingOnItsOwnPullRequestIsPicked(): void
+    {
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50']), Issues::pullRequest(50, 'Fixes #1')]);
+
+        self::assertSame(1, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
+    }
+
     public function testAFailureIsRecordedOnlyForATaskTheListingShowed(): void
     {
         $this->expectException(TaskNotQueued::class);
@@ -213,7 +310,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->source->queue('alpha');
 
         self::assertSame(1, $this->reads->listings);
-        self::assertSame(1, $this->reads->editorReads);
+        self::assertSame(1, $this->reads->historyReads);
     }
 
     public function testAnUnchangedListingKeepsTheStoredStateOfEveryWaitedForIssue(): void
@@ -227,7 +324,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertSame([], $queue->ready());
         self::assertSame('waits for #2', $queue->held()[0]->reason);
         self::assertSame([null, 'W/"one"'], $this->reads->validators);
-        self::assertSame(1, $this->reads->editorReads);
+        self::assertSame(1, $this->reads->historyReads);
     }
 
     public function testAnItemTheListingShowsUnchangedIsNotReadAgain(): void
@@ -238,7 +335,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads->lists([Issues::task(1), Issues::task(2, ['intakt'], with: ['updatedAt' => '2026-11-11T10:00:00Z'])]);
         $this->source->queue('alpha');
 
-        self::assertSame(3, $this->reads->editorReads);
+        self::assertSame(3, $this->reads->historyReads);
     }
 
     #[DataProvider('workersThatDoNotTakeWork')]
@@ -250,7 +347,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
         self::assertSame(NothingPicked::WorkerNotTakingWork, $pick->nothing);
         self::assertSame(0, $this->reads->listings);
-        self::assertSame(0, $this->reads->editorReads);
+        self::assertSame(0, $this->reads->historyReads);
         self::assertSame(0, $this->accounts->checks);
     }
 

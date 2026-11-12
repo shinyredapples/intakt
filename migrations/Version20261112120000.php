@@ -16,12 +16,12 @@ final class Version20261112120000 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'Create the work intake tables of the listing validator per project and the open issues and pull requests the last complete listing showed';
+        return 'Create the work intake tables of the listing validator per project, the open issues and pull requests the last complete listing showed, and the tasks that failed for good';
     }
 
     public function up(Schema $schema): void
     {
-        foreach ([$this->validator(), $this->issue()] as $table) {
+        foreach ([$this->validator(), $this->issue(), $this->failure()] as $table) {
             foreach ($this->platform->getCreateTableSQL($table) as $sql) {
                 $this->addSql($sql);
             }
@@ -30,6 +30,7 @@ final class Version20261112120000 extends AbstractMigration
 
     public function down(Schema $schema): void
     {
+        $this->addSql($this->platform->getDropTableSQL('work_source_failure'));
         $this->addSql($this->platform->getDropTableSQL('work_source_issue'));
         $this->addSql($this->platform->getDropTableSQL('work_source_validator'));
     }
@@ -62,10 +63,25 @@ final class Version20261112120000 extends AbstractMigration
                 Column::editor()->setUnquotedName('milestone_due')->setTypeName(Types::STRING)->setLength(19)->setNotNull(false)->create(),
                 Column::editor()->setUnquotedName('editor')->setTypeName(Types::STRING)->setLength(255)->setNotNull(false)->create(),
                 Column::editor()->setUnquotedName('trusted')->setTypeName(Types::BOOLEAN)->create(),
+                Column::editor()->setUnquotedName('vouched_labels')->setTypeName(Types::JSON)->create(),
                 Column::editor()->setUnquotedName('waits_for')->setTypeName(Types::JSON)->create(),
                 Column::editor()->setUnquotedName('closed_by')->setTypeName(Types::JSON)->create(),
-                Column::editor()->setUnquotedName('failed_reason')->setTypeName(Types::TEXT)->setNotNull(false)->create(),
                 Column::editor()->setUnquotedName('pull_request')->setTypeName(Types::BOOLEAN)->create(),
+            )
+            ->setPrimaryKeyConstraint(
+                PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'), UnqualifiedName::unquoted('number'))->create(),
+            )
+            ->create();
+    }
+
+    private function failure(): Table
+    {
+        return Table::editor()
+            ->setUnquotedName('work_source_failure')
+            ->setColumns(
+                Column::editor()->setUnquotedName('project')->setTypeName(Types::STRING)->setLength(255)->create(),
+                Column::editor()->setUnquotedName('number')->setTypeName(Types::INTEGER)->create(),
+                Column::editor()->setUnquotedName('reason')->setTypeName(Types::TEXT)->create(),
             )
             ->setPrimaryKeyConstraint(
                 PrimaryKeyConstraint::editor()->setColumnNames(UnqualifiedName::unquoted('project'), UnqualifiedName::unquoted('number'))->create(),

@@ -10,6 +10,7 @@ use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
@@ -36,6 +37,8 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
 use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\TaskFailure;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\EligibilityLabels;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\GitHubWorkSource;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\IntakeSnapshots;
@@ -66,6 +69,9 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
 #[UsesClass(ItemReading::class)]
+#[UsesClass(Vouching::class)]
+#[UsesClass(TaskFailure::class)]
+#[UsesClass(IssueHistory::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(ListedIssue::class)]
@@ -205,23 +211,88 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testTheLastEditorIsTheAuthorWhenNobodyEditedTheIssue(): void
     {
-        self::assertSame('ana', $this->api->reads()->lastEditorOf('alpha', 12));
+        self::assertSame('ana', $this->api->reads()->historyOf('alpha', 12)->editor);
     }
 
     public function testTheLastEditorIsTheAccountThatEditedTheIssue(): void
     {
-        $this->api->editorAnswer = '{"data":{"repository":{"issue":{"author":{"login":"ana"},"editor":{"login":"mallory"}}}}}';
+        $this->api->historyAnswer = $this->history('{"__typename":"User","login":"mallory"}', []);
 
-        self::assertSame('mallory', $this->api->reads()->lastEditorOf('alpha', 12));
+        self::assertSame('mallory', $this->api->reads()->historyOf('alpha', 12)->editor);
     }
 
-    public function testAnIssueTheForgeDoesNotKnowIsNoEditorAnswer(): void
+    public function testAnEmptyPageThatNamesANextPagePicksNothing(): void
     {
-        $this->api->editorAnswer = '{"data":{"repository":{"issue":null}}}';
+        $this->api->pages = [1 => $this->page(1, 100), 2 => '[]', 3 => $this->page(201, 1, ['labels' => [['name' => 'intakt'], ['name' => 'priority:urgent']]])];
+
+        self::assertSame(NothingPicked::ListingIncomplete, $this->source->nextWork('alpha', WorkerState::Free)->nothing);
+        self::assertLoggedError('error', self::NOT_COMPLETE);
+    }
+
+    public function testAShortPageThatNamesANextPagePicksNothing(): void
+    {
+        $this->api->pages = [1 => $this->page(1, 99), 2 => $this->page(100, 1)];
+
+        self::assertFalse($this->source->queue('alpha')->complete);
+        self::assertLoggedError('error', self::NOT_COMPLETE);
+    }
+
+    public function testAFullPageWithoutANextLinkIsReadOnUntilAShortPage(): void
+    {
+        $this->api->links = false;
+        $this->api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 2)];
+
+        self::assertCount(102, $this->source->queue('alpha')->ready());
+    }
+
+    public function testAnEditorFieldErrorIsNoHistoryAnswer(): void
+    {
+        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"timelineItems":{"nodes":[]}}}},"errors":[{"message":"Editor unavailable","path":["repository","issueOrPullRequest","editor"]}]}';
 
         $this->expectException(ForgeReadFailed::class);
 
-        $this->api->reads()->lastEditorOf('alpha', 12);
+        $this->api->reads()->historyOf('alpha', 12);
+    }
+
+    public function testAnIssueTheForgeDoesNotKnowIsNoHistoryAnswer(): void
+    {
+        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":null}}}';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->api->reads()->historyOf('alpha', 12);
+    }
+
+    public function testAnAnswerWithoutTheLabelHistoryIsNoHistoryAnswer(): void
+    {
+        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null}}}}';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->api->reads()->historyOf('alpha', 12);
+    }
+
+    public function testEachLabelIsNamedWithTheAccountThatAppliedItLastInTheOrderOfThoseApplications(): void
+    {
+        $this->api->historyAnswer = $this->history('null', [['ana', 'User', 'intakt'], ['mallory', 'User', 'priority:high'], ['bo', 'User', 'intakt']]);
+
+        self::assertSame(['priority:high' => 'mallory', 'intakt' => 'bo'], $this->api->reads()->historyOf('alpha', 12)->labelAppliers);
+    }
+
+    public function testAnAppIsNamedAsThePermissionCheckKnowsIt(): void
+    {
+        $this->api->historyAnswer = $this->history('{"__typename":"Bot","login":"intakt-app"}', [['intakt-app', 'Bot', 'intakt']]);
+
+        $history = $this->api->reads()->historyOf('alpha', 12);
+
+        self::assertSame(['intakt-app[bot]', ['intakt' => 'intakt-app[bot]']], [$history->editor, $history->labelAppliers]);
+    }
+
+    public function testALabelAppliedByADeletedAccountNamesNoApplier(): void
+    {
+        $this->api->historyAnswer = $this->history('null', [[null, 'User', 'intakt']]);
+
+        self::assertSame(['intakt' => null], $this->api->reads()->historyOf('alpha', 12)->labelAppliers);
     }
 
     private function source(RecordedIssueApi $api): GitHubWorkSource
@@ -232,6 +303,17 @@ final class CompleteListingTest extends KernelTestCase
         $snapshots = new IntakeSnapshots($this->entities, new LockFactory(new InMemoryStore()), $api->reads(), new GrantedAccounts(), new IssueReferences(), $labels);
 
         return new GitHubWorkSource($snapshots, $labels, new GrantedAccounts(), $logger);
+    }
+
+    /**
+     * @param list<array{?string, string, string}> $events the login, account type and label of each label event, oldest first
+     */
+    private function history(string $editor, array $events): string
+    {
+        $nodes = array_map(static fn (array $event): array => ['actor' => null === $event[0] ? null : ['__typename' => $event[1], 'login' => $event[0]], 'label' => ['name' => $event[2]]], $events);
+        $item = ['author' => ['__typename' => 'User', 'login' => 'ana'], 'editor' => json_decode($editor, true, flags: JSON_THROW_ON_ERROR), 'timelineItems' => ['nodes' => $nodes]];
+
+        return json_encode(['data' => ['repository' => ['issueOrPullRequest' => $item]]], JSON_THROW_ON_ERROR);
     }
 
     /**

@@ -12,6 +12,7 @@ final class WatchConfiguration implements ConfigurationInterface
 {
     private const string GITHUB_REPOSITORY = '#^[A-Za-z0-9-]+/(?!\.+$)[A-Za-z0-9_.-]+$#';
     private const array KEYS = ['repository', 'base', 'task'];
+    private const string BLANK = '/^\s*$/u';
 
     public function getConfigTreeBuilder(): TreeBuilder
     {
@@ -22,15 +23,16 @@ final class WatchConfiguration implements ConfigurationInterface
         // A string node and a blank check, because a number or a blank would boot and only fail, or reach every round, at the tick.
         foreach (self::KEYS as $key) {
             $watch->stringNode($key)->isRequired()->cannotBeEmpty()
-                ->validate()->ifTrue(static fn (string $value): bool => 1 === preg_match('/^\s*$/u', $value))->thenInvalid(sprintf('The "%s" key must not be blank.', $key))->end();
+                ->validate()->ifTrue(static fn (string $value): bool => 1 === preg_match(self::BLANK, $value))->thenInvalid(sprintf('The "%s" key must not be blank.', $key))->end();
         }
 
         // Optional, because a project watched through a local forge has no GitHub repository; the name is checked here so a typo fails at boot, not at the tick.
         $watch->stringNode('github')
             ->validate()->ifTrue(static fn (string $value): bool => 1 !== preg_match(self::GITHUB_REPOSITORY, $value))->thenInvalid('The "github" key must be owner/name.')->end();
 
-        // Optional, because the default family name applies to a project that names none.
-        $watch->stringNode('eligibility_label')->cannotBeEmpty();
+        // Optional, because the default family name applies to a project that names none; a blank one would match no label and quietly stop the project's intake.
+        $watch->stringNode('eligibility_label')->cannotBeEmpty()
+            ->validate()->ifTrue(static fn (string $value): bool => 1 === preg_match(self::BLANK, $value))->thenInvalid('The "eligibility_label" key must not be blank.')->end();
 
         return $tree;
     }
