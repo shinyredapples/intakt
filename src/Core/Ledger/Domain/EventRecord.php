@@ -23,8 +23,8 @@ final class EventRecord
     public function __construct(
         #[ORM\Column(type: 'uuid')]
         private readonly Uuid $id,
-        #[ORM\Column(length: 32, enumType: LedgerEventKind::class)]
-        private readonly LedgerEventKind $kind,
+        #[ORM\Column(length: 32)]
+        private readonly string $kind,
         #[ORM\Column(type: 'text')]
         private readonly string $payload,
         #[ORM\Column(type: 'utc_datetime_immutable')]
@@ -37,9 +37,10 @@ final class EventRecord
         return $this->id;
     }
 
-    public function kind(): LedgerEventKind
+    // Stored as text so a row of a kind this code no longer knows still loads; the read skips it.
+    public function kind(): ?LedgerEventKind
     {
-        return $this->kind;
+        return LedgerEventKind::tryFrom($this->kind);
     }
 
     public function payload(): string
