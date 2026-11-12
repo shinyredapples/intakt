@@ -88,7 +88,8 @@ final readonly class MercureRoundUpdates implements RoundUpdates
             $this->doneOrLogged($round, fn () => $this->publishFinalSummary($round));
             $this->publishState($round, $progress);
         } finally {
-            $lock->release();
+            // Through doneOrLogged, because this runs inside the judge's event dispatch, outside the guard summaryChanged() puts around its own release.
+            $this->doneOrLogged($round, static fn () => $lock->release());
         }
     }
 

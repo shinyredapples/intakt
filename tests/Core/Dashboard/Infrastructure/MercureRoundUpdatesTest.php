@@ -19,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
+use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -176,7 +177,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testAChangedSummaryReplacesEachLivePartOfTheSummaryWithTheRecomputedCounts(): void
     {
-        $summary = new SessionSummary([new ToolCallCount('read_file', 3)], Cost::inUsd(0.5), ['src/A.php'], [], [], []);
+        $summary = new SessionSummary([new ToolCallCount('read_file', 3)], Cost::inUsd(0.5), ['src/A.php'], [], [], [], false);
 
         $this->updates(null, $this->summaries($summary))->summaryChanged(Uuid::fromString(self::ROUND));
 
@@ -191,7 +192,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testAJudgedRoundPublishesItsSummaryBeforeItsStateSoTheJudgedStateIsTheLastUpdate(): void
     {
-        $summary = new SessionSummary([], Cost::none(), [], [], [], []);
+        $summary = new SessionSummary([], Cost::none(), [], [], [], [], false);
 
         $this->updates(null, $this->summaries($summary))->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
@@ -210,7 +211,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testAFileNameInTheSummaryIsEscapedInTheTurboStream(): void
     {
-        $summary = new SessionSummary([new ToolCallCount('<i>x</i>', 1)], Cost::none(), ['<b>x</b>.php'], [], [], []);
+        $summary = new SessionSummary([new ToolCallCount('<i>x</i>', 1)], Cost::none(), ['<b>x</b>.php'], [], [], [], false);
 
         $this->updates(null, $this->summaries($summary))->summaryChanged(Uuid::fromString(self::ROUND));
 
@@ -236,7 +237,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     public function testAnUnchangedSummaryIsNotPublishedAgain(): void
     {
-        $updates = $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], [])));
+        $updates = $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], [], false)));
 
         $updates->summaryChanged(Uuid::fromString(self::ROUND));
 
@@ -250,7 +251,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $paused = false;
         $summaries = self::createStub(SessionSummaries::class);
         $summaries->method('ofRound')->willReturnCallback(static function () use (&$count, &$paused): SessionSummary {
-            $summary = new SessionSummary([new ToolCallCount('read_file', $count)], Cost::none(), [], [], [], []);
+            $summary = new SessionSummary([new ToolCallCount('read_file', $count)], Cost::none(), [], [], [], [], false);
             if (!$paused) {
                 $paused = true;
                 Fiber::suspend();
@@ -280,7 +281,7 @@ final class MercureRoundUpdatesTest extends TestCase
                 Fiber::suspend();
             }
 
-            return new SessionSummary([], Cost::none(), [], [], [], []);
+            return new SessionSummary([], Cost::none(), [], [], [], [], false);
         });
         $updates = $this->updates(null, $summaries);
         $held = new Fiber(static fn () => $updates->summaryChanged(Uuid::fromString(self::ROUND)));
@@ -371,6 +372,48 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertInstanceOf(LockAcquiringException::class, $context['exception']);
     }
 
+    public function testAJudgedStateGoesOutAndNothingIsThrownWhenTheSummaryLockCannotBeReleased(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new RuntimeException('the lock store is gone'));
+
+        $this->updates(null, $this->summaries(new SessionSummary([], Cost::none(), [], [], [], [], true)), $store)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertSame(['replace round-'.self::ROUND.'-summary-tools', 'replace round-'.self::ROUND.'-state'], array_map($this->actionAndTargetOf(...), $this->published));
+        self::assertStringContainsString('Judged.', array_last($this->published)?->getData() ?? '');
+        self::assertSame([LockReleasingException::class], $this->exceptionsLogged());
+    }
+
+    public function testASummaryLockThatCannotBeReleasedAfterAToolCallIsLoggedAndNotThrown(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('delete')->willThrowException(new RuntimeException('the lock store is gone'));
+
+        $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], [], false)), $store)->summaryChanged(Uuid::fromString(self::ROUND));
+
+        self::assertSame(['replace round-'.self::ROUND.'-summary-tools'], array_map($this->actionAndTargetOf(...), $this->published));
+        self::assertSame([LockReleasingException::class], $this->exceptionsLogged());
+    }
+
+    /**
+     * @return list<class-string>
+     */
+    private function exceptionsLogged(): array
+    {
+        $classes = [];
+
+        foreach ($this->log->cleanLogs() as $log) {
+            self::assertIsArray($log);
+            $context = $log[2];
+            self::assertIsArray($context);
+            $exception = $context['exception'];
+            self::assertIsObject($exception);
+            $classes[] = $exception::class;
+        }
+
+        return $classes;
+    }
+
     /**
      * @param (callable(Update): string)|null $publisher
      */
@@ -397,7 +440,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
             Fiber::suspend();
 
-            return new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], []);
+            return new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], [], false);
         });
 
         return $summaries;
