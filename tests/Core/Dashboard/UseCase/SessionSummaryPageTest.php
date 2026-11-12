@@ -97,7 +97,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertSame(['No tool call yet.', 'No file read yet.', 'No finding to check, and none reported yet. Reported findings appear once every reviewer is in.'], $this->linesOf($crawler->filter('.log-summary p.muted')));
-        self::assertSame([['Total', '0']], $this->pairsOf($crawler->filter('.log-summary .ls-tools')));
+        self::assertCount(0, $crawler->filter('.log-summary .ls-tools'));
     }
 
     public function testARoundIntaktHoldsNoRecordOfSaysTheSummaryIsNotRecorded(): void
