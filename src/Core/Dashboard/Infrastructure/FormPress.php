@@ -10,7 +10,7 @@ use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Security\Csrf\CsrfToken;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
-// The token check and the flash line every button of a dashboard page shares.
+// One home for the token check and the flash line, because every button route of the dashboard needs both.
 final readonly class FormPress
 {
     public function __construct(private CsrfTokenManagerInterface $tokens)
