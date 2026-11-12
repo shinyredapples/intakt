@@ -15,7 +15,7 @@ The orchestrator signs the commits of an accepted hand-back with its own key, pu
 
 ## The pull request
 
-`Plugin/Forge/Contract/ChangeOpening::openOrUpdate(project, branch, base, ChangeText)` returns the `ChangeId`. `Plugin/GitHubForge/Infrastructure/GitHubChangeOpener` implements it as the installation (the App): the title and body are scanned for secrets first (`ChangeTextHoldsSecret`, nothing written), then `GET /pulls?head=<owner>:<branch>&state=open` looks for the branch's open pull request, and `PATCH /pulls/<number>` updates its title, body and base, or `POST /pulls` opens one. The writes are never retried. An answer that is not JSON, a pull request without a number, a refused call and a project without a `github` entry in its watch section are `ForgeWriteFailed`. The local git forge has no pull requests to open and does not implement it.
+`Plugin/Forge/Contract/ChangeOpening::openOrUpdate(ProposedChange)` returns the `ChangeId`; a `ProposedChange` is the project, the branch, the base branch (main) and the `ChangeText`. `Plugin/GitHubForge/Infrastructure/GitHubChangeOpener` implements it as the installation (the App): the title and body are scanned for secrets first (`ChangeTextHoldsSecret`, nothing written), then `GET /pulls?head=<owner>:<branch>&state=open` looks for the branch's open pull request, and `PATCH /pulls/<number>` updates its title, body and base, or `POST /pulls` opens one. The writes are never retried. An answer that is not JSON, a pull request without a number, a refused call and a project without a `github` entry in its watch section are `ForgeWriteFailed`. The local git forge has no pull requests to open and does not implement it.
 
 ## What is not here
 

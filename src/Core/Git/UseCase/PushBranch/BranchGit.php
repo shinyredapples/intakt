@@ -27,47 +27,11 @@ final readonly class BranchGit
      */
     public function output(string $repository, array $arguments, ?string $input = null): string
     {
-        $process = $this->run($repository, $arguments, $input, []);
+        $process = $this->process($repository, $arguments, []);
+        $process->setInput($input);
+        $process->run();
 
         return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed', $arguments[0] ?? ''));
-    }
-
-    /**
-     * @param list<string> $arguments
-     *
-     * @throws BranchNotPushed
-     */
-    public function outputFromRemote(string $repository, array $arguments): string
-    {
-        $process = $this->run($repository, $arguments, null, self::NETWORK);
-
-        // Not the error output, because git may repeat the remote's address, and a credential can be part of it.
-        return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed with exit code %d', $arguments[0] ?? '', $process->getExitCode() ?? -1));
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    public function exitCode(string $repository, array $arguments): int
-    {
-        return $this->run($repository, $arguments, null, [])->getExitCode() ?? -1;
-    }
-
-    // Null when the two merge cleanly, else the paths that conflict; the merge writes objects only, never a ref or a work tree.
-    /**
-     * @return list<string>|null
-     *
-     * @throws BranchNotPushed
-     */
-    public function mergeTree(string $repository, string $main, string $head): ?array
-    {
-        $process = $this->run($repository, ['merge-tree', '--write-tree', '--name-only', '--no-messages', $main, $head], null, []);
-
-        return match ($process->getExitCode()) {
-            0 => null,
-            1 => array_values(array_filter(array_slice(explode("\n", $process->getOutput()), 1))),
-            default => throw BranchNotPushed::because('git merge-tree could not test the merge with main'),
-        };
     }
 
     /**
@@ -81,10 +45,42 @@ final readonly class BranchGit
     }
 
     /**
+     * @param list<string> $arguments
+     *
+     * @throws BranchNotPushed
+     */
+    public function outputFromRemote(string $repository, array $arguments): string
+    {
+        $process = $this->process($repository, $arguments, self::NETWORK);
+        $process->run();
+
+        // Not the error output, because git may repeat the remote's address, and a credential can be part of it.
+        return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed with exit code %d', $arguments[0] ?? '', $process->getExitCode() ?? -1));
+    }
+
+    // Null when the two merge cleanly, else the paths that conflict, because the caller needs both; the merge writes objects only, never a ref or a work tree.
+    /**
+     * @return list<string>|null
+     *
+     * @throws BranchNotPushed
+     */
+    public function mergeTree(string $repository, string $main, string $head): ?array
+    {
+        $process = $this->process($repository, ['merge-tree', '--write-tree', '--name-only', '--no-messages', $main, $head], []);
+        $process->run();
+
+        return match ($process->getExitCode()) {
+            0 => null,
+            1 => array_values(array_filter(array_slice(explode("\n", $process->getOutput()), 1), static fn (string $path): bool => '' !== $path)),
+            default => throw BranchNotPushed::because('git merge-tree could not test the merge with main'),
+        };
+    }
+
+    /**
      * @param list<string>          $arguments
      * @param array<string, string> $environment
      */
-    private function run(string $repository, array $arguments, ?string $input, array $environment): Process
+    private function process(string $repository, array $arguments, array $environment): Process
     {
         try {
             $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
@@ -93,9 +89,6 @@ final readonly class BranchGit
         }
 
         // Because a work tree beside --git-dir would make git treat the bare repository as a checkout.
-        $process = new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false, ...$environment], $input, self::TIMEOUT_SECONDS);
-        $process->run();
-
-        return $process;
+        return new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false, ...$environment], null, self::TIMEOUT_SECONDS);
     }
 }

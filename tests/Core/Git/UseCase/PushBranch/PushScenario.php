@@ -20,18 +20,18 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Process\Process;
 
-// A project repository whose main has one commit and whose task branch has two, an empty bare remote, and a throwaway signing key: everything a push meets, in temporary folders.
-final class PushScenario
+// A project repository (main with one commit, the task branch with two), an empty bare remote and a throwaway signing key, because a push needs all three and each test wants its own.
+final readonly class PushScenario
 {
     public const string BRANCH = 'task';
 
-    public readonly TemporaryRepository $repository;
-    public readonly string $remote;
-    public readonly string $key;
-    public readonly RecordingLedger $ledger;
-    public readonly RecordingChangeOpening $changes;
-    public readonly string $head;
-    private readonly string $folder;
+    public TemporaryRepository $repository;
+    public string $remote;
+    public string $key;
+    public RecordingLedger $ledger;
+    public RecordingChangeOpening $changes;
+    public string $head;
+    private string $folder;
 
     public function __construct()
     {
@@ -49,8 +49,8 @@ final class PushScenario
         $this->head = $this->repository->commitFile('c.txt', "three\n");
         $this->repository->checkout('main');
 
-        self::run(['init', '--quiet', '--bare', '--initial-branch=main', $this->remote], $this->folder);
-        self::run(['push', '--quiet', $this->remote, 'main'], $this->repository->path);
+        $this->run(['init', '--quiet', '--bare', '--initial-branch=main', $this->remote], $this->folder);
+        $this->run(['push', '--quiet', $this->remote, 'main'], $this->repository->path);
     }
 
     public static function generateKey(string $file): string
@@ -90,26 +90,26 @@ final class PushScenario
 
     public function remoteTip(): ?string
     {
-        $listed = self::run(['ls-remote', $this->remote, 'refs/heads/'.self::BRANCH], $this->folder);
+        $listed = $this->run(['ls-remote', $this->remote, 'refs/heads/'.self::BRANCH], $this->folder);
 
         return '' === $listed ? null : explode("\t", $listed)[0];
     }
 
-    // What an outside reader sees: git's own verdict on each commit of the pushed branch against this one key.
+    // Git's own verdict on each pushed commit against this one key, because an outside reader sees nothing else.
     public function signatureMarks(): string
     {
         $signers = $this->folder.'/allowed';
         file_put_contents($signers, 'orchestrator namespaces="git" '.implode(' ', array_slice(explode(' ', (string) file_get_contents($this->key.'.pub')), 0, 2))."\n");
 
-        return self::run(['-c', 'gpg.format=ssh', '-c', 'gpg.ssh.allowedSignersFile='.$signers, 'log', '--format=%G? %H', 'main..'.self::BRANCH], $this->remote);
+        return $this->run(['-c', 'gpg.format=ssh', '-c', 'gpg.ssh.allowedSignersFile='.$signers, 'log', '--format=%G? %H', 'main..'.self::BRANCH], $this->remote);
     }
 
-    // Another writer's commit on the remote branch, as a second builder or a person would leave it.
+    // Another writer's commit on the remote branch, because a second builder or a person can leave one there.
     public function pushOtherCommit(): string
     {
         $other = new TemporaryRepository();
         $other->commitFile('other.txt', "other\n");
-        self::run(['push', '--quiet', $this->remote, 'main:refs/heads/'.self::BRANCH, '--force'], $other->path);
+        $this->run(['push', '--quiet', $this->remote, 'main:refs/heads/'.self::BRANCH, '--force'], $other->path);
         $tip = $other->objectAt('HEAD');
         $other->remove();
 
@@ -125,7 +125,7 @@ final class PushScenario
     /**
      * @param list<string> $arguments
      */
-    private static function run(array $arguments, string $directory): string
+    private function run(array $arguments, string $directory): string
     {
         $process = new Process(['git', ...$arguments], $directory, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false]);
         $process->run();

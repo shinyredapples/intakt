@@ -6,11 +6,11 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
-use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeCredentialsRefused;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
@@ -30,19 +30,21 @@ final readonly class GitHubChangeOpener implements ChangeOpening
     ) {
     }
 
-    public function openOrUpdate(string $project, string $branch, string $base, ChangeText $text): ChangeId
+    public function openOrUpdate(ProposedChange $change): ChangeId
     {
+        $text = $change->text;
+
         if ($this->secrets->findsSecretIn($text->title."\n\n".$text->body)) {
             throw ChangeTextHoldsSecret::inTheText();
         }
 
-        $repository = $this->addressOf($project);
-        $open = $this->numberOfOpenPullRequest($repository, $branch);
-        $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $base];
+        $repository = $this->addressOf($change->project);
+        $open = $this->numberOfOpenPullRequest($repository, $change->branch);
+        $payload = ['title' => $text->title, 'body' => $text->body, 'base' => $change->base];
 
         // The look-up comes first and a write is never retried, so a crash between the two leaves at most the pull request the next call finds.
         $number = null === $open
-            ? $this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $branch]))
+            ? $this->numberOf($this->send('POST', $repository->path().'/pulls', [...$payload, 'head' => $change->branch]))
             : $this->numberOf($this->send('PATCH', $repository->path().'/pulls/'.$open, $payload));
 
         return $repository->pullRequest($number);
@@ -108,7 +110,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
             // Not chained, because the trace of a failed call holds the bearer token.
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a pull request call (%s).', $failure::class));
+            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a pull request call (%s).', $failure::class), $failure->getCode(), $failure);
         }
 
         if ($status < 200 || $status >= 300) {

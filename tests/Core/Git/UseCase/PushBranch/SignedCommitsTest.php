@@ -11,6 +11,7 @@ use Intakt\Core\Git\Domain\CommitObject;
 use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
 use Intakt\Core\Git\UseCase\PushBranch\SignedCommits;
 use Intakt\Core\Git\UseCase\PushBranch\SigningKey;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SignedCommits::class)]
 #[CoversClass(SigningKey::class)]
 #[UsesClass(BranchGit::class)]
+#[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(CommitObject::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(BranchNotPushed::class)]
@@ -51,7 +53,7 @@ final class SignedCommitsTest extends TestCase
     public function testTheCheckRefusesACommitSignedByAnotherKey(): void
     {
         $other = PushScenario::generateKey($this->scenario->key.'-other');
-        $signedByOther = $this->scenario->signedCommits($other)->of($this->scenario->gitDirectory(), $this->scenario->head, null, self::MAIN);
+        $signedByOther = $this->scenario->signedCommits($other)->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $this->scenario->head, 0), self::MAIN);
 
         $this->expectException(UnsignedCommitRefused::class);
         $this->expectExceptionMessage('its signature does not verify');
@@ -61,7 +63,7 @@ final class SignedCommitsTest extends TestCase
 
     public function testTheCheckAcceptsCommitsTheOrchestratorSigned(): void
     {
-        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $this->scenario->head, null, self::MAIN);
+        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $this->scenario->head, 0), self::MAIN);
 
         $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signed, self::MAIN);
 
@@ -71,7 +73,7 @@ final class SignedCommitsTest extends TestCase
     public function testACommitTheBuilderSignedItselfIsSignedAgainByTheOrchestrator(): void
     {
         $foreign = $this->scenario->repository->commitWithASignatureHeader();
-        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $foreign, null, self::MAIN);
+        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $foreign, 0), self::MAIN);
 
         $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signed, self::MAIN);
 
@@ -81,7 +83,7 @@ final class SignedCommitsTest extends TestCase
     public function testCommitsAlreadyPushedAreNotSignedAgain(): void
     {
         $base = $this->scenario->repository->objectAt(PushScenario::BRANCH.'~1');
-        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $this->scenario->head, $base, self::MAIN);
+        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack($base, $this->scenario->head, 0), self::MAIN);
 
         self::assertSame($base, $this->scenario->repository->objectAt($signed.'^'));
     }

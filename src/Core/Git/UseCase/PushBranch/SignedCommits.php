@@ -7,6 +7,7 @@ namespace Intakt\Core\Git\UseCase\PushBranch;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\UnsignedCommitRefused;
 use Intakt\Core\Git\Domain\CommitObject;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 
 // Each new commit keeps its tree, parents, author, committer, dates and message and gains the orchestrator's signature, and an SSH signature of this key is deterministic, so a retry after a crash produces the same ids.
 final readonly class SignedCommits
@@ -20,18 +21,18 @@ final readonly class SignedCommits
     /**
      * @throws BranchNotPushed
      */
-    public function of(string $repository, string $head, ?string $base, string $main): string
+    public function of(string $repository, AcceptedHandBack $accepted, string $main): string
     {
         $header = $this->signatureHeader($repository);
         $replaced = [];
 
-        foreach ($this->newCommits($repository, $head, $base, $main) as $commit) {
+        foreach ($this->newCommits($repository, $accepted->head, null === $accepted->base ? [$main] : [$accepted->base, $main]) as $commit) {
             $unsigned = CommitObject::of($this->git->output($repository, ['cat-file', 'commit', $commit]))->reparented($replaced)->withoutSignature();
             $signed = $unsigned->signedWith($this->key->sign($unsigned->text()), $header);
             $replaced[$commit] = trim($this->git->output($repository, ['hash-object', '-t', 'commit', '-w', '--stdin'], $signed->text()));
         }
 
-        return $replaced[$head] ?? $head;
+        return $replaced[$accepted->head] ?? $accepted->head;
     }
 
     /**
@@ -42,7 +43,7 @@ final readonly class SignedCommits
     {
         $header = $this->signatureHeader($repository);
 
-        foreach ($this->newCommits($repository, $head, null, $main) as $commit) {
+        foreach ($this->newCommits($repository, $head, [$main]) as $commit) {
             $object = CommitObject::of($this->git->output($repository, ['cat-file', 'commit', $commit]));
             $signature = $object->signature($header);
 
@@ -57,11 +58,12 @@ final readonly class SignedCommits
     }
 
     /**
+     * @param list<string> $excluded
+     *
      * @return list<string>
      */
-    private function newCommits(string $repository, string $head, ?string $base, string $main): array
+    private function newCommits(string $repository, string $head, array $excluded): array
     {
-        $excluded = null === $base ? [$main] : [$base, $main];
         $listed = $this->git->lines($repository, ['rev-list', '--reverse', '--topo-order', $head, '--not', ...$excluded]);
 
         return '' === $listed ? [] : explode("\n", $listed);

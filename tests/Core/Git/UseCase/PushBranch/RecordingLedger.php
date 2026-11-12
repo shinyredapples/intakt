@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
 
-use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -12,6 +11,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\Uuid;
 
 // Reads back what it was given, in order, and can start to refuse, so a test can end a push at any phase boundary.
@@ -59,7 +59,7 @@ final class RecordingLedger implements Ledger
      */
     public function payloadOf(LedgerEventKind $kind): array
     {
-        $event = array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind))[0];
+        $event = array_first(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind));
         /** @var array<string, string> $payload */
         $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
 
@@ -71,6 +71,8 @@ final class RecordingLedger implements Ledger
      */
     private function recorded(array $events): RecordedEvents
     {
-        return new RecordedEvents(array_map(static fn (LedgerEvent $event): RecordedEvent => new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-11-25 10:00:00 UTC')), $events));
+        $moment = new MockClock('2026-11-25 10:00:00 UTC')->now();
+
+        return new RecordedEvents(array_map(static fn (LedgerEvent $event): RecordedEvent => new RecordedEvent(Uuid::v7(), $event, $moment), $events));
     }
 }

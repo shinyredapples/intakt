@@ -9,6 +9,7 @@ use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ChangeTextHoldsSecret;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Intakt\Plugin\GitHubForge\Contract\InstallationToken;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Domain\Installation;
@@ -34,6 +35,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(SecretScan::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangeText::class)]
+#[UsesClass(ProposedChange::class)]
 #[UsesClass(ChangeTextHoldsSecret::class)]
 #[UsesClass(ForgeReadFailed::class)]
 #[UsesClass(ForgeWriteFailed::class)]
@@ -56,7 +58,7 @@ final class GitHubChangeOpenerTest extends TestCase
     {
         $github = new ScriptedGitHub();
 
-        $change = $github->opener()->openOrUpdate('widgets', 'task', 'main', new ChangeText('Add the files', 'Evidence: tests pass.'));
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Add the files', 'Evidence: tests pass.')));
 
         self::assertSame('https://github.com/acme/widgets/pull/42', $change->value);
         self::assertSame([['POST '.self::API.'/pulls', ['title' => 'Add the files', 'body' => 'Evidence: tests pass.', 'base' => 'main', 'head' => 'task']]], $github->writes);
@@ -67,7 +69,7 @@ final class GitHubChangeOpenerTest extends TestCase
         $github = new ScriptedGitHub();
         $github->openPulls = [['number' => 7, 'head' => ['ref' => 'task']]];
 
-        $change = $github->opener()->openOrUpdate('widgets', 'task', 'main', new ChangeText('New title', 'New body'));
+        $change = $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('New title', 'New body')));
 
         self::assertSame('https://github.com/acme/widgets/pull/7', $change->value);
         self::assertSame([['PATCH '.self::API.'/pulls/7', ['title' => 'New title', 'body' => 'New body', 'base' => 'main']]], $github->writes);
@@ -78,7 +80,7 @@ final class GitHubChangeOpenerTest extends TestCase
         $github = new ScriptedGitHub();
         $github->openPulls = [['number' => 7, 'head' => ['ref' => 'other']]];
 
-        $github->opener()->openOrUpdate('widgets', 'task', 'main', new ChangeText('T', 'B'));
+        $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
 
         self::assertSame('POST '.self::API.'/pulls', $github->writes[0][0]);
     }
@@ -87,10 +89,10 @@ final class GitHubChangeOpenerTest extends TestCase
     {
         $github = new ScriptedGitHub();
         // Built at run time, because a whole token in this file would trip the repository's own secret scan.
-        $secret = 'gh'.'p_'.bin2hex(random_bytes(18));
+        $secret = 'ghp_'.bin2hex(random_bytes(18));
 
         try {
-            $github->opener()->openOrUpdate('widgets', 'task', 'main', new ChangeText('Title', 'The token is '.$secret));
+            $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('Title', 'The token is '.$secret)));
             self::fail('A secret in the text must be refused.');
         } catch (ChangeTextHoldsSecret) {
             self::assertSame([], $github->writes);
@@ -104,7 +106,7 @@ final class GitHubChangeOpenerTest extends TestCase
         $this->expectException(ForgeWriteFailed::class);
         $this->expectExceptionMessage('has no GitHub repository');
 
-        $github->opener()->openOrUpdate('unknown', 'task', 'main', new ChangeText('T', 'B'));
+        $github->opener()->openOrUpdate(new ProposedChange('unknown', 'task', 'main', new ChangeText('T', 'B')));
     }
 
     public function testAnOpenPullRequestWithoutANumberIsRefused(): void
@@ -114,7 +116,7 @@ final class GitHubChangeOpenerTest extends TestCase
 
         $this->expectException(ForgeWriteFailed::class);
 
-        $github->opener()->openOrUpdate('widgets', 'task', 'main', new ChangeText('T', 'B'));
+        $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
     }
 
     public function testARefusedWriteIsAFailedWriteAndLeavesNothingToRetryBlindly(): void
@@ -125,6 +127,6 @@ final class GitHubChangeOpenerTest extends TestCase
         $this->expectException(ForgeWriteFailed::class);
         $this->expectExceptionMessage('422');
 
-        $github->opener()->openOrUpdate('widgets', 'task', 'main', new ChangeText('T', 'B'));
+        $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
     }
 }

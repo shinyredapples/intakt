@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Domain;
 
-// A commit as git stores it: header lines and a message. Signing and checking a signature work on this text, exactly as git does for an SSH signature.
+// A commit as git stores it, header lines and a message, because signing and checking an SSH signature work on exactly this text.
 final readonly class CommitObject
 {
     private const array SIGNATURE_HEADERS = ['gpgsig', 'gpgsig-sha256'];
@@ -65,7 +65,7 @@ final readonly class CommitObject
         return new self($kept, $this->message);
     }
 
-    // What the signature covers: the commit without its signature header.
+    // The commit without its signature header, because that is the text a signature covers.
     public function payload(): string
     {
         return $this->withoutSignature()->text();

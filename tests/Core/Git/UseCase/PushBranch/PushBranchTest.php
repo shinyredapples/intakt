@@ -82,8 +82,8 @@ final class PushBranchTest extends TestCase
 
     public function testAPushOfTheSameCommitsGetsTheSameSignedIds(): void
     {
-        $first = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $this->scenario->head, null, 'refs/heads/main');
-        $second = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $this->scenario->head, null, 'refs/heads/main');
+        $first = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $this->scenario->head, 0), 'refs/heads/main');
+        $second = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $this->scenario->head, 0), 'refs/heads/main');
 
         self::assertSame($first, $second);
         self::assertNotSame($this->scenario->head, $first);

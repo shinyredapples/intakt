@@ -58,14 +58,14 @@ final class ScriptedGitHub
     {
         [$calls, $checked] = $this->stack();
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), "gitleaks"), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
     }
 
     public function opener(): GitHubChangeOpener
     {
         [$calls, $checked] = $this->stack();
 
-        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), "gitleaks"), new WatchedRepositories(["widgets" => ["github" => "acme/widgets"]]));
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories(['widgets' => ['github' => 'acme/widgets']]));
     }
 
     /**
@@ -121,7 +121,7 @@ final class ScriptedGitHub
             return new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]);
         }
 
-        if ($method === 'PATCH') {
+        if ('PATCH' === $method) {
             return new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
 

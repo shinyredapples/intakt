@@ -11,6 +11,7 @@ use Intakt\Core\Git\Contract\MainConflicts;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Override;
 use Symfony\Component\Lock\LockFactory;
 
@@ -47,13 +48,13 @@ final readonly class PushBranch implements BranchPush
     private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts
     {
         $main = $this->mainOf($request->repository);
-        $head = $this->signed->of($request->repository, $request->accepted->head, $request->accepted->base, $main);
+        $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
 
         if (!$this->records->hasPushed($request->branch, $head)) {
             $conflicts = $this->conflictsWith($request, $main);
 
-            if (null !== $conflicts) {
+            if ($conflicts instanceof MainConflicts) {
                 return $conflicts;
             }
 
@@ -115,7 +116,7 @@ final readonly class PushBranch implements BranchPush
         }
 
         // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one.
-        $change = $this->changes->openOrUpdate($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text);
+        $change = $this->changes->openOrUpdate(new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text));
         $this->records->open($request->branch, $head, $change->value);
 
         return $change;

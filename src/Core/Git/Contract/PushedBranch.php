@@ -6,7 +6,7 @@ namespace Intakt\Core\Git\Contract;
 
 use Intakt\Plugin\Forge\Contract\ChangeId;
 
-// The head is the signed one, the commit the remote branch holds.
+// The head is the signed one, because that is the commit the remote branch holds.
 final readonly class PushedBranch
 {
     public function __construct(
