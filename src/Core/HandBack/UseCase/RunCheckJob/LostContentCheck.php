@@ -145,17 +145,13 @@ final readonly class LostContentCheck
     {
         // From the head back to the base, replacing the path only in a commit that moved a file onto it, so the path follows one file and not every move on the branch; a commit that created the path ends the walk, because the file there was made on the branch and had no path at the base.
         foreach ($movesOfEachCommit as $moves) {
-            foreach ($moves as $move) {
-                if ($move->isCreatedAt($path)) {
-                    return null;
-                }
+            $move = array_find($moves, static fn (ChangedFile $move): bool => $move->isCreatedAt($path) || $move->movedTo($path));
 
-                if ($move->movedTo($path)) {
-                    $path = $move->oldPath();
-
-                    break;
-                }
+            if (true === $move?->isAdded()) {
+                return null;
             }
+
+            $path = $move?->oldPath() ?? $path;
         }
 
         return $path;
