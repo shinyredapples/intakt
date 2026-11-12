@@ -87,7 +87,8 @@ final class MakeBuildCloneCommandTest extends TestCase
         $tester = $this->whenTheCommandRuns('alpha', 'feat/task');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('-clone-<info>literal</info> was not made', $this->displayOnOneLine($tester));
+        // A narrow terminal also breaks the path inside a word, so the comparison drops all whitespace.
+        self::assertStringContainsString('-clone-<info>literal</info>wasnotmade', (string) preg_replace('/\s+/', '', $tester->getDisplay()));
     }
 
     public function testTheCommandPrintsTheReasonForAProjectWithoutAMirrorAndExitsWithOne(): void
