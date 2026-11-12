@@ -1,0 +1,88 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
+
+use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\UnsignedCommitRefused;
+use Intakt\Core\Git\Domain\CommitObject;
+use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\SignedCommits;
+use Intakt\Core\Git\UseCase\PushBranch\SigningKey;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(SignedCommits::class)]
+#[CoversClass(SigningKey::class)]
+#[UsesClass(BranchGit::class)]
+#[UsesClass(CommitObject::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(BranchNotPushed::class)]
+#[UsesClass(UnsignedCommitRefused::class)]
+#[UsesClass(TemporaryRepository::class)]
+final class SignedCommitsTest extends TestCase
+{
+    private const string MAIN = 'refs/heads/main';
+
+    private PushScenario $scenario;
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
+    }
+
+    public function testTheCheckRefusesACommitThatIsNotSigned(): void
+    {
+        $this->expectException(UnsignedCommitRefused::class);
+        $this->expectExceptionMessage('it has no signature');
+
+        $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $this->scenario->head, self::MAIN);
+    }
+
+    public function testTheCheckRefusesACommitSignedByAnotherKey(): void
+    {
+        $other = PushScenario::generateKey($this->scenario->key.'-other');
+        $signedByOther = $this->scenario->signedCommits($other)->of($this->scenario->gitDirectory(), $this->scenario->head, null, self::MAIN);
+
+        $this->expectException(UnsignedCommitRefused::class);
+        $this->expectExceptionMessage('its signature does not verify');
+
+        $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signedByOther, self::MAIN);
+    }
+
+    public function testTheCheckAcceptsCommitsTheOrchestratorSigned(): void
+    {
+        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $this->scenario->head, null, self::MAIN);
+
+        $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signed, self::MAIN);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testACommitTheBuilderSignedItselfIsSignedAgainByTheOrchestrator(): void
+    {
+        $foreign = $this->scenario->repository->commitWithASignatureHeader();
+        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $foreign, null, self::MAIN);
+
+        $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signed, self::MAIN);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testCommitsAlreadyPushedAreNotSignedAgain(): void
+    {
+        $base = $this->scenario->repository->objectAt(PushScenario::BRANCH.'~1');
+        $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $this->scenario->head, $base, self::MAIN);
+
+        self::assertSame($base, $this->scenario->repository->objectAt($signed.'^'));
+    }
+}

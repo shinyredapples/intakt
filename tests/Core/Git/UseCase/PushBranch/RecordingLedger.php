@@ -1,0 +1,76 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
+
+use DateTimeImmutable;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Override;
+use Symfony\Component\Uid\Uuid;
+
+// Reads back what it was given, in order, and can start to refuse, so a test can end a push at any phase boundary.
+final class RecordingLedger implements Ledger
+{
+    public int $accepts = PHP_INT_MAX;
+
+    /** @var list<LedgerEvent> */
+    private array $events = [];
+
+    #[Override]
+    public function append(LedgerEvent $event): AppendResult
+    {
+        if (count($this->events) >= $this->accepts) {
+            return AppendResult::failed('the ledger is down');
+        }
+
+        $this->events[] = $event;
+
+        return AppendResult::appended(Uuid::v7());
+    }
+
+    #[Override]
+    public function readInOrder(): RecordedEvents
+    {
+        return $this->recorded($this->events);
+    }
+
+    #[Override]
+    public function readOfKind(LedgerEventKind $kind): RecordedEvents
+    {
+        return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind)));
+    }
+
+    /**
+     * @return list<LedgerEventKind>
+     */
+    public function kinds(): array
+    {
+        return array_map(static fn (LedgerEvent $event): LedgerEventKind => $event->kind, $this->events);
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function payloadOf(LedgerEventKind $kind): array
+    {
+        $event = array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => $event->kind === $kind))[0];
+        /** @var array<string, string> $payload */
+        $payload = json_decode($event->payload, true, flags: JSON_THROW_ON_ERROR);
+
+        return $payload;
+    }
+
+    /**
+     * @param list<LedgerEvent> $events
+     */
+    private function recorded(array $events): RecordedEvents
+    {
+        return new RecordedEvents(array_map(static fn (LedgerEvent $event): RecordedEvent => new RecordedEvent(Uuid::v7(), $event, new DateTimeImmutable('2026-11-25 10:00:00 UTC')), $events));
+    }
+}

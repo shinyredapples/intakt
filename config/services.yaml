@@ -18,6 +18,8 @@ parameters:
     !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RESERVE_PERCENT: 20
     # One bare mirror per project lives here, rebuilt from the remote if lost.
     !php/const Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY: '%kernel.project_dir%/var/mirrors'
+    # The orchestrator's own private key, in the keys folder of the intakt volume; it is never mounted into a job.
+    !php/const Intakt\Core\Git\Contract\GitServices::SIGNING_KEY: /data/keys/signing_key
 
 services:
     # default configuration for services in *this* file

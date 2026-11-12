@@ -1,0 +1,17 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Git\Contract;
+
+use Intakt\Plugin\Forge\Contract\ChangeId;
+
+// The head is the signed one, the commit the remote branch holds.
+final readonly class PushedBranch
+{
+    public function __construct(
+        public string $head,
+        public ChangeId $change,
+    ) {
+    }
+}
