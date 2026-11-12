@@ -117,6 +117,17 @@ test('the chosen project stays chosen after a reload', () => {
     assert.deepEqual(page.shownRows(), ['alpha']);
 });
 
+test('the board at / shows only the cards of the project chosen on another page', () => {
+    const browser = new Browser('light');
+    browser.open().chooseProject('alpha');
+    browser.address = 'http://localhost/';
+
+    const board = browser.open();
+
+    assert.equal(board.projectFilter.value, 'alpha');
+    assert.deepEqual(board.shownRows(), ['alpha']);
+});
+
 test('a stored project the install no longer lists shows every project', () => {
     const browser = new Browser('light', { projects: ['alpha'], rows: ['alpha'] });
     browser.storage.set('intakt-project', 'gone');
