@@ -112,7 +112,7 @@ final readonly class BuildHistory
      */
     public function bundleByHand(string $head, array $prerequisites, string ...$revisions): string
     {
-        $pack = $this->output(['pack-objects', '--revs', '--thin', '--shallow', '--stdout'],$this->work, implode("\n", $revisions)."\n");
+        $pack = $this->output(['pack-objects', '--revs', '--thin', '--shallow', '--stdout'], $this->work, implode("\n", $revisions)."\n");
         $listed = implode('', array_map(static fn (string $prerequisite): string => '-'.$prerequisite."\n", $prerequisites));
 
         return $this->file("# v2 git bundle\n".$listed.$head." refs/heads/task\n\n".$pack);
