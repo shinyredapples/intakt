@@ -53,11 +53,9 @@ This part is planned, not built yet ([details](../design/05-architecture/06-budg
 
 You add, order and remove accounts in the dashboard's [admin area](a-tour-of-the-dashboard.md#steering-budgets-and-pauses). Billing stays with the AI company: Intakt keeps only whether an account bills past its plan, its own cap below the company's limit, and a link to the company's billing page.
 
-## Shadow mode: trying Intakt alongside your process
+## The former shadow mode
 
-A project can be set to **shadow mode** (`mode: shadow` in its configuration). Intakt then reviews its changes with the whole panel, as it would for real, but nothing it does counts: it never writes to the forge (no review is posted), and its verdicts are marked as shadow ones and never count toward a merge, even after you switch the project back to live. Use it to see how Intakt's reviews compare with the reviews you already have, before you trust it ([details](../user/README.md#shadow-mode)).
-
-A shadow review starts just like a live one: there is no separate, lower ceiling for shadow work. If your configuration still has a `shadow_ceilings` list under `budget`, take it out: Intakt no longer knows that setting and won't start while it is there.
+Intakt used to have a **shadow mode**, for trying it alongside your process without writing anything to the forge. It is gone: a project is either live (the default) or a reviewer for the loop (below). If your configuration still says `mode: shadow` for a project, or still has a `shadow_ceilings` list under `budget`, change or take it out: Intakt no longer knows these settings and won't start while they are there ([details](../user/README.md#project-mode)).
 
 ## Reviewer for the loop: Intakt's review takes a reviewer's place
 

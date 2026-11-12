@@ -44,9 +44,9 @@ projects:
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
         watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha }
     beta:
-        # Optional: shadow never writes to the forge and marks its verdicts shadow in the ledger; reviewer-for-loop reviews the existing loop's heads,
-        # its verdicts count and it only publishes its verdict on each head (a commit status and a comment); live, the default, writes.
-        mode: shadow
+        # Optional: reviewer-for-loop reviews the existing loop's heads, its verdicts count and it only publishes its verdict on each head
+        # (a commit status and a comment); live is the default.
+        mode: reviewer-for-loop
         tiers:
             strong: { provider: openai, model: gpt-5 }
             standard: { provider: openai, model: gpt-5-mini }

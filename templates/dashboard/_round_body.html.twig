@@ -22,7 +22,7 @@
                 <td>{{ outcome.role }}</td>
                 <td>{{ outcome.tier }}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</td>
-                <td>{{ outcome.decision ?? '' }}{% if outcome.decision is not null and outcome.mode.name == 'Shadow' %} (shadow){% endif %}</td>
+                <td>{{ outcome.decision ?? '' }}</td>
                 <td class="num">{{ outcome.findings ?? '' }}</td>
                 <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if unfinished and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
