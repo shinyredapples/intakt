@@ -15,11 +15,6 @@ final readonly class StrippedCommits
     // Because a signature over the old content would not match the new one; the orchestrator signs the commits itself before the push.
     private const array SIGNATURE_HEADERS = ['gpgsig', 'gpgsig-sha256'];
 
-    public function __construct(
-        private RepositoryGit $git,
-    ) {
-    }
-
     /**
      * @throws HandBackNotChecked
      */
@@ -28,7 +23,7 @@ final readonly class StrippedCommits
         $replaced = [];
 
         foreach ($history->newCommits($head) as $commit) {
-            $stripped = $this->stripped($history->repository, $commit, $replaced);
+            $stripped = $this->stripped($history->git, $history->repository, $commit, $replaced);
 
             if (null === $stripped) {
                 return new RefusedHandBack(HandBackRefusal::Malformed);
@@ -47,9 +42,9 @@ final readonly class StrippedCommits
      *
      * @throws HandBackNotChecked
      */
-    private function stripped(string $repository, string $commit, array $replaced): ?string
+    private function stripped(RepositoryGit $git, string $repository, string $commit, array $replaced): ?string
     {
-        $raw = $this->git->exactOutput($repository, ['cat-file', 'commit', $commit]);
+        $raw = $git->exactOutput($repository, ['cat-file', 'commit', $commit]);
         [$headers, $message] = explode("\n\n", $raw, 2) + [1 => ''];
         $headerLines = explode("\n", $headers);
         $reparented = $this->reparented($headerLines, $replaced);
@@ -57,10 +52,10 @@ final readonly class StrippedCommits
 
         // Every new commit passes git's own format check, because unbundling checks none and a crafted bundle may hold a commit git would never write.
         if ($reparented === $headerLines && $strippedMessage === $message) {
-            return null === $this->git->answerWithInput($repository, ['hash-object', '-t', 'commit', '--stdin'], $raw) ? null : $commit;
+            return null === $git->answerWithInput($repository, ['hash-object', '-t', 'commit', '--stdin'], $raw) ? null : $commit;
         }
 
-        return $this->git->answerWithInput(
+        return $git->answerWithInput(
             $repository,
             ['hash-object', '-t', 'commit', '-w', '--stdin'],
             implode("\n", $this->unsigned($reparented))."\n\n".$strippedMessage,

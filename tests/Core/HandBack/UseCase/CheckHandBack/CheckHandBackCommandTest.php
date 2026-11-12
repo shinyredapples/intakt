@@ -18,6 +18,7 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackCommand;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackInput;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Tests\Core\HandBack\BuildHistory;
@@ -33,6 +34,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(CheckHandBack::class)]
 #[UsesClass(BundleFile::class)]
 #[UsesClass(GivenHistory::class)]
+#[UsesClass(IncomingObjects::class)]
 #[UsesClass(RepositoryGit::class)]
 #[UsesClass(StrippedCommits::class)]
 #[UsesClass(AcceptedHandBack::class)]
@@ -128,9 +130,8 @@ final class CheckHandBackCommandTest extends TestCase
      */
     private function executed(array $input): CommandTester
     {
-        $git = new RepositoryGit(new HardenedGit());
         $application = new Application();
-        $application->addCommand(new CheckHandBackCommand(new CheckHandBack($git, new BundleFile(), new StrippedCommits($git))));
+        $application->addCommand(new CheckHandBackCommand(new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects())));
         $tester = new CommandTester($application->find('intakt:hand-back:check'));
         $tester->execute($input);
 

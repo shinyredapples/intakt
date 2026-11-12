@@ -12,12 +12,17 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class GivenHistory
 {
     public function __construct(
-        private RepositoryGit $git,
+        public RepositoryGit $git,
         public string $repository,
         public string $main,
         public string $branch,
         public ?string $pushed,
     ) {
+    }
+
+    public function withObjectsIn(string $quarantine): self
+    {
+        return new self($this->git->withObjectsIn($quarantine), $this->repository, $this->main, $this->branch, $this->pushed);
     }
 
     public function holds(string $commit): bool
@@ -37,10 +42,24 @@ final readonly class GivenHistory
         return false !== $path && $this->git->succeeds($this->repository, ['bundle', 'unbundle', $path]);
     }
 
-    public function isComplete(string $head): bool
+    /**
+     * The commits the head reaches that main and the pushed branch do not, or null when one of them is missing.
+     *
+     * @return list<string>|null
+     */
+    public function reachedCommits(string $head): ?array
     {
-        // Because unbundling checks no connectivity: every object the new commits reach must be there, as git's own fetch checks it.
-        return $this->git->succeeds($this->repository, ['rev-list', '--objects', '--quiet', $head, '--not', ...$this->known()]);
+        return $this->reached([$head]);
+    }
+
+    /**
+     * The commits, trees and blobs the head reaches that main and the pushed branch do not, or null when one of them is missing, because unbundling checks no connectivity.
+     *
+     * @return list<string>|null
+     */
+    public function reachedObjects(string $head): ?array
+    {
+        return $this->reached(['--objects', $head]);
     }
 
     public function isFastForwardTo(string $head): bool
@@ -82,6 +101,22 @@ final readonly class GivenHistory
     private function isAncestor(string $commit, string $descendant): bool
     {
         return $this->git->succeeds($this->repository, ['merge-base', '--is-ancestor', $commit, $descendant]);
+    }
+
+    /**
+     * @param list<string> $revisions
+     *
+     * @return list<string>|null
+     */
+    private function reached(array $revisions): ?array
+    {
+        $output = $this->git->answer($this->repository, ['rev-list', ...$revisions, '--not', ...$this->known()]);
+
+        if (null === $output || '' === $output) {
+            return null === $output ? null : [];
+        }
+
+        return array_map(static fn (string $line): string => explode(' ', $line, 2)[0], explode("\n", $output));
     }
 
     /**

@@ -39,6 +39,14 @@ final readonly class BuildHistory
         return $this->git('rev-parse', 'HEAD');
     }
 
+    public function commitFile(string $path, string $content, string $message): string
+    {
+        file_put_contents($this->work.'/'.$path, $content);
+        $this->git('add', $path);
+
+        return $this->commit($message);
+    }
+
     public function commitWithASignatureHeader(string $message): string
     {
         // A literal block, because a test has no signing key; nothing here verifies the signature.
@@ -95,6 +103,39 @@ final readonly class BuildHistory
         $pack = $this->output(['pack-objects', '--stdout'], $this->work, $head."\n");
 
         return $this->file("# v2 git bundle\n-".$this->git('rev-parse', 'HEAD^')."\n".$head." refs/heads/task\n\n".$pack);
+    }
+
+    /**
+     * By hand, because "git bundle create" lists every prerequisite and packs every object the head needs; only a crafted bundle leaves one out.
+     * With --shallow, because then every excluded commit's objects serve as delta bases, not only those of the head's own ancestors.
+     *
+     * @param list<string> $prerequisites
+     */
+    public function bundleByHand(string $head, array $prerequisites, string ...$revisions): string
+    {
+        $pack = $this->output(['pack-objects', '--revs', '--thin', '--shallow', '--stdout'],$this->work, implode("\n", $revisions)."\n");
+        $listed = implode('', array_map(static fn (string $prerequisite): string => '-'.$prerequisite."\n", $prerequisites));
+
+        return $this->file("# v2 git bundle\n".$listed.$head." refs/heads/task\n\n".$pack);
+    }
+
+    public function mirrorHolds(string $object): bool
+    {
+        try {
+            $this->inMirror('cat-file', '-e', $object);
+        } catch (RuntimeException) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function quarantinesLeftInTheMirror(): array
+    {
+        return glob($this->mirror.'/objects/incoming-*') ?: [];
     }
 
     public function restartAsOrphan(string $branch): void

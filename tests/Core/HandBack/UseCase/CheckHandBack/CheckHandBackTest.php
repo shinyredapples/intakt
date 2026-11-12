@@ -16,6 +16,7 @@ use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Tests\Core\HandBack\BuildHistory;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(CheckHandBack::class)]
 #[CoversClass(BundleFile::class)]
 #[CoversClass(GivenHistory::class)]
+#[CoversClass(IncomingObjects::class)]
 #[CoversClass(RepositoryGit::class)]
 #[CoversClass(StrippedCommits::class)]
 #[UsesClass(AcceptedHandBack::class)]
@@ -186,6 +188,83 @@ final class CheckHandBackTest extends TestCase
         $result = $this->check($this->history->bundle($other.'..task'));
 
         self::assertEquals(new RefusedHandBack(HandBackRefusal::NotOnBranch), $result);
+    }
+
+    public function testABundleWhoseHeaderLeavesOutAPrerequisiteOnAnotherBranchIsRefused(): void
+    {
+        $this->history->startBranch('other', 'main');
+        $other = $this->history->commit('Elsewhere');
+        $this->history->push('other');
+        $head = $this->history->commit('On top of the other branch');
+
+        $result = $this->check($this->history->bundleByHand($head, [], $head, '^'.$other));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::NotOnBranch), $result);
+    }
+
+    public function testABundleThatNamesAnotherBranchsTipWithoutShippingItIsRefused(): void
+    {
+        $this->history->startBranch('other', 'main');
+        $tip = $this->history->commit('Elsewhere');
+        $this->history->push('other');
+
+        $result = $this->check($this->history->bundleByHand($tip, []));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::NotOnBranch), $result);
+    }
+
+    public function testABundleThatShipsACommitAnotherBranchAlsoHoldsIsAccepted(): void
+    {
+        $this->history->startBranch('other', 'main');
+        $other = $this->history->commit('Elsewhere');
+        $this->history->push('other');
+        $this->history->startBranch('task', $other);
+        $head = $this->history->commit('On top of the other branch');
+
+        $result = $this->check($this->history->bundle('main..task'));
+
+        self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
+    }
+
+    public function testAnObjectTheBundleOnlyUsesAsTheBaseOfADeltaIsRefused(): void
+    {
+        $lines = implode("\n", range(1, 2000));
+        $this->history->startBranch('other', 'main');
+        $other = $this->history->commitFile('file', $lines, 'Elsewhere');
+        $this->history->push('other');
+        $this->history->startBranch('task', 'main');
+        $this->history->commitFile('second', 'second', 'Second file');
+        $this->history->commitFile('file', $lines, 'Same file as elsewhere');
+        $head = $this->history->commitFile('file', $lines."\nchanged", 'Changed file');
+        $main = $this->history->inMirror('rev-parse', 'refs/heads/main');
+
+        $result = $this->check($this->history->bundleByHand($head, [$main], $head, '^'.$main, '^'.$other));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::Incomplete), $result);
+    }
+
+    public function testARefusedBundleLeavesNoObjectInTheRepository(): void
+    {
+        $head = $this->history->commitWithoutAnAuthor('Bad');
+
+        $result = $this->check($this->history->bundle('main..task'));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::Malformed), $result);
+        self::assertFalse($this->history->mirrorHolds($head));
+        self::assertSame([], $this->history->quarantinesLeftInTheMirror());
+    }
+
+    public function testAnAcceptedBundleLeavesItsCommitsAndTheStrippedOnesInTheRepository(): void
+    {
+        $first = $this->history->commit('First');
+        $this->history->commit("Second\n\nGenerated with a tool");
+
+        $result = $this->check($this->history->bundle('main..task'));
+
+        self::assertInstanceOf(AcceptedHandBack::class, $result);
+        self::assertTrue($this->history->mirrorHolds($first));
+        self::assertTrue($this->history->mirrorHolds($result->head));
+        self::assertSame([], $this->history->quarantinesLeftInTheMirror());
     }
 
     public function testAFileThatIsNoBundleIsRefused(): void
@@ -373,6 +452,17 @@ final class CheckHandBackTest extends TestCase
         self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
     }
 
+    public function testARepositoryWhosePathHoldsAColonAndAQuoteIsChecked(): void
+    {
+        $head = $this->history->commit('First');
+        $repository = $this->history->folder.'/with:colon"quote.git';
+        rename($this->history->mirror, $repository);
+
+        $result = $this->checker()->check(new HandBack($repository, 'task', $this->history->bundle('main..task'), false));
+
+        self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
+    }
+
     public function testAMissingRepositoryIsNotChecked(): void
     {
         $this->expectException(HandBackNotChecked::class);
@@ -445,8 +535,6 @@ final class CheckHandBackTest extends TestCase
 
     private function checker(): CheckHandBack
     {
-        $git = new RepositoryGit(new HardenedGit());
-
-        return new CheckHandBack($git, new BundleFile(), new StrippedCommits($git));
+        return new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects());
     }
 }

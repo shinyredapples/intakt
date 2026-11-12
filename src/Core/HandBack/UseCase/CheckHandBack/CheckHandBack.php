@@ -22,6 +22,7 @@ final readonly class CheckHandBack
         private RepositoryGit $git,
         private BundleFile $bundles,
         private StrippedCommits $stripped,
+        private IncomingObjects $incoming,
     ) {
     }
 
@@ -40,16 +41,34 @@ final readonly class CheckHandBack
             return new RefusedHandBack(HandBackRefusal::Unreadable);
         }
 
-        $refusal = $this->refusalOfRefs($header, $history);
+        $refusal = $this->refusalOfRefs($header, $history) ?? $this->refusalOfBase($header, $history);
 
         if ($refusal instanceof HandBackRefusal) {
             return new RefusedHandBack($refusal);
         }
 
-        $head = $header->references[$history->branch];
-        $refusal = $this->refusalOfBase($header, $history)
-            ?? $this->refusalToUnbundle($handBack, $history)
-            ?? $this->refusalOfMissingObjects($head, $history)
+        $quarantine = $this->incoming->open($history->repository);
+
+        try {
+            $result = $this->checkedIn($history->withObjectsIn($quarantine), $handBack, $header->references[$history->branch], $quarantine);
+
+            if ($result instanceof AcceptedHandBack) {
+                $this->incoming->keep($quarantine);
+            }
+
+            return $result;
+        } finally {
+            $this->incoming->drop($quarantine);
+        }
+    }
+
+    /**
+     * @throws HandBackNotChecked
+     */
+    private function checkedIn(GivenHistory $history, HandBack $handBack, string $head, string $quarantine): AcceptedHandBack|RefusedHandBack
+    {
+        $refusal = $this->refusalToUnbundle($handBack, $history)
+            ?? $this->refusalOfUnshipped($handBack, $head, $history, $quarantine)
             ?? $this->refusalOfFastForward($head, $history)
             ?? $this->refusalOfMerges($handBack, $head, $history);
 
@@ -136,9 +155,28 @@ final readonly class CheckHandBack
         return $history->unbundle($handBack->bundle) ? null : HandBackRefusal::Unreadable;
     }
 
-    private function refusalOfMissingObjects(string $head, GivenHistory $history): ?HandBackRefusal
+    /**
+     * @throws HandBackNotChecked
+     */
+    private function refusalOfUnshipped(HandBack $handBack, string $head, GivenHistory $history, string $quarantine): ?HandBackRefusal
     {
-        return $history->isComplete($head) ? null : HandBackRefusal::Incomplete;
+        $count = $this->bundles->packedObjectCount($handBack->bundle);
+
+        if (null === $count) {
+            return HandBackRefusal::Unreadable;
+        }
+
+        // Only what the bundle's own pack holds counts, because the header's prerequisites are the bundle's word, and the repository also holds other branches the build was never given.
+        $shipped = $this->incoming->shipped($history, $quarantine, $count);
+        $commits = $history->reachedCommits($head);
+
+        if (null !== $commits && [] !== array_diff_key(array_flip($commits), $shipped)) {
+            return HandBackRefusal::NotOnBranch;
+        }
+
+        $objects = null === $commits ? null : $history->reachedObjects($head);
+
+        return null === $objects || [] !== array_diff_key(array_flip($objects), $shipped) ? HandBackRefusal::Incomplete : null;
     }
 
     private function refusalOfFastForward(string $head, GivenHistory $history): ?HandBackRefusal

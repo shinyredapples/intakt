@@ -10,9 +10,22 @@ use Symfony\Component\Process\Process;
 
 final readonly class RepositoryGit
 {
+    /**
+     * @param array<string, string> $objects
+     */
     public function __construct(
         private HardenedGit $hardened,
+        private array $objects = [],
     ) {
+    }
+
+    // Git writes new objects into the quarantine and still reads the repository's own through the alternate; the path is quoted because the variable separates paths with a colon.
+    public function withObjectsIn(string $quarantine): self
+    {
+        return new self($this->hardened, [
+            'GIT_OBJECT_DIRECTORY' => $quarantine,
+            'GIT_ALTERNATE_OBJECT_DIRECTORIES' => '"'.addcslashes(dirname($quarantine), "\0..\37\"\\").'"',
+        ]);
     }
 
     /**
@@ -87,7 +100,7 @@ final readonly class RepositoryGit
         $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
 
         // Because a work tree beside --git-dir would make git treat the bare repository as a checkout.
-        $process = new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false], $input);
+        $process = new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false, ...$this->objects], $input);
         $process->run();
 
         return $process;
