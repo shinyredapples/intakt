@@ -434,8 +434,9 @@ final class AccountFailoverPlatformTest extends TestCase
         $failures = new SendFailures();
 
         $this->readStream($this->streamed(static function (): Generator {
+            yield from [];
+
             throw new RateLimitExceededException(300);
-            yield;
         }, $cooldowns, $failures));
 
         self::assertFalse($failures->wasRejected($this->account(Account::DEFAULT)));
@@ -449,7 +450,7 @@ final class AccountFailoverPlatformTest extends TestCase
         $this->readStream($this->streamed(static function (): Generator {
             yield new TextDelta('Looks');
 
-            // StreamedAnswer wraps the provider's exception like this once the answer has started.
+            // Wrapped like this because StreamedAnswer does so once the answer has started.
             throw new IncompleteStreamException('Cut off.', 0, new RateLimitExceededException(300));
         }, $cooldowns, new SendFailures()));
     }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Account;
-use Symfony\AI\Platform\Exception\AuthenticationException;
 use NoDiscard;
+use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 use WeakMap;
