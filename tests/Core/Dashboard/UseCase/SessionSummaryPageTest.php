@@ -92,7 +92,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithNothingRecordedYetSaysSoInEachPart(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], []));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
@@ -101,7 +101,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithoutToolCallsShowsNoToolList(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], []));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
@@ -130,7 +130,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testAFindingTextAndAFileNameWithMarkupAreEscaped(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), ['<b>x</b>.php'], [$this->finding('F1', Severity::P2, '<script>alert(1)</script>')], [], []));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), ['<b>x</b>.php'], [$this->finding('F1', Severity::P2, '<script>alert(1)</script>')], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
@@ -175,6 +175,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
             [$checked, $open],
             $reported ?? [$this->finding('F4', Severity::P2, 'Order the queue by hold time.')],
             [$checked],
+            false,
         );
     }
 

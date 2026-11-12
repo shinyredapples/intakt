@@ -1,0 +1,56 @@
+{# One home for the markup of the summary's live parts: the page includes them and the stream replaces them, each by the id the macro gives it. #}
+{% macro tools(round, summary) %}
+        <div id="round-{{ round }}-summary-tools">
+            <h3>Tool calls</h3>
+            {% if summary.toolCalls is empty %}
+            <p class="muted">No tool call yet.</p>
+            {% else %}
+            <dl class="ls-dl ls-tools">
+                {% for kind in summary.toolCalls %}
+                <dt>{{ kind.tool }}</dt><dd>{{ kind.count }}</dd>
+                {% endfor %}
+                <dt>Total</dt><dd>{{ summary.totalToolCalls }}</dd>
+            </dl>
+            {% endif %}
+        </div>
+{% endmacro %}
+
+{# Only this round's cost is a part: the review-wide cell is outside the streams, because a round's updates know nothing of the other rounds. #}
+{% macro round_cost(round, summary) %}<dd id="round-{{ round }}-summary-cost">{{ summary.cost.reading }}</dd>{% endmacro %}
+
+{% macro files(round, summary) %}
+    <div id="round-{{ round }}-summary-files">
+        <h3>Files read</h3>
+        {% if summary.filesRead is empty %}
+        <p class="muted">No file read yet.</p>
+        {% else %}
+        <ul class="ls-list ls-files">
+            {% for file in summary.filesRead %}
+            <li><span class="mono">{{ file }}</span></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+{% endmacro %}
+
+{% macro findings(round, summary) %}
+    <div id="round-{{ round }}-summary-findings">
+        <h3>Findings this round</h3>
+        {% set checked = summary.checking|map(f => f.id) %}
+        {% set resolved = summary.resolved|map(f => f.id) %}
+        {# A finding the round checked and reported again is listed once, as the round checked it. #}
+        {% set reported = summary.reported|filter(f => f.id not in checked) %}
+        {% if summary.checking is empty and reported is empty %}
+        <p class="muted">No finding to check, and none reported yet. Reported findings appear once every reviewer is in.</p>
+        {% else %}
+        <ul class="ls-list ls-findings">
+            {% for finding in summary.checking %}
+            <li><span class="mono">{{ finding.id }}</span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">{{ finding.id in resolved ? 'Checked, resolved' : 'Open' }}</span></li>
+            {% endfor %}
+            {% for finding in reported %}
+            <li><span class="mono">{{ finding.id }}</span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">Reported</span></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+{% endmacro %}
