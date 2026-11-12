@@ -36,7 +36,7 @@ Forges and identity:
 
 Models and budget:
 - [AI providers](ai-providers.md)
-- [Capability tiers per project](capability-tiers.md): shadow mode and reviewer-for-loop mode per project
+- [Capability tiers per project](capability-tiers.md): the mode per project (live or reviewer-for-loop)
 - [Vendor](vendor.md): the judge
 - [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
 - [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`
