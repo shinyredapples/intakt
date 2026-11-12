@@ -192,6 +192,7 @@ final readonly class CheckCommand
     private function gates(?string $testMerge): array
     {
         return [
+            new EnvironmentGate(PhpRuntime::current()),
             new CodingStandardsGate(),
             new ContainerDumpingGate(new StaticAnalysisGate()),
             new RectorGate(),

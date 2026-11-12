@@ -15,5 +15,8 @@ interface RoundUpdates
 
     public function roundChanged(Uuid $round, RoundProgress $progress): void;
 
+    // After what the summary counts is stored, so a listener recomputes the summary of the round.
+    public function summaryChanged(Uuid $round): void;
+
     public function reviewerStopped(Uuid $round, string $reviewer): void;
 }
