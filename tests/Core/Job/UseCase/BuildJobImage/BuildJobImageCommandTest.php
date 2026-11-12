@@ -23,6 +23,7 @@ use Intakt\Core\Job\UseCase\BuildJobImage\BuildContext;
 use Intakt\Core\Job\UseCase\BuildJobImage\BuildJobImage;
 use Intakt\Core\Job\UseCase\BuildJobImage\BuildJobImageCommand;
 use Intakt\Core\Job\UseCase\BuildJobImage\BuiltJobImage;
+use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\Devcontainer;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
@@ -50,6 +51,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[CoversClass(BuildJobImage::class)]
 #[CoversClass(BuildContext::class)]
 #[CoversClass(BuiltJobImage::class)]
+#[UsesClass(CliManifest::class)]
 #[UsesClass(Devcontainer::class)]
 #[UsesClass(DockerEngine::class)]
 #[UsesClass(DockerEngineFailed::class)]
