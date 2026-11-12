@@ -49,6 +49,7 @@ Builds:
 
 Reviews:
 - [Review flow](review-flow.md)
+- [Boot step](boot-step.md): a commit booted once with `bin/instance` (main's for a head), its outcome booted, failed or crashed, never an exception
 - [Review rounds](review-rounds.md)
 - [Review verdicts](review-verdicts.md)
 - [Quorum policies](quorum-policies.md)
