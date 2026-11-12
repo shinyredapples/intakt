@@ -11,7 +11,7 @@ final readonly class SourceLine
     // A whole line with a full commit id, so a sentence, a quote or code that mentions one is prose and not a source line.
     private const string LINE = '/^Source: (\S+)@([0-9a-f]{40}|[0-9a-f]{64})[ \t]*\r?$/';
 
-    // Markdown's fence: a backtick fence's info string holds no backtick, or the line is inline code.
+    // No backtick after a backtick fence, because Markdown reads such a line as inline code and opens no fence.
     private const string FENCE_OPENS = '/^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/';
 
     private const string FENCE_CLOSES = '/^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/';
