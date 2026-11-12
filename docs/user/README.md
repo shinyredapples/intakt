@@ -355,7 +355,7 @@ Each finding line is redacted like a review, as a whole and on its own, so a red
 
 A project can carry `mode: shadow` (or `mode: live`, the same as leaving the key out, or `mode: reviewer-for-loop`, see [below](#reviewer-for-loop-mode)). A project in shadow mode never writes to its forge: whatever Intakt would post there (a review or a verdict) is skipped, while everything else runs as for a live project: a review round of a shadow project runs its whole panel and judge. Use it to let Intakt work alongside an existing review process without anything it does reaching the forge. Any other value stops Intakt from starting and names the key. Every reviewer's verdict is recorded in the ledger with the project's mode at that moment (`"mode":"shadow"`, `"mode":"reviewer-for-loop"` or `"mode":"live"`), so the ledger shows which verdicts were shadow ones. The mark is a record only: a shadow round starts like a live one, and the mark no longer stops a verdict from counting or from being published after a switch to `reviewer-for-loop` (a project still in shadow mode publishes nothing). Intakt can post a review to GitHub, but no review round of a live project posts its outcome yet and nothing merges yet.
 
-Intakt still reads and checks `budget.shadow_ceilings` (percent from 1 to 100, default 70 for both windows), but no review round looks at it: a round of a shadow project is never held back by a ceiling.
+There is no separate ceiling for shadow work: a round of a shadow project is never held back by a ceiling. `budget.shadow_ceilings` is no longer a setting; a configuration that still has it stops Intakt from starting and names the key, so remove it.
 
 To see which panel a change gets, without calling any model, run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php --label=review:full` (`--path` and `--label` can be repeated; all options are optional, and `--lines` must be zero or more). It prints the quorum and one line per reviewer with its tier, provider and budget. Intakt reads the configuration when it starts, so a changed file shows after the cache is cleared. An unknown project fails with a message. A path pattern Intakt cannot evaluate against a path (for example, one too complex for the pattern matcher) fails the same way, with a message that names the pattern. `intakt:review` takes the paths from the branch and no labels.
 
@@ -462,7 +462,7 @@ budget:
         weekly: 90
 ```
 
-Both default to 90; a window you leave out keeps it. The separate shadow ceilings are read but hold nothing back (see [Shadow mode](#shadow-mode)). A value outside 1 to 100 (`.NaN` included), or a window name other than `five-hour` and `weekly`, stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
+Both default to 90; a window you leave out keeps it. A value outside 1 to 100 (`.NaN` included), a window name other than `five-hour` and `weekly`, or another key under `budget` than `ceilings` and `prices` (such as the former `shadow_ceilings`, see [Shadow mode](#shadow-mode)) stops Intakt from starting and names the key. The ceilings apply to every account. Nothing records readings or asks this decision before a call yet: reading the windows from Claude and Codex and holding back new work by this decision come in later changes.
 
 ### Cooldowns, pauses and outage notices
 
