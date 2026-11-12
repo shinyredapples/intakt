@@ -160,7 +160,7 @@ final class CheckHandBackCommandTest extends TestCase
 
     public function testASecretInTheBundlePrintsTheRefusalWithoutTheSecret(): void
     {
-        $key = 'sk_'.'live_'.bin2hex(random_bytes(12));
+        $key = 'sk_live_'.bin2hex(random_bytes(12));
         $this->history->commit('Use the key '.$key);
 
         $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task')]);

@@ -90,7 +90,7 @@ final readonly class CheckHandBack
         // The stripped and redacted commits, because they are what the push sends.
         $refusal = $this->secrets->refusalOf($history, $stripped->head, $handBack->mountedCredentials);
 
-        return null === $refusal ? $stripped : new RefusedHandBack($refusal);
+        return $refusal instanceof HandBackRefusal ? new RefusedHandBack($refusal) : $stripped;
     }
 
     private function givenHistory(HandBack $handBack): GivenHistory

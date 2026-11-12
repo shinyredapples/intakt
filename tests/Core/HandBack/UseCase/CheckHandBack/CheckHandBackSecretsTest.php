@@ -228,7 +228,7 @@ final class CheckHandBackSecretsTest extends TestCase
     // Built at run time and random, so neither this file nor the repository's history holds a key the secrets gates would find.
     private function fakeKey(): string
     {
-        return 'sk_'.'live_'.bin2hex(random_bytes(12));
+        return 'sk_live_'.bin2hex(random_bytes(12));
     }
 
     // No known shape, so only the redaction of mounted credentials can find it, never the scanner.
