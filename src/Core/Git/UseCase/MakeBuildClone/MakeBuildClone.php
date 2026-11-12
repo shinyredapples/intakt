@@ -127,7 +127,7 @@ final readonly class MakeBuildClone
         }
 
         if (!$made) {
-            throw BuildCloneNotMade::at($directory, file_exists($directory) || is_link($directory) ? 'the folder already exists' : $error);
+            throw BuildCloneNotMade::at($directory, file_exists($directory) ?'the folder already exists' : $error);
         }
     }
 
