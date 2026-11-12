@@ -1,0 +1,129 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
+
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\ChangeReview;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerRuns;
+use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AccountLimitedVendor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
+use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
+use Intakt\Tests\Support\KernelTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\PlatformInterface;
+
+// Plan T25: a long run, a reviewer that keeps asking for tools or a provider that refuses late in the conversation, must end as changes or blocked with a reason; scripted by call counters through the real vendor stack, so no run waits.
+#[Group('persistence')]
+#[CoversClass(ReviewerAgent::class)]
+#[CoversClass(ReviewWithReviewerHandler::class)]
+#[CoversClass(SymfonyAiVendor::class)]
+#[CoversClass(UsageLedger::class)]
+#[CoversClass(ReviewChange::class)]
+#[UsesClass(AccountLimitedVendor::class)]
+#[UsesClass(ReviewerRuns::class)]
+#[UsesClass(ChangeDecision::class)]
+#[UsesClass(FailureInWords::class)]
+final class LongRunTest extends KernelTestCase
+{
+    private const int TOOL_ROUNDS = 5;
+
+    private ScriptedRound $run;
+
+    protected function setUp(): void
+    {
+        $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
+    }
+
+    public function testAReviewerStillAskingForToolsAtTheRoundLimitEndsTheRoundAsChangesWithThatReason(): void
+    {
+        $review = $this->stillAskingForTools();
+
+        self::assertSame(Decision::Changes, $review->decision);
+        self::assertSame([], $review->reasons);
+        self::assertCount(1, $review->verdicts);
+        self::assertCount(1, $review->verdicts[0]->verdict->findings);
+        self::assertSame('The reviewer output is not a valid verdict, so it counts as changes: the reviewer was still asking for tools after '.ReviewerRuns::MAX_ROUNDS.' rounds of tool calls.', $review->verdicts[0]->verdict->findings[0]->text);
+    }
+
+    public function testTheCallOfARunThatHitTheRoundLimitIsSettledOnce(): void
+    {
+        $this->stillAskingForTools();
+
+        self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
+    }
+
+    public function testAProviderLimitAfterManyToolRoundsOnTheTierAndItsSubstituteEndsTheRoundBlockedWithTheReasonOfTheReviewer(): void
+    {
+        $review = $this->limitedAfterToolRounds();
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertCount(1, $review->reasons);
+        self::assertMatchesRegularExpression('/^role-1 reviewer failed, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $review->reasons[0]);
+    }
+
+    public function testTheBlockedReviewerOfALongRunRecordsItsReasonInTheLedger(): void
+    {
+        $this->limitedAfterToolRounds();
+
+        $reasons = $this->run->payloadValues(LedgerEventKind::ReviewerBlocked, 'reason');
+        self::assertCount(1, $reasons);
+        self::assertIsString($reasons[0]);
+        self::assertMatchesRegularExpression('/^Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $reasons[0]);
+    }
+
+    public function testEachCallALateLimitInterruptedIsLeftUnsettledOnceAndNeverSettled(): void
+    {
+        $this->limitedAfterToolRounds();
+
+        $calls = array_values($this->run->usagePhasesByCall());
+        self::assertNotSame([], $calls);
+
+        foreach ($calls as $phases) {
+            self::assertSame(['started', 'unsettled'], $phases);
+        }
+    }
+
+    public function testALongRunThatAnswersAfterManyToolRoundsEndsWithTheVerdictAndSettlesItsCallOnce(): void
+    {
+        $tools = $this->run->askingForTools();
+        $own = new InFlightTogether($this->run->deliverNext(...), ...[...array_fill(0, self::TOOL_ROUNDS, $tools), $this->run->answering('approve')]);
+
+        $review = $this->run->review(1, $this->run->vendor($own, $this->run->answering('approve')));
+
+        self::assertSame(Decision::Approve, $review->decision);
+        self::assertSame([], $review->reasons);
+        self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
+    }
+
+    private function stillAskingForTools(): ChangeReview
+    {
+        $own = new InFlightTogether($this->run->deliverNext(...), $this->run->askingForTools());
+
+        return $this->run->review(1, $this->run->vendor($own, $this->run->answering('approve')));
+    }
+
+    private function limitedAfterToolRounds(): ChangeReview
+    {
+        return $this->run->review(1, $this->run->vendor($this->limitedAfterTools(), $this->limitedAfterTools()));
+    }
+
+    // The n-th call goes to the n-th platform, so the limit arrives after a fixed number of tool rounds and not at a moment in time.
+    private function limitedAfterTools(): PlatformInterface
+    {
+        $limit = new FailingWhenRead(new RateLimitExceededException(null, 'Quota exceeded.'));
+
+        return new InFlightTogether($this->run->deliverNext(...), ...[...array_fill(0, self::TOOL_ROUNDS, $this->run->askingForTools()), $limit]);
+    }
+}
