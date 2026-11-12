@@ -30,6 +30,7 @@ final readonly class ReviewedRound
     public TokenFigures $tokens;
     public Cost $cost;
     public ?Decision $outcome;
+    public ?DateTimeImmutable $judgedAt;
 
     public function __construct(
         RoundStart $start,
@@ -50,6 +51,12 @@ final readonly class ReviewedRound
         $this->tokens = TokenFigures::none();
         $this->cost = Cost::none();
         $this->outcome = null;
+        $this->judgedAt = null;
+    }
+
+    public function isJudged(): bool
+    {
+        return $this->state->isJudged();
     }
 
     public function failedReviewers(): int
@@ -78,18 +85,18 @@ final readonly class ReviewedRound
     /**
      * @param list<RoundFinding> $findings
      */
-    public function judgedWith(array $findings): self
+    public function judgedWith(array $findings, DateTimeImmutable $judgedAt): self
     {
-        return clone ($this, ['findings' => $findings, 'state' => ReviewState::Judged]);
+        return clone ($this, ['findings' => $findings, 'state' => ReviewState::Judged, 'judgedAt' => $judgedAt]);
     }
 
     /**
      * @param list<RoundFinding> $marked
      */
     // Rounds judged before the Review module recorded the findings themselves keep only the ids the judge marked.
-    public function judgedFromMarksOnly(array $marked): self
+    public function judgedFromMarksOnly(array $marked, DateTimeImmutable $judgedAt): self
     {
-        return clone ($this->judgedWith($marked), ['findingTextRecorded' => false]);
+        return clone ($this->judgedWith($marked, $judgedAt), ['findingTextRecorded' => false]);
     }
 
     public function withTokens(TokenFigures $tokens): self

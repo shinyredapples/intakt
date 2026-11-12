@@ -23,10 +23,13 @@ run_engine() {
   echo "$status" > "$out/$name.status"
 }
 
+# Keyed by the service name, because an image reference may hold a registry path (a /) that is no file name.
 names=()
+declare -A images
 for engine in "$@"; do
-  IFS='|' read -r name network url <<< "$engine"
+  IFS='|' read -r name image network url <<< "$engine"
   names+=("$name")
+  images[$name]=$image
   run_engine "$name" "$network" "$url" &
 done
 wait
@@ -34,7 +37,7 @@ wait
 failed=0
 for name in "${names[@]}"; do
   status=$(cat "$out/$name.status" 2>/dev/null || echo missing)
-  echo "::group::persistence on $name (exit $status)"
+  echo "::group::persistence on $name, ${images[$name]} (exit $status)"
   cat "$out/$name.log" 2>/dev/null
   echo "::endgroup::"
   if [ "$status" != 0 ]; then

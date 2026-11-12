@@ -15,14 +15,12 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
 final class BudgetConfiguration implements ConfigurationInterface
 {
     public const float DEFAULT_CEILING = 90.0;
-    public const float DEFAULT_SHADOW_CEILING = 70.0;
 
     public function getConfigTreeBuilder(): TreeBuilder
     {
         $tree = new TreeBuilder('intakt');
         $budget = $tree->getRootNode()->addDefaultsIfNotSet()->children()->arrayNode('budget')->addDefaultsIfNotSet()->children();
         $this->windows($budget->arrayNode('ceilings'), self::DEFAULT_CEILING);
-        $this->windows($budget->arrayNode('shadow_ceilings'), self::DEFAULT_SHADOW_CEILING);
         $this->prices($budget->arrayNode('prices'));
 
         return $tree;

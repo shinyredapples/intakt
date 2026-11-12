@@ -11,13 +11,15 @@ use Mcp\Schema\ToolAnnotations;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
 #[McpTool(
-    name: 'list_directory',
+    name: self::NAME,
     description: 'Lists the entries of one directory of the repository at the head under review; directories end with a slash.',
     annotations: new ToolAnnotations(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false),
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]
 final readonly class ListDirectoryTool
 {
+    public const string NAME = 'list_directory';
+
     public function __construct(private ReviewedRepository $repository)
     {
     }

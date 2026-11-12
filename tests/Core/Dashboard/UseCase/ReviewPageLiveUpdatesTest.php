@@ -14,8 +14,9 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundProgress;
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -34,6 +35,7 @@ use Twig\Environment;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(FinishedState::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -97,10 +99,125 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         ];
 
         foreach ($streams as $stream) {
-            $target = new Crawler($stream)->filter('turbo-stream[target]')->attr('target');
+            $target = new Crawler($stream)->filter('turbo-stream[action="replace"], turbo-stream[action="append"][target]')->attr('target');
             self::assertNotNull($target);
             self::assertCount(1, $page->filter('#'.$target), $target);
         }
+    }
+
+    public function testEveryTargetOfAStopAndAJudgedRoundIsOnThePageOfARunningRound(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]);
+
+        foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
+            self::assertCount(1, $page->filter('#'.$target), $target);
+        }
+    }
+
+    public function testAStopPushedToThePageMarksTheReviewerStoppedInTheCurrentStateBlock(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness']));
+
+        self::assertSame('stopped', $updated->filter('#round-round-1-reviewer-round-1-correctness-state')->text());
+        self::assertSame('correctness (standard): stopped', $updated->filter('.state-block .sb-list li')->text());
+    }
+
+    public function testAVerdictPushedToThePageCountsInTheCurrentStateBlock(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false)]));
+
+        self::assertSame('1 of 2 reviewers finished.', $updated->filter('#round-round-1-now-progress')->text());
+        self::assertSame('Now: round 1 in review', $updated->filter('#state-block-title')->text());
+    }
+
+    public function testAVerdictPushedToThePageStopsShowingTheReviewerRunning(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $this->ledger->answer('round-1', 'correctness', 0);
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame('1 of 2 reviewers finished.', $updated->filter('#round-round-1-now-progress')->text());
+        self::assertSame('verdict', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertSame('verdict', $updated->filter('#round-round-1-reviewer-round-1-correctness-state')->text());
+        self::assertCount(0, $updated->filter('#round-round-1-reviewer-round-1-correctness-stop form'));
+    }
+
+    public function testAStoppedReviewerStaysStoppedWhenTheRoundIsJudged(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]));
+
+        self::assertSame('stopped', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
+    }
+
+    public function testAJudgedRoundPushedToThePageTurnsTheCurrentStateBlockToJudged(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
+        self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
+    }
+
+    public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame('verdict', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertCount(0, $updated->filter('#round-round-1-now-none'));
+    }
+
+    public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowInTheCurrentStateBlock(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']));
+
+        self::assertSame(['round-1-correctness (started after this page loaded): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testAReviewerThePageAlreadyListsKeepsItsOneRowWhenItFinishes(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking'])
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame(['correctness (standard): verdict'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testAStreamForARoundWhoseBlockIsNotOnThePageAddsNoRow(): void
+    {
+        $this->givenARunningRound();
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $page = $this->browser->request('GET', '/reviews/round-2');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame(['No reviewer has started yet.'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testOneListenerAuthorizesEveryUnfinishedRoundOfThePage(): void
@@ -138,6 +255,18 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(1, $page->filter('#round-round-1-live #reviewer-round-1-correctness-text'));
+    }
+
+    public function testAToolCallAndTextPushedToThePageAppearInTheLiveLogBesideTheTimeline(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file'])
+            .$this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']));
+
+        self::assertSame(['read_file'], $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-activity li')->each(static fn (Crawler $call): string => $call->text()));
+        self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
     }
 
     // Nothing listens at MERCURE_URL in the test environment, so this is the page of an install whose hub is stopped.
@@ -190,11 +319,50 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $document = $node->ownerDocument;
         self::assertNotNull($document);
 
-        foreach (new Crawler('<div>'.$template.'</div>')->filter('body > div > *') as $child) {
+        // Every child node, text included, because a streamed text is a bare text node.
+        $wrapper = new Crawler('<div>'.$template.'</div>')->filter('body > div')->getNode(0);
+        self::assertNotNull($wrapper);
+        foreach ($wrapper->childNodes as $child) {
             $node->appendChild($document->importNode($child, true));
         }
 
         return new Crawler($document);
+    }
+
+    // Done by hand on the parsed page, because no browser runs Turbo in the tests; like Turbo, a stream whose target is absent changes nothing.
+    private function replaced(Crawler $page, string $streams): Crawler
+    {
+        foreach (new Crawler($streams)->filter('turbo-stream')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
+            $selector = $stream->attr('targets') ?? '#'.$stream->attr('target');
+            foreach ($page->filter($selector)->each(static fn (Crawler $target): Crawler => $target) as $target) {
+                $this->applied($stream, $target);
+            }
+        }
+
+        return $page;
+    }
+
+    private function applied(Crawler $stream, Crawler $target): void
+    {
+        if ('append' === $stream->attr('action')) {
+            $this->appended($target, $stream->filter('template')->html());
+
+            return;
+        }
+
+        $node = $target->getNode(0);
+        self::assertNotNull($node);
+        if ('remove' === $stream->attr('action')) {
+            $node->parentNode?->removeChild($node);
+
+            return;
+        }
+
+        $replacement = $stream->filter('template')->getNode(0)?->firstChild;
+        $document = $node->ownerDocument;
+        self::assertNotNull($replacement);
+        self::assertNotNull($document);
+        $node->parentNode?->replaceChild($document->importNode($replacement, true), $node);
     }
 
     /**

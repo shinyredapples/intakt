@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ReadVerdicts;
 
-use Intakt\Core\Ledger\Contract\LedgerEvent;
-use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -14,16 +11,13 @@ use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\Contract\VerdictIdentity;
-use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
-use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\IdentityNotOfRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
-use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -35,21 +29,15 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
 #[CoversClass(VerdictsOfRoundHandler::class)]
 #[CoversClass(VerdictsOfRound::class)]
-#[CoversClass(ShadowRounds::class)]
-#[CoversClass(LedgerPayloads::class)]
-#[UsesClass(VerdictReceived::class)]
-#[UsesClass(ConfiguredProjectModes::class)]
 #[CoversClass(RoundVerdicts::class)]
 #[CoversClass(RoundNotFound::class)]
 #[CoversClass(IdentityNotOfRound::class)]
 #[CoversClass(ReviewRound::class)]
 #[CoversClass(ReviewRounds::class)]
-#[UsesClass(LedgerEvent::class)]
 #[UsesClass(VerdictIdentity::class)]
 #[UsesClass(VerdictStanding::class)]
 #[UsesClass(ReviewTerms::class)]
@@ -74,106 +62,6 @@ final class VerdictsOfRoundTest extends KernelTestCase
 
         self::assertSame(Standing::Current, $verdicts->standing->standing);
         self::assertSame([Decision::Approve, Decision::Approve], array_map(static fn (PanelVerdict $verdict): Decision => $verdict->verdict->verdict, $verdicts->counting));
-    }
-
-    public function testAShadowProjectsCurrentVerdictsDoNotCountForAMerge(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
-        $round = $this->reviewedRound();
-
-        $verdicts = $this->fixture->verdictsOf($this->unmovedQuery($round));
-
-        self::assertSame(Standing::Current, $verdicts->standing->standing);
-        self::assertSame([], $verdicts->counting);
-    }
-
-    public function testVerdictsRecordedAsShadowStillDoNotCountOnceTheProjectIsLive(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
-        $round = $this->reviewedRound();
-
-        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes(['alpha' => 'live']), $this->unmovedQuery($round));
-
-        self::assertSame([], $verdicts->counting);
-    }
-
-    public function testVerdictsRecordedAsLiveDoNotCountOnceTheProjectIsShadow(): void
-    {
-        $round = $this->reviewedRound();
-
-        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes(['alpha' => 'shadow']), $this->unmovedQuery($round));
-
-        self::assertSame([], $verdicts->counting);
-    }
-
-    public function testAShadowVerdictCommittedAfterTheLedgerWasReadDoesNotCountOnceTheProjectIsLive(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'shadow']));
-        $round = $this->fixture->start(1)->id()->toRfc4122();
-
-        $verdicts = $this->fixture->verdictsReadWhileAVerdictCommitsAfterTheLedgerRead(new ConfiguredProjectModes([]), new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 1), new HeadMove(HeadMoveKind::Unmoved, [])));
-
-        self::assertSame([], $verdicts->counting);
-    }
-
-    public function testAShadowVerdictOfAnotherRoundLeavesTheVerdictsOfThisOneCounting(): void
-    {
-        $round = $this->reviewedRound();
-        $this->recordVerdictRow($this->shadowVerdictRow(Uuid::v7()->toRfc4122()));
-
-        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
-
-        self::assertCount(2, $verdicts->counting);
-    }
-
-    public function testAShadowVerdictOfThisRoundAmongOtherEventsStopsTheVerdictsCountingOnceTheProjectIsLive(): void
-    {
-        $round = $this->reviewedRound();
-        $this->recordVerdictRow($this->shadowVerdictRow($round));
-
-        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
-
-        self::assertSame([], $verdicts->counting);
-    }
-
-    public function testAVerdictRowThatIsNotJsonIsSkippedAndTheVerdictsStillCount(): void
-    {
-        $round = $this->reviewedRound();
-        $this->recordVerdictRow('{"round": "'.$round.'", "mode": "shadow"');
-
-        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
-
-        self::assertCount(2, $verdicts->counting);
-    }
-
-    public function testAVerdictRowWithAModeOutsideTheKnownOnesIsSkippedAndTheVerdictsStillCount(): void
-    {
-        $round = $this->reviewedRound();
-        $this->recordVerdictRow(str_replace('"shadow"', '"paused"', $this->shadowVerdictRow($round)));
-
-        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes([]), $this->unmovedQuery($round));
-
-        self::assertCount(2, $verdicts->counting);
-    }
-
-    private function recordVerdictRow(string $payload): void
-    {
-        self::assertTrue($this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::VerdictReceived, $payload))->succeeded());
-    }
-
-    // The format RoundLedger writes today, so the reader is shown the row it meets in production.
-    private function shadowVerdictRow(string $round): string
-    {
-        return json_encode(['round' => $round, 'reviewer' => Uuid::v7()->toRfc4122(), 'role' => 'security', 'tier' => 'strong', 'decision' => 'approve', 'findings' => 0, 'mode' => 'shadow'], JSON_THROW_ON_ERROR);
-    }
-
-    public function testAnotherProjectInShadowModeLeavesTheVerdictsOfThisOneCounting(): void
-    {
-        $round = $this->reviewedRound();
-
-        $verdicts = $this->fixture->verdictsReadWith(new ConfiguredProjectModes(['beta' => 'shadow']), $this->unmovedQuery($round));
-
-        self::assertCount(2, $verdicts->counting);
     }
 
     public function testANewCommitOnTheHeadMakesTheStoredVerdictsStaleSoNoneCounts(): void
@@ -247,11 +135,6 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $this->expectException(IdentityNotOfRound::class);
 
         $this->fixture->startWithIdentityOf(RoundFixture::TASK, 3, 2);
-    }
-
-    private function unmovedQuery(string $round): VerdictsOfRound
-    {
-        return new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, []));
     }
 
     private function reviewedRound(): string

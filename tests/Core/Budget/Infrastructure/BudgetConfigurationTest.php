@@ -27,25 +27,12 @@ final class BudgetConfigurationTest extends TestCase
         self::assertSame(['five-hour' => 75.0, 'weekly' => 90.0], $this->ceilings(['budget' => ['ceilings' => ['five-hour' => 75]]]));
     }
 
-    public function testWithoutABudgetSectionEveryWindowHasTheDefaultShadowCeilingOfSeventyPercent(): void
-    {
-        self::assertSame(['five-hour' => 70.0, 'weekly' => 70.0], $this->ceilings([], 'shadow_ceilings'));
-    }
-
-    public function testTheOwnerSetsTheShadowCeilingOfOneWindowWithoutMovingTheLiveCeilings(): void
-    {
-        $contents = ['budget' => ['shadow_ceilings' => ['five-hour' => 60]]];
-
-        self::assertSame(['five-hour' => 60.0, 'weekly' => 70.0], $this->ceilings($contents, 'shadow_ceilings'));
-        self::assertSame(['five-hour' => 90.0, 'weekly' => 90.0], $this->ceilings($contents));
-    }
-
-    public function testAShadowCeilingOutsideOneToAHundredPercentIsRefused(): void
+    public function testTheShadowCeilingsAreNoLongerABudgetKey(): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessageMatches('/intakt\.budget\.shadow_ceilings\.five-hour/');
+        $this->expectExceptionMessageMatches('/Unrecognized option "shadow_ceilings" under "intakt\.budget"/');
 
-        $this->ceilings(['budget' => ['shadow_ceilings' => ['five-hour' => 0]]], 'shadow_ceilings');
+        $this->ceilings(['budget' => ['shadow_ceilings' => ['five-hour' => 70]]]);
     }
 
     /**

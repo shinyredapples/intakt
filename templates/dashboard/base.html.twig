@@ -95,12 +95,17 @@
             return null;
         }
     };
+    // Looks the select up when called, because a listener bound once calls it after a visit has replaced the body.
     const showProject = () => {
-        const chosen = phone.matches ? '' : projectFilter.value;
+        const shownFilter = document.querySelector('#projfilter');
+        if (!shownFilter) {
+            return;
+        }
+        const chosen = phone.matches ? '' : shownFilter.value;
         document.querySelectorAll('[data-project]').forEach((item) => {
             item.hidden = chosen !== '' && item.dataset.project !== chosen;
         });
-        projectFilter.title = projectFilter.selectedOptions[0].textContent;
+        shownFilter.title = shownFilter.selectedOptions[0].textContent;
     };
     const showMore = (open) => {
         moreSheet.hidden = !open;
@@ -137,26 +142,26 @@
         projectFilter.value = storedProject;
     }
     showProject();
-    // The width outlives the body Turbo replaces, so the listener of a page left behind does nothing.
-    phone.addEventListener('change', () => {
-        if (projectFilter.isConnected) {
-            showProject();
-        }
-    });
-    // Turbo appends a stream to the document element, so only the document sees it; a page left behind does nothing.
-    document.addEventListener('turbo:before-stream-render', (event) => {
-        if (event.target.getAttribute('target') !== 'projfilter' || !projectFilter.isConnected) {
-            return;
-        }
-        const render = event.detail.render;
-        // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
-        event.detail.render = (stream) => {
-            const chosen = projectFilter.value;
-            render(stream);
-            projectFilter.value = [...projectFilter.options].some((option) => option.value === chosen) ? chosen : '';
-            showProject();
-        };
-    });
+    // The width and the document outlive the body Turbo replaces, so their listeners are bound on the first run only and act on whichever page is shown.
+    if (!('shellBound' in root.dataset)) {
+        root.dataset.shellBound = '';
+        phone.addEventListener('change', showProject);
+        // Turbo appends a stream to the document element, so only the document sees it.
+        document.addEventListener('turbo:before-stream-render', (event) => {
+            const shownFilter = document.querySelector('#projfilter');
+            if (event.target.getAttribute('target') !== 'projfilter' || !shownFilter) {
+                return;
+            }
+            const render = event.detail.render;
+            // The pushed options carry no choice, so this tab's own is put back unless the project is gone; it is never stored, because only the person's own pick is.
+            event.detail.render = (stream) => {
+                const chosen = shownFilter.value;
+                render(stream);
+                shownFilter.value = [...shownFilter.options].some((option) => option.value === chosen) ? chosen : '';
+                showProject();
+            };
+        });
+    }
     if (more) {
         more.addEventListener('click', () => showMore(moreSheet.hidden));
         // A tap beside the sheet's pages lands on its backdrop.

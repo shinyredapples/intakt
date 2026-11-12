@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Domain;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\RoundProgress;
@@ -42,6 +43,10 @@ final class ReviewRound implements HasPlace
     // Kept with the round when it completes, because its indexing runs later in a worker, when a newer round may have reopened what this one resolved.
     #[ORM\Column(name: 'resolved_findings', type: 'text', nullable: true)]
     private ?string $resolvedFindings = null;
+
+    // Kept apart from the resolved findings, because a round completed before migration Version20261112110000 kept those under its reviewer's ids, and only a null here tells such a round apart.
+    #[ORM\Column(name: 'resolved_finding_ids', type: 'text', nullable: true)]
+    private ?string $resolvedFindingIds = null;
 
     public function __construct(
         #[ORM\Id]
@@ -137,6 +142,16 @@ final class ReviewRound implements HasPlace
         $this->resolvedFindings = $json;
     }
 
+    public function resolvedFindingIdsJson(): ?string
+    {
+        return $this->resolvedFindingIds;
+    }
+
+    public function keepResolvedFindingIds(string $json): void
+    {
+        $this->resolvedFindingIds = $json;
+    }
+
     /**
      * @return list<RoundReviewer>
      */
@@ -150,11 +165,23 @@ final class ReviewRound implements HasPlace
         return array_all($this->reviewers(), static fn (RoundReviewer $reviewer): bool => $reviewer->isFinished());
     }
 
-    public function progress(): RoundProgress
+    // A stopped reviewer ends with a verdict, so only the ledger knows it was stopped, and the caller names it.
+    /**
+     * @param list<string> $stopped
+     */
+    public function progress(array $stopped = []): RoundProgress
     {
-        $finished = count(array_filter($this->reviewers(), static fn (RoundReviewer $reviewer): bool => $reviewer->isFinished()));
+        $finished = [];
 
-        return new RoundProgress($finished, count($this->reviewers()), RoundState::Judged === $this->state);
+        foreach ($this->reviewers() as $reviewer) {
+            $id = $reviewer->id()->toRfc4122();
+
+            if ($reviewer->isFinished()) {
+                $finished[$id] = in_array($id, $stopped, true) ? FinishedState::Stopped : FinishedState::from($reviewer->state()->value);
+            }
+        }
+
+        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished);
     }
 
     public function state(): RoundState

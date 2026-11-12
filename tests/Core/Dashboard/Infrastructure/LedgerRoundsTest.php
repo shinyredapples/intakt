@@ -42,7 +42,7 @@ use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
@@ -180,8 +180,9 @@ final class LedgerRoundsTest extends TestCase
      */
     public static function modes(): iterable
     {
-        yield 'shadow' => [',"mode":"shadow"', ProjectMode::Shadow];
+        yield 'reviewer-for-loop' => [',"mode":"reviewer-for-loop"', ProjectMode::ReviewerForLoop];
         yield 'live' => [',"mode":"live"', ProjectMode::Live];
+        yield 'the removed shadow mode' => [',"mode":"shadow"', ProjectMode::Live];
         yield 'recorded before the field existed' => ['', ProjectMode::Live];
         yield 'unknown value' => [',"mode":"other"', ProjectMode::Live];
         yield 'not a string' => [',"mode":3', ProjectMode::Live];
@@ -250,12 +251,12 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 2, ProjectMode::Shadow)),
+            $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 2, ProjectMode::ReviewerForLoop)),
         );
 
         $outcome = $review?->rounds[0]->outcomes[0];
 
-        self::assertSame([ReviewerProgress::Answered, 'changes', 2, ProjectMode::Shadow], [$outcome?->progress, $outcome?->decision, $outcome?->findings, $outcome?->mode]);
+        self::assertSame([ReviewerProgress::Answered, 'changes', 2, ProjectMode::ReviewerForLoop], [$outcome?->progress, $outcome?->decision, $outcome?->findings, $outcome?->mode]);
     }
 
     public function testACatchUpInTodaysFormatNamesTheSubstituteProvider(): void
@@ -377,6 +378,26 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertTrue($review?->rounds[0]->findingTextRecorded);
+    }
+
+    public function testAJudgedRoundIsJudgedAtTheTimeTheJudgesEventWasRecorded(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START, new DateTimeImmutable('2026-10-28T12:00:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"r1-a","role":"correctness","tier":"standard"}', new DateTimeImmutable('2026-10-28T12:05:00+00:00')),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":[],"follow_ups":[],"findings":[]}', new DateTimeImmutable('2026-10-28T12:41:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"r1-b","role":"security","tier":"standard"}', new DateTimeImmutable('2026-10-28T12:50:00+00:00')),
+        );
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:41:00+00:00'), $review?->rounds[0]->judgedAt);
+    }
+
+    public function testARoundTheJudgeHasNotJudgedHasNoJudgedTime(): void
+    {
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
+
+        self::assertNull($review?->rounds[0]->judgedAt);
     }
 
     public function testASecondJudgeDoneOfARoundChangesNothing(): void
@@ -550,9 +571,9 @@ final class LedgerRoundsTest extends TestCase
         return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], []));
     }
 
-    private function event(LedgerEventKind $kind, string $payload): RecordedEvent
+    private function event(LedgerEventKind $kind, string $payload, ?DateTimeImmutable $at = null): RecordedEvent
     {
-        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 
     // Serialized as the writers do, so the reader is shown the row it meets in production.

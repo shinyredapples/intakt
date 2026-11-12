@@ -28,7 +28,7 @@ final class WorkflowsGateTest extends SandboxTestCase
         $sandbox->write('.github/workflows/u.yml', $this->workflow('run: ['));
 
         self::assertStringStartsWith(
-            'zizmor failed: fatal: no audit was performed failed to load file://.github/workflows/u.yml as workflow Caused by: 0: invalid YAML syntax',
+            'zizmor failed with exit code 1: fatal: no audit was performed failed to load file://.github/workflows/u.yml as workflow Caused by: 0: invalid YAML syntax',
             $sandbox->checkWith([], '--only=workflows')->findingsOf('workflows'),
         );
     }
@@ -59,6 +59,15 @@ final class WorkflowsGateTest extends SandboxTestCase
         chmod($tools->root.'/zizmor', 0o755);
 
         self::assertSame('outside a local file excessive-permissions: overly broad permissions', $this->findingsOf('run: true', ['PATH' => $tools->root]));
+    }
+
+    public function testAZizmorFailureWithoutOutputFailsTheGateNamingTheExitCode(): void
+    {
+        $tools = $this->toolsWithoutZizmor();
+        $tools->write('zizmor', "#!/bin/sh\nexit 2\n");
+        chmod($tools->root.'/zizmor', 0o755);
+
+        self::assertSame('zizmor failed with exit code 2', $this->findingsOf('run: true', ['PATH' => $tools->root]));
     }
 
     private function toolsWithoutZizmor(): Sandbox

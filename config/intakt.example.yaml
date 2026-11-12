@@ -8,10 +8,6 @@ budget:
     ceilings:
         five-hour: 90
         weekly: 90
-    # Optional: shadow rounds start only below these lower ceilings (default 70 each), so they leave capacity to the existing loop.
-    shadow_ceilings:
-        five-hour: 70
-        weekly: 70
     # Optional: the price of each model, keyed by the model name exactly as a tier (or substitute) names it, never the name a provider's answer reports, in US dollars per million tokens, for the cost line of a review.
     # input and output are required; cache_read and cache_write default to input. A round that used a model without a price shows its cost as unknown.
     prices:
@@ -48,9 +44,9 @@ projects:
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
         watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha }
     beta:
-        # Optional: shadow never writes to the forge and its verdicts never count; reviewer-for-loop reviews the existing loop's heads,
-        # its verdicts count and it only publishes its verdict on each head (a commit status and a comment); live, the default, writes.
-        mode: shadow
+        # Optional: reviewer-for-loop reviews the existing loop's heads, its verdicts count and it only publishes its verdict on each head
+        # (a commit status and a comment); live is the default.
+        mode: reviewer-for-loop
         tiers:
             strong: { provider: openai, model: gpt-5 }
             standard: { provider: openai, model: gpt-5-mini }

@@ -9,10 +9,12 @@ use DomainException;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
+use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\UseCase\ReadRound\ReadableRounds;
 use InvalidArgumentException;
 use Mcp\Exception\ToolCallException;
@@ -26,8 +28,13 @@ final readonly class ReviewedRepository
     /**
      * @param (Closure(int): void)|null $fileSearched
      */
-    public function __construct(private ReadableRounds $rounds, private Security $security, private Fence $fence, private ?Closure $fileSearched = null)
-    {
+    public function __construct(
+        private ReadableRounds $rounds,
+        private Security $security,
+        private Fence $fence,
+        private RoundToolCalls $calls,
+        private ?Closure $fileSearched = null,
+    ) {
     }
 
     /**
@@ -40,23 +47,43 @@ final readonly class ReviewedRepository
 
     public function readFile(string $path): string
     {
-        return $this->answer(fn (): string => (new ReadFile($this->head()))($path));
+        $round = $this->round();
+        $head = $this->head($round);
+        $real = $this->refusedAsCall($round, ReadFileTool::NAME, static fn (): string => $head->resolve($path));
+        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => new ReadFile($head)->contentAt($real, $path));
+        // Recorded as the checkout resolved it, so two spellings of one file count as one file read.
+        $this->calls->read($round, ReadFileTool::NAME, $head->relative($real));
+
+        return $answer;
     }
 
     public function listDirectory(string $path): string
     {
-        return $this->answer(fn (): string => (new ListDirectory($this->head()))($path));
+        $round = $this->round();
+        $head = $this->head($round);
+        $answer = $this->answer($round, ListDirectoryTool::NAME, static fn (): string => (new ListDirectory($head))($path));
+        $this->calls->called($round, ListDirectoryTool::NAME);
+
+        return $answer;
     }
 
     public function searchFiles(string $text, string $path): string
     {
-        return $this->answer(fn (): string => (new SearchFiles($this->head(), $this->fileSearched))($text, $path));
+        $round = $this->round();
+        $head = $this->head($round);
+        $answer = $this->answer($round, SearchFilesTool::NAME, fn (): string => (new SearchFiles($head, $this->fileSearched))($text, $path));
+        $this->calls->called($round, SearchFilesTool::NAME);
+
+        return $answer;
     }
 
-    private function head(): Checkout
+    private function round(): ReviewRound
     {
-        $round = $this->rounds->forTool($this->credentialRound());
+        return $this->rounds->forTool($this->credentialRound());
+    }
 
+    private function head(ReviewRound $round): Checkout
+    {
         // The snapshot of a judged round is removed, so it is refused before the filesystem is asked.
         if (RoundState::Judged === $round->state()) {
             throw new ToolCallException('The round is judged, so its head is no longer under review.');
@@ -84,11 +111,22 @@ final readonly class ReviewedRepository
     /**
      * @param Closure(): string $read
      */
-    private function answer(Closure $read): string
+    private function answer(ReviewRound $round, string $tool, Closure $read): string
+    {
+        return $this->refusedAsCall($round, $tool, fn (): string => $this->fence->wrap(UntrustedSource::ToolResult, $read()));
+    }
+
+    // A refusal is still recorded as a call, because the reviewer made it.
+    /**
+     * @param Closure(): string $step
+     */
+    private function refusedAsCall(ReviewRound $round, string $tool, Closure $step): string
     {
         try {
-            return $this->fence->wrap(UntrustedSource::ToolResult, $read());
+            return $step();
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
+            $this->calls->called($round, $tool);
+
             throw new ToolCallException($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage()), $refused->getCode(), previous: $refused);
         }
     }

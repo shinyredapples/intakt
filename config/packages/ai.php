@@ -18,7 +18,6 @@ use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
 use Intakt\Core\Budget\Contract\BudgetServices;
-use Intakt\Core\Budget\Domain\BudgetGuard;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Infrastructure\BudgetConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
@@ -26,8 +25,8 @@ use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
-use Intakt\Core\Shadow\Contract\ShadowServices;
-use Intakt\Core\Shadow\Infrastructure\ProjectModeConfiguration;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
+use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
@@ -87,7 +86,7 @@ return static function (ContainerConfigurator $container): void {
     /** @var array<string, mixed> $contents */
     $contents = is_file($projectsFile) ? Yaml::parseFile($projectsFile) ?? [] : [];
     $contentProjects = $contents['projects'] ?? [];
-    // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the shadow tree only; a projects value that is no map stays as written for the projects tree to refuse.
+    // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the mode tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
     $modes = [];
     $watches = [];
@@ -118,7 +117,7 @@ return static function (ContainerConfigurator $container): void {
     // The ceilings and prices are the owner's for every account, so they sit beside the projects and go to the budget tree only.
     $budget = array_key_exists('budget', $contents) ? ['budget' => $contents['budget']] : [];
     unset($contents['budget']);
-    /** @var array{budget: array{ceilings: array<string, float>, shadow_ceilings: array<string, float>, prices: array<string, array{input: float, output: float, cache_read: float, cache_write: float}>}} $ceilings */
+    /** @var array{budget: array{ceilings: array<string, float>, prices: array<string, array{input: float, output: float, cache_read: float, cache_write: float}>}} $ceilings */
     $ceilings = new Processor()->processConfiguration(new BudgetConfiguration(), [$budget]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
@@ -280,20 +279,14 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
-    $container->parameters()->set(ShadowServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
+    $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
-    $container->parameters()->set(BudgetServices::SHADOW_CEILINGS, $ceilings['budget']['shadow_ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
-    // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around the first guard for the start guard.
+    // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)
         ->autowire()
         ->autoconfigure()
         ->arg('$ceilings', new Parameter(BudgetServices::CEILINGS));
-    // The same guards with the lower ceilings for shadow work, so the weekly pace, the holds and the cooldowns apply.
-    $container->services()->set(BudgetServices::SHADOW_CEILING_GUARD, BudgetGuard::class)
-        ->autowire()
-        ->autoconfigure()
-        ->arg('$ceilings', new Definition(CeilingStartGuard::class)->setAutowired(true)->setArgument('$ceilings', new Parameter(BudgetServices::SHADOW_CEILINGS)));
     // Bound here because an attribute cannot call Provider::parameter(), which holds the parameter's name.
     $container->services()->set(ProbeCodexLoginCommand::class)
         ->autowire()

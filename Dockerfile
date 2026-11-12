@@ -62,7 +62,7 @@ RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin intakt \
     && chmod 755 /usr/local/bin/intakt-entrypoint
 
 USER intakt
-VOLUME /app/var/data
+# No VOLUME: this is also Intakt's own job image, and the job runner refuses an image that declares one. Mount /app/var/data when running it.
 EXPOSE 7781
 
 # The admin API answers on localhost only; its metrics endpoint stops answering when the server is stuck, so Docker marks the container unhealthy.

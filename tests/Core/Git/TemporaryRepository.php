@@ -161,6 +161,13 @@ final readonly class TemporaryRepository
         $this->git('tag', $name);
     }
 
+    public function annotatedTag(string $name, string $revision): string
+    {
+        $this->git(...self::IDENTITY, ...['tag', '--annotate', '--message='.$name, $name, $revision]);
+
+        return $this->objectAt('refs/tags/'.$name);
+    }
+
     public function objectAt(string $revision): string
     {
         return $this->git('rev-parse', $revision);
@@ -169,6 +176,15 @@ final readonly class TemporaryRepository
     public function replace(string $object, string $replacement): void
     {
         $this->git('replace', $object, $replacement);
+    }
+
+    // A copy costs no git call, so a test class can build its history once and hand each changing case its own.
+    public function copy(): self
+    {
+        $copy = clone ($this, ['path' => sys_get_temp_dir().'/intakt-forge-'.bin2hex(random_bytes(6))]);
+        new Filesystem()->mirror($this->path, $copy->path);
+
+        return $copy;
     }
 
     public function remove(): void

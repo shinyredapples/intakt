@@ -25,6 +25,35 @@ final class SearchQueryTest extends TestCase
         self::assertSame('alpha round', new SearchQuery('  alpha round ')->text);
     }
 
+    public function testAQueryKeepsItsTextWithoutSurroundingUnicodeSpaces(): void
+    {
+        self::assertSame('alpha round', new SearchQuery("\u{00A0}alpha round\u{2003}")->text);
+    }
+
+    public function testAQueryOfOnlyUnicodeSpacesIsEmpty(): void
+    {
+        self::assertTrue(new SearchQuery("\u{00A0}\u{2003}\u{3000}")->isEmpty());
+    }
+
+    public function testAQueryStillDropsTheNullAndVerticalTabThatTrimRemoves(): void
+    {
+        self::assertSame('alpha', new SearchQuery("\0alpha\x0B")->text);
+    }
+
+    public function testWordsSplitOnUnicodeSpaces(): void
+    {
+        $result = new SearchResult(SearchGroup::Reviews, 'Round 7', 'alpha, judged');
+
+        self::assertTrue(new SearchQuery("alpha\u{2003}judged")->matches($result));
+    }
+
+    public function testWordsSplitOnUnicodeSpacesStillNeedEveryWord(): void
+    {
+        $result = new SearchResult(SearchGroup::Reviews, 'Round 7', 'alpha, open');
+
+        self::assertFalse(new SearchQuery("alpha\u{2003}judged")->matches($result));
+    }
+
     public function testAResultMatchesWhenEveryWordIsInItsLabelDetailOrGroup(): void
     {
         $result = new SearchResult(SearchGroup::Projects, 'alpha', 'Project, 2 review rounds');

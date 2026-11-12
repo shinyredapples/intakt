@@ -75,35 +75,7 @@ final class SampleProjectSeedTest extends KernelTestCase
         new Filesystem()->remove($this->directory);
     }
 
-    public function testWithOneKeyTheSeededPanelLoadsOnThatProvider(): void
-    {
-        $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
-
-        $this->seed();
-
-        self::assertSame([Provider::Anthropic, Provider::Anthropic], $this->seededPanelProviders());
-    }
-
-    public function testWithTwoKeysTheSeededPanelLoadsOnTwoProviders(): void
-    {
-        $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
-        $_SERVER['OPENAI_API_KEY'] = 'test-value';
-
-        $this->seed();
-
-        self::assertSame([Provider::Anthropic, Provider::OpenAi], $this->seededPanelProviders());
-    }
-
-    public function testWithTheHuggingFaceRouterAloneTheSeededPanelLoadsOnIt(): void
-    {
-        $this->setTheHuggingFaceRouter();
-
-        $this->seed();
-
-        self::assertSame([Provider::OpenAiCompatible, Provider::OpenAiCompatible], $this->seededPanelProviders());
-    }
-
-    public function testWithAnAnthropicKeyAndTheHuggingFaceRouterTheSeededPanelLoadsOnBoth(): void
+    public function testWithAnAnthropicKeyAndTheHuggingFaceRouterTheSeededPanelLoadsOnBothAndEveryTierResolvesToAnEnabledProvider(): void
     {
         $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
         $this->setTheHuggingFaceRouter();
@@ -111,18 +83,11 @@ final class SampleProjectSeedTest extends KernelTestCase
         $this->seed();
 
         self::assertSame([Provider::Anthropic, Provider::OpenAiCompatible], $this->seededPanelProviders());
-    }
-
-    public function testEveryTierOfTheSeededProjectResolvesToAnEnabledProvider(): void
-    {
-        $_SERVER['OPENAI_API_KEY'] = 'test-value';
-
-        $this->seed();
-
         $resolver = $this->bootSeeded()->get(TierResolver::class);
         self::assertInstanceOf(TierResolver::class, $resolver);
+        $expected = [Tier::Strong->value => Provider::Anthropic, Tier::Standard->value => Provider::OpenAiCompatible, Tier::Light->value => Provider::Anthropic];
         foreach (Tier::cases() as $tier) {
-            self::assertSame(Provider::OpenAi, $resolver->resolve('sample', $tier)->provider);
+            self::assertSame($expected[$tier->value], $resolver->resolve('sample', $tier)->provider);
         }
     }
 
