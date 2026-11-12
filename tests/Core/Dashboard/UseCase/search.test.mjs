@@ -565,6 +565,17 @@ test('pressing the mouse outside the results is left to the browser', async () =
     assert.ok(!press.defaultPrevented);
 });
 
+test('pressing the mouse on a result while the search is closed is left to the browser', async () => {
+    const { page } = await openWithRecent();
+    const option = page.results.options[2];
+    page.press('Escape');
+
+    const press = page.mousedown(option);
+
+    assert.ok(!page.isOpen());
+    assert.ok(!press.defaultPrevented);
+});
+
 test('escape closes the search and gives the focus back to where it was', async () => {
     const { page } = await openWithRecent();
 
