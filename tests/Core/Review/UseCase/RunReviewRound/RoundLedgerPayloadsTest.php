@@ -71,9 +71,9 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAReceivedVerdictIsWrittenWithTodaysDecisionAndModeValues(): void
     {
-        $received = new VerdictReceived(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Decision::Changes, 2, ProjectMode::Shadow);
+        $received = new VerdictReceived(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Decision::Changes, 2, ProjectMode::ReviewerForLoop);
 
-        self::assertSame(self::IDENTITY.',"decision":"changes","findings":2,"mode":"shadow"}', $this->written($received));
+        self::assertSame(self::IDENTITY.',"decision":"changes","findings":2,"mode":"reviewer-for-loop"}', $this->written($received));
     }
 
     public function testAnOwedCatchUpIsWrittenWithItsSubstitute(): void

@@ -32,16 +32,9 @@ services:
         exclude:
             # Built per review with the checkout under review, so the container cannot wire them.
             - '../src/Core/Review/Infrastructure/Repository/'
-            # Defined below, because the scan would alias the forge writes to the guard itself while it is their only class.
-            - '../src/Core/Shadow/Infrastructure/ModeGuardedForgeWrites.php'
             # Defined in config/packages/ai.php beside the parameters they read, because the scan runs later and would replace those definitions.
             - '../src/Core/Budget/Domain/CeilingStartGuard.php'
             - '../src/Core/Ai/UseCase/ProbeCodexLogin/ProbeCodexLoginCommand.php'
-
-    # Decorates whichever forge writes, so a forge plugin cannot forget the project mode's rule; dropped while no forge writes (plan task T18).
-    Intakt\Core\Shadow\Infrastructure\ModeGuardedForgeWrites:
-        decorates: Intakt\Plugin\Forge\Contract\ForgeWrites
-        decoration_on_invalid: ignore
 
     # Wired here, because a Domain class carries no container attributes; its ceiling guard is wired in config/packages/ai.php.
     Intakt\Core\Budget\Contract\StartGuard: '@Intakt\Core\Budget\Domain\BudgetGuard'
@@ -128,8 +121,6 @@ when@test:
         - { resource: '../tests/Core/Platform/services.yaml', ignore_errors: not_found }
         # A write tool that proves, through the whole server, that a tool the voter refuses does not run.
         - { resource: '../tests/Core/Mcp/services.yaml', ignore_errors: not_found }
-        # No forge writes yet (plan task T18), so the tests give the container one that refuses every write.
-        - { resource: '../tests/Core/Shadow/services.yaml', ignore_errors: not_found }
         # The secret scan as the container wires it, so its test proves the INTAKT_GITLEAKS binding.
         - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }
         # Recorded pull requests and CI runs, so a tick runs on an install in the test environment while no forge lists them (plan task T18).

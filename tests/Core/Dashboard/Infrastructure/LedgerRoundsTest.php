@@ -180,8 +180,9 @@ final class LedgerRoundsTest extends TestCase
      */
     public static function modes(): iterable
     {
-        yield 'shadow' => [',"mode":"shadow"', ProjectMode::Shadow];
+        yield 'reviewer-for-loop' => [',"mode":"reviewer-for-loop"', ProjectMode::ReviewerForLoop];
         yield 'live' => [',"mode":"live"', ProjectMode::Live];
+        yield 'the removed shadow mode' => [',"mode":"shadow"', ProjectMode::Live];
         yield 'recorded before the field existed' => ['', ProjectMode::Live];
         yield 'unknown value' => [',"mode":"other"', ProjectMode::Live];
         yield 'not a string' => [',"mode":3', ProjectMode::Live];
@@ -250,12 +251,12 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf(
             'r1',
             $this->event(LedgerEventKind::ReviewStarted, self::START),
-            $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 2, ProjectMode::Shadow)),
+            $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 2, ProjectMode::ReviewerForLoop)),
         );
 
         $outcome = $review?->rounds[0]->outcomes[0];
 
-        self::assertSame([ReviewerProgress::Answered, 'changes', 2, ProjectMode::Shadow], [$outcome?->progress, $outcome?->decision, $outcome?->findings, $outcome?->mode]);
+        self::assertSame([ReviewerProgress::Answered, 'changes', 2, ProjectMode::ReviewerForLoop], [$outcome?->progress, $outcome?->decision, $outcome?->findings, $outcome?->mode]);
     }
 
     public function testACatchUpInTodaysFormatNamesTheSubstituteProvider(): void
