@@ -31,6 +31,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(WeeklyReportCommand::class)]
 #[CoversClass(RecordedPullRequestFile::class)]
@@ -160,6 +161,45 @@ final class WeeklyReportCommandTest extends TestCase
         yield 'a comment whose moment has no offset' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => '2026-11-03T00:00:00']]])];
         yield 'a comment whose moment is no date' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => '2026-13-01T00:00:00Z']]])];
         yield 'a comment whose moment holds a null byte' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => "2026-11-03T00:00:00Z\0"]]])];
+    }
+
+    public function testAFolderWhoseNameHoldsGlobCharactersStillFindsItsFiles(): void
+    {
+        $folder = $this->copyOfRecorded('weekly-[*?]-');
+        $tester = $this->tester('2026-11-09T00:00:00Z');
+
+        $status = $tester->execute(['folder' => $folder]);
+
+        self::assertSame(Command::SUCCESS, $status);
+        self::assertStringContainsString(self::SUMMARY, $tester->getDisplay());
+    }
+
+    public function testOnlyTheJsonFilesOfTheFolderAreRead(): void
+    {
+        $folder = $this->copyOfRecorded('weekly-only-json-');
+        file_put_contents($folder.'/notes.txt', 'not a pull request');
+        mkdir($folder.'/nested.json');
+        mkdir($folder.'/nested');
+        copy(self::RECORDED.'/41-agree.json', $folder.'/nested/41-agree.json');
+        $tester = $this->tester('2026-11-09T00:00:00Z');
+
+        $status = $tester->execute(['folder' => $folder]);
+
+        self::assertSame(Command::SUCCESS, $status);
+        self::assertStringContainsString(self::SUMMARY, $tester->getDisplay());
+    }
+
+    private function copyOfRecorded(string $prefix): string
+    {
+        $folder = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(4));
+        mkdir($folder);
+        foreach (RecordedFolder::jsonFiles(self::RECORDED) ?? [] as $file) {
+            copy($file, $folder.'/'.basename($file));
+        }
+
+        register_shutdown_function(static fn () => new Filesystem()->remove($folder));
+
+        return $folder;
     }
 
     /**
