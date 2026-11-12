@@ -307,10 +307,10 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], []));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [], [])]);
+        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [], [], false)]);
 
         $targets = new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
         self::assertCount(4, $targets);
@@ -342,11 +342,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
     public function testASummaryPushedToThePageLeavesTheReviewWideCostAlone(): void
     {
-        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], []));
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
         $page = $this->browser->request('GET', '/reviews/round-1');
         $before = $page->filter('.ls-cost dd')->eq(1)->text();
 
-        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [])]));
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [], false)]));
 
         self::assertSame('0.9000 USD', $updated->filter('.ls-cost dd')->first()->text());
         self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());

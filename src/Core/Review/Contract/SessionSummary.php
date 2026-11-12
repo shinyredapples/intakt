@@ -26,7 +26,7 @@ final readonly class SessionSummary
         public array $reported,
         public array $resolved,
         // Carried with the summary, because whoever publishes it live must learn in the same read that the round is judged: its final summary goes out with the judged state, and nothing after it.
-        public bool $judged = false,
+        public bool $judged,
     ) {
     }
 

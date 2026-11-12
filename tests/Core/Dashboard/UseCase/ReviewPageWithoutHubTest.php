@@ -58,7 +58,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
         $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn(new SessionSummary([new ToolCallCount('read_file', 2)], Cost::inUsd(0.3), ['src/A.php'], [], [], []));
+        $summaries->method('ofRound')->willReturn(new SessionSummary([new ToolCallCount('read_file', 2)], Cost::inUsd(0.3), ['src/A.php'], [], [], [], false));
         self::getContainer()->set(SessionSummaries::class, $summaries);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
