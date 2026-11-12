@@ -32,7 +32,7 @@ final class QueuedIssue
     private string $updatedAt;
 
     #[ORM\Column(length: 19, nullable: true)]
-    private ?string $milestoneDue;
+    private ?string $milestoneDue = null;
 
     // Null until the item's history was read, which happens only for an item that can steer the queue.
     #[ORM\Column(nullable: true)]

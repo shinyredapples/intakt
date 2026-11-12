@@ -28,7 +28,7 @@ final class GrantedAccounts implements SteeringAccounts
         ++$this->checks;
         $during = $this->during;
         $this->during = null;
-        if (null !== $during) {
+        if ($during instanceof Closure) {
             $during();
         }
 
