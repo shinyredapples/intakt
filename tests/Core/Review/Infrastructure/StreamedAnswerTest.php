@@ -9,12 +9,19 @@ use Intakt\Core\Review\Infrastructure\AnthropicTextBlocks;
 use Intakt\Core\Review\Infrastructure\StreamedAnswer;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\AI\Platform\Exception\BadRequestException;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\Stream\Delta\DeltaInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\MetadataDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\Stream\Delta\ThinkingDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallStart;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\AI\Platform\TokenUsage\TokenUsage;
+use Throwable;
 
 #[CoversClass(StreamedAnswer::class)]
 #[CoversClass(AnthropicTextBlocks::class)]
@@ -54,6 +61,77 @@ final class StreamedAnswerTest extends TestCase
         $this->expectException(UnexpectedResultTypeException::class);
 
         $this->streamed([$this->textBlock(), $this->text('{"verdict":'), $this->textBlock(), $this->text('"approve"}')]);
+    }
+
+    public function testAServerErrorOnceTheAnswerStartedIsACutAnswerThatKeepsTheErrorAsItsCause(): void
+    {
+        $outage = new ServerException(503);
+
+        $cut = $this->thrownBy($this->brokenAfter([new TextDelta('{"verdict":')], $outage));
+
+        self::assertInstanceOf(IncompleteStreamException::class, $cut);
+        self::assertSame('The provider failed after the answer had started streaming.', $cut->getMessage());
+        self::assertSame($outage, $cut->getPrevious());
+    }
+
+    public function testAServerErrorBeforeAnyDeltaStaysTheProvidersFailure(): void
+    {
+        $outage = new ServerException(503);
+
+        self::assertSame($outage, $this->thrownBy($this->brokenAfter([], $outage)));
+    }
+
+    public function testAServerErrorAfterOnlyTheMessageStartUsageStaysTheProvidersFailure(): void
+    {
+        $outage = new ServerException(errorMessage: 'Overloaded');
+
+        self::assertSame($outage, $this->thrownBy($this->brokenAfter([new TokenUsage(promptTokens: 120)], $outage)));
+    }
+
+    public function testAServerErrorAfterOnlyMetadataStaysTheProvidersFailure(): void
+    {
+        $outage = new ServerException(503);
+
+        self::assertSame($outage, $this->thrownBy($this->brokenAfter([new MetadataDelta('finish_reason', null)], $outage)));
+    }
+
+    public function testAServerErrorOnceAThinkingDeltaStreamedIsACutAnswer(): void
+    {
+        $cut = $this->thrownBy($this->brokenAfter([new TokenUsage(promptTokens: 120), new ThinkingDelta('Reading the diff.')], new ServerException(503)));
+
+        self::assertInstanceOf(IncompleteStreamException::class, $cut);
+    }
+
+    public function testAFailureThatARetryCannotOvercomeStaysItselfAlsoMidStream(): void
+    {
+        $refused = new BadRequestException('Refused.');
+
+        self::assertSame($refused, $this->thrownBy($this->brokenAfter([new TextDelta('{"verdict":')], $refused)));
+    }
+
+    /**
+     * @param list<DeltaInterface> $deltas
+     */
+    private function brokenAfter(array $deltas, Throwable $outage): StreamResult
+    {
+        $broken = static function () use ($deltas, $outage): Generator {
+            yield from $deltas;
+
+            throw $outage;
+        };
+
+        return new StreamResult(new StreamedAnswer(new AnthropicTextBlocks(new InMemoryRawResult()))->of(new StreamResult($broken())));
+    }
+
+    private function thrownBy(StreamResult $stream): ?Throwable
+    {
+        try {
+            iterator_to_array($stream->getContent(), false);
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
     }
 
     /**
