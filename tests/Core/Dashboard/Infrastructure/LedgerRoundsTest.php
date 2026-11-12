@@ -42,7 +42,7 @@ use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;

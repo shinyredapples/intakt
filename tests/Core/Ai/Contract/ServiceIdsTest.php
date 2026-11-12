@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Ai\Contract;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Review\Contract\ReviewServices;
-use Intakt\Core\Shadow\Contract\ShadowServices;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
 use Intakt\Plugin\SymfonyAiVendor\Contract\SymfonyAiVendorServices;
@@ -19,7 +19,7 @@ use ReflectionClass;
 #[CoversClass(AiServices::class)]
 #[CoversClass(BudgetServices::class)]
 #[CoversClass(ReviewServices::class)]
-#[CoversClass(ShadowServices::class)]
+#[CoversClass(ReviewerForLoopServices::class)]
 #[CoversClass(WatcherServices::class)]
 #[CoversClass(GitHubForgeServices::class)]
 #[CoversClass(SymfonyAiVendorServices::class)]
@@ -42,7 +42,7 @@ final class ServiceIdsTest extends TestCase
      */
     public static function idsClasses(): iterable
     {
-        foreach ([AiServices::class, BudgetServices::class, ReviewServices::class, ShadowServices::class, WatcherServices::class, GitHubForgeServices::class, SymfonyAiVendorServices::class] as $ids) {
+        foreach ([AiServices::class, BudgetServices::class, ReviewServices::class, ReviewerForLoopServices::class, WatcherServices::class, GitHubForgeServices::class, SymfonyAiVendorServices::class] as $ids) {
             yield $ids => [$ids];
         }
     }
