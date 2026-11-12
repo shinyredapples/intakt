@@ -41,6 +41,9 @@ Models and budget:
 - [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
 - [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`
 
+Builds:
+- [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
+
 Reviews:
 - [Review flow](review-flow.md)
 - [Review rounds](review-rounds.md)
