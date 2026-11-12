@@ -88,6 +88,8 @@ The project's **rules** (the checks that judge the code, the CI setup, the agent
 
 So a change can never quietly switch off the check that would have caught it, and Intakt can never widen its own powers.
 
+Which files are protected is your list, kept in Intakt's own settings, never in the project, so a change cannot edit the list that judges it. To tell whether a change touches them, Intakt reads the whole change and every commit in it, so a protected file changed and changed back, or undone inside a hand-made merge, still counts; anything it cannot read counts as protected. (The reading is built; holding such a change for you is planned.)
+
 ## When Intakt asks you and why
 
 Intakt asks you only when it cannot prove a rule change is harmless, and it always says why: the request names the limit or the check that sent it. A request to you **never answers itself**: no timer, no "approved unless you object", no one-tap shortcut.
