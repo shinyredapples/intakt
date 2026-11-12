@@ -39,7 +39,7 @@ final class PersistenceEnginesTest extends SandboxTestCase
 
         self::assertTrue($result->succeeded(), $result->output.$result->errors);
         foreach (['one', 'two', 'three'] as $network) {
-            self::assertStringContainsString("::group::persistence on engine {$network} (exit 0)\ntests ran on {$network}\n::endgroup::", $result->output);
+            self::assertStringContainsString("::group::persistence on {$network}, registry.example/db/{$network}:1 (exit 0)\ntests ran on {$network}\n::endgroup::", $result->output);
         }
         self::assertStringNotContainsString('not all engines started', $result->output);
     }
@@ -53,10 +53,10 @@ final class PersistenceEnginesTest extends SandboxTestCase
         $result = $this->runEngines($sandbox);
 
         self::assertSame(1, $result->exitCode, $result->output.$result->errors);
-        self::assertStringContainsString('::group::persistence on engine two (exit 3)', $result->output);
-        self::assertStringContainsString('::error::persistence on engine two failed (exit 3)', $result->output);
-        self::assertStringContainsString('::group::persistence on engine one (exit 0)', $result->output);
-        self::assertStringContainsString('::group::persistence on engine three (exit 0)', $result->output);
+        self::assertStringContainsString('::group::persistence on two, registry.example/db/two:1 (exit 3)', $result->output);
+        self::assertStringContainsString('::error::persistence on two failed (exit 3)', $result->output);
+        self::assertStringContainsString('::group::persistence on one, registry.example/db/one:1 (exit 0)', $result->output);
+        self::assertStringContainsString('::group::persistence on three, registry.example/db/three:1 (exit 0)', $result->output);
         self::assertFileExists($sandbox->root.'/marks/end.one');
         self::assertFileExists($sandbox->root.'/marks/end.three');
     }
@@ -89,7 +89,8 @@ final class PersistenceEnginesTest extends SandboxTestCase
     {
         return $sandbox->runScript(
             'set -eo pipefail; PATH="$PWD/bin:$PATH" '.escapeshellarg(self::SCRIPT)
-            .' "engine one|one|sqlite:///one" "engine two|two|sqlite:///two" "engine three|three|sqlite:///three"',
+            .' "one|registry.example/db/one:1|one|sqlite:///one" "two|registry.example/db/two:1|two|sqlite:///two"'
+            .' "three|registry.example/db/three:1|three|sqlite:///three"',
             ['CI_IMAGE' => 'intakt-ci:test', 'GITHUB_WORKSPACE' => $sandbox->root, 'MARKS' => $sandbox->root.'/marks'],
         );
     }
