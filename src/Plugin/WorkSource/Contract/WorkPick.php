@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\WorkSource\Contract;
 
-
 final readonly class WorkPick
 {
     private function __construct(

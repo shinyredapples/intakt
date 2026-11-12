@@ -46,7 +46,7 @@ final class RecordedIssueReads implements IssueReads
         ++$this->listings;
         $this->validators[] = $validator;
 
-        return $this->failing || null === $this->next ? throw new ForgeReadFailed('GitHub answered 502 to a read.') : $this->next;
+        return $this->failing || !$this->next instanceof IssueListing ? throw new ForgeReadFailed('GitHub answered 502 to a read.') : $this->next;
     }
 
     public function lastEditorOf(string $project, int $number): string

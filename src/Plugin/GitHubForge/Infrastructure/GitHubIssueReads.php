@@ -69,6 +69,7 @@ final readonly class GitHubIssueReads implements IssueReads
 
         return is_string($login) && '' !== $login ? $login : throw new ForgeReadFailed('GitHub answered an issue without an editor.');
     }
+
     /**
      * @return array<string, int|string>
      */
@@ -230,6 +231,7 @@ final readonly class GitHubIssueReads implements IssueReads
     {
         return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
+
     private function bearer(): string
     {
         try {

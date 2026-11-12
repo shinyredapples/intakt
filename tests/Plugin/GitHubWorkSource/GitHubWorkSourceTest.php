@@ -133,7 +133,11 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $checks = $this->accounts->checks;
 
         $this->accounts->writers = ['bo'];
-        $this->reads->lists([Issues::task(7, author: 'bo', updatedAt: '2026-11-10T09:00:00Z'), Issues::task(8, author: 'ana')]);
+        $this->reads->lists([Issues::task(
+            7,
+            author: 'bo',
+            updatedAt: '2026-11-10T09:00:00Z',
+        ), Issues::task(8, author: 'ana')]);
         $this->reads->editors[7] = 'ana';
 
         self::assertSame(NothingPicked::NoTaskReady, $this->source->nextWork('alpha', WorkerState::Free)->nothing);
