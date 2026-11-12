@@ -60,6 +60,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `bash`, `git`, `grep` | the `changes` job | reading which paths a pull request touches | yes |
 | `bash`, `mktemp`, `cat`, `rm` | `persistence-engines.sh` (the `persistence` job) | running the engines at once, each one's output and exit code in a temporary folder, then printing and removing them | yes |
 | `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `persistence-needed.sh` (the `changes` job) | deciding from the pull request's diff and head whether the persistence engines are needed | yes |
+| `bash`, `git`, `grep`, `cut`, `mktemp`, `rm` | `upgrade-needed.sh` (the `image` job) | deciding from the pull request's diff whether the upgrade check is needed | yes |
 
 Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (above).
 
@@ -76,6 +77,8 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 ## To check the demo's first start
 
 `docker/verify-first-start.sh <image>` (the `image` job of `.github/workflows/ci.yml`, on the image that job built) calls `docker` (CLI and a running daemon), `bash`, `openssl` (random secrets) and `sleep` on the host that runs it; it builds no image. The tests gate runs it with a fake `docker` and `openssl` first on the `PATH` (`tests/Core/Dashboard/Infrastructure/VerifyFirstStartScriptTest.php`).
+
+`docker/verify-upgrade.sh <head image> <base commit>` (the `image` job, when the change needs it) calls the same, plus `git archive` of the base commit piped into `docker build`, `mktemp`, `diff`, `dirname` and `rm`. The tests gate runs it with a fake `docker`, `git` and `openssl` (`tests/Core/Dashboard/Infrastructure/VerifyUpgradeScriptTest.php`).
 
 ## Called when a tier maps to `claude_code`
 
