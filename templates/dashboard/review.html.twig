@@ -75,7 +75,8 @@
             {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
             {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. #}
             <span class="muted small">{{ reviewed.outcome is not null ? reviewed.outcome.value : 'outcome not recorded' }}, {% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
-            <time>{{ reviewed.startedAt|date('H:i', 'UTC') }} to {{ reviewed.judgedAt|date('H:i', 'UTC') }} UTC</time>
+            {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
+            <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
         </summary>
         {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
     </details>

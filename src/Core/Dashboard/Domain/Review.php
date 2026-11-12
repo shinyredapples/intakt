@@ -29,7 +29,7 @@ final readonly class Review
     // Only In review and Done, because a review is all the ledger knows of a change until intake and the build lane place tasks in the other columns.
     public function column(): BoardColumn
     {
-        return ReviewState::Judged === $this->latest()->state ? BoardColumn::Done : BoardColumn::InReview;
+        return $this->latest()->isJudged() ? BoardColumn::Done : BoardColumn::InReview;
     }
 
     // Only the latest round counts, because the button starts the round after it on the head the change has now.
@@ -49,7 +49,7 @@ final readonly class Review
     // Null once the judge has called the latest round, because nothing is then in progress.
     public function activeRound(): ?ReviewedRound
     {
-        $latest = array_last($this->rounds);
+        $latest = $this->latest();
 
         return $latest->isJudged() ? null : $latest;
     }
