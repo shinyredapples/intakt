@@ -81,7 +81,7 @@ final class ProtectedPathsTest extends TestCase
     public function testAnEntryThatNamesNoPathOfTheRepositoryIsRefused(string $entry): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('"%s" is not a protected path', $entry));
+        $this->expectExceptionMessageIsOrContains(sprintf('"%s" is not a protected path', $entry));
 
         new ProtectedPaths([$entry]);
     }

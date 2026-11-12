@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Domain;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// Read per diff record, so the container has no reason to hold it.
+#[Exclude]
 final readonly class ChangedPath
 {
     private const string SUBMODULE_MODE = '160000';

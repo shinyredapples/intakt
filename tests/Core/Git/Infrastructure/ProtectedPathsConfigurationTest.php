@@ -31,7 +31,7 @@ final class ProtectedPathsConfigurationTest extends TestCase
     public function testAMalformedEntryIsRefusedAtBoot(): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('"/bin/check" is not a protected path');
+        $this->expectExceptionMessageIsOrContains('"/bin/check" is not a protected path');
 
         $this->processed(['protected_paths' => ['bin/check', '/bin/check']]);
     }

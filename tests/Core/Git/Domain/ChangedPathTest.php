@@ -52,7 +52,7 @@ final class ChangedPathTest extends TestCase
     public function testARawDiffThatCannotBeReadIsRefused(string $raw): void
     {
         $this->expectException(ChangeNotRead::class);
-        $this->expectExceptionMessage('the change could not be read: git printed a raw diff record that is not one');
+        $this->expectExceptionMessageIsOrContains('the change could not be read: git printed a raw diff record that is not one');
 
         ChangedPath::listFrom($raw);
     }

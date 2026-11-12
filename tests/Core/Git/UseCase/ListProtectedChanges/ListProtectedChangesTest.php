@@ -212,7 +212,7 @@ final class ListProtectedChangesTest extends TestCase
     public function testAHeadThatIsNoObjectNameIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('"main" is not a full commit name');
+        $this->expectExceptionMessageIsOrContains('"main" is not a full commit name');
 
         $this->whenTheHeadIsListed('main');
     }

@@ -60,12 +60,6 @@ final readonly class ProtectedPaths
             return true;
         }
 
-        foreach ($this->entries as $entry) {
-            if ($change->path === $entry || str_starts_with($change->path, $entry.'/')) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($this->entries, static fn (string $entry): bool => $change->path === $entry || str_starts_with($change->path, $entry.'/'));
     }
 }

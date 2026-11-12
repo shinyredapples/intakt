@@ -14,10 +14,10 @@ final readonly class ChangedPaths
 {
     private const string BRANCHES = 'refs/heads/';
 
-    // Every path on both sides, never a rename, and every submodule entry, whatever the repository's own settings ask to ignore.
+    // No renames, so both sides of a move count, and no ignored submodule, because the repository's own settings must not hide one.
     private const array RAW_DIFF = ['diff-tree', '-r', '-z', '--raw', '--no-renames', '--ignore-submodules=none'];
 
-    // Merge-base exits with 1 and prints nothing when two commits share no history.
+    // Because merge-base exits with 1 and prints nothing when two commits share no history, which is no failure.
     private const int NO_COMMON_ANCESTOR = 1;
 
     public function __construct(
