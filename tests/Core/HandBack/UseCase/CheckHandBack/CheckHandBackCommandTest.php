@@ -58,15 +58,26 @@ final class CheckHandBackCommandTest extends TestCase
         $this->history->remove();
     }
 
-    public function testAnAcceptedBundlePrintsItsHeadItsBaseAndHowManyCommitsWereRewritten(): void
+    public function testAnAcceptedBundlePrintsItsHeadThePushedBaseAndHowManyCommitsWereRewritten(): void
     {
-        $base = $this->history->inMirror('rev-parse', 'refs/heads/main');
+        $base = $this->history->commit('First');
+        $this->history->push('task');
+        $head = $this->history->commit('Second');
+
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle($base.'..task')]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame("accepted {$head}\nbase {$base}\nrewritten 0\n", $tester->getDisplay());
+    }
+
+    public function testAnAcceptedBundleOfABranchNotPushedYetPrintsNoBase(): void
+    {
         $head = $this->history->commit('First');
 
         $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task')]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertSame("accepted {$head}\nbase {$base}\nrewritten 0\n", $tester->getDisplay());
+        self::assertSame("accepted {$head}\nbase none\nrewritten 0\n", $tester->getDisplay());
     }
 
     public function testARefusedBundlePrintsTheReasonAndFails(): void

@@ -38,7 +38,7 @@ final readonly class CheckHandBackCommand
         }
 
         $io->writeln('accepted '.$result->head);
-        $io->writeln('base '.$result->base);
+        $io->writeln('base '.($result->base ?? 'none'));
         $io->writeln('rewritten '.$result->rewrittenCommits);
 
         return Command::SUCCESS;

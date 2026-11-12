@@ -49,6 +49,7 @@ final readonly class CheckHandBack
         $head = $header->references[$history->branch];
         $refusal = $this->refusalOfBase($header, $history)
             ?? $this->refusalToUnbundle($handBack, $history)
+            ?? $this->refusalOfMissingObjects($head, $history)
             ?? $this->refusalOfFastForward($head, $history)
             ?? $this->refusalOfMerges($handBack, $head, $history);
 
@@ -69,11 +70,9 @@ final readonly class CheckHandBack
             throw new InvalidArgumentException(sprintf('the task\'s branch "%s" is main itself', $handBack->branch));
         }
 
-        // Because a branch not pushed yet starts at main in the build clone, it is checked against main.
-        $base = $this->git->answer($repository, ['rev-parse', '--verify', '--quiet', $branch.'^{commit}'])
-            ?? $this->git->output($repository, ['rev-parse', '--verify', $main.'^{commit}']);
+        $pushed = $this->git->answer($repository, ['rev-parse', '--verify', '--quiet', $branch.'^{commit}']);
 
-        return new GivenHistory($this->git, $repository, $main, $branch, $base);
+        return new GivenHistory($this->git, $repository, $main, $branch, $pushed);
     }
 
     private function resolved(string $repository): string
@@ -135,6 +134,11 @@ final readonly class CheckHandBack
     {
         // Unbundling writes the objects only, never a ref, so a refused bundle moves no branch.
         return $history->unbundle($handBack->bundle) ? null : HandBackRefusal::Unreadable;
+    }
+
+    private function refusalOfMissingObjects(string $head, GivenHistory $history): ?HandBackRefusal
+    {
+        return $history->isComplete($head) ? null : HandBackRefusal::Incomplete;
     }
 
     private function refusalOfFastForward(string $head, GivenHistory $history): ?HandBackRefusal

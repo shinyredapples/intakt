@@ -7,7 +7,7 @@ namespace Intakt\Core\HandBack\UseCase\CheckHandBack;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// What the build was given, main and the task's branch as pushed, read per check, so the container has no reason to hold it.
+// What the build was given, main and the task's branch as pushed (null before its first push), read per check, so the container has no reason to hold it.
 #[Exclude]
 final readonly class GivenHistory
 {
@@ -16,13 +16,13 @@ final readonly class GivenHistory
         public string $repository,
         public string $main,
         public string $branch,
-        public string $base,
+        public ?string $pushed,
     ) {
     }
 
     public function holds(string $commit): bool
     {
-        return $this->isAncestor($commit, $this->base) || $this->isOnMain($commit);
+        return (null !== $this->pushed && $this->isAncestor($commit, $this->pushed)) || $this->isOnMain($commit);
     }
 
     public function isOnMain(string $commit): bool
@@ -37,11 +37,23 @@ final readonly class GivenHistory
         return false !== $path && $this->git->succeeds($this->repository, ['bundle', 'unbundle', $path]);
     }
 
+    public function isComplete(string $head): bool
+    {
+        // Because unbundling checks no connectivity: every object the new commits reach must be there, as git's own fetch checks it.
+        return $this->git->succeeds($this->repository, ['rev-list', '--objects', '--quiet', $head, '--not', ...$this->known()]);
+    }
+
     public function isFastForwardTo(string $head): bool
     {
         // Because merge-base peels an annotated tag to its commit, and a branch can only take a commit.
-        return 'commit' === $this->git->answer($this->repository, ['cat-file', '-t', $head])
-            && $this->isAncestor($this->base, $head);
+        if ('commit' !== $this->git->answer($this->repository, ['cat-file', '-t', $head])) {
+            return false;
+        }
+
+        // A first build may start on any commit of main, because main can move in the repository while the build runs; a new root commit starts elsewhere, also behind a merge of main.
+        return null === $this->pushed
+            ? '' === $this->git->answer($this->repository, ['rev-list', '--max-parents=0', '--max-count=1', $head, '--not', $this->main])
+            : $this->isAncestor($this->pushed, $head);
     }
 
     /**
@@ -73,6 +85,14 @@ final readonly class GivenHistory
     }
 
     /**
+     * @return non-empty-list<string>
+     */
+    private function known(): array
+    {
+        return null === $this->pushed ? [$this->main] : [$this->pushed, $this->main];
+    }
+
+    /**
      * @return list<non-empty-list<string>>
      *
      * @throws HandBackNotChecked
@@ -80,7 +100,7 @@ final readonly class GivenHistory
     private function newCommitsWithParents(string $head, string $option): array
     {
         // Because a merge of main brings main's commits in as they are, they are never new.
-        $output = $this->git->output($this->repository, ['rev-list', '--topo-order', '--parents', $option, $head, '^'.$this->base, '^'.$this->main]);
+        $output = $this->git->output($this->repository, ['rev-list', '--topo-order', '--parents', $option, $head, '--not', ...$this->known()]);
 
         return '' === $output ? [] : array_map(static fn (string $line): array => explode(' ', $line), explode("\n", $output));
     }

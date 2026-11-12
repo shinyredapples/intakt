@@ -39,7 +39,7 @@ final readonly class StrippedCommits
             }
         }
 
-        return new AcceptedHandBack($history->base, $replaced[$head] ?? $head, count($replaced));
+        return new AcceptedHandBack($history->pushed, $replaced[$head] ?? $head, count($replaced));
     }
 
     /**

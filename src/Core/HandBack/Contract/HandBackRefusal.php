@@ -11,6 +11,7 @@ enum HandBackRefusal: string
     case TouchesMain = 'touches-main';
     case NamesAnotherRef = 'names-another-ref';
     case NotOnBranch = 'not-on-branch';
+    case Incomplete = 'incomplete';
     case NotFastForward = 'not-fast-forward';
     case HoldsMerge = 'holds-merge';
     case MergesAnotherBranch = 'merges-another-branch';
@@ -23,6 +24,7 @@ enum HandBackRefusal: string
             self::TouchesMain => 'the bundle updates main',
             self::NamesAnotherRef => 'the bundle names a ref other than the task\'s branch',
             self::NotOnBranch => 'the bundle builds on a commit that is neither on the task\'s branch nor on main',
+            self::Incomplete => 'the bundle leaves out objects its commits need',
             self::NotFastForward => 'the bundle is not a fast-forward of the pushed branch',
             self::HoldsMerge => 'the bundle holds a merge commit, and no merge of main was asked',
             self::MergesAnotherBranch => 'a merge commit in the bundle merges something other than main',

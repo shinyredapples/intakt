@@ -76,6 +76,34 @@ final readonly class BuildHistory
         return $hash;
     }
 
+    public function commitWithAMissingTree(string $message): string
+    {
+        return $this->commitOnTree(str_repeat('a', 40), $message);
+    }
+
+    public function commitWithAMissingFile(string $message): string
+    {
+        $tree = $this->run(['mktree', '--missing'], $this->work, '100644 blob '.str_repeat('b', 40)."\tfile\n");
+
+        return $this->commitOnTree($tree, $message);
+    }
+
+    // By hand, because "git bundle create" refuses a commit whose objects are missing; only a crafted bundle leaves them out.
+    public function bundleOfTheHeadCommitAlone(): string
+    {
+        $head = $this->git('rev-parse', 'HEAD');
+        $pack = $this->output(['pack-objects', '--stdout'], $this->work, $head."\n");
+
+        return $this->file("# v2 git bundle\n-".$this->git('rev-parse', 'HEAD^')."\n".$head." refs/heads/task\n\n".$pack);
+    }
+
+    public function restartAsOrphan(string $branch): void
+    {
+        $this->git('checkout', '--quiet', 'main');
+        $this->git('branch', '--quiet', '-D', $branch);
+        $this->git('checkout', '--quiet', '--orphan', $branch);
+    }
+
     public function checkout(string $branch): void
     {
         $this->git('checkout', '--quiet', $branch);
@@ -89,6 +117,13 @@ final readonly class BuildHistory
     public function merge(string $branch): string
     {
         $this->git('merge', '--quiet', '--no-ff', '--no-edit', $branch);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
+    public function mergeUnrelated(string $branch): string
+    {
+        $this->git('merge', '--quiet', '--no-ff', '--no-edit', '--allow-unrelated-histories', $branch);
 
         return $this->git('rev-parse', 'HEAD');
     }
@@ -129,10 +164,35 @@ final readonly class BuildHistory
         return $this->run(array_values($arguments), $this->work);
     }
 
+    private function commitOnTree(string $tree, string $message): string
+    {
+        // Literally, because git checks that a commit's tree exists before it writes one.
+        $commit = implode("\n", [
+            'tree '.$tree,
+            'parent '.$this->git('rev-parse', 'HEAD'),
+            'author Test <test@example.invalid> 1700000000 +0000',
+            'committer Test <test@example.invalid> 1700000000 +0000',
+            '',
+            $message,
+        ]);
+        $hash = $this->run(['hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], $this->work, $commit."\n");
+        $this->git('update-ref', 'HEAD', $hash);
+
+        return $hash;
+    }
+
     /**
      * @param list<string> $arguments
      */
     private function run(array $arguments, string $directory, ?string $input = null): string
+    {
+        return trim($this->output($arguments, $directory, $input));
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function output(array $arguments, string $directory, ?string $input = null): string
     {
         // Inherited GIT_DIR and the like (as inside a git hook) would make the test change another repository.
         $unset = [];
@@ -148,6 +208,6 @@ final readonly class BuildHistory
             throw new RuntimeException($process->getErrorOutput());
         }
 
-        return trim($process->getOutput());
+        return $process->getOutput();
     }
 }

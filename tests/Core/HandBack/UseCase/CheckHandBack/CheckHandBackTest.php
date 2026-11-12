@@ -54,13 +54,71 @@ final class CheckHandBackTest extends TestCase
 
     public function testNewCommitsOnABranchNotPushedYetAreAcceptedOnTopOfMain(): void
     {
-        $main = $this->history->inMirror('rev-parse', 'refs/heads/main');
         $this->history->commit('First');
         $head = $this->history->commit('Second');
 
         $result = $this->check($this->history->bundle('main..task'));
 
-        self::assertEquals(new AcceptedHandBack($main, $head, 0), $result);
+        self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
+    }
+
+    public function testAFirstBuildIsAcceptedWhenMainMovedInTheRepositoryWhileItRan(): void
+    {
+        $head = $this->history->commit('Build work');
+        $bundle = $this->history->bundle('main..task');
+        $this->movedMain();
+
+        $result = $this->check($bundle);
+
+        self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
+    }
+
+    public function testABranchNotPushedYetThatSharesNoHistoryWithMainIsRefused(): void
+    {
+        $this->history->restartAsOrphan('task');
+        $this->history->commit('Unrelated');
+
+        $result = $this->check($this->history->bundle('task'));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::NotFastForward), $result);
+    }
+
+    public function testABranchNotPushedYetThatMergesMainIntoAHistoryOfItsOwnIsRefused(): void
+    {
+        $this->history->restartAsOrphan('task');
+        $this->history->commit('Unrelated');
+        $this->history->mergeUnrelated('main');
+
+        $result = $this->checkWithMergeOfMain($this->history->bundle('task', '^main'));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::NotFastForward), $result);
+    }
+
+    public function testACommitWhoseTreeIsMissingIsRefused(): void
+    {
+        $this->history->commitWithAMissingTree('Broken tree');
+
+        $result = $this->check($this->history->bundleOfTheHeadCommitAlone());
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::Incomplete), $result);
+    }
+
+    public function testACommitWhoseFileIsMissingIsRefused(): void
+    {
+        $this->history->commitWithAMissingFile('Missing file');
+
+        $result = $this->check($this->history->bundleOfTheHeadCommitAlone());
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::Incomplete), $result);
+    }
+
+    public function testACommitWhoseObjectsAreAllInTheBundleIsAcceptedWhenBundledByHand(): void
+    {
+        $head = $this->history->commit('Complete');
+
+        $result = $this->check($this->history->bundleOfTheHeadCommitAlone());
+
+        self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
     }
 
     public function testNewCommitsOnThePushedBranchAreAcceptedOnTopOfIt(): void
@@ -277,7 +335,7 @@ final class CheckHandBackTest extends TestCase
 
         $result = $this->check($this->history->bundle('main..task'));
 
-        self::assertEquals(new AcceptedHandBack($this->history->inMirror('rev-parse', 'refs/heads/main'), $head, 0), $result);
+        self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
     }
 
     public function testAMalformedCommitWithAttributionIsRefused(): void
@@ -301,7 +359,6 @@ final class CheckHandBackTest extends TestCase
 
     public function testARepositoryGivenByARelativePathIsChecked(): void
     {
-        $main = $this->history->inMirror('rev-parse', 'refs/heads/main');
         $head = $this->history->commit('First');
         $bundle = $this->history->bundle('main..task');
         $directory = (string) getcwd();
@@ -313,7 +370,7 @@ final class CheckHandBackTest extends TestCase
             chdir($directory);
         }
 
-        self::assertEquals(new AcceptedHandBack($main, $head, 0), $result);
+        self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
     }
 
     public function testAMissingRepositoryIsNotChecked(): void
