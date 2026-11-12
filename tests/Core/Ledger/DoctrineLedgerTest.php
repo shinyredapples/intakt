@@ -95,14 +95,28 @@ final class DoctrineLedgerTest extends KernelTestCase
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
         $manager = $this->registry->getManager();
-        $manager->persist(new EventRecord(UuidV7::fromString('019a2600-0000-7fff-bfff-ffffffffffff'), LedgerEventKind::ReviewStarted, '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
-        $manager->persist(new EventRecord(UuidV7::fromString('019a2600-0000-7000-8000-000000000000'), LedgerEventKind::JudgeDone, '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
+        $manager->persist(new EventRecord(UuidV7::fromString('019a2600-0000-7fff-bfff-ffffffffffff'), LedgerEventKind::ReviewStarted->value, '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
+        $manager->persist(new EventRecord(UuidV7::fromString('019a2600-0000-7000-8000-000000000000'), LedgerEventKind::JudgeDone->value, '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
         $manager->flush();
         $manager->clear();
 
         $kinds = array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($ledger->readInOrder()));
 
         self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::JudgeDone], $kinds);
+    }
+
+    public function testAStoredEventOfAKindThisCodeNoLongerKnowsIsSkippedAndTheOthersAreStillRead(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $manager = $this->registry->getManager();
+        $manager->persist(new EventRecord(new UuidV7(), 'shadow_round_held', '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
+        $manager->persist(new EventRecord(new UuidV7(), LedgerEventKind::JudgeDone->value, '{}', new DateTimeImmutable('2026-10-27 12:00:00')));
+        $manager->flush();
+        $manager->clear();
+
+        $kinds = array_map(static fn (RecordedEvent $event): LedgerEventKind => $event->event->kind, iterator_to_array($ledger->readInOrder()));
+
+        self::assertSame([LedgerEventKind::JudgeDone], $kinds);
     }
 
     public function testTheIdOfAnEventIsAUuidV7CarryingTheMomentOfTheClock(): void
@@ -308,7 +322,7 @@ final class DoctrineLedgerTest extends KernelTestCase
 
     private function storedEvent(): EventRecord
     {
-        $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted, '{}', new DateTimeImmutable('2026-10-27 12:00:00'));
+        $record = new EventRecord(new UuidV7(), LedgerEventKind::ReviewStarted->value, '{}', new DateTimeImmutable('2026-10-27 12:00:00'));
         $this->entityManager()->persist($record);
         $this->entityManager()->flush();
 

@@ -12,13 +12,15 @@ use Mcp\Server\ClientGateway;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
 #[McpTool(
-    name: 'search_files',
+    name: self::NAME,
     description: 'Finds the lines of the repository at the head under review that contain a text; answers path:line:text. Send a progressToken to get progress notifications.',
     annotations: new ToolAnnotations(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false),
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]
 final readonly class SearchFilesTool
 {
+    public const string NAME = 'search_files';
+
     // Because a large tree has thousands of files, and a notification for each would flood the client.
     private const int FILES_PER_NOTIFICATION = 10;
 
