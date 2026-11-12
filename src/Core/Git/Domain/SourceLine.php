@@ -58,24 +58,30 @@ final readonly class SourceLine
         $external = false;
 
         foreach (explode("\n", $text) as $line) {
-            // Because text copied into an external block is untrusted even in a trusted task (the threat model), so nothing in it,
-            // not even a fence, counts, and an unclosed block runs to the end of the text; the marker is read before the fence
-            // state, so a block the author opens inside a code example still hides what follows, and its end never closes a fence.
-            if ($external) {
+            // Because copied text in an external block is untrusted even in a trusted task (the threat model), the block hides every line, a fence too, until its closing marker or the end of the text, and that marker ends no fence.
+            if ($external || 1 === preg_match(self::EXTERNAL_OPENS, $line)) {
                 $external = 1 !== preg_match(self::EXTERNAL_CLOSES, $line);
-            } elseif (1 === preg_match(self::EXTERNAL_OPENS, $line)) {
-                $external = true;
-            } elseif (null !== $fence) {
-                // Because a code example shows the syntax and must not steer the clone, and an unclosed fence runs to the end of the text.
-                $fence = self::closes($fence, $line) ? null : $fence;
-            } elseif (1 === preg_match(self::FENCE_OPENS, $line, $opening)) {
-                $fence = $opening[1];
-            } elseif (1 === preg_match(self::LINE, $line, $source)) {
+                continue;
+            }
+
+            $fence = self::fenceAfter($fence, $line);
+
+            if (null === $fence && 1 === preg_match(self::LINE, $line, $source)) {
                 $lines[] = $source;
             }
         }
 
         return $lines;
+    }
+
+    private static function fenceAfter(?string $fence, string $line): ?string
+    {
+        // Because a code example shows the syntax and must not steer the clone, and an unclosed fence runs to the end of the text.
+        if (null !== $fence) {
+            return self::closes($fence, $line) ? null : $fence;
+        }
+
+        return 1 === preg_match(self::FENCE_OPENS, $line, $opening) ? $opening[1] : null;
     }
 
     private static function closes(string $fence, string $line): bool
