@@ -8,13 +8,28 @@ use Intakt\Gates\GitleaksGate;
 use Intakt\Gates\WorkingTreeSecretsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\Attributes\UsesClass;
 
-// A sandbox and a scan per test, because a shared sandbox would let one planted secret fail the next test's clean scan, and most of a scan's second is the gate starting gitleaks twice (version check, then scan), which is the code under test.
+// A sandbox and a scan per test that needs a tree of its own (a clean scan, a scanner configuration, git state, a scanner stub), because one planted secret would fail another test's clean scan; most of a scan's second is the gate starting gitleaks twice (version check, then scan), which is the code under test, so a case that reads only the gate's line runs the gate in the test process, and bin/check stays for its exit code, its output and the scanner it finds.
 #[CoversClass(WorkingTreeSecretsGate::class)]
 #[UsesClass(GitleaksGate::class)]
 final class WorkingTreeSecretsGateTest extends SandboxTestCase
 {
+    // Because the gate reports every finding instead of stopping at the first, and reads its rules from home rather than from the tree, the cases that only ask whether a secret at a path is caught share one tree and one scan.
+    public function testOneScanOfATreeWithASecretAtEveryCataloguedPathFails(): string
+    {
+        $sandbox = $this->emptySandbox();
+        $this->plantSecretsAtTheCataloguedPaths($sandbox);
+
+        $scan = $sandbox->gateResult(new WorkingTreeSecretsGate());
+        $findings = implode("\n", $scan->findings);
+
+        self::assertFalse($scan->isPassing(), $findings);
+
+        return $findings;
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
@@ -48,26 +63,16 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
     }
 
     #[DataProvider('filesTheScannersDefaultsSkip')]
-    public function testAPlantedSecretInAFileTheScannersDefaultsSkipFailsTheScan(string $path): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testAPlantedSecretInAFileTheScannersDefaultsSkipFailsTheScan(string $path, string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
-
-        $run = $sandbox->check('--only=secrets');
-
-        self::assertTrue($run->failed('secrets'), $run->output());
-        self::assertStringContainsString($path, $run->findingsOf('secrets'));
+        $this->assertFoundAt($path, $findings);
     }
 
-    public function testATokenInANestedCopyOfTheScannerConfigurationFailsTheScan(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testATokenInANestedCopyOfTheScannerConfigurationFailsTheScan(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('spikes/throwaway/config/gates/gitleaks.toml', 'token='.$this->fakeGithubToken()."\n");
-
-        $run = $sandbox->check('--only=secrets');
-
-        self::assertTrue($run->failed('secrets'), $run->output());
-        self::assertStringContainsString('spikes/throwaway/config/gates/gitleaks.toml', $run->findingsOf('secrets'));
+        $this->assertFoundAt('spikes/throwaway/config/gates/gitleaks.toml', $findings);
     }
 
     public function testARealSecretContainingADummyValueStillFailsTheScan(): void
@@ -78,8 +83,10 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
 
         $run = $sandbox->check('--only=secrets');
 
+        self::assertSame(1, $run->exitCode(), $run->output());
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString('settings.php', $run->findingsOf('secrets'));
+        self::assertStringNotContainsString($this->fakeGithubToken(), $run->output());
     }
 
     public function testTheScannerConfigurationPassesItsOwnScan(): void
@@ -87,7 +94,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration());
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->passed('secrets'), $run->output());
     }
@@ -97,7 +104,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration().'token = "'.$this->fakeGithubToken()."\"\n");
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString('config/gates/gitleaks.toml', $run->findingsOf('secrets'));
@@ -108,15 +115,13 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration().'stopwords = [\n    "'.$this->fakeGithubToken()."\",\n]\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->failed('secrets'));
     }
 
-    public function testATokenOnARuleRegexLineInAnotherFileIsCaught(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testATokenOnARuleRegexLineInAnotherFileIsCaught(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('rules.toml', "regex = '''".$this->fakeGithubToken()."'''\n");
-
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        $this->assertFoundAt('rules.toml', $findings);
     }
 
     public function testATokenOnARuleRegexLineInTheScannerConfigurationIsCaught(): void
@@ -124,39 +129,31 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/gitleaks.toml', $this->scannerConfiguration()."\n[[rules]]\nid = \"planted\"\nregex = '''".$this->fakeGithubToken()."'''\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->failed('secrets'));
     }
 
-    public function testAShortLivedBedrockKeyIsCaught(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testAShortLivedBedrockKeyIsCaught(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('key.txt', 'key = '.$this->bedrockPrefix().strrev('3D%Q9xVb2Kq7Ld4Mf8Nh1Rj5Tz0Wy6Pc')."\n");
-
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        $this->assertFoundAt('key.txt', $findings);
     }
 
-    public function testTheBarePrefixOfABedrockKeyIsNotAKey(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testTheBarePrefixOfABedrockKeyIsNotAKey(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('prefix.txt', "regex = '''".$this->bedrockPrefix()."'''\n");
-
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+        self::assertDoesNotMatchRegularExpression($this->findingAt('prefix.txt'), $findings);
     }
 
-    public function testATokenAsAQuotedEntryOfAJsonListIsCaught(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testATokenAsAQuotedEntryOfAJsonListIsCaught(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('settings.json', "{\"tokens\": [\n    \"".$this->fakeGithubToken()."\",\n    \"other\"\n]}\n");
-
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        $this->assertFoundAt('settings.json', $findings);
     }
 
-    public function testATokenAsAQuotedEntryOfAPhpArrayIsCaught(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testATokenAsAQuotedEntryOfAPhpArrayIsCaught(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('settings.php', "<?php\n\nreturn [\n    \"".$this->fakeGithubToken()."\",\n];\n");
-
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        $this->assertFoundAt('settings.php', $findings);
     }
 
     public function testAScannerNamedByTheOverrideIsVersionCheckedToo(): void
@@ -184,6 +181,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: start');
         chmod($sandbox->root.'/locked.txt', 0o000);
 
+        // In bin/check, because the gate's failed copy also raises a PHP warning, which fails a test in this process.
         try {
             $run = $sandbox->check('--only=secrets');
         } finally {
@@ -200,7 +198,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->write('vendor/package/tests/key.txt', 'token='.$this->fakeGithubToken()."\n");
         $sandbox->write('README.md', "start\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->passed('secrets'));
     }
 
     public function testAScannerOtherThanThePinnedVersionIsRefused(): void
@@ -223,36 +221,24 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         self::assertMatchesRegularExpression($image, Workflow::ciImageDefinition());
     }
 
-    public function testAPlantedSecretInTheWorkingTreeFailsTheScan(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testAPlantedSecretInTheWorkingTreeFailsTheScan(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('src/settings.txt', 'token='.$this->fakeGithubToken()."\n");
-
-        $run = $sandbox->check('--only=secrets');
-
-        self::assertSame(1, $run->exitCode(), $run->output());
-        self::assertStringContainsString('src/settings.txt', $run->findingsOf('secrets'));
-        self::assertStringNotContainsString($this->fakeGithubToken(), $run->output());
+        $this->assertFoundAt('src/settings.txt', $findings);
+        self::assertStringNotContainsString($this->fakeGithubToken(), $findings);
     }
 
-    public function testAPlantedSecretInsideSpikesStillFailsTheScan(): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testAPlantedSecretInsideSpikesStillFailsTheScan(string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write('spikes/throwaway/settings.txt', 'token='.$this->fakeGithubToken()."\n");
-
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        $this->assertFoundAt('spikes/throwaway/settings.txt', $findings);
     }
 
     #[DataProvider('locationsThatOnceWereAllowlisted')]
-    public function testAPlantedSecretInAnyFormerlyAllowlistedLocationStillFailsTheScan(string $path): void
+    #[Depends('testOneScanOfATreeWithASecretAtEveryCataloguedPathFails')]
+    public function testAPlantedSecretInAnyFormerlyAllowlistedLocationStillFailsTheScan(string $path, string $findings): void
     {
-        $sandbox = $this->emptySandbox();
-        $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
-
-        $run = $sandbox->check('--only=secrets');
-
-        self::assertTrue($run->failed('secrets'), $run->output());
-        self::assertStringContainsString($path, $run->findingsOf('secrets'));
+        $this->assertFoundAt($path, $findings);
     }
 
     #[DataProvider('foldersTheScannerSkips')]
@@ -263,7 +249,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
         $sandbox->git('add', '--force', '--all');
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString($path, $run->findingsOf('secrets'));
@@ -274,7 +260,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/settings.txt', 'token='.$this->fakeGithubToken().' # '.$this->inlineAllowDirective()."\n");
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString('inline allow directive', $run->findingsOf('secrets'));
@@ -286,7 +272,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->write('src/settings.txt', 'token='.$this->fakeGithubToken()."\n");
         $sandbox->write('.gitleaksignore', "src/settings.txt:github-pat:1\n");
 
-        $run = $sandbox->check('--only=secrets');
+        $run = $sandbox->runGate(new WorkingTreeSecretsGate());
 
         self::assertTrue($run->failed('secrets'), $run->output());
         self::assertStringContainsString('.gitleaksignore', $run->findingsOf('secrets'));
@@ -300,7 +286,7 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: start');
         $sandbox->write('vendor/package/settings.txt', 'token='.$this->fakeGithubToken()."\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->passed('secrets'));
     }
 
     public function testAnUntrackedFileThatIsNotIgnoredIsScanned(): void
@@ -310,14 +296,14 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('chore: start');
         $sandbox->write('notes.svg', 'token='.$this->fakeGithubToken()."\n");
 
-        self::assertTrue($sandbox->check('--only=secrets')->failed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->failed('secrets'));
     }
 
     public function testATreeWithoutSecretsPassesTheScan(): void
     {
         $sandbox = $this->sandboxWith('clean');
 
-        self::assertTrue($sandbox->check('--only=secrets')->passed('secrets'));
+        self::assertTrue($sandbox->runGate(new WorkingTreeSecretsGate())->passed('secrets'));
     }
 
     private function checkWithScannerReporting(string $version): CheckRun
@@ -334,6 +320,35 @@ final class WorkingTreeSecretsGateTest extends SandboxTestCase
         } finally {
             putenv('PATH='.$path);
         }
+    }
+
+    private function plantSecretsAtTheCataloguedPaths(Sandbox $sandbox): void
+    {
+        $token = 'token='.$this->fakeGithubToken()."\n";
+
+        foreach ([...self::filesTheScannersDefaultsSkip(), ...self::locationsThatOnceWereAllowlisted()] as [$path]) {
+            $sandbox->write($path, $token);
+        }
+
+        $sandbox->write('spikes/throwaway/settings.txt', $token);
+        $sandbox->write('src/settings.txt', $token);
+        $sandbox->write('spikes/throwaway/config/gates/gitleaks.toml', $token);
+        $sandbox->write('rules.toml', "regex = '''".$this->fakeGithubToken()."'''\n");
+        $sandbox->write('key.txt', 'key = '.$this->bedrockPrefix().strrev('3D%Q9xVb2Kq7Ld4Mf8Nh1Rj5Tz0Wy6Pc')."\n");
+        $sandbox->write('prefix.txt', "regex = '''".$this->bedrockPrefix()."'''\n");
+        $sandbox->write('settings.json', "{\"tokens\": [\n    \"".$this->fakeGithubToken()."\",\n    \"other\"\n]}\n");
+        $sandbox->write('settings.php', "<?php\n\nreturn [\n    \"".$this->fakeGithubToken()."\",\n];\n");
+    }
+
+    private function assertFoundAt(string $path, string $findings): void
+    {
+        self::assertMatchesRegularExpression($this->findingAt($path), $findings);
+    }
+
+    // Anchored at a line's start, because a path such as settings.txt is also the tail of src/settings.txt.
+    private function findingAt(string $path): string
+    {
+        return '~^'.preg_quote($path, '~').':\d+ ~m';
     }
 
     private function inlineAllowDirective(): string
