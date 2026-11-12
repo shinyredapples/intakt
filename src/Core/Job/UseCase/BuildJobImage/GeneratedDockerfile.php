@@ -11,8 +11,6 @@ final readonly class GeneratedDockerfile
     // The release image's Composer pin, so the jobs of every project install with the Composer Intakt itself is built with.
     private const string COMPOSER = 'composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0';
     private const string EXTENSION_INSTALLER = 'mlocati/php-extension-installer:2.13.2';
-    private const string CLAUDE_CODE = '@anthropic-ai/claude-code@2.1.322';
-    private const string CODEX = '@openai/codex@0.167.1';
 
     /**
      * @throws JobImageNotBuilt
@@ -27,7 +25,7 @@ final readonly class GeneratedDockerfile
             'RUN apt-get update \\',
             '    && apt-get install -y --no-install-recommends ca-certificates curl git unzip nodejs npm \\',
             '    && rm -rf /var/lib/apt/lists/*',
-            sprintf('RUN npm install --global %s %s \\', self::CLAUDE_CODE, self::CODEX),
+            sprintf('RUN npm install --global %s \\', implode(' ', CliManifest::installArgumentsFrom(CliManifest::PATH))),
             '    && npm cache clean --force',
             ...self::extensionStep($php->extensions),
             '',
