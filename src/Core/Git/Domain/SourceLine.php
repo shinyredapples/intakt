@@ -9,7 +9,12 @@ use InvalidArgumentException;
 final readonly class SourceLine
 {
     // A whole line with a full commit id, so a sentence, a quote or code that mentions one is prose and not a source line.
-    private const string LINE = '/^Source: (\S+)@([0-9a-f]{40}|[0-9a-f]{64})[ \t]*\r?$/m';
+    private const string LINE = '/^Source: (\S+)@([0-9a-f]{40}|[0-9a-f]{64})[ \t]*\r?$/';
+
+    // Markdown's fence: a backtick fence's info string holds no backtick, or the line is inline code.
+    private const string FENCE_OPENS = '/^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/';
+
+    private const string FENCE_CLOSES = '/^ {0,3}(`{3,}|~{3,})[ \t]*\r?$/';
 
     private function __construct(
         public string $branch,
@@ -44,8 +49,27 @@ final readonly class SourceLine
      */
     private static function linesIn(string $text): array
     {
-        preg_match_all(self::LINE, $text, $lines, PREG_SET_ORDER);
+        $lines = [];
+        $fence = null;
+
+        foreach (explode("\n", $text) as $line) {
+            // Because a code example shows the syntax and must not steer the clone, and an unclosed fence runs to the end of the text.
+            if (null !== $fence) {
+                $fence = self::closes($fence, $line) ? null : $fence;
+            } elseif (1 === preg_match(self::FENCE_OPENS, $line, $opening)) {
+                $fence = $opening[1];
+            } elseif (1 === preg_match(self::LINE, $line, $source)) {
+                $lines[] = $source;
+            }
+        }
 
         return $lines;
+    }
+
+    private static function closes(string $fence, string $line): bool
+    {
+        return 1 === preg_match(self::FENCE_CLOSES, $line, $closing)
+            && $closing[1][0] === $fence[0]
+            && strlen($closing[1]) >= strlen($fence);
     }
 }

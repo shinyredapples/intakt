@@ -63,6 +63,29 @@ final class SourceLineTest extends TestCase
         yield 'a commit of the wrong length' => ['Source: feat/big@'.self::SHA1.'89'];
         yield 'another case' => ['source: feat/big@'.self::SHA1];
         yield 'no line at all' => [''];
+        yield 'a fenced code example' => ["Example only:\n```text\nSource: feat/example@".self::SHA1."\n```\n"];
+        yield 'a tilde fence' => ["~~~\nSource: feat/big@".self::SHA1."\n~~~"];
+        yield 'an indented fence' => ["   ```\nSource: feat/big@".self::SHA1."\n   ```"];
+        yield 'a fence that is never closed' => ["```\nSource: feat/big@".self::SHA1];
+        yield 'a shorter fence inside a longer one' => ["````\n```\nSource: feat/big@".self::SHA1."\n````"];
+        yield 'a fence of the other character inside one' => ["```\n~~~\nSource: feat/big@".self::SHA1."\n```"];
+    }
+
+    public function testASourceLineAfterAClosedFenceIsASource(): void
+    {
+        $source = SourceLine::in("```\nSource: feat/example@".self::SHA1."\n```\nSource: feat/big@".self::SHA1);
+
+        self::assertSame('feat/big', $source?->branch);
+    }
+
+    public function testBackticksAfterThreeBackticksAreInlineCodeAndNoFence(): void
+    {
+        self::assertSame('feat/big', SourceLine::in("```a` b\nSource: feat/big@".self::SHA1)?->branch);
+    }
+
+    public function testAFenceWithAWindowsLineEndingIsClosed(): void
+    {
+        self::assertSame('feat/big', SourceLine::in("```\r\nexample\r\n```\r\nSource: feat/big@".self::SHA1."\r\n")?->branch);
     }
 
     public function testATaskWithTwoSourceLinesIsRefused(): void
