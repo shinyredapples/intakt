@@ -38,16 +38,27 @@ final class ProbeTest extends TestCase
         new Filesystem()->remove($this->scratch);
     }
 
-    public function testAScriptRunsAgainstTheInstanceAndItsOutputAndExitCodeAreReported(): void
+    // One boot holds the script, network and failing-child cases, because each namespaced boot costs seconds.
+    public function testAFailingScriptReachesTheInstanceButNotTheNetworkAndItsChildIsKilled(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
-        $this->probe('Answer.php', '<?php echo "code=", explode(" ", get_headers(getenv("INTAKT_INSTANCE_URL")."/no-such-page")[0])[1], "\n"; exit(7);');
+        $child = $this->childMarker();
+        $this->probe('Fail.php', $this->spawningEscapedChild($child).<<<'PHP_WRAP'
+            echo "code=", explode(" ", get_headers(getenv("INTAKT_INSTANCE_URL")."/no-such-page")[0])[1], "\n";
+            $socket = @fsockopen("192.0.2.1", 80, $error, $message, 3);
+            echo $socket ? "reached" : "unreachable: ".$message, "\n";
+            exit($socket ? 0 : 7);
+            PHP_WRAP);
 
-        $run = $this->runProbe('tests/Probe/Answer.php');
+        $run = $this->runProbe('tests/Probe/Fail.php');
 
         self::assertStringContainsString('code=404', $run->getOutput(), $this->transcriptOf($run));
+        // With a route out the documentation address would only time out; no route at all is what the namespace gives.
+        self::assertStringContainsString('unreachable: Network is unreachable', $run->getOutput());
         self::assertStringContainsString('exit code: 7', $run->getOutput());
         self::assertSame(7, $run->getExitCode());
+        self::assertFileExists($child, 'the child never confirmed that it was running');
+        self::assertSame([], $this->processesNaming($child));
     }
 
     public function testAPhpunitTestRunsAgainstTheInstance(): void
@@ -83,18 +94,6 @@ final class ProbeTest extends TestCase
 
         self::assertStringContainsString('404', $run->getOutput(), $this->transcriptOf($run));
         self::assertSame(0, $run->getExitCode());
-    }
-
-    public function testAProbeThatReachesForTheNetworkFails(): void
-    {
-        $this->skipWhenNetworkNamespacesAreRefused();
-        $this->probe('Reach.php', '<?php $socket = @fsockopen("192.0.2.1", 80, $code, $message, 3); echo $socket ? "reached" : "unreachable: ".$message, "\n"; exit($socket ? 0 : 3);');
-
-        $run = $this->runProbe('tests/Probe/Reach.php');
-
-        // With a route out the documentation address would only time out; no route at all is what the namespace gives.
-        self::assertStringContainsString('unreachable: Network is unreachable', $run->getOutput(), $this->transcriptOf($run));
-        self::assertSame(3, $run->getExitCode());
     }
 
     public function testAProbeNeverRunsWhenTheNamespacesCannotBeCreated(): void
@@ -185,19 +184,7 @@ final class ProbeTest extends TestCase
         self::assertStringContainsString('usage:', $run->getErrorOutput());
     }
 
-    public function testNothingIsLeftBehindAfterAProbe(): void
-    {
-        $this->skipWhenNetworkNamespacesAreRefused();
-        $this->probe('Quiet.php', '<?php echo "ok\n";');
-
-        $run = $this->runProbe('tests/Probe/Quiet.php');
-
-        self::assertSame(0, $run->getExitCode(), $this->transcriptOf($run));
-        self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
-        self::assertSame([], $this->processesNaming($this->project.'/public'));
-    }
-
-    public function testAChildThatAProbeLeavesRunningIsKilledWithTheInstance(): void
+    public function testNothingIsLeftBehindAfterAProbeThatEndsWithZeroAndLeavesAChild(): void
     {
         $this->skipWhenNetworkNamespacesAreRefused();
         $child = $this->childMarker();
@@ -209,20 +196,8 @@ final class ProbeTest extends TestCase
         self::assertSame(0, $run->getExitCode());
         self::assertFileExists($child, 'the child never confirmed that it was running');
         self::assertSame([], $this->processesNaming($child));
-    }
-
-    public function testAChildThatAFailingProbeLeavesRunningIsKilledWithTheInstance(): void
-    {
-        $this->skipWhenNetworkNamespacesAreRefused();
-        $child = $this->childMarker();
-        $this->probe('Fail.php', $this->spawningEscapedChild($child).'exit(4);');
-
-        $run = $this->runProbe('tests/Probe/Fail.php');
-
-        self::assertStringContainsString('exit code: 4', $run->getOutput(), $this->transcriptOf($run));
-        self::assertSame(4, $run->getExitCode());
-        self::assertFileExists($child, 'the child never confirmed that it was running');
-        self::assertSame([], $this->processesNaming($child));
+        self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
+        self::assertSame([], $this->processesNaming($this->project.'/public'));
     }
 
     public function testAProbeThatOverrunsItsTimeIsKilledWithItsChildrenAndExitCode124(): void
