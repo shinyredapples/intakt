@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Domain;
 
-// The triggers that run a workflow with no more than the rights of the branch it comes from; any other one asks.
+// Any other trigger asks, because it may run with the base repository's rights on code a pull request controls.
 enum BranchTrigger: string
 {
     case Push = 'push';

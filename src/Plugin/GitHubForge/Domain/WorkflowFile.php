@@ -6,7 +6,7 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 
 final readonly class WorkflowFile
 {
-    // A null content is a file that could not be read, which the scan reports as risky instead of skipping.
+    // Null when the file could not be read, because the scan must report such a file as risky instead of skipping it.
     public function __construct(
         public string $path,
         public ?string $content,

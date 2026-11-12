@@ -8,6 +8,12 @@ use Intakt\Plugin\GitHubForge\Domain\BranchTrigger;
 use Intakt\Plugin\GitHubForge\Domain\HostedRunnerLabel;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFile;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFileScan;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowFindings;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowJobs;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowLine;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowLines;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowNode;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRisk;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRiskFinding;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRiskKind;
@@ -19,6 +25,12 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(WorkflowRiskScan::class)]
 #[CoversClass(WorkflowFileScan::class)]
+#[CoversClass(WorkflowLines::class)]
+#[CoversClass(WorkflowValue::class)]
+#[CoversClass(WorkflowJobs::class)]
+#[UsesClass(WorkflowLine::class)]
+#[UsesClass(WorkflowNode::class)]
+#[UsesClass(WorkflowFindings::class)]
 #[CoversClass(WorkflowRisk::class)]
 #[UsesClass(WorkflowFile::class)]
 #[UsesClass(WorkflowRiskFinding::class)]

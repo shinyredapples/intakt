@@ -9,6 +9,12 @@ use Intakt\Plugin\GitHubForge\Domain\CiDefinition;
 use Intakt\Plugin\GitHubForge\Domain\HostedRunnerLabel;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFile;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFileScan;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowFindings;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowJobs;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowLine;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowLines;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowNode;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRisk;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRiskFinding;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRiskKind;
@@ -27,6 +33,12 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(WorkflowFiles::class)]
 #[UsesClass(WorkflowRiskScan::class)]
 #[UsesClass(WorkflowFileScan::class)]
+#[UsesClass(WorkflowLines::class)]
+#[UsesClass(WorkflowValue::class)]
+#[UsesClass(WorkflowJobs::class)]
+#[UsesClass(WorkflowLine::class)]
+#[UsesClass(WorkflowNode::class)]
+#[UsesClass(WorkflowFindings::class)]
 #[UsesClass(WorkflowRisk::class)]
 #[UsesClass(WorkflowFile::class)]
 #[UsesClass(WorkflowRiskFinding::class)]

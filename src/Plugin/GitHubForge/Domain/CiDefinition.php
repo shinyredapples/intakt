@@ -8,7 +8,7 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 final readonly class CiDefinition
 {
     private const string GITHUB_FOLDER = '.github/';
-    // A workflow can build an image from any Dockerfile in its build context without naming it.
+    // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/';
 
     /**
