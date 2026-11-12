@@ -48,8 +48,9 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     #[Override]
     public function roundChanged(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
+        // The summary first, because a judged round's state must stay the last update of its topic: nothing is published after it.
         $this->summaryChanged($round);
+        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
     }
 
     #[Override]

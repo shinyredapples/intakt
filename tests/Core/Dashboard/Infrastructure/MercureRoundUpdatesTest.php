@@ -187,15 +187,16 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('0.5000 USD', $this->published[0]->getData());
     }
 
-    public function testARoundChangePublishesTheSummaryAfterTheRoundState(): void
+    public function testAJudgedRoundPublishesItsSummaryBeforeItsStateSoTheJudgedStateIsTheLastUpdate(): void
     {
         $summary = new SessionSummary([], Cost::none(), [], [], [], []);
 
-        $this->updates(null, $this->summaries($summary))->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+        $this->updates(null, $this->summaries($summary))->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertCount(2, $this->published);
-        self::assertSame('replace round-'.self::ROUND.'-state', $this->actionAndTargetOf($this->published[0]));
-        self::assertSame('replace round-'.self::ROUND.'-summary-tools', $this->actionAndTargetOf($this->streamsOf($this->published[1])[0]));
+        self::assertSame('replace round-'.self::ROUND.'-summary-tools', $this->actionAndTargetOf($this->streamsOf($this->published[0])[0]));
+        self::assertSame('replace round-'.self::ROUND.'-state', $this->actionAndTargetOf($this->published[1]));
+        self::assertStringContainsString('Judged.', $this->published[1]->getData());
     }
 
     public function testARoundWithoutARecordedSummaryPublishesNoSummary(): void
