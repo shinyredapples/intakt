@@ -26,7 +26,7 @@ final class ScriptedVendor implements Vendor
     /** @var list<?string> */
     public array $rounds = [];
 
-    public function __construct(private readonly ?Throwable $failure = null)
+    public function __construct(private readonly ?Throwable $failure = null, private readonly ?Verdict $verdict = null)
     {
     }
 
@@ -37,7 +37,7 @@ final class ScriptedVendor implements Vendor
         $this->conversations[] = $request->conversation->id->toRfc4122();
         $this->rounds[] = $request->conversation->round?->toRfc4122();
 
-        return $this->failure instanceof Throwable ? throw $this->failure : new VendorReview(new Verdict(Decision::Approve, [], [], []));
+        return $this->failure instanceof Throwable ? throw $this->failure : new VendorReview($this->verdict ?? new Verdict(Decision::Approve, [], [], []));
     }
 
     #[Override]
