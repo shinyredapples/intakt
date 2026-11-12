@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Domain\Mirrors;
 use InvalidArgumentException;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
@@ -17,8 +18,6 @@ use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
 {
-    private const string SAFE_NAME = '/^[A-Za-z0-9][A-Za-z0-9._-]*\z/';
-
     // Because a mirror holds every ref of the remote, forced, as "clone --mirror" sets it up.
     private const string MIRROR_REFSPEC = '+refs/*:refs/*';
 
@@ -32,7 +31,7 @@ final readonly class UpdateMirror
         private NetworkGit $network,
         private Filesystem $filesystem,
         private LockFactory $locks,
-        private string $mirrorsDirectory,
+        private Mirrors $mirrors,
     ) {
     }
 
@@ -43,7 +42,7 @@ final readonly class UpdateMirror
      */
     public function update(string $project, string $remote): string
     {
-        $path = $this->mirrorPath($project);
+        $path = $this->mirrors->pathOf($project);
         $remote = $this->fromMirrorsDirectory($remote);
 
         if ($this->isMirror($path)) {
@@ -57,16 +56,6 @@ final readonly class UpdateMirror
         return $path;
     }
 
-    private function mirrorPath(string $project): string
-    {
-        // Because the name becomes a path segment: a separator or a leading dot would leave the mirrors directory.
-        if (1 !== preg_match(self::SAFE_NAME, $project) || str_contains($project, '..')) {
-            throw new InvalidArgumentException(sprintf('"%s" is not a project name that can be a folder name', $project));
-        }
-
-        return $this->mirrorsDirectory.'/'.$project.'.git';
-    }
-
     private function fromMirrorsDirectory(string $remote): string
     {
         // Git reads a relative path from its working directory, which is the mirrors folder for the clone but the mirror for a fetch: resolved once, so the second update names the repository the first one cloned. A colon before any slash is a scheme or a host, which git itself never reads as a path.
@@ -74,7 +63,7 @@ final readonly class UpdateMirror
             return $remote;
         }
 
-        return Path::makeAbsolute($remote, $this->mirrorsDirectory);
+        return Path::makeAbsolute($remote, $this->mirrors->directory);
     }
 
     private function isMirror(string $path): bool
@@ -91,7 +80,7 @@ final readonly class UpdateMirror
 
     private function createMirror(string $project, string $remote, string $path): void
     {
-        $this->filesystem->mkdir($this->mirrorsDirectory);
+        $this->filesystem->mkdir($this->mirrors->directory);
         $attempts = [];
         $staging = '';
 
@@ -100,7 +89,7 @@ final readonly class UpdateMirror
             $this->network->runEachAttempt(function () use ($project, $remote, &$attempts, &$staging): GitCall {
                 $attempts[] = $staging = $this->stagingPath($project);
 
-                return $this->withoutAttributeSource($this->pinned(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrorsDirectory));
+                return $this->withoutAttributeSource($this->pinned(['clone', '--mirror', '--quiet', '--', $remote, $staging], $this->mirrors->directory));
             });
             $this->forgetRemote($staging);
             $published = $this->publish($project, $staging, $path);
@@ -125,7 +114,7 @@ final readonly class UpdateMirror
     private function stagingPath(string $project): string
     {
         // A leading dot is never a project name, so a staging folder cannot be taken for a mirror; a clone that dies half-way stays there and is never published.
-        return $this->mirrorsDirectory.'/.'.$project.'.git.'.bin2hex(random_bytes(6));
+        return $this->mirrors->directory.'/.'.$project.'.git.'.bin2hex(random_bytes(6));
     }
 
     private function forgetRemote(string $staging): void
