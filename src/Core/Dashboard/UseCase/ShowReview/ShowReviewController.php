@@ -11,6 +11,8 @@ use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\SessionSummary;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -21,6 +23,7 @@ final readonly class ShowReviewController
     public function __construct(
         private LedgerReviewPages $reviews,
         private LivePageRendering $pages,
+        private SessionSummaries $summaries,
     ) {
     }
 
@@ -33,7 +36,12 @@ final readonly class ShowReviewController
             throw new NotFoundHttpException('The ledger holds no review with this round.');
         }
 
-        return new Response($this->pages->render($request, 'dashboard/review.html.twig', ['review' => $review, 'round' => $round, 'topics' => $this->unfinishedTopicsOf($review)]));
+        return new Response($this->pages->render($request, 'dashboard/review.html.twig', [
+            'review' => $review,
+            'round' => $round,
+            'topics' => $this->unfinishedTopicsOf($review),
+            'summary' => $this->summaryOfTheActiveRound($review),
+        ]));
     }
 
     /**
@@ -44,5 +52,13 @@ final readonly class ShowReviewController
         $unfinished = array_filter($review->rounds, static fn (ReviewedRound $reviewed): bool => ReviewState::Judged !== $reviewed->state);
 
         return array_values(array_map(static fn (ReviewedRound $reviewed): string => MercureRoundUpdates::topicOf($reviewed->round), $unfinished));
+    }
+
+    // Only the active round has a live log to pin the summary under.
+    private function summaryOfTheActiveRound(Review $review): ?SessionSummary
+    {
+        $active = $review->activeRound();
+
+        return $active instanceof ReviewedRound ? $this->summaries->ofRound($active->round) : null;
     }
 }

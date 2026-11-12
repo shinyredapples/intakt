@@ -17,7 +17,6 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\RoundToolCall;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
-use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Kernel;
@@ -238,11 +237,14 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertSame([], $this->summaries()->ofRound($earlier['round'])->resolved);
     }
 
-    public function testAnUnknownRoundIsReportedAsNotFound(): void
+    public function testAnUnknownRoundHasNoSummary(): void
     {
-        $this->expectException(RoundNotFound::class);
+        self::assertNull($this->summaries()->ofRound('0196f1a0-0000-7000-8000-000000000000'));
+    }
 
-        $this->summaries()->ofRound('0196f1a0-0000-7000-8000-000000000000');
+    public function testARoundIdThatIsNoUuidHasNoSummary(): void
+    {
+        self::assertNull($this->summaries()->ofRound('round-1'));
     }
 
     private function summaries(?Cost $cost = null): StoredSessionSummaries
