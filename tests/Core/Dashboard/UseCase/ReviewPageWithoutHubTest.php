@@ -83,6 +83,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
+        self::assertCount(1, $crawler->filter('.page-head form.stop-round button[data-arm-confirm="Click again to stop the round"]'));
         self::assertSame(
             [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { highlightFindings } from '%s'; holdBackDangerButtons(document); offerSearch(document); highlightFindings(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('finding-highlight.js'))],
             $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),

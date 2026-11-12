@@ -22,13 +22,24 @@
         <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
         {% endif %}
     </div>
-    {% if can_start %}
+    {% if can_start or active is not null %}
     <div class="actions">
+        {% if active is not null %}
+        {# Kept empty once nothing runs, so the judged round's stream has a target to clear. #}
+        <div id="round-{{ active.round }}-now-stop">{% if active.outcomes|filter(o => o.progress.name == 'Running')|length > 0 %}
+            <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_ROUND'), {round: active.round}) }}" class="stop-round">
+                <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopRoundController::TOKEN_ID')) }}">
+                {{ include('dashboard/components/button.html.twig', {kind: 'danger', type: 'submit', label: 'Stop', confirm: 'Click again to stop the round'}, with_context = false) }}
+            </form>
+        {% endif %}</div>
+        {% endif %}
+        {% if can_start %}
         <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_REVIEW'), {round: round}) }}" class="start-review">
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">
             <input type="hidden" name="number" value="{{ review.nextNumber }}">
             {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the next round on the current head'}, with_context = false) }}
         </form>
+        {% endif %}
     </div>
     {% endif %}
 </div>

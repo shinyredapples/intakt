@@ -216,6 +216,40 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
     }
 
+    public function testAJudgedRoundPushedToThePageTakesAwayTheStopOfTheRound(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        self::assertSame('Stop', $page->filter('#round-round-1-now-stop form.stop-round button')->text());
+
+        $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
+            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, true, ['round-1-correctness' => FinishedState::Stopped])]));
+
+        self::assertCount(1, $updated->filter('#round-round-1-now-stop'));
+        self::assertCount(0, $updated->filter('form.stop-round'));
+        self::assertSame('stopped', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+    }
+
+    public function testTheStopOfTheRoundStaysWhileAReviewerIsStillWorking(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Stopped])]));
+
+        self::assertCount(1, $updated->filter('form.stop-round'));
+    }
+
+    public function testTheStopOfTheRoundGoesAwayOnceEveryReviewerFinished(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, false, ['round-1-correctness' => FinishedState::Stopped])]));
+
+        self::assertCount(0, $updated->filter('form.stop-round'));
+    }
+
     public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -386,7 +420,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $held = $crawler->filter('.shell[data-controller="connection"]')->filter($actions)->each(static fn (Crawler $button): string => $button->text());
-        self::assertSame(['Stop this reviewer'], $held);
+        self::assertSame(['Stop', 'Stop this reviewer'], $held);
     }
 
     private function actionsTheConnectionControllerHolds(): string
