@@ -127,6 +127,11 @@ final readonly class MakeBuildClone
             throw BuildCloneNotMade::at($directory, sprintf('the commit %s is not on the branch %s', $source->commit, $source->branch));
         }
 
+        // Because merge-base peels an annotated tag to its commit, and the fetch would then put the tag object at the source ref.
+        if ('commit' !== trim($this->mustRun($this->inMirror($mirror, ['cat-file', '-t', $source->commit]), $directory))) {
+            throw BuildCloneNotMade::at($directory, sprintf('the object %s is not a commit', $source->commit));
+        }
+
         // The verified commit by its id, not the branch, so the clone holds no later commit of that branch; outside refs/heads/, a commit in the clone never moves it.
         return '+'.$source->commit.':'.self::SOURCES.$source->branch;
     }

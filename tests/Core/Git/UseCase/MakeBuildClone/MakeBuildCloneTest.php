@@ -353,6 +353,21 @@ final class MakeBuildCloneTest extends TestCase
         $this->whenTheBuildCloneIsMadeWithTheSource('feat/task', 'feat/big', $unknown);
     }
 
+    public function testAnAnnotatedTagOnTheSourceBranchIsNoCommitAndIsRefusedAndNoCloneFolderIsLeft(): void
+    {
+        $this->givenABranch('feat/big', 's.txt');
+        $tag = $this->remote->annotatedTag('v1', 'feat/big');
+        $this->givenTheMirror();
+
+        $this->expectExceptionObject(BuildCloneNotMade::at($this->clone, sprintf('the object %s is not a commit', $tag)));
+
+        try {
+            $this->whenTheBuildCloneIsMadeWithTheSource('feat/task', 'feat/big', $tag);
+        } finally {
+            self::assertDirectoryDoesNotExist($this->clone);
+        }
+    }
+
     public function testASourceBranchTheMirrorDoesNotHoldIsRefused(): void
     {
         $main = $this->remote->objectAt('main');

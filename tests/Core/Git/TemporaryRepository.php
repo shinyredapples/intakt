@@ -161,6 +161,13 @@ final readonly class TemporaryRepository
         $this->git('tag', $name);
     }
 
+    public function annotatedTag(string $name, string $revision): string
+    {
+        $this->git(...self::IDENTITY, ...['tag', '--annotate', '--message='.$name, $name, $revision]);
+
+        return $this->objectAt('refs/tags/'.$name);
+    }
+
     public function objectAt(string $revision): string
     {
         return $this->git('rev-parse', $revision);
