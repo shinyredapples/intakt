@@ -10,7 +10,6 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
 // Stand-ins on the PATH, because the sandbox and the unit tests have no Docker; the real check runs in CI's image job.
-// The fake docker answers healthy to every inspect, and with a file named changing-facts it reads other facts on each start.
 #[CoversNothing]
 final class VerifyUpgradeScriptTest extends TestCase
 {
@@ -68,7 +67,9 @@ final class VerifyUpgradeScriptTest extends TestCase
         $process = $this->verifyUpgrade('intakt:ci', 'abc123');
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
-        self::assertStringContainsString("git archive abc123\nbuild --tag intakt:upgrade-base -\n", $this->calls());
+        // git and docker run side by side in a pipe, so their lines can land in either order.
+        self::assertStringContainsString("git archive abc123\n", $this->calls());
+        self::assertStringContainsString("\nbuild --tag intakt:upgrade-base -\n", $this->calls());
         self::assertSame(1, substr_count($this->calls(), "\nbuild "));
     }
 
@@ -83,6 +84,7 @@ final class VerifyUpgradeScriptTest extends TestCase
 
     public function testFactsTheHeadReadsOtherwiseFailTheCheckBeforeTheRollback(): void
     {
+        // A marker file, because the fake docker cannot tell the base's start from the head's: with it, each read of the facts differs.
         touch($this->directory.'/changing-facts');
 
         $process = $this->verifyUpgrade('intakt:ci', 'abc123');
