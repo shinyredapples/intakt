@@ -2,18 +2,17 @@
 # run it as uid 1000, never as root. PHP 8.5.12 or later (PHP2Shell, CVE-2026-109618 and CVE-2026-109619).
 # The tools' own images are stages, not COPY --from=<image> references, because Dependabot's docker updater reads only
 # FROM lines; pinned by tag and digest, they are kept current with the base. gitleaks publishes its image on GHCR; its
-# binary is static, so it runs on the Debian base.
+# binary is static, so it runs on the Debian base. zizmor's image holds its glibc build, which runs on Debian's glibc.
 FROM composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0 AS composer
 FROM ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f AS gitleaks
+FROM ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d AS zizmor
 
 FROM dunglas/frankenphp:1.13.4-php8.5-trixie@sha256:6f86f003f1478bafa7befe6ec26db5575e703882171f785189de1e222df0e38e
 RUN php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
 
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
-# zizmor's release archive, pinned by version and checksum; Dependabot does not update it. x86_64 only, as the runners.
-ADD --checksum=sha256:bb110cc765eca9cd7efb2e284a956be5974c60027b0970f16397d86208a9957b \
-    https://github.com/zizmorcore/zizmor/releases/download/v1.32.0/zizmor-x86_64-unknown-linux-gnu.tar.gz /tmp/zizmor.tar.gz
+COPY --from=zizmor /usr/bin/zizmor /usr/local/bin/zizmor
 COPY composer.json /usr/local/share/intakt/
 COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
@@ -32,8 +31,6 @@ RUN set -eu; \
     php --ini; \
     composer --version; \
     gitleaks version; \
-    tar --no-same-owner -xzf /tmp/zizmor.tar.gz -C /usr/local/bin zizmor; \
-    rm /tmp/zizmor.tar.gz; \
     zizmor --version; \
     setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
