@@ -222,6 +222,15 @@ jobs:
         id: image
         if: env.ENGINES == 'true'
         uses: $/.github/actions/ci-image
+      # The check job's Composer cache (same key), restored only: the engines mount it read-only and this job never saves,
+      # so only a push to main's check job writes the entry, and a pull request cannot plant an archive in it.
+      - name: Restore Composer's cache
+        if: env.ENGINES == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
       # The three engines run at once (.github/ci/persistence-engines.sh); the step fails when any fails.
       - name: Run the persistence group on each database image
@@ -233,6 +242,7 @@ jobs:
           MYSQL_NETWORK: ${{ job.services.mysql.network }}
           MARIADB_NETWORK: ${{ job.services.mariadb.network }}
           POSTGRESQL_NETWORK: ${{ job.services.postgresql.network }}
+          COMPOSER_CACHE: ${{ runner.temp }}/composer-cache
         run: >-
           .github/ci/persistence-engines.sh
           "mysql|$MYSQL_IMAGE|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
