@@ -15,11 +15,12 @@ use Intakt\Plugin\GitHubForge\Contract\TrustNotChecked;
 use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\WorkSource\Contract\TaskNotQueued;
 use Symfony\Component\Lock\LockFactory;
 
-// The tick's one listing of a project, kept as rows: an item the listing shows unchanged is not read again, and a listing that comes back unchanged is answered from them.
+// Because an unchanged item must not be read again, the tick's one listing of a project is kept as rows, and a listing that comes back unchanged is answered from them.
 final readonly class IntakeSnapshots
 {
     public function __construct(
@@ -33,7 +34,7 @@ final readonly class IntakeSnapshots
     }
 
     /**
-     * @return list<QueuedIssue> every open issue and pull request of the project, from one complete listing
+     * @return list<QueuedIssue>
      *
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
@@ -77,7 +78,7 @@ final readonly class IntakeSnapshots
         }
 
         $kept = [];
-        $changes = [];
+        $readings = [];
         foreach ($this->uniqueByNumber($listing->issues()) as $listed) {
             $row = $rows[$listed->number] ?? null;
             if (null !== $row && $row->isStillAt($listed)) {
@@ -86,21 +87,12 @@ final readonly class IntakeSnapshots
                 continue;
             }
 
-            $changes[] = [$listed, ...$this->trustOf($project, $listed)];
+            $readings[] = $this->reading($project, $listed);
         }
 
         // Written only once every read and trust check passed, so a failure midway leaves the rows as the last complete listing left them.
-        foreach ($changes as [$listed, $editor, $trusted]) {
-            $waits = $this->references->waitsFor($listed->body);
-            $closes = $this->references->closedBy($listed->body);
-            $row = $rows[$listed->number] ?? null;
-            if (null === $row) {
-                $row = new QueuedIssue($project, $listed->number, $listed, $editor, $trusted, $waits, $closes);
-                $this->entities->persist($row);
-            } else {
-                $row->see($listed, $editor, $trusted, $waits, $closes);
-            }
-            $kept[$listed->number] = $row;
+        foreach ($readings as $reading) {
+            $kept[$reading->listed->number] = $this->store($project, $rows[$reading->listed->number] ?? null, $reading);
         }
 
         foreach (array_diff_key($rows, $kept) as $closed) {
@@ -113,22 +105,34 @@ final readonly class IntakeSnapshots
         return array_values($kept);
     }
 
-    /**
-     * @return array{?string, bool}
-     */
-    private function trustOf(string $project, ListedIssue $listed): array
+    private function store(string $project, ?QueuedIssue $row, ItemReading $reading): QueuedIssue
     {
+        if (null === $row) {
+            $row = new QueuedIssue($project, $reading);
+            $this->entities->persist($row);
+
+            return $row;
+        }
+
+        $row->see($reading);
+
+        return $row;
+    }
+
+    private function reading(string $project, ListedIssue $listed): ItemReading
+    {
+        $waits = $this->references->waitsFor($listed->body);
+        $closes = $this->references->closedBy($listed->body);
         $isTask = !$listed->isPullRequest && in_array($this->labels->of($project), $listed->labels, true) && !in_array(WorkLabels::IDEA, $listed->labels, true);
         if (!$isTask) {
-            return [null, false];
+            return new ItemReading($listed, null, false, $waits, $closes);
         }
 
         $editor = $this->reads->lastEditorOf($project, $listed->number);
         $trusted = $this->accounts->steers($project, $listed->author) && (0 === strcasecmp($editor, $listed->author) || $this->accounts->steers($project, $editor));
 
-        return [$editor, $trusted];
+        return new ItemReading($listed, $editor, $trusted, $waits, $closes);
     }
-
     /**
      * @param list<ListedIssue> $issues
      *
@@ -170,7 +174,7 @@ final readonly class IntakeSnapshots
      */
     private function rowsOf(string $project): array
     {
-        return array_values($this->entities->getRepository(QueuedIssue::class)->findBy(['project' => $project]));
+        return $this->entities->getRepository(QueuedIssue::class)->findBy(['project' => $project]);
     }
 
     // Detached one by one, never cleared, because a worker keeps its entity manager between ticks and what another listing stored since is the truth, while the caller's own pending work must survive.

@@ -33,6 +33,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\EligibilityLabels;
@@ -52,7 +53,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
-// The whole path from GitHub's pages to the pick: the order is computed over every page of one listing, or nothing is picked.
+// Because the order must come from every page of one listing, this runs the whole path from GitHub's pages to the pick.
 #[Group('persistence')]
 #[CoversClass(GitHubIssueReads::class)]
 #[UsesClass(GitHubWorkSource::class)]
@@ -64,6 +65,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(IntakePlan::class)]
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
+#[UsesClass(ItemReading::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(ListedIssue::class)]
@@ -111,7 +113,7 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testTheIssueThatSortsFirstOnTheLastPageIsPicked(): void
     {
-        $this->api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 100), 3 => $this->page(201, 49, ['intakt', 'priority:urgent'])];
+        $this->api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 100), 3 => $this->page(201, 49, ['labels' => [['name' => 'intakt'], ['name' => 'priority:urgent']]])];
 
         $pick = $this->source->nextWork('alpha', WorkerState::Free);
 
@@ -160,7 +162,7 @@ final class CompleteListingTest extends KernelTestCase
 
     public function testAnIssueWaitedForThatIsOnALaterPageCountsAsOpen(): void
     {
-        $this->api->pages = [1 => $this->page(1, 100, ['intakt'], 'Waits for #150'), 2 => $this->page(150, 1, ['bug'])];
+        $this->api->pages = [1 => $this->page(1, 100, ['body' => 'Waits for #150']), 2 => $this->page(150, 1, ['labels' => [['name' => 'bug']]])];
 
         $queue = $this->source->queue('alpha');
 
@@ -233,13 +235,13 @@ final class CompleteListingTest extends KernelTestCase
     }
 
     /**
-     * @param list<string> $labels
+     * @param array<string, mixed> $overrides
      */
-    private function page(int $first, int $count, array $labels = ['intakt'], string $body = ''): string
+    private function page(int $first, int $count, array $overrides = []): string
     {
         $issues = [];
         for ($number = $first; $number < $first + $count; ++$number) {
-            $issues[] = ['number' => $number, 'title' => 'Task '.$number, 'body' => $body, 'user' => ['login' => 'ana'], 'labels' => array_map(static fn (string $name): array => ['name' => $name], $labels), 'milestone' => null, 'updated_at' => '2026-11-10T10:00:00Z'];
+            $issues[] = [...['number' => $number, 'title' => 'Task '.$number, 'body' => '', 'user' => ['login' => 'ana'], 'labels' => [['name' => 'intakt']], 'milestone' => null, 'updated_at' => '2026-11-10T10:00:00Z'], ...$overrides];
         }
 
         return json_encode($issues, JSON_THROW_ON_ERROR);

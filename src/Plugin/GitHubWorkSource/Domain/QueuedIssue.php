@@ -54,44 +54,35 @@ final class QueuedIssue
     #[ORM\Column]
     private bool $pullRequest;
 
-    /**
-     * @param list<int> $waitsFor
-     * @param list<int> $closedBy
-     */
-    public function __construct(
-        #[ORM\Id]
-        #[ORM\Column(length: 255)]
-        private readonly string $project,
-        #[ORM\Id]
-        #[ORM\Column]
-        private readonly int $number,
-        ListedIssue $listed,
-        ?string $editor,
-        bool $trusted,
-        array $waitsFor,
-        array $closedBy,
-    ) {
-        $this->pullRequest = $listed->isPullRequest;
-        $this->see($listed, $editor, $trusted, $waitsFor, $closedBy);
+    #[ORM\Id]
+    #[ORM\Column(length: 255)]
+    private readonly string $project;
+
+    #[ORM\Id]
+    #[ORM\Column]
+    private readonly int $number;
+
+    public function __construct(string $project, ItemReading $reading)
+    {
+        $this->project = $project;
+        $this->number = $reading->listed->number;
+        $this->pullRequest = $reading->listed->isPullRequest;
+        $this->see($reading);
     }
 
-    /**
-     * @param list<int> $waitsFor
-     * @param list<int> $closedBy
-     */
-    public function see(ListedIssue $listed, ?string $editor, bool $trusted, array $waitsFor, array $closedBy): void
+    public function see(ItemReading $reading): void
     {
+        $listed = $reading->listed;
         $this->title = mb_substr($listed->title, 0, 255);
         $this->labels = $listed->labels;
         $this->author = $listed->author;
         $this->updatedAt = $this->moment($listed->updatedAt);
         $this->milestoneDue = $listed->milestoneDue?->setTimezone(new DateTimeZone('UTC'))->format(self::DUE);
-        $this->editor = $editor;
-        $this->trusted = $trusted;
-        $this->waitsFor = $waitsFor;
-        $this->closedBy = $closedBy;
+        $this->editor = $reading->editor;
+        $this->trusted = $reading->trusted;
+        $this->waitsFor = $reading->waitsFor;
+        $this->closedBy = $reading->closedBy;
     }
-
     public function isStillAt(ListedIssue $listed): bool
     {
         return $this->updatedAt === $this->moment($listed->updatedAt) && $this->pullRequest === $listed->isPullRequest;

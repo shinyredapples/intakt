@@ -6,7 +6,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
 use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 
-// The steps of docs/design/05-architecture/03-choosing-work.md: eligible, then ready, then ordered.
+// Eligible, then ready, then ordered, as docs/design/05-architecture/03-choosing-work.md has it.
 final readonly class IntakeRules
 {
     public function __construct(
@@ -122,7 +122,7 @@ final readonly class IntakeRules
     {
         $priority = $task->priority();
 
-        // Only an urgent task goes before the ones whose pull request is open; a missing due date sorts after every one.
+        // Only an urgent task goes before the ones whose pull request is open, because finished work waiting on a small step is cheaper to land; a missing due date sorts last.
         return [
             Priority::Urgent === $priority ? 0 : 1,
             isset($withPullRequest[$task->number()]) ? 0 : 1,

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\WorkSource\Contract;
 
-// A task that is eligible but not ready: the reason names what it waits on.
+// Because a held task is eligible but not ready, its reason says what it waits on.
 final readonly class HeldTask
 {
     public function __construct(

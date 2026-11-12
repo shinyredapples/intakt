@@ -12,6 +12,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\EligibilityLabels;
@@ -44,6 +45,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(IntakePlan::class)]
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
+#[UsesClass(ItemReading::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(Task::class)]
 #[UsesClass(HeldTask::class)]
@@ -54,13 +56,13 @@ final class ShowQueueCommandTest extends KernelTestCase
     {
         $tester = $this->show([
             Issues::task(1, ['intakt', 'priority:low']),
-            Issues::task(2, ['intakt', 'priority:high'], due: '2026-12-01T00:00:00Z'),
-            Issues::task(3, ['intakt', 'priority:high'], due: '2026-11-20T00:00:00Z'),
+            Issues::task(2, ['intakt', 'priority:high'], with: ['due' => '2026-12-01T00:00:00Z']),
+            Issues::task(3, ['intakt', 'priority:high'], with: ['due' => '2026-11-20T00:00:00Z']),
             Issues::task(4, ['intakt', 'priority:urgent']),
-            Issues::task(5, ['intakt'], body: 'Waits for #6'),
+            Issues::task(5, ['intakt'], with: ['body' => 'Waits for #6']),
             Issues::task(6, ['bug']),
             Issues::task(7, ['intakt', 'idea']),
-            Issues::task(8, ['intakt'], author: 'mallory'),
+            Issues::task(8, ['intakt'], with: ['author' => 'mallory']),
             Issues::pullRequest(50, 'Closes #1'),
         ]);
 

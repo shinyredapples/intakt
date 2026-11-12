@@ -14,6 +14,7 @@ use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
 use Intakt\Plugin\GitHubWorkSource\Domain\IntakeValidator;
 use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
 use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
 use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
 use Intakt\Plugin\GitHubWorkSource\Infrastructure\EligibilityLabels;
@@ -46,6 +47,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(IntakePlan::class)]
 #[UsesClass(HeldIssue::class)]
 #[UsesClass(IssueReferences::class)]
+#[UsesClass(ItemReading::class)]
 #[UsesClass(Priority::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(ForgeReadFailed::class)]
@@ -106,7 +108,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testAnIssueWrittenByAnAccountWithoutWriteAccessIsNotEligible(): void
     {
-        $this->reads->lists([Issues::task(7, author: 'mallory')]);
+        $this->reads->lists([Issues::task(7, ['intakt'], with: ['author' => 'mallory'])]);
         $this->reads->editors[7] = 'mallory';
 
         self::assertSame([], $this->source->queue('alpha')->ready());
@@ -118,11 +120,11 @@ final class GitHubWorkSourceTest extends KernelTestCase
         self::assertCount(1, $this->source->queue('alpha')->ready());
 
         $this->reads->editors[7] = 'mallory';
-        $this->reads->lists([Issues::task(7, updatedAt: '2026-11-10T11:00:00Z')]);
+        $this->reads->lists([Issues::task(7, ['intakt'], with: ['updatedAt' => '2026-11-10T11:00:00Z'])]);
         self::assertSame([], $this->source->queue('alpha')->ready());
 
         $this->reads->editors[7] = 'bo';
-        $this->reads->lists([Issues::task(7, updatedAt: '2026-11-10T12:00:00Z')]);
+        $this->reads->lists([Issues::task(7, ['intakt'], with: ['updatedAt' => '2026-11-10T12:00:00Z'])]);
         self::assertCount(1, $this->source->queue('alpha')->ready());
     }
 
@@ -133,11 +135,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $checks = $this->accounts->checks;
 
         $this->accounts->writers = ['bo'];
-        $this->reads->lists([Issues::task(
-            7,
-            author: 'bo',
-            updatedAt: '2026-11-10T09:00:00Z',
-        ), Issues::task(8, author: 'ana')]);
+        $this->reads->lists([Issues::task(7, ['intakt'], with: ['author' => 'bo', 'updatedAt' => '2026-11-10T09:00:00Z']), Issues::task(8)]);
         $this->reads->editors[7] = 'ana';
 
         self::assertSame(NothingPicked::NoTaskReady, $this->source->nextWork('alpha', WorkerState::Free)->nothing);
@@ -146,7 +144,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testATaskWhoseWriterLostWriteAccessAfterItBecameEligibleIsSkippedForTheNextOne(): void
     {
-        $this->reads->lists([Issues::task(7, author: 'bo'), Issues::task(8)]);
+        $this->reads->lists([Issues::task(7, ['intakt'], with: ['author' => 'bo']), Issues::task(8)]);
         self::assertCount(2, $this->source->queue('alpha')->ready());
 
         $this->accounts->writers = ['ana'];
@@ -168,18 +166,18 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testATaskWaitingOnAnOpenIssueIsHeldAndReleasedWhenAListingNoLongerShowsIt(): void
     {
-        $this->reads->lists([Issues::task(1, body: 'Waits for #2'), Issues::task(2, ['bug'])]);
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']), Issues::task(2, ['bug'])]);
         $held = $this->source->queue('alpha')->held();
         self::assertSame('waits for #2', $held[0]->reason);
 
-        $this->reads->lists([Issues::task(1, body: 'Waits for #2')]);
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2'])]);
 
         self::assertSame(1, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
     }
 
     public function testATaskWaitingOnSeveralIssuesIsReleasedOnlyWhenEveryOneIsClosed(): void
     {
-        $waiting = Issues::task(1, body: "Waits for #2\nWaits for #3");
+        $waiting = Issues::task(1, ['intakt'], with: ['body' => "Waits for #2\nWaits for #3"]);
         $this->reads->lists([$waiting, Issues::task(3, ['bug'])]);
         self::assertSame([], $this->source->queue('alpha')->ready());
 
@@ -190,11 +188,11 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testATaskWhoseDependencyFailedForGoodIsHeldWithTheReason(): void
     {
-        $this->reads->lists([Issues::task(1, body: 'Waits for #2'), Issues::task(2)]);
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']), Issues::task(2)]);
         self::assertSame(1, $this->source->queue('alpha')->held()[0]->task->number);
         $this->source->failedForGood('alpha', 2, 'the build ran out of rework rounds');
 
-        $this->reads->lists([Issues::task(1, body: 'Waits for #2'), Issues::task(2)]);
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']), Issues::task(2)]);
         $reasons = array_map(static fn (HeldTask $held): string => $held->reason, $this->source->queue('alpha')->held());
 
         self::assertContains('depends on #2, which failed for good: the build ran out of rework rounds', $reasons);
@@ -210,7 +208,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testAWaitOnSeveralIssuesMakesNoReadPerReference(): void
     {
-        $this->reads->lists([Issues::task(1, body: 'Waits for #2, #3, #4'), Issues::task(2, ['bug']), Issues::task(3, ['bug']), Issues::task(4, ['bug'])]);
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2, #3, #4']), Issues::task(2, ['bug']), Issues::task(3, ['bug']), Issues::task(4, ['bug'])]);
 
         $this->source->queue('alpha');
 
@@ -220,7 +218,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testAnUnchangedListingKeepsTheStoredStateOfEveryWaitedForIssue(): void
     {
-        $this->reads->lists([Issues::task(1, body: 'Waits for #2'), Issues::task(2, ['bug'])], 'W/"one"');
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']), Issues::task(2, ['bug'])], 'W/"one"');
         self::assertSame([], $this->source->queue('alpha')->ready());
 
         $this->reads->listsUnchanged();
@@ -237,7 +235,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->reads->lists([Issues::task(1), Issues::task(2)]);
         $this->source->queue('alpha');
 
-        $this->reads->lists([Issues::task(1), Issues::task(2, updatedAt: '2026-11-11T10:00:00Z')]);
+        $this->reads->lists([Issues::task(1), Issues::task(2, ['intakt'], with: ['updatedAt' => '2026-11-11T10:00:00Z'])]);
         $this->source->queue('alpha');
 
         self::assertSame(3, $this->reads->editorReads);
@@ -279,7 +277,7 @@ final class GitHubWorkSourceTest extends KernelTestCase
 
     public function testAFailedListingClosesNoWait(): void
     {
-        $this->reads->lists([Issues::task(1, body: 'Waits for #2'), Issues::task(2, ['bug'])], 'W/"one"');
+        $this->reads->lists([Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']), Issues::task(2, ['bug'])], 'W/"one"');
         $this->source->queue('alpha');
         $this->reads->fails();
         self::assertFalse($this->source->queue('alpha')->complete);

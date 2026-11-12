@@ -32,7 +32,7 @@ final class WatchConfigurationTest extends TestCase
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'build']);
 
-        self::assertSame('build', $projects['alpha']['eligibility_label']);
+        self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'build']], $projects);
     }
 
     public function testABlankEligibilityLabelIsRefused(): void

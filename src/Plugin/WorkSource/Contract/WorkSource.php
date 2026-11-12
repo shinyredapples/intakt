@@ -14,6 +14,6 @@ interface WorkSource
 
     public function queue(string $project): WorkQueue;
 
-    // Holds the tasks that wait on this one, with the reason, until it is built on a base that exists.
+    // Holds the tasks that wait on this one with the reason, because building on a missing base wastes the build.
     public function failedForGood(string $project, int $number, string $reason): void;
 }

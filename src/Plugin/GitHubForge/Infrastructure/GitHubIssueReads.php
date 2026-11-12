@@ -64,7 +64,7 @@ final readonly class GitHubIssueReads implements IssueReads
             throw new ForgeReadFailed('GitHub answered without the issue.');
         }
 
-        // An account GitHub no longer knows (a deleted one) has no login, and a text nobody can name is not trusted.
+        // Refused without a login, because a text nobody can name is not trusted and a deleted account has none.
         $login = $this->at($issue, 'editor', 'login') ?? $this->at($issue, 'author', 'login');
 
         return is_string($login) && '' !== $login ? $login : throw new ForgeReadFailed('GitHub answered an issue without an editor.');

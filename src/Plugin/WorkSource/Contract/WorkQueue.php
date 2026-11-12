@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\WorkSource\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
 // Either the whole queue of one tick or nothing, because an order computed over part of the listing would put the wrong task first.
+#[Exclude]
 final readonly class WorkQueue
 {
     /**
@@ -19,7 +22,7 @@ final readonly class WorkQueue
     }
 
     /**
-     * @param list<Task>     $ready in pick order
+     * @param list<Task>     $ready
      * @param list<HeldTask> $held
      */
     public static function listed(array $ready, array $held): self
