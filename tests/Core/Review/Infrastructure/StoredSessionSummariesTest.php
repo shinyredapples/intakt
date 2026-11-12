@@ -283,7 +283,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         }
     }
 
-    // Written back as a round completed before migration Version20261112110000 left it: its resolved finding under its reviewer's id, and no ledger ids.
+    // Written back through SQL, because the round has no way to forget its ledger ids, and a round completed before migration Version20261112110000 kept none and its resolved finding under its reviewer's id.
     private function completedBeforeLedgerIds(string $round, Finding $kept): void
     {
         $this->fixture->entities->getConnection()->executeStatement(
