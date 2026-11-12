@@ -706,7 +706,7 @@ A build returns its commits as a git bundle. `php bin/console intakt:hand-back:c
 - it holds a merge commit. With `--merge-main` (the task asked for a merge of main), a merge whose other parents are all on main is allowed; a merge of anything else is still refused;
 - one of its new commits is malformed, so git itself would not write it (for example a commit with no author);
 - a file or file name it adds holds the value of a credential mounted into the build job (see `--credential-env` below), also when a later commit deletes it again;
-- the secret scan (`gitleaks` with its built-in rules) finds a secret in anything it adds: a commit and its message, a folder listing or a file, also one a later commit deletes again. Scanner settings, ignore lists and `gitleaks:allow` comments the build committed are ignored, and so are `GITLEAKS_CONFIG` and `GITLEAKS_CONFIG_TOML`.
+- the secret scan (`gitleaks` with its built-in rules) finds a secret in anything it adds: a commit and its message, a folder listing or a file, also one a later commit deletes again. Scanner settings, ignore lists and inline allow comments the build committed are ignored, and so are `GITLEAKS_CONFIG` and `GITLEAKS_CONFIG_TOML`.
 
 A refusal prints `refused:` and a fixed reason, never a ref name, commit id, secret or other text from the bundle, and exits with 1. A branch name git does not accept, a branch that is main, and a path that is no such repository are errors and exit with 1 as well. So is a secret scan that cannot run or fails: the bundle is then not accepted. The scan runs the `gitleaks` that `INTAKT_GITLEAKS` names (`gitleaks` from the path when it is unset or empty), as before a review is posted.
 
