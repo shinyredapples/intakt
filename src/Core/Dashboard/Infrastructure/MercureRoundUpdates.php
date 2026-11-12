@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Override;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 use Twig\Environment;
@@ -22,6 +23,7 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         private LiveUpdates $live,
         private Environment $twig,
         private SessionSummaries $summaries,
+        private LockFactory $locks,
         private LoggerInterface $logger,
     ) {
     }
@@ -53,13 +55,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     #[Override]
     public function summaryChanged(Uuid $round): void
     {
-        $summary = $this->summaryOf($round);
-
-        if (!$summary instanceof SessionSummary) {
-            return;
+        try {
+            $this->publishLatestSummary($round);
+        } catch (Throwable $failure) {
+            // Swallowed after a log, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
+            $this->logger->warning('A live session summary was not published.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
         }
-
-        $this->publish($round, RoundStream::SummaryChanged, ['round' => $round->toRfc4122(), 'summary' => $summary]);
     }
 
     #[Override]
@@ -68,16 +69,47 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
     }
 
-    private function summaryOf(Uuid $round): ?SessionSummary
+    // One worker at a time reads a round's summary and publishes it, because a worker whose older read was published last would leave the page showing fewer calls than were made.
+    private function publishLatestSummary(Uuid $round): void
     {
-        try {
-            return $this->summaries->ofRound($round->toRfc4122());
-        } catch (Throwable $failure) {
-            // Swallowed after a log, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
-            $this->logger->warning('A live session summary was not computed.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+        $lock = $this->locks->createLock('dashboard-session-summary-'.$round->toRfc4122());
+        $seen = null;
 
+        // Tried without waiting, because the worker holding the lock reads the summary again after it lets go, and so publishes what this one would have.
+        while ($lock->acquire(false)) {
+            try {
+                $seen = $this->summaryPublishedOnce($round, $seen);
+            } finally {
+                $lock->release();
+            }
+
+            if ($this->summaryStreamOf($round) === $seen) {
+                return;
+            }
+        }
+    }
+
+    private function summaryPublishedOnce(Uuid $round, ?string $seen): ?string
+    {
+        $latest = $this->summaryStreamOf($round);
+
+        if (null !== $latest && $latest !== $seen) {
+            $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $latest));
+        }
+
+        return $latest;
+    }
+
+    // Compared as the rendered stream, because that is exactly what the page would change to.
+    private function summaryStreamOf(Uuid $round): ?string
+    {
+        $summary = $this->summaries->ofRound($round->toRfc4122());
+
+        if (!$summary instanceof SessionSummary) {
             return null;
         }
+
+        return $this->twig->render(RoundStream::SummaryChanged->template(), ['round' => $round->toRfc4122(), 'summary' => $summary]);
     }
 
     /**

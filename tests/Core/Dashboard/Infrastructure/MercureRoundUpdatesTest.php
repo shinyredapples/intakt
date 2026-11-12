@@ -12,11 +12,14 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\ToolCallCount;
+use Fiber;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
@@ -137,7 +140,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig = self::createStub(Environment::class);
         $twig->method('render')->willThrowException($failure);
 
-        new MercureRoundUpdates($this->live(), $twig, self::createStub(SessionSummaries::class), $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+        new MercureRoundUpdates($this->live(), $twig, self::createStub(SessionSummaries::class), new LockFactory(new InMemoryStore()), $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
 
         self::assertSame(
             [['warning', 'A live round update was not rendered.', ['round' => self::ROUND, 'stream' => 'tool_called', 'exception' => $failure]]],
@@ -223,9 +226,67 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertCount(1, $this->published);
         self::assertSame(
-            [['warning', 'A live session summary was not computed.', ['round' => self::ROUND, 'exception' => $failure]]],
+            [['warning', 'A live session summary was not published.', ['round' => self::ROUND, 'exception' => $failure]]],
             $this->log->cleanLogs(),
         );
+    }
+
+    public function testAnUnchangedSummaryIsNotPublishedAgain(): void
+    {
+        $updates = $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], [])));
+
+        $updates->summaryChanged(Uuid::fromString(self::ROUND));
+
+        self::assertCount(1, $this->published);
+    }
+
+    // The older worker is paused inside its read, holding the lock, so the newer worker runs between its read and its publish: the order that showed the older count last.
+    public function testASummaryReadBeforeANewerOneIsNeverTheLastPublished(): void
+    {
+        $count = 1;
+        $paused = false;
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturnCallback(static function () use (&$count, &$paused): SessionSummary {
+            $summary = new SessionSummary([new ToolCallCount('read_file', $count)], Cost::none(), [], [], [], []);
+            if (!$paused) {
+                $paused = true;
+                Fiber::suspend();
+            }
+
+            return $summary;
+        });
+        $updates = $this->updates(null, $summaries);
+        $older = new Fiber(static fn () => $updates->summaryChanged(Uuid::fromString(self::ROUND)));
+
+        $older->start();
+        $count = 2;
+        $updates->summaryChanged(Uuid::fromString(self::ROUND));
+        $older->resume();
+
+        self::assertTrue($older->isTerminated());
+        self::assertStringContainsString('<dt>Total</dt><dd>2</dd>', array_last($this->published)?->getData() ?? '');
+    }
+
+    public function testTheSummaryOfAnotherRoundIsPublishedWhileOneRoundHoldsItsLock(): void
+    {
+        $paused = false;
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturnCallback(static function () use (&$paused): SessionSummary {
+            if (!$paused) {
+                $paused = true;
+                Fiber::suspend();
+            }
+
+            return new SessionSummary([], Cost::none(), [], [], [], []);
+        });
+        $updates = $this->updates(null, $summaries);
+        $held = new Fiber(static fn () => $updates->summaryChanged(Uuid::fromString(self::ROUND)));
+
+        $held->start();
+        $updates->summaryChanged(Uuid::fromString(self::REVIEWER));
+
+        self::assertSame([['review/rounds/'.self::REVIEWER]], array_map(static fn (Update $update): array => $update->getTopics(), $this->published));
+        $held->resume();
     }
 
     /**
@@ -237,6 +298,7 @@ final class MercureRoundUpdatesTest extends TestCase
             $this->live($publisher),
             new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')),
             $summaries ?? self::createStub(SessionSummaries::class),
+            new LockFactory(new InMemoryStore()),
             $this->log,
         );
     }
