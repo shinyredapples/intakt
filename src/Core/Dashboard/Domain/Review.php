@@ -29,7 +29,7 @@ final readonly class Review
     // Only In review and Done, because a review is all the ledger knows of a change until intake and the build lane place tasks in the other columns.
     public function column(): BoardColumn
     {
-        return ReviewState::Judged === $this->latest()->state ? BoardColumn::Done : BoardColumn::InReview;
+        return $this->latest()->isJudged() ? BoardColumn::Done : BoardColumn::InReview;
     }
 
     // Only the latest round counts, because the button starts the round after it on the head the change has now.
@@ -44,6 +44,33 @@ final readonly class Review
         $latest = $this->latest()->number;
 
         return null === $latest ? null : $latest + 1;
+    }
+
+    // Null once the judge has called the latest round, because nothing is then in progress.
+    public function activeRound(): ?ReviewedRound
+    {
+        $latest = $this->latest();
+
+        return $latest->isJudged() ? null : $latest;
+    }
+
+    // Null before the first judge's call, because only a judged round has findings to carry forward.
+    public function lastJudgedRound(): ?ReviewedRound
+    {
+        $judged = array_filter($this->rounds, static fn (ReviewedRound $round): bool => $round->isJudged());
+
+        return [] === $judged ? null : array_last($judged);
+    }
+
+    /**
+     * @return list<RoundFinding>
+     */
+    // A follow-up waits for a later task, so only a "fix now" finding stays open into the next round.
+    public function openFindings(): array
+    {
+        $judged = $this->lastJudgedRound();
+
+        return $judged instanceof ReviewedRound ? array_values(array_filter($judged->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)) : [];
     }
 
     public function tokens(): TokenFigures
