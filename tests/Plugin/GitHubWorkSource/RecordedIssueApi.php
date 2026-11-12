@@ -25,12 +25,11 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 
-// GitHub's issue endpoints as scripted pages, with every request kept, so a test sees which pages a listing read and whether any read was per issue.
+// GitHub's issue endpoints as scripted pages (a body, or three digits for an HTTP status) with every request kept, because a test must see which pages a listing read.
 final class RecordedIssueApi
 {
     /** @var list<string> */
     public array $requests = [];
-    // The body of each page by number, or an HTTP status as three digits.
     /** @var array<int, string> */
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
@@ -63,15 +62,23 @@ final class RecordedIssueApi
     /**
      * @param array<string, mixed> $options
      */
-    private function answer(string $method, string $url, array $options): ResponseInterface
+    private function keepConditions(array $options): void
     {
-        $this->requests[] = $method.' '.$url;
         $headers = $options['headers'] ?? [];
         foreach (is_array($headers) ? $headers : [] as $header) {
             if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
                 $this->conditions[] = substr($header, strlen('If-None-Match: '));
             }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function answer(string $method, string $url, array $options): ResponseInterface
+    {
+        $this->requests[] = $method.' '.$url;
+        $this->keepConditions($options);
 
         if ('POST' === $method) {
             return new MockResponse($this->editorAnswer);
