@@ -35,6 +35,16 @@ final readonly class RepositoryGit
 
     /**
      * @param list<string> $arguments
+     */
+    public function answerWithInput(string $repository, array $arguments, string $input): ?string
+    {
+        $process = $this->run($repository, $arguments, $input);
+
+        return $process->isSuccessful() ? trim($process->getOutput()) : null;
+    }
+
+    /**
+     * @param list<string> $arguments
      *
      * @throws HandBackNotChecked
      */
@@ -51,16 +61,6 @@ final readonly class RepositoryGit
     public function exactOutput(string $repository, array $arguments): string
     {
         return $this->mustRun($repository, $arguments, null);
-    }
-
-    /**
-     * @param list<string> $arguments
-     *
-     * @throws HandBackNotChecked
-     */
-    public function outputWithInput(string $repository, array $arguments, string $input): string
-    {
-        return trim($this->mustRun($repository, $arguments, $input));
     }
 
     /**

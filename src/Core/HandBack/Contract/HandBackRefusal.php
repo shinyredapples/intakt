@@ -14,6 +14,7 @@ enum HandBackRefusal: string
     case NotFastForward = 'not-fast-forward';
     case HoldsMerge = 'holds-merge';
     case MergesAnotherBranch = 'merges-another-branch';
+    case Malformed = 'malformed';
 
     public function reason(): string
     {
@@ -25,6 +26,7 @@ enum HandBackRefusal: string
             self::NotFastForward => 'the bundle is not a fast-forward of the pushed branch',
             self::HoldsMerge => 'the bundle holds a merge commit, and no merge of main was asked',
             self::MergesAnotherBranch => 'a merge commit in the bundle merges something other than main',
+            self::Malformed => 'the bundle holds a commit git would not write',
         };
     }
 }

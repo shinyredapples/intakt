@@ -280,6 +280,49 @@ final class CheckHandBackTest extends TestCase
         self::assertEquals(new AcceptedHandBack($this->history->inMirror('rev-parse', 'refs/heads/main'), $head, 0), $result);
     }
 
+    public function testAMalformedCommitWithAttributionIsRefused(): void
+    {
+        $this->history->commitWithoutAnAuthor("Bad\n\nCo-authored-by: Bot <bot@example.invalid>");
+
+        $result = $this->check($this->history->bundle('main..task'));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::Malformed), $result);
+    }
+
+    public function testAMalformedCommitWithoutAttributionIsRefused(): void
+    {
+        $this->history->commitWithoutAnAuthor('Bad');
+        $this->history->commit('After it');
+
+        $result = $this->check($this->history->bundle('main..task'));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::Malformed), $result);
+    }
+
+    public function testARepositoryGivenByARelativePathIsChecked(): void
+    {
+        $main = $this->history->inMirror('rev-parse', 'refs/heads/main');
+        $head = $this->history->commit('First');
+        $bundle = $this->history->bundle('main..task');
+        $directory = (string) getcwd();
+        chdir($this->history->folder);
+
+        try {
+            $result = $this->checker()->check(new HandBack('mirror.git', 'task', $bundle, false));
+        } finally {
+            chdir($directory);
+        }
+
+        self::assertEquals(new AcceptedHandBack($main, $head, 0), $result);
+    }
+
+    public function testAMissingRepositoryIsNotChecked(): void
+    {
+        $this->expectException(HandBackNotChecked::class);
+
+        (void) $this->checker()->check(new HandBack($this->history->folder.'/missing.git', 'task', $this->history->file(''), false));
+    }
+
     public function testTheRefusalNamesNoValueFromTheBundle(): void
     {
         $this->history->startBranch('leaked-value-branch', 'main');

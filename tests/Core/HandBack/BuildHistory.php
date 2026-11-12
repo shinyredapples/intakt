@@ -60,6 +60,22 @@ final readonly class BuildHistory
         return $hash;
     }
 
+    public function commitWithoutAnAuthor(string $message): string
+    {
+        // Literally, because git itself never writes a commit without an author; only a crafted bundle holds one.
+        $commit = implode("\n", [
+            'tree '.$this->git('rev-parse', 'HEAD^{tree}'),
+            'parent '.$this->git('rev-parse', 'HEAD'),
+            'committer Test <test@example.invalid> 1700000000 +0000',
+            '',
+            $message,
+        ]);
+        $hash = $this->run(['hash-object', '-t', 'commit', '-w', '--stdin', '--literally'], $this->work, $commit."\n");
+        $this->git('update-ref', 'HEAD', $hash);
+
+        return $hash;
+    }
+
     public function checkout(string $branch): void
     {
         $this->git('checkout', '--quiet', $branch);

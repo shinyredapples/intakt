@@ -61,7 +61,7 @@ final readonly class CheckHandBack
 
     private function givenHistory(HandBack $handBack): GivenHistory
     {
-        $repository = $handBack->repository;
+        $repository = $this->resolved($handBack->repository);
         $main = $this->mainOf($repository);
         $branch = $this->branchRef($repository, $handBack->branch);
 
@@ -74,6 +74,18 @@ final readonly class CheckHandBack
             ?? $this->git->output($repository, ['rev-parse', '--verify', $main.'^{commit}']);
 
         return new GivenHistory($this->git, $repository, $main, $branch, $base);
+    }
+
+    private function resolved(string $repository): string
+    {
+        // Because git runs inside the repository, where a relative --git-dir would point below the repository itself.
+        $path = realpath($repository);
+
+        if (false === $path || !is_dir($path)) {
+            throw HandBackNotChecked::in($repository, 'it is no folder');
+        }
+
+        return $path;
     }
 
     private function mainOf(string $repository): string

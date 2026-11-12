@@ -6,6 +6,8 @@ namespace Intakt\Core\HandBack\UseCase\CheckHandBack;
 
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
+use Intakt\Core\HandBack\Contract\HandBackRefusal;
+use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 
 final readonly class StrippedCommits
@@ -21,12 +23,16 @@ final readonly class StrippedCommits
     /**
      * @throws HandBackNotChecked
      */
-    public function of(GivenHistory $history, string $head): AcceptedHandBack
+    public function of(GivenHistory $history, string $head): AcceptedHandBack|RefusedHandBack
     {
         $replaced = [];
 
         foreach ($history->newCommits($head) as $commit) {
             $stripped = $this->stripped($history->repository, $commit, $replaced);
+
+            if (null === $stripped) {
+                return new RefusedHandBack(HandBackRefusal::Malformed);
+            }
 
             if ($stripped !== $commit) {
                 $replaced[$commit] = $stripped;
@@ -41,18 +47,20 @@ final readonly class StrippedCommits
      *
      * @throws HandBackNotChecked
      */
-    private function stripped(string $repository, string $commit, array $replaced): string
+    private function stripped(string $repository, string $commit, array $replaced): ?string
     {
-        [$headers, $message] = explode("\n\n", $this->git->exactOutput($repository, ['cat-file', 'commit', $commit]), 2) + [1 => ''];
+        $raw = $this->git->exactOutput($repository, ['cat-file', 'commit', $commit]);
+        [$headers, $message] = explode("\n\n", $raw, 2) + [1 => ''];
         $headerLines = explode("\n", $headers);
         $reparented = $this->reparented($headerLines, $replaced);
         $strippedMessage = AttributionLines::strippedFrom($message);
 
+        // Every new commit passes git's own format check, because unbundling checks none and a crafted bundle may hold a commit git would never write.
         if ($reparented === $headerLines && $strippedMessage === $message) {
-            return $commit;
+            return null === $this->git->answerWithInput($repository, ['hash-object', '-t', 'commit', '--stdin'], $raw) ? null : $commit;
         }
 
-        return $this->git->outputWithInput(
+        return $this->git->answerWithInput(
             $repository,
             ['hash-object', '-t', 'commit', '-w', '--stdin'],
             implode("\n", $this->unsigned($reparented))."\n\n".$strippedMessage,
