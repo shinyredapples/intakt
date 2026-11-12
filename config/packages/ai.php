@@ -20,6 +20,8 @@ use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
 use Intakt\Core\Budget\Contract\BudgetServices;
 use Intakt\Core\Budget\Domain\CeilingStartGuard;
 use Intakt\Core\Budget\Infrastructure\BudgetConfiguration;
+use Intakt\Core\Git\Contract\GitServices;
+use Intakt\Core\Git\Infrastructure\ProtectedPathsConfiguration;
 use Intakt\Core\Memory\Infrastructure\EmbeddingsNotConfigured;
 use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
@@ -90,8 +92,15 @@ return static function (ContainerConfigurator $container): void {
     $reviews = [];
     $modes = [];
     $watches = [];
+    $protectedPaths = [];
     if (is_array($contentProjects)) {
         foreach ($contentProjects as $name => $project) {
+            if (is_array($project) && array_key_exists('protected_paths', $project)) {
+                $protectedPaths[$name] = ['protected_paths' => $project['protected_paths']];
+                unset($project['protected_paths']);
+                $contentProjects[$name] = $project;
+            }
+
             if (is_array($project) && array_key_exists('review', $project)) {
                 $reviews[$name] = $project['review'];
                 unset($project['review']);
@@ -129,6 +138,8 @@ return static function (ContainerConfigurator $container): void {
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
     /** @var array<string, array{repository: string, base: string, task: string, github?: string}> $projectWatches */
     $projectWatches = new Processor()->processConfiguration(new WatchConfiguration(), [['projects' => $watches]])['projects'];
+    /** @var array<string, array{protected_paths: list<string>}> $projectProtectedPaths */
+    $projectProtectedPaths = new Processor()->processConfiguration(new ProtectedPathsConfiguration(), [['projects' => $protectedPaths]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];
     $env = static fn (string $variable): string => '%env('.$variable.')%';
@@ -279,6 +290,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
+    $container->parameters()->set(GitServices::PROTECTED_PATHS, array_map(static fn (array $project): array => $project['protected_paths'], $projectProtectedPaths));
     $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
