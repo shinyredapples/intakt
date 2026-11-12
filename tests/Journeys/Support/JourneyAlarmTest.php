@@ -66,10 +66,10 @@ final class JourneyAlarmTest extends TestCase
 
     private string|false $tokenBefore = false;
 
-    /** @var list<array{number: int, body: string}> */
+    /** @var list<array<string, mixed>> */
     private array $issues = [];
 
-    /** @var array{number: int, body: string}|null */
+    /** @var array<string, mixed>|null */
     private ?array $rival = null;
 
     /** @var list<array{arguments: list<string>, input: string}> */
@@ -364,31 +364,38 @@ final class JourneyAlarmTest extends TestCase
     private function fakeGh(array $arguments, string $input): string
     {
         $this->recorded[] = ['arguments' => $arguments, 'input' => $input];
-        $action = 'api' === $arguments[0] ? 'api' : $arguments[1];
 
-        if ('api' === $action) {
-            return json_encode(array_chunk($this->issues, 100), JSON_THROW_ON_ERROR);
+        return match ('api' === $arguments[0] ? 'api' : $arguments[1]) {
+            'api' => json_encode(array_chunk($this->issues, 100), JSON_THROW_ON_ERROR),
+            'create' => $this->fakeCreate($input),
+            'edit' => $this->fakeEdit((int) $arguments[2], $input),
+            default => $this->fakeClose((int) $arguments[2]),
+        };
+    }
+
+    private function fakeCreate(string $body): string
+    {
+        $number = count($this->issues) + 7;
+        $this->issues[] = ['number' => $number, 'body' => $body];
+        // A rival opens its issue at the same moment, as a run on another machine would.
+        if (null !== $this->rival) {
+            $this->issues[] = $this->rival;
+            $this->rival = null;
         }
 
-        if ('create' === $action) {
-            $number = count($this->issues) + 7;
-            $this->issues[] = ['number' => $number, 'body' => $input];
-            // A rival opens its issue at the same moment, as a run on another machine would.
-            if (null !== $this->rival) {
-                $this->issues[] = $this->rival;
-                $this->rival = null;
-            }
+        return 'https://github.com/example/repo/issues/'.$number;
+    }
 
-            return 'https://github.com/example/repo/issues/'.$number;
-        }
+    private function fakeEdit(int $number, string $body): string
+    {
+        $this->issues = array_map(static fn (array $issue): array => $issue['number'] === $number ? ['number' => $number, 'body' => $body] : $issue, $this->issues);
 
-        if ('edit' === $action) {
-            $this->issues = array_map(fn (array $issue): array => $issue['number'] === (int) $arguments[2] ? ['number' => $issue['number'], 'body' => $input] : $issue, $this->issues);
+        return 'https://github.com/example/repo/issues/'.$number;
+    }
 
-            return 'https://github.com/example/repo/issues/'.$arguments[2];
-        }
-
-        $this->issues = array_values(array_filter($this->issues, fn (array $issue): bool => $issue['number'] !== (int) $arguments[2]));
+    private function fakeClose(int $number): string
+    {
+        $this->issues = array_values(array_filter($this->issues, static fn (array $issue): bool => $issue['number'] !== $number));
 
         return '';
     }

@@ -17,7 +17,7 @@ final readonly class GitHubIssues
     private const int SECONDS = 60;
 
     /**
-     * @param (Closure(list<string>, string): string)|null $runner answers one gh call with its trimmed output, or throws GitHubCallFailed; the real gh when null
+     * @param (Closure(list<string>, string): string)|null $runner
      */
     public function __construct(private string $repository, private ?Closure $runner = null)
     {
