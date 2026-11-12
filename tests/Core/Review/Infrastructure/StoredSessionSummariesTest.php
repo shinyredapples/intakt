@@ -17,7 +17,6 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\RoundToolCall;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
-use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Kernel;
@@ -71,7 +70,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'list_directory', []);
         $this->call($server, 'read_file', ['path' => 'RecordingBus.php']);
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
 
         self::assertEquals([new ToolCallCount('list_directory', 1), new ToolCallCount('read_file', 2)], $summary->toolCalls);
         self::assertSame(3, $summary->totalToolCalls());
@@ -86,7 +85,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'read_file', ['path' => 'RecordingBus.php']);
         $this->call($server, 'read_file', ['path' => 'RoundFixture.php']);
 
-        self::assertSame(['RoundFixture.php', 'RecordingBus.php'], $this->summaries()->ofRound($round)->filesRead);
+        self::assertSame(['RoundFixture.php', 'RecordingBus.php'], $this->summaryOf($round)->filesRead);
     }
 
     public function testOneFileReadUnderTwoSpellingsIsListedOnce(): void
@@ -97,7 +96,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'read_file', ['path' => 'RoundFixture.php']);
         $this->call($server, 'read_file', ['path' => './RoundFixture.php']);
 
-        self::assertSame(['RoundFixture.php'], $this->summaries()->ofRound($round)->filesRead);
+        self::assertSame(['RoundFixture.php'], $this->summaryOf($round)->filesRead);
     }
 
     public function testARefusedReadCountsAsACallButNotAsAFileRead(): void
@@ -106,7 +105,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
         $this->call($this->serverFor($round), 'read_file', ['path' => '../outside.php']);
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
         self::assertEquals([new ToolCallCount('read_file', 1)], $summary->toolCalls);
         self::assertSame([], $summary->filesRead);
     }
@@ -119,7 +118,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'list_directory', []);
         $this->call($server, 'search_files', ['text' => 'final readonly class', 'path' => 'RoundFixture.php']);
 
-        self::assertSame([], $this->summaries()->ofRound($round)->filesRead);
+        self::assertSame([], $this->summaryOf($round)->filesRead);
     }
 
     public function testTheCallsOfAnotherRoundAreNotCounted(): void
@@ -129,7 +128,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
         $this->call($this->serverFor($other), 'read_file', ['path' => 'RoundFixture.php']);
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
         self::assertSame([], $summary->toolCalls);
         self::assertSame([], $summary->filesRead);
         self::assertSame(0, $summary->totalToolCalls());
@@ -139,7 +138,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     {
         $round = $this->fixture->start(1)->id()->toRfc4122();
 
-        self::assertEquals(Cost::inUsd(0.61), $this->summaries(Cost::inUsd(0.61))->ofRound($round)->cost);
+        self::assertEquals(Cost::inUsd(0.61), $this->summaryOf($round, Cost::inUsd(0.61))->cost);
     }
 
     public function testBeforeTheRoundCompletesItListsTheOpenFindingsItChecksAndNothingReportedYet(): void
@@ -147,7 +146,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a')], [], []));
         $round = $this->fixture->start(1)->id()->toRfc4122();
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
 
         self::assertSame(['F1'], $this->ids($summary->checking));
         self::assertSame([], $summary->reported);
@@ -159,7 +158,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a')], [], []));
         $round = $this->completedRound(new Verdict(Decision::Changes, [$this->finding('b')], ['F1'], []));
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
 
         self::assertSame(['F1'], $this->ids($summary->checking));
         self::assertSame(['F2'], $this->ids($summary->reported));
@@ -171,7 +170,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a'), $this->finding('b')], [], []));
         $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F2'], []));
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
 
         self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
         self::assertSame(['F2'], $this->ids($summary->resolved));
@@ -182,7 +181,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Same text'), $this->finding('b', 'Same text')], [], []));
         $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
 
         self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
         self::assertSame(['F1'], $this->ids($summary->resolved));
@@ -194,7 +193,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
         $this->completedBeforeLedgerIds($round, $this->finding('F2', 'Same text'));
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
 
         self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
         self::assertSame([], $summary->resolved);
@@ -206,7 +205,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
         $this->completedBeforeLedgerIds($round, $this->finding('F2', 'First'));
 
-        $summary = $this->summaries()->ofRound($round);
+        $summary = $this->summaryOf($round);
 
         self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
         self::assertSame([], $summary->resolved);
@@ -221,7 +220,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->finish($earlier, new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, 'src/A.php', 3, null, 'New text', FixableBy::Builder, true, null, null)], [], []));
         $this->finish($later, new Verdict(Decision::Changes, [], ['F1'], []));
 
-        $resolved = $this->summaries()->ofRound($later['round'])->resolved;
+        $resolved = $this->summaryOf($later['round'])->resolved;
         self::assertSame(['F1'], $this->ids($resolved));
         self::assertSame('Old text', $resolved[0]->text);
     }
@@ -235,14 +234,25 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->finish($later, new Verdict(Decision::Changes, [], [], []));
         $this->finish($earlier, new Verdict(Decision::Changes, [], ['F1'], []));
 
-        self::assertSame([], $this->summaries()->ofRound($earlier['round'])->resolved);
+        self::assertSame([], $this->summaryOf($earlier['round'])->resolved);
     }
 
-    public function testAnUnknownRoundIsReportedAsNotFound(): void
+    public function testAnUnknownRoundHasNoSummary(): void
     {
-        $this->expectException(RoundNotFound::class);
+        self::assertNull($this->summaries()->ofRound('0196f1a0-0000-7000-8000-000000000000'));
+    }
 
-        $this->summaries()->ofRound('0196f1a0-0000-7000-8000-000000000000');
+    public function testARoundIdThatIsNoUuidHasNoSummary(): void
+    {
+        self::assertNull($this->summaries()->ofRound('round-1'));
+    }
+
+    private function summaryOf(string $roundId, ?Cost $cost = null): SessionSummary
+    {
+        $summary = $this->summaries($cost)->ofRound($roundId);
+        self::assertInstanceOf(SessionSummary::class, $summary);
+
+        return $summary;
     }
 
     private function summaries(?Cost $cost = null): StoredSessionSummaries
