@@ -279,6 +279,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .conn { flex-wrap: wrap; }
   .topbar .offline-marker { display: none; }
   .subtabs a, .row .t a, .ledger td a { display: inline-flex; align-items: center; min-height: 44px; }
+  /* A term on a meta line is focusable and stands alone, not in a sentence, so it is a control and takes the 44 px floor. */
+  .meta .term { min-height: 44px; }
   .toast { right: var(--s16); bottom: calc(var(--bar) + var(--s16) + env(safe-area-inset-bottom)); left: var(--s16); justify-content: space-between; transform: none; animation-name: toast-in-phone; }
 }
 @keyframes toast-in-phone { from { opacity: 0; transform: translateY(8px); } }
