@@ -50,21 +50,9 @@ final readonly class GivenHistory
      */
     public function shippedObjects(int $count): array
     {
-        // Only the quarantine's pack, because the repository's own objects were never shipped.
-        $indexes = null === $this->quarantine ? false : glob($this->quarantine.'/pack/*.idx');
-
-        if (false === $indexes || [] === $indexes) {
-            return [];
-        }
-
-        $index = 1 === count($indexes) ? file_get_contents($indexes[0]) : false;
-        $listing = false === $index ? null : $this->git->answerWithInput($this->repository, ['show-index'], $index);
-
-        if (null === $listing) {
-            throw HandBackNotChecked::in($this->repository, 'the unbundled pack could not be listed');
-        }
-
+        $listing = $this->unbundledPack();
         $offsets = [];
+
         foreach ('' === $listing ? [] : explode("\n", $listing) as $line) {
             [$offset, $object] = explode(' ', $line, 3) + [1 => ''];
             $offsets[$object] = (int) $offset;
@@ -126,6 +114,24 @@ final readonly class GivenHistory
     public function newCommits(string $head): array
     {
         return array_map(static fn (array $commit): string => $commit[0], $this->newCommitsWithParents($head, '--reverse'));
+    }
+
+    /**
+     * @throws HandBackNotChecked
+     */
+    private function unbundledPack(): string
+    {
+        // Only the quarantine's pack, because the repository's own objects were never shipped.
+        $indexes = null === $this->quarantine ? false : glob($this->quarantine.'/pack/*.idx');
+
+        if (false === $indexes || [] === $indexes) {
+            return '';
+        }
+
+        $index = 1 === count($indexes) ? file_get_contents($indexes[0]) : false;
+        $listing = false === $index ? null : $this->git->answerWithInput($this->repository, ['show-index'], $index);
+
+        return $listing ?? throw HandBackNotChecked::in($this->repository, 'the unbundled pack could not be listed');
     }
 
     private function isAncestor(string $commit, string $descendant): bool

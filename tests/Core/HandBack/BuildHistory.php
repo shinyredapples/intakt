@@ -106,12 +106,12 @@ final readonly class BuildHistory
     }
 
     // By hand, because "git bundle create" lists every prerequisite and packs every object the head needs; only a crafted bundle leaves one out.
-    // With --shallow, because then every excluded commit's objects serve as delta bases, not only those of the head's own ancestors.
     /**
      * @param list<string> $prerequisites
      */
     public function bundleByHand(string $head, array $prerequisites, string ...$revisions): string
     {
+        // With --shallow, because then every excluded commit's objects serve as delta bases, not only those of the head's own ancestors.
         $pack = $this->output(['pack-objects', '--revs', '--thin', '--shallow', '--stdout'], $this->work, implode("\n", $revisions)."\n");
         $listed = implode('', array_map(static fn (string $prerequisite): string => '-'.$prerequisite."\n", $prerequisites));
 
@@ -134,7 +134,9 @@ final readonly class BuildHistory
      */
     public function quarantinesLeftInTheMirror(): array
     {
-        return glob($this->mirror.'/objects/incoming-*') ?: [];
+        $folders = glob($this->mirror.'/objects/incoming-*');
+
+        return false === $folders ? [] : $folders;
     }
 
     public function restartAsOrphan(string $branch): void

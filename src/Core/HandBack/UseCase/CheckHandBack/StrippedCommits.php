@@ -23,7 +23,7 @@ final readonly class StrippedCommits
         $replaced = [];
 
         foreach ($history->newCommits($head) as $commit) {
-            $stripped = $this->stripped($history->git, $history->repository, $commit, $replaced);
+            $stripped = $this->stripped($history, $commit, $replaced);
 
             if (null === $stripped) {
                 return new RefusedHandBack(HandBackRefusal::Malformed);
@@ -42,8 +42,10 @@ final readonly class StrippedCommits
      *
      * @throws HandBackNotChecked
      */
-    private function stripped(RepositoryGit $git, string $repository, string $commit, array $replaced): ?string
+    private function stripped(GivenHistory $history, string $commit, array $replaced): ?string
     {
+        $git = $history->git;
+        $repository = $history->repository;
         $raw = $git->exactOutput($repository, ['cat-file', 'commit', $commit]);
         [$headers, $message] = explode("\n\n", $raw, 2) + [1 => ''];
         $headerLines = explode("\n", $headers);
