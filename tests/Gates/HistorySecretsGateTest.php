@@ -275,10 +275,11 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('fix: remove settings');
         $sandbox->git('switch', '--quiet', '--create', 'change');
 
-        $run = $sandbox->check('--only=secrets,secrets-history', '--base=main');
+        $tree = $sandbox->runGate(new WorkingTreeSecretsGate(), 'main');
+        $history = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
-        self::assertTrue($run->passed('secrets'), $run->output());
-        self::assertSame('', $run->findingsOf('secrets-history'));
+        self::assertTrue($tree->passed('secrets'), $tree->output());
+        self::assertSame('', $history->findingsOf('secrets-history'));
     }
 
     public function testASecretAddedAndDeletedWithinTheChangeIsFoundInItsHistory(): void
@@ -289,11 +290,12 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/settings.txt');
         $sandbox->commitAll('fix: remove settings');
 
-        $run = $sandbox->check('--only=secrets,secrets-history', '--base=main');
+        $tree = $sandbox->runGate(new WorkingTreeSecretsGate(), 'main');
+        $history = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
-        self::assertTrue($run->passed('secrets'), $run->output());
-        self::assertTrue($run->failed('secrets-history'), $run->output());
-        self::assertStringContainsString('settings.txt', $run->findingsOf('secrets-history'));
+        self::assertTrue($tree->passed('secrets'), $tree->output());
+        self::assertTrue($history->failed('secrets-history'), $history->output());
+        self::assertStringContainsString('settings.txt', $history->findingsOf('secrets-history'));
     }
 
     public function testTheHistoryScanFailsWhenThereIsNoBaseToCompareWith(): void
