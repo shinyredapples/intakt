@@ -48,6 +48,17 @@ final class PersistenceNeededTest extends SandboxTestCase
         self::assertSame('yes', $this->answer($sandbox));
     }
 
+    public function testRenamingTheTestSqliteMiddlewareAwayNeedsTheEngines(): void
+    {
+        $sandbox = $this->sandboxWithTests();
+        $sandbox->write('tests/Support/UnsyncedSqlite.php', '<?php');
+        $sandbox->commitAll('chore: add the middleware');
+
+        rename($sandbox->root.'/tests/Support/UnsyncedSqlite.php', $sandbox->root.'/tests/Support/RenamedMiddleware.php');
+
+        self::assertSame('yes', $this->answer($sandbox));
+    }
+
     public function testAnUnknownRevisionFailsInsteadOfAnsweringNo(): void
     {
         $result = $this->sandboxWithTests()->runScript(escapeshellarg(self::SCRIPT).' nonexistent HEAD');

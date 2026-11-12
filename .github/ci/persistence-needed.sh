@@ -13,9 +13,10 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 # Saved first under set -e, so a failing git can never read as "untouched".
-git diff --name-only "$base" "$head" > "$work/changed-paths"
-git diff "$base" "$head" -- src > "$work/src.diff"
-git diff "$base" "$head" -- tests > "$work/tests.diff"
+# --no-renames lists a renamed file under its old path too, so moving a trigger away still counts.
+git diff --no-renames --name-only "$base" "$head" > "$work/changed-paths"
+git diff --no-renames "$base" "$head" -- src > "$work/src.diff"
+git diff --no-renames "$base" "$head" -- tests > "$work/tests.diff"
 
 # Exit 1 means no match, an answer; above 1 is a failure.
 status=0
