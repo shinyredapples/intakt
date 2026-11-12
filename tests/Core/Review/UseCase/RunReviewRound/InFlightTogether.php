@@ -14,7 +14,7 @@ use Symfony\AI\Platform\Result\DeferredResult;
 // Runs what a test chooses after each call is sent and before its answer is read, because that puts several reviewers' calls in flight together without any timing; the n-th call goes to the n-th platform, the last one answering the rest.
 final class InFlightTogether implements PlatformInterface
 {
-    public int $calls = 0;
+    private int $calls = 0;
 
     /** @var list<PlatformInterface> */
     private readonly array $answers;
