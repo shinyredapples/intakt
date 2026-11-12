@@ -1,0 +1,261 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Git\UseCase\ListProtectedChanges;
+
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Domain\ChangedPath;
+use Intakt\Core\Git\Domain\ChangeNotRead;
+use Intakt\Core\Git\Domain\ProtectedChanges;
+use Intakt\Core\Git\Domain\ProtectedPaths;
+use Intakt\Core\Git\UseCase\ListProtectedChanges\ChangedPaths;
+use Intakt\Core\Git\UseCase\ListProtectedChanges\ListProtectedChanges;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(ListProtectedChanges::class)]
+#[CoversClass(ChangedPaths::class)]
+#[CoversClass(ProtectedChanges::class)]
+#[CoversClass(ChangeNotRead::class)]
+#[UsesClass(ProtectedPaths::class)]
+#[UsesClass(ChangedPath::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(GitCall::class)]
+final class ListProtectedChangesTest extends TestCase
+{
+    private TemporaryRepository $repository;
+
+    private string $base;
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->givenMainWithTheProtectedFiles($this->repository);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
+
+    public function testAChangeToAProtectedFileIsListed(): void
+    {
+        $head = $this->givenABranchCommitting('bin/check', 'two');
+
+        $changes = $this->whenTheHeadIsListed($head);
+
+        self::assertSame(['bin/check'], $changes->paths);
+        self::assertTrue($changes->touchesProtectedPaths());
+    }
+
+    public function testAFileBelowAProtectedFolderIsListed(): void
+    {
+        $head = $this->givenABranchCommitting('.github/workflows/ci.yml', 'on: push');
+
+        self::assertSame(['.github/workflows/ci.yml'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testAChangeOutsideTheProtectedPathsListsNothing(): void
+    {
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $this->repository->commitFile('bin/checker', 'one');
+        $head = $this->repository->commitFile('config/gates.php', 'one');
+
+        $changes = $this->whenTheHeadIsListed($head);
+
+        self::assertSame([], $changes->paths);
+        self::assertFalse($changes->touchesProtectedPaths());
+    }
+
+    public function testAProtectedChangeUndoneLaterInTheBranchIsStillListed(): void
+    {
+        $this->givenABranchCommitting('bin/check', 'two');
+        $head = $this->repository->commitFile('bin/check', 'one');
+
+        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testARevertOfAProtectedFileInACraftedMergeIsListed(): void
+    {
+        $this->repository->commitFile('config/gates/rule.php', 'two');
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $head = $this->repository->craftMerge($this->base, 'config/gates/rule.php', 'one');
+
+        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testADeletionOfAProtectedFileInACraftedMergeIsListed(): void
+    {
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $head = $this->repository->craftMerge($this->base, 'config/gates/rule.php', null);
+
+        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testARevertInACraftedMergeThatALaterCommitUndoesIsStillListed(): void
+    {
+        $this->repository->commitFile('config/gates/rule.php', 'two');
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $this->repository->craftMerge($this->base, 'config/gates/rule.php', 'one');
+        $head = $this->repository->commitFile('config/gates/rule.php', 'two');
+
+        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testAProtectedChangeOnAMergedSideBranchIsListed(): void
+    {
+        $this->givenABranchCommitting('bin/check', 'two');
+        $this->repository->commitFile('bin/check', 'one');
+        $this->repository->checkout('main');
+        $this->givenABranchCommitting('src/a.php', 'two', 'feat/task');
+        $head = $this->repository->merge('feat/side');
+
+        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testAProtectedChangeThatAMergeOfMainBringsInIsNotListed(): void
+    {
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $this->repository->checkout('main');
+        $this->repository->commitFile('bin/check', 'two');
+        $this->repository->checkout('feat/side');
+        $head = $this->repository->merge('main');
+
+        self::assertSame([], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testTheSubmodulesFileIsProtectedWithoutBeingListed(): void
+    {
+        $head = $this->givenABranchCommitting('.gitmodules', '[submodule "lib"]');
+
+        self::assertSame(['.gitmodules'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testASubmoduleEntryIsProtectedWithoutBeingListed(): void
+    {
+        $this->repository->checkoutNewBranch('feat/side');
+        $head = $this->repository->commitSubmodule('lib', $this->base);
+
+        self::assertSame(['lib'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testARenameOutOfAProtectedFolderListsTheOldPath(): void
+    {
+        $this->repository->checkoutNewBranch('feat/side');
+        rename($this->repository->path.'/config/gates/rule.php', $this->repository->path.'/src/rule.php');
+        $head = $this->repository->commitFile('src/rule.php', 'one');
+
+        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testAHeadWithoutACommonAncestorListsEveryProtectedFileItHolds(): void
+    {
+        $this->repository->checkoutOrphan('feat/side');
+        $this->repository->commitFile('src/a.php', 'one');
+        $head = $this->repository->commitFile('bin/check', 'one');
+
+        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testAMissingObjectCountsAsProtected(): void
+    {
+        $head = $this->givenABranchCommitting('src/a.php', 'two');
+        $this->repository->checkout('main');
+        $this->repository->removeObject($this->repository->objectAt($head.'^{tree}'));
+
+        $changes = $this->listed($this->repository->path.'/.git', $head);
+
+        self::assertTrue($changes->touchesProtectedPaths());
+        self::assertStringContainsString('git diff-tree failed', (string) $changes->unreadable);
+    }
+
+    public function testAnAnnotatedTagCountsAsProtected(): void
+    {
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $tag = $this->repository->annotatedTag('v1', 'HEAD');
+
+        $changes = $this->whenTheHeadIsListed($tag);
+
+        self::assertTrue($changes->touchesProtectedPaths());
+        self::assertSame(sprintf('the change could not be read: %s is not a commit of the repository', $tag), $changes->unreadable);
+    }
+
+    public function testACommitTheRepositoryDoesNotHoldCountsAsProtected(): void
+    {
+        $changes = $this->whenTheHeadIsListed(str_repeat('a', 40));
+
+        self::assertTrue($changes->touchesProtectedPaths());
+    }
+
+    public function testARepositoryWhoseHeadNamesNoBranchCountsAsProtected(): void
+    {
+        $head = $this->givenABranchCommitting('src/a.php', 'two');
+        $this->repository->checkoutDetached('main');
+
+        $changes = $this->listed($this->repository->path.'/.git', $head);
+
+        self::assertSame('the change could not be read: the repository\'s HEAD names no branch, so main is unknown', $changes->unreadable);
+    }
+
+    public function testAMissingRepositoryCountsAsProtected(): void
+    {
+        $changes = $this->listed($this->repository->path.'/missing.git', $this->base);
+
+        self::assertTrue($changes->touchesProtectedPaths());
+    }
+
+    public function testAHeadThatIsNoObjectNameIsRefused(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('"main" is not a full commit name');
+
+        $this->whenTheHeadIsListed('main');
+    }
+
+    public function testASha256RepositoryIsRead(): void
+    {
+        $repository = new TemporaryRepository('sha256');
+
+        try {
+            $this->givenMainWithTheProtectedFiles($repository);
+            $repository->checkoutNewBranch('feat/side');
+            $head = $repository->commitFile('bin/check', 'two');
+            $repository->checkout('main');
+
+            self::assertSame(['bin/check'], $this->listed($repository->path.'/.git', $head)->paths);
+        } finally {
+            $repository->remove();
+        }
+    }
+
+    private function givenMainWithTheProtectedFiles(TemporaryRepository $repository): void
+    {
+        $repository->commitFile('bin/check', 'one');
+        $repository->commitFile('src/a.php', 'one');
+        $this->base = $repository->commitFile('config/gates/rule.php', 'one');
+    }
+
+    private function givenABranchCommitting(string $path, string $content, string $branch = 'feat/side'): string
+    {
+        $this->repository->checkoutNewBranch($branch);
+
+        return $this->repository->commitFile($path, $content);
+    }
+
+    private function whenTheHeadIsListed(string $head): ProtectedChanges
+    {
+        $this->repository->checkout('main');
+
+        return $this->listed($this->repository->path.'/.git', $head);
+    }
+
+    private function listed(string $repository, string $head): ProtectedChanges
+    {
+        return new ListProtectedChanges(new ChangedPaths(new HardenedGit()))->of($repository, $head, new ProtectedPaths(['bin/check', 'config/gates/', '.github']));
+    }
+}
