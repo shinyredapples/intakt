@@ -84,8 +84,7 @@ final class PersistenceEnginesTest extends SandboxTestCase
         return $sandbox;
     }
 
-    // Images with a registry path, because a / in a log file name once hid an engine's real exit code.
-    // Under the runner's own shell options (bash -e with pipefail), because under -e a failing engine once lost its exit code.
+    // Under the runner's shell options (bash -e, pipefail) and with registry paths in the images, as each once hid an exit code.
     private function runEngines(Sandbox $sandbox): ProcessResult
     {
         return $sandbox->runScript(
