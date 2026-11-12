@@ -36,7 +36,8 @@ final class HighlightsWorkflowTest extends TestCase
     {
         $jobs = $this->workflow()['jobs'];
 
-        self::assertArrayNotHasKey('permissions', $jobs['build']);
+        // Because jekyll-build-pages reads the Pages settings, the build job may read them; only the publish job may write.
+        self::assertSame(['contents' => 'read', 'pages' => 'read'], $jobs['build']['permissions'] ?? null);
         self::assertSame(['pages' => 'write', 'id-token' => 'write'], $jobs['publish']['permissions'] ?? null);
     }
 

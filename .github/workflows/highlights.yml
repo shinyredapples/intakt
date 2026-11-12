@@ -14,6 +14,11 @@ jobs:
     if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # jekyll-build-pages reads the repository's Pages settings (jekyll-github-metadata): without pages: read its token
+    # gets 403 and the build fails
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
