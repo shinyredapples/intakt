@@ -106,6 +106,12 @@ final readonly class MakeBuildClone
     private function reserve(string $directory): void
     {
         $this->filesystem->mkdir(dirname($directory));
+
+        // Because a thread-safe PHP resolves the path before mkdir and follows a link, so mkdir on a dangling link makes its target; is_link does not follow it.
+        if (is_link($directory) || file_exists($directory)) {
+            throw BuildCloneNotMade::at($directory, 'the folder already exists');
+        }
+
         $error = '';
         set_error_handler(static function (int $level, string $message) use (&$error): bool {
             $error = $message;
