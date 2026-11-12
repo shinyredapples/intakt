@@ -34,21 +34,19 @@ final readonly class StoredSessionSummaries implements SessionSummaries
             $this->toolCalls->filesReadIn($round),
             $checking,
             $this->findings->reportedIn($round),
-            $this->resolvedAmong($checking, $this->findings->resolvedBy($round)),
+            $this->resolvedAmong($checking, $this->findings->resolvedIdsOf($round)),
         );
     }
 
-    // Taken from the open findings the round checked when one equals a kept finding in id and content, because a round completed before resolved findings were kept under ledger ids kept them under its reviewer's ids, and such an id can be another open finding's ledger id.
+    // Shown as the round checked them, because a round of the change that completed meanwhile may have repeated a finding with new text.
     /**
      * @param list<Finding> $checking
-     * @param list<Finding> $resolved
+     * @param list<string>  $ids
      *
      * @return list<Finding>
      */
-    private function resolvedAmong(array $checking, array $resolved): array
+    private function resolvedAmong(array $checking, array $ids): array
     {
-        $kept = array_map(static fn (Finding $finding): string => json_encode($finding, JSON_THROW_ON_ERROR), $resolved);
-
-        return array_values(array_filter($checking, static fn (Finding $open): bool => in_array(json_encode($open, JSON_THROW_ON_ERROR), $kept, true)));
+        return array_values(array_filter($checking, static fn (Finding $open): bool => in_array($open->id, $ids, true)));
     }
 }

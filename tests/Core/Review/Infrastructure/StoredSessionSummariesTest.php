@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Doctrine\DBAL\Types\Types;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -28,7 +29,9 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Uid\Uuid;
 
 // Calls go through the review server over HTTP, because that is where every reviewer's tool calls are served and recorded, whichever vendor runs it.
 #[Group('persistence')]
@@ -185,19 +188,54 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertSame(['F1'], $this->ids($summary->resolved));
     }
 
-    // Written back under the reviewer's id, because a round completed before resolved findings were kept under ledger ids stored them so, and a reviewer's id can be another finding's ledger id.
-    public function testALegacyRoundKeptUnderAReviewerIdThatNamesAnotherLedgerFindingListsNoneAsResolved(): void
+    public function testALegacyRoundThatResolvedOneOfTwoFindingsThatReadAlikeUnderAReviewerIdNamingTheOtherListsNoneAsResolved(): void
     {
-        $first = $this->finding('F2');
-        $this->completedRound(new Verdict(Decision::Changes, [$first, $this->finding('x')], [], []));
+        $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Same text'), $this->finding('b', 'Same text')], [], []));
         $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
-        $this->fixture->transactions()->stored($round)->keepResolvedFindings($this->storedSerializer()->serialize([$first], 'json'));
-        $this->fixture->entities->flush();
+        $this->completedBeforeLedgerIds($round, $this->finding('F2', 'Same text'));
 
         $summary = $this->summaries()->ofRound($round);
 
         self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
         self::assertSame([], $summary->resolved);
+    }
+
+    public function testALegacyRoundThatResolvedOneOfTwoFindingsThatReadDifferentlyUnderAReviewerIdNamingTheOtherListsNoneAsResolved(): void
+    {
+        $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'First'), $this->finding('b', 'Second')], [], []));
+        $round = $this->completedRound(new Verdict(Decision::Changes, [], ['F1'], []));
+        $this->completedBeforeLedgerIds($round, $this->finding('F2', 'First'));
+
+        $summary = $this->summaries()->ofRound($round);
+
+        self::assertSame(['F1', 'F2'], $this->ids($summary->checking));
+        self::assertSame([], $summary->resolved);
+    }
+
+    public function testAFindingResolvedAfterAnEarlierOpenRoundRepeatedItWithNewTextIsListedAsResolvedAsTheRoundCheckedIt(): void
+    {
+        $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a', 'Old text')], [], []));
+        $earlier = $this->startedRound();
+        $later = $this->startedRound();
+
+        $this->finish($earlier, new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, 'src/A.php', 3, null, 'New text', FixableBy::Builder, true, null, null)], [], []));
+        $this->finish($later, new Verdict(Decision::Changes, [], ['F1'], []));
+
+        $resolved = $this->summaries()->ofRound($later['round'])->resolved;
+        self::assertSame(['F1'], $this->ids($resolved));
+        self::assertSame('Old text', $resolved[0]->text);
+    }
+
+    public function testARoundCompletedAfterANewerRoundOfTheChangeListsNoneAsResolved(): void
+    {
+        $this->completedRound(new Verdict(Decision::Changes, [$this->finding('a')], [], []));
+        $earlier = $this->startedRound();
+        $later = $this->startedRound();
+
+        $this->finish($later, new Verdict(Decision::Changes, [], [], []));
+        $this->finish($earlier, new Verdict(Decision::Changes, [], ['F1'], []));
+
+        self::assertSame([], $this->summaries()->ofRound($earlier['round'])->resolved);
     }
 
     public function testAnUnknownRoundIsReportedAsNotFound(): void
@@ -217,15 +255,43 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
     private function completedRound(Verdict $verdict): string
     {
+        $started = $this->startedRound();
+        $this->finish($started, $verdict);
+
+        return $started['round'];
+    }
+
+    /**
+     * @return array{round: string, queue: RecordingBus}
+     */
+    private function startedRound(): array
+    {
         $queue = new RecordingBus();
-        $round = $this->fixture->startFor(RoundFixture::CHANGE, $queue, 1);
+
+        return ['round' => $this->fixture->startFor(RoundFixture::CHANGE, $queue, 1), 'queue' => $queue];
+    }
+
+    /**
+     * @param array{round: string, queue: RecordingBus} $started
+     */
+    private function finish(array $started, Verdict $verdict): void
+    {
         $vendor = new VerdictPerRole([self::FIRST => $verdict]);
 
-        foreach ($queue->messages as $message) {
+        foreach ($started['queue']->messages as $message) {
             $this->fixture->deliver($message, $vendor);
         }
+    }
 
-        return $round;
+    // Written back as a round completed before migration Version20261112110000 left it: its resolved finding under its reviewer's id, and no ledger ids.
+    private function completedBeforeLedgerIds(string $round, Finding $kept): void
+    {
+        $this->fixture->entities->getConnection()->executeStatement(
+            'UPDATE review_round SET resolved_findings = ?, resolved_finding_ids = NULL WHERE id = ?',
+            [$this->storedSerializer()->serialize([$kept], 'json'), Uuid::fromString($round)],
+            [Types::TEXT, UuidType::NAME],
+        );
+        $this->fixture->entities->clear();
     }
 
     private function storedSerializer(): SerializerInterface

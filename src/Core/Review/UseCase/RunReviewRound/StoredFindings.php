@@ -78,6 +78,24 @@ final readonly class StoredFindings
         return $this->findingsIn($round->resolvedFindingsJson());
     }
 
+    /**
+     * @return list<string>
+     */
+    public function resolvedIdsOf(ReviewRound $round): array
+    {
+        $json = $round->resolvedFindingIdsJson();
+
+        // None, because a round completed before migration Version20261112110000 kept its resolved findings under its reviewer's ids, which can name other findings of the ledger.
+        if (null === $json) {
+            return [];
+        }
+
+        /** @var list<string> $ids */
+        $ids = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+
+        return $ids;
+    }
+
     // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.
     public function markJudged(ReviewRound $round): bool
     {
@@ -105,25 +123,27 @@ final readonly class StoredFindings
         // The round still keeps what it reported, under its ledger's ids, so its judge sees its findings although its verdicts must not undo the newer round's; it keeps nothing as resolved, because a resolution its ledger accepted never reaches the stored one, where the newer round may hold the finding open.
         if ($stored->hasRecordedAfter($round->number())) {
             $round->keepResolvedFindings($this->written([]));
+            $round->keepResolvedFindingIds($this->serializer->serialize([], 'json'));
 
             return;
         }
 
-        $round->keepResolvedFindings($this->written($this->resolvedIn($round, $ledger)));
+        $resolved = $this->resolvedIn($round, $ledger);
+        // Under the ledger's id, because reviewers name findings by it and two findings may read alike.
+        $round->keepResolvedFindings($this->written(array_map(static fn (TrackedFinding $tracked): Finding => $tracked->latest->withId($tracked->id), $resolved)));
+        $round->keepResolvedFindingIds($this->serializer->serialize(array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $resolved), 'json'));
         $stored->recordFindings($round->number(), $this->written($ledger->all()));
     }
 
     /**
-     * @return list<Finding>
+     * @return list<TrackedFinding>
      */
     private function resolvedIn(ReviewRound $round, FindingLedger $ledger): array
     {
         $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : $verdict->resolved, $this->verdictsOf($round)));
-        // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
-        $resolved = array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true));
 
-        // Under the ledger's id, because reviewers name findings by it and two findings may read alike.
-        return array_values(array_map(static fn (TrackedFinding $tracked): Finding => $tracked->latest->withId($tracked->id), $resolved));
+        // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
+        return array_values(array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true)));
     }
 
     private function locked(string $project, string $change): ChangeFindings
