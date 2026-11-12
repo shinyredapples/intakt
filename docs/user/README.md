@@ -476,14 +476,14 @@ Besides the ceilings, Intakt can hold work back in these ways (the tables are cr
 - **Cooldown of one account:** when the AI company answers that an account's usage limit is reached, that account gets no new call until the reset time the answer gave, even if that is days away. Other accounts, of the same company or another, keep working. An answer whose reset time has already passed, or lies more than a week ahead, cools nothing down.
 - **Budget back-off:** no new call starts on any account, but pull requests that are already approved still merge, since merging calls no model.
 - **Pause:** the same as a budget back-off: nothing new starts, approved pull requests still merge.
-- **Failure back-off:** no new call starts on any account and nothing merges. Intakt starts it by itself for 15 minutes, and only for a fault no single item causes. Today these come from the pull requests Intakt watches: GitHub refuses Intakt's credentials (an answer of 401; a rate limit does not count), the disk is full, the lock store fails while a pull request is being locked or unlocked, two different pull requests fail with the same error within an hour, or handing a pull request over to the maintainer agent itself fails. The log gets an error naming the reason.
+- **Failure back-off:** no new call starts on any account and nothing merges (once holds are checked, see below). Intakt starts it by itself for 15 minutes, and only for a fault no single item causes. Today these come from the pull requests Intakt watches: GitHub refuses Intakt's credentials (an answer of 401; a rate limit does not count), the disk is full, the lock store fails while a pull request is being locked or unlocked, two different pull requests fail with the same error within an hour, or handing a pull request over to the maintainer agent itself fails. The log gets an error naming the reason.
 - **Drain:** nothing new starts and nothing merges, so work in progress can finish before an update.
 
 When several are in effect, the strictest wins: drain, then failure back-off, then pause, then budget back-off, then an account's cooldown, then the ceilings. Each one ends by itself at the time it was given.
 
 When no usage reading of an account has arrived for 3 hours, Intakt writes one warning to its log, for example `No usage of account claude_code.main has been read since 2026-11-02T08:00:00+00:00, so only one call at a time runs on it.` It writes it once for that outage, also with several workers; if writing the warning fails, Intakt tries again at the next decision; after a new reading, a later outage gets its own warning. Sending these notices to your phone comes with the notifier.
 
-Nothing places a cooldown, a back-off, a pause or a drain yet: the AI company answers and the admin controls that place them come in later changes.
+Nothing places a cooldown, a budget back-off, a pause or a drain yet: the AI company answers and the admin controls that place them come in later changes. Nothing checks a hold before a call or a merge yet either, the failure back-off included: only `intakt:budget:replay` (below) reads them.
 
 To see what Intakt would decide over a day, write a script and replay it:
 
