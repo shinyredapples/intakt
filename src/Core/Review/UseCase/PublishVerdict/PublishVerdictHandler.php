@@ -6,7 +6,6 @@ namespace Intakt\Core\Review\UseCase\PublishVerdict;
 
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Domain\ReviewRound;
-use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Core\Shadow\Contract\ProjectModes;
@@ -24,7 +23,6 @@ final readonly class PublishVerdictHandler
     public function __construct(
         private ReviewRounds $rounds,
         private ProjectModes $modes,
-        private ShadowRounds $shadow,
         private VerdictForTheLoop $verdicts,
         private ForgeWrites $forge,
         private LoggerInterface $logger,
@@ -39,19 +37,13 @@ final readonly class PublishVerdictHandler
         }
 
         try {
-            $this->publish($round, $this->verdictOf($round));
+            $this->publish($round, $this->verdicts->of($round));
         } catch (ReviewTextHoldsSecret) {
             $this->publish($round, $this->verdicts->unpublishable($round));
         } catch (ChangeNotFound) {
             // Logged and dropped, because a round of a local branch has no pull request to publish on, and retrying cannot give it one.
             $this->logger->warning('The round {round} of {project} names no pull request the forge knows, so its verdict is not published.', ['round' => $command->roundId, 'project' => $round->project()]);
         }
-    }
-
-    // The recorded verdict modes count too, so a round reviewed in shadow mode before a switch to reviewer-for-loop never publishes a counting verdict.
-    private function verdictOf(ReviewRound $round): PublishedVerdict
-    {
-        return $this->shadow->isShadow($round) ? $this->verdicts->shadowed($round) : $this->verdicts->of($round);
     }
 
     private function publish(ReviewRound $round, PublishedVerdict $verdict): void
