@@ -94,7 +94,7 @@ final readonly class CiDefinition
         return $names;
     }
 
-    // Null when the folder is not a plain relative one; the empty prefix is the repository root.
+    // Null because a folder that is not a plain relative one may point anywhere; the empty prefix is the repository root, since ./ names it.
     private function folderOf(string $value): ?string
     {
         $folder = preg_replace('#^(?:\./)+#', '', $value) ?? $value;
