@@ -533,13 +533,16 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([Decision::Blocked, Verdict::INCOMPLETE_STREAM], [$verdict->verdict, $verdict->findings[0]->id]);
     }
 
-    public function testAServerErrorBeforeTheStreamsFirstDeltaStillFailsTheReviewTransientlySoAnotherAccountCanTakeIt(): void
+    public function testAServerErrorBeforeTheStreamsFirstAnswerDeltaStillFailsTheReviewTransientlySoAnotherAccountCanTakeIt(): void
     {
         $ledger = new InMemoryLedger();
         $beforeAnyDelta = static function (): Generator {
-            yield from [];
+            yield new TokenUsage(
+                promptTokens: 120,
+                model: 'big',
+            );
 
-            throw new ServerException(503);
+            throw new ServerException(errorMessage: 'Overloaded');
         };
 
         $failure = $this->thrownBy(fn (): VendorReview => $this->vendor($this->toolRoundThen($beforeAnyDelta), $ledger)->review('alpha', Tier::Strong, $this->request()));

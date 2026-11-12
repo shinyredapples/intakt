@@ -15,9 +15,12 @@ use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\Stream\Delta\DeltaInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\MetadataDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\Stream\Delta\ThinkingDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallStart;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Throwable;
 
 #[CoversClass(StreamedAnswer::class)]
@@ -76,6 +79,27 @@ final class StreamedAnswerTest extends TestCase
         $outage = new ServerException(503);
 
         self::assertSame($outage, $this->thrownBy($this->brokenAfter([], $outage)));
+    }
+
+    public function testAServerErrorAfterOnlyTheMessageStartUsageStaysTheProvidersFailure(): void
+    {
+        $outage = new ServerException(errorMessage: 'Overloaded');
+
+        self::assertSame($outage, $this->thrownBy($this->brokenAfter([new TokenUsage(promptTokens: 120)], $outage)));
+    }
+
+    public function testAServerErrorAfterOnlyMetadataStaysTheProvidersFailure(): void
+    {
+        $outage = new ServerException(503);
+
+        self::assertSame($outage, $this->thrownBy($this->brokenAfter([new MetadataDelta('finish_reason', null)], $outage)));
+    }
+
+    public function testAServerErrorOnceAThinkingDeltaStreamedIsACutAnswer(): void
+    {
+        $cut = $this->thrownBy($this->brokenAfter([new TokenUsage(promptTokens: 120), new ThinkingDelta('Reading the diff.')], new ServerException(503)));
+
+        self::assertInstanceOf(IncompleteStreamException::class, $cut);
     }
 
     public function testAFailureThatARetryCannotOvercomeStaysItselfAlsoMidStream(): void

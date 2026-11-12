@@ -12,12 +12,14 @@ use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Result\MultiPartResult;
 use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
 use Symfony\AI\Platform\Result\Stream\Delta\DeltaInterface;
+use Symfony\AI\Platform\Result\Stream\Delta\MetadataDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\Stream\Delta\ToolCallStart;
 use Symfony\AI\Platform\Result\Stream\DeltaEvent;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Needed because Symfony AI's structured output reads every text delta of a stream as the answer, also the narration before a tool call: the listeners after this one see the answer once, when the round ends without asking for tools, while the text still streams as it is written; excluded from the container because one is built per stream.
@@ -65,7 +67,7 @@ final class StreamedAnswer extends AbstractStreamListener
         yield $this->answer = new TextDelta($text);
     }
 
-    // A transient failure once the stream has started is a cut answer, because the provider cannot resume it and asking again would start the review over; before the first delta it stays the provider's failure, so another account or a substitute can take the call.
+    // A transient failure once the answer has started streaming is a cut answer, because the provider cannot resume it and asking again would start the review over; before the first answer delta it stays the provider's failure, so another account or a substitute can take the call. Usage and metadata do not start the answer, because a provider reports them on opening the message, often right before an overload error.
     /**
      * @return Generator<DeltaInterface>
      */
@@ -75,7 +77,7 @@ final class StreamedAnswer extends AbstractStreamListener
 
         try {
             foreach ($stream->getContent() as $delta) {
-                $started = true;
+                $started = $started || !($delta instanceof TokenUsageInterface || $delta instanceof MetadataDelta);
 
                 yield $delta;
             }
