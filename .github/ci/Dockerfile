@@ -2,7 +2,7 @@
 # run it as uid 1000, never as root. PHP 8.5.12 or later (PHP2Shell, CVE-2026-109618 and CVE-2026-109619).
 # The tools' own images are stages, not COPY --from=<image> references, because Dependabot's docker updater reads only
 # FROM lines; pinned by tag and digest, they are kept current with the base. gitleaks publishes its image on GHCR; its
-# binary is static, so it runs on the Debian base.
+# binary is static, so it runs on the Debian base. zizmor's image holds its glibc build, which runs on Debian's glibc.
 FROM composer:2.11.1@sha256:8de2184c6de224f4689e8f80ed5f5edaf0030b6b8b7839a22a2bcb6722ac87d0 AS composer
 FROM ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f AS gitleaks
 FROM ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d AS zizmor
