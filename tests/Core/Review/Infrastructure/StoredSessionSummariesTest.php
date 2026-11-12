@@ -185,7 +185,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertSame(['F1'], $this->ids($summary->resolved));
     }
 
-    // A round completed before resolved findings were kept under ledger ids kept them as its reviewer wrote them, and a reviewer's id may be another finding's ledger id.
+    // Written back under the reviewer's id, because a round completed before resolved findings were kept under ledger ids stored them so, and a reviewer's id can be another finding's ledger id.
     public function testALegacyRoundKeptUnderAReviewerIdThatNamesAnotherLedgerFindingListsNoneAsResolved(): void
     {
         $first = $this->finding('F2');
