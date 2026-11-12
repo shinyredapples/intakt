@@ -108,7 +108,7 @@ final class RunCheckJobTest extends TestCase
         $this->history->commit('Build work');
         $bundle = $this->history->bundle('main..task');
 
-        (void) $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($bundle, null, []));
+        $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($bundle, null, []));
 
         $spec = $this->ranSpec();
         self::assertEquals(
@@ -123,7 +123,7 @@ final class RunCheckJobTest extends TestCase
     {
         $this->history->commit('Build work');
 
-        (void) $this->whenTheJobLeaves(['check-result' => "passed\n"]);
+        $this->whenTheJobLeaves(['check-result' => "passed\n"]);
 
         $spec = $this->ranSpec();
         self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice($spec->command, 8));
@@ -134,7 +134,7 @@ final class RunCheckJobTest extends TestCase
     {
         $this->history->commit('Build work');
 
-        (void) $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), 'make check', []));
+        $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), 'make check', []));
 
         self::assertSame(['make check'], array_slice($this->ranSpec()->command, 8));
     }
