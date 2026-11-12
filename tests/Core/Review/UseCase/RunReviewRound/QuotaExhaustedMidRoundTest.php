@@ -133,6 +133,13 @@ final class QuotaExhaustedMidRoundTest extends KernelTestCase
         self::assertSame(['anthropic.default', 'openai.default'], $this->run->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
     }
 
+    public function testAnAccountThatRanOutAfterAnAnswerCoolsDownOnce(): void
+    {
+        $this->quotaRunsOutAfterAnAnswer();
+
+        self::assertSame(['anthropic.default', 'openai.default'], $this->run->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
+    }
+
     private function quotaRunsOutAfterAnAnswer(): ChangeReview
     {
         $vendor = $this->run->vendor($this->exhaustedAfter($this->run->answering('changes')), $this->exhaustedAfter());
@@ -150,7 +157,6 @@ final class QuotaExhaustedMidRoundTest extends KernelTestCase
     {
         $quota = new FailingWhenRead(new RateLimitExceededException(null, 'Quota exceeded.'));
 
-        return new InFlightTogether(static function (): void {
-        }, ...[...$answers, $quota]);
+        return new InFlightTogether($this->run->deliverNext(...), ...[...$answers, $quota]);
     }
 }
