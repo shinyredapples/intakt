@@ -10,13 +10,11 @@ final readonly class CiDefinition
     private const string GITHUB_FOLDER = '.github/';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/';
-    private const string WORKING_DIRECTORY = '/working-directory:[ \t]*(\S*)/';
     private const string USES = '/uses:[ \t]*(\S*)/';
     private const string LOCAL_ACTION = './';
     // Kept this strict because any other folder (an expression, an unclosed quote, none on its line) may point anywhere, so it must widen the match.
     private const string PLAIN_FOLDER = '#^(?:[\w.-]+(?:/[\w.-]+)*/?)?$#';
-    // A step path is not resolved against its folder: a dot component anywhere (../test.sh, cd .., scripts/.) may name any file, so it widens the match too. A leading ./ names the folder itself.
-    private const string DOT_COMPONENT = '#/\.(?![\w.-])|(?<![\w.-])\.\.(?![\w.-])#';
+    private const array DOT_COMPONENTS = ['.', '..'];
 
     /**
      * @param list<WorkflowFile> $workflows
@@ -67,38 +65,20 @@ final readonly class CiDefinition
         return false;
     }
 
+    // Any trailing part counts, because a shell may change folder in ways a line scan cannot follow (cd, pushd, a variable, a working-directory).
     private function names(string $content, string $path): bool
     {
         return array_any(
-            $this->namesFor($content, $path),
+            $this->trailingParts($path),
             static fn (string $name): bool => 1 === preg_match('/(?<![\w.-])'.preg_quote($name, '/').'(?![\w.\/-])/', $content),
         );
-    }
-
-    // A step run from a working directory names its files relative to it; a folder this cannot read could be any folder of the path.
-    /** @return list<string> */
-    private function namesFor(string $content, string $path): array
-    {
-        preg_match_all(self::WORKING_DIRECTORY, $content, $directories);
-        $folders = array_map(fn (string $raw): ?string => $this->folderOf(new WorkflowValue($raw)->text()), $directories[1]);
-        if (in_array(null, $folders, true) || 1 === preg_match(self::DOT_COMPONENT, $content)) {
-            return $this->suffixes($path);
-        }
-        $names = [$path];
-        foreach ($folders as $folder) {
-            if ('' !== $folder && str_starts_with($path, $folder)) {
-                $names[] = substr($path, strlen($folder));
-            }
-        }
-
-        return $names;
     }
 
     // Null because a folder that is not a plain relative one may point anywhere; the empty prefix is the repository root, since ./ names it.
     private function folderOf(string $value): ?string
     {
         $folder = preg_replace('#^(?:\./)+#', '', $value) ?? $value;
-        if (1 !== preg_match(self::PLAIN_FOLDER, $folder)) {
+        if (1 !== preg_match(self::PLAIN_FOLDER, $folder) || [] !== array_intersect(explode('/', $folder), self::DOT_COMPONENTS)) {
             return null;
         }
 
@@ -106,7 +86,7 @@ final readonly class CiDefinition
     }
 
     /** @return list<string> */
-    private function suffixes(string $path): array
+    private function trailingParts(string $path): array
     {
         $parts = explode('/', $path);
 
