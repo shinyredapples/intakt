@@ -134,7 +134,7 @@ The option runs alone (`--fast`, `--only`, `--skip`, `--base` and `--test-merge`
 `bin/journey-alarm [--run=<https link>] [<file>]` reads that output (from the file, or from stdin) and, when journeys failed, files one task on the repository named by `GITHUB_REPOSITORY` through `gh` (labels `priority:urgent` and `ready`, the failing journeys, their steps and the last 40 lines of the output, and the run link when given). A later red run replaces the body of that task, found by the hidden line `<!-- intakt:journey-alarm -->` in it, instead of filing another. Two runs at the same time on one computer take turns, and a run that finds an older task filed meanwhile closes its own as a duplicate. A green run files nothing and exits 0; output with neither a failing journey nor a pass, or a failed journeys gate whose findings name no journey, exits 1 with a message, as does a failing `gh` call or a missing token; a file it cannot read, an unknown option or a `--run` that is not an https link exits 2. Set the token in `GH_TOKEN` or `GITHUB_TOKEN`: without one the command stops before calling `gh`, so a stored `gh` login is never used.
 
 `bin/journey-alarm --timed-out [--run=<https link>] [<file>]` is for a run stopped at its time limit.
-It does not read the output, so a cut-off or empty output files or updates the same task instead of exiting 1.
+It skips parsing the output, so a cut-off or empty output files or updates the same task instead of exiting 1.
 That task is titled `fix(journeys): the journeys run timed out on main` and says the run timed out instead of listing journeys.
 Without `--timed-out`, the command behaves as described above.
 

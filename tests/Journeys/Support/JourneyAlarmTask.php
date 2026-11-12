@@ -58,7 +58,9 @@ final readonly class JourneyAlarmTask
 
         $what = $this->run->timedOut ? 'The journeys run on `main` timed out, so its output may be cut off.' : 'The journeys failed on `main`.';
 
-        return self::MARKER."\n".$what."\n\n".implode("\n", $failures)."\n".$link
+        $list = [] === $failures ? '' : "\n".implode("\n", $failures)."\n";
+
+        return self::MARKER."\n".$what."\n".$list.$link
             ."\nLast ".self::TAIL_LINES." lines of the output:\n\n";
     }
 

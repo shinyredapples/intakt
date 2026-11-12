@@ -15,11 +15,11 @@ final readonly class JourneyRun
     private function __construct(
         public array $failures,
         public string $output,
-        public bool $timedOut = false,
+        public bool $timedOut,
     ) {
     }
 
-    // A run stopped at the job's limit may have printed no result line, so its output is not read.
+    // A run stopped at the job's limit may have printed no result line, so its output is not parsed.
     public static function timedOut(string $output): self
     {
         return new self([], $output, timedOut: true);
@@ -34,7 +34,7 @@ final readonly class JourneyRun
             throw new UnreadableJourneyRun('the output holds no failing journey and no pass, so the run is not known to be green');
         }
 
-        return new self($failures, $output);
+        return new self($failures, $output, timedOut: false);
     }
 
     public function isRed(): bool

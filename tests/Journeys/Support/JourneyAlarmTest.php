@@ -186,6 +186,17 @@ final class JourneyAlarmTest extends TestCase
         self::assertStringNotContainsString('The journeys failed on `main`.', $edit[0]['input']);
     }
 
+    public function testARunThatTimedOutFilesTheTaskEvenWhenItsOutputHoldsAPassLine(): void
+    {
+        $github = new GitHubIssues(self::REPOSITORY, $this->fakeGh(...));
+        $alarm = new JourneyAlarm($github, new LockFactory(new InMemoryStore()));
+
+        $result = $alarm->raise(JourneyRun::timedOut(JourneyRunTest::PASS), null);
+
+        self::assertSame('filed https://github.com/example/repo/issues/7', $result);
+        self::assertSame('fix(journeys): the journeys run timed out on main', $this->callsOf('create')[0]['arguments'][3]);
+    }
+
     public function testAnAnswerOfGhThatIsNoIssueListFailsAndFilesNothing(): void
     {
         $this->openIssues('{"message":"Bad credentials"}');
