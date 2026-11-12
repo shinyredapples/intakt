@@ -3,7 +3,12 @@ set -euo pipefail
 
 # Smoke check of the demo's first start on the real image and an empty volume; a single run may pass even with a stale container.
 # intakt:review:panel calls no model, so the key is a placeholder that only lets the seed run.
-image=intakt-first-start-check
+# The image is the caller's, so CI checks the one image it built for the smoke test instead of building a second.
+if [[ $# -ne 1 || -z $1 ]]; then
+    echo 'usage: docker/verify-first-start.sh <image>' >&2
+    exit 2
+fi
+image=$1
 volume=intakt-first-start-check-data
 name=intakt-first-start-check
 
@@ -14,7 +19,6 @@ cleanup() {
 trap cleanup EXIT
 cleanup
 
-docker build --tag "$image" .
 docker volume create "$volume" >/dev/null
 # A fresh volume is owned by root, and the image runs as one fixed user.
 docker run --rm --user root --entrypoint chown --volume "$volume:/app/var/data" "$image" 10001:10001 /app/var/data
