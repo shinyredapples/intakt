@@ -228,7 +228,7 @@ final class WorkflowRiskScanTest extends TestCase
         yield 'a second document' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n---\njobs: {}\n", 6];
         yield 'a block scalar with an indentation indicator' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |2\n          true\n", 7];
         yield 'a block scalar on' => ["on: >-\n  push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n", 1];
-        yield 'a block scalar runs-on' =>["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: |\n      ubuntu-latest\n", 5];
+        yield 'a block scalar runs-on' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: |\n      ubuntu-latest\n", 5];
         yield 'a dash alone' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      -\n        run: true\n", 7];
         yield 'closing braces inside a string of an expression' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"\${{ format('}}', secrets.DEPLOY_KEY) }}\"\n", 7];
         yield 'closing braces and a placeholder inside a string of an expression' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"\${{ format('}}{0}', secrets.DEPLOY_KEY) }}\"\n", 7];

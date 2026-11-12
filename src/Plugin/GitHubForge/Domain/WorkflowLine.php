@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Domain;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
 final readonly class WorkflowLine
 {
     // Script text, a comment and a blank line have neither a node nor a reason: only their expressions are checked, since a quote left open above may make a comment part of a value.
