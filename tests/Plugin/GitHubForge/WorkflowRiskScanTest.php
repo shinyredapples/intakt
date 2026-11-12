@@ -13,11 +13,11 @@ use Intakt\Plugin\GitHubForge\Domain\WorkflowJobs;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowLine;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowLines;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowNode;
-use Intakt\Plugin\GitHubForge\Domain\WorkflowValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRisk;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRiskFinding;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRiskKind;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRiskScan;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowValue;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -95,7 +95,7 @@ final class WorkflowRiskScanTest extends TestCase
 
     public function testAJobThatCallsAReusableWorkflowIsUnreadable(): void
     {
-        self::assertSame(['6 unreadable'],$this->findings(self::READ_ONLY."jobs:\n  t:\n    uses: acme/ci/.github/workflows/build.yml@v1\n"));
+        self::assertSame(['6 unreadable'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    uses: acme/ci/.github/workflows/build.yml@v1\n"));
     }
 
     public function testEveryReadOnlyFormOfPermissionsIsNotRisky(): void
@@ -105,7 +105,7 @@ final class WorkflowRiskScanTest extends TestCase
 
     public function testAJobThatRaisesAScopeToWriteAsks(): void
     {
-        self::assertSame(['9 writable-token'],$this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      pull-requests: write\n"));
+        self::assertSame(['9 writable-token'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      pull-requests: write\n"));
     }
 
     public function testWriteAllAsks(): void
@@ -130,12 +130,12 @@ final class WorkflowRiskScanTest extends TestCase
 
     public function testARepositorySecretInAScriptAsks(): void
     {
-        self::assertSame(['9 secret'],$this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          echo \${{ secrets.DEPLOY_KEY }}\n"));
+        self::assertSame(['9 secret'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          echo \${{ secrets.DEPLOY_KEY }}\n"));
     }
 
     public function testEveryReadOfTheWholeSecretsContextAsks(): void
     {
-        self::assertSame(['9 secret', '10 secret'],$this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ALL: \${{ toJSON(secrets) }}\n        if: secrets.KEY != ''\n        run: true\n"));
+        self::assertSame(['9 secret', '10 secret'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - env:\n          ALL: \${{ toJSON(secrets) }}\n        if: secrets.KEY != ''\n        run: true\n"));
     }
 
     public function testTheReadOnlyTokenIsNoSecret(): void
@@ -145,7 +145,7 @@ final class WorkflowRiskScanTest extends TestCase
 
     public function testPassingSecretsOnAsks(): void
     {
-        self::assertSame(['6 unreadable', '7 secret'],$this->findings(self::READ_ONLY."jobs:\n  t:\n    uses: ./.github/workflows/build.yml\n    secrets: inherit\n"));
+        self::assertSame(['6 unreadable', '7 secret'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    uses: ./.github/workflows/build.yml\n    secrets: inherit\n"));
     }
 
     /** @return iterable<string, array{string}> */
@@ -209,12 +209,12 @@ final class WorkflowRiskScanTest extends TestCase
 
     public function testAKeyInsideABlockScalarIsScriptTextButTheLineAfterItIsReadAgain(): void
     {
-        self::assertSame(['11 not-hosted-runner'],$this->findings(self::READ_ONLY."jobs:\n  t:\n    steps:\n      - run: |\n          runs-on: self-hosted\n\n          permissions: write-all\n    runs-on: self-hosted\n"));
+        self::assertSame(['11 not-hosted-runner'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    steps:\n      - run: |\n          runs-on: self-hosted\n\n          permissions: write-all\n    runs-on: self-hosted\n"));
     }
 
     public function testALessIndentedLineEndsABlockScalarAsYamlDoes(): void
     {
-        self::assertContains('10 unreadable',$this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n            true\n          permissions: write-all\n"));
+        self::assertContains('10 unreadable', $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n            true\n          permissions: write-all\n"));
     }
 
     public function testAFileThatCannotBeReadIsUnreadable(): void

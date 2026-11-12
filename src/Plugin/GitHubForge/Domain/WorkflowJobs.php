@@ -33,7 +33,7 @@ final class WorkflowJobs
     /** @param list<string> $path */
     public function record(int $number, array $path): void
     {
-        if ($path[0] !== 'jobs' || count($path) < 2 || count($path) > 3) {
+        if ('jobs' !== $path[0] || count($path) < 2 || count($path) > 3) {
             return;
         }
         $job = $path[1];
@@ -60,9 +60,9 @@ final class WorkflowJobs
     {
         $this->permissions[$job] = true;
         match (true) {
-            $value === '' => $this->scopesAwaited[$job] = $number,
+            '' === $value => $this->scopesAwaited[$job] = $number,
             in_array($value, self::READ_ONLY_PERMISSIONS, true) => null,
-            $value === 'write-all' => $this->findings->report($number, WorkflowRiskKind::WritableToken, 'permissions: write-all'),
+            'write-all' === $value => $this->findings->report($number, WorkflowRiskKind::WritableToken, 'permissions: write-all'),
             default => $this->findings->report($number, WorkflowRiskKind::Unreadable, sprintf('permissions this scan does not read: %s', $value)),
         };
     }
@@ -73,7 +73,7 @@ final class WorkflowJobs
         $value = $scope->value->text();
         match (true) {
             in_array($value, self::READ_ONLY_SCOPE, true) => null,
-            $value === 'write' => $this->findings->report($number, WorkflowRiskKind::WritableToken, sprintf('the token may write %s', $scope->key)),
+            'write' === $value => $this->findings->report($number, WorkflowRiskKind::WritableToken, sprintf('the token may write %s', $scope->key)),
             default => $this->findings->report($number, WorkflowRiskKind::Unreadable, sprintf('a permission this scan does not read: %s: %s', $scope->key, $value)),
         };
     }

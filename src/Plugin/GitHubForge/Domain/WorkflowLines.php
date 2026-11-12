@@ -14,6 +14,9 @@ final class WorkflowLines
     private const string ITEM = '/^-(?: +|$)/';
     // YAML also breaks lines at these, so a line holding one would hide lines from the scan.
     private const string OTHER_LINE_BREAK = '/[\r\x{85}\x{2028}\x{2029}]/u';
+    // An unclosed quote runs to the line's end, so a # after it stays text and the unclosed value is refused later.
+    private const string SEGMENT = '/"(?:[^"\\\\]|\\\\.)*"?|\'(?:[^\']|\'\')*\'?|[^"\']+/';
+    private const string COMMENT = '/(?<!\S)#/';
 
     private bool $started = false;
     private ?int $blockParent = null;
@@ -32,7 +35,7 @@ final class WorkflowLines
 
     private function line(int $number, string $text): ?WorkflowLine
     {
-        if (preg_match(self::OTHER_LINE_BREAK, $text) === 1) {
+        if (1 === preg_match(self::OTHER_LINE_BREAK, $text)) {
             return WorkflowLine::unreadable($number, $text, 'a line break other than a newline');
         }
         if ($this->isBlockContent($text)) {
@@ -40,11 +43,11 @@ final class WorkflowLines
         }
         $indent = $this->indentOf($text);
         $content = rtrim($this->withoutComment(substr($text, $indent)), " \t");
-        if ($content === '' || ($content === '---' && $indent === 0 && !$this->started)) {
+        if ('' === $content || ('---' === $content && 0 === $indent && !$this->started)) {
             return null;
         }
         $this->started = true;
-        if ($content[0] === "\t") {
+        if ("\t" === $content[0]) {
             return WorkflowLine::unreadable($number, $text, 'a tab in the indentation');
         }
 
@@ -53,7 +56,7 @@ final class WorkflowLines
 
     private function nodeLine(int $number, string $text, ?WorkflowNode $node): WorkflowLine
     {
-        if ($node === null) {
+        if (!$node instanceof WorkflowNode) {
             return WorkflowLine::unreadable($number, $text, 'a line that is neither a plain key nor a list item');
         }
         if ($node->value->startsBlockScalar()) {
@@ -66,25 +69,25 @@ final class WorkflowLines
     private function node(int $indent, string $content): ?WorkflowNode
     {
         $isItem = false;
-        while (preg_match(self::ITEM, $content, $dash) === 1) {
+        while (1 === preg_match(self::ITEM, $content, $dash)) {
             $isItem = true;
             $indent += strlen($dash[0]);
             $content = substr($content, strlen($dash[0]));
         }
-        if (preg_match(self::KEY, $content, $match) === 1) {
+        if (1 === preg_match(self::KEY, $content, $match)) {
             return new WorkflowNode($indent, $match['key'], new WorkflowValue(trim($match['value'] ?? '')));
         }
 
-        return $isItem && $content !== '' ? new WorkflowNode($indent, null, new WorkflowValue($content)) : null;
+        return $isItem && '' !== $content ? new WorkflowNode($indent, null, new WorkflowValue($content)) : null;
     }
 
     // The same rule as YAML's (deeper than the key, and at least as deep as the first text line), because a line the scan skips as script text must be script text to GitHub too.
     private function isBlockContent(string $text): bool
     {
-        if ($this->blockParent === null) {
+        if (null === $this->blockParent) {
             return false;
         }
-        if (trim($text) === '') {
+        if ('' === trim($text)) {
             return true;
         }
         $indent = $this->indentOf($text);
@@ -100,22 +103,17 @@ final class WorkflowLines
     // Quote-aware, because a # inside a quoted value is text; a quote inside a plain value only keeps more text, never less.
     private function withoutComment(string $content): string
     {
-        $quote = null;
-        $length = strlen($content);
-        for ($at = 0; $at < $length; ++$at) {
-            $char = $content[$at];
-            if ($quote === '"' && $char === '\\') {
-                ++$at;
-            } elseif ($quote !== null) {
-                $quote = $char === $quote ? null : $quote;
-            } elseif ($char === '"' || $char === "'") {
-                $quote = $char;
-            } elseif ($char === '#' && ($at === 0 || ctype_space($content[$at - 1]))) {
-                return substr($content, 0, $at);
+        preg_match_all(self::SEGMENT, $content, $segments);
+        $kept = '';
+        foreach ($segments[0] as $segment) {
+            $line = $kept.$segment;
+            if (!in_array($segment[0], ['"', "'"], true) && 1 === preg_match(self::COMMENT, $line, $comment, PREG_OFFSET_CAPTURE, strlen($kept))) {
+                return substr($line, 0, $comment[0][1]);
             }
+            $kept = $line;
         }
 
-        return $content;
+        return $kept;
     }
 
     private function indentOf(string $text): int

@@ -25,7 +25,7 @@ final readonly class CiDefinition
     /** @param list<WorkflowFile> $workflows */
     private function isPartOf(array $workflows, string $path): bool
     {
-        if (str_starts_with($path, self::GITHUB_FOLDER) || preg_match(self::DOCKERFILE, $path) === 1) {
+        if (str_starts_with($path, self::GITHUB_FOLDER) || 1 === preg_match(self::DOCKERFILE, $path)) {
             return true;
         }
 
@@ -35,10 +35,10 @@ final readonly class CiDefinition
     // A workflow that cannot be read may name any path.
     private function names(WorkflowFile $workflow, string $path): bool
     {
-        if ($workflow->content === null) {
+        if (null === $workflow->content) {
             return true;
         }
 
-        return preg_match('/(?<![\w.-])'.preg_quote($path, '/').'(?![\w.\/-])/', $workflow->content) === 1;
+        return 1 === preg_match('/(?<![\w.-])'.preg_quote($path, '/').'(?![\w.\/-])/', $workflow->content);
     }
 }

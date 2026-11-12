@@ -14,6 +14,6 @@ final readonly class WorkflowRisk
 
     public function isRisky(): bool
     {
-        return $this->findings !== [];
+        return [] !== $this->findings;
     }
 }

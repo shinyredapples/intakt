@@ -29,7 +29,7 @@ final class WorkflowFileScan
     public function findings(): array
     {
         $content = $this->file->content;
-        if ($content === null || preg_match('//u', $content) !== 1) {
+        if (null === $content || 1 !== preg_match('//u', $content)) {
             $this->findings->report(0, WorkflowRiskKind::Unreadable, 'the file cannot be read as UTF-8 text');
 
             return $this->findings->all();
@@ -46,10 +46,10 @@ final class WorkflowFileScan
     private function readLine(WorkflowLine $line): void
     {
         $this->checkExpressions($line);
-        if ($line->unreadable !== null) {
+        if (null !== $line->unreadable) {
             $this->findings->report($line->number, WorkflowRiskKind::Unreadable, $line->unreadable);
         }
-        if ($line->node !== null) {
+        if ($line->node instanceof WorkflowNode) {
             $this->readNode($line->number, $line->node);
         }
     }
@@ -67,14 +67,14 @@ final class WorkflowFileScan
 
     private function checkSecret(int $number, string $text): void
     {
-        if (preg_match(self::SECRET, $text) === 1) {
+        if (1 === preg_match(self::SECRET, $text)) {
             $this->findings->report($number, WorkflowRiskKind::Secret, 'reads a secret other than the read-only GITHUB_TOKEN');
         }
     }
 
     private function readNode(int $number, WorkflowNode $node): void
     {
-        while ($this->keys !== [] && array_last($this->keys)['indent'] >= $node->indent) {
+        while ([] !== $this->keys && array_last($this->keys)['indent'] >= $node->indent) {
             array_pop($this->keys);
         }
         if (array_last($this->keys)['valued'] ?? false) {
@@ -82,7 +82,7 @@ final class WorkflowFileScan
 
             return;
         }
-        if ($node->key !== null) {
+        if (null !== $node->key) {
             $this->enterKey($number, $node);
         }
         if (!$node->value->isReadable()) {
@@ -90,15 +90,15 @@ final class WorkflowFileScan
 
             return;
         }
-        $node->key === null ? $this->readItem($number, $node->value) : $this->readSetting($number, $node);
+        null === $node->key ? $this->readItem($number, $node->value) : $this->readSetting($number, $node);
     }
 
     // A block scalar counts as a value too, because once its text ends a deeper line is no child of its key.
     private function enterKey(int $number, WorkflowNode $node): void
     {
-        $this->keys[] = ['indent' => $node->indent, 'key' => (string) $node->key, 'valued' => $node->value->raw !== ''];
+        $this->keys[] = ['indent' => $node->indent, 'key' => (string) $node->key, 'valued' => '' !== $node->value->raw];
         $this->jobs->record($number, $this->path());
-        if ($node->key === 'secrets') {
+        if ('secrets' === $node->key) {
             $this->findings->report($number, WorkflowRiskKind::Secret, 'passes secrets on');
         }
     }
@@ -112,18 +112,18 @@ final class WorkflowFileScan
 
     private function readSetting(int $number, WorkflowNode $node): void
     {
-        if ($node->key === 'if') {
+        if ('if' === $node->key) {
             $this->checkSecret($number, $node->value->raw);
         }
         $path = $this->path();
         $depth = count($path);
         match (true) {
             $path === ['on'] => $this->readTriggers($number, $node->value),
-            $depth === 2 && $path[0] === 'on' => $this->readTrigger($number, $path[1]),
+            2 === $depth && 'on' === $path[0] => $this->readTrigger($number, $path[1]),
             $path === ['permissions'] => $this->jobs->readWorkflowPermissions($number, $node->value->text()),
-            $depth === 2 && $path[0] === 'permissions' => $this->jobs->readWorkflowScope($number, $node),
-            $depth === 3 && $path[0] === 'jobs' => $this->readJobSetting($number, $path[1], $node),
-            $depth === 4 && $path[0] === 'jobs' && $path[2] === 'permissions' => $this->jobs->readScope($number, $path[1], $node),
+            2 === $depth && 'permissions' === $path[0] => $this->jobs->readWorkflowScope($number, $node),
+            3 === $depth && 'jobs' === $path[0] => $this->readJobSetting($number, $path[1], $node),
+            4 === $depth && 'jobs' === $path[0] && 'permissions' === $path[2] => $this->jobs->readScope($number, $path[1], $node),
             default => null,
         };
     }
@@ -137,7 +137,7 @@ final class WorkflowFileScan
 
     private function readTrigger(int $number, string $trigger): void
     {
-        if (BranchTrigger::tryFrom($trigger) === null) {
+        if (null === BranchTrigger::tryFrom($trigger)) {
             $this->findings->report($number, WorkflowRiskKind::Trigger, sprintf('the trigger %s may run with the base repository\'s rights', $trigger));
         }
     }
@@ -160,11 +160,11 @@ final class WorkflowFileScan
             return;
         }
         $labels = $value->listed();
-        if ($labels === []) {
+        if ([] === $labels) {
             $this->findings->report($number, WorkflowRiskKind::Unreadable, 'runs-on names no label on its own line');
         }
         foreach ($labels as $label) {
-            if (HostedRunnerLabel::tryFrom($label) === null) {
+            if (null === HostedRunnerLabel::tryFrom($label)) {
                 $this->findings->report($number, WorkflowRiskKind::NotHostedRunner, sprintf('the runner label %s is not a GitHub-hosted one', $label));
             }
         }

@@ -42,7 +42,7 @@ final readonly class ScanWorkflowsCommand
 
         $workflows = $this->files->in($checkout);
         $this->showRisk($io, $this->scan->scan(...$workflows), count($workflows));
-        if ($changed !== []) {
+        if ([] !== $changed) {
             $this->showCiChanges($io, $workflows, $changed);
         }
 
@@ -69,7 +69,7 @@ final readonly class ScanWorkflowsCommand
         foreach ($ciPaths as $path) {
             $io->writeln(sprintf('CI change: %s', $path));
         }
-        if ($ciPaths === []) {
+        if ([] === $ciPaths) {
             $io->writeln(sprintf('No CI change among %d changed paths', count($changed)));
         }
     }

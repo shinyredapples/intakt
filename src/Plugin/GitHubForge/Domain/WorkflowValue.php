@@ -18,7 +18,7 @@ final readonly class WorkflowValue
 
     public function startsBlockScalar(): bool
     {
-        return preg_match(self::BLOCK_SCALAR, $this->raw) === 1;
+        return 1 === preg_match(self::BLOCK_SCALAR, $this->raw);
     }
 
     public function isReadable(): bool
@@ -38,7 +38,7 @@ final readonly class WorkflowValue
     /** @return list<string> */
     public function listed(): array
     {
-        if ($this->raw === '') {
+        if ('' === $this->raw) {
             return [];
         }
         if (!str_starts_with($this->raw, '[')) {
@@ -50,7 +50,7 @@ final readonly class WorkflowValue
 
     private function isReadableFlowSequence(): bool
     {
-        return preg_match(self::FLOW_SEQUENCE, $this->raw) === 1 && array_all($this->items(), $this->isReadableScalar(...));
+        return 1 === preg_match(self::FLOW_SEQUENCE, $this->raw) && array_all($this->items(), $this->isReadableScalar(...));
     }
 
     private function isReadableScalar(string $value): bool
@@ -69,7 +69,7 @@ final readonly class WorkflowValue
     {
         $items = array_map(trim(...), explode(',', substr($this->raw, 1, -1)));
 
-        return array_values(array_filter($items, static fn (string $item): bool => $item !== ''));
+        return array_values(array_filter($items, static fn (string $item): bool => '' !== $item));
     }
 
     private function unquoted(string $value): string

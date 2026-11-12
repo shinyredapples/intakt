@@ -29,7 +29,7 @@ final readonly class WorkflowFiles
         }
         $entries = Finder::create()->in($folder)->depth(0)->name(['*.yml', '*.yaml'])->ignoreDotFiles(false)->sortByName();
 
-        return array_values(array_map($this->read(...), iterator_to_array($entries, false)));
+        return array_map($this->read(...), iterator_to_array($entries, false));
     }
 
     private function read(SplFileInfo $entry): WorkflowFile
