@@ -8,6 +8,7 @@ use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubChangeOpener;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -16,6 +17,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
+use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -31,6 +33,9 @@ final class ScriptedGitHub
 
     /** @var list<array{string, array<mixed>}> */
     public array $writes = [];
+
+    /** @var list<array<mixed>> */
+    public array $openPulls = [];
 
     /** @var list<array<mixed>> */
     private array $comments = [];
@@ -51,6 +56,23 @@ final class ScriptedGitHub
 
     public function forge(): GitHubForge
     {
+        [$calls, $checked] = $this->stack();
+
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), "gitleaks"), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
+    }
+
+    public function opener(): GitHubChangeOpener
+    {
+        [$calls, $checked] = $this->stack();
+
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), "gitleaks"), new WatchedRepositories(["widgets" => ["github" => "acme/widgets"]]));
+    }
+
+    /**
+     * @return array{GitHubCalls, CheckedInstallationTokens}
+     */
+    private function stack(): array
+    {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $identity = new RecordedInstallation('installation-secret')->client();
         $jwt = new AppJwt(self::APP_ID, AppKey::generate()->private, $clock);
@@ -62,7 +84,7 @@ final class ScriptedGitHub
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
+        return [$calls, $checked];
     }
 
     /**
@@ -70,6 +92,10 @@ final class ScriptedGitHub
      */
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
+        if ('GET' === $method && str_ends_with(parse_url($url, PHP_URL_PATH) ?: '', '/pulls')) {
+            return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        }
+
         if ('GET' === $method) {
             return new MockResponse(json_encode(str_contains($url, 'page=1') ? $this->comments : [], JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
@@ -89,6 +115,14 @@ final class ScriptedGitHub
         // Stamped with the App's id, because GitHub stamps a comment posted with an installation token so, and a retry counts only such a comment as its own.
         if (str_ends_with($url, '/comments')) {
             $this->comments[] = [...$payload, 'performed_via_github_app' => ['id' => (int) self::APP_ID]];
+        }
+
+        if (str_ends_with($url, '/pulls')) {
+            return new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+        }
+
+        if ($method === 'PATCH') {
+            return new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]);
         }
 
         return new MockResponse('{}', ['http_code' => 201]);
