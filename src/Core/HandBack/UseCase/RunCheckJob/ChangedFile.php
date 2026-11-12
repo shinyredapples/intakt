@@ -44,6 +44,11 @@ final readonly class ChangedFile
         return $this->isRenamed() && $this->path() === $path;
     }
 
+    public function isCreatedAt(string $path): bool
+    {
+        return $this->isAdded() && $this->path() === $path;
+    }
+
     // An added file and the new path of a rename or a copy, because those are the only entries whose path did not exist at the base.
     public function isNewAt(string $path): bool
     {
@@ -74,7 +79,7 @@ final readonly class ChangedFile
         return 1 + count($this->paths);
     }
 
-    private function isAdded(): bool
+    public function isAdded(): bool
     {
         return str_starts_with($this->status, 'A');
     }

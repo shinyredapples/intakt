@@ -32,6 +32,12 @@ final class LostContentTest extends TestCase
         self::assertNotNull(LostContent::in('notes.txt', $before, str_repeat("1234\n", 19).'1234'));
     }
 
+    public function testOnlyAFileThatKeepsUnderAFifthOfItsBytesCouldHaveLostItsContent(): void
+    {
+        self::assertFalse(LostContent::couldBeLost(500, 100));
+        self::assertTrue(LostContent::couldBeLost(500, 99));
+    }
+
     public function testAFileThatLosesExactlyFiftyLinesHasNot(): void
     {
         self::assertNull(LostContent::in('short.txt', $this->lines(50), ''));

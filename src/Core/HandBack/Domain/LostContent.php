@@ -18,9 +18,15 @@ final readonly class LostContent
     ) {
     }
 
+    // From the sizes alone, so a file that kept enough of its bytes is never loaded.
+    public static function couldBeLost(int $bytesBefore, int $bytesAfter): bool
+    {
+        return $bytesAfter * self::FRACTION < $bytesBefore;
+    }
+
     public static function in(string $path, string $before, string $after): ?self
     {
-        if (strlen($after) * self::FRACTION >= strlen($before)) {
+        if (!self::couldBeLost(strlen($before), strlen($after))) {
             return null;
         }
 
