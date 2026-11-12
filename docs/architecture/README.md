@@ -54,7 +54,7 @@ Reviews:
 - [Reviewer agent](reviewer-agent.md)
 - [Project memory](project-memory.md)
 - [Ledger](ledger.md)
-- [Shadow: reading the loop's reviews, and the weekly report](shadow-loop-reviews.md)
+- [The weekly report: the loop's reviews and Intakt's](weekly-report.md)
 
 Dashboard:
 - [Dashboard](dashboard.md)
