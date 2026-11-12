@@ -451,6 +451,21 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('#round-round-3-live .live'));
     }
 
+    public function testOnlyTheLatestOfTwoUnjudgedRoundsGetsTheLiveLog(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'correctness');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(1, $crawler->filter('.log-pane'));
+        self::assertCount(1, $crawler->filter('#round-round-2-live'));
+        self::assertCount(0, $crawler->filter('#round-round-1-live'));
+        self::assertSame('Live log of round 2', $crawler->filter('.log-pane h2')->text());
+    }
+
     public function testALongChangeNameIsShownWhole(): void
     {
         $change = 'feat/'.str_repeat('a-very-long-branch-name-', 8);
