@@ -89,19 +89,19 @@ final readonly class MercureRoundUpdates implements RoundUpdates
             $this->publishState($round, $progress);
         } finally {
             // Through doneOrLogged, because this runs inside the judge's event dispatch, outside the guard summaryChanged() puts around its own release.
-            $this->doneOrLogged($round, static fn () => $lock->release());
+            $this->doneOrLogged($round, static fn () => $lock->release(), 'The live session summary lock was not released.');
         }
     }
 
     // Logged and swallowed, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
-    private function doneOrLogged(Uuid $round, Closure $step): bool
+    private function doneOrLogged(Uuid $round, Closure $step, string $failureMessage = 'A live session summary was not published.'): bool
     {
         try {
             $step();
 
             return true;
         } catch (Throwable $failure) {
-            $this->logger->warning('A live session summary was not published.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+            $this->logger->warning($failureMessage, ['round' => $round->toRfc4122(), 'exception' => $failure]);
 
             return false;
         }

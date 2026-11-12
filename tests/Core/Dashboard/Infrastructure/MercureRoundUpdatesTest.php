@@ -240,6 +240,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $updates = $this->updates(null, $this->summaries(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::none(), [], [], [], [], false)));
 
         $updates->summaryChanged(Uuid::fromString(self::ROUND));
+        $updates->summaryChanged(Uuid::fromString(self::ROUND));
 
         self::assertCount(1, $this->published);
     }
