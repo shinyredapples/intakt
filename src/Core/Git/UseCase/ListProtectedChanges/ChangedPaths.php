@@ -84,7 +84,13 @@ final readonly class ChangedPaths
                 $ofCommit = [...$ofCommit, ...$this->between($repository, $parent, $commit)];
             }
 
-            $changed = [...$changed, ...$this->notAsOnMain($repository, $main, $commit, $ofCommit)];
+            if ([] === $ofCommit) {
+                continue;
+            }
+
+            // A path the commit holds exactly as the current main does adds nothing to main, so a merge of main does not list what main added; a revert to an old main still differs and stays listed.
+            $unlikeMain = array_column($this->between($repository, $main, $commit), 'path', 'path');
+            $changed = [...$changed, ...array_filter($ofCommit, static fn (ChangedPath $path): bool => isset($unlikeMain[$path->path]))];
         }
 
         return $changed;
@@ -145,26 +151,6 @@ final readonly class ChangedPaths
         }
 
         return $commits;
-    }
-
-    /**
-     * @param list<ChangedPath> $changed
-     *
-     * @return list<ChangedPath>
-     *
-     * @throws ChangeNotRead
-     * @throws RepositoryAttributesRefused
-     */
-    private function notAsOnMain(string $repository, string $main, string $commit, array $changed): array
-    {
-        if ([] === $changed) {
-            return [];
-        }
-
-        // A path the commit holds exactly as the current main does adds nothing to main, so a merge of main does not list what main added; a revert to an old main still differs and stays listed.
-        $differing = array_column($this->between($repository, $main, $commit), 'path', 'path');
-
-        return array_values(array_filter($changed, static fn (ChangedPath $path): bool => isset($differing[$path->path])));
     }
 
     /**
