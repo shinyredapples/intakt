@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Shadow\Domain;
+namespace Intakt\Tests\Core\ReviewerForLoop\Domain;
 
 use Intakt\Core\Review\Contract\Severity;
-use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\LoopReview;
-use Intakt\Core\Shadow\Contract\LoopReviews;
-use Intakt\Core\Shadow\Contract\LoopVerdict;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReview;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReviews;
+use Intakt\Core\ReviewerForLoop\Contract\LoopVerdict;
 
 final class ComparisonBuilder
 {

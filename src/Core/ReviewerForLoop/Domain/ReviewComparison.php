@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Domain;
+namespace Intakt\Core\ReviewerForLoop\Domain;
 
-use Intakt\Core\Shadow\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
 use NoDiscard;
 
 final readonly class ReviewComparison

@@ -2,21 +2,21 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\UseCase\WeeklyReport;
+namespace Intakt\Core\ReviewerForLoop\UseCase\WeeklyReport;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use Intakt\Core\Shadow\Contract\Agreement;
-use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\PublishedHead;
-use Intakt\Core\Shadow\Contract\ReviewerDecision;
-use Intakt\Core\Shadow\Contract\WeeklyReport;
-use Intakt\Core\Shadow\Domain\PublishedComparison;
-use Intakt\Core\Shadow\Domain\RecordedPullRequest;
-use Intakt\Core\Shadow\Domain\Week;
-use Intakt\Core\Shadow\Infrastructure\RecordedFolder;
-use Intakt\Core\Shadow\Infrastructure\RecordedMoment;
-use Intakt\Core\Shadow\Infrastructure\RecordedPullRequestFile;
+use Intakt\Core\ReviewerForLoop\Contract\Agreement;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\PublishedHead;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewerDecision;
+use Intakt\Core\ReviewerForLoop\Contract\WeeklyReport;
+use Intakt\Core\ReviewerForLoop\Domain\PublishedComparison;
+use Intakt\Core\ReviewerForLoop\Domain\RecordedPullRequest;
+use Intakt\Core\ReviewerForLoop\Domain\Week;
+use Intakt\Core\ReviewerForLoop\Infrastructure\RecordedFolder;
+use Intakt\Core\ReviewerForLoop\Infrastructure\RecordedMoment;
+use Intakt\Core\ReviewerForLoop\Infrastructure\RecordedPullRequestFile;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -25,7 +25,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'intakt:shadow:weekly-report', description: 'Print the week\'s comparison of the loop\'s reviews and Intakt\'s published reviews on the same heads of recorded pull requests')]
+#[AsCommand(name: 'intakt:reviewer-for-loop:weekly-report', description: 'Print the week\'s comparison of the loop\'s reviews and Intakt\'s published reviews on the same heads of recorded pull requests')]
 final readonly class WeeklyReportCommand
 {
     private const string MOMENT = 'Y-m-d\TH:i:sp';

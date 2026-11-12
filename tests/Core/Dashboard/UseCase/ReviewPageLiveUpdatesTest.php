@@ -16,7 +16,7 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\RoundProgress;
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;

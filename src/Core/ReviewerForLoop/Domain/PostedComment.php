@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Domain;
+namespace Intakt\Core\ReviewerForLoop\Domain;
 
 use DateTimeImmutable;
-use Intakt\Core\Shadow\Contract\PullRequestComment;
+use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
 
 final readonly class PostedComment
 {

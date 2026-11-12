@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Infrastructure;
+namespace Intakt\Core\ReviewerForLoop\Infrastructure;
 
 final readonly class RecordedFolder
 {

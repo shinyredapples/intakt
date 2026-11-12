@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 
 // The latest event of a reviewer decides its row, because a reviewer started again after a stopped worker runs anew.
 final readonly class ReviewerOutcome

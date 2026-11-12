@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Domain;
+namespace Intakt\Core\ReviewerForLoop\Domain;
 
 use Intakt\Core\Review\Contract\Severity;
-use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\LoopReview;
-use Intakt\Core\Shadow\Contract\LoopReviews;
-use Intakt\Core\Shadow\Contract\LoopVerdict;
-use Intakt\Core\Shadow\Contract\PullRequestComment;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReview;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReviews;
+use Intakt\Core\ReviewerForLoop\Contract\LoopVerdict;
+use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
 use JsonException;
 use NoDiscard;
 
-// Parses the loop's prose because the shadow report must compare with it; Intakt's own reviews never decide from prose.
+// Parses the loop's prose because the weekly report must compare with it; Intakt's own reviews never decide from prose.
 final readonly class LoopReviewReader
 {
     private const string REVIEWER_LINE = '/^Reviewer:\s*(\S.*?)\s*$/';

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Domain;
+namespace Intakt\Core\ReviewerForLoop\Domain;
 
 use Intakt\Core\Review\Contract\Severity;
-use Intakt\Core\Shadow\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
 
 /**
  * @template T of LoopFinding

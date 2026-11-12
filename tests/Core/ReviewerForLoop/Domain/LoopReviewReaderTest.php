@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Shadow\Domain;
+namespace Intakt\Tests\Core\ReviewerForLoop\Domain;
 
 use Intakt\Core\Review\Contract\Severity;
-use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\LoopReview;
-use Intakt\Core\Shadow\Contract\LoopReviews;
-use Intakt\Core\Shadow\Contract\LoopVerdict;
-use Intakt\Core\Shadow\Contract\PullRequestComment;
-use Intakt\Core\Shadow\Domain\LoopReviewReader;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReview;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReviews;
+use Intakt\Core\ReviewerForLoop\Contract\LoopVerdict;
+use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
+use Intakt\Core\ReviewerForLoop\Domain\LoopReviewReader;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -25,7 +25,7 @@ final class LoopReviewReaderTest extends TestCase
     public function testRecordedLoopReviewsGiveTheExpectedVerdictsAndFindings(): void
     {
         /** @var array{comments: list<array{author: string, head: string, body: string}>} $recorded */
-        $recorded = json_decode((string) file_get_contents(__DIR__.'/../../../Fixtures/Shadow/loop-review-comments.json'), true, 16, JSON_THROW_ON_ERROR);
+        $recorded = json_decode((string) file_get_contents(__DIR__.'/../../../Fixtures/ReviewerForLoop/loop-review-comments.json'), true, 16, JSON_THROW_ON_ERROR);
         $comments = array_map(static fn (array $c): PullRequestComment => new PullRequestComment($c['author'], $c['head'], $c['body']), $recorded['comments']);
 
         $reviews = new LoopReviewReader()->read('loop-bot', 'abc123', $comments)->reviews;

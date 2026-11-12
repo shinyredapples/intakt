@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Contract;
+namespace Intakt\Core\ReviewerForLoop\Contract;
 
 interface ProjectModes
 {

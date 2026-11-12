@@ -2,27 +2,27 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Shadow\Domain;
+namespace Intakt\Tests\Core\ReviewerForLoop\Domain;
 
 use DateTimeImmutable;
 use DateTimeZone;
 use Intakt\Core\Review\Contract\Severity;
-use Intakt\Core\Shadow\Contract\Agreement;
-use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\LoopReview;
-use Intakt\Core\Shadow\Contract\LoopReviews;
-use Intakt\Core\Shadow\Contract\PublishedHead;
-use Intakt\Core\Shadow\Contract\PullRequestComment;
-use Intakt\Core\Shadow\Contract\ReviewerDecision;
-use Intakt\Core\Shadow\Contract\ReviewOutcome;
-use Intakt\Core\Shadow\Contract\WeeklyReport;
-use Intakt\Core\Shadow\Domain\LoopReviewReader;
-use Intakt\Core\Shadow\Domain\MergedSpot;
-use Intakt\Core\Shadow\Domain\PostedComment;
-use Intakt\Core\Shadow\Domain\PublishedComparison;
-use Intakt\Core\Shadow\Domain\RecordedPullRequest;
-use Intakt\Core\Shadow\Domain\ReviewComparison;
-use Intakt\Core\Shadow\Domain\Week;
+use Intakt\Core\ReviewerForLoop\Contract\Agreement;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReview;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReviews;
+use Intakt\Core\ReviewerForLoop\Contract\PublishedHead;
+use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewerDecision;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewOutcome;
+use Intakt\Core\ReviewerForLoop\Contract\WeeklyReport;
+use Intakt\Core\ReviewerForLoop\Domain\LoopReviewReader;
+use Intakt\Core\ReviewerForLoop\Domain\MergedSpot;
+use Intakt\Core\ReviewerForLoop\Domain\PostedComment;
+use Intakt\Core\ReviewerForLoop\Domain\PublishedComparison;
+use Intakt\Core\ReviewerForLoop\Domain\RecordedPullRequest;
+use Intakt\Core\ReviewerForLoop\Domain\ReviewComparison;
+use Intakt\Core\ReviewerForLoop\Domain\Week;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;

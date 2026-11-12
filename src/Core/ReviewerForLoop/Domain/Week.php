@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Domain;
+namespace Intakt\Core\ReviewerForLoop\Domain;
 
 use DateInterval;
 use DateTimeImmutable;

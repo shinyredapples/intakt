@@ -2,26 +2,26 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Shadow\UseCase\WeeklyReport;
+namespace Intakt\Tests\Core\ReviewerForLoop\UseCase\WeeklyReport;
 
-use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\LoopReview;
-use Intakt\Core\Shadow\Contract\LoopReviews;
-use Intakt\Core\Shadow\Contract\PublishedHead;
-use Intakt\Core\Shadow\Contract\PullRequestComment;
-use Intakt\Core\Shadow\Contract\ReviewerDecision;
-use Intakt\Core\Shadow\Contract\WeeklyReport;
-use Intakt\Core\Shadow\Domain\LoopReviewReader;
-use Intakt\Core\Shadow\Domain\MergedSpot;
-use Intakt\Core\Shadow\Domain\PostedComment;
-use Intakt\Core\Shadow\Domain\PublishedComparison;
-use Intakt\Core\Shadow\Domain\RecordedPullRequest;
-use Intakt\Core\Shadow\Domain\ReviewComparison;
-use Intakt\Core\Shadow\Domain\Week;
-use Intakt\Core\Shadow\Infrastructure\RecordedFolder;
-use Intakt\Core\Shadow\Infrastructure\RecordedMoment;
-use Intakt\Core\Shadow\Infrastructure\RecordedPullRequestFile;
-use Intakt\Core\Shadow\UseCase\WeeklyReport\WeeklyReportCommand;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReview;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReviews;
+use Intakt\Core\ReviewerForLoop\Contract\PublishedHead;
+use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewerDecision;
+use Intakt\Core\ReviewerForLoop\Contract\WeeklyReport;
+use Intakt\Core\ReviewerForLoop\Domain\LoopReviewReader;
+use Intakt\Core\ReviewerForLoop\Domain\MergedSpot;
+use Intakt\Core\ReviewerForLoop\Domain\PostedComment;
+use Intakt\Core\ReviewerForLoop\Domain\PublishedComparison;
+use Intakt\Core\ReviewerForLoop\Domain\RecordedPullRequest;
+use Intakt\Core\ReviewerForLoop\Domain\ReviewComparison;
+use Intakt\Core\ReviewerForLoop\Domain\Week;
+use Intakt\Core\ReviewerForLoop\Infrastructure\RecordedFolder;
+use Intakt\Core\ReviewerForLoop\Infrastructure\RecordedMoment;
+use Intakt\Core\ReviewerForLoop\Infrastructure\RecordedPullRequestFile;
+use Intakt\Core\ReviewerForLoop\UseCase\WeeklyReport\WeeklyReportCommand;
 use Intakt\Tests\Support\ConsoleDisplay;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -54,7 +54,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ReviewerDecision::class)]
 final class WeeklyReportCommandTest extends TestCase
 {
-    private const string RECORDED = __DIR__.'/../../../../Fixtures/Shadow/weekly';
+    private const string RECORDED = __DIR__.'/../../../../Fixtures/ReviewerForLoop/weekly';
     private const string SUMMARY = '3 heads: 1 agree, 1 disagree, 1 incomplete; findings: 1 matched, 1 loop only, 2 intakt only';
 
     public function testTheReportPrintsTheWeekOneRowPerHeadReviewedInItAndTheSummary(): void
@@ -216,6 +216,6 @@ final class WeeklyReportCommandTest extends TestCase
         $application = new Application();
         $application->addCommand(new WeeklyReportCommand(new PublishedComparison(new LoopReviewReader(), new ReviewComparison()), new MockClock($now)));
 
-        return new CommandTester($application->find('intakt:shadow:weekly-report'));
+        return new CommandTester($application->find('intakt:reviewer-for-loop:weekly-report'));
     }
 }

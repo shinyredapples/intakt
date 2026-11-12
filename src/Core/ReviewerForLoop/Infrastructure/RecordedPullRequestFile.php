@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Infrastructure;
+namespace Intakt\Core\ReviewerForLoop\Infrastructure;
 
-use Intakt\Core\Shadow\Contract\PullRequestComment;
-use Intakt\Core\Shadow\Domain\PostedComment;
-use Intakt\Core\Shadow\Domain\RecordedPullRequest;
+use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
+use Intakt\Core\ReviewerForLoop\Domain\PostedComment;
+use Intakt\Core\ReviewerForLoop\Domain\RecordedPullRequest;
 use JsonException;
 use TypeError;
 

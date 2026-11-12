@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Domain;
+namespace Intakt\Core\ReviewerForLoop\Domain;
 
-use Intakt\Core\Shadow\Contract\Agreement;
-use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\LoopReview;
-use Intakt\Core\Shadow\Contract\LoopReviews;
-use Intakt\Core\Shadow\Contract\LoopVerdict;
-use Intakt\Core\Shadow\Contract\PublishedHead;
-use Intakt\Core\Shadow\Contract\PullRequestComment;
-use Intakt\Core\Shadow\Contract\ReviewerDecision;
-use Intakt\Core\Shadow\Contract\ReviewOutcome;
-use Intakt\Core\Shadow\Contract\WeeklyReport;
+use Intakt\Core\ReviewerForLoop\Contract\Agreement;
+use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReview;
+use Intakt\Core\ReviewerForLoop\Contract\LoopReviews;
+use Intakt\Core\ReviewerForLoop\Contract\LoopVerdict;
+use Intakt\Core\ReviewerForLoop\Contract\PublishedHead;
+use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewerDecision;
+use Intakt\Core\ReviewerForLoop\Contract\ReviewOutcome;
+use Intakt\Core\ReviewerForLoop\Contract\WeeklyReport;
 use NoDiscard;
 
 // Intakt's published comment follows the loop's own format (issue #1251, D1), so the loop's reader reads both sides.

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Shadow\Infrastructure;
+namespace Intakt\Core\ReviewerForLoop\Infrastructure;
 
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Symfony\Component\Config\Definition\Builder\TreeBuilder;
 use Symfony\Component\Config\Definition\ConfigurationInterface;
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Shadow;
+namespace Intakt\Tests\Core\ReviewerForLoop;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
@@ -29,7 +29,7 @@ use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
-use Intakt\Core\Shadow\Contract\ProjectModes;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Intakt\Plugin\Forge\Contract\HeadMove;
 use Intakt\Plugin\Forge\Contract\HeadMoveKind;
 use Intakt\Tests\Core\Review\SampleIdentity;

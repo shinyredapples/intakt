@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Shadow\Contract\ProjectMode;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 
 final readonly class VerdictReceived
 {
