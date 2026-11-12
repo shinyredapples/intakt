@@ -9,12 +9,15 @@ use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
+use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
+use Symfony\AI\Platform\Result\ResultInterface;
+use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 
@@ -37,16 +40,16 @@ final readonly class AccountPlatform implements PlatformInterface
         try {
             $result = $this->platform->invoke($model, $input, $options);
         } catch (Throwable $failure) {
-            $this->record($failure);
-            $this->coolDownAfter($failure);
+            $this->failed($failure);
 
             throw $failure;
         }
 
         $result->getMetadata()->add(Account::METADATA, $this->account->key());
         // A provider's limit arrives when the answer is read, not when the call is sent, so the cooldown hangs on the result.
-        $result->onError($this->record(...));
-        $result->onError($this->coolDownAfter(...));
+        $result->onError($this->failed(...));
+        // A limit that arrives while the stream is read never reaches onError, so the stream reports it too.
+        $result->onConvert($this->listenToStream(...));
 
         return $result;
     }
@@ -57,9 +60,23 @@ final readonly class AccountPlatform implements PlatformInterface
         return $this->platform->getModelCatalog();
     }
 
-    private function record(Throwable $failure): void
+    private function listenToStream(ResultInterface $result): ResultInterface
     {
-        $this->failures->record($this->account, $failure);
+        if ($result instanceof StreamResult) {
+            $result->addListener(new AccountStreamFailures($this->failed(...)));
+        }
+
+        return $result;
+    }
+
+    private function failed(Throwable $failure): void
+    {
+        // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
+        $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
+
+        if ($this->failures->record($this->account, $cause)) {
+            $this->coolDownAfter($cause);
+        }
     }
 
     // Matched by the exception type only, because the provider's text can change (plan T5); logged whole, because the log redacts a key the text echoes.
