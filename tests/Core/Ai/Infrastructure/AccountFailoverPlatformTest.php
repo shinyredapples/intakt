@@ -502,13 +502,17 @@ final class AccountFailoverPlatformTest extends TestCase
 
     private function readStream(DeferredResult $result): void
     {
+        $failure = null;
+
         try {
             foreach ($result->asStream() as $delta) {
                 self::assertInstanceOf(TextDelta::class, $delta);
             }
-            self::fail('The stream was expected to fail when read.');
-        } catch (Throwable) {
+        } catch (Throwable $caught) {
+            $failure = $caught;
         }
+
+        self::assertNotNull($failure, 'The stream was expected to fail when read.');
     }
 
     /**
