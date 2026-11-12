@@ -26,7 +26,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
-use Intakt\Core\Shadow\Contract\ProjectModes;
+use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
 

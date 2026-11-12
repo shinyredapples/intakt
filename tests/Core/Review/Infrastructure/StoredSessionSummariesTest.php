@@ -28,6 +28,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -132,6 +133,30 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertSame([], $summary->toolCalls);
         self::assertSame([], $summary->filesRead);
         self::assertSame(0, $summary->totalToolCalls());
+    }
+
+    public function testAReadWhoseRecordingFailsStillAnswersWithTheFile(): void
+    {
+        $round = $this->fixture->start(1)->id()->toRfc4122();
+        $this->recordingFails();
+
+        $result = $this->answerOf($this->serverFor($round), 'read_file', ['path' => 'RoundFixture.php']);
+
+        self::assertFalse($result['isError']);
+        self::assertStringContainsString('final readonly class RoundFixture', $result['text']);
+        self::assertLoggedError('error', 'A tool call of the review server was not recorded; it is answered anyway.');
+    }
+
+    public function testARefusalWhoseRecordingFailsIsStillRefusedWithItsReason(): void
+    {
+        $round = $this->fixture->start(1)->id()->toRfc4122();
+        $this->recordingFails();
+
+        $result = $this->answerOf($this->serverFor($round), 'read_file', ['path' => '../outside.php']);
+
+        self::assertTrue($result['isError']);
+        self::assertStringContainsString('../outside.php', $result['text']);
+        self::assertLoggedError('error', 'A tool call of the review server was not recorded; it is answered anyway.');
     }
 
     public function testTheCostIsTheRoundsCost(): void
@@ -260,7 +285,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn($cost ?? Cost::none());
 
-        return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, new RoundToolCalls($this->fixture->entities));
+        return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, new RoundToolCalls($this->fixture->entities, new NullLogger()));
     }
 
     private function completedRound(Verdict $verdict): string
@@ -326,6 +351,25 @@ final class StoredSessionSummariesTest extends KernelTestCase
     private function call(McpServerClient $server, string $tool, array $arguments): void
     {
         $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
+    }
+
+    /**
+     * @param array<string, string> $arguments
+     *
+     * @return array{isError: bool, text: string}
+     */
+    private function answerOf(McpServerClient $server, string $tool, array $arguments): array
+    {
+        /** @var array{result: array{isError?: bool, content: list<array{text: string}>}} $response */
+        $response = $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
+
+        return ['isError' => $response['result']['isError'] ?? false, 'text' => $response['result']['content'][0]['text']];
+    }
+
+    // The table is dropped, because then the insert fails in the database itself, as it would when the database refuses it.
+    private function recordingFails(): void
+    {
+        $this->fixture->entities->getConnection()->executeStatement('DROP TABLE round_tool_call');
     }
 
     private function finding(string $id, ?string $text = null): Finding
