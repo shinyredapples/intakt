@@ -39,6 +39,17 @@ final readonly class ChangedFile
         return str_starts_with($this->status, 'R');
     }
 
+    public function movedTo(string $path): bool
+    {
+        return $this->isRenamed() && $this->path() === $path;
+    }
+
+    // A path the diff adds, or moves or copies a file onto, did not exist at the base.
+    public function isNewAt(string $path): bool
+    {
+        return $this->path() === $path && ($this->isAdded() || 2 === count($this->paths));
+    }
+
     /**
      * @param list<string> $paths
      */
@@ -50,6 +61,17 @@ final readonly class ChangedFile
     public function path(): string
     {
         return (string) array_last($this->paths);
+    }
+
+    public function oldPath(): string
+    {
+        return (string) array_first($this->paths);
+    }
+
+    // The status field and the paths, as "--raw -z" lays an entry out.
+    public function fieldCount(): int
+    {
+        return 1 + count($this->paths);
     }
 
     private function isAdded(): bool

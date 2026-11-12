@@ -27,10 +27,11 @@ final readonly class LostContentCheck
         // Against the merge base, because a file main shrank after the branch started is not this change's loss; renames are followed, so a moved file is not read as removed.
         $main = $this->git->output($repository, ['symbolic-ref', '--quiet', 'HEAD']);
         $base = $this->git->output($repository, ['merge-base', $main, $head]);
-        $named = $this->withEarlierPaths($namedByThePlan, $this->movesOnTheBranch($repository, $base, $head));
+        $changed = $this->changedFiles($repository, $base, $head);
+        $named = $this->withTheBasePathOfEachNewNamedFile($namedByThePlan, $changed, $this->renamesOfEachCommit($repository, $base, $head));
         $lost = [];
 
-        foreach ($this->changedFiles($repository, $base, $head) as $file) {
+        foreach ($changed as $file) {
             $content = $this->unnamedLoss($repository, $file, $named);
 
             if ($content instanceof LostContent) {
@@ -48,66 +49,113 @@ final readonly class LostContentCheck
      */
     private function changedFiles(string $repository, string $base, string $head): array
     {
-        $raw = $this->git->exactOutput($repository, ['diff', '--raw', '-z', '-M', '--no-abbrev', $base, $head, '--']);
-
-        return $this->parsed(explode("\0", $raw));
-    }
-
-    /**
-     * @return list<ChangedFile>
-     *
-     * @throws HandBackNotChecked
-     */
-    private function movesOnTheBranch(string $repository, string $base, string $head): array
-    {
-        // Commit by commit, because a file moved and then rewritten below git's similarity threshold reads as removed in the diff of the whole branch.
-        $raw = $this->git->exactOutput($repository, ['log', '--raw', '-z', '-M', '--no-abbrev', '--format=', $base.'..'.$head, '--']);
-        $fields = array_values(array_filter(explode("\0", $raw), static fn (string $field): bool => '' !== $field));
-
-        return array_values(array_filter($this->parsed($fields), static fn (ChangedFile $file): bool => $file->isRenamed()));
-    }
-
-    /**
-     * @param list<string>      $named
-     * @param list<ChangedFile> $moves
-     *
-     * @return list<string>
-     */
-    private function withEarlierPaths(array $named, array $moves): array
-    {
-        // A path the plan names covers every path the file had earlier on the branch, so a move before the rewrite keeps the exemption.
-        do {
-            $before = count($named);
-
-            foreach ($moves as $move) {
-                if (in_array($move->paths[1] ?? null, $named, true) && !in_array($move->paths[0], $named, true)) {
-                    $named[] = $move->paths[0];
-                }
-            }
-        } while (count($named) !== $before);
-
-        return $named;
-    }
-
-    /**
-     * @param list<string> $fields
-     *
-     * @return list<ChangedFile>
-     */
-    private function parsed(array $fields): array
-    {
+        $fields = explode("\0", $this->git->exactOutput($repository, ['diff', '--raw', '-z', '-M', '--no-abbrev', $base, $head, '--']));
         $files = [];
         $index = 0;
 
-        while (str_starts_with($fields[$index] ?? '', ':')) {
-            [$oldMode, $newMode, $oldBlob, $newBlob, $status] = explode(' ', substr($fields[$index], 1), 5) + ['', '', '', '', ''];
-            // Two paths for a rename or a copy, because git names the old path and then the new one.
-            $count = str_starts_with($status, 'R') || str_starts_with($status, 'C') ? 2 : 1;
-            $files[] = new ChangedFile($status, $oldMode, $newMode, $oldBlob, $newBlob, array_slice($fields, $index + 1, $count));
-            $index += $count + 1;
+        while (($file = $this->entryAt($fields, $index)) instanceof ChangedFile) {
+            $files[] = $file;
+            $index += $file->fieldCount();
         }
 
         return $files;
+    }
+
+    /**
+     * @return list<list<ChangedFile>> the renames of each commit, the head's first
+     *
+     * @throws HandBackNotChecked
+     */
+    private function renamesOfEachCommit(string $repository, string $base, string $head): array
+    {
+        // Commit by commit, because a file moved and then rewritten below git's similarity threshold reads as removed in the diff of the whole branch; with each commit's hash, because a path is followed back through one commit's moves at a time.
+        $fields = explode("\0", $this->git->exactOutput($repository, ['log', '--raw', '-z', '-M', '--no-abbrev', '--topo-order', '--format=%H', $base.'..'.$head, '--']));
+        $commits = [];
+        $renames = [];
+        $index = 0;
+
+        while ($index < count($fields)) {
+            $file = $this->entryAt($fields, $index);
+
+            // A field that is no entry is a commit's hash, and the entries after it are that commit's.
+            if (!$file instanceof ChangedFile) {
+                $commits[] = $renames;
+                $renames = [];
+                ++$index;
+
+                continue;
+            }
+
+            if ($file->isRenamed()) {
+                $renames[] = $file;
+            }
+
+            $index += $file->fieldCount();
+        }
+
+        $commits[] = $renames;
+
+        return $commits;
+    }
+
+    /**
+     * @param list<string>            $fields
+     * @param non-negative-int $index
+     */
+    private function entryAt(array $fields, int $index): ?ChangedFile
+    {
+        // Without the line break "log -z" puts before a commit's first entry.
+        $field = ltrim($fields[$index] ?? '', "\n");
+
+        if (!str_starts_with($field, ':')) {
+            return null;
+        }
+
+        [$oldMode, $newMode, $oldBlob, $newBlob, $status] = explode(' ', substr($field, 1), 5) + ['', '', '', '', ''];
+        // Two paths for a rename or a copy, because git names the old path and then the new one.
+        $count = str_starts_with($status, 'R') || str_starts_with($status, 'C') ? 2 : 1;
+
+        return new ChangedFile($status, $oldMode, $newMode, $oldBlob, $newBlob, array_slice($fields, $index + 1, $count));
+    }
+
+    /**
+     * @param list<string>            $named
+     * @param list<ChangedFile>       $changed
+     * @param list<list<ChangedFile>> $renamesOfEachCommit
+     *
+     * @return list<string>
+     */
+    private function withTheBasePathOfEachNewNamedFile(array $named, array $changed, array $renamesOfEachCommit): array
+    {
+        // A named path that existed at the base names the file that was there, so a file moved onto it later is not covered; a path the branch created names the file there at the head, which is also covered under the one path it had at the base, so a move before the rewrite keeps the exemption.
+        $basePaths = [];
+
+        foreach ($named as $path) {
+            if (array_any($changed, static fn (ChangedFile $file): bool => $file->isNewAt($path))) {
+                $basePaths[] = $this->pathAtTheBase($path, $renamesOfEachCommit);
+            }
+        }
+
+        return array_values(array_unique([...$named, ...$basePaths]));
+    }
+
+    /**
+     * @param list<list<ChangedFile>> $renamesOfEachCommit
+     */
+    private function pathAtTheBase(string $path, array $renamesOfEachCommit): string
+    {
+        // From the head back to the base, replacing the path only in a commit that moved a file onto it, so the path follows one file and not every move on the branch.
+        foreach ($renamesOfEachCommit as $renames) {
+            foreach ($renames as $rename) {
+                if ($rename->movedTo($path)) {
+                    $path = $rename->oldPath();
+
+                    break;
+                }
+            }
+        }
+
+        return $path;
     }
 
     /**

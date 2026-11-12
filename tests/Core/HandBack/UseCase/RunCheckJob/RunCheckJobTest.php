@@ -355,6 +355,61 @@ final class RunCheckJobTest extends TestCase
         self::assertSame([['docs/old.md', 120, 0]], $this->lostIn($outcome));
     }
 
+    public function testAnUnnamedFileMovedOverANamedPathThatExistedAtTheBaseIsStillReportedLost(): void
+    {
+        $this->givenMainHolds('docs/guide.md', $this->lines(120));
+        $this->history->checkout('main');
+        $this->history->commitFile('docs/keep.md', $this->lines(120), 'Add the file to keep');
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+        $this->history->removeFile('docs/guide.md', 'Remove the guide');
+        $this->history->moveFile('docs/keep.md', 'docs/guide.md', 'Move the kept file over it');
+        $this->history->commitFile('docs/guide.md', "1\n", 'Rewrite the guide');
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), null, ['docs/guide.md']));
+
+        self::assertInstanceOf(CheckJobOutcome::class, $outcome);
+        self::assertSame([['docs/keep.md', 120, 0]], $this->lostIn($outcome));
+    }
+
+    public function testAnUnnamedFileMovedOntoTheNamedPathAndBackIsStillReportedLost(): void
+    {
+        $this->givenMainHolds('src/Important.php', $this->lines(120));
+        $this->history->checkout('main');
+        $this->history->commitFile('docs/old.md', $this->lines(120), 'Add the guide');
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+        $this->history->moveFile('src/Important.php', 'docs/new.md', 'Move the class onto the named path');
+        $this->history->moveFile('docs/new.md', 'src/Important.php', 'Move it back');
+        $this->history->moveFile('docs/old.md', 'docs/new.md', 'Move the guide');
+        $this->history->commitFile('docs/new.md', "1\n", 'Rewrite the guide');
+        $this->history->commitFile('src/Important.php', "1\n", 'Destroy the class');
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), null, ['docs/new.md']));
+
+        self::assertInstanceOf(CheckJobOutcome::class, $outcome);
+        self::assertSame([['src/Important.php', 120, 1]], $this->lostIn($outcome));
+    }
+
+    public function testAnUnnamedFileThatPassedThroughTheNamedPathBeforeAnotherTookItIsStillReportedLost(): void
+    {
+        $this->givenMainHolds('a.txt', $this->lines(120));
+        $this->history->checkout('main');
+        $this->history->commitFile('b.txt', $this->lines(120), 'Add B');
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
+        $this->history->moveFile('a.txt', 'named.txt', 'Move A onto the named path');
+        $this->history->moveFile('named.txt', 'temp.txt', 'Move A aside');
+        $this->history->moveFile('b.txt', 'named.txt', 'Move B onto the named path');
+        $this->history->moveFile('temp.txt', 'a.txt', 'Restore the path of A');
+        $this->history->commitFile('a.txt', "1\n", 'Rewrite A');
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $this->job($this->history->bundle('main..task'), null, ['named.txt']));
+
+        self::assertInstanceOf(CheckJobOutcome::class, $outcome);
+        self::assertSame([['a.txt', 120, 1]], $this->lostIn($outcome));
+    }
+
     private function givenMainHolds(string $path, string $content): void
     {
         $this->history->checkout('main');
