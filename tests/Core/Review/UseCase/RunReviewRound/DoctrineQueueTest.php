@@ -97,7 +97,7 @@ final class DoctrineQueueTest extends KernelTestCase
         self::assertSame([], $this->fixture->storedRounds());
     }
 
-    public function testARoundWhoseDispatchBreaksTakesItsQueuedMessageBackWithIt(): void
+    public function testARoundWhoseReviewerMessageCannotBeQueuedTakesItsQueuedAnnouncementBackWithIt(): void
     {
         $this->queue->setup();
 
@@ -108,6 +108,7 @@ final class DoctrineQueueTest extends KernelTestCase
             self::assertSame('queue unavailable', $refused->getMessage());
         }
 
+        self::assertSame([], $this->queuedAnnouncements());
         self::assertSame(0, $this->queue->getMessageCount());
         self::assertSame([], $this->fixture->storedRounds());
     }
@@ -122,19 +123,6 @@ final class DoctrineQueueTest extends KernelTestCase
             [RoundOpened::class, ReviewWithReviewer::class, ReviewWithReviewer::class],
             array_map(static fn (Envelope $queued): string => $queued->getMessage()::class, iterator_to_array($this->queue->all(), false)),
         );
-    }
-
-    public function testARoundWhoseReviewerMessagesCannotAllBeQueuedTakesItsQueuedAnnouncementBackWithIt(): void
-    {
-        $this->queue->setup();
-
-        try {
-            $this->fixture->startOn(new RefusingQueue($this->commands), 3);
-            self::fail('The refused dispatch was swallowed.');
-        } catch (RuntimeException) {
-        }
-
-        self::assertSame([], $this->queuedAnnouncements());
     }
 
     public function testTheQueueStillTakesTheNextRoundAfterARolledBackOne(): void
