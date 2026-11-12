@@ -24,8 +24,6 @@ final readonly class AttributionLines
 
         $text = rtrim((string) preg_replace(self::BLANK_LINES, "\n\n", implode("\n", $kept)));
 
-        $ending = str_contains($message, "\r\n") ? "\r\n" : "\n";
-
-        return '' === $text ? '' : $text.$ending;
+        return '' === $text ? '' : $text."\n";
     }
 }
