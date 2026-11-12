@@ -4,18 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Shadow\Domain;
 
-use Intakt\Core\Review\Contract\ChangeReview;
-use Intakt\Core\Review\Contract\Decision;
-use Intakt\Core\Review\Contract\Finding;
-use Intakt\Core\Review\Contract\PanelVerdict;
-use Intakt\Core\Shadow\Contract\FindingMatch;
-use Intakt\Core\Shadow\Contract\HeadComparison;
 use Intakt\Core\Shadow\Contract\LoopFinding;
-use Intakt\Core\Shadow\Contract\LoopReview;
-use Intakt\Core\Shadow\Contract\LoopReviews;
-use Intakt\Core\Shadow\Contract\LoopVerdict;
-use Intakt\Core\Shadow\Contract\ReviewerDecision;
-use Intakt\Core\Shadow\Contract\ReviewOutcome;
 use NoDiscard;
 
 final readonly class ReviewComparison
@@ -24,29 +13,8 @@ final readonly class ReviewComparison
     public const int LINE_WINDOW = 3;
 
     /**
-     * @param list<ChangeReview> $shadowRounds
-     */
-    #[NoDiscard('a comparison that is not read reports nothing')]
-    public function compare(string $head, LoopReviews $loop, array $shadowRounds): HeadComparison
-    {
-        $loopFindings = array_map(static fn (LoopReview $review): array => $review->findings, $loop->reviews);
-        [$pairs, $loopOnly, $intaktOnly] = $this->matchedSpots($loopFindings, $this->countingFindings($shadowRounds));
-
-        return new HeadComparison(
-            head: $head,
-            loopDecisions: array_map($this->loopDecision(...), $loop->reviews),
-            intaktDecisions: $this->intaktDecisions($shadowRounds),
-            matches: array_map(static fn (array $pair): FindingMatch => new FindingMatch($pair[0], $pair[1]), $pairs),
-            loopOnly: $loopOnly,
-            intaktOnly: $intaktOnly,
-            intaktTokens: array_sum(array_map(static fn (ChangeReview $round): int => $round->tokens->total, $shadowRounds)),
-        );
-    }
-
-    // Shared with the weekly report, so the loop's findings meet Intakt's published ones by the same spots as its shadow verdicts.
-    /**
-     * @template L of LoopFinding|Finding
-     * @template I of LoopFinding|Finding
+     * @template L of LoopFinding
+     * @template I of LoopFinding
      *
      * @param list<list<L>> $loopReviews
      * @param list<list<I>> $intaktReviews
@@ -60,7 +28,7 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template T of LoopFinding|Finding
+     * @template T of LoopFinding
      *
      * @param list<list<T>> $reviews
      *
@@ -78,7 +46,7 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template T of LoopFinding|Finding
+     * @template T of LoopFinding
      *
      * @param non-empty-list<array{int, T}> $sameLine
      * @param list<MergedSpot<T>>           $spots
@@ -116,7 +84,7 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template T of LoopFinding|Finding
+     * @template T of LoopFinding
      *
      * @param list<list<T>> $reviews
      *
@@ -131,7 +99,7 @@ final readonly class ReviewComparison
             }
         }
 
-        $spot = static fn (LoopFinding|Finding $finding): array => [$finding->file ?? '', $finding->line ?? 0];
+        $spot = static fn (LoopFinding $finding): array => [$finding->file, $finding->line];
         usort($tagged, static fn (array $a, array $b): int => $spot($a[1]) <=> $spot($b[1]));
 
         $groups = [];
@@ -150,8 +118,8 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template L of LoopFinding|Finding
-     * @template I of LoopFinding|Finding
+     * @template L of LoopFinding
+     * @template I of LoopFinding
      *
      * @param list<MergedSpot<L>> $loopSpots
      * @param list<MergedSpot<I>> $intaktSpots
@@ -173,12 +141,12 @@ final readonly class ReviewComparison
             unset($intaktSpots[$index]);
         }
 
-        return [$matches, $loopOnly, array_map(static fn (MergedSpot $spot): LoopFinding|Finding => $spot->finding, array_values($intaktSpots))];
+        return [$matches, $loopOnly, array_map(static fn (MergedSpot $spot): LoopFinding => $spot->finding, array_values($intaktSpots))];
     }
 
     /**
-     * @template L of LoopFinding|Finding
-     * @template I of LoopFinding|Finding
+     * @template L of LoopFinding
+     * @template I of LoopFinding
      *
      * @param MergedSpot<L>             $loopSpot
      * @param array<int, MergedSpot<I>> $intaktSpots
@@ -196,71 +164,5 @@ final readonly class ReviewComparison
         }
 
         return $closest;
-    }
-
-    /**
-     * @param list<ChangeReview> $shadowRounds
-     *
-     * @return list<list<Finding>>
-     */
-    private function countingFindings(array $shadowRounds): array
-    {
-        $reviews = [];
-        foreach ($this->verdicts($shadowRounds) as $verdict) {
-            if (!$verdict->verdict->isFailedReview()) {
-                $reviews[] = $verdict->verdict->findings;
-            }
-        }
-
-        return $reviews;
-    }
-
-    /**
-     * @param list<ChangeReview> $shadowRounds
-     *
-     * @return list<ReviewerDecision>
-     */
-    private function intaktDecisions(array $shadowRounds): array
-    {
-        $decisions = [];
-        foreach ($shadowRounds as $round) {
-            foreach ($round->verdicts as $verdict) {
-                $decisions[] = new ReviewerDecision(sprintf('round %d %s', $round->round, $verdict->tier->value), $this->intaktOutcome($verdict));
-            }
-        }
-
-        return $decisions;
-    }
-
-    /**
-     * @param list<ChangeReview> $shadowRounds
-     *
-     * @return list<PanelVerdict>
-     */
-    private function verdicts(array $shadowRounds): array
-    {
-        return array_merge(...array_map(static fn (ChangeReview $round): array => $round->verdicts, $shadowRounds));
-    }
-
-    private function intaktOutcome(PanelVerdict $verdict): ReviewOutcome
-    {
-        if ($verdict->verdict->isFailedReview()) {
-            return ReviewOutcome::Failed;
-        }
-
-        return match ($verdict->verdict->verdict) {
-            Decision::Approve => ReviewOutcome::Approve,
-            Decision::Changes => ReviewOutcome::Changes,
-            Decision::Blocked => ReviewOutcome::Blocked,
-        };
-    }
-
-    private function loopDecision(LoopReview $review): ReviewerDecision
-    {
-        return new ReviewerDecision($review->reviewer, match ($review->verdict) {
-            LoopVerdict::Approve => ReviewOutcome::Approve,
-            LoopVerdict::Changes => ReviewOutcome::Changes,
-            LoopVerdict::Unreadable => ReviewOutcome::Unreadable,
-        });
     }
 }

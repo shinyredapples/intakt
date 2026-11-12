@@ -11,13 +11,16 @@ use Mcp\Schema\ToolAnnotations;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
 #[McpTool(
-    name: 'read_file',
+    name: self::NAME,
     description: 'Reads one file of the repository at the head under review.',
     annotations: new ToolAnnotations(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false),
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]
 final readonly class ReadFileTool
 {
+    // A constant, because the review server records each call under the tool's name and the summary counts by it.
+    public const string NAME = 'read_file';
+
     public function __construct(private ReviewedRepository $repository)
     {
     }

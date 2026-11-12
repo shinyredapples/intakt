@@ -7,7 +7,6 @@ namespace Intakt\Core\Ledger\Contract;
 enum LedgerEventKind: string
 {
     case ReviewStarted = 'review_started';
-    case ShadowRoundHeld = 'shadow_round_held';
     case ReviewerStarted = 'reviewer_started';
     case VerdictReceived = 'verdict_received';
     case ReviewerFailed = 'reviewer_failed';
