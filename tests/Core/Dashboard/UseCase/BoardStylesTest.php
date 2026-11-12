@@ -26,11 +26,15 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/padding:\s*0 var\(--s48\)/', $rules['.topbar'] ?? '');
     }
 
-    public function testAt2200WideAndUpTheBoardContentStopsAt2000(): void
+    // The mock caps only its roomy pages from 2200 wide; its board (content wide) keeps growing at every width.
+    public function testTheBoardContentIsNeverCappedAtAnyWidth(): void
     {
-        $rules = $this->rulesOf($this->mediaBlock('min-width: 2200px'));
+        preg_match_all('/(?:^|[{}])\s*\.content\.wide\s*\{([^{}]*)\}/', (string) preg_replace('~/\*.*?\*/~s', '', $this->sheet()), $declarations);
 
-        self::assertMatchesRegularExpression('/max-width:\s*2000px/', $rules['.content.wide'] ?? '');
+        self::assertNotEmpty($declarations[1]);
+        foreach ($declarations[1] as $declaration) {
+            self::assertMatchesRegularExpression('/^\s*max-width:\s*none;\s*$/', $declaration);
+        }
     }
 
     public function testACardMetaLineUsesTheMutedThirteenTypeToken(): void
@@ -38,6 +42,17 @@ final class BoardStylesTest extends TestCase
         $rules = $this->rulesOf($this->sheet());
 
         self::assertMatchesRegularExpression('/color:\s*var\(--muted\);\s*font-size:\s*var\(--t13\)/', $rules['.meta'] ?? '');
+    }
+
+    // A card's meta line shows its spans on one line (.meta span), which would otherwise outrank the tip's own rule.
+    public function testAGlossaryTipInACardsMetaLineStaysHiddenAndWrapsUntilItsTermIsPointedAt(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertArrayNotHasKey('.term-tip', $rules);
+        self::assertMatchesRegularExpression('/display:\s*none;/', $rules['.term .term-tip'] ?? '');
+        self::assertMatchesRegularExpression('/white-space:\s*normal;/', $rules['.term .term-tip'] ?? '');
+        self::assertMatchesRegularExpression('/display:\s*block/', $rules['.term:hover .term-tip, .term:focus .term-tip'] ?? '');
     }
 
     public function testTheCountBadgeInAColumnHeadIsStyledFromTokens(): void

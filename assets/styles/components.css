@@ -206,8 +206,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 
 /* Glossary terms */
 .term { position: relative; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; cursor: help; }
-.term-tip {
-  position: absolute; top: calc(100% + var(--s4)); left: 0; z-index: 140; display: none; width: max-content; max-width: 300px;
+/* Under .term so it outranks .meta span, which would show the tip on a card and keep it on one line. */
+.term .term-tip {
+  position: absolute; top: calc(100% + var(--s4)); left: 0; z-index: 140; display: none; width: max-content; max-width: 300px; white-space: normal;
   padding: var(--s8) var(--s12); border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--ink);
   font: 400 var(--t13)/1.4 var(--f-body); pointer-events: none;
 }
@@ -321,9 +322,6 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 @media (min-width: 1700px) {
   .content { padding: var(--s32) var(--s48); }
   .topbar { padding: 0 var(--s48); }
-}
-@media (min-width: 2200px) {
-  .content.wide { max-width: 2000px; }
 }
 
 @media (max-width: 760px) {
