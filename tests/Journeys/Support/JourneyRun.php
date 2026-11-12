@@ -15,7 +15,14 @@ final readonly class JourneyRun
     private function __construct(
         public array $failures,
         public string $output,
+        public bool $timedOut = false,
     ) {
+    }
+
+    // A run stopped at the job's limit may have printed no result line, so its output is not read.
+    public static function timedOut(string $output): self
+    {
+        return new self([], $output, timedOut: true);
     }
 
     public static function fromOutput(string $output): self
@@ -32,7 +39,7 @@ final readonly class JourneyRun
 
     public function isRed(): bool
     {
-        return [] !== $this->failures;
+        return $this->timedOut || [] !== $this->failures;
     }
 
     public function tail(int $lines): string

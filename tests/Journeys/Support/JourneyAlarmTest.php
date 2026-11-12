@@ -152,6 +152,40 @@ final class JourneyAlarmTest extends TestCase
         self::assertSame([], $this->calls());
     }
 
+    public function testACutOffRunThatTimedOutFilesTheTaskNamingTheTimeoutAndTheRunLink(): void
+    {
+        $alarm = $this->alarm(['--timed-out', '--run=https://github.com/example/repo/actions/runs/3'], "Building the instance\n{\"gate\":\"jour");
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        $create = $this->callsOf('create');
+        self::assertSame('fix(journeys): the journeys run timed out on main', $create[0]['arguments'][3]);
+        self::assertStringContainsString('The journeys run on `main` timed out', $create[0]['input']);
+        self::assertStringContainsString('Run: https://github.com/example/repo/actions/runs/3', $create[0]['input']);
+        self::assertStringContainsString("Building the instance\n{\"gate\":\"jour\n```", $create[0]['input']);
+    }
+
+    public function testAnEmptyOutputOfARunThatTimedOutFilesTheTask(): void
+    {
+        $alarm = $this->alarm(['--timed-out']);
+
+        self::assertSame("filed https://github.com/example/repo/issues/7\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertSame('fix(journeys): the journeys run timed out on main', $this->callsOf('create')[0]['arguments'][3]);
+    }
+
+    public function testARunThatTimedOutReplacesTheBodyOfTheOpenTaskAndKeepsItsTitle(): void
+    {
+        $this->openIssues((string) json_encode([['number' => 5, 'body' => JourneyAlarmTask::MARKER."\nThe journeys failed on `main`."]]));
+
+        $alarm = $this->alarm(['--timed-out'], "Building the instance\n");
+
+        self::assertSame("updated #5\n", $alarm->getOutput(), $alarm->getErrorOutput());
+        self::assertSame([], $this->callsOf('create'));
+        $edit = $this->callsOf('edit');
+        self::assertSame(['issue', 'edit', '5', '--body-file', '-', '--repo', self::REPOSITORY], $edit[0]['arguments']);
+        self::assertStringContainsString('The journeys run on `main` timed out', $edit[0]['input']);
+        self::assertStringNotContainsString('The journeys failed on `main`.', $edit[0]['input']);
+    }
+
     public function testAnAnswerOfGhThatIsNoIssueListFailsAndFilesNothing(): void
     {
         $this->openIssues('{"message":"Bad credentials"}');
@@ -355,7 +389,7 @@ final class JourneyAlarmTest extends TestCase
         $github = new GitHubIssues(self::REPOSITORY, $this->fakeGh(...));
         $alarm = new JourneyAlarm($github, new LockFactory(new InMemoryStore()));
 
-        return $alarm->raise($output ?? $this->fixtureOutput(), null === $run ? null : Uri::parse($run));
+        return $alarm->raise(JourneyRun::fromOutput($output ?? $this->fixtureOutput()), null === $run ? null : Uri::parse($run));
     }
 
     /**
