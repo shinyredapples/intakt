@@ -189,11 +189,11 @@ Before it runs any gate, `bin/check` checks that the programs the selected gates
 
 The `workflows` gate is the exception: it needs zizmor (the [requirements](../architecture/requirements.md) name the version), and without it only that gate fails, with `missing tool zizmor` in its own result line; `--skip=workflows` leaves it out.
 
+`bin/check` looks for the programs on `PATH`. When `PATH` is not set at all, it looks where the system shell `/bin/sh` then looks, since the gates start their programs through that shell (on Debian and Ubuntu: `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` and `/bin`); if the shell cannot run, it looks only in the project folder. A `PATH` that is set but empty (`PATH=`) is taken as it is: only the project folder is searched, so every other program is reported missing.
+
 ## When the `workflows` gate reports an ignore without a reason
 
 A zizmor finding in a YAML file under `.github/` may only be silenced with a comment `# zizmor: ignore[<audit>]` followed by the reason on the same line, for example `# zizmor: ignore[artipacked] the job needs the token to push`. The `workflows` gate fails with `<file>:<line> zizmor ignore without a reason: # zizmor: ignore[...]` when the last ignore on a line has no words after it (blanks or punctuation do not count, and neither do words before it, for example in a quoted value that happens to contain such a comment), and with `<file> cannot be read for zizmor ignores` for a YAML file it cannot read. To resolve it, fix the finding the ignore silences, or write on the same line why the pattern is safe. A file with Windows (CR LF) or old Mac (CR) line endings is read line by line the same way.
-
-`bin/check` looks for the programs on `PATH`. When `PATH` is not set at all, it looks where the system shell `/bin/sh` then looks, since the gates start their programs through that shell (on Debian and Ubuntu: `/usr/local/sbin`, `/usr/local/bin`, `/usr/sbin`, `/usr/bin`, `/sbin` and `/bin`); if the shell cannot run, it looks only in the project folder. A `PATH` that is set but empty (`PATH=`) is taken as it is: only the project folder is searched, so every other program is reported missing.
 
 ## The release cooldown for dependencies
 
