@@ -18,10 +18,13 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FinishedState;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\ToolCallCount;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
@@ -350,6 +353,19 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame('0.9000 USD', $updated->filter('.ls-cost dd')->first()->text());
         self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
+    }
+
+    public function testASummaryPushedToThePageRendersFindingIdsAsHighlightButtons(): void
+    {
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $reported = new Finding('F7', Severity::P2, 'src/A.php', 3, null, 'Name it.', FixableBy::Builder, false, null, null);
+
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [$reported], [], false)]));
+
+        $button = $updated->filter('#round-round-1-summary-findings .ls-findings button');
+        self::assertSame('finding-highlight#select', $button->attr('data-action'));
+        self::assertSame('F7', $button->attr('data-finding-highlight-id-param'));
     }
 
     // Nothing listens at MERCURE_URL in the test environment, so this is the page of an install whose hub is stopped.

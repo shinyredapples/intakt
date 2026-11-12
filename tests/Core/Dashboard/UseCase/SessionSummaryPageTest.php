@@ -81,6 +81,27 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         ], $this->linesOf($crawler->filter('.log-summary .ls-findings li')));
     }
 
+    public function testEachFindingIdIsAButtonNamingItsFindingUnderTheHighlightController(): void
+    {
+        $this->givenTheRunningRoundRecorded($this->summary());
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame('finding-highlight', $crawler->filter('.log-summary')->attr('data-controller'));
+        $buttons = $crawler->filter('.log-summary .ls-findings li .mono button');
+        self::assertSame(['F1', 'F2', 'F4'], $buttons->each(static fn (Crawler $button): string => $button->attr('data-finding-highlight-id-param')));
+        self::assertSame(['finding-highlight#select'], array_unique($buttons->each(static fn (Crawler $button): string => $button->attr('data-action'))));
+    }
+
+    public function testTheTimelineEntryOfAJudgedFindingNamesItsFindingForTheHighlight(): void
+    {
+        $this->givenTheRunningRoundRecorded($this->summary());
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['F1', 'F2'], $crawler->filter('#round-round-1 table.findings td[data-finding]')->each(static fn (Crawler $cell): string => $cell->attr('data-finding')));
+    }
+
     public function testAFindingTheRoundCheckedAndReportedAgainIsListedOnceAsOpen(): void
     {
         $this->givenTheRunningRoundRecorded($this->summary(reported: [$this->finding('F2', Severity::P3, 'Name the cache window again.')]));
