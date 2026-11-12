@@ -32,8 +32,16 @@ A project without `composer.json` gets its devcontainer or Dockerfile image unch
 1. `FROM php:<version>-cli`, from the platform version's minor when there is one, otherwise from the newest of the minors 8.5, 8.4, 8.3 and 8.2 for which some patch meets the rule (`PhpProfile::imageVersionIn`): the minor alone (`php:8.4-cli`, a tag that moves with the patches) when the rule allows that minor's newest patches (it allows `<minor>.9999`), otherwise the lowest patch the rule allows in that minor: the start of the first range of the rule inside that minor that admits a patch, or the patch after it when the rule excludes the start (`8.4.1` for `require.php` `8.4.1` or `>=8.4.1 <8.4.5`, `8.4.2` for `>8.4.1 <8.4.5`, and the platform version itself when it has three numbers). A minor where no range admits a patch (`>8.4.1 <8.4.2`) is skipped. A rule no candidate meets is refused.
 2. Composer from `composer:2.11.1`, by the release image's digest, and `install-php-extensions` from `mlocati/php-extension-installer:2.13.2`.
 3. `ca-certificates`, `curl`, `git`, `unzip`, `nodejs` and `npm` from Debian: `curl` for the [start check](job-containers.md#start-check), `git` for the checkout.
-4. `npm install --global @anthropic-ai/claude-code@2.1.322 @openai/codex@0.167.1`.
+4. `npm install --global <package>@<version> ...` for each dependency of the [CLI manifest](#the-cli-versions), in its order: Claude Code (`@anthropic-ai/claude-code`) and Codex (`@openai/codex`).
 5. For each extension: skipped when `php -m` lists it already (spelled as Composer spells it), otherwise `install-php-extensions <name>`; still missing afterwards, the step prints `missing PHP extension: <name>` and fails the build.
+
+## The CLI versions
+
+`docker/job/cli/package.json` is the one place the Claude Code and Codex versions live: its `dependencies` name both CLIs at exact versions, and `docker/job/cli/package-lock.json`, written by `npm install --package-lock-only`, locks them. No PHP code or test repeats a version. `CliManifest` reads the manifest each time a Dockerfile is generated (the release image holds it, since its `Dockerfile` copies the repository) and refuses it (`JobImageNotBuilt`, `The CLI manifest <path> cannot be used: <reason>.`) when it cannot be read, is not JSON, has no non-empty `dependencies` object, or names a package that is not an npm package name (lowercase, an optional `@scope/`) or a version that is not exact (three numbers and an optional pre-release; no range, tag or URL), because both end up in the `RUN` line.
+
+The versions are meant to be bumped by Dependabot pull requests that change the manifest and its lock together, both CLIs in one group, and go through normal review and CI like any dependency pull request (no auto-merge). The `npm` entry of `.github/dependabot.yml` for this directory is not there yet; until it is, a bump is an edit of `package.json` followed by `npm install --package-lock-only` in `docker/job/cli/`.
+
+`tests/Gates/JobImageCliVersionsTest.php` fails when the generated Dockerfile installs another version of a CLI than the manifest names, or leaves one out (it also checks that a Dockerfile with a changed version fails), when the manifest names other packages than the two CLIs, and when the lock file locks other versions than the manifest.
 
 ## The build
 
