@@ -29,15 +29,15 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\VendorAccountOut;
-use Intakt\Tests\Support\KernelTestCase;
-use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Intakt\Tests\Core\Ai\Infrastructure\FailingWhenRead;
-use Symfony\AI\Platform\PlatformInterface;
+use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\PlatformInterface;
 
-// Plan T25: the quota of an account runs out during a round, after earlier calls were answered, and no reset is given; Symfony AI reports it as a rate limit without a retry delay, scripted through the real vendor stack.
+// Plan T25: a quota that runs out during a round must end it as changes or blocked, because Symfony AI reports a quota as a rate limit without a retry delay; scripted through the real vendor stack so the end and the usage rows are those an install records.
 #[Group('persistence')]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(AccountLimitedVendor::class)]
@@ -111,7 +111,7 @@ final class QuotaExhaustedMidRoundTest extends KernelTestCase
     {
         $this->quotaRunsOutAfterAnAnswer();
 
-        self::assertSame(['started', 'settled'], array_values($this->run->usagePhasesByCall())[0]);
+        self::assertSame(['started', 'settled'], array_first($this->run->usagePhasesByCall()));
     }
 
     public function testEachCallTheQuotaInterruptedIsLeftUnsettledOnceAndNeverSettled(): void
