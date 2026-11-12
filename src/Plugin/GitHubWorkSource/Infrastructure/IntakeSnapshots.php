@@ -154,7 +154,7 @@ final readonly class IntakeSnapshots
     {
         $rules = new IntakeRules($this->labels->of($project));
         foreach ($rows as $row) {
-            if (!$row->hasHistory() && $rules->needsHistory($row->isPullRequest(), $row->labels(), $row->closedBy())) {
+            if (!$row->hasHistory() && $rules->needsHistory($row)) {
                 $row->vouch($this->vouchingOf($project, $row));
             }
         }

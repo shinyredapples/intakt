@@ -15,22 +15,19 @@ final readonly class IntakeRules
     }
 
     // Only these items can steer the queue, so only their history is worth a read: a task candidate, and a pull request whose closing keywords reorder or release tasks.
-    /**
-     * @param list<string> $labels
-     * @param list<int>    $closedBy
-     */
-    public function needsHistory(bool $isPullRequest, array $labels, array $closedBy): bool
+    public function needsHistory(QueuedIssue $item): bool
     {
-        if ($isPullRequest) {
-            return [] !== $closedBy;
+        if ($item->isPullRequest()) {
+            return [] !== $item->closedBy();
         }
 
-        return in_array($this->eligibilityLabel, $labels, true) && !in_array(WorkLabels::IDEA, $labels, true);
+        return $item->hasLabel($this->eligibilityLabel) && !$item->hasLabel(WorkLabels::IDEA);
     }
 
+    // The failures hold every task of the project that failed for good, open or closed, because a closed failure still holds its dependents.
     /**
      * @param list<QueuedIssue>  $items
-     * @param array<int, string> $failures the reason of every task of the project that failed for good, open or closed
+     * @param array<int, string> $failures
      */
     public function planOf(array $items, array $failures): IntakePlan
     {
@@ -70,11 +67,11 @@ final readonly class IntakeRules
         return $open;
     }
 
-    // Only a pull request whose author and last editor have write access, because anyone can open one that says `Fixes #n` and would move that task ahead.
+    // The lowest open pull request that closes each task, and only one whose author and last editor have write access, because anyone can open one that says `Fixes #n` and would move that task ahead.
     /**
      * @param list<QueuedIssue> $items
      *
-     * @return array<int, int> the lowest open pull request that closes each task
+     * @return array<int, int>
      */
     private function pullRequestsOf(array $items): array
     {

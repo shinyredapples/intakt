@@ -250,11 +250,11 @@ final class GitHubWorkSourceTest extends KernelTestCase
     public function testAMilestoneDueDateMovedWithoutAnEditOfItsIssuesReordersTheQueue(): void
     {
         $this->reads->lists([Issues::task(1, ['intakt'], with: ['due' => '2026-12-01T00:00:00Z']), Issues::task(2, ['intakt'], with: ['due' => '2026-12-10T00:00:00Z'])]);
-        self::assertSame(1, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
+        self::assertSame([1, 2], array_map(static fn (Task $task): int => $task->number, $this->source->queue('alpha')->ready()));
 
         $this->reads->lists([Issues::task(1, ['intakt'], with: ['due' => '2026-12-01T00:00:00Z']), Issues::task(2, ['intakt'], with: ['due' => '2026-11-20T00:00:00Z'])]);
 
-        self::assertSame(2, $this->source->nextWork('alpha', WorkerState::Free)->task?->number);
+        self::assertSame([2, 1], array_map(static fn (Task $task): int => $task->number, $this->source->queue('alpha')->ready()));
     }
 
     public function testAnotherEligibilityLabelMakesTasksOfStoredItemsTheListingShowsUnchanged(): void
@@ -284,9 +284,10 @@ final class GitHubWorkSourceTest extends KernelTestCase
         $this->source->queue('alpha');
         $this->entities->getConnection()->executeStatement('DELETE FROM work_source_issue');
 
-        $pick = $this->source->nextWork('alpha', WorkerState::Free);
+        $task = $this->source->nextWork('alpha', WorkerState::Free)->task;
 
-        self::assertSame([1, 50], [$pick->task?->number, $pick->task?->reworkOf]);
+        self::assertInstanceOf(Task::class, $task);
+        self::assertSame([1, 50], [$task->number, $task->reworkOf]);
     }
 
     public function testATaskWaitingOnItsOwnPullRequestIsPicked(): void

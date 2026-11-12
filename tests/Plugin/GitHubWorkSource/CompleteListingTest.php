@@ -20,10 +20,12 @@ use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\BudgetReserve;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\RateLimitReadings;
@@ -59,6 +61,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 // Because the order must come from every page of one listing, this runs the whole path from GitHub's pages to the pick.
 #[Group('persistence')]
 #[CoversClass(GitHubIssueReads::class)]
+#[CoversClass(GitHubIssueHistories::class)]
+#[CoversClass(InstallationReads::class)]
 #[UsesClass(GitHubWorkSource::class)]
 #[UsesClass(IntakeSnapshots::class)]
 #[UsesClass(EligibilityLabels::class)]
@@ -305,8 +309,9 @@ final class CompleteListingTest extends KernelTestCase
         return new GitHubWorkSource($snapshots, $labels, new GrantedAccounts(), $logger);
     }
 
+    // Each event as its login, account type and label, oldest first, because that is the order GitHub answers them in.
     /**
-     * @param list<array{?string, string, string}> $events the login, account type and label of each label event, oldest first
+     * @param list<array{?string, string, string}> $events
      */
     private function history(string $editor, array $events): string
     {

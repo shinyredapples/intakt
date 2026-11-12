@@ -16,7 +16,7 @@ The order is computed over the whole listing, after the last page. The first pag
 
 ## History of an item
 
-`IssueReads::historyOf(project, number)` asks GitHub's GraphQL API (`issueOrPullRequest`) for the author, the last editor and the last 100 label events of an issue or pull request, and answers an `IssueHistory`: the editor (the author when nobody edited the text) and, for each label, the account that applied it last, in the order of those applications (null for a deleted account). An app is named with the `[bot]` suffix the permission check knows. An answer with `errors`, without the item, without an editor or author login, or without the label events is a `ForgeReadFailed`, which makes the listing incomplete.
+`IssueReads::historyOf(project, number)` (`GitHubIssueHistories`, which shares the installation's reads with the listing through `InstallationReads`) asks GitHub's GraphQL API (`issueOrPullRequest`) for the author, the last editor and the last 100 label events of an issue or pull request, and answers an `IssueHistory`: the editor (the author when nobody edited the text) and, for each label, the account that applied it last, in the order of those applications (null for a deleted account). An app is named with the `[bot]` suffix the permission check knows. An answer with `errors`, without the item, without an editor or author login, or without the label events is a `ForgeReadFailed`, which makes the listing incomplete.
 
 ## Stored state (`work_source_issue`, `work_source_failure`)
 

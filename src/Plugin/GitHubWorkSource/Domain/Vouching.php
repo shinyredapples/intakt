@@ -6,12 +6,12 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// What an item's history said when it was last read: whether its author and last editor had write access, and which labels such an account applied last.
+// Kept with the item, because its history is read again only when the item changes: whether author and last editor had write access, and the labels such an account applied last, in the order of those applications.
 #[Exclude]
 final readonly class Vouching
 {
     /**
-     * @param list<string> $labels in the order of their last application
+     * @param list<string> $labels
      */
     public function __construct(
         public string $editor,

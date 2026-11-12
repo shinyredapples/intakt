@@ -34,7 +34,7 @@ final class QueuedIssue
     #[ORM\Column(length: 19, nullable: true)]
     private ?string $milestoneDue = null;
 
-    // Null until the item's history was read, which happens only for an item that can steer the queue.
+    // Null until the item's history was read, because only an item that can steer the queue is worth that read.
     #[ORM\Column(nullable: true)]
     private ?string $editor;
 
@@ -126,14 +126,6 @@ final class QueuedIssue
     public function isPullRequest(): bool
     {
         return $this->pullRequest;
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function labels(): array
-    {
-        return $this->labels;
     }
 
     public function hasLabel(string $label): bool

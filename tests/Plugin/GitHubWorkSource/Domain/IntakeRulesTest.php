@@ -243,11 +243,11 @@ final class IntakeRulesTest extends TestCase
         self::assertSame(
             [true, false, false, true, false],
             [
-                $rules->needsHistory(false, ['intakt'], []),
-                $rules->needsHistory(false, ['intakt', 'idea'], []),
-                $rules->needsHistory(false, ['bug'], []),
-                $rules->needsHistory(true, [], [4]),
-                $rules->needsHistory(true, ['intakt'], []),
+                $rules->needsHistory($this->row(Issues::task(1))),
+                $rules->needsHistory($this->row(Issues::task(1, ['intakt', 'idea']))),
+                $rules->needsHistory($this->row(Issues::task(1, ['bug']))),
+                $rules->needsHistory($this->row(Issues::pullRequest(50, 'Fixes #4'))),
+                $rules->needsHistory($this->row(Issues::pullRequest(50, 'A refactoring.'))),
             ],
         );
     }
@@ -281,8 +281,9 @@ final class IntakeRulesTest extends TestCase
         return array_map(static fn (QueuedIssue $row): int => $row->number(), $rows);
     }
 
+    // Every label counts as applied last by an account with write access unless a test names the ones that do, because most cases are about something else.
     /**
-     * @param list<string>|null $vouched the labels an account with write access applied last, by default every label
+     * @param list<string>|null $vouched
      */
     private function row(ListedIssue $listed, bool $trusted = true, ?array $vouched = null): QueuedIssue
     {

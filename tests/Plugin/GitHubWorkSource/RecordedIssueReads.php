@@ -19,7 +19,8 @@ final class RecordedIssueReads implements IssueReads
     public array $validators = [];
     /** @var array<int, string> */
     public array $editors = [];
-    /** @var array<int, array<string, ?string>> by default every label was applied by the author */
+    // Without an entry every label counts as applied by the author, because most cases are about something else.
+    /** @var array<int, array<string, ?string>> */
     public array $labelAppliers = [];
     /** @var array<int, ListedIssue> */
     private array $listed = [];

@@ -8,10 +8,12 @@ use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
@@ -35,7 +37,7 @@ final class RecordedIssueApi
     public string $etag = 'W/"issues-1"';
     public bool $notModified = false;
     public string $historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"__typename":"User","login":"ana"},"editor":null,"timelineItems":{"nodes":[{"actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}},{"actor":{"__typename":"User","login":"ana"},"label":{"name":"priority:urgent"}}]}}}}}';
-    // GitHub names the next page in a Link header; off, a test sees what a listing does when the header is missing.
+    // Switchable, because GitHub names the next page in a Link header and a test must see what a listing does when the header is missing.
     public bool $links = true;
     /** @var list<string> */
     public array $conditions = [];
@@ -51,7 +53,10 @@ final class RecordedIssueApi
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubIssueReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
+        $reads = new InstallationReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens));
+        $repositories = new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]);
+
+        return new GitHubIssueReads($reads, new GitHubIssueHistories($reads, $repositories), $repositories, new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
     public static function fixture(string $name): string

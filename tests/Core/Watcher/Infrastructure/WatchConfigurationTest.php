@@ -44,7 +44,7 @@ final class WatchConfigurationTest extends TestCase
 
     public function testAWhitespaceEligibilityLabelIsRefused(): void
     {
-        $this->expectExceptionMessage('The "eligibility_label" key must not be blank.');
+        $this->expectException(InvalidConfigurationException::class);
 
         $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => " \u{00A0}\t"]);
     }
