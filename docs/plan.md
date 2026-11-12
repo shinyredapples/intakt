@@ -526,7 +526,7 @@ T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain earl
 - **Waits for:** T50, T37, T51, T55 (nothing is pushed before the pre-push check and the workflow approval exist; the dependency policy decides at merge). **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T54 Protected paths from the whole change
-- **Description:** Whether a head touches a protected path is read from the full diff between the merge base and the head plus the per-commit lists (each commit against each parent, second parents included unless main has them); submodules and `.gitmodules` count. The protected list, the owner-only list and the approval rules are owner config, never repository files.
+- **Description:** Whether a head touches a protected path is read from the full diff between the merge base and the head plus the per-commit lists (each commit against each parent, second parents included unless main has them, a path a commit holds exactly as the current main does left out); submodules and `.gitmodules` count. The protected list, the owner-only list and the approval rules are owner config, never repository files.
 - **Reference:** `test_crafted_merge.py` (a revert and a deletion a crafted merge hides), `test_policy.py` (exact files, workflows, main never pushed).
 - **Acceptance:** each case above; a path the check cannot read counts as protected.
 - **Evidence:** the protected list of a crafted-merge sample.

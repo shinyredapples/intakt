@@ -107,6 +107,11 @@ final readonly class TemporaryRepository
         unlink($this->path.'/.git/objects/'.substr($hash, 0, 2).'/'.substr($hash, 2));
     }
 
+    public function cutHistoryBelow(string $commit): void
+    {
+        file_put_contents($this->path.'/.git/shallow', $commit."\n");
+    }
+
     public function writeHook(string $name, string $script): string
     {
         $path = $this->path.'/.git/hooks/'.$name;

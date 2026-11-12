@@ -79,12 +79,27 @@ final readonly class ChangedPaths
     {
         $changed = [];
         foreach ($this->commitsMainLacks($repository, $main, $head) as [$commit, $parents]) {
-            foreach ($this->comparedParents($repository, $main, $parents) as $parent) {
-                $changed = [...$changed, ...$this->between($repository, $parent, $commit)];
+            $ofCommit = [];
+            foreach ($parents as $parent) {
+                $ofCommit = [...$ofCommit, ...$this->between($repository, $parent, $commit)];
             }
+
+            $changed = [...$changed, ...$this->notAsOnMain($repository, $main, $commit, $ofCommit)];
         }
 
         return $changed;
+    }
+
+    /**
+     * @throws ChangeNotRead
+     * @throws RepositoryAttributesRefused
+     */
+    public function mustBeComplete(string $repository): void
+    {
+        // Because a shallow history lacks the commits that would show a protected change undone later, so their absence would read as no change.
+        if ('false' !== trim($this->mustSucceed($this->run($repository, ['rev-parse', '--is-shallow-repository']), 'rev-parse'))) {
+            throw ChangeNotRead::because('the repository\'s history is shallow, so commits are missing');
+        }
     }
 
     /**
@@ -133,18 +148,23 @@ final readonly class ChangedPaths
     }
 
     /**
-     * @param list<string> $parents
+     * @param list<ChangedPath> $changed
      *
-     * @return list<string>
+     * @return list<ChangedPath>
      *
+     * @throws ChangeNotRead
      * @throws RepositoryAttributesRefused
      */
-    private function comparedParents(string $repository, string $main, array $parents): array
+    private function notAsOnMain(string $repository, string $main, string $commit, array $changed): array
     {
-        $onMain = array_values(array_filter($parents, fn (string $parent): bool => $this->run($repository, ['merge-base', '--is-ancestor', $parent, $main])->isSuccessful()));
+        if ([] === $changed) {
+            return [];
+        }
 
-        // What a commit keeps from a parent main holds is main's own content, so a merge of main lists only what differs from main; a parent that cannot be placed counts as off main, which compares more.
-        return [] === $onMain ? $parents : $onMain;
+        // A path the commit holds exactly as the current main does adds nothing to main, so a merge of main does not list what main added; a revert to an old main still differs and stays listed.
+        $differing = array_column($this->between($repository, $main, $commit), 'path', 'path');
+
+        return array_values(array_filter($changed, static fn (ChangedPath $path): bool => isset($differing[$path->path])));
     }
 
     /**

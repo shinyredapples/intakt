@@ -35,6 +35,7 @@ final readonly class ListProtectedChanges
             $repository = $this->existing($repository);
             $main = $this->changed->mainOf($repository);
             $this->changed->mustBeCommit($repository, $head);
+            $this->changed->mustBeComplete($repository);
 
             // Both, because a crafted merge can hide a revert or a deletion from a diff against one parent, and a change undone later in the branch leaves no trace in the whole diff.
             $changes = [

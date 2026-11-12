@@ -12,12 +12,10 @@ Each project's list is the key `projects.<name>.protected_paths` of the owner's 
 flowchart LR
     H[head] --> W["whole change: diff of each merge base with main against the head"]
     H --> C["each commit the head reaches and main does not"]
-    C --> P{"a parent on main?"}
-    P -- yes --> PM["diff against each parent on main"]
-    P -- no --> PA["diff against each parent (the empty tree for a root commit)"]
+    C --> PA["diff against each parent (the empty tree for a root commit)"]
+    PA --> M["keep the paths where the commit differs from the current main"]
     W --> U[union of paths]
-    PM --> U
-    PA --> U
+    M --> U
     U --> L["ProtectedPaths::touchedBy: sorted, each path once"]
 ```
 
@@ -25,14 +23,15 @@ flowchart LR
 
 - main from `symbolic-ref --quiet HEAD`, which must name a branch under `refs/heads/`;
 - that the head is a commit (`cat-file -t`), so an annotated tag's id is refused;
+- that the history is complete (`rev-parse --is-shallow-repository` prints `false`), because a shallow history lacks the commits that would show a protected change undone later;
 - the whole change: `merge-base --all <main> <head>`, and for each base `diff-tree -r -z --raw --no-renames --ignore-submodules=none <base> <head>`. Every base of a criss-cross history counts, so no choice of one hides a change. Without a common ancestor (`merge-base` exits with 1 and prints nothing), the base is the empty tree (`hash-object -t tree --stdin`, which names it in the repository's object format), so every path of the head counts;
-- each commit: `rev-list --parents <head> --not <main>`, the commits the head reaches and main does not, a merge's second parents included, and for each one the same `diff-tree` against its parents. A parent is on main when `merge-base --is-ancestor <parent> <main>` succeeds. A commit with one or more parents on main is compared with those parents only, because what it keeps from them is main's content: a merge of main lists what differs from main, not what main added. A commit without a parent on main is compared with each parent, and a root commit with the empty tree.
+- each commit: `rev-list --parents <head> --not <main>`, the commits the head reaches and main does not, a merge's second parents included, and for each one the same `diff-tree` against each of its parents, a root commit against the empty tree. Of those paths, a commit keeps only the ones where `diff-tree <main> <commit>` shows it differs from the current main: a path it holds exactly as main does adds nothing to main, so a merge of main does not list what main added, while a crafted merge that reverts a file to an old main still differs and is listed, even when a later merge puts the file back.
 
 The whole change catches a crafted merge (first parent the branch, second an old main commit) that reverts or deletes a protected file, which a list of the branch's own commits never shows; the per-commit lists catch a protected change that a later commit undoes, which leaves no trace in the whole change. `--no-renames` lists both sides of a move, so a file moved out of a protected folder is listed under its old path; `--ignore-submodules=none` beats a `diff.ignoreSubmodules` or `submodule.<name>.ignore` of the repository; `-z` hands every path over as it is, newlines included.
 
 ## Unreadable counts as protected
 
-`Domain/ChangedPath::listFrom()` parses the raw records (two modes, two object ids, one status letter of `ADMTUX`, then one path) and refuses anything else with `ChangeNotRead`. A failed git call, a malformed record, a missing or non-folder repository, a `HEAD` that names no branch, a head that is not a commit, a missing object and an `info/attributes` file (`RepositoryAttributesRefused`) all end in `ProtectedChanges::unreadable()` with the reason; `touchesProtectedPaths()` is then true. A head that is not a full commit id is an `InvalidArgumentException`, since a ref name could move while the check runs.
+`Domain/ChangedPath::listFrom()` parses the raw records (two modes, two object ids, one status letter of `ADMTUX`, then one path) and refuses anything else with `ChangeNotRead`. A failed git call, a malformed record, a missing or non-folder repository, a `HEAD` that names no branch, a head that is not a commit, a shallow history, a missing object and an `info/attributes` file (`RepositoryAttributesRefused`) all end in `ProtectedChanges::unreadable()` with the reason; `touchesProtectedPaths()` is then true. A head that is not a full commit id is an `InvalidArgumentException`, since a ref name could move while the check runs.
 
 ## The command
 

@@ -107,6 +107,19 @@ final class ListProtectedChangesTest extends TestCase
         self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
     }
 
+    public function testARevertToAnOldMainInACraftedMergeThatASecondCraftedMergeUndoesIsListed(): void
+    {
+        $this->repository->commitFile('config/gates/rule.php', 'two');
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $this->repository->craftMerge($this->base, 'config/gates/rule.php', 'one');
+        $this->repository->checkout('main');
+        $main = $this->repository->commitFile('other.txt', 'one');
+        $this->repository->checkout('feat/side');
+        $head = $this->repository->craftMerge($main, 'config/gates/rule.php', 'two');
+
+        self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
+    }
+
     public function testAProtectedChangeOnAMergedSideBranchIsListed(): void
     {
         $this->givenABranchCommitting('bin/check', 'two');
@@ -127,6 +140,17 @@ final class ListProtectedChangesTest extends TestCase
         $head = $this->repository->merge('main');
 
         self::assertSame([], $this->whenTheHeadIsListed($head)->paths);
+    }
+
+    public function testAMergeOfMainThatLeavesAProtectedFileUnlikeMainIsListed(): void
+    {
+        $this->givenABranchCommitting('src/a.php', 'two');
+        $this->repository->checkout('main');
+        $this->repository->commitFile('bin/check', 'two');
+        $this->repository->checkout('feat/side');
+        $head = $this->repository->mergeChanging('main', 'bin/check', 'three');
+
+        self::assertSame(['bin/check'], $this->whenTheHeadIsListed($head)->paths);
     }
 
     public function testTheSubmodulesFileIsProtectedWithoutBeingListed(): void
@@ -172,6 +196,18 @@ final class ListProtectedChangesTest extends TestCase
 
         self::assertTrue($changes->touchesProtectedPaths());
         self::assertStringContainsString('git diff-tree failed', (string) $changes->unreadable);
+    }
+
+    public function testAShallowHistoryCountsAsProtected(): void
+    {
+        $this->givenABranchCommitting('bin/check', 'two');
+        $head = $this->repository->removeFile('bin/check');
+        $this->repository->cutHistoryBelow($head);
+
+        $changes = $this->whenTheHeadIsListed($head);
+
+        self::assertTrue($changes->touchesProtectedPaths());
+        self::assertSame('the change could not be read: the repository\'s history is shallow, so commits are missing', $changes->unreadable);
     }
 
     public function testAnAnnotatedTagCountsAsProtected(): void
