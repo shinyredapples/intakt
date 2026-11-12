@@ -64,6 +64,14 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/display:\s*block/', $rules['.term:hover .term-tip, .term:focus .term-tip'] ?? '');
     }
 
+    // A card's round is a term the keyboard reaches on its own, so bin/ui-check measured it as a 22 px touch target at 390 wide.
+    public function testOnAPhoneATermOnAMetaLineIsAtLeast44PxTall(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlock('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/min-height:\s*44px/', $rules['.meta .term'] ?? '');
+    }
+
     public function testTheCountBadgeInAColumnHeadIsStyledFromTokens(): void
     {
         $rules = $this->rulesOf($this->sheet());
