@@ -2,6 +2,8 @@
 
 A build works in a fresh clone of the project made from its [bare mirror](mirror.md), never from the remote. The clone holds main and the task's branch and no other ref: no other branch, no tag, no remote and no remote-tracking ref, and no commit only another branch reaches.
 
+`php bin/console intakt:build:clone <project> <branch> <directory>` (`MakeBuildCloneCommand`) calls the use case. On success it prints `clone <directory>` and exits with 0; on an `InvalidArgumentException` or a `ReportableFailure` (such as `BuildCloneNotMade`) it prints the message in an error block and exits with 1. Any other exception (Symfony's `IOException`, `RepositoryAttributesRefused`) is left to the console, which prints it and exits with 1 as well.
+
 `MakeBuildClone::make($project, $branch, $directory)` in `src/Core/Git/UseCase/MakeBuildClone/` makes it:
 
 1. The mirror is `var/mirrors/<project>.git` (`Intakt\Core\Git\Domain\Mirrors`, the one home of the project-name rule that `UpdateMirror` uses too). A project whose mirror has no `HEAD` file has no mirror yet, and the clone is refused.
@@ -18,4 +20,4 @@ Every call is built by `HardenedGit`. The calls in the mirror carry `--git-dir=<
 
 A step that fails throws `BuildCloneNotMade` with git's message, except that parent folders that cannot be made (a file in the way, for example) throw Symfony's `IOException`. When the folder was already reserved by this call, it is removed, so a clone that failed half-way is never taken for a build clone. A project name that is not a safe folder name, and a branch that is unsafe or main, throw `InvalidArgumentException`.
 
-The build job (plan task T49) is not built yet, and no console command calls the use case yet. The `Source:` line of a task, which adds one verified commit as a read-only ref, is the third part of plan task T46 and not built yet.
+The build job (plan task T49) is not built yet, so only the console command calls the use case. The `Source:` line of a task, which adds one verified commit as a read-only ref, is the third part of plan task T46 and not built yet.
