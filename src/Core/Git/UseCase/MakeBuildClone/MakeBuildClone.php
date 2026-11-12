@@ -8,6 +8,8 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\SourceLine;
+use Intakt\Core\Git\Domain\TaskBranch;
 use InvalidArgumentException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
@@ -16,6 +18,8 @@ use Throwable;
 final readonly class MakeBuildClone
 {
     private const string BRANCHES = 'refs/heads/';
+
+    private const string SOURCES = 'refs/source/';
 
     public function __construct(
         private HardenedGit $hardened,
@@ -29,24 +33,26 @@ final readonly class MakeBuildClone
      * @throws BuildCloneNotMade
      * @throws RepositoryAttributesRefused
      */
-    public function make(string $project, string $branch, string $directory): void
+    public function make(string $project, TaskBranch $branch, string $directory): void
     {
         $mirror = $this->existingMirror($project, $directory);
         $main = $this->mainOf($mirror, $directory);
-        $task = $this->taskRef($mirror, $main, $branch);
+        $task = $this->taskRef($mirror, $main, $branch->name);
+        $source = $this->verifiedSource($mirror, $branch->source, $directory);
         $format = $this->objectFormatOf($mirror, $directory);
         $this->reserve($directory);
 
         try {
-            $this->initialize($directory, $branch, $format);
-            $this->fetch($directory, $mirror, $main);
+            $this->initialize($directory, $branch->name, $format);
+            $this->fetch($directory, $mirror, '+'.$main.':'.$main);
 
             if ($this->mirrorHolds($mirror, $task)) {
-                $this->fetch($directory, $mirror, $task);
+                $this->fetch($directory, $mirror, '+'.$task.':'.$task);
             } else {
                 $this->startAtMain($directory, $task, $main);
             }
 
+            $this->addSource($directory, $mirror, $source);
             $this->checkOut($directory);
         } catch (Throwable $failed) {
             // Because a clone that failed half-way must never be taken for a build clone.
@@ -83,6 +89,17 @@ final readonly class MakeBuildClone
 
     private function taskRef(string $mirror, string $main, string $branch): string
     {
+        $ref = $this->branchRef($mirror, $branch);
+
+        if ($ref === $main) {
+            throw new InvalidArgumentException(sprintf('the task\'s branch "%s" is main itself', $branch));
+        }
+
+        return $ref;
+    }
+
+    private function branchRef(string $mirror, string $branch): string
+    {
         // Git's own branch rule, and the answer must be the name itself, because git expands a name such as "@{-1}" to another branch.
         $checked = $this->run($this->inMirror($mirror, ['check-ref-format', '--branch', $branch]));
 
@@ -90,11 +107,28 @@ final readonly class MakeBuildClone
             throw new InvalidArgumentException(sprintf('"%s" is not a branch name git accepts', $branch));
         }
 
-        if (self::BRANCHES.$branch === $main) {
-            throw new InvalidArgumentException(sprintf('the task\'s branch "%s" is main itself', $branch));
+        return self::BRANCHES.$branch;
+    }
+
+    private function verifiedSource(string $mirror, ?SourceLine $source, string $directory): ?string
+    {
+        if (null === $source) {
+            return null;
         }
 
-        return self::BRANCHES.$branch;
+        $branch = $this->branchRef($mirror, $source->branch);
+
+        if (!$this->mirrorHolds($mirror, $branch)) {
+            throw BuildCloneNotMade::at($directory, sprintf('the mirror holds no branch %s to take the source from', $source->branch));
+        }
+
+        // Because a source line may only hand the build a commit its branch reaches, never one of any other branch.
+        if (!$this->run($this->inMirror($mirror, ['merge-base', '--is-ancestor', $source->commit, $branch]))->isSuccessful()) {
+            throw BuildCloneNotMade::at($directory, sprintf('the commit %s is not on the branch %s', $source->commit, $source->branch));
+        }
+
+        // The verified commit by its id, not the branch, so the clone holds no later commit of that branch; outside refs/heads/, a commit in the clone never moves it.
+        return '+'.$source->commit.':'.self::SOURCES.$source->branch;
     }
 
     private function objectFormatOf(string $mirror, string $directory): string
@@ -139,10 +173,10 @@ final readonly class MakeBuildClone
         $this->mustRun(new GitCall($init->command, $init->directory, [...$init->environment, 'GIT_WORK_TREE' => false]), $directory);
     }
 
-    private function fetch(string $directory, string $mirror, string $ref): void
+    private function fetch(string $directory, string $mirror, string $refspec): void
     {
         // Init and fetch instead of "clone", so the clone gets no remote, no remote-tracking refs and no tags; the task's branch is the one checked out, which a fetch only updates with --update-head-ok.
-        $call = $this->hardened->call(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--update-head-ok', '--', $mirror, '+'.$ref.':'.$ref], $directory);
+        $call = $this->hardened->call(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--update-head-ok', '--', $mirror, $refspec], $directory);
 
         // Because HardenedGit allows no transport, and git reads a local path as the "file" transport.
         $this->mustRun(new GitCall($call->command, $call->directory, [...$call->environment, 'GIT_ALLOW_PROTOCOL' => 'file']), $directory);
@@ -156,6 +190,13 @@ final readonly class MakeBuildClone
     private function startAtMain(string $directory, string $task, string $main): void
     {
         $this->mustRun($this->hardened->call(['update-ref', $task, $main], $directory), $directory);
+    }
+
+    private function addSource(string $directory, string $mirror, ?string $source): void
+    {
+        if (null !== $source) {
+            $this->fetch($directory, $mirror, $source);
+        }
     }
 
     private function checkOut(string $directory): void
