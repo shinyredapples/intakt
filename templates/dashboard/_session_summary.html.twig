@@ -8,12 +8,12 @@
             {% if summary.toolCalls is empty %}
             <p class="muted">No tool call yet.</p>
             {% else %}
-            <dl class="ls-dl ls-tools">
-                {% for kind in summary.toolCalls %}
-                <dt>{{ kind.tool }}</dt><dd>{{ kind.count }}</dd>
-                {% endfor %}
-                <dt>Total</dt><dd>{{ summary.totalToolCalls }}</dd>
-            </dl>
+                <dl class="ls-dl ls-tools">
+                    {% for kind in summary.toolCalls %}
+                    <dt>{{ kind.tool }}</dt><dd>{{ kind.count }}</dd>
+                    {% endfor %}
+                    <dt>Total</dt><dd>{{ summary.totalToolCalls }}</dd>
+                </dl>
             {% endif %}
         </div>
         <div>
