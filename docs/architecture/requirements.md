@@ -45,7 +45,8 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 
 | Command | Called by | What for | Needed |
 |---|---|---|---|
-| `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the `journeys` and `alarm` jobs of `journeys.yml`, the runner for the `persistence` service container | building the CI image, running `bin/check`, the persistence group, `bin/check --journeys` and `bin/journey-alarm` in it, the database service | yes |
+| `docker` (CLI and a running daemon the runner's user may use) | `build-image.sh`, the `check` and `persistence` jobs, the `journeys` and `alarm` jobs of `journeys.yml`, the `build` job of `highlights.yml`, the runner for the `persistence` service container | building the CI image, running `bin/check`, the persistence group, `bin/check --journeys`, `bin/journey-alarm` and `bin/highlights` in it, the database service | yes |
+| `mkdir`, `chmod` (coreutils) | the `build` job of `highlights.yml` | making the output folder `_highlights` that the CI image's uid 1000 user can write | yes |
 | `docker` in the `publish` job of `ci-image.yml` | `.github/ci/publish-ci-image.sh` | `docker login ghcr.io` (the job's token on stdin), `docker buildx imagetools inspect` (is the image of this hash published), the build through `.github/ci/build-image.sh`, `docker tag` and `docker push` | on the runner that publishes the CI image |
 | `docker` in the `image` job of `release-image.yml` | `.github/ci/release-image.sh` | `docker build` of the release tag's checkout, `docker login ghcr.io` (the job's token on stdin), `docker tag` and `docker push` to GitHub's container registry | on the runner that publishes a release |
 | `git` | `.github/ci/release-image.sh` | `git rev-parse` of the tag's checkout and of the tag, so a checkout that is not the tag's commit builds nothing | on the runner that publishes a release |
