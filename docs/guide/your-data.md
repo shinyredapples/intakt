@@ -44,7 +44,7 @@ A new version of Intakt may change how its database is laid out. It does that by
 
 **If something is wrong:** stop the new version and go back to the previous version on the copy you made in step 2. Never start the previous version on the data the new version has already updated.
 
-Every change that could affect your data is checked this way before it is merged: the version before it writes data, the new version starts on a copy of that data and must read the same, and the version before it starts again on the untouched original.
+Intakt's own changes are checked this way: the version before it writes data, the new version starts on a copy of that data and must read the same, and the version before it starts again on the untouched original. A change to the database migrations, a stored class, the image or the locked dependencies is checked before it is merged; every change is checked again on the main branch right after it is merged.
 
 ## Moving to another machine
 
