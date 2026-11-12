@@ -18,6 +18,9 @@ final readonly class DockerEngine
     private const string API = 'http://docker/v1.44/';
     private const string CONTAINER_ID = '/^[A-Za-z0-9]{1,128}$/D';
     private const string NETWORK_NAME = '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D';
+    // Generous, because a step such as compiling an extension may print nothing for minutes; a whole build gets an hour before it counts as stuck.
+    private const float BUILD_IDLE_SECONDS = 600.0;
+    private const float BUILD_SECONDS = 3600.0;
 
     private HttpClientInterface $client;
 
@@ -38,6 +41,18 @@ final readonly class DockerEngine
         $answer = $this->send('POST', 'containers/create', ['query' => ['name' => $name], 'json' => $definition])->accepting(201);
 
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
+    }
+
+    // With rm and forcerm, so no container of a step is left behind, also after a failed one.
+    public function build(string $context, string $tag, string $dockerfile): ImageBuild
+    {
+        return $this->send('POST', 'build', [
+            'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],
+            'headers' => ['Content-Type' => 'application/x-tar'],
+            'body' => $context,
+            'timeout' => self::BUILD_IDLE_SECONDS,
+            'max_duration' => self::BUILD_SECONDS,
+        ])->built(200);
     }
 
     public function start(string $container): void
