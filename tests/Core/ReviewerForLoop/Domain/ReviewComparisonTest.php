@@ -238,21 +238,18 @@ final class ReviewComparisonTest extends TestCase
         $a = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10, Severity::P2)));
         $b = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 16, Severity::P3)));
         $c = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 12, Severity::P1)));
-        $comparison = new ReviewComparison();
 
         $first = $this->spots(ComparisonBuilder::loop(), [$a, $b, $c]);
         $second = $this->spots(ComparisonBuilder::loop(), [$c, $b, $a]);
 
-        $severities = static fn (array $result): array => array_map(static fn (Finding $finding): Severity => $finding->severity, $result['intaktOnly']);
-        self::assertSame([Severity::P1, Severity::P3], $severities($first));
-        self::assertSame([Severity::P1, Severity::P3], $severities($second));
+        self::assertSame([Severity::P1, Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $first['intaktOnly']));
+        self::assertSame([Severity::P1, Severity::P3], array_map(static fn (Finding $finding): Severity => $finding->severity, $second['intaktOnly']));
     }
 
     public function testFindingsOfTwoReviewsOnTheSameLineMergeTheSameWhateverTheReviewersOrder(): void
     {
         $a = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 10), ComparisonBuilder::finding('src/A.php', 12)));
         $b = ComparisonBuilder::round(ComparisonBuilder::changes(ComparisonBuilder::finding('src/A.php', 12), ComparisonBuilder::finding('src/A.php', 14)));
-        $comparison = new ReviewComparison();
 
         $first = $this->spots(ComparisonBuilder::loop(), [$a, $b]);
         $second = $this->spots(ComparisonBuilder::loop(), [$b, $a]);
