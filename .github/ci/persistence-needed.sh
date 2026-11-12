@@ -26,7 +26,7 @@ fi
 cut -d: -f2- "$work/head-tests.raw" > "$work/head-tests"
 
 touched=no
-if grep -E '^(src/Core/Ledger/|src/Core/Platform/|tests/Core/Platform/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|\.github/(workflows|ci)/)' "$work/changed-paths" > /dev/null; then touched=yes
+if grep -E '^(src/Core/Ledger/|src/Core/Platform/|tests/Core/Platform/|migrations/|config/packages/doctrine|composer\.(json|lock)$|phpunit\.dist\.xml$|tests/Application/MigrationsMatchMappingTest\.php$|tests/Core/Ledger/|tests/Support/(UnsyncedSqlite\.php|UnsyncedSqliteDriver\.php|services\.yaml)$|\.github/(workflows|ci)/)' "$work/changed-paths" > /dev/null; then touched=yes
 elif grep -E '^\+.*(Doctrine|ORM\\)' "$work/src.diff" > /dev/null; then touched=yes
 elif grep -E "^[+-].*Group\('persistence'\)" "$work/tests.diff" > /dev/null; then touched=yes
 elif grep -Fxf "$work/head-tests" "$work/changed-paths" > /dev/null; then touched=yes

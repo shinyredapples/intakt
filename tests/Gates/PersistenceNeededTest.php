@@ -20,6 +20,11 @@ final class PersistenceNeededTest extends SandboxTestCase
         yield 'a new persistence test' => ['tests/Application/NewTest.php', self::PERSISTENCE_TEST, 'yes'];
         yield 'a test outside the group' => ['tests/Gates/PlainTest.php', "<?php\nfinal class PlainTest {}\n", 'no'];
         yield 'an existing path trigger' => ['migrations/Version1.php', '<?php', 'yes'];
+        yield 'the test SQLite middleware' => ['tests/Support/UnsyncedSqlite.php', '<?php', 'yes'];
+        yield 'the test SQLite driver' => ['tests/Support/UnsyncedSqliteDriver.php', '<?php', 'yes'];
+        yield 'the test support services' => ['tests/Support/services.yaml', 'services:', 'yes'];
+        yield 'the test SQLite middleware test' => ['tests/Support/UnsyncedSqliteTest.php', '<?php', 'no'];
+        yield 'another test support file' => ['tests/Support/WebTestCase.php', '<?php', 'no'];
         yield 'an added Doctrine line in src' => ['src/Core/Other/Service.php', "<?php\nuse Doctrine\\DBAL\\Connection;\n", 'yes'];
         yield 'an unrelated src change' => ['src/Core/Other/Service.php', "<?php\n", 'no'];
     }
