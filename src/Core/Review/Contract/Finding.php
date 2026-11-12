@@ -37,4 +37,9 @@ final readonly class Finding
     {
         return clone ($this, ['severity' => $severity]);
     }
+
+    public function withId(string $id): self
+    {
+        return clone ($this, ['id' => $id]);
+    }
 }
