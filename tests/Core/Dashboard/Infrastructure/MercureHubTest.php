@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -105,6 +106,7 @@ final class MercureHubTest extends TestCase
         $this->updates = new MercureRoundUpdates(
             new MercureLiveUpdates(new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
             new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates')),
+            self::createStub(SessionSummaries::class),
             $logger,
         );
     }

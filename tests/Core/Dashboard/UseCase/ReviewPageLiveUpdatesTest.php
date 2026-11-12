@@ -15,7 +15,11 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\FinishedState;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\ToolCallCount;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -36,6 +40,9 @@ use Twig\Environment;
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(FinishedState::class)]
+#[UsesClass(SessionSummary::class)]
+#[UsesClass(ToolCallCount::class)]
+#[UsesClass(Cost::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -269,6 +276,46 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
     }
 
+    public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
+    {
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], []));
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $streams = $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [], [])]);
+
+        $targets = new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
+        self::assertCount(4, $targets);
+        foreach ($targets as $target) {
+            self::assertCount(1, $page->filter('#'.$target), $target);
+        }
+    }
+
+    public function testAToolCallPublishedForTheRoundChangesTheSessionSummaryOnThePage(): void
+    {
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], []));
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        self::assertSame([['read_file', '1'], ['Total', '1']], $this->pairsOf($page->filter('.ls-tools')));
+
+        $changed = new SessionSummary([new ToolCallCount('list_directory', 1), new ToolCallCount('read_file', 2)], Cost::inUsd(0.2), ['src/A.php', 'src/B.php'], [], [], []);
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => $changed]));
+
+        self::assertSame([['list_directory', '1'], ['read_file', '2'], ['Total', '3']], $this->pairsOf($updated->filter('.ls-tools')));
+        self::assertSame('0.2000 USD', $updated->filter('.ls-cost dd')->first()->text());
+        self::assertSame(['src/A.php', 'src/B.php'], $updated->filter('.ls-files .mono')->each(static fn (Crawler $file): string => $file->text()));
+    }
+
+    public function testASummaryPushedToThePageLeavesTheReviewWideCostAlone(): void
+    {
+        $this->givenARunningRoundWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [], []));
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $before = $page->filter('.ls-cost dd')->eq(1)->text();
+
+        $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [])]));
+
+        self::assertSame('0.9000 USD', $updated->filter('.ls-cost dd')->first()->text());
+        self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
+    }
+
     // Nothing listens at MERCURE_URL in the test environment, so this is the page of an install whose hub is stopped.
     public function testThePageRendersFullyWhileTheHubIsStopped(): void
     {
@@ -383,6 +430,22 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         }
 
         self::fail('The page set no subscriber cookie.');
+    }
+
+    private function givenARunningRoundWithTheSummary(SessionSummary $summary): void
+    {
+        $this->givenARunningRound();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn($summary);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function pairsOf(Crawler $list): array
+    {
+        return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), $term->nextAll()->first()->text()]);
     }
 
     private function givenARunningRound(): void

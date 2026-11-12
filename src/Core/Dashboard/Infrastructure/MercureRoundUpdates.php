@@ -8,6 +8,8 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\SessionSummary;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Uuid;
@@ -19,6 +21,7 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     public function __construct(
         private LiveUpdates $live,
         private Environment $twig,
+        private SessionSummaries $summaries,
         private LoggerInterface $logger,
     ) {
     }
@@ -44,12 +47,37 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     public function roundChanged(Uuid $round, RoundProgress $progress): void
     {
         $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
+        $this->summaryChanged($round);
+    }
+
+    #[Override]
+    public function summaryChanged(Uuid $round): void
+    {
+        $summary = $this->summaryOf($round);
+
+        if (!$summary instanceof SessionSummary) {
+            return;
+        }
+
+        $this->publish($round, RoundStream::SummaryChanged, ['round' => $round->toRfc4122(), 'summary' => $summary]);
     }
 
     #[Override]
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {
         $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
+    }
+
+    private function summaryOf(Uuid $round): ?SessionSummary
+    {
+        try {
+            return $this->summaries->ofRound($round->toRfc4122());
+        } catch (Throwable $failure) {
+            // Swallowed after a log, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
+            $this->logger->warning('A live session summary was not computed.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+
+            return null;
+        }
     }
 
     /**

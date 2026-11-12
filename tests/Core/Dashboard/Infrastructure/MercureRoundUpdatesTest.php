@@ -7,7 +7,11 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\ToolCallCount;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -26,6 +30,9 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
+#[UsesClass(SessionSummary::class)]
+#[UsesClass(ToolCallCount::class)]
+#[UsesClass(Cost::class)]
 final class MercureRoundUpdatesTest extends TestCase
 {
     private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
@@ -130,7 +137,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig = self::createStub(Environment::class);
         $twig->method('render')->willThrowException($failure);
 
-        new MercureRoundUpdates($this->live(), $twig, $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+        new MercureRoundUpdates($this->live(), $twig, self::createStub(SessionSummaries::class), $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
 
         self::assertSame(
             [['warning', 'A live round update was not rendered.', ['round' => self::ROUND, 'stream' => 'tool_called', 'exception' => $failure]]],
@@ -162,12 +169,84 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
+    public function testAChangedSummaryReplacesEachLivePartOfTheSummaryWithTheRecomputedCounts(): void
+    {
+        $summary = new SessionSummary([new ToolCallCount('read_file', 3)], Cost::inUsd(0.5), ['src/A.php'], [], [], []);
+
+        $this->updates(null, $this->summaries($summary))->summaryChanged(Uuid::fromString(self::ROUND));
+
+        $base = 'round-'.self::ROUND.'-summary';
+        self::assertSame(
+            ['replace '.$base.'-tools', 'replace '.$base.'-cost', 'replace '.$base.'-files', 'replace '.$base.'-findings'],
+            array_map($this->actionAndTargetOf(...), $this->streamsOf($this->published[0])),
+        );
+        self::assertStringContainsString('<dt>read_file</dt><dd>3</dd>', $this->published[0]->getData());
+        self::assertStringContainsString('0.5000 USD', $this->published[0]->getData());
+    }
+
+    public function testARoundChangePublishesTheSummaryAfterTheRoundState(): void
+    {
+        $summary = new SessionSummary([], Cost::none(), [], [], [], []);
+
+        $this->updates(null, $this->summaries($summary))->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+
+        self::assertCount(2, $this->published);
+        self::assertSame('replace round-'.self::ROUND.'-state', $this->actionAndTargetOf($this->published[0]));
+        self::assertSame('replace round-'.self::ROUND.'-summary-tools', $this->actionAndTargetOf($this->streamsOf($this->published[1])[0]));
+    }
+
+    public function testARoundWithoutARecordedSummaryPublishesNoSummary(): void
+    {
+        $this->updates(null, $this->summaries(null))->summaryChanged(Uuid::fromString(self::ROUND));
+
+        self::assertSame([], $this->published);
+    }
+
+    public function testAFileNameInTheSummaryIsEscapedInTheTurboStream(): void
+    {
+        $summary = new SessionSummary([new ToolCallCount('<i>x</i>', 1)], Cost::none(), ['<b>x</b>.php'], [], [], []);
+
+        $this->updates(null, $this->summaries($summary))->summaryChanged(Uuid::fromString(self::ROUND));
+
+        self::assertStringContainsString('&lt;b&gt;x&lt;/b&gt;.php', $this->published[0]->getData());
+        self::assertStringContainsString('&lt;i&gt;x&lt;/i&gt;', $this->published[0]->getData());
+        self::assertStringNotContainsString('<b>', $this->published[0]->getData());
+    }
+
+    public function testASummaryThatCannotBeComputedIsLoggedAndPublishesNothingButTheRoundChangeStillGoesOut(): void
+    {
+        $failure = new RuntimeException('the store is gone');
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willThrowException($failure);
+
+        $this->updates(null, $summaries)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+
+        self::assertCount(1, $this->published);
+        self::assertSame(
+            [['warning', 'A live session summary was not computed.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
     /**
      * @param (callable(Update): string)|null $publisher
      */
-    private function updates(?callable $publisher = null): MercureRoundUpdates
+    private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null): MercureRoundUpdates
     {
-        return new MercureRoundUpdates($this->live($publisher), new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $this->log);
+        return new MercureRoundUpdates(
+            $this->live($publisher),
+            new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')),
+            $summaries ?? self::createStub(SessionSummaries::class),
+            $this->log,
+        );
+    }
+
+    private function summaries(?SessionSummary $summary): SessionSummaries
+    {
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn($summary);
+
+        return $summaries;
     }
 
     /**
@@ -184,9 +263,17 @@ final class MercureRoundUpdatesTest extends TestCase
         return new MercureLiveUpdates(new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), $publisher), $this->log);
     }
 
-    private function actionAndTargetOf(Update $update): string
+    /**
+     * @return list<string>
+     */
+    private function streamsOf(Update $update): array
     {
-        preg_match('/action="(\w+)" target="([^"]+)"/', $update->getData(), $found);
+        return array_values(array_filter(explode('</turbo-stream>', $update->getData()), static fn (string $stream): bool => str_contains($stream, '<turbo-stream')));
+    }
+
+    private function actionAndTargetOf(Update|string $update): string
+    {
+        preg_match('/action="(\w+)" target="([^"]+)"/', $update instanceof Update ? $update->getData() : $update, $found);
 
         return ($found[1] ?? '').' '.($found[2] ?? '');
     }

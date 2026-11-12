@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
@@ -17,6 +18,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\RoundToolCall;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Kernel;
@@ -74,6 +76,19 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
         self::assertEquals([new ToolCallCount('list_directory', 1), new ToolCallCount('read_file', 2)], $summary->toolCalls);
         self::assertSame(3, $summary->totalToolCalls());
+    }
+
+    public function testEveryToolCallAnnouncesTheChangedSummaryOfItsRound(): void
+    {
+        $updates = new RecordedRoundUpdates();
+        self::getContainer()->set(RoundUpdates::class, $updates);
+        $round = $this->fixture->start(1)->id()->toRfc4122();
+        $server = $this->serverFor($round);
+
+        $this->call($server, 'read_file', ['path' => 'RoundFixture.php']);
+        $this->call($server, 'read_file', ['path' => '../outside.php']);
+
+        self::assertSame(['summary '.$round, 'summary '.$round], $updates->seen);
     }
 
     public function testAFileReadTwiceIsListedOnceInTheOrderItWasFirstRead(): void

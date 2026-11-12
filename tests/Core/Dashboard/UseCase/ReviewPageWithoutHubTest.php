@@ -7,7 +7,10 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\ToolCallCount;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Asset\Packages;
@@ -23,6 +26,9 @@ use Twig\Environment;
 #[CoversClass(ShowReviewController::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LivePageRendering::class)]
+#[UsesClass(SessionSummary::class)]
+#[UsesClass(ToolCallCount::class)]
+#[UsesClass(Cost::class)]
 final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 {
     public function testThePageRendersTheLedgerStateWhenTheHubCannotAuthorizeAListener(): void
@@ -46,6 +52,21 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertSame('Live log of round 1', $crawler->filter('.task-grid > aside.log-pane h2')->text());
         self::assertSame('correctness (standard) live', $crawler->filter('.log-pane #reviewer-round-1-correctness h3')->text());
+    }
+
+    public function testThePlainPageStillShowsTheSessionSummaryItWasLoadedWith(): void
+    {
+        $this->givenARunningRound();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([new ToolCallCount('read_file', 2)], Cost::inUsd(0.3), ['src/A.php'], [], [], []));
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
+        self::assertSame('2', $crawler->filter('#round-round-1-summary-tools .ls-tools dd')->first()->text());
+        self::assertSame('0.3000 USD', $crawler->filter('#round-round-1-summary-cost')->text());
     }
 
     public function testThePlainPageStillLoadsTheScriptThatHoldsBackTheFirstClickOnStop(): void
