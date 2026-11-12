@@ -107,7 +107,7 @@ final readonly class ReviewedRepository
         return $reviewer->getUserIdentifier();
     }
 
-    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose. A refusal is still recorded as a call, because the reviewer made it.
+    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose.
     /**
      * @param Closure(): string $read
      */
@@ -116,14 +116,11 @@ final readonly class ReviewedRepository
         return $this->refusedAsCall($round, $tool, fn (): string => $this->fence->wrap(UntrustedSource::ToolResult, $read()));
     }
 
+    // A refusal is still recorded as a call, because the reviewer made it.
     /**
-     * @template T
-     *
-     * @param Closure(): T $step
-     *
-     * @return T
+     * @param Closure(): string $step
      */
-    private function refusedAsCall(ReviewRound $round, string $tool, Closure $step): mixed
+    private function refusedAsCall(ReviewRound $round, string $tool, Closure $step): string
     {
         try {
             return $step();
