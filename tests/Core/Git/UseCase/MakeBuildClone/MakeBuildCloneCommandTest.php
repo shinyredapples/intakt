@@ -8,6 +8,8 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\SourceLine;
+use Intakt\Core\Git\Domain\TaskBranch;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneCommand;
@@ -25,12 +27,15 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(MakeBuildCloneCommand::class)]
 #[UsesClass(MakeBuildClone::class)]
 #[UsesClass(MakeBuildCloneInput::class)]
 #[UsesClass(BuildCloneNotMade::class)]
 #[UsesClass(Mirrors::class)]
+#[UsesClass(SourceLine::class)]
+#[UsesClass(TaskBranch::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(NetworkGit::class)]
@@ -53,7 +58,7 @@ final class MakeBuildCloneCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone', $this->mirrors.'-clone-<info>literal<']);
+        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone', $this->mirrors.'-clone-<info>literal<', $this->mirrors.'-task.md']);
         $this->remote->remove();
     }
 
@@ -107,6 +112,115 @@ final class MakeBuildCloneCommandTest extends TestCase
         self::assertStringContainsString('is not a project name that can be a folder name', $this->displayOnOneLine($tester));
     }
 
+    public function testASourceLineOfATrustedAuthorAddsTheSourceRefToTheClone(): void
+    {
+        $source = $this->givenTheSourceBranch();
+        $this->givenTheProjectHasAMirror();
+        $task = $this->givenATaskFile("Part 2.\n\nSource: feat/big@".$source."\n");
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $task, '--trusted-author' => true]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringNotContainsString('comment', $tester->getDisplay());
+        self::assertSame($source, $this->refOfTheClone('refs/source/feat/big'));
+    }
+
+    public function testASourceLineOfAnUntrustedAuthorIsIgnoredWithOneComment(): void
+    {
+        $source = $this->givenTheSourceBranch();
+        $this->givenTheProjectHasAMirror();
+        $task = $this->givenATaskFile('Source: feat/big@'.$source."\nSource: feat/other@".$source."\n");
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $task]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame(1, substr_count($tester->getDisplay(), 'comment '));
+        self::assertStringContainsString('comment '.MakeBuildCloneCommand::SOURCE_IGNORED, $tester->getDisplay());
+        self::assertSame('', $this->refOfTheClone('refs/source/feat/big'));
+    }
+
+    public function testATaskOfAnUntrustedAuthorWithoutASourceLineGetsNoComment(): void
+    {
+        $this->givenTheProjectHasAMirror();
+        $task = $this->givenATaskFile("Add a Source: line later.\n");
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $task]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringNotContainsString('comment', $tester->getDisplay());
+    }
+
+    public function testATrustedSourceBranchTheMirrorDoesNotHoldExitsWithOneAndMakesNoClone(): void
+    {
+        $this->givenTheProjectHasAMirror();
+        $task = $this->givenATaskFile('Source: feat/other@'.$this->remote->objectAt('main'));
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $task, '--trusted-author' => true]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('the mirror holds no branch feat/other', $this->displayOnOneLine($tester));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testATrustedTaskWithTwoSourceLinesExitsWithOneAndMakesNoClone(): void
+    {
+        $source = $this->givenTheSourceBranch();
+        $this->givenTheProjectHasAMirror();
+        $task = $this->givenATaskFile('Source: feat/big@'.$source."\nSource: feat/big@".$source);
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $task, '--trusted-author' => true]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('more than one Source line', $this->displayOnOneLine($tester));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testATaskFileThatCannotBeReadExitsWithOneAndMakesNoClone(): void
+    {
+        $this->givenTheProjectHasAMirror();
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $this->mirrors.'-missing-task.md', '--trusted-author' => true]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('-missing-task.md', $this->displayOnOneLine($tester));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testATaskFileThatIsAFolderExitsWithOneAndMakesNoClone(): void
+    {
+        $this->givenTheProjectHasAMirror();
+
+        $tester = $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $this->mirrors]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    private function givenTheSourceBranch(): string
+    {
+        $this->remote->checkoutNewBranch('feat/big');
+        $source = $this->remote->commitFile('s.txt', 'source');
+        $this->remote->checkout('main');
+
+        return $source;
+    }
+
+    private function givenATaskFile(string $text): string
+    {
+        $path = $this->mirrors.'-task.md';
+        file_put_contents($path, $text);
+
+        return $path;
+    }
+
+    private function refOfTheClone(string $ref): string
+    {
+        $process = new Process(['git', 'for-each-ref', '--format=%(objectname)', $ref], $this->clone, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false]);
+        $process->mustRun();
+
+        return trim($process->getOutput());
+    }
+
     private function givenTheProjectHasAMirror(): void
     {
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
@@ -119,12 +233,15 @@ final class MakeBuildCloneCommandTest extends TestCase
         return (string) preg_replace('/\s+/', ' ', $tester->getDisplay());
     }
 
-    private function whenTheCommandRuns(string $project, string $branch): CommandTester
+    /**
+     * @param array<string, string|bool> $options
+     */
+    private function whenTheCommandRuns(string $project, string $branch, array $options = []): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors))));
+        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:build:clone'));
-        $tester->execute(['project' => $project, 'branch' => $branch, 'directory' => $this->clone]);
+        $tester->execute(['project' => $project, 'branch' => $branch, 'directory' => $this->clone, ...$options]);
 
         return $tester;
     }
