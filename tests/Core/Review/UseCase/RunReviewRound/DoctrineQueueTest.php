@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 use Doctrine\DBAL\Exception\TableNotFoundException;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
@@ -109,6 +110,31 @@ final class DoctrineQueueTest extends KernelTestCase
 
         self::assertSame(0, $this->queue->getMessageCount());
         self::assertSame([], $this->fixture->storedRounds());
+    }
+
+    public function testTheAnnouncementOfARoundIsQueuedAheadOfItsReviewerMessages(): void
+    {
+        $this->queue->setup();
+
+        $this->fixture->startOn($this->commands, 2);
+
+        self::assertSame(
+            [RoundOpened::class, ReviewWithReviewer::class, ReviewWithReviewer::class],
+            array_map(static fn (Envelope $queued): string => $queued->getMessage()::class, iterator_to_array($this->queue->all(), false)),
+        );
+    }
+
+    public function testARoundWhoseReviewerMessagesCannotAllBeQueuedTakesItsQueuedAnnouncementBackWithIt(): void
+    {
+        $this->queue->setup();
+
+        try {
+            $this->fixture->startOn(new RefusingQueue($this->commands), 3);
+            self::fail('The refused dispatch was swallowed.');
+        } catch (RuntimeException) {
+        }
+
+        self::assertSame([], $this->queuedAnnouncements());
     }
 
     public function testTheQueueStillTakesTheNextRoundAfterARolledBackOne(): void

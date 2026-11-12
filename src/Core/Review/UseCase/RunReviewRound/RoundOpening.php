@@ -23,11 +23,18 @@ final readonly class RoundOpening
         return $this->rounds->inOneTransaction(function () use ($command): string {
             $round = $this->rounds->open($command);
             $this->ledger->reviewStarted($round, $command->panel->quorum, $command->round->source);
-            $this->dispatchOneMessagePerReviewer($round);
             $this->announce($round);
+            $this->dispatchOneMessagePerReviewer($round);
 
             return $round->id()->toRfc4122();
         });
+    }
+
+    // Queued with the round rather than dispatched after it, because a caller's enclosing transaction may still roll the round back, and only the queue row goes with it.
+    // Ahead of the reviewer messages, because with fewer workers than reviewers it would otherwise wait behind whole reviews.
+    private function announce(ReviewRound $round): void
+    {
+        $this->commands->dispatch(new RoundOpened($round->id()->toRfc4122(), $round->project()));
     }
 
     private function dispatchOneMessagePerReviewer(ReviewRound $round): void
@@ -35,11 +42,5 @@ final readonly class RoundOpening
         foreach ($round->reviewers() as $reviewer) {
             $this->commands->dispatch(new ReviewWithReviewer($reviewer->id()->toRfc4122()));
         }
-    }
-
-    // Queued with the round rather than dispatched after it, because a caller's enclosing transaction may still roll the round back, and only the queue row goes with it.
-    private function announce(ReviewRound $round): void
-    {
-        $this->commands->dispatch(new RoundOpened($round->id()->toRfc4122(), $round->project()));
     }
 }
