@@ -482,6 +482,24 @@ final class AccountFailoverPlatformTest extends TestCase
         }, $cooldowns, new SendFailures()));
     }
 
+    public function testAFailureRecordedTwiceForOneAccountIsNewOnlyTheFirstTime(): void
+    {
+        $failures = new SendFailures();
+        $failure = new RateLimitExceededException(300);
+
+        self::assertTrue($failures->record($this->account(Account::DEFAULT), $failure));
+        self::assertFalse($failures->record($this->account(Account::DEFAULT), $failure));
+    }
+
+    public function testAFailureAlreadyRecordedForOneAccountIsNewForAnotherAccount(): void
+    {
+        $failures = new SendFailures();
+        $failure = new RateLimitExceededException(300);
+
+        self::assertTrue($failures->record($this->account(Account::DEFAULT), $failure));
+        self::assertTrue($failures->record($this->account('team'), $failure));
+    }
+
     private function readStream(DeferredResult $result): void
     {
         try {
