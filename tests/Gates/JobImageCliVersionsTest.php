@@ -27,7 +27,7 @@ final class JobImageCliVersionsTest extends TestCase
     {
         $dockerfile = GeneratedDockerfile::for(PhpProfile::fromComposerJson('{"require": {"php": "^8.5"}}'));
 
-        self::assertInstallsTheManifestVersions($dockerfile);
+        $this->assertInstallsTheManifestVersions($dockerfile);
     }
 
     #[DataProvider('manifestPackages')]
@@ -38,14 +38,14 @@ final class JobImageCliVersionsTest extends TestCase
 
         $this->expectException(AssertionFailedError::class);
 
-        self::assertInstallsTheManifestVersions(self::dockerfileInstalling($versions));
+        $this->assertInstallsTheManifestVersions($this->dockerfileInstalling($versions));
     }
 
     public function testADockerfileWithoutOneOfTheToolsFailsTheCheck(): void
     {
         $this->expectException(AssertionFailedError::class);
 
-        self::assertInstallsTheManifestVersions(self::dockerfileInstalling(array_slice(self::manifestVersions(), 0, 1)));
+        $this->assertInstallsTheManifestVersions($this->dockerfileInstalling(array_slice(self::manifestVersions(), 0, 1)));
     }
 
     public function testTheLockFileLocksTheManifestVersions(): void
@@ -69,11 +69,11 @@ final class JobImageCliVersionsTest extends TestCase
         }
     }
 
-    private static function assertInstallsTheManifestVersions(string $dockerfile): void
+    private function assertInstallsTheManifestVersions(string $dockerfile): void
     {
         self::assertSame(1, preg_match('/^RUN npm install --global (.+?) \\\\$/m', $dockerfile, $install), 'The Dockerfile has no npm install --global step.');
         $installed = [];
-        foreach (explode(' ', $install[1]) as $argument) {
+        foreach (explode(' ', $install[1] ?? '') as $argument) {
             $at = (int) strrpos($argument, '@');
             $installed[substr($argument, 0, $at)] = substr($argument, $at + 1);
         }
@@ -84,7 +84,7 @@ final class JobImageCliVersionsTest extends TestCase
     /**
      * @param array<string, string> $versions
      */
-    private static function dockerfileInstalling(array $versions): string
+    private function dockerfileInstalling(array $versions): string
     {
         $arguments = array_map(static fn (string $package, string $version): string => $package.'@'.$version, array_keys($versions), $versions);
 

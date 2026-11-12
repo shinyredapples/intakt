@@ -46,8 +46,7 @@ final class CliManifestTest extends TestCase
     {
         $this->givenTheManifest('{"dependencies": ');
 
-        $this->expectException(JobImageNotBuilt::class);
-        $this->expectExceptionMessage('it is not valid JSON');
+        $this->expectExceptionObject(JobImageNotBuilt::unusableCliManifest($this->manifest, 'it is not valid JSON: Syntax error'));
 
         CliManifest::installArgumentsFrom($this->manifest);
     }

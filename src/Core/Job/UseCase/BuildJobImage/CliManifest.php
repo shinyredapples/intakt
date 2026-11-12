@@ -16,7 +16,7 @@ final readonly class CliManifest
     private const string EXACT_VERSION = '/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/';
 
     /**
-     * @return list<string> each dependency as npm install takes it, "<package>@<version>"
+     * @return list<string>
      *
      * @throws JobImageNotBuilt
      */
