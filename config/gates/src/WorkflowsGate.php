@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-final class WorkflowsGate implements Gate
+final readonly class WorkflowsGate implements Gate
 {
     // Because no network, token or config file may change the answer, and zizmor without --strict-collection skips a workflow it cannot parse.
     private const array SCAN = ['zizmor', '--offline', '--no-config', '--quiet', '--strict-collection', '--format=json', '.github'];
@@ -39,7 +39,15 @@ final class WorkflowsGate implements Gate
 
         $findings = array_map($this->finding(...), JsonNode::parse($result->output)?->items() ?? []);
 
-        return [] !== $findings ? $findings : ['zizmor failed: '.$this->errorOf($result)];
+        return [] !== $findings ? $findings : [$this->failureOf($result)];
+    }
+
+    // Because zizmor may fail without printing anything, the exit code is the cause that is never empty.
+    private function failureOf(ProcessResult $result): string
+    {
+        $error = $this->errorOf($result);
+
+        return 'zizmor failed with exit code '.$result->exitCode.('' === $error ? '' : ': '.$error);
     }
 
     // On one line, because zizmor names the cause only on the lines after "fatal: no audit was performed".
