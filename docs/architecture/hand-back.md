@@ -2,7 +2,7 @@
 
 A build hands back a git bundle. The module `Core/HandBack` (plan task T50, first part) checks that bundle before anything trusts it, and strips attribution from its commits. The secret scan, the redaction of mounted credentials, the send-back once and the hand-over on a second failure are later parts of T50 and are not built.
 
-`php bin/console intakt:hand-back:check <repository> <branch> <bundle> [--merge-main]` (`CheckHandBackCommand`) calls the use case. It prints `accepted <head>`, `base <commit>` (`base none` when the branch was not pushed yet) and `rewritten <count>` and exits with 0; a refusal prints `refused: <reason>` in an error block and exits with 1; an `InvalidArgumentException` or a `ReportableFailure` (`HandBackNotChecked`) prints its message and exits with 1. Nothing calls the use case from another module yet: the push (T53) and the build lane (T56) will.
+`php bin/console intakt:hand-back:check <repository> <branch> <bundle> [--merge-main]` (`CheckHandBackCommand`) calls the use case. It prints `accepted <head>`, `base <commit>` (`base none` when the branch was not pushed yet) and `rewritten <count>` and exits with 0; a refusal prints `refused: <reason>` in an error block and exits with 1; an `InvalidArgumentException` or a `ReportableFailure` (`HandBackNotChecked`) prints its message and exits with 1. Nothing calls the use case from another module yet: the build lane (T56) will, and the signed push takes its `AcceptedHandBack` ([Branch push](branch-push.md)).
 
 ## Contract
 
@@ -13,7 +13,7 @@ A build hands back a git bundle. The module `Core/HandBack` (plan task T50, firs
 - `HandBackRefusal` is a backed enum; `reason()` is fixed text per case, so a reason never holds a value from the refused bundle.
 - `HandBackNotChecked` (a `ReportableFailure`) is thrown when the repository cannot be read; its message names the repository and the git subcommand, never git's own output, which may quote the bundle.
 
-The check itself, `CheckHandBack::check(HandBack)` (marked `#[NoDiscard]`), lives in `src/Core/HandBack/UseCase/CheckHandBack/`, not in the Contract, so only the module's own console door calls it. The push (T53) and the build lane (T56) need an entry point in the Contract first; it is added with the first of them.
+The check itself, `CheckHandBack::check(HandBack)` (marked `#[NoDiscard]`), lives in `src/Core/HandBack/UseCase/CheckHandBack/`, not in the Contract, so only the module's own console door calls it. The build lane (T56) needs an entry point in the Contract first; the push (T53) did not need one, because it takes the result of the check, an `AcceptedHandBack`, as its input.
 
 ## The checks, in order
 
