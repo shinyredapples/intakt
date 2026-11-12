@@ -1,0 +1,227 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\LocalGitForge;
+
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Review\Contract\BootAt;
+use Intakt\Core\Review\Contract\BootOutcome;
+use Intakt\Core\Review\Contract\BootState;
+use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Plugin\Forge\Contract\CommitId;
+use Intakt\Plugin\Forge\Contract\FileContent;
+use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Contract\RepositoryNotFound;
+use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
+use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
+use Intakt\Plugin\LocalGitForge\UseCase\BootHead\InstanceBoot;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(InstanceBoot::class)]
+#[UsesClass(BootAt::class)]
+#[UsesClass(BootOutcome::class)]
+#[UsesClass(ChangeSource::class)]
+#[UsesClass(CommitId::class)]
+#[UsesClass(FileContent::class)]
+#[UsesClass(FileNotFoundAtHead::class)]
+#[UsesClass(ForgeReadFailed::class)]
+#[UsesClass(GitCall::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(LocalGitForge::class)]
+#[UsesClass(LocalRepository::class)]
+#[UsesClass(NameStatusParser::class)]
+#[UsesClass(RepositoryNotFound::class)]
+final class InstanceBootTest extends TestCase
+{
+    // Reports what the commit it sits in holds, so a test can tell which commit and which harness booted.
+    private const string HARNESS = <<<'PHP'
+        <?php
+        $root = dirname(__DIR__);
+        echo "server log\n";
+        $status = match (true) {
+            is_file($root.'/broken') => ['status' => 'failed', 'reason' => trim(file_get_contents($root.'/broken'))],
+            !is_file($root.'/vendor/autoload.php') => ['status' => 'failed', 'reason' => 'no autoloader'],
+            default => ['status' => 'ready'],
+        };
+        file_put_contents('php://fd/3', json_encode($status)."\n");
+        exit('ready' === $status['status'] ? 0 : 1);
+        PHP;
+
+    private const string ALWAYS_READY = <<<'PHP'
+        <?php
+        file_put_contents('php://fd/3', '{"status":"ready"}'."\n");
+        PHP;
+
+    private TemporaryRepository $repository;
+    private CommitId $main;
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('composer.json', '{"name": "intakt-test/boot"}');
+        $this->main = new CommitId($this->repository->commitFile('bin/instance', self::HARNESS));
+        $this->repository->checkoutNewBranch('feature');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+    }
+
+    public function testAHeadThatBootsAfterComposerInstallIsReportedAsBooted(): void
+    {
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertSame('', $outcome->reason);
+    }
+
+    public function testAHeadThatDoesNotBootIsReportedAsFailedWithTheReasonOfTheHarness(): void
+    {
+        $head = $this->repository->commitFile('broken', "Unrecognized option \"nope\"\n");
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertSame('Unrecognized option "nope"', $outcome->reason);
+    }
+
+    public function testAHeadIsBootedWithMainsHarnessRatherThanItsOwn(): void
+    {
+        $this->repository->commitFile('bin/instance', self::ALWAYS_READY);
+        $head = $this->repository->commitFile('broken', "the kernel does not boot\n");
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertSame('the kernel does not boot', $outcome->reason);
+    }
+
+    public function testAHeadWhoseHarnessIsALinkOutsideIsBootedWithMainsHarnessAndLeavesTheLinkedFileAlone(): void
+    {
+        $outside = $this->repository->path.'-outside';
+        file_put_contents($outside, "kept\n");
+        unlink($this->repository->path.'/bin/instance');
+        symlink($outside, $this->repository->path.'/bin/instance');
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertSame("kept\n", file_get_contents($outside));
+        unlink($outside);
+    }
+
+    public function testAHeadWhoseBinIsALinkFailsWithoutWritingThroughIt(): void
+    {
+        $outside = $this->repository->path.'-bin';
+        mkdir($outside);
+        $this->repository->removeFile('bin/instance');
+        rmdir($this->repository->path.'/bin');
+        symlink($outside, $this->repository->path.'/bin');
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertStringContainsString('bin that is not a plain folder', $outcome->reason);
+        self::assertSame([], array_values(array_diff((array) scandir($outside), ['.', '..'])));
+        rmdir($outside);
+    }
+
+    public function testAHeadWhoseComposerInstallFailsIsReportedAsFailedWithComposersMessage(): void
+    {
+        $head = $this->repository->commitFile('composer.json', '{"name": ');
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertStringStartsWith('composer install failed: ', $outcome->reason);
+        self::assertStringContainsString('composer.json', $outcome->reason);
+    }
+
+    public function testAHarnessThatReportsNoStatusIsACrashRatherThanAnException(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\necho \"log only\\n\";\n");
+
+        $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+        self::assertSame('bin/instance reported no status line.', $outcome->reason);
+    }
+
+    public function testAHarnessThatReportsAStatusItDoesNotDefineIsACrash(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nfile_put_contents('php://fd/3', '{\"status\":\"maybe\"}');\n");
+
+        $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+        self::assertSame('bin/instance reported a status line it does not define: {"status":"maybe"}', $outcome->reason);
+    }
+
+    public function testAHarnessThatReportsReadyButExitsWithAnErrorIsACrash(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nfile_put_contents('php://fd/3', '{\"status\":\"ready\"}');\nexit(1);\n");
+
+        $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+    }
+
+    public function testAHeadThatIsNotInTheRepositoryIsACrashRatherThanAnException(): void
+    {
+        $outcome = $this->bootWithMainsHarness(str_repeat('a', 40));
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+        self::assertStringContainsString('git worktree failed', $outcome->reason);
+    }
+
+    public function testAMainWithoutAHarnessIsACrashRatherThanAnException(): void
+    {
+        $head = $this->repository->removeFile('bin/instance');
+
+        $outcome = new InstanceBoot()->of($this->at($head), new CommitId($head));
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+        self::assertStringContainsString('There is no file "bin/instance"', $outcome->reason);
+    }
+
+    public function testAMissingRepositoryIsACrashRatherThanAnException(): void
+    {
+        $target = new BootAt(new ChangeSource($this->repository->path.'-missing', 'main'), $this->main);
+
+        $outcome = new InstanceBoot()->of($target, $this->main);
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+        self::assertStringContainsString('is not a directory', $outcome->reason);
+    }
+
+    public function testTheSnapshotOfTheHeadIsRemovedAfterTheBoot(): void
+    {
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $this->bootWithMainsHarness($head);
+
+        self::assertCount(1, $this->repository->worktrees());
+    }
+
+    private function bootWithMainsHarness(string $head): BootOutcome
+    {
+        return new InstanceBoot()->of($this->at($head), $this->main);
+    }
+
+    private function at(string $commit): BootAt
+    {
+        return new BootAt(new ChangeSource($this->repository->path, 'main'), new CommitId($commit));
+    }
+}
