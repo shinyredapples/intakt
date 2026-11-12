@@ -299,6 +299,16 @@ test('after several visits a pushed project list keeps the project the current p
     assert.equal(page.projectFilter.title, 'beta');
 });
 
+test('after several visits a pushed list without the chosen project falls back to all projects', () => {
+    const page = new Browser('light').open().visit().visit();
+    page.chooseProject('beta');
+
+    page.pushStream('projfilter', ['alpha', 'gamma']);
+
+    assert.equal(page.projectFilter.value, '');
+    assert.deepEqual(page.shownRows(), ['beta', 'alpha', 'beta']);
+});
+
 test('a page without pages under more runs the shell without a more item', () => {
     const page = new Browser('light').open();
 
