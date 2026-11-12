@@ -13,21 +13,14 @@ RUN php -r 'exit(version_compare(PHP_VERSION, "8.5.12", ">=") ? 0 : 1);'
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY --from=gitleaks /usr/bin/gitleaks /usr/local/bin/gitleaks
 COPY --from=zizmor /usr/bin/zizmor /usr/local/bin/zizmor
-COPY composer.json /usr/local/share/intakt/
-COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
-# The extensions are composer.json's ext-* entries; pdo_mysql and pdo_pgsql only serve the persistence group.
-# The list is assigned before use because set -e ignores a failing command substitution inside a command's arguments.
+# A fixed list before the copy, so a composer.json edit reuses this layer; pdo_mysql and pdo_pgsql serve persistence.
 RUN set -eu; \
     apt-get update; \
     apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
-    missing='$c = json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true, 512, JSON_THROW_ON_ERROR); if (!is_array($c["require"] ?? null)) { throw new UnexpectedValueException("composer.json has no require object"); } foreach ($c["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
-    exts="$(php -r "$missing")"; \
-    docker-php-ext-install -j"$(nproc)" $exts pdo_mysql pdo_pgsql; \
-    left="$(php -r "$missing")"; \
-    test -z "$left"; \
+    docker-php-ext-install -j"$(nproc)" intl pcntl zip pdo_mysql pdo_pgsql; \
     php --ini; \
     composer --version; \
     gitleaks version; \
@@ -38,6 +31,14 @@ RUN set -eu; \
     php -r 'foreach (["pdo_mysql", "pdo_pgsql"] as $e) { if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension $e\n"); exit(1); } }'; \
     useradd --uid 1000 --user-group --create-home ci; \
     chown -R ci:ci /config/caddy /data/caddy
+
+COPY composer.json /usr/local/share/intakt/
+COPY config/gates/php/check.ini /usr/local/etc/php/conf.d/zz-check.ini
+RUN set -eu; \
+    missing='$c = json_decode(file_get_contents("/usr/local/share/intakt/composer.json"), true, 512, JSON_THROW_ON_ERROR); if (!is_array($c["require"] ?? null)) { throw new UnexpectedValueException("composer.json has no require object"); } foreach ($c["require"] as $p => $v) { $e = substr($p, 4); if (str_starts_with($p, "ext-") && !extension_loaded($e)) { echo "$e "; } }'; \
+    left="$(php -r "$missing")"; \
+    for e in $left; do echo "missing PHP extension $e" >&2; done; \
+    test -z "$left"
 
 USER 1000:1000
 WORKDIR /home/ci

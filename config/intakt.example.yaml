@@ -8,10 +8,6 @@ budget:
     ceilings:
         five-hour: 90
         weekly: 90
-    # Optional: separate ceilings for shadow work (default 70 each); they are read and checked, but no review round is held back by them.
-    shadow_ceilings:
-        five-hour: 70
-        weekly: 70
     # Optional: the price of each model, keyed by the model name exactly as a tier (or substitute) names it, never the name a provider's answer reports, in US dollars per million tokens, for the cost line of a review.
     # input and output are required; cache_read and cache_write default to input. A round that used a model without a price shows its cost as unknown.
     prices:
