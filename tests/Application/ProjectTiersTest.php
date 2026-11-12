@@ -27,14 +27,9 @@ use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Shadow\Contract\ProjectMode;
 use Intakt\Core\Shadow\Contract\ProjectModes;
-use Intakt\Core\Shadow\Infrastructure\ModeGuardedForgeWrites;
 use Intakt\Core\Watcher\Contract\WatcherServices;
-use Intakt\Plugin\Forge\Contract\ForgeWrites;
-use Intakt\Tests\Core\Shadow\ReviewToPost;
-use Intakt\Tests\Core\Shadow\WriteRefusingForge;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
-use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\AI\Platform\Bridge\Anthropic\Claude;
@@ -82,7 +77,7 @@ final class ProjectTiersTest extends KernelTestCase
         file_put_contents($this->file, <<<'YAML'
             projects:
                 alpha-one:
-                    mode: shadow
+                    mode: reviewer-for-loop
                     tiers:
                         strong: { provider: anthropic, model: big }
                         light: { provider: anthropic, model: small }
@@ -165,29 +160,6 @@ final class ProjectTiersTest extends KernelTestCase
         $this->bootedContainer();
     }
 
-    public function testAShadowProjectsReviewNeverReachesTheForgeTheContainerWritesTo(): void
-    {
-        $forge = $this->bootedContainer()->get(ForgeWrites::class);
-        self::assertInstanceOf(ForgeWrites::class, $forge);
-
-        $forge->postReview('alpha-one', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
-
-        self::assertInstanceOf(ModeGuardedForgeWrites::class, $forge);
-        $refusing = self::getContainer()->get(WriteRefusingForge::class);
-        self::assertInstanceOf(WriteRefusingForge::class, $refusing);
-        self::assertSame([], $refusing->writeLog);
-    }
-
-    public function testAProjectWithoutAModeWritesToTheForgeTheContainerWritesTo(): void
-    {
-        $forge = $this->bootedContainer()->get(ForgeWrites::class);
-        self::assertInstanceOf(ForgeWrites::class, $forge);
-
-        $this->expectExceptionObject(new LogicException('The test forge refuses every write.'));
-
-        $forge->postReview('beta', ReviewToPost::change('feature'), ReviewToPost::comment('approve'));
-    }
-
     public function testAProjectWatchSectionLoadsAsAWatchedProjectBesideItsTiers(): void
     {
         $container = $this->bootedContainer();
@@ -212,6 +184,16 @@ final class ProjectTiersTest extends KernelTestCase
 
         $this->expectException(LoaderLoadException::class);
         $this->expectExceptionMessageMatches('/"quiet" is not allowed for path "intakt\.projects\.beta\.mode"/');
+
+        $this->bootedContainer();
+    }
+
+    public function testAShadowModeStopsTheBootAsAnUnknownMode(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        mode: shadow\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/"shadow" is not allowed for path "intakt\.projects\.beta\.mode"/');
 
         $this->bootedContainer();
     }

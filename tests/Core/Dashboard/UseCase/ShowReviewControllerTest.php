@@ -81,7 +81,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         );
     }
 
-    public function testTheReviewPageMarksAShadowVerdictAndLeavesAnOrdinaryOneUnmarked(): void
+    public function testTheReviewPageShowsAVerdictRecordedInTheRemovedShadowModeLikeAnOrdinaryOne(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
@@ -92,7 +92,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
-        self::assertSame(['approve (shadow)', 'approve'], [$rows[0][3], $rows[1][3]]);
+        self::assertSame(['approve', 'approve'], [$rows[0][3], $rows[1][3]]);
     }
 
     public function testAFailedReviewerAnsweredByASubstituteShowsBothNotesSeparated(): void
