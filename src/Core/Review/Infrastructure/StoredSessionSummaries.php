@@ -49,7 +49,7 @@ final readonly class StoredSessionSummaries implements SessionSummaries
     {
         return array_values(array_filter(
             $checking,
-            static fn (Finding $open): bool => array_any($resolved, static fn (Finding $kept): bool => $kept->withId($open->id) == $open),
+            static fn (Finding $open): bool => array_any($resolved, static fn (Finding $kept): bool => json_encode($kept->withId($open->id), JSON_THROW_ON_ERROR) === json_encode($open, JSON_THROW_ON_ERROR)),
         ));
     }
 }

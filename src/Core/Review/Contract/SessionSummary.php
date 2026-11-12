@@ -10,11 +10,11 @@ use Intakt\Core\Budget\Contract\Cost;
 final readonly class SessionSummary
 {
     /**
-     * @param list<ToolCallCount> $toolCalls ordered by tool name
-     * @param list<string>        $filesRead each once, in the order first read
-     * @param list<Finding>       $checking  the open findings the round was handed to check
-     * @param list<Finding>       $reported  the findings open after the round that it reported
-     * @param list<Finding>       $resolved  the findings the round resolved
+     * @param list<ToolCallCount> $toolCalls
+     * @param list<string>        $filesRead
+     * @param list<Finding>       $checking
+     * @param list<Finding>       $reported
+     * @param list<Finding>       $resolved
      */
     public function __construct(
         public array $toolCalls,

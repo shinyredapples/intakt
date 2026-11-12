@@ -102,8 +102,7 @@ final readonly class ReviewedRepository
         return $reviewer->getUserIdentifier();
     }
 
-    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose.
-    // A refused call is still counted, because the reviewer made it; it is no file read.
+    // Fenced here and not only by the reviewer's toolbox, because a subscription CLI calls this server itself and puts the answer into its prompt as it comes; a refusal too, since it echoes the path the reviewed code chose. A refusal is still recorded as a call, because the reviewer made it.
     /**
      * @param Closure(Checkout): string $read
      */

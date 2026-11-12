@@ -50,7 +50,7 @@ final readonly class RoundToolCalls
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return array<mixed>
      */
     private function rowsOf(ReviewRound $round, string $dql): array
     {
