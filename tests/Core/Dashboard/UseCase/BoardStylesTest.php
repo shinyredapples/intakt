@@ -44,6 +44,15 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/color:\s*var\(--muted\);\s*font-size:\s*var\(--t13\)/', $rules['.meta'] ?? '');
     }
 
+    // A board card's cost reads "Cost unknown, no price for <model>", wider than a 176 px card, so one line ran past its edge.
+    public function testAFactWiderThanACardWrapsInsideTheCard(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/white-space:\s*nowrap;/', $rules['.meta span'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*white-space:\s*normal;\s*$/', $rules['.card .meta span'] ?? '');
+    }
+
     // A card's meta line shows its spans on one line (.meta span), which would otherwise outrank the tip's own rule.
     public function testAGlossaryTipInACardsMetaLineStaysHiddenAndWrapsUntilItsTermIsPointedAt(): void
     {

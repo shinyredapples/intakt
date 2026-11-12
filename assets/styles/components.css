@@ -77,6 +77,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .blocker.broken { color: var(--red); }
 .meta { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s12); margin: 0; color: var(--muted); font-size: var(--t13); }
 .meta span { display: inline-flex; align-items: center; gap: var(--s4); white-space: nowrap; }
+/* A fact wider than its card wraps inside it; flex-wrap still moves a fact that fits to the next line whole. */
+.card .meta span { white-space: normal; }
 
 /* List rows */
 .list { border-top: 1px solid var(--hairline); }
