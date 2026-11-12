@@ -53,7 +53,6 @@ final class DeferredRateLimitFailoverTest extends TestCase
         self::assertSame('answer of the second account', $result->asText());
     }
 
-    // The control case: the same 429 raised while invoking fails over as documented.
     public function testARateLimitRaisedWhileInvokingFailsOverToTheSecondPlatform(): void
     {
         $platform = new FailoverPlatform([$this->rateLimitedOnInvoke(), MockPlatformFactory::createPlatform('answer of the second account')], new KeyRecordingLimiterFactory());

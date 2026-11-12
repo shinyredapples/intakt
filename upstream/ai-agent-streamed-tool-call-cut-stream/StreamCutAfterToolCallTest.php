@@ -40,7 +40,6 @@ final class LookupTool
     }
 }
 
-// Round one streams a tool call and its usage; round two streams its usage and half a sentence, then the connection drops.
 #[CoversNothing]
 final class StreamCutAfterToolCallTest extends TestCase
 {
@@ -86,7 +85,6 @@ final class StreamCutAfterToolCallTest extends TestCase
         );
     }
 
-    // The control case: without the cut, the streamed execution adds up the usage of both rounds once.
     public function testACompleteExecutionCountsTheUsageOfItsRoundsOnce(): void
     {
         $execution = $this->start($this->completeRound());
