@@ -32,11 +32,19 @@ final readonly class ChangedPaths
     public function mainOf(string $repository): string
     {
         $process = $this->run($repository, ['symbolic-ref', '--quiet', 'HEAD']);
-        $main = trim($process->getOutput());
+        $branch = trim($process->getOutput());
 
         // Main is the branch the repository's HEAD names, because the mirror's HEAD follows the remote's default branch.
-        if (!$process->isSuccessful() || !str_starts_with($main, self::BRANCHES)) {
+        if (!$process->isSuccessful() || !str_starts_with($branch, self::BRANCHES)) {
             throw ChangeNotRead::because('the repository\'s HEAD names no branch, so main is unknown');
+        }
+
+        // Resolved once to a commit id, because the branch can move while the check runs (a mirror update), and every later git call must compare against the same main.
+        $process = $this->run($repository, ['rev-parse', '--verify', '--quiet', $branch.'^{commit}']);
+        $main = trim($process->getOutput());
+
+        if (!$process->isSuccessful() || '' === $main) {
+            throw ChangeNotRead::because(sprintf('%s names no commit, so main is unknown', $branch));
         }
 
         return $main;

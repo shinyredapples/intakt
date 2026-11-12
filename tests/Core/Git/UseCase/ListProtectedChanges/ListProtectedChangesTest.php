@@ -120,6 +120,43 @@ final class ListProtectedChangesTest extends TestCase
         self::assertSame(['config/gates/rule.php'], $this->whenTheHeadIsListed($head)->paths);
     }
 
+    public function testAProtectedChangeUndoneLaterIsStillListedWhenMainMovesDuringTheCheck(): void
+    {
+        $changed = $this->givenABranchCommitting('bin/check', 'two');
+        $head = $this->repository->commitFile('bin/check', 'one');
+        $this->repository->checkout('main');
+        $this->repository->checkoutNewBranch('next-main');
+        $next = $this->repository->commitFile('bin/check', 'two');
+        $this->repository->checkout('main');
+
+        // Forced order: main advances to the same content as the undone commit right when that commit is compared with its parent.
+        $changes = $this->whileMainAdvancesTo($next, 'diff-tree', $this->base.' '.$changed, fn (): ProtectedChanges => $this->whenTheHeadIsListed($head));
+
+        self::assertSame(['bin/check'], $changes->paths);
+        self::assertNull($changes->unreadable);
+    }
+
+    public function testMainIsTheCommitTheBranchNamesNotTheBranch(): void
+    {
+        $main = new ChangedPaths(new HardenedGit())->mainOf($this->repository->path.'/.git');
+
+        self::assertSame($this->base, $main);
+    }
+
+    public function testARepositoryWhoseMainHasNoCommitCountsAsProtected(): void
+    {
+        $repository = new TemporaryRepository();
+
+        try {
+            $changes = $this->listed($repository->path.'/.git', $this->base);
+        } finally {
+            $repository->remove();
+        }
+
+        self::assertTrue($changes->touchesProtectedPaths());
+        self::assertSame('the change could not be read: refs/heads/main names no commit, so main is unknown', $changes->unreadable);
+    }
+
     public function testAProtectedChangeOnAMergedSideBranchIsListed(): void
     {
         $this->givenABranchCommitting('bin/check', 'two');
@@ -293,5 +330,34 @@ final class ListProtectedChangesTest extends TestCase
     private function listed(string $repository, string $head): ProtectedChanges
     {
         return new ListProtectedChanges(new ChangedPaths(new HardenedGit()))->of($repository, $head, new ProtectedPaths(['bin/check', 'config/gates/', '.github']));
+    }
+
+    /**
+     * @param callable(): ProtectedChanges $check
+     */
+    private function whileMainAdvancesTo(string $commit, string $command, string $arguments, callable $check): ProtectedChanges
+    {
+        // A git on PATH that moves main before it runs the named call, as a mirror update beside the check would.
+        $path = (string) getenv('PATH');
+        $shim = sys_get_temp_dir().'/intakt-git-shim-'.bin2hex(random_bytes(6));
+        mkdir($shim);
+        file_put_contents($shim.'/git', implode("\n", [
+            '#!/bin/sh',
+            'PATH='.escapeshellarg($path),
+            'export PATH',
+            'case " $* " in *" '.$command.' "*" '.$arguments.' ") git --git-dir='.escapeshellarg($this->repository->path.'/.git').' update-ref refs/heads/main '.$commit.';; esac',
+            'exec git "$@"',
+            '',
+        ]));
+        chmod($shim.'/git', 0o755);
+        putenv('PATH='.$shim.':'.$path);
+
+        try {
+            return $check();
+        } finally {
+            putenv('PATH='.$path);
+            unlink($shim.'/git');
+            rmdir($shim);
+        }
     }
 }
