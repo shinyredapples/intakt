@@ -107,6 +107,7 @@ use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
+use Symfony\AI\Platform\Result\Stream\Delta\ToolCallComplete;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Result\ToolCall;
@@ -461,6 +462,74 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $unsettled['usages'];
         self::assertSame([100], array_column($usages, 'prompt'));
+    }
+
+    public function testAStreamCutMidTextAfterAToolRoundBlocksTheReviewWithTheCutAsItsReasonAndLeavesOneUnsettledRowWithBothRounds(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $verdict = $this->vendor($this->toolRoundThen(self::cutMidText(...)), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
+        self::assertSame(Severity::P1, $verdict->findings[0]->severity);
+        self::assertStringContainsString('The stream ended before its terminal event.', $verdict->findings[0]->text);
+        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame($ledger->payloads()[0]['call'], $ledger->payloads()[1]['call']);
+        /** @var list<array<string, int>> $usages */
+        $usages = $ledger->payloads()[1]['usages'];
+        self::assertSame([110, 120], array_column($usages, 'prompt'));
+    }
+
+    public function testAServerErrorMidStreamAfterAToolRoundFailsTheReviewTransientlyAndLeavesOneUnsettledRowWithBothRounds(): void
+    {
+        $ledger = new InMemoryLedger();
+        $outage = static function (): Generator {
+            yield new TokenUsage(promptTokens: 120, model: 'big');
+            yield new TextDelta('{"verdict":');
+
+            throw new ServerException(503);
+        };
+
+        try {
+            $this->vendor($this->toolRoundThen($outage), $ledger)->review('alpha', Tier::Strong, $this->request());
+            self::fail('A transport failure must not become a verdict.');
+        } catch (ProviderFailedTransiently) {
+            // Expected, because the round never ended and the review is asked again once, then parked.
+        }
+
+        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame(ServerException::class, $ledger->payloads()[1]['failure']);
+        /** @var list<array<string, int>> $usages */
+        $usages = $ledger->payloads()[1]['usages'];
+        self::assertSame([110, 120], array_column($usages, 'prompt'));
+    }
+
+    /**
+     * @param callable(): Generator $lastRound
+     */
+    private function toolRoundThen(callable $lastRound): Closure
+    {
+        $calls = 0;
+
+        return static function () use (&$calls, $lastRound): StreamResult {
+            if (1 === ++$calls) {
+                return new StreamResult((static function (): Generator {
+                    yield new ToolCallComplete([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+                    yield new TokenUsage(promptTokens: 110, model: 'big');
+                })());
+            }
+
+            return new StreamResult($lastRound());
+        };
+    }
+
+    private static function cutMidText(): Generator
+    {
+        yield new TokenUsage(promptTokens: 120, model: 'big');
+        yield new TextDelta('{"verdict":"approve",');
+
+        throw new IncompleteStreamException('The stream ended before its terminal event.');
     }
 
     public function testACallThatFailsIsLeftUnsettledOnce(): void
