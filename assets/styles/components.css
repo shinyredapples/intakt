@@ -404,6 +404,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
 .page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }
 .page-head .actions { margin-left: auto; }
+.now-stop-idle ~ .stop-round { display: none; }
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */

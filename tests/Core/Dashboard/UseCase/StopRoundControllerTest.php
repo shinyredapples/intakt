@@ -80,7 +80,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         self::assertSame('/reviews/round-2/stop', $crawler->filter('form.stop-round')->attr('action'));
     }
 
-    public function testARoundWithNoRunningReviewerShowsNoStopForm(): void
+    public function testARoundWithNoRunningReviewerHoldsTheStopFormBehindTheIdleMarker(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'security');
@@ -88,8 +88,16 @@ final class StopRoundControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(1, $crawler->filter('#round-round-1-now-stop'));
-        self::assertCount(0, $crawler->filter('form.stop-round'));
+        self::assertCount(1, $crawler->filter('#round-round-1-now-stop #round-round-1-now-stop-idle.now-stop-idle + form.stop-round'));
+    }
+
+    public function testARunningReviewerLeavesNoIdleMarkerBeforeTheStopForm(): void
+    {
+        $this->runningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.now-stop-idle'));
     }
 
     public function testAJudgedRoundShowsNoStopForm(): void

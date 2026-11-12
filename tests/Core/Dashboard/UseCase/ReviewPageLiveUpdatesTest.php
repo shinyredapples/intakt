@@ -46,6 +46,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Mercure\Jwt\StaticTokenProvider;
 use Symfony\Component\Mercure\MockHub;
 use Symfony\Component\Mercure\Update;
+use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
@@ -247,6 +248,39 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, false, ['round-1-correctness' => FinishedState::Stopped])]));
 
+        self::assertCount(0, $updated->filter('form.stop-round'));
+    }
+
+    public function testAToolCallPublishedForAReviewerThatStartedAfterThePageLoadedMakesTheStopOfTheRoundAvailable(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $this->ledger->startRoundOf('feat/thing', $round->toRfc4122(), 1);
+        $page = $this->browser->request('GET', '/reviews/'.$round->toRfc4122());
+        self::assertCount(1, $page->filter('.now-stop-idle + form.stop-round'));
+        $this->ledger->startReviewer($round->toRfc4122(), 'security');
+
+        $this->publishedUpdates()->toolCalled($round, $round->toRfc4122().'-security', 'read_file');
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertCount(0, $updated->filter('.now-stop-idle'));
+        self::assertSame('Stop', $updated->filter('.page-head form.stop-round button')->text());
+    }
+
+    public function testAStopPublishedThroughTheHubShowsTheReviewerStoppedAndTakesTheStopOfTheRoundAway(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->startReviewer($id, 'security');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertCount(1, $page->filter('form.stop-round'));
+
+        $this->publishedUpdates()->reviewerStopped($round, $id.'-security');
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, false, [$id.'-security' => FinishedState::Stopped]));
+
+        self::assertSame([['review/rounds/'.$id], ['review/rounds/'.$id]], array_map(static fn (Update $update): array => $update->getTopics(), $this->published));
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertSame('stopped', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-security-state')->text());
         self::assertCount(0, $updated->filter('form.stop-round'));
     }
 
@@ -529,6 +563,24 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertInstanceOf(Environment::class, $twig);
         self::assertInstanceOf(SessionSummaries::class, $summaries);
         $container->set(RoundUpdates::class, new MercureRoundUpdates(new MercureLiveUpdates($hub, new NullLogger()), $twig, $summaries, new LockFactory(new InMemoryStore()), new NullLogger()));
+    }
+
+    // No stored summary, so the round's own streams are the only updates the hub records.
+    private function givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary(): Uuid
+    {
+        $this->browser->disableReboot();
+        self::getContainer()->set(SessionSummaries::class, self::createStub(SessionSummaries::class));
+        $this->givenTheHubRecordsWhatIsPublished();
+
+        return Uuid::v7();
+    }
+
+    private function publishedUpdates(): RoundUpdates
+    {
+        $updates = self::getContainer()->get(RoundUpdates::class);
+        self::assertInstanceOf(RoundUpdates::class, $updates);
+
+        return $updates;
     }
 
     private function reviewServerFor(string $round): McpServerClient
