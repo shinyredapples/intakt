@@ -55,16 +55,13 @@ final class QueuedIssue
     private bool $pullRequest;
 
     #[ORM\Id]
-    #[ORM\Column(length: 255)]
-    private readonly string $project;
-
-    #[ORM\Id]
     #[ORM\Column]
     private readonly int $number;
 
-    public function __construct(string $project, ItemReading $reading)
+    public function __construct(#[ORM\Id]
+    #[ORM\Column(length: 255)]
+    private readonly string $project, ItemReading $reading)
     {
-        $this->project = $project;
         $this->number = $reading->listed->number;
         $this->pullRequest = $reading->listed->isPullRequest;
         $this->see($reading);
@@ -83,6 +80,7 @@ final class QueuedIssue
         $this->waitsFor = $reading->waitsFor;
         $this->closedBy = $reading->closedBy;
     }
+
     public function isStillAt(ListedIssue $listed): bool
     {
         return $this->updatedAt === $this->moment($listed->updatedAt) && $this->pullRequest === $listed->isPullRequest;

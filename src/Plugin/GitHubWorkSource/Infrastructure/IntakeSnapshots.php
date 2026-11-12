@@ -107,7 +107,7 @@ final readonly class IntakeSnapshots
 
     private function store(string $project, ?QueuedIssue $row, ItemReading $reading): QueuedIssue
     {
-        if (null === $row) {
+        if (!$row instanceof QueuedIssue) {
             $row = new QueuedIssue($project, $reading);
             $this->entities->persist($row);
 
@@ -133,6 +133,7 @@ final readonly class IntakeSnapshots
 
         return new ItemReading($listed, $editor, $trusted, $waits, $closes);
     }
+
     /**
      * @param list<ListedIssue> $issues
      *

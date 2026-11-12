@@ -14,7 +14,7 @@ final class Issues
     private const string MOMENT = 'Y-m-d\TH:i:sp';
 
     /**
-     * @param list<string>                                                                   $labels
+     * @param list<string>                                                            $labels
      * @param array{author?: string, body?: string, updatedAt?: string, due?: string} $with
      */
     public static function task(int $number, array $labels = ['intakt'], array $with = []): ListedIssue
