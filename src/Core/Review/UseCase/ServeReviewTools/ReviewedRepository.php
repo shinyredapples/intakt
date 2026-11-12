@@ -49,9 +49,10 @@ final readonly class ReviewedRepository
     {
         $round = $this->round();
         $head = $this->head($round);
-        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => (new ReadFile($head))($path));
+        $real = $this->refusedAsCall($round, ReadFileTool::NAME, static fn (): string => $head->resolve($path));
+        $answer = $this->answer($round, ReadFileTool::NAME, static fn (): string => (new ReadFile($head))->contentAt($real, $path));
         // Recorded as the checkout resolved it, so two spellings of one file count as one file read.
-        $this->calls->read($round, ReadFileTool::NAME, $head->relative($head->resolve($path)));
+        $this->calls->read($round, ReadFileTool::NAME, $head->relative($real));
 
         return $answer;
     }
@@ -112,8 +113,20 @@ final readonly class ReviewedRepository
      */
     private function answer(ReviewRound $round, string $tool, Closure $read): string
     {
+        return $this->refusedAsCall($round, $tool, fn (): string => $this->fence->wrap(UntrustedSource::ToolResult, $read()));
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(): T $step
+     *
+     * @return T
+     */
+    private function refusedAsCall(ReviewRound $round, string $tool, Closure $step): mixed
+    {
         try {
-            return $this->fence->wrap(UntrustedSource::ToolResult, $read());
+            return $step();
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
             $this->calls->called($round, $tool);
 

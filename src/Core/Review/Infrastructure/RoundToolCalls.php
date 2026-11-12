@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Doctrine\DBAL\Exception;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Exception\ORMException;
 use Intakt\Core\Review\Contract\ToolCallCount;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundToolCall;
+use Psr\Log\LoggerInterface;
 use Symfony\Bridge\Doctrine\Types\UuidType;
 
 // Recorded by the review server, because every reviewer's tool calls pass through it, also those of a subscription CLI whose conversation Intakt never stores.
 final readonly class RoundToolCalls
 {
-    public function __construct(private EntityManagerInterface $entities)
-    {
+    public function __construct(
+        private EntityManagerInterface $entities,
+        private LoggerInterface $logger,
+    ) {
     }
 
     public function called(ReviewRound $round, string $tool): void
@@ -60,9 +65,14 @@ final readonly class RoundToolCalls
             ->getArrayResult();
     }
 
+    // Best effort, because the answer is already computed and the reviewer needs it more than the summary needs the row.
     private function record(RoundToolCall $call): void
     {
-        $this->entities->persist($call);
-        $this->entities->flush();
+        try {
+            $this->entities->persist($call);
+            $this->entities->flush();
+        } catch (Exception|ORMException $failure) {
+            $this->logger->error('A tool call of the review server was not recorded; it is answered anyway.', ['round' => $call->round->id()->toRfc4122(), 'tool' => $call->tool, 'exception' => $failure]);
+        }
     }
 }
