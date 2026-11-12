@@ -122,4 +122,16 @@ final class SandboxTest extends TestCase
         self::assertTrue($run->passed('dashes'), $run->output());
         self::assertStringContainsString('commits skipped, no git history', $run->noteOf('dashes'));
     }
+
+    public function testAGateResultInTheTestProcessKeepsTheFindingsPastTheTenTheCheckLineShows(): void
+    {
+        foreach (range(1, 12) as $number) {
+            $this->sandbox->write('notes-'.$number.'.md', "Plain \u{2014} text\n");
+        }
+
+        $result = $this->sandbox->gateResult(new LongDashesGate());
+
+        self::assertCount(12, $result->findings);
+        self::assertSame('2', $this->sandbox->runGate(new LongDashesGate())->omittedOf('dashes'));
+    }
 }
