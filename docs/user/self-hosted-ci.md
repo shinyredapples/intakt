@@ -1,6 +1,6 @@
 # Running Intakt's CI on your own runner
 
-Intakt's own CI (`.github/workflows/ci.yml`, `.github/workflows/first-start.yml` and `.github/workflows/journeys.yml`) runs on GitHub's `ubuntu-24.04` runners unless you say otherwise. This page is for whoever maintains a copy of the Intakt repository and wants that CI on a machine of their own.
+Intakt's own CI (`.github/workflows/ci.yml` and `.github/workflows/journeys.yml`) runs on GitHub's `ubuntu-24.04` runners unless you say otherwise. This page is for whoever maintains a copy of the Intakt repository and wants that CI on a machine of their own.
 
 ## Choosing the runner
 
@@ -10,7 +10,7 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 ["self-hosted","linux","x64","intakt-ci"]
 ```
 
-These jobs then run on a runner with all of those labels: `check`, `changes`, `persistence` and `image` from `ci.yml`, `first-start` from `first-start.yml`, `journeys` from `journeys.yml`, `image` from `release-image.yml` and `publish` from `ci-image.yml` (both push to `ghcr.io`, see [The published CI image](#the-published-ci-image)). The `alarm` job of `journeys.yml` always runs on GitHub's `ubuntu-24.04`, because it uses the `gh` command those runners have. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
+These jobs then run on a runner with all of those labels: `check`, `changes`, `persistence` and `image` from `ci.yml`, `journeys` from `journeys.yml`, `image` from `release-image.yml` and `publish` from `ci-image.yml` (both push to `ghcr.io`, see [The published CI image](#the-published-ci-image)). The `alarm` job of `journeys.yml` always runs on GitHub's `ubuntu-24.04`, because it uses the `gh` command those runners have. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
 ## A hosted runner service
 
@@ -50,11 +50,11 @@ The script that registers your ephemeral runner should do three things before ea
 
 | Need | Why |
 |---|---|
-| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | the `check`, `persistence` and `journeys` jobs build or reuse the CI image and run the code in it; the `image` job builds the application image from the repository's `Dockerfile` on the host and runs `docker/smoke-test.sh` against it; the `persistence` job starts a service container for each database engine; the `first-start` job builds the full application image from the repository's `Dockerfile` on the host, creates a Docker volume and runs the image on it |
+| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | the `check`, `persistence` and `journeys` jobs build or reuse the CI image and run the code in it; the `image` job builds the application image from the repository's `Dockerfile` on the host once, runs `docker/smoke-test.sh` against it, then `docker/verify-first-start.sh`, which creates a Docker volume and runs the same image on it; the `persistence` job starts a service container for each database engine |
 | `bash`, `git`, `grep`, `sh`, `sha256sum`, `cut`, `mktemp` and `rm` | the `changes` job reads the diff on the host in a temporary folder; `build-image.sh` hashes the Dockerfile, `composer.json` and the check ini (the image loads that ini by itself) |
 | Docker's `buildx` plugin, and network access to Docker Hub from the host | `docker/smoke-test.sh` (the `image` job) runs `docker buildx imagetools inspect` on the `Dockerfile`'s base image tag to print its digest, which asks the registry |
 | `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `dirname`, `env`, `timeout` and `sleep` | `docker/smoke-test.sh` (the `image` job) checks the started container over HTTP with `curl`, reads the `FROM` tag, the base image digest and the published port with `awk`, makes the run's random secrets with `od` and `tr`, and limits each wait |
-| `openssl`, `bash` and `sleep` | `docker/verify-first-start.sh` (the `first-start` job) generates the random secrets for the started container with `openssl` on the host and waits with `sleep` until the container answers |
+| `openssl`, `bash` and `sleep` | `docker/verify-first-start.sh` (the `image` job) generates the random secrets for the started container with `openssl` on the host and waits with `sleep` until the container answers |
 | Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container (a pull request that leaves the gate code alone skips them, but every push to main runs them); `journeys` runs each journey in one too, where `unshare` allows it |
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; `journeys` gets the same container settings; the workflows lift AppArmor only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, never on other runners of yours |
 
