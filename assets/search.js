@@ -7,6 +7,7 @@ const STOP = 'button:not([tabindex="-1"]), a[href]:not([tabindex="-1"])';
 const ACTION = '[data-search-action]';
 const CANCEL = '[data-search-cancel]';
 const RESULT_LINK = '#search-results a[href]';
+const RESULT_OPTION = '#search-results [role="option"]';
 const FAILED = '<div class="test-result err" role="alert"><p><strong>Search did not answer.</strong> Type again to try once more; nothing was changed.</p></div>';
 
 // One entry per case of Dashboard\Domain\SearchAction; SearchOverlayTest checks that every case has one.
@@ -22,6 +23,7 @@ const ACTIONS = {
 export function offerSearch(page) {
     const search = new Search(page);
     page.addEventListener('keydown', (event) => search.key(event));
+    page.addEventListener('mousedown', (event) => search.press(event));
     page.addEventListener('click', (event) => search.click(event));
     page.addEventListener('input', (event) => search.input(event));
     // A page Turbo keeps for going back comes back with the search closed and the shell usable.
@@ -96,6 +98,13 @@ class Search {
         // The link opens its page as it is; the overlay only gets out of the way and gives the shell back.
         if (target?.closest?.(RESULT_LINK)) {
             this.close();
+        }
+    }
+
+    // An option has tabindex -1, so a press would take the focus from the field, where the arrows and Enter act; the click still follows.
+    press(event) {
+        if (this.isOpen() && event.target?.closest?.(RESULT_OPTION)) {
+            event.preventDefault();
         }
     }
 
