@@ -31,6 +31,8 @@ final class Issues
 
     private static function moment(string $text): DateTimeImmutable
     {
-        return DateTimeImmutable::createFromFormat(self::MOMENT, $text, new DateTimeZone('UTC')) ?: throw new LogicException('Not a moment: '.$text);
+        $moment = DateTimeImmutable::createFromFormat(self::MOMENT, $text, new DateTimeZone('UTC'));
+
+        return false === $moment ? throw new LogicException('Not a moment: '.$text) : $moment;
     }
 }

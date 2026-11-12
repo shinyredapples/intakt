@@ -6,7 +6,7 @@ namespace Intakt\Plugin\GitHubWorkSource\Domain;
 
 use Intakt\Plugin\GitHubWorkSource\Contract\WorkLabels;
 
-// Eligible, then ready, then ordered, as docs/design/05-architecture/03-choosing-work.md has it.
+// Eligible, then ready, then ordered, because docs/design/05-architecture/03-choosing-work.md fixes that sequence.
 final readonly class IntakeRules
 {
     public function __construct(

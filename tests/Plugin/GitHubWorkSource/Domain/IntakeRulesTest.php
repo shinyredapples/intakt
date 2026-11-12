@@ -170,6 +170,6 @@ final class IntakeRulesTest extends TestCase
     {
         $references = new IssueReferences();
 
-        return new QueuedIssue('alpha', new ItemReading($listed, $listed->author, $trusted, $references->waitsFor($listed->body), $references->closedBy($listed->body)));
+        return new QueuedIssue('alpha', $listed->number, new ItemReading($listed, $listed->author, $trusted, $references->waitsFor($listed->body), $references->closedBy($listed->body)));
     }
 }

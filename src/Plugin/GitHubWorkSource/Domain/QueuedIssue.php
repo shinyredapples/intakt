@@ -54,15 +54,15 @@ final class QueuedIssue
     #[ORM\Column]
     private bool $pullRequest;
 
-    #[ORM\Id]
-    #[ORM\Column]
-    private readonly int $number;
-
-    public function __construct(#[ORM\Id]
-    #[ORM\Column(length: 255)]
-    private readonly string $project, ItemReading $reading)
-    {
-        $this->number = $reading->listed->number;
+    public function __construct(
+        #[ORM\Id]
+        #[ORM\Column(length: 255)]
+        private readonly string $project,
+        #[ORM\Id]
+        #[ORM\Column]
+        private readonly int $number,
+        ItemReading $reading,
+    ) {
         $this->pullRequest = $reading->listed->isPullRequest;
         $this->see($reading);
     }

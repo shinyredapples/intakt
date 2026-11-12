@@ -30,7 +30,8 @@ final class RecordedIssueApi
 {
     /** @var list<string> */
     public array $requests = [];
-    /** @var array<int, string> pages by number: the body, or an HTTP status as digits */
+    // The body of each page by number, or an HTTP status as three digits.
+    /** @var array<int, string> */
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
     public bool $notModified = false;
@@ -65,9 +66,11 @@ final class RecordedIssueApi
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
         $this->requests[] = $method.' '.$url;
-        $headers = $options['normalized_headers']['if-none-match'][0] ?? null;
-        if (is_string($headers)) {
-            $this->conditions[] = substr($headers, strlen('If-None-Match: '));
+        $headers = $options['headers'] ?? [];
+        foreach (is_array($headers) ? $headers : [] as $header) {
+            if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
+                $this->conditions[] = substr($header, strlen('If-None-Match: '));
+            }
         }
 
         if ('POST' === $method) {
