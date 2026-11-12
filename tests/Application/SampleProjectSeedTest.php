@@ -85,8 +85,9 @@ final class SampleProjectSeedTest extends KernelTestCase
         self::assertSame([Provider::Anthropic, Provider::OpenAiCompatible], $this->seededPanelProviders());
         $resolver = $this->bootSeeded()->get(TierResolver::class);
         self::assertInstanceOf(TierResolver::class, $resolver);
+        $expected = [Tier::Strong->value => Provider::Anthropic, Tier::Standard->value => Provider::OpenAiCompatible, Tier::Light->value => Provider::Anthropic];
         foreach (Tier::cases() as $tier) {
-            self::assertContains($resolver->resolve('sample', $tier)->provider, [Provider::Anthropic, Provider::OpenAiCompatible]);
+            self::assertSame($expected[$tier->value], $resolver->resolve('sample', $tier)->provider);
         }
     }
 
