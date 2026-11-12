@@ -194,7 +194,8 @@ final class JourneyAlarmTest extends TestCase
         $result = $alarm->raise(JourneyRun::timedOut(JourneyRunTest::PASS), null);
 
         self::assertSame('filed https://github.com/example/repo/issues/7', $result);
-        self::assertSame('fix(journeys): the journeys run timed out on main', $this->callsOf('create')[0]['arguments'][3]);
+        $create = array_values(array_filter($this->recorded, static fn (array $call): bool => 'create' === ($call['arguments'][1] ?? null)));
+        self::assertSame('fix(journeys): the journeys run timed out on main', $create[0]['arguments'][3]);
     }
 
     public function testAnAnswerOfGhThatIsNoIssueListFailsAndFilesNothing(): void
