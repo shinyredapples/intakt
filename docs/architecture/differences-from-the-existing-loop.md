@@ -8,6 +8,12 @@ Intakt is to replace the existing loop for the owner's own use ([plan](../plan.m
 - **Intakt:** every job (a build, a check, a review) runs in a fresh container through the Docker Engine API, with a read-only root, a work area on tmpfs that is its home and holds its caches, inputs mounted read-only, one output directory read after exit, its own memory and CPU limit and no environment from the orchestrator, so no forge credential or signing key. The container, its output directory and, after a crash, whatever a crashed run left are removed by plain code. Built in `Core/Job` ([Job containers](job-containers.md)); no lane starts a job through it yet.
 - **Why:** nothing a job writes survives it except what it hands back, so there is no state to reset and no denylist to grow.
 
+## No job image without the project's PHP
+
+- **The loop:** a project without its PHP record gets no probes rather than the system's PHP (its `test_entry_harness.py`).
+- **Intakt:** there is no system PHP to fall back to: a project's job image comes from its devcontainer, its Dockerfile or `composer.json`, and when `composer.json` names no PHP version no image is built at all. Every built image is asked for its PHP version and extensions, and one that does not match `composer.json` is refused. Built in `Core/Job` ([Job images](job-images.md)); no build runs in such an image yet.
+- **Why:** the PHP a job runs is a property of the project's image, so it is checked once when the image is built instead of in each step that runs PHP.
+
 ## An egress allowlist per job through its own proxy
 
 - **The loop:** egress is denied by default (its `test_review_gpt_egress.py`).

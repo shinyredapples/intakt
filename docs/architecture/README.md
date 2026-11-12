@@ -8,6 +8,7 @@ Code and conventions:
 - [Sample repository](sample-repository.md)
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
+- [Build clone](build-clone.md)
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
 - [Development diagnostics (Mate)](development-diagnostics.md)
@@ -25,6 +26,7 @@ Running Intakt:
 - [The demo with docker compose](demo-with-docker-compose.md)
 - [Persistence](persistence.md)
 - [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the start check and its reduced mode, the memory-kill cause, and the cleanup after a crash
+- [Job images](job-images.md): a project's job image from its devcontainer, its Dockerfile or one generated from `composer.json`, and the probe that checks its PHP and extensions
 - [Differences from the existing loop](differences-from-the-existing-loop.md): what Intakt deliberately does another way than the loop it replaces, and why
 - [MCP server for the owner](mcp-server.md)
 

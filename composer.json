@@ -27,6 +27,7 @@
     "ext-xml": "*",
     "ext-xmlwriter": "*",
     "ext-zip": "*",
+    "composer/semver": "^3.6",
     "doctrine/doctrine-bundle": "^3.3",
     "doctrine/doctrine-migrations-bundle": "^4.0",
     "doctrine/orm": "^3.7",

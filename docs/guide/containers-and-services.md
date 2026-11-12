@@ -25,11 +25,12 @@ The image is the box's contents: the language, the tools, the package managers, 
 | Source | Example |
 |---|---|
 | your **devcontainer** | `.devcontainer/devcontainer.json` |
-| your **Dockerfile** or compose file | `Dockerfile`, `compose.yaml` |
-| an image **you supply** | a prebuilt image from your registry |
-| an image **Intakt generates** | from what it reads in your package files (`composer.json`, `package.json`, ...) |
+| your **Dockerfile** | `Dockerfile` |
+| an image **Intakt generates** | from what it reads in `composer.json`: the PHP version, the PHP extensions, Composer, and the AI companies' tools at fixed versions |
 
-Images are built once per version of the project and cached, and rebuilt when the files they come from change.
+Building an image this way is built (the `intakt:job:build-image` command), but no job runs in one yet. A job never gets another PHP than the one `composer.json` asks for: without a PHP version there, no image is built at all, and after every build Intakt asks the image's PHP for its version and extensions and refuses an image that does not match.
+
+Planned, not built yet: a compose file and an image you supply as sources, images for other languages (`package.json`, ...), and building once per version of the project, cached, and rebuilt when the files they come from change.
 
 ## A check before every job
 

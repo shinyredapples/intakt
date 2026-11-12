@@ -9,6 +9,7 @@ use Intakt\Gates\HistorySecretsGate;
 use Intakt\Gates\WorkingTreeSecretsGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Depends;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 #[CoversClass(HistorySecretsGate::class)]
@@ -38,19 +39,37 @@ final class HistorySecretsGateTest extends SandboxTestCase
         yield 'a png image' => ['logo.png'];
     }
 
-    #[DataProvider('filesTheScannersDefaultsSkip')]
-    public function testASecretInAFileTheScannersDefaultsSkipFailsTheHistoryScan(string $path): void
+    // Because the gate reports every leak it finds, one change that adds and deletes all these files answers each of them; the skipped folders get a change of their own, since a commit in one stops the gate before it scans.
+    public function testOneChangeThatAddsAndDeletesEveryFileTheScannersDefaultsSkipFailsTheHistoryScan(): string
     {
         $sandbox = $this->startedChange();
-        $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
-        $sandbox->commitAll('feat: add a file');
-        unlink($sandbox->root.'/'.$path);
-        $sandbox->commitAll('fix: remove the file');
+        $paths = array_column([...self::filesTheScannersDefaultsSkip()], 0);
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        foreach ($paths as $path) {
+            $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
+        }
 
-        self::assertTrue($run->failed('secrets-history'), $run->output());
-        self::assertStringContainsString($path, $run->findingsOf('secrets-history'));
+        $sandbox->commitAll('feat: add the files');
+
+        foreach ($paths as $path) {
+            unlink($sandbox->root.'/'.$path);
+        }
+
+        $sandbox->commitAll('fix: remove the files');
+
+        $scan = $sandbox->gateResult(new HistorySecretsGate(), 'main');
+        $findings = implode("\n", $scan->findings);
+
+        self::assertFalse($scan->isPassing(), $findings);
+
+        return $findings;
+    }
+
+    #[DataProvider('filesTheScannersDefaultsSkip')]
+    #[Depends('testOneChangeThatAddsAndDeletesEveryFileTheScannersDefaultsSkipFailsTheHistoryScan')]
+    public function testASecretInAFileTheScannersDefaultsSkipFailsTheHistoryScan(string $path, string $findings): void
+    {
+        self::assertMatchesRegularExpression('~^'.preg_quote($path, '~').':\d+ ~m', $findings);
     }
 
     public function testASecretAddedOnlyInAMergeResolutionAndRemovedLaterFailsTheHistoryScan(): void
@@ -68,7 +87,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/resolution.txt');
         $sandbox->commitAll('fix: remove the resolution file');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('resolution.txt', $run->findingsOf('secrets-history'));
@@ -85,7 +104,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/hidden.dat');
         $sandbox->commitAll('fix: remove the files');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('hidden.txt', $run->findingsOf('secrets-history'));
@@ -103,7 +122,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('settings.txt', 'token='.$this->fakeGithubToken()."\n");
         $sandbox->commitAll('feat: add settings');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('settings.txt', $run->findingsOf('secrets-history'));
@@ -120,7 +139,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('settings.txt', 'token '.$this->fakeGithubToken()."\n");
         $sandbox->commitAll('feat: add the gates');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringNotContainsString('base has no', $run->findingsOf('secrets-history'));
@@ -141,7 +160,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('settings.txt', 'token '.$this->fakeGithubToken()."\n");
         $sandbox->commitAll('feat: add lax rules and a token');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringNotContainsString('base has no', $run->findingsOf('secrets-history'));
@@ -159,7 +178,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('feat: add the gates');
         unlink($sandbox->root.'/.git/objects/'.substr($tree, 0, 2).'/'.substr($tree, 2));
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('cannot read config/gates at the tip of the base', $run->findingsOf('secrets-history'));
@@ -175,25 +194,50 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->write('config/gates/gitleaks.toml', (string) file_get_contents(__DIR__.'/../../config/gates/gitleaks.toml'));
         $sandbox->commitAll('feat: add the configuration');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('base has no config/gates/gitleaks.toml', $run->findingsOf('secrets-history'));
     }
 
-    #[DataProvider('foldersTheScannerSkips')]
-    public function testAFileAddedInAFolderTheScannerSkipsFailsTheHistoryScanEvenWhenRemovedAgain(string $path): void
+    /**
+     * @return array{string, array<string, string>}
+     */
+    public function testOneChangeThatAddsAndDeletesAFileInEveryFolderTheScannerSkipsFailsTheHistoryScan(): array
     {
         $sandbox = $this->startedChange();
-        $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
-        $sandbox->commitAll('feat: add a file');
-        unlink($sandbox->root.'/'.$path);
-        $sandbox->commitAll('fix: remove the file');
+        $addedBy = [];
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        foreach (array_column([...self::foldersTheScannerSkips()], 0) as $path) {
+            $sandbox->write($path, 'token='.$this->fakeGithubToken()."\n");
+            $sandbox->commitAll('feat: add '.$path);
+            $addedBy[$path] = trim($sandbox->git('log', '-1', '--format=%h')->output);
+        }
 
-        self::assertTrue($run->failed('secrets-history'), $run->output());
-        self::assertStringContainsString('folder the scanner skips', $run->findingsOf('secrets-history'));
+        foreach (array_keys($addedBy) as $path) {
+            unlink($sandbox->root.'/'.$path);
+        }
+
+        $sandbox->commitAll('fix: remove the files');
+
+        $scan = $sandbox->gateResult(new HistorySecretsGate(), 'main');
+        $findings = implode("\n", $scan->findings);
+
+        self::assertFalse($scan->isPassing(), $findings);
+
+        return [$findings, $addedBy];
+    }
+
+    /**
+     * @param array{string, array<string, string>} $change
+     */
+    #[DataProvider('foldersTheScannerSkips')]
+    #[Depends('testOneChangeThatAddsAndDeletesAFileInEveryFolderTheScannerSkipsFailsTheHistoryScan')]
+    public function testAFileAddedInAFolderTheScannerSkipsFailsTheHistoryScanEvenWhenRemovedAgain(string $path, array $change): void
+    {
+        [$findings, $addedBy] = $change;
+
+        self::assertStringContainsString('commit '.$addedBy[$path].' adds files in a folder the scanner skips', $findings);
     }
 
     public function testAnInlineAllowDirectiveInACommitOfTheChangeFailsTheHistoryScan(): void
@@ -204,7 +248,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/settings.txt');
         $sandbox->commitAll('fix: remove settings');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=main');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
         self::assertStringContainsString('inline allow directive', $run->findingsOf('secrets-history'));
@@ -231,10 +275,11 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->commitAll('fix: remove settings');
         $sandbox->git('switch', '--quiet', '--create', 'change');
 
-        $run = $sandbox->check('--only=secrets,secrets-history', '--base=main');
+        $tree = $sandbox->runGate(new WorkingTreeSecretsGate(), 'main');
+        $history = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
-        self::assertTrue($run->passed('secrets'), $run->output());
-        self::assertSame('', $run->findingsOf('secrets-history'));
+        self::assertTrue($tree->passed('secrets'), $tree->output());
+        self::assertSame('', $history->findingsOf('secrets-history'));
     }
 
     public function testASecretAddedAndDeletedWithinTheChangeIsFoundInItsHistory(): void
@@ -245,11 +290,12 @@ final class HistorySecretsGateTest extends SandboxTestCase
         unlink($sandbox->root.'/settings.txt');
         $sandbox->commitAll('fix: remove settings');
 
-        $run = $sandbox->check('--only=secrets,secrets-history', '--base=main');
+        $tree = $sandbox->runGate(new WorkingTreeSecretsGate(), 'main');
+        $history = $sandbox->runGate(new HistorySecretsGate(), 'main');
 
-        self::assertTrue($run->passed('secrets'), $run->output());
-        self::assertTrue($run->failed('secrets-history'), $run->output());
-        self::assertStringContainsString('settings.txt', $run->findingsOf('secrets-history'));
+        self::assertTrue($tree->passed('secrets'), $tree->output());
+        self::assertTrue($history->failed('secrets-history'), $history->output());
+        self::assertStringContainsString('settings.txt', $history->findingsOf('secrets-history'));
     }
 
     public function testTheHistoryScanFailsWhenThereIsNoBaseToCompareWith(): void
@@ -258,7 +304,7 @@ final class HistorySecretsGateTest extends SandboxTestCase
         $sandbox->startRepository();
         $sandbox->commitAll('chore: start');
 
-        $run = $sandbox->check('--only=secrets-history', '--base=missing');
+        $run = $sandbox->runGate(new HistorySecretsGate(), 'missing');
 
         self::assertTrue($run->failed('secrets-history'), $run->output());
     }
