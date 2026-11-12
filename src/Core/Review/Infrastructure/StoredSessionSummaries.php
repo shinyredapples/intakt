@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Override;
@@ -23,9 +24,14 @@ final readonly class StoredSessionSummaries implements SessionSummaries
     }
 
     #[Override]
-    public function ofRound(string $roundId): SessionSummary
+    public function ofRound(string $roundId): ?SessionSummary
     {
-        $round = $this->rounds->stored($roundId);
+        try {
+            $round = $this->rounds->stored($roundId);
+        } catch (RoundNotFound) {
+            return null;
+        }
+
         $checking = $this->findings->openFor($round);
 
         return new SessionSummary(

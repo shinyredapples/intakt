@@ -41,6 +41,7 @@ Models and budget:
 - [Vendor](vendor.md): the judge
 - [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
 - [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`
+- [Provider failure cases](provider-failure-cases.md): the scripted runs of plan T25 and how each round ends
 
 Builds:
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
