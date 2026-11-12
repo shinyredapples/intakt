@@ -19,7 +19,7 @@ final readonly class JourneyRun
     ) {
     }
 
-    // A run stopped at the job's limit printed no result line, so its output is kept as it is instead of being read.
+    // A run stopped at the job's limit may have printed no result line, so its output is not read.
     public static function timedOut(string $output): self
     {
         return new self([], $output, true);

@@ -56,7 +56,7 @@ jobs:
           path: ${{ runner.temp }}/journeys.out
   alarm:
     needs: journeys
-    # A run cancelled by hand makes failure() false, so only a timeout of the journeys step gets here as cancelled.
+    # A cancel by hand makes failure() false: only a timeout gets here as cancelled.
     if: failure() && (needs.journeys.outputs.outcome == 'failure' || needs.journeys.outputs.outcome == 'cancelled')
     # GitHub's image has gh; the CI image lacks it.
     runs-on: ubuntu-24.04

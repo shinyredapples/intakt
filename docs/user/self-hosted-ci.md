@@ -18,7 +18,7 @@ A service that runs each job on a new VM and throws the VM away afterwards (for 
 
 These services share their IP addresses among their customers, and Docker Hub allows only a few anonymous downloads per address, so a job can fail to fetch an image. Create a read-only access token on a Docker Hub account and store it, with the account name, as the repository secrets `DOCKERHUB_TOKEN` and `DOCKERHUB_USERNAME`; the jobs then log in before they download. A same-repository pull request's job can read the token, so give it no more than read access to public repositories.
 
-`journeys.yml` runs the journeys on main every night and never on a pull request. To start a run yourself, use the "Run workflow" button of the `journeys` workflow on the Actions tab, or `gh workflow run journeys.yml`. When a journey fails, `alarm` files one urgent task, or updates the one already open.
+`journeys.yml` runs the journeys on main every night and never on a pull request. To start a run yourself, use the "Run workflow" button of the `journeys` workflow on the Actions tab, or `gh workflow run journeys.yml`. When a journey fails, or the run times out, `alarm` files one urgent task, or updates the one already open. A run you cancel files nothing.
 
 ## The runner must be ephemeral
 

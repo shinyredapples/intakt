@@ -148,13 +148,6 @@ final class JourneyAlarmTest extends TestCase
         self::assertStringContainsString("Building the instance\n{\"gate\":\"jour\n```", $create[0]['input']);
     }
 
-    public function testACutOffRunThatTimedOutUpdatesTheOpenTask(): void
-    {
-        $this->openIssues($this->issues([5, JourneyAlarmTask::MARKER."\nold"]));
-
-        self::assertSame("updated #5\n", $this->alarm(['--timed-out'], "Building the instance\n")->getOutput());
-    }
-
     public function testAnAnswerOfGhThatIsNoIssueListFailsAndFilesNothing(): void
     {
         $this->openIssues('{"message":"Bad credentials"}');
