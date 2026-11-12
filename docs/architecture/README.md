@@ -9,6 +9,7 @@ Code and conventions:
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
 - [Build clone](build-clone.md)
+- [Work intake from GitHub issues](work-intake.md): the work source contract, the one listing per tick, eligibility, waits and the pick order
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
 - [Development diagnostics (Mate)](development-diagnostics.md)

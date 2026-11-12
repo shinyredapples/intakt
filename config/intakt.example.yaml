@@ -42,7 +42,8 @@ projects:
         # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
         # the task text is given to every round until the pull request text is read from the forge.
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
-        watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha }
+        # `eligibility_label` (optional, default intakt) is the issue label that lets Intakt build a task; `php bin/console intakt:queue:show alpha` prints the queue.
+        watch: { repository: /path/to/alpha, base: main, task: Review the pull request., github: acme/alpha, eligibility_label: intakt }
     beta:
         # Optional: reviewer-for-loop reviews the existing loop's heads, its verdicts count and it only publishes its verdict on each head
         # (a commit status and a comment); live is the default.
