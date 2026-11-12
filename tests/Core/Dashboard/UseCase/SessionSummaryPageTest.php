@@ -81,16 +81,14 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         ], $this->linesOf($crawler->filter('.log-summary .ls-findings li')));
     }
 
-    public function testEachFindingIdIsAButtonNamingItsFindingUnderTheHighlightController(): void
+    public function testEachFindingIdIsAButtonNamingTheFindingToHighlight(): void
     {
         $this->givenTheRunningRoundRecorded($this->summary());
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame('finding-highlight', $crawler->filter('.log-summary')->attr('data-controller'));
-        $buttons = $crawler->filter('.log-summary .ls-findings li .mono button');
-        self::assertSame(['F1', 'F2', 'F4'], $buttons->each(static fn (Crawler $button): string => (string) $button->attr('data-finding-highlight-id-param')));
-        self::assertSame(['finding-highlight#select'], array_unique($buttons->each(static fn (Crawler $button): string => (string) $button->attr('data-action'))));
+        $buttons = $crawler->filter('.log-summary .ls-findings li .mono button[type="button"]');
+        self::assertSame(['F1', 'F2', 'F4'], $buttons->each(static fn (Crawler $button): string => (string) $button->attr('data-highlight-finding')));
     }
 
     public function testTheTimelineEntryOfAJudgedFindingNamesItsFindingForTheHighlight(): void

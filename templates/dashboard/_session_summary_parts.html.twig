@@ -45,10 +45,10 @@
         {% else %}
         <ul class="ls-list ls-findings">
             {% for finding in summary.checking %}
-            <li><span class="mono"><button type="button" class="linkbtn" data-action="finding-highlight#select" data-finding-highlight-id-param="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">{{ finding.id in resolved ? 'Checked, resolved' : 'Open' }}</span></li>
+            <li><span class="mono"><button type="button" class="linkbtn" data-highlight-finding="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">{{ finding.id in resolved ? 'Checked, resolved' : 'Open' }}</span></li>
             {% endfor %}
             {% for finding in reported %}
-            <li><span class="mono"><button type="button" class="linkbtn" data-action="finding-highlight#select" data-finding-highlight-id-param="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">Reported</span></li>
+            <li><span class="mono"><button type="button" class="linkbtn" data-highlight-finding="{{ finding.id }}">{{ finding.id }}</button></span> <span class="sev">{{ finding.severity.value }}</span> <span class="ls-text">{{ finding.text }}</span> <span class="r">Reported</span></li>
             {% endfor %}
         </ul>
         {% endif %}

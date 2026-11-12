@@ -8,8 +8,11 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -29,6 +32,7 @@ use Twig\Environment;
 #[UsesClass(SessionSummary::class)]
 #[UsesClass(ToolCallCount::class)]
 #[UsesClass(Cost::class)]
+#[UsesClass(Finding::class)]
 final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 {
     public function testThePageRendersTheLedgerStateWhenTheHubCannotAuthorizeAListener(): void
@@ -80,7 +84,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
         self::assertSame(
-            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; holdBackDangerButtons(document); offerSearch(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'))],
+            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { highlightFindings } from '%s'; holdBackDangerButtons(document); offerSearch(document); highlightFindings(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('finding-highlight.js'))],
             $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),
         );
     }
@@ -105,6 +109,34 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('export function offerSearch(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
+    public function testThePlainPageShowsTheFindingIdsOfTheSummaryAsHighlightButtonsWithoutTheImportMap(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act']);
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $finding = new Finding('F1', Severity::P2, 'src/A.php', 1, null, 'Fix it.', FixableBy::Builder, false, null, null);
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [$finding], [], [], false));
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(0, $crawler->filter('script[type="importmap"]'));
+        self::assertSame('F1', $crawler->filter('.log-summary .ls-findings button')->attr('data-highlight-finding'));
+        self::assertCount(1, $crawler->filter('#round-round-1 td[data-finding="F1"]'));
+    }
+
+    public function testTheHighlightScriptThePlainPageImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('finding-highlight.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function highlightFindings(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void

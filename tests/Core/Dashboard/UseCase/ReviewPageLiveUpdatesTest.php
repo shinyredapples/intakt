@@ -363,9 +363,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::none(), [], [], [$reported], [], false)]));
 
-        $button = $updated->filter('#round-round-1-summary-findings .ls-findings button');
-        self::assertSame('finding-highlight#select', $button->attr('data-action'));
-        self::assertSame('F7', $button->attr('data-finding-highlight-id-param'));
+        self::assertSame('F7', $updated->filter('#round-round-1-summary-findings .ls-findings button')->attr('data-highlight-finding'));
     }
 
     // Nothing listens at MERCURE_URL in the test environment, so this is the page of an install whose hub is stopped.
