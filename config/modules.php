@@ -14,7 +14,7 @@ return [
     'Core/Platform',
     'Core/Review',
     'Core/Server',
-    'Core/Shadow',
+    'Core/ReviewerForLoop',
     'Core/Upstream',
     'Core/Watcher',
     'Plugin/Forge',
