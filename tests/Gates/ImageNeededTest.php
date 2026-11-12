@@ -24,6 +24,10 @@ final class ImageNeededTest extends SandboxTestCase
         yield 'a change under .github' => [['.github/workflows/ci.yml'], 'yes'];
         yield 'a root file named like an excluded folder' => [['docs.md'], 'yes'];
         yield 'an excluded folder name deeper down' => [['src/docs/a.md'], 'yes'];
+        yield 'a docs file with a tab in its name' => [["docs/a\tb.md"], 'no'];
+        yield 'a docs file with a newline in its name' => [["docs/a\nsrc/b.md"], 'no'];
+        yield 'a docs file with a non-ASCII name' => [['docs/größe.md'], 'no'];
+        yield 'a src file with a newline before an excluded folder name' => [["src/a\ndocs/b.php"], 'yes'];
     }
 
     /** @param list<string> $paths */

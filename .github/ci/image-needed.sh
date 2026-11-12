@@ -14,11 +14,18 @@ trap 'rm -rf "$work"' EXIT
 
 # Saved first under set -e, so a failing git can never read as "not needed".
 # --no-renames lists a renamed file under its old path too, so moving a file into the build still counts.
-git diff --no-renames --name-only "$base" "$head" > "$work/changed-paths"
+# -z keeps paths unquoted and NUL-separated, so a tab, newline or non-ASCII name is matched as itself.
+git diff -z --no-renames --name-only "$base" "$head" > "$work/changed-paths"
 
 # Only these folders are left out of the image by .dockerignore; an empty change proves nothing, so it builds.
 needed=yes
-if [ -s "$work/changed-paths" ] && ! grep -Ev '^(docs|tests|upstream)/' "$work/changed-paths" > /dev/null; then
+if [ -s "$work/changed-paths" ]; then
   needed=no
+  while IFS= read -r -d '' path; do
+    case "$path" in
+      docs/* | tests/* | upstream/*) ;;
+      *) needed=yes ;;
+    esac
+  done < "$work/changed-paths"
 fi
 echo "$needed"
