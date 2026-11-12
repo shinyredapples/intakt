@@ -39,7 +39,7 @@ final class WorkflowLines
             return WorkflowLine::unreadable($number, $text, 'a line break other than a newline');
         }
         if ($this->isBlockContent($text)) {
-            return WorkflowLine::textOnly($number, $text);
+            return WorkflowLine::blockText($number, $text);
         }
         $indent = $this->indentOf($text);
         $content = rtrim($this->withoutComment(substr($text, $indent)), " \t");

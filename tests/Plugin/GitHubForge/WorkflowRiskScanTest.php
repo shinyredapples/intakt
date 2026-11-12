@@ -160,6 +160,36 @@ final class WorkflowRiskScanTest extends TestCase
         yield 'a flow list' => ['on: [push, workflow_run]'];
         yield 'a key' => ["on:\n  push:\n  issue_comment:\n    types: [created]"];
         yield 'a list item' => ["on:\n  - push\n  - pull_request_target"];
+        yield 'a list item at the key\'s own indentation' => ["on:\n- push\n- pull_request_target"];
+    }
+
+    public function testAListAtItsKeysOwnIndentationEndsAtTheNextKey(): void
+    {
+        self::assertSame([], $this->findings("on:\n- push\n- pull_request\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n    - run: true\n"));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function blockScalarIndicators(): iterable
+    {
+        yield 'literal' => ['|'];
+        yield 'folded and stripped' => ['>-'];
+        yield 'literal and kept' => ['|+'];
+    }
+
+    #[DataProvider('blockScalarIndicators')]
+    public function testASecretInABlockScalarIfAsks(string $indicator): void
+    {
+        self::assertSame(['9 secret'], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    if: ".$indicator."\n      github.ref == 'refs/heads/main' &&\n      secrets.KEY != ''\n"));
+    }
+
+    public function testABlockScalarIfWithoutSecretsIsNotRisky(): void
+    {
+        self::assertSame([], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    if: >-\n      github.ref == 'refs/heads/main'\n    steps:\n      - run: |\n          cat secrets.txt\n"));
+    }
+
+    public function testTheLineAfterABlockScalarIfIsNoPartOfIt(): void
+    {
+        self::assertSame([], $this->findings(self::READ_ONLY."jobs:\n  t:\n    runs-on: ubuntu-latest\n    if: |\n      true\n    steps:\n      - run: cat secrets.txt\n"));
     }
 
     #[DataProvider('triggersWithTheBaseRepositorysRights')]
@@ -197,6 +227,8 @@ final class WorkflowRiskScanTest extends TestCase
         yield 'a line separator' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\u{2028}    runs-on: self-hosted\n", 5];
         yield 'a second document' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n---\njobs: {}\n", 6];
         yield 'a block scalar with an indentation indicator' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |2\n          true\n", 7];
+        yield 'a block scalar on' => ["on: >-\n  push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n", 1];
+        yield 'a block scalar runs-on' =>["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: |\n      ubuntu-latest\n", 5];
         yield 'a dash alone' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      -\n        run: true\n", 7];
         yield 'closing braces inside a string of an expression' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"\${{ format('}}', secrets.DEPLOY_KEY) }}\"\n", 7];
         yield 'closing braces and a placeholder inside a string of an expression' => ["on: push\npermissions: {}\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo \"\${{ format('}}{0}', secrets.DEPLOY_KEY) }}\"\n", 7];

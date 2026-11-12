@@ -12,6 +12,7 @@ final readonly class WorkflowLine
         public string $text,
         public ?WorkflowNode $node,
         public ?string $unreadable,
+        public bool $inBlock = false,
     ) {
     }
 
@@ -23,6 +24,12 @@ final readonly class WorkflowLine
     public static function textOnly(int $number, string $text): self
     {
         return new self($number, $text, null, null);
+    }
+
+    // Kept apart from other text, because a block scalar is the value of the key above it.
+    public static function blockText(int $number, string $text): self
+    {
+        return new self($number, $text, null, null, true);
     }
 
     public static function unreadable(int $number, string $text, string $reason): self

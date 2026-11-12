@@ -15,6 +15,7 @@ final class WorkflowFileScan
 
     /** @var list<array{indent: int, key: string, valued: bool}> */
     private array $keys = [];
+    private bool $inSecretCheckedBlock = false;
     private readonly WorkflowFindings $findings;
     private readonly WorkflowJobs $jobs;
 
@@ -46,6 +47,10 @@ final class WorkflowFileScan
     private function readLine(WorkflowLine $line): void
     {
         $this->checkExpressions($line);
+        $this->inSecretCheckedBlock = $line->inBlock && $this->inSecretCheckedBlock;
+        if ($this->inSecretCheckedBlock) {
+            $this->checkSecret($line->number, $line->text);
+        }
         if (null !== $line->unreadable) {
             $this->findings->report($line->number, WorkflowRiskKind::Unreadable, $line->unreadable);
         }
@@ -83,9 +88,7 @@ final class WorkflowFileScan
 
     private function readNode(int $number, WorkflowNode $node): void
     {
-        while ([] !== $this->keys && array_last($this->keys)['indent'] >= $node->indent) {
-            array_pop($this->keys);
-        }
+        $this->leaveKeysAbove($node);
         if (array_last($this->keys)['valued'] ?? false) {
             $this->findings->report($number, WorkflowRiskKind::Unreadable, 'a line under a key that already has a value');
 
@@ -100,6 +103,17 @@ final class WorkflowFileScan
             return;
         }
         null === $node->key ? $this->readItem($number, $node->value) : $this->readSetting($number, $node);
+    }
+
+    // YAML lets a list sit at its key's own indentation (on: then - pull_request_target), so a keyless item there stays under that key; under a valued key it is refused as a line under a value.
+    private function leaveKeysAbove(WorkflowNode $node): void
+    {
+        while ([] !== $this->keys && array_last($this->keys)['indent'] > $node->indent) {
+            array_pop($this->keys);
+        }
+        if (null !== $node->key && $node->indent === (array_last($this->keys)['indent'] ?? null)) {
+            array_pop($this->keys);
+        }
     }
 
     // A block scalar counts as a value too, because once its text ends a deeper line is no child of its key.
@@ -123,6 +137,7 @@ final class WorkflowFileScan
     {
         if ('if' === $node->key) {
             $this->checkSecret($number, $node->value->raw);
+            $this->inSecretCheckedBlock = $node->value->startsBlockScalar();
         }
         $path = $this->path();
         $depth = count($path);
@@ -139,6 +154,11 @@ final class WorkflowFileScan
 
     private function readTriggers(int $number, WorkflowValue $value): void
     {
+        if ($value->startsBlockScalar()) {
+            $this->findings->report($number, WorkflowRiskKind::Unreadable, 'on is a block scalar');
+
+            return;
+        }
         foreach ($value->listed() as $trigger) {
             $this->readTrigger($number, $trigger);
         }
@@ -165,6 +185,11 @@ final class WorkflowFileScan
     {
         if (str_contains($value->raw, '${{')) {
             $this->findings->report($number, WorkflowRiskKind::Unreadable, 'runs-on comes from a variable or an expression, whose value can change without a commit');
+
+            return;
+        }
+        if ($value->startsBlockScalar()) {
+            $this->findings->report($number, WorkflowRiskKind::Unreadable, 'runs-on is a block scalar');
 
             return;
         }
