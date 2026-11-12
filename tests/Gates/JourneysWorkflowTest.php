@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * @phpstan-type Step array{env?: array<string, string>}
+ * @phpstan-type Step array{env?: array<string, string>, if?: string, uses?: string, with?: array<string, string>}
  * @phpstan-type Job array{permissions?: array<string, string>, needs?: string|list<string>, if?: string, outputs?: array<string, string>, env?: array<string, string>, steps?: list<Step>}
  * @phpstan-type WorkflowFile array{on: array<string, mixed>, permissions: array<string, string>, env?: array<string, string>, jobs: array<string, Job>}
  */
@@ -58,6 +58,18 @@ final class JourneysWorkflowTest extends TestCase
         self::assertSame('journeys', $jobs['alarm']['needs'] ?? null);
         self::assertSame("failure() && (needs.journeys.outputs.outcome == 'failure' || needs.journeys.outputs.outcome == 'cancelled')", $jobs['alarm']['if'] ?? null);
         self::assertSame('${{ steps.journeys.outcome }}', $jobs['journeys']['outputs']['outcome'] ?? null);
+    }
+
+    public function testTheOutputIsUploadedWhenTheJourneysStepFailedOrTimedOut(): void
+    {
+        $uploads = array_values(array_filter(
+            $this->workflow()['jobs']['journeys']['steps'] ?? [],
+            static fn (array $step): bool => 'journeys-output' === ($step['with']['name'] ?? null)
+                && str_starts_with($step['uses'] ?? '', 'actions/upload-artifact@'),
+        ));
+
+        self::assertCount(1, $uploads);
+        self::assertSame("always() && (steps.journeys.outcome == 'failure' || steps.journeys.outcome == 'cancelled')", $uploads[0]['if'] ?? null);
     }
 
     public function testOnlyTheLastAlarmStepHasTheTokenInItsEnvironment(): void
