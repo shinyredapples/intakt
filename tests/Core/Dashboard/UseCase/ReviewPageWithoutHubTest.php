@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\SessionSummaries;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Asset\Packages;
@@ -124,6 +125,6 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertInstanceOf(LedgerReviewPages::class, $reviews);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return new ShowReviewController($reviews, new LivePageRendering($twig, $log));
+        return new ShowReviewController($reviews, new LivePageRendering($twig, $log), self::createStub(SessionSummaries::class));
     }
 }
