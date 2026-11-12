@@ -33,6 +33,12 @@ doctrine:
                 dir: '%kernel.project_dir%/src/Core/Review/Domain'
                 prefix: 'Intakt\Core\Review\Domain'
                 alias: Review
+            GitHubWorkSource:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Plugin/GitHubWorkSource/Domain'
+                prefix: 'Intakt\Plugin\GitHubWorkSource\Domain'
+                alias: GitHubWorkSource
             Watcher:
                 type: attribute
                 is_bundle: false

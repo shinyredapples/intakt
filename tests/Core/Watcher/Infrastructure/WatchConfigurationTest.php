@@ -28,6 +28,20 @@ final class WatchConfigurationTest extends TestCase
         self::assertSame(['alpha' => ['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'github' => 'acme/widgets']], $projects);
     }
 
+    public function testAnEligibilityLabelIsAccepted(): void
+    {
+        $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => 'build']);
+
+        self::assertSame('build', $projects['alpha']['eligibility_label']);
+    }
+
+    public function testABlankEligibilityLabelIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.', 'eligibility_label' => '']);
+    }
+
     #[DataProvider('misspelledRepositories')]
     public function testAGitHubRepositoryThatIsNotOwnerSlashNameIsRefused(string $name): void
     {

@@ -1,0 +1,86 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\GitHubWorkSource;
+
+use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
+use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
+use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
+use Intakt\Tests\Plugin\GitHubForge\AppKey;
+use Intakt\Tests\Plugin\GitHubForge\FreshReadings;
+use Intakt\Tests\Plugin\GitHubForge\RecordedInstallation;
+use LogicException;
+use Psr\Log\NullLogger;
+use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Contracts\HttpClient\ResponseInterface;
+
+// GitHub's issue endpoints as scripted pages, with every request kept, so a test sees which pages a listing read and whether any read was per issue.
+final class RecordedIssueApi
+{
+    /** @var list<string> */
+    public array $requests = [];
+    /** @var array<int, string> pages by number: the body, or an HTTP status as digits */
+    public array $pages = [];
+    public string $etag = 'W/"issues-1"';
+    public bool $notModified = false;
+    public string $editorAnswer = '{"data":{"repository":{"issue":{"author":{"login":"ana"},"editor":null}}}}';
+    /** @var list<string> */
+    public array $conditions = [];
+
+    public function reads(): GitHubIssueReads
+    {
+        $clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $http = new MockHttpClient($this->answer(...), 'https://api.github.com');
+        $identity = new RecordedInstallation('installation-secret')->client();
+        $jwt = new AppJwt('12345', AppKey::generate()->private, $clock);
+        $tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $identity, new NullLogger()), '678', $clock);
+        $expected = ExpectedInstallation::fromSettings('contents:write,pull_requests:write,workflows:write', 'acme/widget,acme/gadget');
+        $readings = FreshReadings::at($clock);
+        $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
+
+        return new GitHubIssueReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
+    }
+
+    public static function fixture(string $name): string
+    {
+        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+
+        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function answer(string $method, string $url, array $options): ResponseInterface
+    {
+        $this->requests[] = $method.' '.$url;
+        $headers = $options['normalized_headers']['if-none-match'][0] ?? null;
+        if (is_string($headers)) {
+            $this->conditions[] = substr($headers, strlen('If-None-Match: '));
+        }
+
+        if ('POST' === $method) {
+            return new MockResponse($this->editorAnswer);
+        }
+
+        if ($this->notModified) {
+            return new MockResponse('', ['http_code' => 304]);
+        }
+
+        $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
+        $body = $this->pages[$page] ?? '[]';
+
+        return 1 === preg_match('/^\d{3}$/', $body) ? new MockResponse('{}', ['http_code' => (int) $body]) : new MockResponse($body, ['response_headers' => ['ETag' => $this->etag]]);
+    }
+}

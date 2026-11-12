@@ -1,0 +1,23 @@
+[
+ {
+  "number": 12,
+  "title": "Add the export",
+  "body": "Export the report.\n\nWaits for #9 and #10\n",
+  "state": "open",
+  "user": {"login": "ana"},
+  "labels": [{"name": "intakt"}, {"name": "priority:high"}],
+  "milestone": {"title": "M7", "due_on": "2026-12-01T08:00:00Z"},
+  "updated_at": "2026-11-10T10:00:00Z"
+ },
+ {
+  "number": 13,
+  "title": "Export the report",
+  "body": null,
+  "state": "open",
+  "user": {"login": "ana"},
+  "labels": [],
+  "milestone": null,
+  "updated_at": "2026-11-10T11:30:00+02:00",
+  "pull_request": {"url": "https://api.github.com/repos/acme/widgets/pulls/13"}
+ }
+]

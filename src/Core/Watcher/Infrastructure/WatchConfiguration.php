@@ -29,6 +29,9 @@ final class WatchConfiguration implements ConfigurationInterface
         $watch->stringNode('github')
             ->validate()->ifTrue(static fn (string $value): bool => 1 !== preg_match(self::GITHUB_REPOSITORY, $value))->thenInvalid('The "github" key must be owner/name.')->end();
 
+        // Optional, because the default family name applies to a project that names none.
+        $watch->stringNode('eligibility_label')->cannotBeEmpty();
+
         return $tree;
     }
 }
