@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Closure;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
@@ -15,7 +16,10 @@ final readonly class GitHubIssues
     private const array TOKENS = ['GH_TOKEN', 'GITHUB_TOKEN'];
     private const int SECONDS = 60;
 
-    public function __construct(private string $repository)
+    /**
+     * @param (Closure(list<string>, string): string)|null $runner
+     */
+    public function __construct(private string $repository, private ?Closure $runner = null)
     {
     }
 
@@ -120,6 +124,14 @@ final readonly class GitHubIssues
             throw new GitHubCallFailed('GH_TOKEN or GITHUB_TOKEN must hold the token, so gh never falls back to a stored login');
         }
 
+        return ($this->runner ?? $this->runProcess(...))($arguments, $input);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function runProcess(array $arguments, string $input): string
+    {
         $process = new Process(['gh', ...$arguments], null, null, $input, self::SECONDS);
 
         try {

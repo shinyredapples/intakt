@@ -80,17 +80,14 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertEquals([new RoundOpened($round->id()->toRfc4122(), $round->project())], $this->fixture->bus->announced);
     }
 
-    public function testARoundWhoseMessagesCannotAllBeQueuedIsNotAnnounced(): void
+    public function testAnOpenedRoundIsAnnouncedBeforeAnyOfItsReviewerMessages(): void
     {
-        $queue = new RecordingBus();
+        $this->fixture->start(3);
 
-        try {
-            $this->fixture->startOn(new RefusingQueue($queue), 3);
-            self::fail('The refused dispatch was swallowed.');
-        } catch (RuntimeException) {
-        }
-
-        self::assertSame([], $queue->announced);
+        self::assertSame(
+            [RoundOpened::class, ReviewWithReviewer::class, ReviewWithReviewer::class, ReviewWithReviewer::class],
+            array_map(static fn (object $message): string => $message::class, $this->fixture->bus->dispatched),
+        );
     }
 
     /**
