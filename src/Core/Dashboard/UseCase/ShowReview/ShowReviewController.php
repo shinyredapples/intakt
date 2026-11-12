@@ -54,7 +54,6 @@ final readonly class ShowReviewController
         return array_values(array_map(static fn (ReviewedRound $reviewed): string => MercureRoundUpdates::topicOf($reviewed->round), $unfinished));
     }
 
-    // Only the active round has a live log to pin the summary under.
     private function summaryOfTheActiveRound(Review $review): ?SessionSummary
     {
         $active = $review->activeRound();
