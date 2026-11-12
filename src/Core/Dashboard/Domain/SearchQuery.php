@@ -13,9 +13,9 @@ final readonly class SearchQuery
 
     public function __construct(string $text)
     {
-        // Scrubbed first, because the address may carry bytes that are not UTF-8 and the word split refuses them.
-        $this->text = trim(mb_scrub($text));
-        $words = preg_split('/\s+/u', mb_strtolower($this->text), flags: PREG_SPLIT_NO_EMPTY);
+        // Scrubbed first, as the address may carry bytes that are not UTF-8; trim() would keep a no-break or em space.
+        $this->text = preg_replace('/^[\s\x00\p{Z}]+|[\s\x00\p{Z}]+$/u', '', mb_scrub($text)) ?? '';
+        $words = preg_split('/[\s\p{Z}]+/u', mb_strtolower($this->text), flags: PREG_SPLIT_NO_EMPTY);
         $this->words = false === $words ? [] : $words;
     }
 

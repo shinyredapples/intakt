@@ -12,11 +12,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Ai\Contract\TierResolver;
-use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
-use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
-use Intakt\Core\Budget\Contract\StartGuard;
-use Intakt\Core\Budget\Domain\EveryAccountShadowGuard;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -49,7 +44,6 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
-use Intakt\Core\Review\UseCase\ReadVerdicts\ShadowRounds;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
@@ -63,13 +57,11 @@ use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRoundHandler;
-use Intakt\Core\Review\UseCase\RunReviewRound\ShadowRoundHold;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Core\Shadow\Contract\ProjectModes;
 use Intakt\Core\Shadow\Infrastructure\ConfiguredProjectModes;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Tests\Application\EmptyDatabase;
-use Intakt\Tests\Core\Budget\ScriptedAccountGuard;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -92,8 +84,6 @@ final readonly class RoundFixture
     public const string TASK = 'Add the thing.';
     public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
-
-    private const array TIERS = ['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]];
 
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
@@ -146,33 +136,9 @@ final readonly class RoundFixture
         return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
     }
 
-    public function startHandlerOn(MessageBusInterface $queue, StartGuard $guard = new ScriptedAccountGuard(), TierResolver $tiers = new ConfiguredTierResolver(self::TIERS, [])): RunReviewRoundHandler
+    public function startHandlerOn(MessageBusInterface $queue): RunReviewRoundHandler
     {
-        $ledger = new RoundLedger($this->ledger, $this->modes, $this->serializer);
-
-        return new RunReviewRoundHandler($this->modes, $this->shadowHold($guard, $tiers, $ledger), new RoundOpening($this->rounds($this->entities), $ledger, $queue));
-    }
-
-    // The panel's tier with one substitute on another provider, so a test sees whether the hold looks at the provider a reviewer may answer on.
-    public static function tiersSubstitutedBy(Provider $provider): TierResolver
-    {
-        $tiers = self::TIERS;
-        $tiers['alpha']['tiers']['standard']['substitutes'] = [['provider' => $provider->value, 'model' => 'other']];
-
-        return new ConfiguredTierResolver($tiers, []);
-    }
-
-    // A light tier for the judge with its substitutes, so a test sees whether the hold looks at the judge's providers.
-    public static function tiersJudgedOn(Provider $provider, Provider ...$substitutes): TierResolver
-    {
-        $tiers = self::TIERS;
-        $tiers['alpha']['tiers']['light'] = [
-            'provider' => $provider->value,
-            'model' => 'small',
-            'substitutes' => array_values(array_map(static fn (Provider $substitute): array => ['provider' => $substitute->value, 'model' => 'other'], $substitutes)),
-        ];
-
-        return new ConfiguredTierResolver($tiers, []);
+        return new RunReviewRoundHandler(new RoundOpening($this->rounds($this->entities), new RoundLedger($this->ledger, $this->modes, $this->serializer), $queue));
     }
 
     public function startFromSource(ChangeSource $source): string
@@ -193,22 +159,7 @@ final readonly class RoundFixture
 
     public function verdictsOf(VerdictsOfRound $query): RoundVerdicts
     {
-        return $this->verdictsReadWith($this->modes, $query);
-    }
-
-    // The modes come with the read, so a test can switch a project's mode between recording its verdicts and counting them.
-    public function verdictsReadWith(ProjectModes $modes, VerdictsOfRound $query): RoundVerdicts
-    {
-        return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $this->ledger, $this->ledgerPayloads()))($query);
-    }
-
-    // A reader with its own entity manager, because a worker commits the first reviewer's verdict right after the reader's ledger read, the order in which a commit lands between the two reads of the query.
-    public function verdictsReadWhileAVerdictCommitsAfterTheLedgerRead(ProjectModes $modes, VerdictsOfRound $query): RoundVerdicts
-    {
-        $reader = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
-        $ledger = new AfterLedgerRead($this->ledger, fn () => $this->deliver($this->bus->messages[0], new ScriptedVendor()));
-
-        return new VerdictsOfRoundHandler($reader, new StoredVerdicts($this->serializer), new ShadowRounds($modes, $ledger, $this->ledgerPayloads()))($query);
+        return new VerdictsOfRoundHandler($this->entities, new StoredVerdicts($this->serializer))($query);
     }
 
     /**
@@ -255,7 +206,7 @@ final readonly class RoundFixture
     // The fixture's one lock store, because the workers of one install share theirs and a worker on its own store would never find the publication taken.
     public function liveProgress(EntityManagerInterface $entities): LiveRoundProgress
     {
-        return new LiveRoundProgress($this->rounds($entities), $this->updates, $this->locks);
+        return new LiveRoundProgress($this->rounds($entities), $this->updates, $this->locks, new StopRequests($this->ledger, $this->ledgerPayloads()));
     }
 
     // A test that stops here has a worker killed right after it took the reviewer, because that is the row a kill leaves behind.
@@ -321,17 +272,8 @@ final readonly class RoundFixture
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
         $ledger = new RoundLedger(new InMemoryLedger(), $this->modes, $this->serializer);
-        $hold = $this->shadowHold(new ScriptedAccountGuard(), new ConfiguredTierResolver(self::TIERS, []), $ledger);
 
-        return new RunReviewRoundHandler($this->modes, $hold, new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
-    }
-
-    // The accounts hold a second provider, so a substitute on it has an account the hold can look at.
-    private function shadowHold(StartGuard $guard, TierResolver $tiers, RoundLedger $ledger): ShadowRoundHold
-    {
-        $accounts = new ConfiguredAccounts([Provider::Anthropic->value => ['default', 'team'], Provider::OpenAi->value => ['default']]);
-
-        return new ShadowRoundHold(new EveryAccountShadowGuard($guard, $accounts), $ledger, $tiers);
+        return new RunReviewRoundHandler(new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
     }
 
     public function findingStore(): StoredFindings

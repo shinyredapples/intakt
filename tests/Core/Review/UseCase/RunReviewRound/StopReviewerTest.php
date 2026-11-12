@@ -9,6 +9,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Domain\ReviewerState;
@@ -94,6 +95,27 @@ final class StopReviewerTest extends KernelTestCase
 
         self::assertSame(['approve'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
         self::assertCount(1, $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
+    }
+
+    public function testTheProgressPublishedAfterAStopShowsTheReviewerStopped(): void
+    {
+        $message = $this->started();
+        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+
+        $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
+
+        self::assertSame([$message->reviewerId => FinishedState::Stopped], array_last($this->fixture->updates->progress)?->finished);
+    }
+
+    public function testTheProgressPublishedAfterAVerdictThatFollowedAnEarlierStopShowsTheVerdict(): void
+    {
+        $message = $this->started();
+        $this->record(LedgerEventKind::ReviewerStopRequested, $message);
+        $this->record(LedgerEventKind::ReviewerStopped, $message);
+
+        $this->fixture->deliver($message, $this->agentAnswering(self::APPROVE));
+
+        self::assertSame([$message->reviewerId => FinishedState::Verdict], array_last($this->fixture->updates->progress)?->finished);
     }
 
     public function testAStopPressedDuringARetryWaitStopsTheRetriedRun(): void

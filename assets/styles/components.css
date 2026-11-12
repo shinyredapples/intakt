@@ -440,3 +440,17 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .spec .cards-row { grid-template-columns: 1fr; }
   .comp-nav a { display: inline-flex; align-items: center; min-height: 44px; }
 }
+
+/* Current state block and the folded timeline of a review */
+.state-block { margin: var(--s24) 0; padding: var(--s16) var(--s24); border-radius: var(--r-card); background: var(--tint); }
+.sb-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8) var(--s12); margin-bottom: var(--s12); }
+.sb-head h2 { margin: 0; }
+.sb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--s24); }
+.sb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s8); }
+.sb-finding { display: flex; gap: var(--s8); align-items: baseline; margin-bottom: var(--s8); padding: var(--s8) var(--s12); border-radius: var(--r-btn); background: var(--raised); color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.sb-finding:hover { background: var(--page); }
+.sev { flex: none; padding: 2px var(--s8); border-radius: var(--r-chip); background: var(--tint); font-size: var(--t13); font-weight: 600; }
+.timeline-title { margin: var(--s32) 0 var(--s8); }
+details.ev > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s8) var(--s12); cursor: pointer; }
+details.ev > summary h2 { margin: 0; font-size: var(--t15); }
+details.ev > summary time { margin-left: auto; color: var(--muted); font-size: var(--t13); }

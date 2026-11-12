@@ -6,7 +6,6 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Budget\Contract\StartDecision;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -58,18 +57,12 @@ final readonly class RoundLedger
         ));
     }
 
-    // No round exists yet, so the event names the change and the number asked for; the decision is the reason, in the words the guard uses.
-    public function shadowRoundHeld(RunReviewRound $command, Provider $provider, StartDecision $decision): void
-    {
-        $this->append(LedgerEventKind::ShadowRoundHeld, new ShadowRoundHeld($command->target->subject->project, $command->round->change, $provider, $decision->value));
-    }
-
     public function reviewerStarted(RoundReviewer $reviewer): void
     {
         $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer)));
     }
 
-    // The mode goes with each verdict, because a verdict recorded as shadow must never count for a merge, even after the project is switched to live.
+    // The mode goes with each verdict, because the mode of its moment is lost once the project is switched; the review page labels shadow verdicts from it.
     public function verdictReceived(RoundReviewer $reviewer, Verdict $verdict): void
     {
         $this->append(LedgerEventKind::VerdictReceived, new VerdictReceived(
@@ -121,7 +114,7 @@ final readonly class RoundLedger
         return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
-    private function append(LedgerEventKind $kind, ReviewStarted|ShadowRoundHeld|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
     {
         $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, 'json')));
 
