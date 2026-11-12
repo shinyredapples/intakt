@@ -192,7 +192,7 @@ final class CheckHandBackSecretsTest extends TestCase
         $result = $this->check($this->history->bundle('main..task'), $credential);
 
         self::assertEquals(new RefusedHandBack(HandBackRefusal::HoldsCredential), $result);
-        self::assertStringNotContainsString($credential, $result->reason());
+        self::assertStringNotContainsString($credential, HandBackRefusal::HoldsCredential->reason());
     }
 
     public function testAMountedCredentialInAFileNameIsRefused(): void

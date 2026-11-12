@@ -26,7 +26,9 @@ final readonly class StrippedCommits
         $redaction = $this->redactionOf($credentials);
 
         foreach ($history->newCommits($head) as $commit) {
-            $stripped = $this->stripped($history, $commit, $replaced, $redaction);
+            $raw = $history->git->exactOutput($history->repository, ['cat-file', 'commit', $commit]);
+            $rewritten = $this->rewritten($raw, $replaced, $redaction);
+            $stripped = null === $rewritten ? $this->unchanged($history, $commit, $raw) : $this->written($history, $rewritten);
 
             if (null === $stripped) {
                 return new RefusedHandBack(HandBackRefusal::Malformed);
@@ -52,29 +54,30 @@ final readonly class StrippedCommits
     /**
      * @param array<string, string> $replaced
      * @param array<string, string> $redaction
-     *
-     * @throws HandBackNotChecked
      */
-    private function stripped(GivenHistory $history, string $commit, array $replaced, array $redaction): ?string
+    private function rewritten(string $raw, array $replaced, array $redaction): ?string
     {
-        $git = $history->git;
-        $repository = $history->repository;
-        $raw = $git->exactOutput($repository, ['cat-file', 'commit', $commit]);
         [$headers, $message] = explode("\n\n", $raw, 2) + [1 => ''];
         $headerLines = explode("\n", $headers);
         $reparented = $this->redactedHeaders($this->reparented($headerLines, $replaced), $redaction);
         $strippedMessage = strtr(AttributionLines::strippedFrom($message), $redaction);
 
-        // Every new commit passes git's own format check, because unbundling checks none and a crafted bundle may hold a commit git would never write.
         if ($reparented === $headerLines && $strippedMessage === $message) {
-            return null === $git->answerWithInput($repository, ['hash-object', '-t', 'commit', '--stdin'], $raw) ? null : $commit;
+            return null;
         }
 
-        return $git->answerWithInput(
-            $repository,
-            ['hash-object', '-t', 'commit', '-w', '--stdin'],
-            implode("\n", $this->unsigned($reparented))."\n\n".$strippedMessage,
-        );
+        return implode("\n", $this->unsigned($reparented))."\n\n".$strippedMessage;
+    }
+
+    // Every new commit passes git's own format check, because unbundling checks none and a crafted bundle may hold a commit git would never write.
+    private function unchanged(GivenHistory $history, string $commit, string $raw): ?string
+    {
+        return null === $history->git->answerWithInput($history->repository, ['hash-object', '-t', 'commit', '--stdin'], $raw) ? null : $commit;
+    }
+
+    private function written(GivenHistory $history, string $rewritten): ?string
+    {
+        return $history->git->answerWithInput($history->repository, ['hash-object', '-t', 'commit', '-w', '--stdin'], $rewritten);
     }
 
     /**
