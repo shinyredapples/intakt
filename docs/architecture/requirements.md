@@ -53,7 +53,7 @@ The `phpstan` gate also runs `php` as `PHP_BINARY`: it starts the checked tree's
 | `gh`, `grep`, `sort` (coreutils, `-V`), `docker` with `buildx` | `.github/ci/release-latest.sh`, the `latest` job of `release-image.yml`, GitHub's `ubuntu-24.04` only | the release tags as they are now (`gh api`), the highest of them in version order, `docker buildx imagetools inspect` (is its image on the registry) and `imagetools create` (point `latest` at it) | on GitHub's `ubuntu-24.04` |
 | `tee` | the `journeys` job's journeys step | keeping the output of `bin/check --journeys` in the runner's temporary folder for the `alarm` job (with `set -o pipefail`, so the step still fails with the journeys) | yes |
 | `gh` (GitHub's CLI) | the `alarm` job of `journeys.yml`, GitHub's `ubuntu-24.04` only | mounted read-only into the CI image at `/usr/local/bin/gh` for `bin/journey-alarm`, which files or updates the urgent task with it; the CI image has no `gh` | on GitHub's runners |
-| `docker build`, the `buildx` plugin, network access to Docker Hub, and what `docker/smoke-test.sh` calls on the host ([below](#to-smoke-test-the-container-image): `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `dirname`, `env`, `timeout`, `sleep`) | the `image` job | building the app image and smoke-testing it; `docker buildx imagetools inspect` asks the registry for the base image tag's digest | yes |
+| `docker build`, the `buildx` plugin, network access to Docker Hub, and what `docker/smoke-test.sh` and `docker/verify-first-start.sh` call on the host ([below](#to-smoke-test-the-container-image): `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `dirname`, `env`, `timeout`, `sleep`; and `openssl`, [below](#to-check-the-demos-first-start)) | the `image` job | building the app image once, smoke-testing it and checking the demo's first start on it; `docker buildx imagetools inspect` asks the registry for the base image tag's digest | yes |
 | `docker run` security options | the `check` and `journeys` jobs | `--security-opt seccomp=.github/ci/seccomp-userns.json` and `systempaths=unconfined` everywhere, `apparmor=unconfined` on GitHub-hosted runners only, so the gate tests can create a user namespace and mount `/proc`; a self-hosted host needs unprivileged user namespaces and no AppArmor profile blocking mount | yes |
 | `sudo sysctl` | the `check` and `journeys` jobs, GitHub-hosted runners only | `kernel.apparmor_restrict_unprivileged_userns=0` | on GitHub's runners |
 | `sh`, `sha256sum`, `cut` | `build-image.sh` | the image tag from a hash of the Dockerfile, `composer.json` and the check ini | yes |
@@ -75,7 +75,7 @@ Inside the image, `.github/ci/run-on-copy.sh` uses `php`, `cp` and `composer` (a
 
 ## To check the demo's first start
 
-`docker/verify-first-start.sh` (`.github/workflows/first-start.yml`) calls `docker` (CLI and a running daemon), `bash`, `openssl` (random secrets) and `sleep` on the host that runs it.
+`docker/verify-first-start.sh <image>` (the `image` job of `.github/workflows/ci.yml`, on the image that job built) calls `docker` (CLI and a running daemon), `bash`, `openssl` (random secrets) and `sleep` on the host that runs it; it builds no image. The tests gate runs it with a fake `docker` and `openssl` first on the `PATH` (`tests/Core/Dashboard/Infrastructure/VerifyFirstStartScriptTest.php`).
 
 ## Called when a tier maps to `claude_code`
 
