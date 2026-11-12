@@ -77,7 +77,7 @@ final class StreamedAnswer extends AbstractStreamListener
 
         try {
             foreach ($stream->getContent() as $delta) {
-                $started = $started || !($delta instanceof TokenUsageInterface || $delta instanceof MetadataDelta);
+                $started = $started || !$delta instanceof TokenUsageInterface && !$delta instanceof MetadataDelta;
 
                 yield $delta;
             }
