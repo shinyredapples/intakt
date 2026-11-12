@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\ReviewerForLoop\Domain;
 
-use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\ReviewerForLoop\Contract\LoopFinding;
 use NoDiscard;
 
@@ -14,8 +13,8 @@ final readonly class ReviewComparison
     public const int LINE_WINDOW = 3;
 
     /**
-     * @template L of LoopFinding|Finding
-     * @template I of LoopFinding|Finding
+     * @template L of LoopFinding
+     * @template I of LoopFinding
      *
      * @param list<list<L>> $loopReviews
      * @param list<list<I>> $intaktReviews
@@ -29,7 +28,7 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template T of LoopFinding|Finding
+     * @template T of LoopFinding
      *
      * @param list<list<T>> $reviews
      *
@@ -47,7 +46,7 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template T of LoopFinding|Finding
+     * @template T of LoopFinding
      *
      * @param non-empty-list<array{int, T}> $sameLine
      * @param list<MergedSpot<T>>           $spots
@@ -85,7 +84,7 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template T of LoopFinding|Finding
+     * @template T of LoopFinding
      *
      * @param list<list<T>> $reviews
      *
@@ -100,7 +99,7 @@ final readonly class ReviewComparison
             }
         }
 
-        $spot = static fn (LoopFinding|Finding $finding): array => [$finding->file ?? '', $finding->line ?? 0];
+        $spot = static fn (LoopFinding $finding): array => [$finding->file, $finding->line];
         usort($tagged, static fn (array $a, array $b): int => $spot($a[1]) <=> $spot($b[1]));
 
         $groups = [];
@@ -119,8 +118,8 @@ final readonly class ReviewComparison
     }
 
     /**
-     * @template L of LoopFinding|Finding
-     * @template I of LoopFinding|Finding
+     * @template L of LoopFinding
+     * @template I of LoopFinding
      *
      * @param list<MergedSpot<L>> $loopSpots
      * @param list<MergedSpot<I>> $intaktSpots
@@ -142,12 +141,12 @@ final readonly class ReviewComparison
             unset($intaktSpots[$index]);
         }
 
-        return [$matches, $loopOnly, array_map(static fn (MergedSpot $spot): LoopFinding|Finding => $spot->finding, array_values($intaktSpots))];
+        return [$matches, $loopOnly, array_map(static fn (MergedSpot $spot): LoopFinding => $spot->finding, array_values($intaktSpots))];
     }
 
     /**
-     * @template L of LoopFinding|Finding
-     * @template I of LoopFinding|Finding
+     * @template L of LoopFinding
+     * @template I of LoopFinding
      *
      * @param MergedSpot<L>             $loopSpot
      * @param array<int, MergedSpot<I>> $intaktSpots

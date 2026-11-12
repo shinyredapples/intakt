@@ -433,7 +433,7 @@ T44 to T46 run in M6 alongside T37, T38, T40 and T43 (owner decision 2026-11-09,
 
 ## M7 Builder half
 
-T44 to T46 run in M6 and T39 moved here (D5 of #1434) (owner decision 2026-11-09, to start the builder chain early); M7 holds T47 to T69, and their sections stay here.
+T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early). T39 moved here under D5 of #1434: the loop's GPT reviewer is the second vote until the takeover. M7 holds T39 and T47 to T69, and their sections stay here.
 
 ### T39 A Codex subscription reviewer
 - **Description:** A reviewer role runs through the Codex platform bridge on a subscription login: the login file is kept per account in the orchestrator, refreshed there, and given to the call read-only; the model and effort are pinned in config. The vendor's structured errors (usage limit, model not available for the plan, login lost) become an account cooldown or an account error with one owner notice, never a failed review or `changes`; the measured use it reports is recorded per account. The package is a new dependency the owner approves.
@@ -672,8 +672,8 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 ## Parallel paths (M6 to M8)
 
-- From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T39 after T33 and T14.
-- The first weeks of the weekly report (after T43) runs while M7 is built.
+- From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37.
+- The first weeks of the weekly report (after T43) run while M7 is built.
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
-- M7: T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
+- M7: T39 after T33 and T14, in parallel with T47 and T54; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
 - M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.

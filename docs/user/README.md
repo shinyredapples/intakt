@@ -402,7 +402,7 @@ Read the events back, oldest first, with:
 php bin/console intakt:ledger:events
 ```
 
-It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event.
+It prints one line per event (the moment in UTC, the id, the kind and the payload) and ends with a count, for example `2 events`. The payload is printed exactly as stored, console color tags included. The ledger has no notion of a run yet, so the command lists every stored event of a kind this version knows; rows of a removed kind stay stored but are not shown or counted.
 
 ## Job containers
 
