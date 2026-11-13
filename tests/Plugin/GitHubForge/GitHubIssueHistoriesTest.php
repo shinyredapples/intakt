@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
@@ -11,6 +12,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\RepositoryAddress;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -169,6 +171,31 @@ final class GitHubIssueHistoriesTest extends TestCase
         $this->expectException(ForgeReadFailed::class);
 
         $api->histories()->of('alpha', 12);
+    }
+
+    public function testAnExhaustedGraphqlPoolAnsweredWith200HoldsTheNextReadUntilTheReset(): void
+    {
+        $api = $this->answering('history_rate_limited.json');
+        $api->graphqlHeaders = ['X-RateLimit-Remaining' => '0', 'X-RateLimit-Limit' => '5000', 'X-RateLimit-Reset' => '1795604400', 'X-RateLimit-Resource' => 'graphql'];
+        $histories = $api->histories();
+
+        $first = $this->limitOf($histories);
+        $second = $this->limitOf($histories);
+
+        self::assertSame(1795604400, $first->resetsAt->getTimestamp());
+        self::assertSame(1795604400, $second->resetsAt->getTimestamp());
+        self::assertCount(1, $api->graphqlRequests);
+    }
+
+    private function limitOf(GitHubIssueHistories $histories): ForgeRateLimited
+    {
+        try {
+            $histories->of('alpha', 12);
+        } catch (ForgeRateLimited $limited) {
+            return $limited;
+        }
+
+        throw new LogicException('The read was expected to be rate limited.');
     }
 
     private function answering(string $fixture): RecordedIssueApi

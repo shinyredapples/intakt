@@ -167,6 +167,43 @@ final class RateLimitReadingsTest extends TestCase
         $this->process()->refuseWhileLimited('678', 'graphql');
     }
 
+    public function testAnExhaustedGraphqlPoolAnsweredWith200PausesGraphqlCalls(): void
+    {
+        $limited = $this->limitOf($this->process(), 200, $this->exhausted('graphql'));
+
+        self::assertSame($this->clock->now()->getTimestamp() + 3600, $limited->resetsAt->getTimestamp());
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->process()->refuseWhileLimited('678', 'graphql');
+    }
+
+    public function testAnExhaustedGraphqlPoolAnsweredWith200DoesNotPauseRestCalls(): void
+    {
+        $this->limitOf($this->process(), 200, $this->exhausted('graphql'));
+
+        $this->process()->refuseWhileLimited('678');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    public function testAGraphqlAnswerWith200AndARetryAfterButBudgetLeftIsNoRateLimit(): void
+    {
+        $reset = (string) ($this->clock->now()->getTimestamp() + 600);
+
+        $this->process()->observe('678', 200, ['retry-after' => ['60'], 'x-ratelimit-remaining' => ['3'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => ['graphql']]);
+        $this->process()->refuseWhileLimited('678', 'graphql');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    public function testARestAnswerWith200ThatSpentTheLastCallIsNoRateLimit(): void
+    {
+        $this->process()->observe('678', 200, $this->exhausted('core'));
+        $this->process()->refuseWhileLimited('678');
+
+        self::assertSame(0, $this->process()->latest('678')?->remaining);
+    }
+
     public function testAnUpgradeKeepsAnUnexpiredPauseStoredUnderTheEarlierKey(): void
     {
         $this->pauseStoredByAnEarlierVersion();

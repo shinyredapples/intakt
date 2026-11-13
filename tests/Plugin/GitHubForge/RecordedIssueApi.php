@@ -41,6 +41,8 @@ final class RecordedIssueApi
     public string $graphql = '{}';
     /** @var list<string> */
     public array $graphqlRequests = [];
+    /** @var array<string, string> */
+    public array $graphqlHeaders = [];
     private BudgetReserve $reserve;
 
     public function reads(): GitHubIssueReads
@@ -103,7 +105,7 @@ final class RecordedIssueApi
     {
         $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
 
-        return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql);
+        return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql, ['response_headers' => $this->graphqlHeaders]);
     }
 
     /**

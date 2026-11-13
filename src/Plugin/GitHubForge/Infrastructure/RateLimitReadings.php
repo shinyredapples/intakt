@@ -65,7 +65,7 @@ final readonly class RateLimitReadings
             $this->remember($installationId, $reading);
         }
 
-        $until = $this->limitedUntil($status, $headers);
+        $until = $this->limitedUntil($pool, $status, $headers);
         if ($until instanceof DateTimeImmutable) {
             throw new ForgeRateLimited($this->pause($installationId, $pool, $until));
         }
@@ -101,14 +101,15 @@ final readonly class RateLimitReadings
     /**
      * @param array<string, list<string>> $headers
      */
-    private function limitedUntil(int $status, array $headers): ?DateTimeImmutable
+    private function limitedUntil(string $pool, int $status, array $headers): ?DateTimeImmutable
     {
-        // Any other 403 stays an ordinary refusal, because a missing permission answers it too.
-        if (!in_array($status, self::LIMITED_STATUSES, true)) {
+        // Any other 403 stays an ordinary refusal, because a missing permission answers it too. GitHub answers an exhausted GraphQL pool with 200 and a RATE_LIMITED error, so there an empty budget counts at any status; an answer that spent the last point is read again after the reset, because its headers do not tell it apart from the refusal.
+        $limitedStatus = in_array($status, self::LIMITED_STATUSES, true);
+        if (!$limitedStatus && self::GRAPHQL !== $pool) {
             return null;
         }
 
-        if (isset($headers['retry-after'])) {
+        if ($limitedStatus && isset($headers['retry-after'])) {
             return $this->ahead($this->retryAfter($headers['retry-after'][0] ?? ''));
         }
 
