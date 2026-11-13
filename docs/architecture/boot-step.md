@@ -1,6 +1,6 @@
 # Boot step
 
-The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md): nothing calls it before a review yet, and a failing head is not sent back yet; those parts come later.
+The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md). `BootGate` ([below](#the-gate-decision)) decides from it whether a head goes back, but nothing calls the gate before a review yet, so no head is sent back yet; acting on the decision in the watcher comes later.
 
 ## Contract
 
@@ -17,9 +17,29 @@ In `src/Core/Review/Contract/`:
 
 `BootResults::ofMain(BootKey, ChangeSource)` in `src/Core/Watcher/UseCase/WatchPullRequests/` (part 2) answers main's boot result from the table `watcher_boot_result` and boots only on a miss. `BootKey` is the project, main's commit and a tool fingerprint (a string the caller passes; nothing computes one yet), so main's result is reused while both stay the same and recomputed when either changes. On a miss it asks the query bus with `BootHarness`, stores the row of a `BootRecord` (the state, the reason and the moment, from `ClockInterface`) and appends the ledger event `boot_result_computed` (project, main commit, tool fingerprint, state, reason); a cache hit appends nothing. A `crashed` outcome is returned but not stored, because it is the boot step's fault and not main's, so the next ask boots again; a query bus that throws is turned into a `crashed` outcome with the exception's class and message. Before the reason is stored, logged in the ledger or returned, bytes that are not UTF-8 are replaced with `?` and it is redacted through the `Redactor` as a log line is, so a token in a tool's output or an exception message is neither stored nor shown.
 
-The record is read through the entity manager but written with one insert on the connection, inside a savepoint, never with a flush: the default entity manager is the ledger's, and a failed flush would close it. When two workers miss the same key at once, the one whose insert loses (a unique constraint violation) still returns its own outcome. Nothing in `ofMain` throws: a cache that cannot be read is treated as a miss, a result that cannot be stored or a ledger line that cannot be written is logged as an error, and the computed outcome is returned in every case. Nothing calls `BootResults` yet: acting on the result in the watcher is a later part.
+The record is read through the entity manager but written with one insert on the connection, inside a savepoint, never with a flush: the default entity manager is the ledger's, and a failed flush would close it. When two workers miss the same key at once, the one whose insert loses (a unique constraint violation) still returns its own outcome. Nothing in `ofMain` throws: a cache that cannot be read is treated as a miss, a result that cannot be stored or a ledger line that cannot be written is logged as an error, and the computed outcome is returned in every case. `BootResults::ofHead(BootAt, CommitId main)` boots a head with `BootHarnessAtMain` through the same dispatch, crash and scrubbing steps, and stores and records nothing.
 
 Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`persistence` group) and `tests/Core/Watcher/Domain/BootKeyTest.php`.
+
+## The gate decision
+
+`BootGate::admit(WatchedProject, HeadDecision)` in `src/Core/Watcher/UseCase/WatchPullRequests/` takes the decision of a head whose CI is green and answers the decision the head gets after its boot. It runs for every watched project:
+
+1. it asks the query bus for `MainCommit(ChangeSource)`, the commit the base branch points at, answered by the local git forge's `MainCommitHandler` (`git show-ref` of the base branch in the project's `repository` path);
+2. it asks `BootResults::ofMain` for main's result under the `BootKey` of the project, that commit and the constant `BootGate::TOOL_FINGERPRINT` (nothing computes a fingerprint of the boot tools yet, so one constant stands for them);
+3. only when main is `booted`, it boots the head with `BootResults::ofHead`.
+
+| main | head | decision |
+| --- | --- | --- |
+| booted | failed | `HeadDecision::sentBackFor(FailedBoot)`: `HeadAdmission::FailedBoot` with the redacted reason in `FailedBoot`; it starts no round, like red CI |
+| booted | booted or crashed | the green decision unchanged: the round may start |
+| failed or crashed | not booted | the green decision unchanged: the gate is off for the head |
+
+A project without `bin/instance` has the gate off: main's boot crashes because main has no harness (before any `composer install`), and a crash is not stored, so each ask reads main's tree for `bin/instance` again. Any `Throwable` from the gate (also a `MainCommit` answer that is not a commit) is logged as the error `The boot gate failed, so the review starts without it.` and the green decision is returned, so a crashing gate never stops the review. `WatcherLedger` writes a `FailedBoot` decision as `head_red`, as it does a red head.
+
+Nothing calls `BootGate` yet: the watcher's tick does not boot heads, so no head is sent back and no stale mark is sent; that wiring is a later part of plan task T58.
+
+Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootGateTest.php` (`persistence` group), `tests/Core/Watcher/Domain/HeadDecisionTest.php` and the main commit case of `tests/Plugin/LocalGitForge/BootHeadHandlersTest.php`.
 
 ## How a commit boots
 
