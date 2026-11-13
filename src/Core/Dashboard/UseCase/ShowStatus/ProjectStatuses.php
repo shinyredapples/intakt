@@ -89,7 +89,7 @@ final readonly class ProjectStatuses
     // A handed-over head is a Needs-you item instead, because the watcher no longer retries it on its own.
     /**
      * @param list<array{project: string, change: string, decision: 'pending'|'red', read_again_at: ?string}> $waitingHeads
-     * @param list<FailingHead>                                                                                $failing
+     * @param list<FailingHead>                                                                               $failing
      *
      * @return array<string, list<array<string, mixed>>>
      */
