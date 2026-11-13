@@ -36,7 +36,6 @@
 <section aria-labelledby="board-h">
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
     {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. #}
-    {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
     <div class="board">
     {% for column in columns %}
         {% set cards = board.cardsIn(column) %}
