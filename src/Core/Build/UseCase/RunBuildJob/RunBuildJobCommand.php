@@ -48,18 +48,14 @@ final readonly class RunBuildJobCommand
 
     private function jobOf(RunBuildJobInput $input): BuildJob
     {
-        $brief = new BuildBrief($this->filesystem->readFile($input->task), array_values($input->decision), null);
+        $brief = new BuildBrief($this->filesystem->readFile($input->task), $input->decision, null);
 
         return new BuildJob($input->project, $input->clone, $input->branch, $brief, $this->tierOf($input->tier), $input->image);
     }
 
     private function tierOf(string $value): Tier
     {
-        return Tier::tryFrom($value) ?? throw new InvalidArgumentException(sprintf(
-            'The tier "%s" is not one of %s.',
-            $value,
-            implode(', ', array_map(static fn (Tier $tier): string => $tier->value, Tier::cases())),
-        ));
+        return Tier::tryFrom($value) ?? throw new InvalidArgumentException(sprintf('The tier "%s" is not one of %s.', $value, implode(', ', array_map(static fn (Tier $tier): string => $tier->value, Tier::cases()))));
     }
 
     private function failed(SymfonyStyle $io, BuildJobOutcome $outcome): int

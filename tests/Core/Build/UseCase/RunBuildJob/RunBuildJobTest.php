@@ -111,7 +111,7 @@ final class RunBuildJobTest extends TestCase
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "PLANT-task"), $this->promptSeen);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task'), $this->promptSeen);
         self::assertFileDoesNotExist($this->ran->inputs[1]->hostPath);
     }
 
@@ -146,7 +146,7 @@ final class RunBuildJobTest extends TestCase
     {
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
         $first = $this->ran?->id->value;
-        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo',$this->folder.'/clone', 'task', new BuildBrief('again', [], null), Tier::Light, 'img'));
+        (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('again', [], null), Tier::Light, 'img'));
         $second = $this->ran?->id->value;
         (void) $this->runBuilds(new JobOutput([]))->run(new BuildJob('demot', $this->folder.'/clone', 'ask', new BuildBrief('x', [], null), Tier::Light, 'img'));
 
@@ -160,8 +160,7 @@ final class RunBuildJobTest extends TestCase
         $runner = $this->createMock(JobRunner::class);
         $runner->expects(self::never())->method('run');
 
-        $this->expectException(BuilderNotOnClaudeCode::class);
-        $this->expectExceptionMessage('Project "demo" maps the "standard" tier to provider "anthropic"');
+        $this->expectExceptionObject(new BuilderNotOnClaudeCode('demo', Tier::Standard, Provider::Anthropic));
 
         (void) $this->useCase($runner, new ResolvedModel(Provider::Anthropic, 'claude-sonnet-5-5'))->run($this->job());
     }
@@ -203,7 +202,7 @@ final class RunBuildJobTest extends TestCase
     public function testAnOutputTheRunnerRefusesIsNoResult(): void
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willThrowException(JobOutputRefused::tooLarge("handback.bundle", 16));
+        $runner->method('run')->willThrowException(JobOutputRefused::tooLarge('handback.bundle', 16));
 
         $outcome = $this->useCase($runner, new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'))->run($this->job());
 
@@ -233,6 +232,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence()), $runner, new PhpGate(), new Filesystem(), realpath(self::SCRIPT) ?: self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence()), $runner, new PhpGate(), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }

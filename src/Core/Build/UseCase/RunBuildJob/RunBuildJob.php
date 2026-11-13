@@ -39,14 +39,14 @@ final readonly class RunBuildJob
 
     public const string LOG = 'build.log';
 
-    // The Claude Code CLI's only host, and the builder installs the project's dependencies from the gate's registries.
+    // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.
     private const string VENDOR_HOST = 'api.anthropic.com';
 
     private const int MEMORY_BYTES = 4 * 1024 ** 3;
 
     private const float CPUS = 2.0;
 
-    // A bound on the whole session until the turn limit and the allowance bound it (plan task T49, part 2).
+    // An hour for the whole session, because no turn limit or allowance bounds it yet (plan task T49, part 2).
     private const int SECONDS = 3600;
 
     public function __construct(
@@ -79,7 +79,7 @@ final readonly class RunBuildJob
         $prompt = $this->promptFileFor($job);
 
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $clone, $prompt, $model)));
+            return $this->outcomeOf($this->ranJob($this->specOf($job, $model, [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)])));
         } finally {
             $this->filesystem->remove($prompt);
         }
@@ -127,13 +127,16 @@ final readonly class RunBuildJob
         }
     }
 
-    private function specOf(BuildJob $job, string $clone, string $prompt, string $model): JobSpec
+    /**
+     * @param list<JobInput> $inputs
+     */
+    private function specOf(BuildJob $job, string $model, array $inputs): JobSpec
     {
         return new JobSpec(
             $this->idOf($job),
             $job->image,
             ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model],
-            [new JobInput($clone, self::CLONE), new JobInput($prompt, self::PROMPT)],
+            $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),
         );
@@ -167,7 +170,11 @@ final readonly class RunBuildJob
         $text = $output->contents(self::PULL_REQUEST_TEXT);
 
         if (null === $bundle) {
-            return new BuildJobOutcome(BuildVerdict::NoCommits, pullRequestText: $text, log: $log);
+            return new BuildJobOutcome(
+                BuildVerdict::NoCommits,
+                pullRequestText: $text,
+                log: $log,
+            );
         }
 
         if (null === $text) {
