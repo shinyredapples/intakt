@@ -18,22 +18,34 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackCommand;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBackInput;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\FailedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\HandBackRoute;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\HandBackRoutes;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\RouteHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\HandBack\RecordingLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(CheckHandBackCommand::class)]
 #[UsesClass(CheckHandBackInput::class)]
 #[UsesClass(CheckHandBack::class)]
+#[UsesClass(RouteHandBack::class)]
+#[UsesClass(HandBackRoutes::class)]
+#[UsesClass(HandBackRoute::class)]
+#[UsesClass(FailedHandBack::class)]
 #[UsesClass(BundleFile::class)]
 #[UsesClass(GivenHistory::class)]
 #[UsesClass(IncomingObjects::class)]
@@ -56,9 +68,15 @@ final class CheckHandBackCommandTest extends TestCase
 
     private BuildHistory $history;
 
+    private RecordingLedger $ledger;
+
+    private LockFactory $locks;
+
     protected function setUp(): void
     {
         $this->history = new BuildHistory();
+        $this->ledger = new RecordingLedger();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     protected function tearDown(): void
@@ -72,7 +90,7 @@ final class CheckHandBackCommandTest extends TestCase
         $this->history->push('task');
         $head = $this->history->commit('Second');
 
-        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle($base.'..task')]);
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle($base.'..task'), 'pull-request-text' => $this->text()]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame("accepted {$head}\nbase {$base}\nrewritten 0\n", $tester->getDisplay());
@@ -82,7 +100,7 @@ final class CheckHandBackCommandTest extends TestCase
     {
         $head = $this->history->commit('First');
 
-        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task')]);
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $this->text()]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame("accepted {$head}\nbase none\nrewritten 0\n", $tester->getDisplay());
@@ -92,10 +110,47 @@ final class CheckHandBackCommandTest extends TestCase
     {
         $this->history->commit('First');
 
-        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main', 'task')]);
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main', 'task'), 'pull-request-text' => $this->text()]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('refused: '.HandBackRefusal::TouchesMain->reason(), $this->flat($tester));
+        self::assertStringContainsString('refused, sent back to the builder: '.HandBackRefusal::TouchesMain->reason(), $this->flat($tester));
+    }
+
+    public function testATokenInThePullRequestTextIsSentBackWithTheReasonAndWithoutItsValue(): void
+    {
+        $key = 'sk_live_'.bin2hex(random_bytes(12));
+        $this->history->commit('First');
+
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $this->text('Uses the key '.$key)]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('refused, sent back to the builder: '.HandBackRefusal::TextHoldsSecret->reason(), $this->flat($tester));
+        self::assertStringNotContainsString($key, $tester->getDisplay());
+    }
+
+    public function testASecondFailureInARowPrintsTheHandOver(): void
+    {
+        $this->history->commit('First');
+        $input = ['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main', 'task'), 'pull-request-text' => $this->text()];
+
+        $this->executed($input);
+        $tester = $this->executed($input);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('refused, handed over: '.HandBackRefusal::TouchesMain->reason(), $this->flat($tester));
+    }
+
+    public function testAPullRequestTextThatCannotBeReadFailsWithItsPath(): void
+    {
+        $this->history->commit('First');
+        $missing = $this->history->folder.'/missing.md';
+
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $missing]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        // Without the folder, because the error block wraps a long path.
+        self::assertStringContainsString('missing.md" cannot be read', $this->flat($tester));
+        self::assertSame([], $this->ledger->kinds());
     }
 
     public function testAMergeOfMainPassesOnlyWithTheOption(): void
@@ -108,8 +163,8 @@ final class CheckHandBackCommandTest extends TestCase
         $this->history->merge('main');
         $bundle = $this->history->bundle('task', '^main');
 
-        $without = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $bundle]);
-        $with = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $bundle, '--merge-main' => true]);
+        $without = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $bundle, 'pull-request-text' => $this->text()]);
+        $with = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $bundle, 'pull-request-text' => $this->text(), '--merge-main' => true]);
 
         self::assertSame(Command::FAILURE, $without->getStatusCode());
         self::assertSame(Command::SUCCESS, $with->getStatusCode());
@@ -117,7 +172,7 @@ final class CheckHandBackCommandTest extends TestCase
 
     public function testABranchThatIsMainFailsWithTheReason(): void
     {
-        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'main', 'bundle' => $this->history->file('')]);
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'main', 'bundle' => $this->history->file(''), 'pull-request-text' => $this->text()]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('is main itself', $this->flat($tester));
@@ -125,7 +180,7 @@ final class CheckHandBackCommandTest extends TestCase
 
     public function testAFolderThatIsNoRepositoryFailsWithTheReason(): void
     {
-        $tester = $this->executed(['repository' => $this->history->folder, 'branch' => 'task', 'bundle' => $this->history->file('')]);
+        $tester = $this->executed(['repository' => $this->history->folder, 'branch' => 'task', 'bundle' => $this->history->file(''), 'pull-request-text' => $this->text()]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('could not be checked', $this->flat($tester));
@@ -138,7 +193,7 @@ final class CheckHandBackCommandTest extends TestCase
         $_SERVER[self::CREDENTIAL] = $credential;
 
         try {
-            $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), '--credential-env' => [self::CREDENTIAL]]);
+            $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $this->text(), '--credential-env' => [self::CREDENTIAL]]);
         } finally {
             unset($_SERVER[self::CREDENTIAL]);
         }
@@ -152,7 +207,7 @@ final class CheckHandBackCommandTest extends TestCase
     {
         $this->history->commit('First');
 
-        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), '--credential-env' => [self::CREDENTIAL]]);
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $this->text(), '--credential-env' => [self::CREDENTIAL]]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('the credential variable "'.self::CREDENTIAL.'" is unset or empty', $this->flat($tester));
@@ -163,10 +218,10 @@ final class CheckHandBackCommandTest extends TestCase
         $key = 'sk_live_'.bin2hex(random_bytes(12));
         $this->history->commit('Use the key '.$key);
 
-        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task')]);
+        $tester = $this->executed(['repository' => $this->history->mirror, 'branch' => 'task', 'bundle' => $this->history->bundle('main..task'), 'pull-request-text' => $this->text()]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
-        self::assertStringContainsString('refused: '.HandBackRefusal::HoldsSecret->reason(), $this->flat($tester));
+        self::assertStringContainsString('refused, sent back to the builder: '.HandBackRefusal::HoldsSecret->reason(), $this->flat($tester));
         self::assertStringNotContainsString($key, $tester->getDisplay());
     }
 
@@ -175,12 +230,22 @@ final class CheckHandBackCommandTest extends TestCase
      */
     private function executed(array $input): CommandTester
     {
+        $scan = new BundleSecretScan('gitleaks');
+        $checks = new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), $scan);
         $application = new Application();
-        $application->addCommand(new CheckHandBackCommand(new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks'))));
+        $application->addCommand(new CheckHandBackCommand(new RouteHandBack($checks, $scan, new HandBackRoutes($this->ledger, $this->locks)), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:hand-back:check'));
         $tester->execute($input);
 
         return $tester;
+    }
+
+    private function text(string $content = 'Adds the change.'): string
+    {
+        $path = $this->history->folder.'/'.bin2hex(random_bytes(4)).'.md';
+        new Filesystem()->dumpFile($path, $content);
+
+        return $path;
     }
 
     private function flat(CommandTester $tester): string
