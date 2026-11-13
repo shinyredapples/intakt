@@ -24,7 +24,7 @@
         {% set folds = column.startsCollapsed %}
         {% set slug = column.value|lower|replace({' ': '-'}) %}
         {% set count = board.countOf(column) %}
-        {# assets/column-fold.js opens and collapses it; below 761 px the stylesheet keeps every column open, so Backlog and Done are not collapsed on phones. #}
+        {# Backlog and Done stay open on phones because DESIGN.md asks for it. #}
         <section class="col{{ needs ? ' col-needs' }}{{ folds ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}">
             {# The name is built from hidden words around the visible ones rather than an aria-label, so it contains what a speech user sees and says (WCAG 2.5.3). #}
             {% if folds %}<button type="button" class="col-fold" aria-expanded="false" aria-controls="cards-{{ slug }}"><span><span class="sr-only">Show </span>{{ column.value }}</span>{{ include('dashboard/components/count.html.twig', {n: count}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span></button>{% endif %}

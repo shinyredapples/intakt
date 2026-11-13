@@ -243,6 +243,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .col-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--s8); }
 .col-fold { display: none; }
 .col-hide { margin-left: auto; height: 28px; }
+.col-hide:focus-visible { outline-offset: -2px; }
 /* Only from 761 px, because Backlog and Done are not collapsed on phones (DESIGN.md, Phone). */
 @media (min-width: 761px) {
   .board .col.collapsed { flex: 0 0 108px; min-width: 108px; }
