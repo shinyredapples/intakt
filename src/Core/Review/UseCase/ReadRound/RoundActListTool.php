@@ -17,7 +17,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 
 #[McpTool(
     name: 'review_act_list',
-    description: 'Read the act list of a round: the findings the judge marked for the builder to fix. Empty and not judged until the judge has answered.',
+    description: 'Read the act list of a round: the findings for the builder to fix (every P1 and P2 finding and the P3 findings the judge marked act). Empty and not judged until the judge has answered.',
     annotations: new ToolAnnotations(readOnlyHint: true, destructiveHint: false),
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]
