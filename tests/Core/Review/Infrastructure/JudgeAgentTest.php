@@ -18,9 +18,9 @@ use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use ReflectionProperty;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
-use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Uid\UuidV7;
 

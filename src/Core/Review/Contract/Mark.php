@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-// A P1 or P2 finding is act whatever the judge answers; defer and reject apply to a P3 only.
+// Defer and reject apply to a P3 only, because a P1 or P2 must always reach the builder.
 enum Mark: string
 {
     case Act = 'act';

@@ -14,7 +14,7 @@ use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Override;
 
-// Reviews as the given vendor does but marks every finding the judge is given reject.
+// Marks every finding reject, because a round must show that a rejected P1 stays on the act list.
 final readonly class RejectingJudge implements Vendor
 {
     public function __construct(private Vendor $reviewers)
