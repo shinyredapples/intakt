@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Plugin\GitHubForge\Domain\CiDefinition;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowBlockValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFile;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowInlineValue;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowReader;
 use Intakt\Plugin\GitHubForge\UseCase\ListCiChanges\ListCiChangesCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -18,6 +21,9 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ListCiChangesCommand::class)]
 #[UsesClass(CiDefinition::class)]
 #[UsesClass(WorkflowFile::class)]
+#[UsesClass(WorkflowReader::class)]
+#[UsesClass(WorkflowInlineValue::class)]
+#[UsesClass(WorkflowBlockValue::class)]
 final class ListCiChangesCommandTest extends TestCase
 {
     public function testEachChangedPathAWorkflowRunsIsListed(): void
@@ -51,7 +57,7 @@ final class ListCiChangesCommandTest extends TestCase
     private function execute(array $paths, array $workflows): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ListCiChangesCommand(new CiDefinition(), new Filesystem()));
+        $application->addCommand(new ListCiChangesCommand(new CiDefinition(new WorkflowReader(new WorkflowInlineValue(), new WorkflowBlockValue())), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:forge:ci-paths'));
         $tester->execute(['paths' => $paths, '--workflow' => $workflows]);
 

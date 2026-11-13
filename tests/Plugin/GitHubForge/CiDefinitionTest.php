@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Plugin\GitHubForge\Domain\CiDefinition;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowBlockValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFile;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowInlineValue;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowReader;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -13,6 +16,9 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(CiDefinition::class)]
 #[UsesClass(WorkflowFile::class)]
+#[UsesClass(WorkflowReader::class)]
+#[UsesClass(WorkflowInlineValue::class)]
+#[UsesClass(WorkflowBlockValue::class)]
 final class CiDefinitionTest extends TestCase
 {
     private const string WORKFLOW = "jobs:\n  t:\n    steps:\n      - run: ./scripts/test.sh --all\n      - run: docker run image sh /workspace/tools/lint\n";
@@ -130,9 +136,23 @@ final class CiDefinitionTest extends TestCase
 
     public function testEveryChangedPathIsACiChangeWhenAWorkflowCannotBeRead(): void
     {
-        $paths = new CiDefinition()->changedAmong([new WorkflowFile('.github/workflows/ci.yml', self::WORKFLOW), new WorkflowFile('.github/workflows/other.yml', null)], ['src/Foo.php']);
+        $paths = $this->ciDefinition()->changedAmong([new WorkflowFile('.github/workflows/ci.yml', self::WORKFLOW), new WorkflowFile('.github/workflows/other.yml', null)], ['src/Foo.php']);
 
         self::assertSame(['src/Foo.php'], $paths);
+    }
+
+    public function testAnEscapedUsesKeyMakesEveryPathACiChange(): void
+    {
+        $workflow = "on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - \"u\\u0073es\": ./tools/build\n";
+
+        self::assertSame(['tools/build/helper.php', 'src/Foo.php'], $this->ciPathsOf($workflow, ['tools/build/helper.php', 'src/Foo.php']));
+    }
+
+    public function testAnEscapedFileNameInARunValueMakesEveryPathACiChange(): void
+    {
+        $workflow = "on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \"./scripts/te\\u0073t.sh\"\n";
+
+        self::assertSame(['scripts/test.sh', 'src/Foo.php'], $this->ciPathsOf($workflow, ['scripts/test.sh', 'src/Foo.php']));
     }
 
     /**
@@ -152,6 +172,11 @@ final class CiDefinitionTest extends TestCase
      */
     private function ciPathsOf(string $workflow, array $changed): array
     {
-        return new CiDefinition()->changedAmong([new WorkflowFile('.github/workflows/ci.yml', $workflow)], $changed);
+        return $this->ciDefinition()->changedAmong([new WorkflowFile('.github/workflows/ci.yml', $workflow)], $changed);
+    }
+
+    private function ciDefinition(): CiDefinition
+    {
+        return new CiDefinition(new WorkflowReader(new WorkflowInlineValue(), new WorkflowBlockValue()));
     }
 }

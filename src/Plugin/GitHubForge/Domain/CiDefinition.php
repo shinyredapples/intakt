@@ -20,6 +20,11 @@ final readonly class CiDefinition
     private const string LOCAL_ACTION = './';
     private const string PLAIN_FOLDER = '#^(?:(?!\.\.?/)[\w.@-]+/)*$#';
 
+    public function __construct(
+        private WorkflowReader $reader,
+    ) {
+    }
+
     /**
      * @param list<WorkflowFile> $workflows
      * @param list<string>       $changedPaths
@@ -45,11 +50,23 @@ final readonly class CiDefinition
     // Paths are not resolved against a working directory or a cd, so naming wins over any folder; a workflow that cannot be read may name any path.
     private function runs(WorkflowFile $workflow, string $path): bool
     {
-        if (null === $workflow->content) {
+        if (null === $workflow->content || !$this->isReadable($workflow->content)) {
             return true;
         }
 
         return $this->runsAsLocalAction($workflow->content, $path) || $this->namesTheFileOf($workflow->content, $path);
+    }
+
+    // The rules below read the text as written, so a form the strict line reader refuses (an escaped key or value, an anchor, a tag) could spell a path the text does not show.
+    private function isReadable(string $content): bool
+    {
+        try {
+            $this->reader->workflow($content);
+        } catch (WorkflowFormNotRead) {
+            return false;
+        }
+
+        return true;
     }
 
     // Every file under a local action's folder, because its action.yml may run any of them without the workflow naming it; case is ignored as for file names.
