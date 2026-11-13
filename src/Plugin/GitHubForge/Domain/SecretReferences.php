@@ -6,7 +6,7 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 
 final readonly class SecretReferences
 {
-    // GitHub reads context names in any case; the job's own token is the one secret inside the envelope.
+    // Matched in any case, because GitHub reads context names in any case; the job's own token is the one secret the envelope allows.
     private const string SECRET = '/\bsecrets\b(?!\s*\.\s*github_token\b)(?:\s*\.\s*[A-Za-z0-9_-]+)?/i';
 
     /**

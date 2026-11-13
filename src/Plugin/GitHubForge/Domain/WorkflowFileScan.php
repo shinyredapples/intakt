@@ -6,23 +6,25 @@ namespace Intakt\Plugin\GitHubForge\Domain;
 
 use NoDiscard;
 
-// The envelope a change may push in without the owner: hosted runners, a read-only token, no secrets, no trigger with the base repository's rights.
+// A change may push without the owner only inside this envelope, because a pushed workflow runs before any review: hosted runners, a read-only token, no secrets, no trigger with the base repository's rights.
 final readonly class WorkflowFileScan
 {
     public function __construct(
+        private WorkflowInlineValue $inline,
+        private WorkflowBlockValue $blocks,
         private TokenPermissions $permissions,
         private SecretReferences $secrets,
     ) {
     }
 
     /**
-     * @return list<WorkflowFinding> empty when the workflow stays inside the envelope
+     * @return list<WorkflowFinding>
      */
     #[NoDiscard]
     public function scan(string $workflowText): array
     {
         try {
-            $workflow = new WorkflowLines($workflowText)->workflow();
+            $workflow = new WorkflowLines($workflowText, $this->inline, $this->blocks)->workflow();
         } catch (WorkflowFormNotRead $unread) {
             return [new WorkflowFinding(WorkflowRisk::Unreadable, $unread->lineNumber, $unread->getMessage())];
         }
@@ -72,7 +74,7 @@ final readonly class WorkflowFileScan
     {
         $jobs = $workflow->entry('jobs');
         if ($jobs === null || !$jobs->value instanceof WorkflowMapping) {
-            return [new WorkflowFinding(WorkflowRisk::Unreadable, $jobs?->line ?? $workflow->line, 'the workflow names no jobs')];
+            return [new WorkflowFinding(WorkflowRisk::Unreadable, $jobs->line ??$workflow->line, 'the workflow names no jobs')];
         }
 
         $inherited = $workflow->entry('permissions');
