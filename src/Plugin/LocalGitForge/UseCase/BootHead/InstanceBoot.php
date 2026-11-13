@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\BootHead;
 
+use Closure;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -28,11 +29,14 @@ final readonly class InstanceBoot
     // bin/instance writes its status on descriptor 3 only; moved to stdout and its log to stderr, so no log line can pass for the status.
     private const array STATUS_ON_STDOUT = ['sh', '-c', 'exec "$@" 3>&1 1>&2', 'sh'];
 
-    // An allowlist, so neither the install nor the commit's code sees a token of the install that boots it; COMPOSER_AUTH is left out for that reason.
+    // An allowlist, so neither the install nor the commit's code gets a token of the booting install from its environment; COMPOSER_AUTH is left out for that reason.
+    // HOME and COMPOSER_HOME are left out too, because Composer loads auth.json from COMPOSER_HOME or, without it, from under HOME, and a plugin of the commit reads those tokens through Composer's config: both processes get a scratch home instead. COMPOSER_CACHE_DIR stays, so the package cache is shared when the install sets one (Composer never derives it from a scratch home).
     private const array INHERITED_VARIABLES = [
-        'PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR', 'COMPOSER_HOME', 'COMPOSER_CACHE_DIR',
+        'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR', 'COMPOSER_CACHE_DIR',
         'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
     ];
+
+    private const string SCRATCH_HOME_PREFIX = 'intakt-boot-home-';
 
     // Every failure of the step itself is a crash outcome, because a boot step that throws would stop the review it only gates.
     public function of(BootAt $target, CommitId $harness): BootOutcome
@@ -41,9 +45,26 @@ final readonly class InstanceBoot
             $forge = $this->forgeFor($target->source);
             $instance = $forge->fileAt($harness, self::HARNESS);
 
-            return $forge->withSnapshotOf($target->commit, fn (string $snapshot): BootOutcome => $this->bootIn($snapshot, $instance));
+            return $forge->withSnapshotOf(
+                $target->commit,
+                fn (string $snapshot): BootOutcome => $this->withScratchHome(fn (string $home): BootOutcome => $this->bootIn($snapshot, $instance, $home)),
+            );
         } catch (Throwable $crash) {
             return BootOutcome::crashed($crash->getMessage());
+        }
+    }
+
+    // One empty home per boot, removed with the snapshot, so what Composer or the commit's code writes there (an auth.json, a config) outlives neither the boot nor reaches the next one. The commit's code still runs as the install's user without a filesystem sandbox, so a plugin that computes the real home can read it; only what the environment and Composer hand over is removed here, the sandbox is a later part.
+    private function withScratchHome(Closure $work): BootOutcome
+    {
+        $filesystem = new Filesystem();
+        $home = sys_get_temp_dir().'/'.self::SCRATCH_HOME_PREFIX.bin2hex(random_bytes(8));
+        $filesystem->mkdir($home, 0o700);
+
+        try {
+            return $work($home);
+        } finally {
+            $filesystem->remove($home);
         }
     }
 
@@ -53,9 +74,9 @@ final readonly class InstanceBoot
     }
 
     // The harness is placed after the install, so nothing the install writes into bin can replace it.
-    private function bootIn(string $snapshot, FileContent $harness): BootOutcome
+    private function bootIn(string $snapshot, FileContent $harness, string $home): BootOutcome
     {
-        $install = $this->run(self::INSTALL, $snapshot, self::INSTALL_SECONDS);
+        $install = $this->run(self::INSTALL, $snapshot, $home, self::INSTALL_SECONDS);
 
         if (!$install->isSuccessful()) {
             return BootOutcome::failed('composer install failed: '.trim($install->getErrorOutput()));
@@ -67,7 +88,7 @@ final readonly class InstanceBoot
 
         $this->placeHarness($snapshot, $harness);
 
-        return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, self::BOOT_SECONDS));
+        return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, $home, self::BOOT_SECONDS));
     }
 
     // A link is refused, because writing the harness through it would change a file outside the snapshot.
@@ -89,9 +110,9 @@ final readonly class InstanceBoot
     /**
      * @param list<string> $command
      */
-    private function run(array $command, string $snapshot, int $seconds): Process
+    private function run(array $command, string $snapshot, string $home, int $seconds): Process
     {
-        $process = new Process($command, $snapshot, $this->environment(), timeout: $seconds);
+        $process = new Process($command, $snapshot, $this->environment($home), timeout: $seconds);
         $process->run();
 
         return $process;
@@ -100,7 +121,7 @@ final readonly class InstanceBoot
     /**
      * @return array<string, string|false>
      */
-    private function environment(): array
+    private function environment(string $home): array
     {
         // Process adds every variable of getenv() and $_ENV that is not named here, so each of them is named as unset.
         $environment = array_fill_keys(array_map(strval(...), array_keys(getenv() + $_ENV)), false);
@@ -113,7 +134,7 @@ final readonly class InstanceBoot
             }
         }
 
-        return $environment;
+        return [...$environment, 'HOME' => $home, 'COMPOSER_HOME' => $home];
     }
 
     private function outcomeOf(Process $boot): BootOutcome

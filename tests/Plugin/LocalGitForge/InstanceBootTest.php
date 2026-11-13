@@ -23,6 +23,7 @@ use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(InstanceBoot::class)]
 #[UsesClass(BootAt::class)]
@@ -59,6 +60,9 @@ final class InstanceBootTest extends TestCase
         file_put_contents('php://fd/3', '{"status":"ready"}'."\n");
         PHP;
 
+    // Not shaped like a real token, so the secret scan has nothing to find, while the plugin's report still cannot hold it by chance.
+    private const string PROBE_TOKEN = 'probe-token-of-the-booting-install';
+
     private TemporaryRepository $repository;
     private CommitId $main;
 
@@ -72,6 +76,7 @@ final class InstanceBootTest extends TestCase
 
     protected function tearDown(): void
     {
+        new Filesystem()->remove([$this->repository->path.'-composer-home', $this->repository->path.'-home']);
         $this->repository->remove();
     }
 
@@ -166,6 +171,42 @@ final class InstanceBootTest extends TestCase
         self::assertSame(BootState::Booted, $outcome->state);
         self::assertSame('false', file_get_contents($seen));
         unlink($seen);
+    }
+
+    public function testAComposerPluginOfTheHeadDoesNotSeeTheComposerAuthTokenOfTheBootingInstallsComposerHome(): void
+    {
+        $composerHome = $this->repository->path.'-composer-home';
+        $this->writeComposerAuth($composerHome);
+
+        $saw = $this->githubOauthAPluginSeesWith(['COMPOSER_HOME' => $composerHome]);
+
+        self::assertStringNotContainsString(self::PROBE_TOKEN, $saw, 'the plugin saw: '.$saw);
+    }
+
+    public function testAComposerPluginOfTheHeadDoesNotSeeTheComposerAuthTokenUnderTheBootingInstallsHome(): void
+    {
+        $home = $this->repository->path.'-home';
+        $this->writeComposerAuth($home.'/.config/composer');
+
+        $saw = $this->githubOauthAPluginSeesWith(['HOME' => $home, 'COMPOSER_HOME' => false, 'XDG_CONFIG_HOME' => false]);
+
+        self::assertStringNotContainsString(self::PROBE_TOKEN, $saw, 'the plugin saw: '.$saw);
+    }
+
+    public function testTheBootRunsInAScratchHomeThatIsRemovedWithTheSnapshot(): void
+    {
+        $seen = $this->repository->path.'-plugin-saw';
+        $head = $this->commitPlugin("file_put_contents('".$seen."', json_encode([getenv('HOME'), getenv('COMPOSER_HOME')]));");
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Booted, $outcome->state, $outcome->reason);
+        [$home, $composerHome] = (array) json_decode((string) file_get_contents($seen), true);
+        unlink($seen);
+        self::assertIsString($home);
+        self::assertSame($home, $composerHome);
+        self::assertNotSame(getenv('HOME'), $home);
+        self::assertDirectoryDoesNotExist($home);
     }
 
     public function testAComposerPluginOfTheHeadCannotReplaceMainsHarness(): void
@@ -283,6 +324,42 @@ final class InstanceBootTest extends TestCase
     private function bootWithMainsHarness(string $head): BootOutcome
     {
         return new InstanceBoot()->of($this->at($head), $this->main);
+    }
+
+    private function writeComposerAuth(string $composerHome): void
+    {
+        mkdir($composerHome, 0o700, true);
+        file_put_contents($composerHome.'/auth.json', json_encode(['github-oauth' => ['github.com' => self::PROBE_TOKEN]]));
+    }
+
+    /**
+     * Boots a head whose Composer plugin reports the github-oauth config Composer loaded, with the given variables set (false: unset) in the booting process.
+     *
+     * @param array<string, string|false> $variables
+     */
+    private function githubOauthAPluginSeesWith(array $variables): string
+    {
+        $seen = $this->repository->path.'-plugin-saw';
+        $head = $this->commitPlugin("file_put_contents('".$seen."', json_encode(\$composer->getConfig()->get('github-oauth')));");
+        $previous = array_map(getenv(...), array_combine(array_keys($variables), array_keys($variables)));
+
+        foreach ($variables as $name => $value) {
+            putenv(false === $value ? $name : $name.'='.$value);
+        }
+
+        try {
+            $outcome = $this->bootWithMainsHarness($head);
+        } finally {
+            foreach ($previous as $name => $value) {
+                putenv(false === $value ? $name : $name.'='.$value);
+            }
+        }
+
+        self::assertSame(BootState::Booted, $outcome->state, $outcome->reason);
+        $saw = is_file($seen) ? (string) file_get_contents($seen) : 'the plugin did not run';
+        @unlink($seen);
+
+        return $saw;
     }
 
     // A local path package the head allows as a Composer plugin, so its activation runs the given PHP unless plugins are off.
