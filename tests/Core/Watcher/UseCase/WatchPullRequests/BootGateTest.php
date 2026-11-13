@@ -69,7 +69,7 @@ final class BootGateTest extends KernelTestCase
     private array $asked = [];
     private BootOutcome $main;
     private BootOutcome $head;
-    private CommitId|string|null $mainCommit;
+    private CommitId|string $mainCommit;
     private bool $busDown = false;
 
     protected function setUp(): void
@@ -149,7 +149,8 @@ final class BootGateTest extends KernelTestCase
 
         $decision = $this->gate()->admit($this->project(), $this->green());
 
-        self::assertStringNotContainsString('synthetic-private-token', $decision->failedBoot?->reason ?? '');
+        self::assertInstanceOf(FailedBoot::class, $decision->failedBoot);
+        self::assertStringNotContainsString('synthetic-private-token', $decision->failedBoot->reason);
     }
 
     public function testAGateThatThrowsLogsAnErrorAndTheReviewStillStarts(): void
@@ -180,7 +181,7 @@ final class BootGateTest extends KernelTestCase
         return new BootGate($bus, $results, $logger);
     }
 
-    private function answer(object $query): CommitId|BootOutcome|string|null
+    private function answer(object $query): CommitId|BootOutcome|string
     {
         $this->asked[] = $query;
 
