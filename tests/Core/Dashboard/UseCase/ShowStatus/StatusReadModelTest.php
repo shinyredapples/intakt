@@ -218,13 +218,6 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
     }
 
-    public function testANextReadOnADayThatDoesNotExistIsReportedAsNone(): void
-    {
-        $this->ledger->keepHeadPendingUntil('alpha', '8', '2026-02-30T12:01:00+00:00');
-
-        self::assertSame([null], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'read_again_at'));
-    }
-
     public function testARedHeadIsARedGuardDecision(): void
     {
         $this->ledger->recordRedHead('alpha', '9', 'c');

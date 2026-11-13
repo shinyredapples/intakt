@@ -63,7 +63,7 @@ Intakt can describe what it is doing as one JSON document, the status, which the
 - `generated_at`: when the status was read (UTC).
 - `holds`: the install-wide holds in effect (`drain`, `failure-back-off`, `pause`, `budget-back-off`), the one that wins first. Only the name is given, never when it ends.
 - `queues`: each background queue with the number of messages waiting for a worker (`async`, `failed`), or `null` for a queue that cannot count them.
-- `projects`: one entry per project the watcher watches or a section names, by name. Each has:
+- `projects`: one entry per project the watcher watches or the ledger names, by name. Each has:
   - `lanes.review`: the review rounds in progress, newest first, each with its change, round id and number, start, its number of reviewers and one step per reviewer a worker has started (role, tier and `running`, `verdict`, `failed`, `blocked` or `stopped`). Fewer steps than reviewers means the others still wait for a worker.
   - `guard_decisions`: the pull requests the watcher holds back: `pending` (CI still runs, with when it reads again), `red` (CI failed) or `failed` (the head could not be read, with the cause, the failures in a row and the next try).
   - `waiting_for_owner`: the changes on the board's Waiting on you column; empty for now, since Intakt places nothing there yet.
