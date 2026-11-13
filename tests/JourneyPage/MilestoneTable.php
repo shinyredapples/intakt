@@ -29,14 +29,19 @@ final readonly class MilestoneTable
         $open = count(array_filter($issues, static fn (Issue $issue): bool => $issue->isOpen()));
         $done = array_filter($issues, static fn (Issue $issue): bool => $issue->isDone());
         $last = [] === $done ? null : max(array_map(static fn (Issue $issue) => $issue->closed, $done));
-        $lastText = $open > 0 || null === $last ? 'open' : JourneyDates::short($last);
+        $lastText = match (true) {
+            $open > 0 => 'open',
+            null === $last => 'none',
+            default => JourneyDates::short($last),
+        };
         $due = $milestone->due instanceof DateTimeImmutable ? JourneyDates::short($milestone->due) : 'none';
 
         return '| '.implode(' | ', [$this->cell($milestone->title), $this->cell($milestone->goal), $due, $lastText, count($done).' / '.$open]).' |';
     }
 
+    // An escaped `<` keeps forge text from opening a comment or writing a journey marker into the page.
     private function cell(string $text): string
     {
-        return str_replace(['|', "\r", "\n"], ['\|', '', ' '], trim($text));
+        return str_replace(['|', '<', "\r", "\n"], ['\|', '&lt;', '', ' '], trim($text));
     }
 }

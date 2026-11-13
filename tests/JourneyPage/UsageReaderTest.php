@@ -36,6 +36,13 @@ final class UsageReaderTest extends TestCase
         self::assertSame(10, new UsageReader()->tokensIn($this->file));
     }
 
+    public function testTheFiveFieldsAreAcceptedInAnyOrder(): void
+    {
+        file_put_contents($this->file, '{"tokens": 5, "day": "2026-11-13", "vendor": "gpt", "account": "gpt-1", "lane": "review"}');
+
+        self::assertSame(5, new UsageReader()->tokensIn($this->file));
+    }
+
     #[DataProvider('refusedLines')]
     public function testARowThatIsNotExactlyTheFiveNamedFieldsIsRefused(string $line, string $reason): void
     {

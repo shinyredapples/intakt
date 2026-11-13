@@ -26,7 +26,12 @@ final readonly class UsageReader
     {
         $row = json_validate($line) ? json_decode($line, true) : null;
 
-        if (!is_array($row) || self::FIELDS !== array_keys($row)) {
+        $fields = is_array($row) ? array_keys($row) : [];
+        sort($fields);
+        $expected = self::FIELDS;
+        sort($expected);
+
+        if (!is_array($row) || $expected !== $fields) {
             throw $this->rejected($index, 'it must hold exactly '.implode(', ', self::FIELDS));
         }
 
