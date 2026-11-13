@@ -78,7 +78,9 @@ final class RecordingLedger implements Ledger
     {
         $last = array_last($this->recorded) ?? throw new LogicException('nothing was recorded');
 
-        /** @var array<string, mixed> */
-        return json_decode($last->event->payload, true, flags: JSON_THROW_ON_ERROR);
+        /** @var array<string, mixed> $payload */
+        $payload = json_decode($last->event->payload, true, flags: JSON_THROW_ON_ERROR);
+
+        return $payload;
     }
 }

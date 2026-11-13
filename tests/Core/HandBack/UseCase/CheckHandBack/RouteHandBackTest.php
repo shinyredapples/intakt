@@ -92,7 +92,7 @@ final class RouteHandBackTest extends TestCase
     {
         $this->history->commit('First');
 
-        (void) $this->route('Uses the key '.$this->fakeKey());
+        $this->route('Uses the key '.$this->fakeKey());
         $result = $this->route('Uses the key '.$this->fakeKey());
 
         self::assertEquals(new FailedHandBack(HandBackRefusal::TextHoldsSecret, HandBackRoute::HandedOver), $result);
@@ -114,8 +114,8 @@ final class RouteHandBackTest extends TestCase
     {
         $this->history->commit('First');
 
-        (void) $this->route('Uses the key '.$this->fakeKey());
-        (void) $this->route('Adds the first commit.');
+        $this->route('Uses the key '.$this->fakeKey());
+        $this->route('Adds the first commit.');
         $result = $this->route('Uses the key '.$this->fakeKey());
 
         self::assertEquals(new FailedHandBack(HandBackRefusal::TextHoldsSecret, HandBackRoute::SentBack), $result);
@@ -125,8 +125,8 @@ final class RouteHandBackTest extends TestCase
     {
         $this->history->commit('First');
 
-        (void) $this->route('Uses the key '.$this->fakeKey());
-        (void) $this->route('Uses the key '.$this->fakeKey());
+        $this->route('Uses the key '.$this->fakeKey());
+        $this->route('Uses the key '.$this->fakeKey());
         $result = $this->route('Uses the key '.$this->fakeKey());
 
         self::assertSame(HandBackRoute::SentBack, $result instanceof FailedHandBack ? $result->route : null);
@@ -200,7 +200,7 @@ final class RouteHandBackTest extends TestCase
 
         $this->expectException(HandBackRoundNotRecorded::class);
 
-        (void) $this->route('Uses the key '.$this->fakeKey());
+        $this->route('Uses the key '.$this->fakeKey());
     }
 
     public function testAMissingScannerFailsClosedOnThePullRequestTextAndRecordsNothing(): void

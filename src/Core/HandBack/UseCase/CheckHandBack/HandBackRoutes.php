@@ -55,7 +55,7 @@ final readonly class HandBackRoutes
      * @template T
      *
      * @param array{repository: string, branch: string} $task
-     * @param Closure(): T                               $step
+     * @param Closure(): T                              $step
      *
      * @return T
      */
