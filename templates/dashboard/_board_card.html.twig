@@ -1,7 +1,7 @@
-{#- One review as a board card. A round from before the ledger named its change has no change, so the round names it, as on the review page; the round number falls back to the count of rounds for the same reason. -#}
+{#- One review as a board card. A round from before the ledger named its change has no change, so the round names it, as on the review page; the round number falls back to the count of rounds for the same reason. past_limit marks a card its crowded column hides until Show more. -#}
 {%- set latest = review.latest -%}
 {%- set unnamed = review.change is same as('') -%}
-<article data-project="{{ review.project }}">
+<article data-project="{{ review.project }}"{% if past_limit %} data-past-limit{% endif %}>
     {{ include('dashboard/components/card.html.twig', {
         number: unnamed ? latest.round : review.change,
         project: review.project,

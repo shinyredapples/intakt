@@ -6,6 +6,9 @@ namespace Intakt\Core\Dashboard\Domain;
 
 final readonly class Board
 {
+    // Twelve, because DESIGN.md's crowded column shows 12 cards before "Show n more".
+    public const int PAGE_LIMIT = 12;
+
     /** @var list<Review> */
     private array $cards;
 
@@ -32,7 +35,7 @@ final readonly class Board
         return new WhoIsWorking($this->cards);
     }
 
-    // Every card of every project, so a later cap on the cards shown never lowers the count.
+    // Every card of every project, so the page limit on the cards shown never lowers the count.
     public function countOf(BoardColumn $column): int
     {
         return count($this->cardsIn($column));
