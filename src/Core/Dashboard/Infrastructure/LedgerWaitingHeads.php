@@ -88,6 +88,7 @@ final readonly class LedgerWaitingHeads
     {
         $parsed = is_string($moment) ? DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC')) : false;
 
-        return false === $parsed ? null : $parsed->format(DATE_ATOM);
+        // PHP rolls 2026-02-30 over to March instead of failing, and only a warning tells.
+        return false === $parsed || false !== DateTimeImmutable::getLastErrors() ? null : $parsed->format(DATE_ATOM);
     }
 }
