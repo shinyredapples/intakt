@@ -26,6 +26,19 @@ updates:
       images:
         patterns: ['*']
         exclude-patterns: ['ghcr.io/gitleaks/gitleaks']
+  - package-ecosystem: npm
+    directory: /docker/job/cli
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+    cooldown:
+      default-days: 3 # zizmor: ignore[dependabot-cooldown] matches the 3-day composer cooldown in docs/architecture/conventions.md
+    groups:
+      # one group, so one update round rebuilds the job image once
+      job-image-cli:
+        patterns: ['*']
   - package-ecosystem: composer
     directory: /
     schedule:

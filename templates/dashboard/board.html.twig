@@ -20,13 +20,14 @@
     <div class="board">
     {% for column in columns %}
         {% set cards = board.cardsIn(column) %}
-        <section class="col" id="col-{{ column.value|lower|replace({' ': '-'}) }}" aria-label="{{ column.value }}">
-            <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: board.countOf(column), needs: column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') and cards is not empty}, with_context = false) }}</div>
+        {% set needs = column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') %}
+        <section class="col{{ needs ? ' col-needs' }}" id="col-{{ column.value|lower|replace({' ': '-'}) }}" aria-label="{{ column.value }}">
+            <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: board.countOf(column), needs: needs and cards is not empty}, with_context = false) }}</div>
             <div class="col-cards">
             {% for review in cards %}
                 {{ include('dashboard/_board_card.html.twig', {review: review}, with_context = false) }}
             {% else %}
-                {{ include('dashboard/components/column_empty.html.twig', {}, with_context = false) }}
+                {{ include('dashboard/components/column_empty.html.twig', needs ? {text: 'Nothing needs you'} : {}, with_context = false) }}
             {% endfor %}
             </div>
         </section>
