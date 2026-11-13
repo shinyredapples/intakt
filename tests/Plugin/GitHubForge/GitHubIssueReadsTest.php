@@ -95,6 +95,17 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame(['W/"issues-1"'], $api->conditions);
     }
 
+    public function testAnUnchangedAnswerWithoutAValidatorFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->notModified = true;
+
+        $this->expectException(ForgeReadFailed::class);
+        $this->expectExceptionMessage('GitHub answered 304 to a read without a validator.');
+
+        $api->reads()->listOpen('alpha', null);
+    }
+
     public function testAFailedLaterPageFailsTheWholeListing(): void
     {
         $api = new RecordedIssueApi();

@@ -14,11 +14,6 @@ final readonly class RepositoryAddress
     ) {
     }
 
-    public function fullName(): string
-    {
-        return $this->owner.'/'.$this->repository;
-    }
-
     public function path(): string
     {
         return '/repos/'.rawurlencode($this->owner).'/'.rawurlencode($this->repository);

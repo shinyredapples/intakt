@@ -186,8 +186,12 @@ final readonly class GitHubIssueReads implements IssueReads
     {
         $headers = null === $validator ? [] : ['If-None-Match' => $validator];
         $answer = $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
+        if (self::NOT_MODIFIED !== $answer['status']) {
+            return $answer;
+        }
 
-        return self::NOT_MODIFIED === $answer['status'] && null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false] : $answer;
+        // Without a validator there is no earlier listing a 304 could stand for, so taking it as unchanged would report issues never read.
+        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
     }
 
     /**
