@@ -170,7 +170,8 @@ final readonly class GitHubIssueComments
         $app = $comment['performed_via_github_app'] ?? null;
         $appId = is_array($app) ? ($app['id'] ?? null) : null;
 
-        return new IssueComment($login, self::PERSON === $type, $created !== $updated, is_int($appId) && (string) $appId === $this->appId, $body);
+        // An App acting with a person's token keeps that person's login and `User` type, so only a comment with no App on it is the person's own.
+        return new IssueComment($login, self::PERSON === $type && null === $app, $created !== $updated, is_int($appId) && (string) $appId === $this->appId, $body);
     }
 
     /**

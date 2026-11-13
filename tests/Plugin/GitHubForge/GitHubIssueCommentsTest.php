@@ -36,6 +36,16 @@ final class GitHubIssueCommentsTest extends TestCase
         self::assertContains('GET https://api.github.com/repos/acme/widget/issues/7/comments?per_page=100&page=2', $issue->requests);
     }
 
+    public function testACommentAnotherAppPostedWithAPersonsTokenIsNotByAPerson(): void
+    {
+        $issue = new ScriptedIssue();
+        $issue->byOwnerThroughAnApp('approve abc', 999);
+
+        $comments = $issue->comments()->of(ScriptedIssue::task());
+
+        self::assertEquals([new IssueComment('owner', false, false, false, 'approve abc')], $comments);
+    }
+
     public function testAnIssueWithMoreCommentsThanThirtyFullPagesFailsTheRead(): void
     {
         $issue = new ScriptedIssue();

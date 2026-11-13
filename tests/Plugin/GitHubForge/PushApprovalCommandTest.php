@@ -194,6 +194,15 @@ final class PushApprovalCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $this->execute()->getStatusCode());
     }
 
+    public function testAnApproveAnAppPostedWithTheOwnersTokenLeavesTheHeadHeld(): void
+    {
+        $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $this->issue->byOwnerThroughAnApp('approve '.$head, (int) ScriptedIssue::APP_ID);
+        $this->issue->byOwnerThroughAnApp('approve '.$head, 999);
+
+        self::assertSame(Command::FAILURE, $this->execute()->getStatusCode());
+    }
+
     public function testAScriptChangeUnderARunnerFromAVariableIsHeldWithNoWorkflowChanged(): void
     {
         $this->repository->checkout('main');

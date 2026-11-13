@@ -47,6 +47,12 @@ final class ScriptedIssue
         $this->comments[] = ['body' => $body, 'user' => ['login' => $login, 'type' => 'User'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => null];
     }
 
+    // An App acting with the owner's own token keeps the owner's login and `User` type; only the App's id on the comment tells it apart.
+    public function byOwnerThroughAnApp(string $body, int $app): void
+    {
+        $this->comments[] = ['body' => $body, 'user' => ['login' => 'owner', 'type' => 'User'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => $app]];
+    }
+
     public function editedByOwner(string $body): void
     {
         $this->comments[] = ['body' => $body, 'user' => ['login' => 'owner', 'type' => 'User'], 'created_at' => self::MOMENT, 'updated_at' => '2026-11-25T10:05:00Z', 'performed_via_github_app' => null];
