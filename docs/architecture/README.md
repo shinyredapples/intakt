@@ -63,5 +63,6 @@ Reviews:
 
 Dashboard:
 - [Dashboard](dashboard.md)
+- [Status read model](status.md): the status JSON per project and its schema, read without the message bus
 - [Server status](server-status.md)
 - [Live updates](live-updates.md)
