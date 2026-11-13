@@ -14,7 +14,7 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 final readonly class DisabledProvidersWarning
 {
     // Only the commands that show which providers are off, so no other command's result is preceded by the notes.
-    public const array COMMANDS = ['intakt:ai:tiers', 'intakt:vendor:probe'];
+    private const array COMMANDS = ['intakt:ai:tiers', 'intakt:vendor:probe'];
 
     /**
      * @param array<string, string> $disabledProviders
