@@ -63,14 +63,14 @@ final class RateLimitReadingsTest extends TestCase
 
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
     }
 
     public function testAnotherInstallationIsNotPaused(): void
     {
         $this->limitOf($this->process(), 429, ['retry-after' => ['90']]);
 
-        $this->process()->refuseWhileLimited('999');
+        $this->process()->refuseWhileLimited('999', 'core');
 
         self::assertNull($this->process()->latest('999'));
     }
@@ -100,7 +100,7 @@ final class RateLimitReadingsTest extends TestCase
         self::assertSame($this->clock->now()->getTimestamp() + 569, $later->resetsAt->getTimestamp());
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
     }
 
     public function testARetryAfterGivenAsADateIsARateLimitUntilThatMoment(): void
@@ -126,7 +126,7 @@ final class RateLimitReadingsTest extends TestCase
         self::assertSame($this->clock->now()->getTimestamp() + 60, $limited->resetsAt->getTimestamp());
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
     }
 
     public function testA403WithCallsLeftAndNoRetryAfterIsNoRateLimit(): void
@@ -134,7 +134,7 @@ final class RateLimitReadingsTest extends TestCase
         $reset = (string) ($this->clock->now()->getTimestamp() + 600);
 
         $this->process()->observe('678', 403, ['x-ratelimit-remaining' => ['12'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset]]);
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
 
         self::assertSame(12, $this->process()->latest('678')?->remaining);
     }
@@ -153,7 +153,7 @@ final class RateLimitReadingsTest extends TestCase
     {
         $this->limitOf($this->process(), 403, $this->exhausted('graphql'));
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
 
         self::assertNull($this->process()->latest('678'));
     }
@@ -181,7 +181,7 @@ final class RateLimitReadingsTest extends TestCase
     {
         $this->limitOf($this->process(), 200, $this->exhausted('graphql'));
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
 
         self::assertNull($this->process()->latest('678'));
     }
@@ -199,7 +199,7 @@ final class RateLimitReadingsTest extends TestCase
     public function testARestAnswerWith200ThatSpentTheLastCallIsNoRateLimit(): void
     {
         $this->process()->observe('678', 200, $this->exhausted('core'));
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
 
         self::assertSame(0, $this->process()->latest('678')?->remaining);
     }
@@ -210,7 +210,7 @@ final class RateLimitReadingsTest extends TestCase
 
         $this->expectException(ForgeRateLimited::class);
 
-        $this->process()->refuseWhileLimited('678');
+        $this->process()->refuseWhileLimited('678', 'core');
     }
 
     public function testAPauseStoredUnderTheEarlierKeyIsNotShortenedByALaterLimit(): void
