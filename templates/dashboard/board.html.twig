@@ -26,7 +26,8 @@
         {% set count = board.countOf(column) %}
         {# assets/column-fold.js opens and collapses it; below 761 px the stylesheet keeps every column open, so Backlog and Done are not collapsed on phones. #}
         <section class="col{{ needs ? ' col-needs' }}{{ folds ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}">
-            {% if folds %}<button type="button" class="col-fold" aria-expanded="false" aria-controls="cards-{{ slug }}" aria-label="Show {{ column.value }}, {{ count }} {{ count == 1 ? 'task' : 'tasks' }}"><span>{{ column.value }}</span>{{ include('dashboard/components/count.html.twig', {n: count}, with_context = false) }}</button>{% endif %}
+            {# The name is built from hidden words around the visible ones rather than an aria-label, so it contains what a speech user sees and says (WCAG 2.5.3). #}
+            {% if folds %}<button type="button" class="col-fold" aria-expanded="false" aria-controls="cards-{{ slug }}"><span><span class="sr-only">Show </span>{{ column.value }}</span>{{ include('dashboard/components/count.html.twig', {n: count}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span></button>{% endif %}
             <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: count, needs: needs and cards is not empty}, with_context = false) }}{% if folds %}<button type="button" class="btn quiet sm col-hide" aria-label="Hide {{ column.value }}">Hide</button>{% endif %}</div>
             <div class="col-cards" id="cards-{{ slug }}">
             {% for review in cards %}

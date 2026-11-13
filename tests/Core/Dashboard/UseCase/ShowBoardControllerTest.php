@@ -138,21 +138,31 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         $strip = $this->column($this->browser->request('GET', '/'), 'Done')->filter('button.col-fold');
 
-        self::assertSame(['Done', '1'], $strip->children()->each(static fn (Crawler $part): string => $part->text()));
+        self::assertSame(['Show Done', '1', 'task'], $strip->children()->each(static fn (Crawler $part): string => $part->text()));
         self::assertSame('count', $strip->filter('.count')->attr('class'));
     }
 
-    public function testACollapsedColumnsStripSaysItShowsTheColumnsCardsWhichItControls(): void
+    // A speech user says the words they see, so the name holds them instead of an aria-label that would replace them.
+    public function testACollapsedColumnsStripIsNamedByItsVisibleWordsBetweenHiddenOnes(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Show Done1 task', $this->column($page, 'Done')->filter('button.col-fold')->text());
+        self::assertSame('Show Backlog0 tasks', $this->column($page, 'Backlog')->filter('button.col-fold')->text());
+        self::assertSame(['Show ', ' task'], $this->column($page, 'Done')->filter('button.col-fold .sr-only')->each(static fn (Crawler $hidden): string => $hidden->text(normalizeWhitespace: false)));
+        self::assertNull($this->column($page, 'Done')->filter('button.col-fold')->attr('aria-label'));
+    }
+
+    public function testACollapsedColumnsStripSaysItIsCollapsedAndControlsTheColumnsCards(): void
+    {
         $column = $this->column($this->browser->request('GET', '/'), 'Done');
         $strip = $column->filter('button.col-fold');
 
-        self::assertSame(['false', 'Show Done, 1 task', 'cards-done'], [$strip->attr('aria-expanded'), $strip->attr('aria-label'), $strip->attr('aria-controls')]);
+        self::assertSame(['false', 'cards-done'], [$strip->attr('aria-expanded'), $strip->attr('aria-controls')]);
         self::assertSame('cards-done', $column->filter('.col-cards')->attr('id'));
-        self::assertSame('Show Backlog, 0 tasks', $this->column($this->browser->getCrawler(), 'Backlog')->filter('button.col-fold')->attr('aria-label'));
     }
 
     public function testACollapsedColumnOffersHideInItsHeadNamingTheColumn(): void

@@ -248,7 +248,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .board .col.collapsed { flex: 0 0 108px; min-width: 108px; }
   .col.collapsed .col-head, .col.collapsed .col-cards { display: none; }
   .col.collapsed .col-fold {
-    display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 108px; height: 32px; padding: 0 6px 0 10px;
+    display: flex; align-items: center; justify-content: space-between; gap: calc(var(--s4) + 2px); width: 108px; height: 32px; padding: 0 calc(var(--s4) + 2px) 0 calc(var(--s8) + 2px);
     border: 0; border-radius: var(--r-chip); background: var(--tint); color: var(--ink); cursor: pointer; font: 600 var(--t15)/1 var(--f-head);
   }
   .col.collapsed .col-fold:hover { background: var(--tint-2); }
