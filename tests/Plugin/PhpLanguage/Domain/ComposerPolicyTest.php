@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\PhpLanguage\Domain;
 use Intakt\Plugin\Language\Contract\DependencyDecision;
 use Intakt\Plugin\Language\Contract\DependencyFiles;
 use Intakt\Plugin\Language\Contract\DependencyFinding;
+use Intakt\Plugin\PhpLanguage\Domain\AutoloadRules;
 use Intakt\Plugin\PhpLanguage\Domain\ComposerFileUnreadable;
 use Intakt\Plugin\PhpLanguage\Domain\ComposerPolicy;
 use Intakt\Plugin\PhpLanguage\Domain\ComposerState;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ComposerPolicy::class)]
+#[CoversClass(AutoloadRules::class)]
 #[CoversClass(ComposerState::class)]
 #[CoversClass(LockedPackage::class)]
 #[CoversClass(GitHubCommit::class)]

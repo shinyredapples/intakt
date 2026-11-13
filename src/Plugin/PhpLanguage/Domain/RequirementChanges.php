@@ -58,7 +58,7 @@ final readonly class RequirementChanges
             if (!$this->trusted->trusts($name)) {
                 $findings[] = new DependencyFinding($name, 'is not from a trusted vendor');
             } elseif (!array_key_exists($name, $after->locked)) {
-                // Only the lock entry names its repository, tag, type and autoloading, which the package rules check.
+                // Needs the owner, because only the lock entry names its repository, tag, type and autoloading, which the package rules check.
                 $findings[] = new DependencyFinding($name, 'is not locked in composer.lock');
             }
         }

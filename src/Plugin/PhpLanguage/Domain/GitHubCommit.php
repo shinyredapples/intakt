@@ -32,7 +32,7 @@ final readonly class GitHubCommit
      */
     public static function fromLockEntry(array $entry): ?self
     {
-        // Its stream options could send the download through a proxy that serves other code.
+        // Never checkable, because its stream options could send the download through a proxy that serves other code.
         if (array_key_exists('transport-options', $entry)) {
             return null;
         }
