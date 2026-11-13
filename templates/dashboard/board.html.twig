@@ -14,6 +14,18 @@
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
     </div>
 </div>
+<details class="working" id="working">
+    <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working ? working.working ~ ' working' : 'Nobody is working yet' }}</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+    <div class="lanes">
+    {% for lane in working.lanes %}
+        <div class="lane" data-project="{{ lane.project }}">
+            <div class="who"><span class="dot ok"></span>{{ lane.role }}, {{ lane.tier }}<span class="elapsed">since <time datetime="{{ lane.since|date('c', 'UTC') }}">{{ lane.since|date('H:i', 'UTC') }}</time></span></div>
+            <div class="what">{{ lane.change }}</div>
+            <p class="meta"><span>{{ lane.project }}</span>{% if lane.round is not null %}<span>Round {{ lane.round }}</span>{% endif %}</p>
+        </div>
+    {% endfor %}
+    </div>
+</details>
 <section aria-labelledby="board-h">
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
     {# The counts are totals over every project, so the project filter hides cards and never changes a count. #}

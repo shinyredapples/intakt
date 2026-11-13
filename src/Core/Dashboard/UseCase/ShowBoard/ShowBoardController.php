@@ -23,8 +23,11 @@ final readonly class ShowBoardController
     #[Route('/', name: DashboardRoutes::SHOW_BOARD, methods: ['GET'])]
     public function __invoke(Request $request): Response
     {
+        $board = $this->reviewPages->board();
+
         return new Response($this->pages->render($request, 'dashboard/board.html.twig', [
-            'board' => $this->reviewPages->board(),
+            'board' => $board,
+            'working' => $board->whoIsWorking(),
             'columns' => BoardColumn::cases(),
         ]));
     }
