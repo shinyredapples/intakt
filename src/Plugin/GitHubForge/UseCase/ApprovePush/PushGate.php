@@ -86,12 +86,6 @@ final readonly class PushGate
         }
     }
 
-    /**
-     * @throws ChangeNotShown
-     * @throws ForgeReadFailed
-     * @throws ForgeWriteFailed
-     * @throws ForgeRateLimited
-     */
     // The project name is length-prefixed, because a project name may hold the dots that separate the other parts.
     private function lockKey(TaskIssue $issue, string $commit): string
     {
