@@ -41,6 +41,8 @@ Intakt serves five pages in the browser, built from the ledger of review events 
 
 Above the columns, the board shows **Who is working**, a closed strip that says "N working" (or "Nobody is working yet"). Opening it lists the lanes: the reviewers still running in the latest round of each review that the judge has not decided, newest review first, each with its role, tier, the time it started (UTC), its change, its project and its round. The project filter hides the lanes of other projects, but the "N working" count stays the total over all projects. Build slots are not part of it yet, so there is no idle count.
 
+Above Who is working, the board shows one red banner for each pull request whose head failed in the watcher (the same heads as "Pull requests that failed" on `/reviews`): "Pull request 7 of alpha failed.", then how many failures in a row and the next try (UTC), or that it was handed over to the maintainer agent, and the cause, with any credential in it replaced by `[redacted]`. **See the failed pull requests** opens that section of `/reviews`. The project filter hides the banners of other projects. The board does not update them live: a banner goes away on the next load of the board after the watcher reads the head again, starts its round or forgets the pull request. Below 761 pixels a banner is one line with the pull request and project; tapping it shows the rest, on a board with its live connection.
+
 Every page sits in the same frame. On the left, the menu shows the Intakt logo, which opens the dashboard's address, and one entry per page that is built: today **Board** and **Projects**, each highlighted while you are on it (Waiting on you, Team, History and Settings join them as their pages are built). **Collapse** at its bottom narrows the menu to its icons; this browser remembers it. The bar along the top holds the search field, with the hint `Ctrl K` (`⌘K` on a Mac): clicking it, or pressing Ctrl K (Cmd K on a Mac) on any page, opens the search window over the page (see Search, below). Beside it, the moon or sun button switches between the light and the dark look and remembers the choice in this browser. Below 761 pixels of width (a phone) the menu becomes a 68 px bar at the bottom of the screen, each entry an icon over its name, and the top bar holds only the logo (it opens the dashboard's address), a **Search** button (it opens the search as a full-screen sheet, described under Search below) and the theme button; the project filter is hidden there, so every project is shown, and the choice comes back on a wider window. History and Settings, once built, go behind **More** at the end of the bar, which opens a sheet with them above it (tap beside it or press Escape to close it); until then More is not shown.
 
 - `/components` shows each building block of the dashboard (buttons, a button with only an icon, segmented tabs, filter chips, cards, banners and the one-line phone banner, inputs, a number stepper, a command with a Copy button, usage bars including a dimmed "Last known" one, and so on) in the light and the dark look side by side, with a "Switch theme" button that flips the look and remembers it in this browser. It loads no font, style or script from another website. The segmented tabs, the filter chips, the stepper and the Copy button only show how they look for now: no page uses them yet, so pressing one changes nothing. Nothing links to it yet.
@@ -389,6 +391,22 @@ A project can carry `mode: live`, the same as leaving the key out, or `mode: rev
 `budget.shadow_ceilings` is no longer a setting either; a configuration that still has it stops Intakt from starting and names the key, so remove it.
 
 To see which panel a change gets, without calling any model, run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php --label=review:full` (`--path` and `--label` can be repeated; all options are optional, and `--lines` must be zero or more). It prints the quorum and one line per reviewer with its tier, provider and budget. Intakt reads the configuration when it starts, so a changed file shows after the cache is cleared. An unknown project fails with a message. A path pattern Intakt cannot evaluate against a path (for example, one too complex for the pattern matcher) fails the same way, with a message that names the pattern. `intakt:review` takes the paths from the branch and no labels.
+
+### Which tier a build starts on
+
+A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
+
+```yaml
+projects:
+    alpha:
+        build:
+            tier: standard
+            sensitive_paths: [config/**, src/**/Security/**]
+```
+
+A build that touches a sensitive path starts on the strong tier, whatever its label says. Otherwise a `model:<tier>` label (for example `model:strong`) sets the tier, and without either the build starts on `tier`. A `model:` value that names no tier, such as a model name, is ignored. The rules look only at the labels and the touched paths of the build, so a job can never choose its own model. A bad tier, or sensitive paths that are not a list, stop Intakt from starting and name the key.
+
+To see the tier the rules choose, without calling any model, run `php bin/console intakt:build:tier <project> --label=model:strong --path=src/Foo.php` (`--label` and `--path` can be repeated and are optional). It prints the tier and why (`default`, `label` or `sensitive-path`); an unknown project fails with a message. Starting a build on the chosen tier is not wired yet, and a later part adds raising the tier after a failure.
 
 ## Looking inside the development install with Mate
 

@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\Infrastructure;
-
-use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
+namespace Intakt\Core\Review\Contract;
 
 final readonly class PathGlob
 {
