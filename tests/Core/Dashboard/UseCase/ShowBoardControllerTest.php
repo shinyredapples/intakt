@@ -8,9 +8,11 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
@@ -29,6 +31,8 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(Lane::class)]
+#[UsesClass(WhoIsWorking::class)]
 #[UsesClass(RefuseForeignHost::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
