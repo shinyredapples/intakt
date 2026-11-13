@@ -14,6 +14,8 @@ use Intakt\Core\Review\Domain\FindingStatus;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 use Symfony\Component\Serializer\SerializerInterface;
 
 // Covers nothing because the subject is the application's configured serializer for stored JSON, not one class.
@@ -90,6 +92,62 @@ final class StoredJsonTest extends KernelTestCase
         $read = $this->serializer()->deserialize($row, TrackedFinding::class.'[]', 'json');
 
         self::assertEquals([new TrackedFinding('a', $this->finding(), [1, 3], FindingStatus::Resolved)], $read);
+    }
+
+    public function testAFindingWithMergedIdsReadsBackWithThem(): void
+    {
+        $finding = $this->finding()->withMerged(['F2', 'F3']);
+
+        $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], 'json'), Finding::class.'[]', 'json');
+
+        self::assertEquals([$finding], $read);
+    }
+
+    public function testATrackedFindingWithMergedIdsReadsBackWithThem(): void
+    {
+        $tracked = [new TrackedFinding('a', $this->finding()->withMerged(['F2']), [1], FindingStatus::Open)];
+
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, 'json'), TrackedFinding::class.'[]', 'json');
+
+        self::assertEquals($tracked, $read);
+    }
+
+    public function testAFindingIsWrittenWithItsMergedIdsUnderTheKeyMerged(): void
+    {
+        $json = $this->serializer()->serialize($this->finding()->withMerged(['F2']), 'json');
+
+        self::assertStringEndsWith(',"regression":true,"merged":["F2"]}', $json);
+    }
+
+    public function testAFindingRowWithoutMergedIdsReadsWithNone(): void
+    {
+        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', 'json');
+
+        self::assertInstanceOf(Finding::class, $read[0]);
+        self::assertSame([], $read[0]->merged);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function brokenMergedIds(): iterable
+    {
+        yield 'a string' => ['"F2"'];
+        yield 'a number among the ids' => ['["F2",3]'];
+        yield 'an object' => ['{"a":"F2"}'];
+        yield 'an object with list keys' => ['{"0":"F2"}'];
+        yield 'an empty object' => ['{}'];
+        yield 'null' => ['null'];
+    }
+
+    #[DataProvider('brokenMergedIds')]
+    public function testAFindingRowWithMergedIdsThatAreNotAListOfStringsFailsToRead(string $merged): void
+    {
+        $row = '['.substr(self::TODAYS_FINDING, 0, -1).',"merged":'.$merged.'}]';
+
+        $this->expectException(UnexpectedValueException::class);
+
+        $this->serializer()->deserialize($row, Finding::class.'[]', 'json');
     }
 
     private function finding(): Finding
