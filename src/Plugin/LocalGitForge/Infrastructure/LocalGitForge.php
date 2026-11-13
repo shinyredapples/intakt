@@ -38,7 +38,7 @@ final readonly class LocalGitForge implements Forge
     private const int REFERENCE_INVALID = 1;
     private const int NOT_AN_ANCESTOR = 1;
 
-    // Every file is text to git, because an attribute or git's guess from the first bytes would decide what is binary, which BinaryFiles decides from all the bytes shown; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
+    // Every file is text to git, because an attribute or git's guess from the first bytes would decide what is binary, which BinaryFiles decides from all the bytes of both blobs; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
     private const array DIFF_OPTIONS = ['--no-color', '--no-ext-diff', '--no-textconv', '--text', '--no-renames', '--ignore-submodules=none'];
 
     // Because a name that is not ASCII is then written in escapes, so a file's header is UTF-8 whatever bytes its name holds.
@@ -185,14 +185,12 @@ final readonly class LocalGitForge implements Forge
     {
         $patch = $this->read([...self::QUOTED_NAMES, 'diff', '--full-index', ...self::DIFF_OPTIONS, ...$this->range($commits)]);
 
-        return new Diff($this->binaryFiles->named($patch, $this->sizeOf(...)), $this->changedFiles($commits));
+        return new Diff($this->binaryFiles->named($patch, $this->blob(...)), $this->changedFiles($commits));
     }
 
-    private function sizeOf(string $blob): int
+    private function blob(string $id): string
     {
-        $size = trim($this->read(['cat-file', '-s', $blob]));
-
-        return ctype_digit($size) ? (int) $size : throw new ForgeReadFailed(sprintf('git cat-file printed "%s" as the size of a blob.', $size));
+        return $this->read(['cat-file', 'blob', $id]);
     }
 
     private function changedFiles(CommitRange $commits): ChangedFiles

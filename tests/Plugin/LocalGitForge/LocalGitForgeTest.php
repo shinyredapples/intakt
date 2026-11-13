@@ -389,15 +389,30 @@ final class LocalGitForgeTest extends TestCase
         self::assertCount(2, $change->diff->files);
     }
 
-    public function testItNamesAFileWithBytesThatAreNotUtf8AsBinaryEvenWithoutANulByte(): void
+    public function testItShowsTheCodeOfAFileWithAByteThatIsNotUtf8WithThatByteEscaped(): void
     {
+        $this->repository->commitFile('src/Auth.php', "<?php\nfunction allowed(): bool { return false; }\n");
         $this->repository->checkoutNewBranch('feature');
-        $this->repository->commitFile('latin1.txt', "caf\xe9\n");
+        $this->repository->commitFile('src/Auth.php', "<?php\n// caf\xe9\nfunction allowed(): bool { return true; }\n");
 
         $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
 
-        self::assertStringContainsString("Binary file, not shown: absent at the base, 5 bytes at the head\n", $patch);
+        self::assertStringContainsString("+// caf\u{fffd}{E9}\n+function allowed(): bool { return true; }\n", $patch);
+        self::assertStringNotContainsString('Binary', $patch);
         self::assertTrue(mb_check_encoding($patch, 'UTF-8'));
+    }
+
+    public function testItNamesABinaryFileAsBinaryWhenItsNulByteLiesOutsideTheLinesShown(): void
+    {
+        $start = "\x89PNG\0\n".str_repeat("padding\n", 30);
+        $this->repository->commitFile('image.png', $start."old payload\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('image.png', $start."new payload\n");
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString('Binary file, not shown: 258 bytes at the base, 258 bytes at the head', $patch);
+        self::assertStringNotContainsString('payload', $patch);
     }
 
     public function testItNamesAFileAsBinaryByItsBytesWhereGitWouldShowItAsText(): void
