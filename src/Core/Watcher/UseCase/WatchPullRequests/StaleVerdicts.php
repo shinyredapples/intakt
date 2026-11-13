@@ -37,15 +37,24 @@ final readonly class StaleVerdicts
         }
     }
 
-    // Told to Review rather than asked, because the head itself is the one refused: whatever its round approved no longer counts, and Review must say so to every later reader too.
+    // Told to Review rather than asked, because the head itself is the one refused: whatever its rounds approved no longer counts, and Review must say so to every later reader too.
     public function noteFailedBoot(WatchedProject $project, OpenChange $open): void
     {
-        $round = $this->rounds->roundAt($project->name, $open);
-
-        if ($round instanceof StartedRound) {
+        foreach ($this->roundsCountingFor($project, $open) as $round) {
             $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
             $this->rounds->markStaleOnce($round, $this->ledger->verdictsStale(...));
         }
+    }
+
+    // The round at the head, and every earlier round still open after the moved-head check, because Review keeps an earlier round's approvals across a move that touched none of its parts, and those would still count for a head that does not boot.
+    /**
+     * @return list<StartedRound>
+     */
+    private function roundsCountingFor(WatchedProject $project, OpenChange $open): array
+    {
+        $atHead = $this->rounds->roundAt($project->name, $open);
+
+        return [...($atHead instanceof StartedRound ? [$atHead] : []), ...$this->rounds->openRoundsBefore($project->name, $open)];
     }
 
     private function check(WatchedProject $project, OpenChange $open, StartedRound $round): void

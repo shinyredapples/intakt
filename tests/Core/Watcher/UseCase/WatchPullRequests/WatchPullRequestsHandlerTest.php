@@ -867,7 +867,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         $this->tick();
 
-        self::assertSame(['round-1'], $this->commands->markedStale);
+        self::assertContains('round-1', $this->commands->markedStale);
         self::assertCount(2, $this->commands->started);
     }
 

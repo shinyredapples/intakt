@@ -84,6 +84,24 @@ final class StaleVerdictsTest extends KernelTestCase
         self::assertSame(Standing::Stale, $verdicts->standing->standing);
     }
 
+    public function testAFailedBootMakesStaleTheApprovalsOfAnEarlierHeadThatReviewKeptAcrossADocumentationOnlyMove(): void
+    {
+        $round = $this->fixture->start(2)->id()->toRfc4122();
+        $this->fixture->entities->persist(new StartedRound('alpha', new OpenChange(new ChangeId('7'), new CommitId(SampleIdentity::HEAD), new DateTimeImmutable('2026-11-13T10:00:00Z')), $round));
+        $this->fixture->entities->flush();
+        $documentationOnly = new StandingQueryBus($this->fixture->identityAt(SampleIdentity::HEAD, 2), $this->fixture->entities);
+        $documentationOnly->move = new HeadMove(HeadMoveKind::Commits, ['docs/user/README.md']);
+        $project = new WatchedProject('alpha', new ChangeSource('repo', 'main'), 'Review it.');
+        $failing = new OpenChange(new ChangeId('7'), new CommitId(SampleIdentity::NEW_HEAD), new DateTimeImmutable('2026-11-13T10:05:00Z'));
+        $stale = $this->staleVerdicts($documentationOnly);
+        $stale->noteMovedHead($project, $failing);
+
+        $stale->noteFailedBoot($project, $failing);
+
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::NEW_HEAD, 2), $documentationOnly->move));
+        self::assertSame(Standing::Stale, $verdicts->standing->standing);
+    }
+
     private function staleVerdicts(?MessageBusInterface $queries = null): StaleVerdicts
     {
         $commands = self::getContainer()->get('command.bus');

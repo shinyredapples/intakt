@@ -38,11 +38,26 @@ final readonly class PublishVerdictHandler
 
         try {
             $this->publish($round, $this->verdicts->of($round));
+            $this->withdrawIfMadeStaleMeanwhile($round);
         } catch (ReviewTextHoldsSecret) {
             $this->publish($round, $this->verdicts->unpublishable($round));
         } catch (ChangeNotFound) {
             // Logged and dropped, because a round of a local branch has no pull request to publish on, and retrying cannot give it one.
             $this->logger->warning('The round {round} of {project} names no pull request the forge knows, so its verdict is not published.', ['round' => $command->roundId, 'project' => $round->project()]);
+        }
+    }
+
+    // Read again after the write, because a failed boot may have marked the round while its approval was on the way: either this read sees the mark and withdraws it, or the mark came after the write, and the publication the mark queued withdraws it later.
+    private function withdrawIfMadeStaleMeanwhile(ReviewRound $published): void
+    {
+        if ($published->hasStaleVerdicts()) {
+            return;
+        }
+
+        $current = $this->rounds->stored($published->id()->toRfc4122());
+
+        if ($current->hasStaleVerdicts()) {
+            $this->publish($current, $this->verdicts->of($current));
         }
     }
 

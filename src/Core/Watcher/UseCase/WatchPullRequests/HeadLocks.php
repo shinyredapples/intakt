@@ -18,8 +18,8 @@ use Throwable;
 // One lock per pull request, held from the stale check to the round start, because a tick that looked at a newer head while an older one was still starting would miss that round.
 final readonly class HeadLocks
 {
-    // Long enough for main's boot on a cache miss and the head's boot, both run while the lock is held, plus the 300 seconds the other steps had; a lock that ran out mid-boot would let a second tick settle the same head.
-    private const float TTL_SECONDS = 2 * BootLimits::LONGEST_SECONDS + 300;
+    // The 300 seconds the other steps had, before the boots were added.
+    private const int OTHER_STEPS_SECONDS = 300;
 
     public function __construct(
         private PendingHeads $pending,
@@ -38,8 +38,11 @@ final readonly class HeadLocks
         $heads = [];
 
         try {
-            foreach ($this->pending->dueFor($project) as $open) {
-                $lock = $this->lockOf($project, $open);
+            $due = $this->pending->dueFor($project);
+            $lifetime = $this->lifetimeFor(count($due));
+
+            foreach ($due as $open) {
+                $lock = $this->lockOf($project, $open, $lifetime);
 
                 // Tried without waiting, because a tick has a time budget and the head stays due for the next tick.
                 if (!$lock->acquire(false)) {
@@ -65,10 +68,16 @@ final readonly class HeadLocks
         $this->giveBack($held);
     }
 
-    private function lockOf(string $project, OpenChange $open): LockInterface
+    // Every lock is taken before the first head settles and the heads boot one after another, so each lock must outlast main's boot on a cache miss and the boot of every due head; a lock that ran out mid-tick would let a second tick settle a head this one has not reached yet.
+    private function lifetimeFor(int $dueHeads): float
+    {
+        return (1 + $dueHeads) * BootLimits::LONGEST_SECONDS + self::OTHER_STEPS_SECONDS;
+    }
+
+    private function lockOf(string $project, OpenChange $open, float $lifetime): LockInterface
     {
         // Not released on destruction, because releaseEach() already gives every lock back, and a destructor asking a store that is still down would replace the failure this tick rethrows.
-        return $this->locks->createLock('watcher-change-'.hash('sha256', json_encode([$project, $open->id->value], JSON_THROW_ON_ERROR)), self::TTL_SECONDS, autoRelease: false);
+        return $this->locks->createLock('watcher-change-'.hash('sha256', json_encode([$project, $open->id->value], JSON_THROW_ON_ERROR)), $lifetime, autoRelease: false);
     }
 
     // Reported outside any head's back-off, because every head's lock lives in the one store, so its failure is no head's own.

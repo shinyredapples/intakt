@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
+use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -37,6 +38,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(VerdictIdentity::class)]
 #[UsesClass(VerdictStanding::class)]
 #[UsesClass(HeadMove::class)]
+#[UsesClass(PublishVerdict::class)]
 final class MarkVerdictsStaleTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -50,7 +52,7 @@ final class MarkVerdictsStaleTest extends KernelTestCase
     {
         $round = $this->fixture->start(2)->id()->toRfc4122();
 
-        new MarkVerdictsStaleHandler($this->fixture->transactions())(new MarkVerdictsStale($round));
+        $this->handler()(new MarkVerdictsStale($round));
 
         $verdicts = $this->verdictsAtTheSameHead($round);
         self::assertSame(Standing::Stale, $verdicts->standing->standing);
@@ -63,7 +65,7 @@ final class MarkVerdictsStaleTest extends KernelTestCase
         $marked = $this->fixture->start(2)->id()->toRfc4122();
         $other = $this->fixture->startFor('8', $this->fixture->bus, 2);
 
-        new MarkVerdictsStaleHandler($this->fixture->transactions())(new MarkVerdictsStale($marked));
+        $this->handler()(new MarkVerdictsStale($marked));
 
         self::assertSame(Standing::Current, $this->verdictsAtTheSameHead($other)->standing->standing);
     }
@@ -72,7 +74,22 @@ final class MarkVerdictsStaleTest extends KernelTestCase
     {
         $this->expectException(RoundNotFound::class);
 
-        new MarkVerdictsStaleHandler($this->fixture->transactions())(new MarkVerdictsStale('not-a-round'));
+        $this->handler()(new MarkVerdictsStale('not-a-round'));
+    }
+
+    public function testMarkingARoundStaleQueuesItsPublicationAgainSoAnApprovalAlreadyOnTheForgeIsWithdrawn(): void
+    {
+        $round = $this->fixture->start(2)->id()->toRfc4122();
+        $commands = new QueuedPublications();
+
+        new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($round));
+
+        self::assertEquals([new PublishVerdict($round)], $commands->messages);
+    }
+
+    private function handler(): MarkVerdictsStaleHandler
+    {
+        return new MarkVerdictsStaleHandler($this->fixture->transactions(), new QueuedPublications());
     }
 
     private function verdictsAtTheSameHead(string $round): RoundVerdicts
