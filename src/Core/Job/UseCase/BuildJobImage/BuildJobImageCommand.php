@@ -8,6 +8,7 @@ use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -24,9 +25,11 @@ final readonly class BuildJobImageCommand
         string $directory,
         #[Argument('The tag the image gets, for example intakt-job/demo:main')]
         string $tag,
+        #[Option('Build the image of a review job: a project Dockerfile or devcontainer image gets the job tools added')]
+        bool $review = false,
     ): int {
         try {
-            $built = $this->images->build($directory, $tag);
+            $built = $review ? $this->images->buildForReview($directory, $tag) : $this->images->build($directory, $tag);
         } catch (ReportableFailure|JobRefused $failure) {
             $io->error($failure->getMessage());
 

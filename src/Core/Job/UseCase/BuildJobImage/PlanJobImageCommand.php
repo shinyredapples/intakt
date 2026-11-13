@@ -6,6 +6,7 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Option;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -20,9 +21,11 @@ final readonly class PlanJobImageCommand
         SymfonyStyle $io,
         #[Argument('The project checkout; the files of its HEAD commit decide the image')]
         string $directory,
+        #[Option('Plan the image of a review job: a project Dockerfile or devcontainer image gets the job tools added')]
+        bool $review = false,
     ): int {
         try {
-            $plan = $this->planner->planFor($directory);
+            $plan = $review ? $this->planner->planForReview($directory) : $this->planner->planFor($directory);
         } catch (JobImageNotBuilt $refused) {
             $io->error($refused->getMessage());
 
@@ -30,8 +33,19 @@ final readonly class PlanJobImageCommand
         }
 
         $io->writeln($plan->summary());
-        $io->writeln($plan->generated ?? sprintf('Builds %s in %s.', $plan->dockerfile, '' === $plan->tree ? 'the repository root' : $plan->tree));
+        $this->showDockerfileOf($plan, $io);
 
         return Command::SUCCESS;
+    }
+
+    private function showDockerfileOf(JobImagePlan $plan, SymfonyStyle $io): void
+    {
+        if (null !== $plan->generated) {
+            $io->writeln($plan->generated);
+        }
+
+        if (null !== $plan->tree) {
+            $io->writeln(sprintf('Builds %s in %s.', $plan->dockerfile, '' === $plan->tree ? 'the repository root' : $plan->tree));
+        }
     }
 }

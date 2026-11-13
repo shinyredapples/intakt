@@ -14,7 +14,9 @@ use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlanner;
 use Intakt\Core\Job\UseCase\BuildJobImage\PhpProfile;
 use Intakt\Core\Job\UseCase\BuildJobImage\PlanJobImageCommand;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobTools;
 use Intakt\Core\Job\UseCase\BuildJobImage\ProjectFiles;
+use Intakt\Core\Job\UseCase\BuildJobImage\ReviewDockerfile;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -33,8 +35,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobImageNotBuilt::class)]
 #[UsesClass(JobImagePlan::class)]
 #[UsesClass(JobImagePlanner::class)]
+#[UsesClass(JobTools::class)]
 #[UsesClass(PhpProfile::class)]
 #[UsesClass(ProjectFiles::class)]
+#[UsesClass(ReviewDockerfile::class)]
 final class PlanJobImageCommandTest extends TestCase
 {
     private TemporaryRepository $repository;
@@ -71,6 +75,40 @@ final class PlanJobImageCommandTest extends TestCase
         self::assertStringContainsString('Builds Dockerfile in .devcontainer.', $tester->getDisplay());
     }
 
+    public function testAReviewImageOfAProjectDockerfileShowsTheDockerfileWithTheJobToolsAndWhereItIsBuilt(): void
+    {
+        $this->repository->commitFile('composer.json', '{"require": {"php": "^8.4"}}');
+        $this->repository->commitFile('Dockerfile', "FROM php:8.4-cli\n");
+
+        $tester = $this->whenTheCommandRuns(['--review' => true]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString('Job image from Dockerfile for PHP ^8.4.', $tester->getDisplay());
+        self::assertStringContainsString("FROM php:8.4-cli\n\n# Added by Intakt for a review job.\nUSER root\n", $tester->getDisplay());
+        self::assertStringContainsString('Builds .intakt-review.Dockerfile in the repository root.', $tester->getDisplay());
+    }
+
+    public function testAReviewImageOfADevcontainerImageShowsItsDockerfileAlone(): void
+    {
+        $this->repository->commitFile('.devcontainer/devcontainer.json', '{"image": "mcr.microsoft.com/devcontainers/php:8.5"}');
+
+        $tester = $this->whenTheCommandRuns(['--review' => true]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString("FROM mcr.microsoft.com/devcontainers/php:8.5\n\n# Added by Intakt for a review job.\n", $tester->getDisplay());
+        self::assertStringNotContainsString('Builds ', $tester->getDisplay());
+    }
+
+    public function testWithoutTheReviewOptionAProjectDockerfileIsShownAsItIs(): void
+    {
+        $this->repository->commitFile('Dockerfile', "FROM php:8.4-cli\n");
+
+        $tester = $this->whenTheCommandRuns();
+
+        self::assertStringNotContainsString('Added by Intakt', $tester->getDisplay());
+        self::assertStringContainsString('Builds Dockerfile in the repository root.', $tester->getDisplay());
+    }
+
     public function testARefusedProjectFailsWithTheReason(): void
     {
         $this->repository->commitFile('README.md', 'no PHP here');
@@ -81,12 +119,15 @@ final class PlanJobImageCommandTest extends TestCase
         self::assertStringContainsString('nothing to build a job image from', preg_replace('/\s+/', ' ', $tester->getDisplay()) ?? '');
     }
 
-    private function whenTheCommandRuns(): CommandTester
+    /**
+     * @param array<string, bool> $options
+     */
+    private function whenTheCommandRuns(array $options = []): CommandTester
     {
         $application = new Application();
         $application->addCommand(new PlanJobImageCommand(new JobImagePlanner(new ProjectFiles())));
         $tester = new CommandTester($application->find('intakt:job:plan-image'));
-        $tester->execute(['directory' => $this->repository->path]);
+        $tester->execute(['directory' => $this->repository->path, ...$options]);
 
         return $tester;
     }

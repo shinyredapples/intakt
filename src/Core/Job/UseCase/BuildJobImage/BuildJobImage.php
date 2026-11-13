@@ -29,11 +29,34 @@ final readonly class BuildJobImage
      */
     public function build(string $directory, string $tag): BuiltJobImage
     {
+        self::refuseAnotherThanATag($tag);
+
+        return $this->built($this->planner->planFor($directory), $directory, $tag);
+    }
+
+    /**
+     * @throws JobImageNotBuilt
+     * @throws JobRefused
+     * @throws DockerEngineFailed
+     * @throws JobOutputRefused
+     * @throws JobEventNotRecorded
+     */
+    public function buildForReview(string $directory, string $tag): BuiltJobImage
+    {
+        self::refuseAnotherThanATag($tag);
+
+        return $this->built($this->planner->planForReview($directory), $directory, $tag);
+    }
+
+    private static function refuseAnotherThanATag(string $tag): void
+    {
         if (!ImageReference::isTag($tag)) {
             throw JobImageNotBuilt::notATag($tag);
         }
+    }
 
-        $plan = $this->planner->planFor($directory);
+    private function built(JobImagePlan $plan, string $directory, string $tag): BuiltJobImage
+    {
         $build = $this->engine->build($this->context->of($plan, $directory), $tag, $plan->dockerfile);
 
         if (null !== $build->error || null === $build->image) {

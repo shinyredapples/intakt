@@ -31,7 +31,9 @@ use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlanner;
 use Intakt\Core\Job\UseCase\BuildJobImage\PhpInImage;
 use Intakt\Core\Job\UseCase\BuildJobImage\PhpProfile;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobTools;
 use Intakt\Core\Job\UseCase\BuildJobImage\ProjectFiles;
+use Intakt\Core\Job\UseCase\BuildJobImage\ReviewDockerfile;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Job\FakeDockerEngine;
 use PharData;
@@ -72,7 +74,9 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[UsesClass(JobSpec::class)]
 #[UsesClass(PhpInImage::class)]
 #[UsesClass(PhpProfile::class)]
+#[UsesClass(JobTools::class)]
 #[UsesClass(ProjectFiles::class)]
+#[UsesClass(ReviewDockerfile::class)]
 final class BuildJobImageCommandTest extends TestCase
 {
     private const string IMAGE = 'sha256:2d2f1c0b5f6e4a3b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b';
@@ -83,6 +87,7 @@ final class BuildJobImageCommandTest extends TestCase
     private string $socket = FakeDockerEngine::SOCKET;
     private string $probe = '{"version": "8.5.12", "extensions": ["core", "intl"]}';
     private string $context = '';
+    private string $url = '';
     private ?BuildJobImage $racing = null;
 
     /** @var list<MockResponse> */
@@ -166,6 +171,30 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertSame(['Dockerfile', 'composer.json'], $this->filesInTheSentContext());
     }
 
+    public function testAReviewImageSendsTheProjectsFilesWithItsDockerfileExtendedByTheJobTools(): void
+    {
+        $this->repository->commitFile('Dockerfile', "FROM php:8.5.12-cli\n");
+
+        $tester = $this->whenTheCommandRuns(self::BUILT, options: ['--review' => true]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
+        self::assertSame([ReviewDockerfile::PATH, 'Dockerfile', 'composer.json'], $this->filesInTheSentContext());
+        self::assertSame(ReviewDockerfile::after("FROM php:8.5.12-cli\n"), $this->fileInTheSentContext(ReviewDockerfile::PATH));
+        self::assertSame("FROM php:8.5.12-cli\n", $this->fileInTheSentContext('Dockerfile'));
+        self::assertStringContainsString('dockerfile='.rawurlencode(ReviewDockerfile::PATH), $this->url);
+        self::assertStringContainsString('Image intakt-job/demo:main ('.self::IMAGE.') built: PHP 8.5.12 with every required extension.', $this->display($tester));
+    }
+
+    public function testAReviewImageWithAnUnusableTagIsRefusedBeforeAnyPlan(): void
+    {
+        $this->repository->commitFile('composer.json', '{"require": {"ext-intl": "*"}}');
+
+        $tester = $this->whenTheCommandRuns(self::BUILT, 'Demo:main tag', ['--review' => true]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('"Demo:main tag" is not an image tag', $this->display($tester));
+    }
+
     public function testAProjectWithoutAPhpRecordFailsWithTheReason(): void
     {
         $this->repository->commitFile('composer.json', '{"require": {"ext-intl": "*"}}');
@@ -195,9 +224,13 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertStringContainsString('there is no socket at /nonexistent/docker.sock', $this->display($tester));
     }
 
-    private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main'): CommandTester
+    /**
+     * @param array<string, bool> $options
+     */
+    private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main', array $options = []): CommandTester
     {
         $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream): MockResponse {
+            $this->url = $url;
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
             new Filesystem()->dumpFile($this->context, is_string($options['body']) ? $options['body'] : self::fail('The build context is no string.'));
             $response = new MockResponse($stream);
@@ -212,9 +245,14 @@ final class BuildJobImageCommandTest extends TestCase
         $application = new Application();
         $application->addCommand(new BuildJobImageCommand($build));
         $tester = new CommandTester($application->find('intakt:job:build-image'));
-        $tester->execute(['directory' => $this->repository->path, 'tag' => $tag]);
+        $tester->execute(['directory' => $this->repository->path, 'tag' => $tag, ...$options]);
 
         return $tester;
+    }
+
+    private function fileInTheSentContext(string $name): string
+    {
+        return new PharData($this->context)[$name]->getContent();
     }
 
     /**
