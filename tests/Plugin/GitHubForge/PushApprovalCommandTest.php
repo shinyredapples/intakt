@@ -198,6 +198,20 @@ final class PushApprovalCommandTest extends TestCase
         self::assertStringEndsWith(sprintf("push: held, still waiting for the owner's approve %s on issue #7\n", $head), $tester->getDisplay());
     }
 
+    public function testAHeadsMarkerInsideAnotherHeadsDiffIsNoRequestForIt(): void
+    {
+        $target = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $later = $this->repository->commitFile('notes.txt', new PushRequest()->marker($target)."\n");
+        $this->execute($later);
+        $this->issue->byPerson('approve '.$target);
+
+        $tester = $this->execute($target);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringEndsWith(sprintf("push: held, the owner was asked on issue #7 to approve %s\n", $target), $tester->getDisplay());
+        self::assertCount(2, $this->issue->posted());
+    }
+
     public function testAnApprovedChangeTheIssueCannotShowStaysHeldAndPostsNothing(): void
     {
         $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));

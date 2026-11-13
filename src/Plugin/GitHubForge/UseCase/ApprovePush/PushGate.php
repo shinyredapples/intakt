@@ -127,11 +127,12 @@ final readonly class PushGate
     /**
      * @param list<IssueComment> $comments
      */
+    // Only the marker that ends the request counts, because a request shows another head's diff, which may hold this head's marker anywhere.
     private function requestIndex(array $comments, string $commit): ?int
     {
-        $marker = $this->request->marker($commit);
+        $marker = "\n".$this->request->marker($commit);
 
-        return array_find_key($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && str_contains($comment->body, $marker));
+        return array_find_key($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && str_ends_with($comment->body, $marker));
     }
 
     /**
