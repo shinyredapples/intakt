@@ -42,7 +42,7 @@ final readonly class ShowBoardController
         ]));
     }
 
-    // The cause quotes an exception, which can carry a credential, as the status report's guard decisions do.
+    // Redacted because the cause quotes an exception, which can carry a credential, as the status report does.
     private function redacted(FailingHead $head): FailingHead
     {
         return $head->withCause($this->redactor->redact($head->fault->cause));
