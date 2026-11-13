@@ -112,7 +112,8 @@ final class BuildScriptTest extends TestCase
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
 
         self::assertSame(0, $run->getExitCode());
-        $sleeps = array_map(intval(...), file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES) ?: []);
+        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
+        $sleeps = array_map(intval(...), false === $recorded ? [] : $recorded);
         self::assertNotSame([], $sleeps);
         self::assertSame([], array_values(array_filter($sleeps, $this->isRunning(...))));
     }
@@ -305,7 +306,7 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/claude', 0o755);
     }
 
-    // The CI image has no procps, so the script's sleeps report their own process ids instead of being looked up.
+    // Each sleep reports its own process id, because the CI image has no procps to look it up with.
     private function givenSleepRecordsItsProcess(): void
     {
         $sleep = new ExecutableFinder()->find('sleep');
@@ -318,7 +319,7 @@ final class BuildScriptTest extends TestCase
     {
         $stat = is_readable('/proc/'.$process.'/stat') ? file_get_contents('/proc/'.$process.'/stat') : false;
 
-        // A process nobody reaped yet is a zombie: it no longer runs.
+        // A zombie counts as ended, because a container's first process may never reap what the killed watchdog left.
         return false !== $stat && 'Z' !== substr($stat, (int) strrpos($stat, ')') + 2, 1);
     }
 
