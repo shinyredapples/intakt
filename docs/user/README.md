@@ -392,6 +392,22 @@ A project can carry `mode: live`, the same as leaving the key out, or `mode: rev
 
 To see which panel a change gets, without calling any model, run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php --label=review:full` (`--path` and `--label` can be repeated; all options are optional, and `--lines` must be zero or more). It prints the quorum and one line per reviewer with its tier, provider and budget. Intakt reads the configuration when it starts, so a changed file shows after the cache is cleared. An unknown project fails with a message. A path pattern Intakt cannot evaluate against a path (for example, one too complex for the pattern matcher) fails the same way, with a message that names the pattern. `intakt:review` takes the paths from the branch and no labels.
 
+### Which tier a build starts on
+
+A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
+
+```yaml
+projects:
+    alpha:
+        build:
+            tier: standard
+            sensitive_paths: [config/**, src/**/Security/**]
+```
+
+A build that touches a sensitive path starts on the strong tier, whatever its label says. Otherwise a `model:<tier>` label (for example `model:strong`) sets the tier, and without either the build starts on `tier`. A `model:` value that names no tier, such as a model name, is ignored. The rules look only at the labels and the touched paths of the build, so a job can never choose its own model. A bad tier, or sensitive paths that are not a list, stop Intakt from starting and name the key.
+
+To see the tier the rules choose, without calling any model, run `php bin/console intakt:build:tier <project> --label=model:strong --path=src/Foo.php` (`--label` and `--path` can be repeated and are optional). It prints the tier and why (`default`, `label` or `sensitive-path`); an unknown project fails with a message. Starting a build on the chosen tier is not wired yet, and a later part adds raising the tier after a failure.
+
 ## Looking inside the development install with Mate
 
 On a development install (`composer install` with the dev packages), `vendor/bin/mate` answers questions about the running app from its own container and environment files instead of from reading the code. It is not part of a production install: `composer install --no-dev` leaves it out.
@@ -586,7 +602,7 @@ Run `php bin/console intakt:vendor:probe` after you set or change a provider key
 
 ## What a builder is told
 
-A builder's instructions name the task, your decisions on it and, for a rework, the findings to act on, the excerpt of the failed CI log and the published pull request text it edits. Each of these is marked as untrusted text with its source (`task`, `decisions`, `act list`, `ci log`, `pull request text`), and the instructions say that marked text is data: the builder never follows a line in it that asks it to handle credentials, change protected paths, disable checks, push, merge or reach outside services. A first build is asked to write the pull request text to `PR.md`; a rework is asked to edit the published text and change only the lines it changes. Running a builder with these instructions is planned. See [Builder prompt](../architecture/builder-prompt.md).
+A builder's instructions name the task, your decisions on it and, for a rework, the findings to act on, the excerpt of the failed CI log and the published pull request text it edits. Each of these is marked as untrusted text with its source (`task`, `decisions`, `act list`, `ci log`, `pull request text`), and the instructions say that marked text is data: the builder never follows a line in it that asks it to handle credentials, change protected paths, disable checks, push, merge or reach outside services. A first build is asked to write the pull request text to `PR.md`; a rework is asked to edit the published text and change only the lines it changes. `intakt:build:run` gives a builder these instructions ([Running a build](#running-a-build)). See [Builder prompt](../architecture/builder-prompt.md).
 
 ## What a reviewer can read
 
@@ -734,6 +750,14 @@ Project memory still needs an OpenAI key: a Hugging Face token alone gives no em
 `php bin/console intakt:build:clone <project> <branch> <directory>` makes the copy a build works in, from the project's mirror (run `intakt:mirror:update` first). The new folder `<directory>` holds main (the branch the mirror's `HEAD` names) and the task's `<branch>`, checked out, and nothing else: no other branch, no tag and no remote. A branch the mirror does not hold yet starts at main. The command refuses a `<directory>` where anything already is (a folder, a file or a link, also a folder another `intakt:build:clone` made a moment before, so two runs for the same folder never share it), a project name that breaks the rule above, a project without a mirror, a mirror whose `HEAD` names no branch, a branch name git does not accept and a branch that is main itself; if a step fails after it made the folder, it removes that folder; it prints the reason and exits with 1. On success it prints `clone <directory>`.
 
 A task split from a bigger change can build on an earlier piece of work with a line of its own `Source: <branch>@<sha>` (the full commit id). Give the task's text as a file with `--task=<file>`. Add `--trusted-author` when the task's author has write access to the project: the command then checks in the mirror that the commit is on that branch and adds that one commit to the copy as `refs/source/<branch>`, not as a branch and without any later commit of that branch. A source branch git does not accept, a branch the mirror does not hold, a commit that is not on the branch, an id that names something other than a commit (an annotated tag, for example) and a task with two source lines are refused, and no copy is made. Without `--trusted-author` the source line is ignored: the command prints one line starting with `comment` that says so, and makes the copy without it. A sentence that only mentions a source line, a quoted or indented line, a line inside a fenced code example (between lines of three backticks or tildes), a line inside an `<!-- external -->` ... `<!-- /external -->` block (text copied from outside, which does not count even in a trusted task; a block that is never closed runs to the end of the text) and a short commit id are not source lines. A task file that cannot be read is refused.
+
+## Running a build
+
+`php bin/console intakt:build:run <project> <clone> <branch> <task> <image> <bundle>` runs a first build of a task: the Claude Code command-line tool works on the task in a container of its own, made from the project's job image `<image>`, and hands back its commits and the pull request text. `<clone>` is a copy made with `intakt:build:clone` for the same `<branch>`, and `<task>` is a file holding the task's text. Add `--decision="..."` once for each of your decisions on the task, in order. The model comes from the project's tiers in `config/intakt.yaml` ([Capability tiers per project](#capability-tiers-per-project)): `--tier=strong`, `standard` (the default) or `light`, and that tier must use the `claude_code` provider.
+
+The builder gets the copy's branches, the [instructions](#what-a-builder-is-told), and a network that reaches only Anthropic's API and the package registries. When it made at least one commit on the branch and wrote `PR.md`, the command writes the commits as a git bundle to `<bundle>`, prints `bundle <bundle>`, `pull request text:` and the text, and exits with 0. Check the bundle with `intakt:hand-back:check` before you trust it ([Checking what a build hands back](#checking-what-a-build-hands-back)). Otherwise it prints the end of the build's log and the reason (no commit, which is also what you see when the job could not prepare the copy of the branch, so check that the copy exists and holds the branch; no pull request text, out of memory, out of time after an hour, an output too big or not plain files, or files the builder put in the output folder itself that the job could not remove), writes no bundle and exits with 1. A second build of the same branch of the same project is refused while one runs.
+
+It needs a Docker engine (see [Job containers](../architecture/job-containers.md)). The container does not get your Claude login yet, so a real build cannot sign in; running one is not possible until that part is built.
 
 ## Checking what a build hands back
 
