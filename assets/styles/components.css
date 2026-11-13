@@ -237,6 +237,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .board { display: flex; align-items: flex-start; gap: var(--s16); overflow-x: auto; padding-bottom: var(--s16); }
 .board .col { flex: 1 1 0; min-width: 176px; }
+.board .col.col-needs { flex-grow: 1.25; min-width: 224px; }
 .col-head { display: flex; align-items: center; gap: var(--s8); height: 32px; margin-bottom: var(--s8); font-family: var(--f-head); }
 .col-head h3 { margin: 0; font-size: var(--t15); font-weight: 600; }
 .col-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--s8); }
