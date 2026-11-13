@@ -49,6 +49,19 @@ final readonly class TemporaryRepository
         return $this->commit('Point '.$path.' at '.$commit);
     }
 
+    public function commitEmptySignedWith(string $privateKeyFile, string $subject): string
+    {
+        $this->git(...self::IDENTITY, ...['-c', 'gpg.format=ssh', '-c', 'user.signingkey='.$privateKeyFile, 'commit', '--quiet', '--allow-empty', '--gpg-sign', '-m', $subject]);
+
+        return $this->git('rev-parse', 'HEAD');
+    }
+
+    // What a force push leaves: main points at a commit that does not descend from the old head.
+    public function moveHeadTo(string $commit): void
+    {
+        $this->git('reset', '--quiet', '--hard', $commit);
+    }
+
     public function commitEmpty(string $subject): string
     {
         return $this->commit($subject);
