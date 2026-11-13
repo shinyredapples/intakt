@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
+use DateTimeImmutable;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 
 // The latest event of a reviewer decides its row, because a reviewer started again after a stopped worker runs anew.
@@ -20,6 +21,7 @@ final readonly class ReviewerOutcome
         public string $id,
         public string $role,
         public string $tier,
+        public DateTimeImmutable $since,
     ) {
         $this->progress = ReviewerProgress::Running;
         $this->decision = null;
@@ -29,9 +31,9 @@ final readonly class ReviewerOutcome
         $this->mode = ProjectMode::Live;
     }
 
-    public function restarted(): self
+    public function restarted(DateTimeImmutable $at): self
     {
-        return new self($this->id, $this->role, $this->tier);
+        return new self($this->id, $this->role, $this->tier, $at);
     }
 
     public function answered(string $decision, int $findings, ProjectMode $mode): self
