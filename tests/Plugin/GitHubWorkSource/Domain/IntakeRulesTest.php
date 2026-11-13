@@ -65,7 +65,7 @@ final class IntakeRulesTest extends TestCase
 
     public function testATaskWhoseHistoryWasNotReadIsNotEligible(): void
     {
-        self::assertSame([], $this->readyOf([new QueuedIssue(new ItemReading(Issues::task(1), [], []))]));
+        self::assertSame([], $this->readyOf([new QueuedIssue(new ItemReading(Issues::task(1), [], [], []))]));
     }
 
     public function testAPullRequestIsNoTask(): void
@@ -139,18 +139,39 @@ final class IntakeRulesTest extends TestCase
         self::assertSame('depends on #3, which failed for good: cannot build', $plan->held[0]->reason);
     }
 
-    public function testAWaitOnAPullRequestOfAnAccountWithoutWriteAccessLastsUntilThePullRequestCloses(): void
+    public function testAPullRequestOfAnAccountWithoutWriteAccessIsNoWaitTarget(): void
     {
-        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #1', 'mallory'))]);
-
-        self::assertSame('waits for #50', $plan->held[0]->reason);
+        self::assertSame([1, 2], $this->readyOf([
+            $this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])),
+            $this->row(Issues::pullRequest(50, 'Fixes #1', 'mallory')),
+            $this->row(Issues::pullRequest(51, 'Fixes #3', 'mallory')),
+            $this->row(Issues::task(2, ['intakt'], with: ['body' => 'Waits for #51'])),
+            $this->row(Issues::task(3, ['bug'])),
+        ]));
     }
 
-    public function testAWaitOnAPullRequestLastEditedByAnAccountWithoutWriteAccessLastsUntilThePullRequestCloses(): void
+    public function testAPullRequestLastEditedByAnAccountWithoutWriteAccessIsNoWaitTarget(): void
     {
-        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #1'), $this->history('mallory', []))]);
+        self::assertSame([1], $this->readyOf([
+            $this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])),
+            $this->row(Issues::pullRequest(50, 'Closes #3'), $this->history('mallory', [])),
+            $this->row(Issues::task(3, ['bug'])),
+        ]));
+    }
 
-        self::assertSame('waits for #50', $plan->held[0]->reason);
+    public function testATaskWithAWaitsForLineInAnotherFormIsHeldWithTheLine(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => "Do it.\nWaits for billing#12"]))]);
+
+        self::assertSame([], $this->numbers($plan->ready));
+        self::assertSame('unreadable wait: "Waits for billing#12"', $plan->held[0]->reason);
+    }
+
+    public function testATaskWaitingInAnOxfordCommaListIsHeldByTheLastOne(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #9, #10, and #11'])), $this->row(Issues::task(11, ['bug']))]);
+
+        self::assertSame('waits for #11', $plan->held[0]->reason);
     }
 
     public function testAWaitOnAPullRequestWithoutAClosingKeywordLastsUntilThePullRequestCloses(): void
@@ -325,7 +346,7 @@ final class IntakeRulesTest extends TestCase
     private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
     {
         $references = new IssueReferences();
-        $row = new QueuedIssue(new ItemReading($listed, $references->waitsFor($listed->body), $references->closedBy($listed->body)));
+        $row = new QueuedIssue(new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
 
         return $row->vouchedBy(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys($listed->labels, $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
     }

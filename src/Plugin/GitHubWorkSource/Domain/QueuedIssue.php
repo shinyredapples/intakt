@@ -66,6 +66,14 @@ final readonly class QueuedIssue
     }
 
     /**
+     * @return list<string>
+     */
+    public function unreadableWaits(): array
+    {
+        return $this->reading->unreadableWaits;
+    }
+
+    /**
      * @return list<int>
      */
     public function closedBy(): array

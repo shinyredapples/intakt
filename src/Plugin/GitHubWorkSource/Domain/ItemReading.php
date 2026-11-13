@@ -12,12 +12,14 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class ItemReading
 {
     /**
-     * @param list<int> $waitsFor
-     * @param list<int> $closedBy
+     * @param list<int>    $waitsFor
+     * @param list<string> $unreadableWaits
+     * @param list<int>    $closedBy
      */
     public function __construct(
         public ListedIssue $listed,
         public array $waitsFor,
+        public array $unreadableWaits,
         public array $closedBy,
     ) {
     }

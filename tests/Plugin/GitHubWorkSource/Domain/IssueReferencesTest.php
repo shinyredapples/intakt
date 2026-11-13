@@ -22,6 +22,13 @@ final class IssueReferencesTest extends TestCase
         yield 'several lines' => ["Waits for #9\nWaits for #4.", [9, 4]];
         yield 'any case, indented' => ['   waits FOR #7', [7]];
         yield 'twice named' => ["Waits for #9\nWaits for #9", [9]];
+        yield 'an Oxford comma' => ['Waits for #9, #10, and #11', [9, 10, 11]];
+        yield 'a comma and the last one' => ['Waits for #9, and #10', [9, 10]];
+        yield 'a note after the number' => ['Waits for #9 (part 1)', [9]];
+        yield 'what it provides after a colon' => ['Waits for #1600: the forge reads', [1600]];
+        yield 'a colon after the words' => ['Waits for: #9', [9]];
+        yield 'Windows line ends' => ["Waits for #9\r\nWaits for #10 (part 2)\r\n", [9, 10]];
+        yield 'in a markdown list' =>["- Waits for #9\n* Waits for #10", [9, 10]];
         yield 'prose that mentions an issue' => ['This task waits for #9 to land in its own time.', []];
         yield 'a plain reference' => ['See #9', []];
         yield 'nothing' => ['', []];
@@ -34,6 +41,28 @@ final class IssueReferencesTest extends TestCase
     public function testOnlyAWaitsForLineNamesTheIssuesATaskWaitsOn(string $body, array $expected): void
     {
         self::assertSame($expected, new IssueReferences()->waitsFor($body));
+        self::assertSame([], new IssueReferences()->unreadableWaits($body));
+    }
+
+    /**
+     * @return iterable<string, array{string, list<string>}>
+     */
+    public static function unreadableWaitLines(): iterable
+    {
+        yield 'no number' => ["Do it.\nWaits for the forge reads\n", ['Waits for the forge reads']];
+        yield 'another repository' => ['Waits for billing#12', ['Waits for billing#12']];
+        yield 'a number without its sign' => ['Waits for #9 and 10', ['Waits for #9 and 10']];
+        yield 'another number in the note' => ['  - Waits for #9 (after #8)', ['- Waits for #9 (after #8)']];
+        yield 'nothing after the words' => ['Waits for', ['Waits for']];
+    }
+
+    /**
+     * @param list<string> $expected
+     */
+    #[DataProvider('unreadableWaitLines')]
+    public function testAWaitsForLineInAnotherFormIsUnreadableInsteadOfIgnored(string $body, array $expected): void
+    {
+        self::assertSame($expected, new IssueReferences()->unreadableWaits($body));
     }
 
     /**

@@ -105,6 +105,11 @@ final readonly class IntakeRules
             return 'failed for good: '.$failures[$task->number()];
         }
 
+        // A wait Intakt cannot read holds the task, because building it before its base costs more than asking for the line in the usual form.
+        if ([] !== $task->unreadableWaits()) {
+            return 'unreadable wait: '.implode(', ', array_map(static fn (string $line): string => '"'.$line.'"', $task->unreadableWaits()));
+        }
+
         $targets = $this->targetsOf($task, $open);
         $failed = array_find($targets, static fn (int $target): bool => isset($failures[$target]));
         if (null !== $failed) {
@@ -133,12 +138,17 @@ final readonly class IntakeRules
     }
 
     // A trusted pull request stands for the tasks it closes, because the work waited for is theirs; one that closes the waiting task is its own and no wait, because the build hands over instead.
+    // Anyone else's pull request is no wait at all, because anyone can open one and would hold a task for as long as it stays open.
     /**
      * @return list<int>
      */
     private function resolved(QueuedIssue $task, int $number, ?QueuedIssue $item): array
     {
-        if (!$item instanceof QueuedIssue || !$this->isTrustedPullRequest($item) || [] === $item->closedBy()) {
+        if ($item instanceof QueuedIssue && $item->isPullRequest() && !$item->isTrusted()) {
+            return [];
+        }
+
+        if (!$item instanceof QueuedIssue || !$item->isPullRequest() || [] === $item->closedBy()) {
             return [$number];
         }
 
