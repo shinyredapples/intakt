@@ -100,10 +100,7 @@ final class GitHubIssueReadsTest extends TestCase
         $api = new RecordedIssueApi();
         $api->notModified = true;
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('GitHub answered 304 to a read without a validator.');
-
-        $api->reads()->listOpen('alpha', null);
+        self::assertSame('GitHub answered 304 to a read without a validator.', $this->failureOf($api)->getMessage());
     }
 
     public function testAFailedLaterPageFailsTheWholeListing(): void
