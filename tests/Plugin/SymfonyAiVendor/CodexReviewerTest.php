@@ -339,6 +339,26 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
     }
 
+    public function testAnApprovalFromACliWhoseReadThroughTheReviewServerOnlyStartedIsRefused(): void
+    {
+        $this->replaying('review-server-read-started-only');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliWhoseMessageOnlyTextQuotesAReadThroughTheReviewServerIsRefused(): void
+    {
+        $this->replaying('review-server-read-in-message');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
     public function testAnApprovalFromACliGivenTheReviewServerThatReadOnlyThroughAnotherServerIsRefused(): void
     {
         $this->replaying('other-server-read');
