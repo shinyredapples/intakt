@@ -34,7 +34,7 @@
 
 ## Vendor terms
 
-Some vendors' consumer subscriptions restrict automated or unattended use. Intakt will document, per vendor plugin, which plans its terms allow for this kind of use, show it at setup next to each account, and leave the choice to the owner: subscriptions and API keys are equally configurable, and the wizard never hides one of them. For ChatGPT plans, check OpenAI's sign-in route for third-party apps, which has per-app usage caps; if it applies, those caps are one more budget input for the planner.
+Some vendors' consumer subscriptions restrict automated or unattended use. Intakt will document, per vendor plugin, which plans its terms allow for this kind of use, show it at setup next to each account, and leave the choice to the owner: subscriptions and API keys are equally configurable, and the wizard never hides one of them. For ChatGPT plans, check OpenAI's sign-in route for third-party apps, which has per-app usage caps; if it applies, those caps are one more budget input for the model planner.
 
 ## Code standards
 
