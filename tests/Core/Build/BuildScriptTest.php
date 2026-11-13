@@ -66,9 +66,94 @@ final class BuildScriptTest extends TestCase
 
         self::assertSame("Build the task.\n", (string) file_get_contents($this->history->folder.'/input'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'json', '--dangerously-skip-permissions'],
+            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions'],
             explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments'))),
         );
+    }
+
+    public function testASessionCutAtItsAllowanceAfterCommittingHandsBackABundleOfItsCommits(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            sleep 30
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatPutsAFolderWhereACutMarkerCouldBeIsStillCutAtItsAllowance(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkdir "$TMPDIR/cut"
+            sleep 30
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatWritesACutMarkerItselfIsNotLoggedAsCut(): void
+    {
+        $this->givenTheCli('touch "$TMPDIR/cut"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatKillsItselfBeforeItsAllowanceIsNotLoggedAsCut(): void
+    {
+        $this->givenTheCli('kill -s KILL $$');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatEndsByItsTurnLimitKeepsItsCommitsAndIsNotLoggedAsCut(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            echo '{"subtype":"error_max_turns"}'
+            exit 1
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatEndsBeforeItsAllowanceLeavesNoWatchdogBehind(): void
+    {
+        // Waits for the watchdog's sleep, because a session that ends at once could end the watchdog before its sleep is recorded.
+        $this->givenTheCli('until [ -s "$RECORD/sleeps" ]; do :; done; exit 0');
+        $this->givenSleepRecordsItsProcess();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
+
+        self::assertSame(0, $run->getExitCode());
+        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
+        $sleeps = array_map(intval(...), false === $recorded ? [] : $recorded);
+        self::assertNotSame([], $sleeps);
+        self::assertSame([], array_values(array_filter($sleeps, $this->isRunning(...))));
     }
 
     public function testTheCliWorksInAFreshCloneOnTheTasksBranchWithOnlyTheBuildClonesBranches(): void
@@ -259,6 +344,23 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/claude', 0o755);
     }
 
+    // Each sleep reports its own process id, because the CI image has no procps to look it up with.
+    private function givenSleepRecordsItsProcess(): void
+    {
+        $sleep = new ExecutableFinder()->find('sleep');
+        self::assertNotNull($sleep);
+        file_put_contents($this->bin.'/sleep', "#!/bin/sh\necho \$\$ >> \"\$RECORD/sleeps\"\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
+        chmod($this->bin.'/sleep', 0o755);
+    }
+
+    private function isRunning(int $process): bool
+    {
+        $stat = is_readable('/proc/'.$process.'/stat') ? file_get_contents('/proc/'.$process.'/stat') : false;
+
+        // A zombie counts as ended, because a container's first process may never reap what the killed watchdog left.
+        return false !== $stat && 'Z' !== substr($stat, (int) strrpos($stat, ')') + 2, 1);
+    }
+
     private function givenGitLeavesAPartialBundleAndFails(): void
     {
         $git = (string) new ExecutableFinder()->find('git');
@@ -273,10 +375,10 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/git', 0o755);
     }
 
-    private function whenTheBuildRuns(string $branch, string $model): Process
+    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance],
             null,
             $this->environment(),
             timeout: 20,

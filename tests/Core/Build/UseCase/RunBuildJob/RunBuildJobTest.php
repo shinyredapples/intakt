@@ -91,9 +91,17 @@ final class RunBuildJobTest extends TestCase
 
         self::assertNotNull($this->ran);
         self::assertSame(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5'],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000'],
             $this->ran->command,
         );
+    }
+
+    public function testTheJobsTimeLimitLeavesRoomToBundleAfterTheAllowance(): void
+    {
+        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+
+        self::assertNotNull($this->ran);
+        self::assertGreaterThan((int) $this->ran->command[9], $this->ran->limits->seconds);
     }
 
     public function testTheBuildClonedAndThePromptAreTheJobsOnlyInputs(): void
