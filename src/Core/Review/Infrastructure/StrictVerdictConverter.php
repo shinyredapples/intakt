@@ -39,6 +39,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         private ResultConverterInterface $inner,
         private SerializerInterface $serializer,
         private ValidatorInterface $validator,
+        private bool $readsFencedBlock = false,
     ) {
     }
 
@@ -137,10 +138,18 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     private function verdictFrom(string $content): Verdict
     {
         try {
-            return $this->deserialized($content);
+            return $this->deserialized($this->readsFencedBlock ? $this->fencedBlockOf($content) : $content);
         } catch (ExceptionInterface $exception) {
             throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
         }
+    }
+
+    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block; any other count leaves the text as it is, which then fails as invalid.
+    private function fencedBlockOf(string $content): string
+    {
+        $found = preg_match_all('/^```json[ \t]*\R(.*?)\R```[ \t]*$/ms', $content, $blocks);
+
+        return 1 === $found ? $blocks[1][0] : $content;
     }
 
     /**

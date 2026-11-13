@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Verdict;
+use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
+use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Event\ResultEvent;
+use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactoryInterface;
@@ -35,8 +38,13 @@ final readonly class StrictVerdictSubscriber implements EventSubscriberInterface
         }
 
         $deferred = $event->getDeferredResult();
-        $converter = new StrictVerdictConverter($deferred->getResultConverter(), $this->serializer, $this->validator);
+        $converter = new StrictVerdictConverter($deferred->getResultConverter(), $this->serializer, $this->validator, $this->answersInProse($event->getModel()));
         $event->setDeferredResult(new DeferredResult($converter, $deferred->getRawResult(), $event->getOptions()));
+    }
+
+    private function answersInProse(Model $model): bool
+    {
+        return $model instanceof ClaudeCode || $model instanceof Codex;
     }
 
     /**

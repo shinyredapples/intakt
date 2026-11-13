@@ -65,6 +65,7 @@ use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
@@ -158,6 +159,32 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[1]['usages'];
         self::assertSame([120, 40], [$usages[0]['prompt'], $usages[0]['completion']]);
+    }
+
+    public function testProseAroundOneFencedJsonBlockYieldsTheTypedVerdict(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('fenced'))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+    }
+
+    #[DataProvider('unreadableAnswers')]
+    public function testAnAnswerWithoutExactlyOneVerdictBlockIsRecordedAsInvalidOutput(string $recording): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying($recording))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unreadableAnswers(): iterable
+    {
+        yield 'no block' => ['prose-only'];
+        yield 'two blocks' => ['two-blocks'];
+        yield 'a block that is not a verdict' => ['not-a-verdict'];
     }
 
     public function testTheCliGetsNoToolsNoProjectSettingsAndTheVerdictSchema(): void
