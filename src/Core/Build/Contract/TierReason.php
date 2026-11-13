@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\Contract;
 enum TierReason: string
 {
     case SensitivePath = 'sensitive-path';
+    case Setback = 'setback';
     case Label = 'label';
     case Default = 'default';
 }
