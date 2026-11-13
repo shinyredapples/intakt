@@ -131,7 +131,7 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $answer = RecordedAnthropicTurns::answering()->thinking('Done.')->saying(VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('id', '')->json());
 
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('findings[0].id: This value should not be blank.');
+        $this->expectExceptionMessageMatches('/findings\[0\]\.id: This value should not be blank\.$/');
 
         $this->review($this->unstreamed($answer));
     }

@@ -971,15 +971,13 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $ledger = new InMemoryLedger();
         $vendor = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger);
 
-        $this->refusedAsUnreadable(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+        RefusedAsUnreadable::after(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
 
         $payloads = $ledger->payloads();
         self::assertSame(['started', 'settled', 'started', 'settled'], array_column($payloads, 'phase'));
-        foreach ([$payloads[1], $payloads[3]] as $settled) {
-            /** @var list<array<string, int>> $usages */
-            $usages = $settled['usages'];
-            self::assertSame([100, 20], [$usages[0]['prompt'], $usages[0]['completion']]);
-        }
+        /** @var array{0: array{usages: list<array<string, int>>}, 1: array{usages: list<array<string, int>>}} $settled */
+        $settled = [$payloads[1], $payloads[3]];
+        self::assertSame([[100, 20], [100, 20]], [[$settled[0]['usages'][0]['prompt'], $settled[0]['usages'][0]['completion']], [$settled[1]['usages'][0]['prompt'], $settled[1]['usages'][0]['completion']]]);
     }
 
     public function testAProviderAnswerThatFailsToMapSettlesWithTheTokensItsExtractorReads(): void
@@ -1018,7 +1016,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $logger = new BufferingLogger();
         $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), $logger, StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW));
 
-        $this->refusedAsUnreadable(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+        RefusedAsUnreadable::after(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
 
         $payloads = $ledger->payloads();
         self::assertSame(['started', 'unsettled', 'started', 'unsettled'], array_column($payloads, 'phase'));
@@ -1027,20 +1025,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $logs = $logger->cleanLogs();
         self::assertSame('warning', $logs[0][0]);
         self::assertInstanceOf(JsonException::class, $logs[0][2]['exception']);
-    }
-
-    /**
-     * @param Closure(): VendorReview $review
-     */
-    private function refusedAsUnreadable(Closure $review): void
-    {
-        try {
-            $review();
-        } catch (VerdictUnreadable) {
-            return;
-        }
-
-        self::fail('The answer was not refused as unreadable.');
     }
 
     public function testAnAggregatedUsageSettlesAsOneEntryPerPart(): void

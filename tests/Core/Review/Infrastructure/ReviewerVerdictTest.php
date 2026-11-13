@@ -390,7 +390,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->open = [$this->openFinding('F1')];
 
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('ids that were not open: F9');
+        $this->expectExceptionMessageMatches('/ids that were not open: F9\.$/');
 
         $this->review('Add a cart.', [], '{"verdict":"approve","findings":[],"resolved":["F9"],"follow_ups":[]}');
     }
@@ -400,7 +400,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->open = [$this->openFinding('F1')];
 
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('ids that were not open: F7');
+        $this->expectExceptionMessageMatches('/ids that were not open: F7\.$/');
 
         $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('id', 'F7')->withFinding('repeat', true)->json());
     }
@@ -410,7 +410,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->open = [$this->openFinding('F3')];
 
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('both resolved and repeat: F3');
+        $this->expectExceptionMessageMatches('/both resolved and repeat: F3\.$/');
 
         $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', ['F3'])->withFinding('repeat', true)->json());
     }

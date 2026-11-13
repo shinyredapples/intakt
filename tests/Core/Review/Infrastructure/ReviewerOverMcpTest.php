@@ -123,7 +123,7 @@ final class ReviewerOverMcpTest extends KernelTestCase
     public function testAMalformedToolCallOverMcpStillRefusesTheAnswerAsUnreadable(): void
     {
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('malformed tool call');
+        $this->expectExceptionMessageMatches('/malformed tool call/');
 
         $this->review($this->mcpToolboxes()->create(...), 'no_such_tool');
     }

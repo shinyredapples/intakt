@@ -122,7 +122,7 @@ final class VerdictParserTest extends KernelTestCase
     public function testABrokenFieldRuleIsRefusedAsUnreadableSayingWhy(string $output, string $why): void
     {
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage($why);
+        $this->expectExceptionMessageMatches('/'.preg_quote($why, '/').'/');
 
         $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
     }
@@ -132,7 +132,7 @@ final class VerdictParserTest extends KernelTestCase
         $output = str_replace('"line":12', '"line":12.0', VerdictDocument::fromTheDesign()->json());
 
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessage('"line" attribute');
+        $this->expectExceptionMessageMatches('/"line" attribute/');
 
         $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
     }
