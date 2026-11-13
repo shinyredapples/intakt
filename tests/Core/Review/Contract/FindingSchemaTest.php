@@ -21,4 +21,12 @@ final class FindingSchemaTest extends TestCase
         self::assertArrayHasKey('fixable_by', $properties);
         self::assertArrayNotHasKey('fixableBy', $properties);
     }
+
+    public function testTheStructuredOutputSchemaOfAFindingDoesNotAskForMergedIds(): void
+    {
+        /** @var array<string, mixed> $properties */
+        $properties = new ResponseFormatFactory()->create(Finding::class)['json_schema']['schema']['properties'];
+
+        self::assertArrayNotHasKey('merged', $properties);
+    }
 }

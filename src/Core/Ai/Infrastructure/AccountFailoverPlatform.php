@@ -78,7 +78,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         foreach ($this->platforms as $name => $platform) {
             $account = new Account($this->provider, $name);
             if (!$this->cooldowns->isCoolingDown($account)) {
-                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->logger, $failures);
+                $free[$name] = new AccountPlatform($account, $platform, $this->cooldowns, $this->clock, $this->logger, $failures);
             }
         }
 
