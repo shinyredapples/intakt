@@ -18,6 +18,7 @@ flowchart LR
 | **Forge** | list work, read an issue, open or update a pull request, read CI status, merge, comment | GitHub, Gitea |
 | **Vendor** | run a build, run a review, report usage, report prices and limits | Claude Code, Codex, an OpenAI-compatible API |
 | **Gate** | name the steps of the check and the hosts its downloads come from (built); name the files it protects (planned) | PHP: `composer install` and `bin/check --fast`, or the project's own command (`make check`, ...) |
+| **Language** | decide whether a change to the package files is routine or needs the owner (built); compare two versions of a file without comments, set the memory limit of a job's processes (planned) | PHP: Composer's `composer.json` and `composer.lock` |
 | **Work source** | say which tasks are eligible, and in what order | forge issues with a label, with `Waits for #n` |
 | **Notifier** | deliver a notice, report whether it arrived, send a test | browser push, Home Assistant, ntfy, webhook, email |
 
