@@ -174,7 +174,7 @@ final readonly class RateLimitReadings
         $current = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId, $pool)));
         $earlier = $this->pauseStoredByAnEarlierVersion($installationId, $pool);
 
-        return null === $current || null === $earlier ? $current ?? $earlier : max($current, $earlier);
+        return $current instanceof DateTimeImmutable && $earlier instanceof DateTimeImmutable ? max($current, $earlier) : $current ?? $earlier;
     }
 
     // Honored until it expires, because an install upgraded during a pause stored it under the key the earlier version used (the installation id alone, for REST calls only), and dropping it would resume calls before GitHub's reset.

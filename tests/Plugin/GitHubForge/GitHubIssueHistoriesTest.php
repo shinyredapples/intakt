@@ -111,8 +111,10 @@ final class GitHubIssueHistoriesTest extends TestCase
         $api = $this->answering('history_edited.json');
         $api->histories()->of('alpha', 12);
 
-        $query = json_decode($api->graphqlRequests[0], true, flags: JSON_THROW_ON_ERROR)['query'];
-        self::assertSame(4, preg_match_all('/(author|editor|actor) \{[^}]*__typename/', $query));
+        $body = json_decode($api->graphqlRequests[0], true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($body);
+        self::assertIsString($body['query']);
+        self::assertSame(4, preg_match_all('/(author|editor|actor) \{[^}]*__typename/', $body['query']));
     }
 
     public function testANullEditorWithoutAnErrorFailsTheReadInsteadOfNamingTheAuthor(): void

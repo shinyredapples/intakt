@@ -194,7 +194,7 @@ final class RateLimitReadingsTest extends TestCase
         self::assertNull($this->process()->latest('678'));
     }
 
-    // The key the version before the per-pool keys wrote: the kind and the hashed installation id alone.
+    // Written under the kind and the hashed installation id alone, because that is the key the version before the per-pool keys used.
     private function pauseStoredByAnEarlierVersion(): void
     {
         $cache = new FilesystemAdapter('', 0, $this->directory);

@@ -23,7 +23,7 @@ final readonly class GitHubIssueHistories
     private const int UNAUTHORIZED = 401;
     private const string LABELED = 'LabeledEvent';
     private const string UNLABELED = 'UnlabeledEvent';
-    // GraphQL names an App by its bare slug (`renovate`), while the REST API and the trust check name it `renovate[bot]`.
+    // Suffixed, because GraphQL names an App by its bare slug (`renovate`) while the trust check tells an App from a person by the `[bot]` the REST API adds.
     private const string APP = 'Bot';
     private const string APP_SUFFIX = '[bot]';
     private const string QUERY = <<<'GRAPHQL'
@@ -140,26 +140,10 @@ final readonly class GitHubIssueHistories
      */
     private function labelsOf(array $issue): array
     {
-        $timeline = $this->at($issue, 'timelineItems');
-        $events = is_array($timeline) ? ($timeline['nodes'] ?? null) : null;
-        // Only a page that says it is the last proves the history whole; a missing flag is no such proof.
-        if (!is_array($timeline) || !is_array($events) || false !== $this->at($timeline, 'pageInfo', 'hasNextPage')) {
-            throw new ForgeReadFailed('GitHub answered a label history this forge cannot read whole.');
-        }
-
         // Keyed by label, because a label applied again must take its later place and a removed one must leave.
         $applied = [];
-        foreach ($events as $event) {
-            if (!is_array($event)) {
-                throw new ForgeReadFailed('GitHub listed a label event that is not an object.');
-            }
-
-            // An event of another kind fails instead of counting as a removal, because a removal it did not record would drop a label's applier.
-            $kind = $event['__typename'] ?? null;
-            if (!in_array($kind, [self::LABELED, self::UNLABELED], true)) {
-                throw new ForgeReadFailed('GitHub listed a label event of a kind this forge does not read.');
-            }
-
+        foreach ($this->eventsOf($issue) as $event) {
+            $kind = $this->kindOf($event);
             // The actor of a removal is checked too, because an answer without one is not the history GitHub recorded.
             $label = $this->text($event, 'label', 'name');
             $actor = $this->login($event, 'actor');
@@ -170,6 +154,34 @@ final readonly class GitHubIssueHistories
         }
 
         return array_values($applied);
+    }
+
+    /**
+     * @param array<mixed> $issue
+     *
+     * @return array<array<mixed>>
+     */
+    private function eventsOf(array $issue): array
+    {
+        $timeline = $this->at($issue, 'timelineItems');
+        $events = is_array($timeline) ? ($timeline['nodes'] ?? null) : null;
+        // The flag must be false, because only a page that says it is the last proves the history whole.
+        if (!is_array($timeline) || !is_array($events) || false !== $this->at($timeline, 'pageInfo', 'hasNextPage')) {
+            throw new ForgeReadFailed('GitHub answered a label history this forge cannot read whole.');
+        }
+
+        return array_map(static fn (mixed $event): array => is_array($event) ? $event : throw new ForgeReadFailed('GitHub listed a label event that is not an object.'), $events);
+    }
+
+    /**
+     * @param array<mixed> $event
+     */
+    private function kindOf(array $event): string
+    {
+        $kind = $event['__typename'] ?? null;
+
+        // An event of another kind fails instead of counting as a removal, because a removal GitHub did not record would drop a label's applier.
+        return is_string($kind) && in_array($kind, [self::LABELED, self::UNLABELED], true) ? $kind : throw new ForgeReadFailed('GitHub listed a label event of a kind this forge does not read.');
     }
 
     /**
