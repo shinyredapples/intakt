@@ -127,6 +127,21 @@ final class ScanCiChangeCommandTest extends TestCase
             TEXT, $tester->getDisplay());
     }
 
+    public function testAHeadThatLinksTheWorkflowsFolderElsewhereWaitsForTheOwner(): void
+    {
+        $this->repository->commitFile('other/deploy.yml', $this->fixture('risky.yml'));
+        $this->repository->removeFile('.github/workflows/checks.yml');
+        rmdir($this->repository->path.'/.github/workflows');
+        symlink('../other', $this->repository->path.'/.github/workflows');
+        $this->repository->commitFile('bin/check', "#!/bin/sh\n");
+
+        $tester = $this->execute('head');
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString("head .github/workflows line 0: unreadable: the workflow could not be read: a blob entry with mode 120000, not a folder\n", $tester->getDisplay());
+        self::assertStringEndsWith("push waits for the owner: yes\n", $tester->getDisplay());
+    }
+
     public function testAFileNameThatWouldForgeALineIsEscaped(): void
     {
         $this->repository->commitFile("src/a\nci bin/check", "x\n");

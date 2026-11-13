@@ -69,6 +69,42 @@ final class MirrorWorkflowsTest extends TestCase
         self::assertSame(['.github/workflows/ci.yml' => "main's ci\n", '.github/workflows/linked.yml' => 'a blob entry with mode 120000, not a regular file'], $this->texts($this->read()->head));
     }
 
+    public function testALinkedWorkflowsFolderIsUnreadOnTheHeadAndTheMerge(): void
+    {
+        $this->repository->commitFile('other/ci.yml', "runs-on: self-hosted\n");
+        $this->repository->removeFile('.github/workflows/ci.yml');
+        rmdir($this->repository->path.'/.github/workflows');
+        symlink('../other', $this->repository->path.'/.github/workflows');
+        $this->repository->commitFile('scripts/test.sh', "test\n");
+
+        $workflows = $this->read();
+
+        self::assertSame(['.github/workflows' => 'a blob entry with mode 120000, not a folder'], $this->texts($workflows->head));
+        self::assertSame(['.github/workflows' => 'a blob entry with mode 120000, not a folder'], $this->texts($workflows->merged));
+        self::assertSame(['.github/workflows/ci.yml' => "main's ci\n"], $this->texts($workflows->main));
+    }
+
+    public function testALinkedGithubFolderIsUnread(): void
+    {
+        $this->repository->commitFile('other/workflows/ci.yml', "runs-on: self-hosted\n");
+        $this->repository->removeFile('.github/workflows/ci.yml');
+        rmdir($this->repository->path.'/.github/workflows');
+        rmdir($this->repository->path.'/.github');
+        symlink('other', $this->repository->path.'/.github');
+        $this->repository->commitFile('scripts/test.sh', "test\n");
+
+        self::assertSame(['.github' => 'a blob entry with mode 120000, not a folder'], $this->texts($this->read()->head));
+    }
+
+    public function testAWorkflowsFolderThatIsAFileIsUnread(): void
+    {
+        $this->repository->removeFile('.github/workflows/ci.yml');
+        rmdir($this->repository->path.'/.github/workflows');
+        $this->repository->commitFile('.github/workflows', "not a folder\n");
+
+        self::assertSame(['.github/workflows' => 'a blob entry with mode 100644, not a folder'], $this->texts($this->read()->head));
+    }
+
     public function testAConflictWithMainLeavesTheMergedWorkflowsUnread(): void
     {
         $this->repository->commitFile('.github/workflows/ci.yml', "head's ci\n");
