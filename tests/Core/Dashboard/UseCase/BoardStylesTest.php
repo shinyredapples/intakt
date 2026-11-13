@@ -18,6 +18,13 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/flex:\s*1 1 0;\s*min-width:\s*176px/', $rules['.board .col'] ?? '');
     }
 
+    public function testTheWaitingOnYouColumnTakesTheMocksLargerShareAndMinimumWidth(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*flex-grow:\s*1\.25;\s*min-width:\s*224px;\s*$/', $rules['.board .col.col-needs'] ?? '');
+    }
+
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void
     {
         $rules = $this->rulesOf($this->mediaBlock('min-width: 1700px'));
