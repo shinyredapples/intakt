@@ -17,12 +17,12 @@ use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use stdClass;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Exception\InvalidOptionException;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\TransportInterface;
-use stdClass;
 
 // Through the kernel and the Doctrine ledger, because the evidence of the status is this command on a running install.
 #[Group('persistence')]
