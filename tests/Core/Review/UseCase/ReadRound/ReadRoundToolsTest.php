@@ -161,6 +161,7 @@ final class ReadRoundToolsTest extends KernelTestCase
             'requirement' => null,
             'evidence' => null,
             'regression' => false,
+            'merged' => [],
         ], $findings[0]);
     }
 

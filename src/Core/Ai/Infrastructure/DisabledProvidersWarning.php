@@ -13,6 +13,9 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 // Standard error because the log in the application has no handler yet that prints warnings.
 final readonly class DisabledProvidersWarning
 {
+    // Only the commands that show which providers are off, so no other command's result is preceded by the notes.
+    private const array COMMANDS = ['intakt:ai:tiers', 'intakt:vendor:probe'];
+
     /**
      * @param array<string, string> $disabledProviders
      * @param list<string>          $disabledAccounts
@@ -28,6 +31,10 @@ final readonly class DisabledProvidersWarning
     #[AsEventListener(event: ConsoleCommandEvent::class)]
     public function onConsoleCommand(ConsoleCommandEvent $event): void
     {
+        if (!in_array($event->getCommand()?->getName(), self::COMMANDS, true)) {
+            return;
+        }
+
         $output = $event->getOutput();
         $errors = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
 
