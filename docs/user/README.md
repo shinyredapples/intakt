@@ -715,7 +715,7 @@ The first start seeds the demo, in the volume:
 - the sample repository at `/app/var/data/sample-repository`, with the branch `sample-change` to review against `main`;
 - the project `sample` in `/app/var/data/intakt.yaml`, with a panel of two reviewers (`correctness` and `security`) that must both approve. With one Anthropic or OpenAI key, both reviewers use that provider; with both keys, `correctness` uses Anthropic and `security` uses OpenAI. With `HF_TOKEN` beside one or both keys, `security` moves to Hugging Face, so the two reviewers use two providers; with `HF_TOKEN` alone, see [Running the demo on a Hugging Face token](#running-the-demo-on-a-hugging-face-token).
 
-The log then shows the command that reviews the sample change. Run it inside the container, for example:
+The log then shows the command that reviews the sample change, in the form your shell runs from the repository folder (it runs the console inside the container). Copy it as printed:
 
 ```
 docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
@@ -735,7 +735,7 @@ Later starts keep both as they are (the log says `Kept`), also when you add a ke
 
 ### Running the demo on a Hugging Face token
 
-`HF_TOKEN` lets you try the demo without a paid Anthropic or OpenAI key. Create a fine-grained token on Hugging Face with only the permission "Make calls to Inference Providers". The container hands it to the `openai_compatible` provider, with `https://router.huggingface.co` as the base URL, unless you set `OPENAI_COMPATIBLE_BASE_URL` or `OPENAI_COMPATIBLE_API_KEY` in the environment yourself (then yours win and the token is not used).
+`HF_TOKEN` lets you try the demo without an Anthropic or OpenAI key. The demo needs one provider key or one Hugging Face token, and its calls are billed to the key's or the token's owner. Create a fine-grained token on Hugging Face with only the permission "Make calls to Inference Providers". The container hands it to the `openai_compatible` provider, with `https://router.huggingface.co` as the base URL, unless you set `OPENAI_COMPATIBLE_BASE_URL` or `OPENAI_COMPATIBLE_API_KEY` in the environment yourself (then yours win and the token is not used).
 
 - With `HF_TOKEN` alone, the two reviewers run on models of two different makers through it: `correctness` on `moonshotai/Kimi-K3:deepinfra` and `security` on `openai/gpt-oss-120b:novita`.
 - With `HF_TOKEN` and `ANTHROPIC_API_KEY`, `correctness` stays on Anthropic and `security` runs on `moonshotai/Kimi-K3:deepinfra`. Two separate providers are the stronger setup: one token is one outage, one rate limit and one bill.

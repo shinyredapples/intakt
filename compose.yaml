@@ -9,6 +9,8 @@ services:
             # On the data volume, so the seeded project and the sample repository survive a restart and the seed runs once.
             INTAKT_CONFIG: /app/var/data/intakt.yaml
             INTAKT_SAMPLE_REPOSITORY: /app/var/data/sample-repository
+            # The service's own name, so the printed review command runs from the host shell in this folder.
+            INTAKT_COMPOSE_SERVICE: intakt
         ports:
             # Loopback only, because the dashboard is the owner's alone; the port matches DASHBOARD_PORT in the image.
             - 127.0.0.1:7781:7781

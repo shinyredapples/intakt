@@ -26,6 +26,8 @@ final readonly class SeedSampleProjectCommand
         #[SensitiveParameter]
         #[Autowire(env: 'MCP_OWNER_TOKEN')]
         private string $ownerToken,
+        #[Autowire(env: 'INTAKT_COMPOSE_SERVICE')]
+        private string $composeService,
     ) {
     }
 
@@ -43,17 +45,29 @@ final readonly class SeedSampleProjectCommand
         }
 
         $this->seedRepository($io, $repository);
+        $this->printReviewCommand($io, $repository);
+        $this->printMcpSetup($io);
+
+        return Command::SUCCESS;
+    }
+
+    private function printReviewCommand(SymfonyStyle $io, string $repository): void
+    {
         $io->writeln(OutputFormatter::escape(sprintf(
-            'Review the sample change: php bin/console intakt:review %s --project=%s --repository=%s --base=%s --task="%s"',
+            'Review the sample change: %sphp bin/console intakt:review %s --project=%s --repository=%s --base=%s --task="%s"',
+            $this->hostPrefix(),
             SampleRepository::BRANCH,
             SampleProject::NAME,
             $repository,
             SampleRepository::BASE,
             SampleProject::TASK,
         )));
-        $this->printMcpSetup($io);
+    }
 
-        return Command::SUCCESS;
+    // Prefixed in the compose demo, because its reader copies the line into the host shell and PHP runs only inside the service's container.
+    private function hostPrefix(): string
+    {
+        return '' === $this->composeService ? '' : sprintf('docker compose exec %s ', $this->composeService);
     }
 
     private function printMcpSetup(SymfonyStyle $io): void
