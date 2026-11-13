@@ -98,6 +98,14 @@ final class RecordedIssueApi
     }
 
     /**
+     * @return array<int, string>
+     */
+    private function pagesNow(): array
+    {
+        return $this->pageReads++ < $this->movesAfter ? $this->pages : $this->movedPages;
+    }
+
+    /**
      * @param array<string, mixed> $options
      */
     private function answer(string $method, string $url, array $options): ResponseInterface
@@ -117,7 +125,7 @@ final class RecordedIssueApi
         }
 
         $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
-        $pages = $this->pageReads++ < $this->movesAfter ? $this->pages : $this->movedPages;
+        $pages = $this->pagesNow();
         $body = $pages[$page] ?? '[]';
 
         $headers = ['ETag' => $this->etag];
