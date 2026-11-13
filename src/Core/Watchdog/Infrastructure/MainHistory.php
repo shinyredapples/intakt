@@ -31,6 +31,8 @@ final readonly class MainHistory
      */
     public function headOf(string $repository): string
     {
+        $this->mustBeComplete($repository);
+
         $branch = trim($this->run($repository, ['symbolic-ref', '--quiet', 'HEAD'])->getOutput());
 
         // Main is the branch the repository's HEAD names, because the mirror's HEAD follows the remote's default branch.
@@ -93,6 +95,17 @@ final readonly class MainHistory
         }
 
         return $this->seen($this->mustSucceed($process, 'log'));
+    }
+
+    /**
+     * @throws MainNotRead
+     */
+    private function mustBeComplete(string $repository): void
+    {
+        // Because a shallow history ends the first-parent walk at the cut and hides every commit below it from the first check.
+        if ('false' !== trim($this->mustSucceed($this->run($repository, ['rev-parse', '--is-shallow-repository']), 'rev-parse'))) {
+            throw MainNotRead::because('the repository\'s history is shallow, so commits are missing');
+        }
     }
 
     /**

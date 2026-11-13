@@ -14,7 +14,7 @@ How Intakt classifies the new commits on main (plan task T63, part 1; design: [O
 | a signature by another key, or one that is bad, expired or that git could not check | `unknown_key` (anything that is not clearly the owner's fails closed) |
 | `checkedUpTo` is no longer an ancestor of main's head, or the repository no longer has it | one `history_rewritten` violation naming `checkedUpTo`; no commit is judged then |
 
-Only commits on main's first-parent line since `checkedUpTo` are judged (`git log --first-parent`), so the commits a recorded merge brings in are covered by the merge. Without `checkedUpTo` the whole first-parent history is judged.
+Only commits on main's first-parent line since `checkedUpTo` are judged (`git log --first-parent`), so the commits a recorded merge brings in are covered by the merge. Without `checkedUpTo` the whole first-parent history is judged. A shallow repository (a `shallow` file, as after a `--depth` fetch) is refused with `MainNotRead` before anything is read (`rev-parse --is-shallow-repository` must print `false`), because the walk would end at the cut and a first check would never see the commits below it.
 
 ```mermaid
 flowchart TD

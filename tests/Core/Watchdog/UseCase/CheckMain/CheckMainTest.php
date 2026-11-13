@@ -160,6 +160,21 @@ final class CheckMainTest extends TestCase
         $this->whenMainIsChecked(null, []);
     }
 
+    public function testAMainWithAShallowHistoryIsNotReadEvenWhenTheCommitsAboveTheCutAreClean(): void
+    {
+        $this->repository->commitEmpty('Unsigned ancestor');
+        $this->repository->checkoutNewBranch('feat/task');
+        $this->repository->commitFile('task.txt', 'Task');
+        $this->repository->checkout('main');
+        $merge = $this->repository->merge('feat/task');
+        $this->repository->cutHistoryBelow($merge);
+
+        $this->expectException(MainNotRead::class);
+        $this->expectExceptionMessage('shallow');
+
+        $this->whenMainIsChecked(null, [$merge]);
+    }
+
     public function testARepositoryNamedByARelativePathIsReadLikeItsAbsolutePath(): void
     {
         $base = $this->repository->commitEmpty('Base');
