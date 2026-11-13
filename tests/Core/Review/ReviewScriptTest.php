@@ -123,11 +123,12 @@ final class ReviewScriptTest extends TestCase
     // An image's GIT_DIR and GIT_WORK_TREE would send every git call to the other repository, whose head is the one the review was told.
     public function testACheckoutAtAnotherCommitIsNotReviewedWhenTheImagesGitVariablesNameAnotherRepositoryAtTheHead(): void
     {
-        $this->otherRepository = $this->repository->copy();
+        $atTheHead = $this->repository->copy();
+        $this->otherRepository = $atTheHead;
         $this->repository->commitFile('src/Later.php', "<?php\n");
         $this->givenTheCheckoutIsReadOnly();
 
-        $run = $this->whenTheReviewRuns(['GIT_DIR' => $this->otherRepository->path.'/.git', 'GIT_WORK_TREE' => $this->otherRepository->path]);
+        $run = $this->whenTheReviewRuns(['GIT_DIR' => $atTheHead->path.'/.git', 'GIT_WORK_TREE' => $atTheHead->path]);
 
         self::assertSame(1, $run->getExitCode(), $this->outputFile('review.log'));
         self::assertStringContainsString(sprintf(', not at %s', $this->head), $this->outputFile('review.log'));
