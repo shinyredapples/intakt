@@ -8,12 +8,14 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Infrastructure\AnswerForm;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
 use Symfony\AI\Platform\Bridge\Codex\Codex;
 use Symfony\AI\Platform\Event\ResultEvent;
@@ -27,10 +29,10 @@ use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
-use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StrictVerdictConverter::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
+#[UsesClass(AnswerForm::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]

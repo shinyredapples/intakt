@@ -39,7 +39,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         private ResultConverterInterface $inner,
         private SerializerInterface $serializer,
         private ValidatorInterface $validator,
-        private bool $readsFencedBlock = false,
+        private AnswerForm $form = AnswerForm::Json,
     ) {
     }
 
@@ -138,7 +138,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     private function verdictFrom(string $content): Verdict
     {
         try {
-            return $this->deserialized($this->readsFencedBlock ? $this->fencedBlockOf($content) : $content);
+            return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
         } catch (ExceptionInterface $exception) {
             throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
         }

@@ -38,13 +38,13 @@ final readonly class StrictVerdictSubscriber implements EventSubscriberInterface
         }
 
         $deferred = $event->getDeferredResult();
-        $converter = new StrictVerdictConverter($deferred->getResultConverter(), $this->serializer, $this->validator, $this->answersInProse($event->getModel()));
+        $converter = new StrictVerdictConverter($deferred->getResultConverter(), $this->serializer, $this->validator, $this->formOf($event->getModel()));
         $event->setDeferredResult(new DeferredResult($converter, $deferred->getRawResult(), $event->getOptions()));
     }
 
-    private function answersInProse(Model $model): bool
+    private function formOf(Model $model): AnswerForm
     {
-        return $model instanceof ClaudeCode || $model instanceof Codex;
+        return $model instanceof ClaudeCode || $model instanceof Codex ? AnswerForm::ProseAroundBlock : AnswerForm::Json;
     }
 
     /**
