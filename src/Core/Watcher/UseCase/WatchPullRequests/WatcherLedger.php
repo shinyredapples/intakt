@@ -8,6 +8,8 @@ use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\BootOutcome;
+use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\HeadFailure;
@@ -57,6 +59,11 @@ final readonly class WatcherLedger
     public function headFailed(HeadFailure $failure, int $failures, DateTimeImmutable $retryAt): void
     {
         $this->append(LedgerEventKind::HeadFailed, $this->failureOf($failure, $failures, $retryAt));
+    }
+
+    public function bootResultComputed(BootKey $key, BootOutcome $outcome): void
+    {
+        $this->append(LedgerEventKind::BootResultComputed, ['project' => $key->project, 'main' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'state' => $outcome->state->value, 'reason' => $outcome->reason]);
     }
 
     /**
