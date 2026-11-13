@@ -8,7 +8,7 @@ use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\DomCrawler\Crawler;
 
-// The page's markup for the phone's Timeline and Live log switch and its actions row; the widths themselves are rules of the sheet (TaskDetailStylesTest).
+// Only the markup is checked here, because the widths are rules of the sheet, which TaskDetailStylesTest reads.
 #[CoversClass(ShowReviewController::class)]
 final class ReviewPageLayoutTest extends DashboardPageTestCase
 {
@@ -47,7 +47,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertSelectorExists('.task-grid[data-pane="timeline"] > .tl-pane');
     }
 
-    // DESIGN.md, Breakpoints: the task page is a roomy page, which grows past the default width from 1500 px.
+    // The page must be roomy, because DESIGN.md's Breakpoints grow only roomy pages past the default width from 1500 px.
     public function testTheReviewPageIsARoomyPage(): void
     {
         $this->givenARunningRound();
@@ -67,7 +67,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertSame(['round-round-1-now-stop', 'start-review'], $crawler->filter('.page-head .task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
     }
 
-    // D4 of #1794: Continue and Send back wait for T59 and are left out, never shown disabled.
+    // Left out rather than disabled, because Continue and Send back wait for T59 (D4 of #1794).
     public function testTheTaskActionsOfferNeitherContinueNorSendBack(): void
     {
         $this->givenARunningRound();

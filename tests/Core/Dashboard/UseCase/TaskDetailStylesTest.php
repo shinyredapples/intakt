@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
-// The review page's layout at each width of DESIGN.md's Breakpoints and Phone patterns, read from the sheet as text as BoardStylesTest does.
+// The sheet is read as text, as BoardStylesTest does, because no page is needed to see a rule.
 #[CoversNothing]
 final class TaskDetailStylesTest extends TestCase
 {
@@ -74,7 +74,7 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*grid-template-columns:\s*1fr;\s*$/', $rules['.ls-grid'] ?? '');
     }
 
-    // DESIGN.md, Long titles: page titles wrap, and shas and paths wrap rather than run off a 390 px screen.
+    // They must wrap, because DESIGN.md's Long titles never clip a title, sha or path, so on a 390 px screen it would run off the edge.
     public function testALongTitleAChangeNameOrALoggedPathWrapsInsteadOfOverflowing(): void
     {
         $rules = $this->rulesOf($this->sheet());
