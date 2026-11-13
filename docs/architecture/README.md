@@ -42,6 +42,7 @@ Forges and identity:
 Models and budget:
 - [AI providers](ai-providers.md)
 - [Capability tiers per project](capability-tiers.md): the mode per project (live or reviewer-for-loop)
+- [Model choice](model-choice.md): the routing rules that pick the build tier
 - [Vendor](vendor.md): the judge
 - [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
 - [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`
@@ -49,6 +50,7 @@ Models and budget:
 
 Builds:
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
+- [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns
 
 Reviews:
 - [Review flow](review-flow.md)
