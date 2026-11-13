@@ -1,8 +1,8 @@
-{#- Embed it and fill the action block with its one action. Below 761 px it collapses to its toggle (icon, short, chevron), which the disclosure controller opens; compact keeps it collapsed at every width, and open renders it opened. A project lets the top bar filter hide it. -#}
+{#- Embed it and fill the action block with its one action. Below 761 px it collapses to its toggle (icon, short, chevron), which assets/banner-toggle.js opens; compact keeps it collapsed at every width, and open renders it opened. A project lets the top bar filter hide it. -#}
 {%- set broken = broken|default(false) -%}
 {%- set open = open|default(false) -%}
-<div class="banner{% if broken %} broken{% endif %}{% if compact|default(false) %} compact{% endif %}{% if open %} open{% endif %}"{% if project is defined %} data-project="{{ project }}"{% endif %} data-controller="disclosure">
-    <button class="banner-toggle" type="button" aria-expanded="{{ open ? 'true' : 'false' }}" data-action="disclosure#toggle">
+<div class="banner{% if broken %} broken{% endif %}{% if compact|default(false) %} compact{% endif %}{% if open %} open{% endif %}"{% if project is defined %} data-project="{{ project }}"{% endif %}>
+    <button class="banner-toggle" type="button" aria-expanded="{{ open ? 'true' : 'false' }}">
         {{- include('dashboard/components/icon.html.twig', {name: icon, small: true}, with_context = false) -}}
         <span>{{ short }}</span>
         {{- include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) -}}
