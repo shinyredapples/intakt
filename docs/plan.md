@@ -666,7 +666,7 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 ## Not in the switch
 
-- **Later:** approval by class and the additive gate proof; pacing and stand-ins for a second reviewer vendor; cross-checks; the plan trial arm, holdout and quality report; cost reports from CLI logs; webhooks (T32); branch cleanup beyond merged branches (T30); conflict resolution for generated files; deploy hooks after a merge; database sidecars for builds; the maintainer agent; a dashboard beyond the status JSON; the setup wizard; other forges, languages and vendors.
+- **Later:** pacing and stand-ins for a second reviewer vendor; cross-checks; the plan trial arm, holdout and quality report; cost reports from CLI logs; webhooks (T32); branch cleanup beyond merged branches (T30); conflict resolution for generated files; deploy hooks after a merge; database sidecars for builds; the maintainer agent; a dashboard beyond the status JSON; the setup wizard; other forges, languages and vendors.
 - **Dropped** (the existing loop's own constraints, replaced by the design): its round mode, tick and shared host locks, acknowledgment ranges and ledger branch seeding, its pre-App token history, its install scripts and resource slices, its CI slot wrappers, review verdicts parsed from Markdown, and its old config shims.
 
 ## Parallel paths (M6 to M8)
