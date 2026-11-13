@@ -84,6 +84,9 @@ final readonly class CompletedCodexTurn implements RawResultInterface
     private function withReportedUsage(array $data): array
     {
         $usage = $this->reportedUsage();
+        if (null === $usage) {
+            $this->failForAnAccountFailure();
+        }
 
         return null === $usage ? $data : [...$data, self::USAGE => $usage];
     }
@@ -98,6 +101,8 @@ final readonly class CompletedCodexTurn implements RawResultInterface
     {
         $usage = $this->reportedUsage();
         if (null === $usage) {
+            $this->failForAnAccountFailure();
+
             throw $processFailed;
         }
 
@@ -105,23 +110,60 @@ final readonly class CompletedCodexTurn implements RawResultInterface
     }
 
     /**
+     * @throws RuntimeException
+     */
+    // Asked only of a turn that never completed, and read only from the CLI's own error events, never from an agent message, so a reviewer's text cannot take an account out.
+    private function failForAnAccountFailure(): void
+    {
+        foreach ($this->events() as $event) {
+            $failure = CodexAccountFailure::of($this->errorMessage($event));
+            if ($failure instanceof CodexAccountFailure) {
+                throw $failure->exception();
+            }
+        }
+    }
+
+    /**
+     * @param array<mixed> $event
+     */
+    private function errorMessage(array $event): string
+    {
+        $message = match ($event[self::TYPE] ?? null) {
+            'error' => $event[self::MESSAGE] ?? null,
+            'turn.failed' => is_array($event['error'] ?? null) ? $event['error'][self::MESSAGE] ?? null : null,
+            default => null,
+        };
+
+        return is_string($message) ? $message : '';
+    }
+
+    /**
      * @return array<mixed>|null
      */
     private function reportedUsage(): ?array
     {
-        $process = $this->inner->getObject();
-        if (!$process instanceof Process) {
-            return null;
-        }
-
         $usage = null;
-        foreach (explode(PHP_EOL, $process->getOutput()) as $line) {
-            $event = json_decode($line, true);
-            if (is_array($event) && 'turn.completed' === ($event['type'] ?? null) && is_array($event[self::USAGE] ?? null)) {
+        foreach ($this->events() as $event) {
+            if ('turn.completed' === ($event[self::TYPE] ?? null) && is_array($event[self::USAGE] ?? null)) {
                 $usage = $event[self::USAGE];
             }
         }
 
         return $usage;
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function events(): array
+    {
+        $process = $this->inner->getObject();
+        if (!$process instanceof Process) {
+            return [];
+        }
+
+        $events = array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput()));
+
+        return array_values(array_filter($events, is_array(...)));
     }
 }

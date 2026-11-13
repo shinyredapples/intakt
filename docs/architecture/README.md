@@ -36,7 +36,7 @@ Running Intakt:
 Forges and identity:
 - [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
 - [GitHub App identity](github-app-identity.md)
-- [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`
+- [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`; the changed paths that are part of the CI definition
 
 Models and budget:
 - [AI providers](ai-providers.md)
