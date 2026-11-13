@@ -390,6 +390,22 @@ A project can carry `mode: live`, the same as leaving the key out, or `mode: rev
 
 To see which panel a change gets, without calling any model, run `php bin/console intakt:review:panel <project> --lines=300 --path=src/Foo.php --label=review:full` (`--path` and `--label` can be repeated; all options are optional, and `--lines` must be zero or more). It prints the quorum and one line per reviewer with its tier, provider and budget. Intakt reads the configuration when it starts, so a changed file shows after the cache is cleared. An unknown project fails with a message. A path pattern Intakt cannot evaluate against a path (for example, one too complex for the pattern matcher) fails the same way, with a message that names the pattern. `intakt:review` takes the paths from the branch and no labels.
 
+### Which tier a build starts on
+
+A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
+
+```yaml
+projects:
+    alpha:
+        build:
+            tier: standard
+            sensitive_paths: [config/**, src/**/Security/**]
+```
+
+A build that touches a sensitive path starts on the strong tier, whatever its label says. Otherwise a `model:<tier>` label (for example `model:strong`) sets the tier, and without either the build starts on `tier`. A `model:` value that names no tier, such as a model name, is ignored. The rules look only at the labels and the touched paths of the build, so a job can never choose its own model. A bad tier, or sensitive paths that are not a list, stop Intakt from starting and name the key.
+
+To see the tier the rules choose, without calling any model, run `php bin/console intakt:build:tier <project> --label=model:strong --path=src/Foo.php` (`--label` and `--path` can be repeated and are optional). It prints the tier and why (`default`, `label` or `sensitive-path`); an unknown project fails with a message. Starting a build on the chosen tier is not wired yet, and a later part adds raising the tier after a failure.
+
 ## Looking inside the development install with Mate
 
 On a development install (`composer install` with the dev packages), `vendor/bin/mate` answers questions about the running app from its own container and environment files instead of from reading the code. It is not part of a production install: `composer install --no-dev` leaves it out.

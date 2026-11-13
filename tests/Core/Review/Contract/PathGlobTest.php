@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Review\Infrastructure;
+namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\GlobCannotBeEvaluated;
-use Intakt\Core\Review\Infrastructure\PathGlob;
+use Intakt\Core\Review\Contract\PathGlob;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 

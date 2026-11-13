@@ -18,7 +18,7 @@ use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
-use Intakt\Core\Review\Infrastructure\PathGlob;
+use Intakt\Core\Review\Contract\PathGlob;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
