@@ -241,6 +241,10 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .col-head { display: flex; align-items: center; gap: var(--s8); height: 32px; margin-bottom: var(--s8); font-family: var(--f-head); }
 .col-head h3 { margin: 0; font-size: var(--t15); font-weight: 600; }
 .col-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--s8); }
+/* Its own attribute, not hidden, which the project filter owns: a filter change then never undoes Show more (assets/column-more.js). */
+.col-cards > [data-past-limit] { display: none; }
+.more-btn { width: 100%; }
+.more-btn[hidden] { display: none; }
 .col-fold { display: none; }
 .col-hide { margin-left: auto; height: 28px; }
 .col-hide:focus-visible { outline-offset: -2px; }
