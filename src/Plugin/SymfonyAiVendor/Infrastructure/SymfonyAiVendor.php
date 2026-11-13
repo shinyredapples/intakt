@@ -14,6 +14,7 @@ use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
@@ -72,23 +73,27 @@ final readonly class SymfonyAiVendor implements Vendor
         $substitute = $this->substituteOf($project, $tier, $answering);
         $attempt = fn (ResolvedModel $model, ReviewRequest $asked): Verdict => $this->verdictOn($model, $this->usage->reserve($project, new AnsweringTier($tier, $model), $asked->conversation->round), $asked);
         $first = fn (): Verdict => $attempt($answering, $request);
-        $retry = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
+        $withMoreRoom = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
+        $again = fn (): Verdict => $attempt($answering, $this->inNewConversation($request));
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnce($first, $retry), $substitute));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnce($first, $withMoreRoom, $again), $substitute));
     }
 
-    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again; a second one fails the reviewer.
+    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, and a changes verdict without findings is no verdict either; a second failure fails the reviewer.
     /**
      * @param Closure(): Verdict $first
-     * @param Closure(): Verdict $retry
+     * @param Closure(): Verdict $withMoreRoom
+     * @param Closure(): Verdict $again
      */
-    private function retriedOnce(Closure $first, Closure $retry): Verdict
+    private function retriedOnce(Closure $first, Closure $withMoreRoom, Closure $again): Verdict
     {
         try {
             return $first();
         } catch (MaxOutputTokensException|VerdictUnreadable) {
-            return $retry();
+            return $withMoreRoom();
+        } catch (ChangesWithoutFindings) {
+            return $again();
         }
     }
 
@@ -155,7 +160,13 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $this->readOrRefused($answering->provider, $options, $verdict);
+        return $this->readOrRefused($answering->provider, $options, $this->namingAFinding($verdict));
+    }
+
+    // Refused after the usage is settled, because the call itself finished and was paid for.
+    private function namingAFinding(Verdict $verdict): Verdict
+    {
+        return $verdict->asksForChangesWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
     }
 
     // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.

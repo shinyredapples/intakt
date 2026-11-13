@@ -16,6 +16,7 @@ final readonly class FailureInWords
         ProviderRejectedTheKey::class => 'the provider rejected the key',
         ProviderFailedTransiently::class => 'the provider kept failing',
         VerdictUnreadable::class => 'the reviewer\'s answer could not be read as a verdict',
+        ChangesWithoutFindings::class => 'asked for changes without naming a finding',
     ];
 
     public function of(string $failure): string

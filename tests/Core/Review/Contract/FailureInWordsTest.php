@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
@@ -34,6 +35,11 @@ final class FailureInWordsTest extends TestCase
     public function testAnAnswerThatIsNoVerdictIsToldInPlainWords(): void
     {
         self::assertSame('the reviewer\'s answer could not be read as a verdict', new FailureInWords()->of(VerdictUnreadable::class));
+    }
+
+    public function testAChangesVerdictWithoutFindingsIsToldInPlainWords(): void
+    {
+        self::assertSame('asked for changes without naming a finding', new FailureInWords()->of(ChangesWithoutFindings::class));
     }
 
     public function testAnUnknownFailureClassIsToldInGenericWordsWithoutTheClassName(): void

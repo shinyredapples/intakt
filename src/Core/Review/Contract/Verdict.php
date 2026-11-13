@@ -55,6 +55,13 @@ final readonly class Verdict
         return Decision::Blocked === $this->verdict && array_any($this->findings, static fn (Finding $finding): bool => self::REVIEWER_STOPPED === $finding->id);
     }
 
+    // A verdict that asks for changes names at least one finding, so one that names none is not a valid verdict.
+    #[Ignore]
+    public function asksForChangesWithoutFinding(): bool
+    {
+        return Decision::Changes === $this->verdict && [] === $this->findings;
+    }
+
     public static function incompleteStream(string $reason): self
     {
         $finding = new Finding(
