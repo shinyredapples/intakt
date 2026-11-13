@@ -230,6 +230,57 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.'], array_last($published));
     }
 
+    public function testAWithdrawalOfAnOlderRoundDeliveredAfterTheFreshApprovalOfTheSameHeadLeavesThatApprovalStanding(): void
+    {
+        $old = $this->publishRoundJudgedOn([]);
+        $alreadyHandled = count($this->publicationsOf($old));
+        $this->markStale($old);
+        $this->publishRoundJudgedOn([]);
+
+        foreach (array_slice($this->publicationsOf($old), $alreadyHandled) as $withdrawal) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($withdrawal);
+        }
+
+        self::assertSame('success', array_last($this->github->writes)[1]['state'] ?? null);
+    }
+
+    public function testAWithdrawalOfAnOlderRoundIsPublishedWhileTheNextRoundOfThatHeadIsNotJudgedYet(): void
+    {
+        $old = $this->publishRoundJudgedOn([]);
+        $alreadyHandled = count($this->publicationsOf($old));
+        $this->markStale($old);
+        $this->reviewedRound(self::PULL, []);
+
+        foreach (array_slice($this->publicationsOf($old), $alreadyHandled) as $withdrawal) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($withdrawal);
+        }
+
+        self::assertSame([self::STATUS, self::WITHDRAWN], array_last($this->github->writes));
+    }
+
+    public function testAFreshRoundJudgedWhileAnOlderWithdrawalIsOnTheWayIsPublishedAgainByThatWithdrawal(): void
+    {
+        $old = $this->judgedRound(self::PULL, []);
+        $this->markStale($old);
+        $this->reviewedRound(self::PULL, []);
+        $published = [];
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturnCallback(function (string $project, ChangeId $change, PublishedVerdict $verdict) use (&$published): void {
+            // Judged here, because only a fresh round judged after the withdrawal was decided and before it is written forces the race.
+            if ([] === $published) {
+                foreach ($this->fixture->judgings() as $judging) {
+                    $this->fixture->judge(new VerdictPerRole([]))($judging);
+                }
+            }
+
+            $published[] = $verdict->status;
+        });
+
+        new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $this->verdicts(), $forge, $this->fixture->log)(new PublishVerdict($old));
+
+        self::assertSame([HeadStatus::Failure, HeadStatus::Success], $published);
+    }
+
     public function testAHeadNoReviewerCouldReviewGetsAnErrorStatusAndNoComment(): void
     {
         $blocked = new Verdict(Decision::Blocked, [], [], []);

@@ -8,11 +8,13 @@ use Closure;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Query;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
@@ -84,6 +86,18 @@ final readonly class ReviewRounds
         $this->entities->clear();
 
         return $this->entities->find(ReviewRound::class, Uuid::fromString($roundId)) ?? throw RoundNotFound::for($roundId);
+    }
+
+    // Refreshed, because the round's publication asks after its own write whether another worker judged a later round meanwhile.
+    public function judgedAfter(ReviewRound $round): ?ReviewRound
+    {
+        $later = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.change.number > :number AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+            ->setParameters(['project' => $round->project(), 'change' => $round->change(), 'number' => $round->number(), 'judged' => RoundState::Judged])
+            ->setHint(Query::HINT_REFRESH, true)
+            ->setMaxResults(1)
+            ->getOneOrNullResult();
+
+        return $later instanceof ReviewRound ? $later : null;
     }
 
     /**
