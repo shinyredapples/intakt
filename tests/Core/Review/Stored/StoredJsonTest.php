@@ -135,6 +135,8 @@ final class StoredJsonTest extends KernelTestCase
         yield 'a string' => ['"F2"'];
         yield 'a number among the ids' => ['["F2",3]'];
         yield 'an object' => ['{"a":"F2"}'];
+        yield 'an object with list keys' => ['{"0":"F2"}'];
+        yield 'an empty object' => ['{}'];
         yield 'null' => ['null'];
     }
 

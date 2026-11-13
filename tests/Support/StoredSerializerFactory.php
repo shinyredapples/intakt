@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Support;
 
 use Intakt\Core\Review\Infrastructure\StoredFindingNormalizer;
+use Intakt\Core\Review\Infrastructure\StoredJsonEncoder;
 use Symfony\Component\PropertyInfo\Extractor\PhpDocExtractor;
 use Symfony\Component\PropertyInfo\Extractor\ReflectionExtractor;
 use Symfony\Component\PropertyInfo\PropertyInfoExtractor;
@@ -31,6 +32,6 @@ final class StoredSerializerFactory
             propertyTypeExtractor: $types,
         );
 
-        return new Serializer([new DateTimeNormalizer(), new BackedEnumNormalizer(), new ArrayDenormalizer(), new StoredFindingNormalizer(), $objects], [new JsonEncoder()]);
+        return new Serializer([new DateTimeNormalizer(), new BackedEnumNormalizer(), new ArrayDenormalizer(), new StoredFindingNormalizer(), $objects], [new StoredJsonEncoder(), new JsonEncoder()]);
     }
 }

@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Infrastructure\StoredFindingNormalizer;
+use Intakt\Core\Review\Infrastructure\StoredJsonEncoder;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -22,6 +23,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(StoredFindingNormalizer::class)]
+#[UsesClass(StoredJsonEncoder::class)]
 final class StoredSerializerFactoryTest extends KernelTestCase
 {
     // A started row outside a round, because it needs the enum, the name converter and the attribute context the container's serializer has.
