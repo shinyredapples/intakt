@@ -152,7 +152,7 @@ final class GitHubIssueReadsTest extends TestCase
 
     public function testAListingThatReachesThePageCapFails(): void
     {
-        $this->api->pages = array_fill(1, 11, $this->page(1, 100));
+        $this->api->pages = $this->fullPages(11);
 
         try {
             $this->api->reads()->listOpen('alpha', null);
@@ -165,10 +165,19 @@ final class GitHubIssueReadsTest extends TestCase
 
     public function testAListingOfExactlyThePageCapIsRead(): void
     {
-        $this->api->pages = array_fill(1, 9, $this->page(1, 100));
+        $this->api->pages = $this->fullPages(9);
         $this->api->pages[10] = $this->page(901, 1);
 
         self::assertCount(901, $this->api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnIssueListedOnTwoPagesFailsTheListing(): void
+    {
+        $this->api->pages = [1 => $this->page(1, 100), 2 => $this->page(100, 50)];
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub listed an issue twice, so the listing moved while it was read.'));
+
+        $this->api->reads()->listOpen('alpha', null);
     }
 
     public function testAFullPageFollowedByAnEmptyOneEndsTheListing(): void
@@ -198,6 +207,19 @@ final class GitHubIssueReadsTest extends TestCase
             if (1 === preg_match('/\/issues\?.*\bpage=(\d+)/', $request, $found)) {
                 $pages[] = (int) $found[1];
             }
+        }
+
+        return $pages;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function fullPages(int $count): array
+    {
+        $pages = [];
+        foreach (range(1, $count) as $page) {
+            $pages[$page] = $this->page(($page - 1) * 100 + 1, 100);
         }
 
         return $pages;

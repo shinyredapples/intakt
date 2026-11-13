@@ -11,9 +11,11 @@ use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 // Through GraphQL, because the REST API names neither the last editor of a text nor who applied a label.
 final readonly class GitHubIssueHistories
 {
-    // The last hundred label events, because the label that counts is the one applied last; an older application is not trusted unseen.
-    private const string FIELDS = 'author { __typename login } editor { __typename login } timelineItems(last: 100, itemTypes: [LABELED_EVENT]) { nodes { ... on LabeledEvent { actor { __typename login } label { name } } } }';
-    private const string QUERY = 'query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issueOrPullRequest(number: $number) { ... on Issue { '.self::FIELDS.' } ... on PullRequest { '.self::FIELDS.' } } } }';
+    // Paged back from the newest label events, because a label still on the item may have been applied long before the last hundred events.
+    private const string FIELDS = 'author { __typename login } editor { __typename login } lastEditedAt timelineItems(last: 100, before: $before, itemTypes: [LABELED_EVENT]) { pageInfo { hasPreviousPage startCursor } nodes { ... on LabeledEvent { actor { __typename login } label { name } } } }';
+    private const string QUERY = 'query($owner: String!, $name: String!, $number: Int!, $before: String) { repository(owner: $owner, name: $name) { issueOrPullRequest(number: $number) { ... on Issue { '.self::FIELDS.' } ... on PullRequest { '.self::FIELDS.' } } } }';
+    // A longer history fails, because an application left unread could be the one a label counts by.
+    private const int MAX_PAGES = 10;
 
     public function __construct(
         private InstallationReads $reads,
@@ -28,7 +30,30 @@ final readonly class GitHubIssueHistories
     public function of(string $project, int $number): IssueHistory
     {
         [$owner, $name] = explode('/', $this->repositories->addressOf($project)->fullName(), 2);
-        $body = json_encode(['query' => self::QUERY, 'variables' => ['owner' => $owner, 'name' => $name, 'number' => $number]], JSON_THROW_ON_ERROR);
+        $editor = null;
+        $events = [];
+        $before = null;
+        for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
+            $item = $this->itemOf(['owner' => $owner, 'name' => $name, 'number' => $number, 'before' => $before]);
+            $editor ??= $this->editorOf($item);
+            $events = [...$this->labelEventsOf($item), ...$events];
+            $before = $this->earlierCursorOf($item);
+            if (null === $before) {
+                return new IssueHistory($editor, $this->labelAppliersOf($events));
+            }
+        }
+
+        throw new ForgeReadFailed('GitHub answered a label history longer than this forge reads.');
+    }
+
+    /**
+     * @param array<string, int|string|null> $variables
+     *
+     * @return array<mixed>
+     */
+    private function itemOf(array $variables): array
+    {
+        $body = json_encode(['query' => self::QUERY, 'variables' => $variables], JSON_THROW_ON_ERROR);
         $answer = $this->reads->decode($this->reads->send('POST', '/graphql', ['body' => $body])['body']);
 
         // GitHub answers a field it could not resolve with null beside an error, and a null editor would then pass for the author.
@@ -41,24 +66,64 @@ final readonly class GitHubIssueHistories
             throw new ForgeReadFailed('GitHub answered without the issue.');
         }
 
-        // Refused without a login, because a text nobody can name is not trusted and a deleted account has none.
-        $editor = $this->loginOf($this->at($item, 'editor')) ?? $this->loginOf($this->at($item, 'author'));
+        return $item;
+    }
 
-        return new IssueHistory($editor ?? throw new ForgeReadFailed('GitHub answered an issue without an editor.'), $this->labelAppliersOf($item));
+    /**
+     * @param array<mixed> $item
+     */
+    private function editorOf(array $item): string
+    {
+        $editor = $this->at($item, 'editor');
+        if (null !== $editor) {
+            return $this->loginOf($editor) ?? throw new ForgeReadFailed('GitHub answered an editor without a login.');
+        }
+
+        // GitHub answers no editor both for a text nobody edited and for an editor it cannot name, so only an unedited text is the author's.
+        if (null !== $this->at($item, 'lastEditedAt')) {
+            throw new ForgeReadFailed('GitHub answered an edited issue without its editor.');
+        }
+
+        // Refused without a login, because a text nobody can name is not trusted and a deleted account has none.
+        return $this->loginOf($this->at($item, 'author')) ?? throw new ForgeReadFailed('GitHub answered an issue without an editor.');
     }
 
     /**
      * @param array<mixed> $item
      *
-     * @return array<string, ?string>
+     * @return list<mixed>
      */
-    private function labelAppliersOf(array $item): array
+    private function labelEventsOf(array $item): array
     {
         $events = $this->at($item, 'timelineItems', 'nodes');
-        if (!is_array($events)) {
+        if (!is_array($events) || !array_is_list($events)) {
             throw new ForgeReadFailed('GitHub answered without the label history.');
         }
 
+        return $events;
+    }
+
+    /**
+     * @param array<mixed> $item
+     */
+    private function earlierCursorOf(array $item): ?string
+    {
+        $earlier = $this->at($item, 'timelineItems', 'pageInfo', 'hasPreviousPage');
+        $cursor = $this->at($item, 'timelineItems', 'pageInfo', 'startCursor');
+        if (false === $earlier) {
+            return null;
+        }
+
+        return true === $earlier && is_string($cursor) && '' !== $cursor ? $cursor : throw new ForgeReadFailed('GitHub answered a label history without its page info.');
+    }
+
+    /**
+     * @param list<mixed> $events
+     *
+     * @return array<string, ?string>
+     */
+    private function labelAppliersOf(array $events): array
+    {
         $appliers = [];
         foreach ($events as $event) {
             [$label, $applier] = $this->labelEventOf($event);
@@ -94,8 +159,8 @@ final readonly class GitHubIssueHistories
             return null;
         }
 
-        // Suffixed for an app, because GraphQL names it without the `[bot]` the permission check knows it by.
-        return 'Bot' === $this->at($account, '__typename') ? $login.'[bot]' : $login;
+        // Suffixed for an app, because GraphQL may name it without the `[bot]` the permission check knows it by; a login that has it keeps one.
+        return 'Bot' === $this->at($account, '__typename') && !str_ends_with($login, '[bot]') ? $login.'[bot]' : $login;
     }
 
     /**

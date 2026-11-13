@@ -33,7 +33,9 @@ final class RecordedIssueApi
     public array $pages = [];
     public string $etag = 'W/"issues-1"';
     public bool $notModified = false;
-    public string $historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"__typename":"User","login":"ana"},"editor":null,"timelineItems":{"nodes":[{"actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}},{"actor":{"__typename":"User","login":"ana"},"label":{"name":"priority:urgent"}}]}}}}}';
+    public string $historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"__typename":"User","login":"ana"},"editor":null,"lastEditedAt":null,"timelineItems":{"pageInfo":{"hasPreviousPage":false,"startCursor":"c1"},"nodes":[{"actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}},{"actor":{"__typename":"User","login":"ana"},"label":{"name":"priority:urgent"}}]}}}}}';
+    /** @var array<string, string> the answers to a history request for the label events before a cursor */
+    public array $earlierHistory = [];
     // Switchable, because GitHub names the next page in a Link header and a test must see what a listing does when the header is missing.
     public bool $links = true;
     /** @var list<string> */
@@ -99,8 +101,9 @@ final class RecordedIssueApi
 
         if ('POST' === $method) {
             $this->keepVariables($options);
+            $before = $this->graphQlVariables['before'] ?? null;
 
-            return new MockResponse($this->historyAnswer);
+            return new MockResponse(is_string($before) ? $this->earlierHistory[$before] ?? '{}' : $this->historyAnswer);
         }
 
         if ($this->notModified) {

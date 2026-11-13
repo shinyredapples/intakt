@@ -69,6 +69,24 @@ final class GitHubIssueHistoriesTest extends TestCase
         self::assertSame('mallory', $this->api->reads()->historyOf('alpha', 12)->editor);
     }
 
+    public function testAnEditedIssueWhoseEditorGitHubCannotNameFailsTheRead(): void
+    {
+        $this->api->historyAnswer = $this->history(null, [], '2026-11-10T12:00:00Z');
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an edited issue without its editor.'));
+
+        $this->api->reads()->historyOf('alpha', 12);
+    }
+
+    public function testAnEditorWithoutALoginFailsTheRead(): void
+    {
+        $this->api->historyAnswer = $this->history(['__typename' => 'User'], [], '2026-11-10T12:00:00Z');
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered an editor without a login.'));
+
+        $this->api->reads()->historyOf('alpha', 12);
+    }
+
     public function testAnEditorFieldErrorFailsTheReadInsteadOfNamingTheAuthor(): void
     {
         $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"timelineItems":{"nodes":[]}}}},"errors":[{"message":"Editor unavailable","path":["repository","issueOrPullRequest","editor"]}]}';
@@ -80,7 +98,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testAnAnswerWithAnEmptyErrorListIsRead(): void
     {
-        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"timelineItems":{"nodes":[]}}}},"errors":[]}';
+        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"lastEditedAt":null,"timelineItems":{"pageInfo":{"hasPreviousPage":false,"startCursor":null},"nodes":[]}}}},"errors":[]}';
 
         self::assertSame('ana', $this->api->reads()->historyOf('alpha', 12)->editor);
     }
@@ -119,9 +137,74 @@ final class GitHubIssueHistoriesTest extends TestCase
         self::assertSame(['priority:high' => 'mallory', 'intakt' => 'bo'], $this->api->reads()->historyOf('alpha', 12)->labelAppliers);
     }
 
+    public function testOlderLabelApplicationsAreReadFromTheEarlierPagesOfTheHistory(): void
+    {
+        $this->api->historyAnswer = $this->history(null, [['bo', 'User', 'intakt']], earlier: 'c2');
+        $this->api->earlierHistory['c2'] = $this->history(null, [['mallory', 'User', 'priority:high']], earlier: 'c1');
+        $this->api->earlierHistory['c1'] = $this->history(null, [['ana', 'User', 'steer:pause'], ['ana', 'User', 'intakt']]);
+
+        self::assertSame(['steer:pause' => 'ana', 'priority:high' => 'mallory', 'intakt' => 'bo'], $this->api->reads()->historyOf('alpha', 12)->labelAppliers);
+        self::assertSame(['owner' => 'acme', 'name' => 'widgets', 'number' => 12, 'before' => 'c1'], $this->api->graphQlVariables);
+    }
+
+    public function testALabelHistoryLongerThanThePageCapFailsTheRead(): void
+    {
+        $this->api->historyAnswer = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c1');
+        foreach (range(1, 10) as $page) {
+            $this->api->earlierHistory['c'.$page] = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c'.($page + 1));
+        }
+
+        try {
+            $this->api->reads()->historyOf('alpha', 12);
+            self::fail('A label history past the page cap was answered.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame('GitHub answered a label history longer than this forge reads.', $failure->getMessage());
+            self::assertCount(10, $this->api->requests);
+        }
+    }
+
+    public function testALabelHistoryOfExactlyThePageCapIsRead(): void
+    {
+        $this->api->historyAnswer = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c1');
+        foreach (range(1, 8) as $page) {
+            $this->api->earlierHistory['c'.$page] = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c'.($page + 1));
+        }
+        $this->api->earlierHistory['c9'] = $this->history(null, [['bo', 'User', 'priority:high']]);
+
+        self::assertSame(['priority:high' => 'bo', 'intakt' => 'ana'], $this->api->reads()->historyOf('alpha', 12)->labelAppliers);
+        self::assertCount(10, $this->api->requests);
+    }
+
+    public function testALabelHistoryWithoutItsPageInfoFailsTheRead(): void
+    {
+        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"lastEditedAt":null,"timelineItems":{"nodes":[]}}}}}';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a label history without its page info.'));
+
+        $this->api->reads()->historyOf('alpha', 12);
+    }
+
+    public function testALabelHistoryWithEarlierEventsButNoCursorFailsTheRead(): void
+    {
+        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"lastEditedAt":null,"timelineItems":{"pageInfo":{"hasPreviousPage":true,"startCursor":null},"nodes":[]}}}}}';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a label history without its page info.'));
+
+        $this->api->reads()->historyOf('alpha', 12);
+    }
+
     public function testAnAppIsNamedAsThePermissionCheckKnowsIt(): void
     {
-        $this->api->historyAnswer = $this->history(['__typename' => 'Bot', 'login' => 'intakt-app'], [['intakt-app', 'Bot', 'intakt']]);
+        $this->api->historyAnswer = $this->history(['__typename' => 'Bot', 'login' => 'intakt-app'], [['intakt-app', 'Bot', 'intakt']], '2026-11-10T12:00:00Z');
+
+        $history = $this->api->reads()->historyOf('alpha', 12);
+
+        self::assertSame(['intakt-app[bot]', ['intakt' => 'intakt-app[bot]']], [$history->editor, $history->labelAppliers]);
+    }
+
+    public function testAnAppLoginThatAlreadyEndsInTheBotSuffixKeepsIt(): void
+    {
+        $this->api->historyAnswer = $this->history(['__typename' => 'Bot', 'login' => 'intakt-app[bot]'], [['intakt-app[bot]', 'Bot', 'intakt']], '2026-11-10T12:00:00Z');
 
         $history = $this->api->reads()->historyOf('alpha', 12);
 
@@ -137,7 +220,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testALabelEventWithoutALabelNameFailsTheRead(): void
     {
-        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"timelineItems":{"nodes":[{"actor":{"login":"ana"},"label":null}]}}}}}';
+        $this->api->historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"login":"ana"},"editor":null,"lastEditedAt":null,"timelineItems":{"pageInfo":{"hasPreviousPage":false,"startCursor":null},"nodes":[{"actor":{"login":"ana"},"label":null}]}}}}}';
 
         $this->expectExceptionObject(new ForgeReadFailed('GitHub answered a label event this forge cannot read.'));
 
@@ -149,7 +232,7 @@ final class GitHubIssueHistoriesTest extends TestCase
         $this->api->reads()->historyOf('alpha', 12);
 
         self::assertSame(['POST https://api.github.com/graphql'], $this->api->requests);
-        self::assertSame(['owner' => 'acme', 'name' => 'widgets', 'number' => 12], $this->api->graphQlVariables);
+        self::assertSame(['owner' => 'acme', 'name' => 'widgets', 'number' => 12, 'before' => null], $this->api->graphQlVariables);
     }
 
     // Each event as its login, account type and label, oldest first, because that is the order GitHub answers them in.
@@ -157,10 +240,11 @@ final class GitHubIssueHistoriesTest extends TestCase
      * @param array<string, string>|null           $editor
      * @param list<array{?string, string, string}> $events
      */
-    private function history(?array $editor, array $events): string
+    private function history(?array $editor, array $events, ?string $editedAt = null, ?string $earlier = null): string
     {
         $nodes = array_map(static fn (array $event): array => ['actor' => null === $event[0] ? null : ['__typename' => $event[1], 'login' => $event[0]], 'label' => ['name' => $event[2]]], $events);
-        $item = ['author' => ['__typename' => 'User', 'login' => 'ana'], 'editor' => $editor, 'timelineItems' => ['nodes' => $nodes]];
+        $pageInfo = ['hasPreviousPage' => null !== $earlier, 'startCursor' => $earlier];
+        $item = ['author' => ['__typename' => 'User', 'login' => 'ana'], 'editor' => $editor, 'lastEditedAt' => $editedAt, 'timelineItems' => ['pageInfo' => $pageInfo, 'nodes' => $nodes]];
 
         return json_encode(['data' => ['repository' => ['issueOrPullRequest' => $item]]], JSON_THROW_ON_ERROR);
     }

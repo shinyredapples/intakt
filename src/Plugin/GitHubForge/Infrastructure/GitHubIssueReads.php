@@ -41,7 +41,7 @@ final readonly class GitHubIssueReads implements IssueReads
         $later = $complete ? [] : $this->laterIssues($repository);
 
         // The validator belongs to the first page only, so a list of several pages has none and the next listing is full.
-        return IssueListing::listed(array_map($this->listed(...), [...$issues, ...$later]), $complete ? $first['etag'] : null);
+        return IssueListing::listed($this->onceEach(array_map($this->listed(...), [...$issues, ...$later])), $complete ? $first['etag'] : null);
     }
 
     public function historyOf(string $project, int $number): IssueHistory
@@ -104,6 +104,22 @@ final readonly class GitHubIssueReads implements IssueReads
     private function isLastPage(array $answer, array $issues): bool
     {
         return !$answer['next'] && count($issues) < self::PAGE_SIZE;
+    }
+
+    /**
+     * @param list<ListedIssue> $issues
+     *
+     * @return list<ListedIssue>
+     */
+    private function onceEach(array $issues): array
+    {
+        // An issue opened between two page reads pushes the last one of a page onto the next, so a number seen twice means the pages do not add up to one listing.
+        $numbers = array_map(static fn (ListedIssue $issue): int => $issue->number, $issues);
+        if (count($numbers) !== count(array_unique($numbers))) {
+            throw new ForgeReadFailed('GitHub listed an issue twice, so the listing moved while it was read.');
+        }
+
+        return $issues;
     }
 
     /**
