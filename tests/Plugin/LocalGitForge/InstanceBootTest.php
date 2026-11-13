@@ -332,7 +332,7 @@ final class InstanceBootTest extends TestCase
         file_put_contents($composerHome.'/auth.json', json_encode(['github-oauth' => ['github.com' => self::PROBE_TOKEN]]));
     }
 
-    // Boots a head whose Composer plugin reports the github-oauth config Composer loaded, with the given variables set (false: unset) in the booting process.
+    // The plugin reads the token through Composer's config rather than the environment, because that is how Composer hands an auth.json of the booting install to the head's code; the variables are restored so the other tests keep the install's own home.
     /**
      * @param array<string, string|false> $variables
      */
