@@ -75,6 +75,7 @@ final class ReviewDockerfileTest extends TestCase
         yield 'first line' => ["# escape=`\nFROM mcr.microsoft.com/windows/servercore\n", '`'];
         yield 'after another directive' => ["# syntax=docker/dockerfile:1\n#ESCAPE = `\nFROM php:8.5-cli\n", '`'];
         yield 'Windows line ends' => ["# escape=`\r\nFROM php:8.5-cli\r\n", '`'];
+        yield 'after a byte order mark, which Docker strips' => ["\u{FEFF}# escape=`\nFROM php:8.5-cli\n", '`'];
     }
 
     #[DataProvider('openContinuation')]

@@ -10,6 +10,7 @@ final readonly class ReviewDockerfile
     // A file of Intakt's own beside the project's files, so the project's Dockerfile is sent as it is committed.
     public const string PATH = '.intakt-review.Dockerfile';
     private const string DIRECTIVE = '/^#\s*([a-z]+)\s*=\s*(\S*)\s*$/i';
+    private const string BYTE_ORDER_MARK = "\u{FEFF}";
 
     /**
      * @throws JobImageNotBuilt
@@ -26,7 +27,10 @@ final readonly class ReviewDockerfile
     // The added steps continue their lines with a backslash, which another escape character would turn into part of the command.
     private static function refuseAnotherEscape(string $dockerfile): void
     {
-        foreach (explode("\n", $dockerfile) as $line) {
+        // Docker strips a byte order mark before it reads the directives, so the scan does too.
+        $withoutMark = str_starts_with($dockerfile, self::BYTE_ORDER_MARK) ? substr($dockerfile, strlen(self::BYTE_ORDER_MARK)) : $dockerfile;
+
+        foreach (explode("\n", $withoutMark) as $line) {
             if (1 !== preg_match(self::DIRECTIVE, trim($line), $directive)) {
                 return;
             }

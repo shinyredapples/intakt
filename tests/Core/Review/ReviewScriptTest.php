@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review;
 
+use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
 use Intakt\Core\Job\Infrastructure\EgressProxyDefinition;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -77,7 +78,7 @@ final class ReviewScriptTest extends TestCase
         );
     }
 
-    public function testCodexGetsTheModelAndItsReadOnlySandbox(): void
+    public function testCodexGetsTheModelItsReadOnlySandboxAndEveryToolOfTheInProcessReviewerSwitchedOff(): void
     {
         $this->givenTheCheckoutIsReadOnly();
         $this->cli = 'codex';
@@ -86,7 +87,11 @@ final class ReviewScriptTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
         self::assertSame(
-            ['exec', '--json', '--model', 'claude-opus-5-5', '--sandbox', 'read-only', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules', '-c', 'web_search="disabled"', '-'],
+            [
+                'exec', '--json', '--model', 'claude-opus-5-5', '--sandbox', 'read-only', '--ephemeral', '--skip-git-repo-check', '--ignore-user-config', '--ignore-rules',
+                ...array_merge(...array_map(static fn (string $feature): array => ['--disable', $feature], IsolatedCodexCli::DISABLED_FEATURES)),
+                '-c', 'web_search="disabled"', '-',
+            ],
             explode("\n", trim($this->recorded('arguments'))),
         );
     }
@@ -147,6 +152,29 @@ final class ReviewScriptTest extends TestCase
         self::assertSame(1, $run->getExitCode());
         self::assertStringContainsString(sprintf('the checkout differs from %s', $this->head), $this->outputFile('review.log'));
         self::assertTheCliDidNotRun();
+    }
+
+    #[DataProvider('marksGitStatusTrusts')]
+    public function testACheckoutWithAChangedFileThatGitStatusIsToldToSkipIsNotReviewed(string $mark): void
+    {
+        file_put_contents($this->repository->path.'/src/Change.php', "<?php\n// changed\n");
+        new Process(['git', 'update-index', $mark, 'src/Change.php'], $this->repository->path)->mustRun();
+        $this->givenTheCheckoutIsReadOnly();
+
+        $run = $this->whenTheReviewRuns();
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertStringContainsString('src/Change.php is marked so that git status does not compare it', $this->outputFile('review.log'));
+        self::assertTheCliDidNotRun();
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function marksGitStatusTrusts(): iterable
+    {
+        yield 'skip-worktree' => ['--skip-worktree'];
+        yield 'assume-unchanged' => ['--assume-unchanged'];
     }
 
     public function testACheckoutWithAnUntrackedFileIsNotReviewed(): void

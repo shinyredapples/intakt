@@ -16,14 +16,17 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
 {
     private const float TIMEOUT = 300.0;
 
-    // Its shell, browsers, apps, plugins and agents would read past the checkout's path checks and the fence, so each tool the CLI enables by default is off; the CLI refuses a feature name it does not know, so a renamed one fails the call instead of staying on. No saved session, no user config or rules from the writable home, no Git check of a home that is no repository.
+    // Its shell, browsers, apps, plugins and agents would read past the checkout's path checks and the fence, so each tool the CLI enables by default is off; the CLI refuses a feature name it does not know, so a renamed one fails the call instead of staying on. Public because the review job's script switches off the same tools.
+    public const array DISABLED_FEATURES = ['shell_tool', 'unified_exec', 'apps', 'plugins', 'browser_use', 'in_app_browser', 'computer_use', 'multi_agent', 'image_generation', 'view_image', 'hooks'];
+
+    // No saved session, no user config or rules from the writable home, no Git check of a home that is no repository.
     private const array CONFINEMENT = [
         'sandbox' => 'read-only',
         'ephemeral' => true,
         'ignore_user_config' => true,
         'ignore_rules' => true,
         'skip_git_repo_check' => true,
-        'disable' => ['shell_tool', 'unified_exec', 'apps', 'plugins', 'browser_use', 'in_app_browser', 'computer_use', 'multi_agent', 'image_generation', 'view_image', 'hooks'],
+        'disable' => self::DISABLED_FEATURES,
     ];
 
     private const string NO_WEB_SEARCH = 'web_search="disabled"';

@@ -66,6 +66,18 @@ fi
 if [ -n "$changes" ]; then
     refuse 1 "the checkout differs from $head"
 fi
+# git status takes a file marked skip-worktree or assume-unchanged as unchanged without reading it, so no file may carry either mark.
+if ! entries="$(git --no-optional-locks -C "$checkout" -c core.fsmonitor=false ls-files -v 2>> "$log")"; then
+    refuse 1 "the files of the checkout cannot be listed"
+fi
+while IFS= read -r entry; do
+    case "$entry" in
+        ''|'H '*) ;;
+        *) refuse 1 "${entry#??} is marked so that git status does not compare it" ;;
+    esac
+done <<EOF
+$entries
+EOF
 
 # The repository folder is probed too, because it can be a mount of its own.
 for folder in "$checkout" "$checkout/.git"; do
@@ -98,7 +110,11 @@ case "$cli" in
             < "$prompt" > "$output/answer" 2>> "$log"
         ;;
     codex)
-        codex exec --json --model "$model" --sandbox read-only --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules -c 'web_search="disabled"' - \
+        # Its read-only sandbox stops writes, not commands, so every tool the CLI enables by default is off, as IsolatedCodexCli::DISABLED_FEATURES has it.
+        codex exec --json --model "$model" --sandbox read-only --ephemeral --skip-git-repo-check --ignore-user-config --ignore-rules \
+            --disable shell_tool --disable unified_exec --disable apps --disable plugins --disable browser_use --disable in_app_browser \
+            --disable computer_use --disable multi_agent --disable image_generation --disable view_image --disable hooks \
+            -c 'web_search="disabled"' - \
             < "$prompt" > "$output/answer" 2>> "$log"
         ;;
 esac
