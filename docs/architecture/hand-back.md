@@ -1,8 +1,8 @@
 # Hand-back checks
 
-A build hands back a git bundle. The module `Core/HandBack` (plan task T50, parts 1 and 2) checks that bundle before anything trusts it, strips attribution from its commits, redacts the credentials mounted into the build job from them and runs the secret scan over everything the bundle adds. The scan of the pull request text, the send-back once and the hand-over on a second failure are part 3 of T50 and are not built.
+A build hands back a git bundle and the pull request text. The module `Core/HandBack` (plan task T50) checks that bundle before anything trusts it, strips attribution from its commits, redacts the credentials mounted into the build job from them, runs the secret scan over everything the bundle adds and over the pull request text, and sends a failure back to the builder once before it hands the task over.
 
-`php bin/console intakt:hand-back:check <repository> <branch> <bundle> [--merge-main] [--credential-env=<variable>]...` (`CheckHandBackCommand`) calls the use case. Each `--credential-env` names an environment variable (read from `$_SERVER`, then `getenv()`) whose value is a credential mounted into the build job; the value never goes on the command line, which the process list shows. An unset or empty one is an `InvalidArgumentException`. The command prints `accepted <head>`, `base <commit>` (`base none` when the branch was not pushed yet) and `rewritten <count>` and exits with 0; a refusal prints `refused: <reason>` in an error block and exits with 1; an `InvalidArgumentException` or a `ReportableFailure` (`HandBackNotChecked`) prints its message and exits with 1. The [check job](check-job.md) (`intakt:check:run`) runs it first in the same module; nothing calls it from another module yet: the push (T53) and the build lane (T56) will.
+`php bin/console intakt:hand-back:check <repository> <branch> <bundle> <pull-request-text> [--merge-main] [--credential-env=<variable>]...` (`CheckHandBackCommand`) calls `RouteHandBack` ([The round](#the-round)); `<pull-request-text>` is a file, and one that cannot be read (`Filesystem::readFile()` throws an `IOException`) is an `InvalidArgumentException` naming its path. Each `--credential-env` names an environment variable (read from `$_SERVER`, then `getenv()`) whose value is a credential mounted into the build job; the value never goes on the command line, which the process list shows. An unset or empty one is an `InvalidArgumentException`. The command prints `accepted <head>`, `base <commit>` (`base none` when the branch was not pushed yet) and `rewritten <count>` and exits with 0; a failure prints `refused, sent back to the builder: <reason>` or `refused, handed over: <reason>` in an error block and exits with 1; an `InvalidArgumentException` or a `ReportableFailure` (`HandBackNotChecked`, `HandBackRoundNotRecorded`) prints its message and exits with 1. The [check job](check-job.md) (`intakt:check:run`) runs `CheckHandBack` first in the same module, without the pull request text and without the round; nothing calls either from another module yet: the push (T53) and the build lane (T56) will.
 
 ## Contract
 
@@ -10,10 +10,10 @@ A build hands back a git bundle. The module `Core/HandBack` (plan task T50, part
 
 - `HandBack`: the repository (a bare repository whose `HEAD` names main, such as the project's [mirror](mirror.md)), the task's branch, the bundle's path, `mergeOfMainAsked` and `mountedCredentials`, the values of the credentials mounted into the build job as a `JobCredentials` (`Plugin/Forge/Contract`, the type a review comment carries for the same reason; no value is empty).
 - `AcceptedHandBack` (`base`, the pushed branch's commit or null before the first push, `head`, `rewrittenCommits`) and `RefusedHandBack` (a `HandBackRefusal`) are the two results of a check.
-- `HandBackRefusal` is a backed enum; `reason()` is fixed text per case, so a reason never holds a value from the refused bundle.
+- `HandBackRefusal` is a backed enum; `reason()` is fixed text per case, so a reason never holds a value from the refused bundle or text. `TextHoldsCredential` and `TextHoldsSecret` are the refusals of the pull request text.
 - `HandBackNotChecked` (a `ReportableFailure`) is thrown when the repository cannot be read or the secret scan cannot run or fails; its message names the repository and the git subcommand or the scan, never git's or gitleaks's own output, which may quote the bundle.
 
-The check itself, `CheckHandBack::check(HandBack)` (marked `#[NoDiscard]`), lives in `src/Core/HandBack/UseCase/CheckHandBack/`, not in the Contract, so only the module's own console door calls it. The push (T53) and the build lane (T56) need an entry point in the Contract first; it is added with the first of them.
+The check itself, `CheckHandBack::check(HandBack)`, and the round, `RouteHandBack::route(HandBack, string $pullRequestText)` (both marked `#[NoDiscard]`), live in `src/Core/HandBack/UseCase/CheckHandBack/`, not in the Contract, so only the module's own doors call them. The push (T53) and the build lane (T56) need an entry point in the Contract first; it is added with the first of them.
 
 ## The checks, in order
 
@@ -64,3 +64,23 @@ flowchart TD
 12. The same text goes to `gitleaks stdin --no-banner --ignore-gitleaks-allow --redact --log-level error --exit-code 3` (Symfony Process, in the repository, at most 600 seconds), the binary taken from `INTAKT_GITLEAKS` (the container binds `%env(default:intakt.gitleaks:INTAKT_GITLEAKS)%` through `PlatformServices::GITLEAKS`, the parameter the GitHub forge's scan uses too), with `GITLEAKS_CONFIG` and `GITLEAKS_CONFIG_TOML` removed, so only the built-in rules apply. There is no allow-list: the objects come on standard input, so a `.gitleaks.toml` or `.gitleaksignore` the build committed is never a file gitleaks reads, and its inline allow comments are ignored. Exit 3 is `HoldsSecret`, 0 passes; any other exit (127 when the scanner is missing) or a process failure, a timeout included, is `HandBackNotChecked`, so a check without a scanner never accepts a bundle. gitleaks's output is never read.
 
 Every git call is built by `HardenedGit` with `--git-dir=<repository>` and `GIT_WORK_TREE` unset, through `RepositoryGit` (`withObjectsIn()` adds the quarantine). The check writes objects only, and only for an accepted bundle, so a mirror update in between loses nothing; the commits as the bundle shipped them stay beside the rewritten ones, named by no ref; the returned `base` lets the push name the branch state it was checked against (null: the branch must not exist yet).
+
+## The round
+
+```mermaid
+flowchart TD
+  route[RouteHandBack] --> check{CheckHandBack}
+  check -- "cannot run" --> notChecked[HandBackNotChecked, nothing recorded]
+  check -- refused --> failed
+  check -- accepted --> text{Pull request text holds a<br/>mounted credential or<br/>a secret gitleaks finds?}
+  text -- "cannot run or fails" --> notChecked
+  text -- yes --> failed{Task's last hand-back line<br/>is hand_back_sent_back?}
+  text -- no --> accepted[hand_back_accepted: AcceptedHandBack]
+  failed -- no --> sentBack[hand_back_sent_back: FailedHandBack SentBack]
+  failed -- yes --> handedOver[hand_back_handed_over: FailedHandBack HandedOver]
+```
+
+13. `RouteHandBack` runs the check above. A refused bundle is a failure of the round with its refusal.
+14. For an accepted bundle, `BundleSecretScan::refusalOfText()` reads the pull request text: a mounted credential's value in it (byte-wise) is `TextHoldsCredential`, and the same `gitleaks stdin` call as in step 12 finding a secret in it is `TextHoldsSecret`; a scan that cannot run or fails is `HandBackNotChecked`. The text is refused, not redacted, because the builder wrote it and can write it again without the value. The bundle's objects are already moved into the repository then, named by no ref, as in step 6.
+15. `HandBackRoutes` writes one ledger line per round, under a lock per task (Symfony Lock, the `FlockStore` the container configures; the key is `intakt-hand-back-` and the SHA-256 of the JSON list of the resolved repository path and the branch), held from the read to the append, so two rounds of one task never both read the same last line. A task is the resolved repository path and the branch. A failure reads the task's lines of the three kinds below in ledger order (`Ledger::readInOrder()`): when the last is `hand_back_sent_back`, the failure is `hand_back_handed_over` (`HandBackRoute::HandedOver`), otherwise `hand_back_sent_back` (`HandBackRoute::SentBack`), so a failure is sent back once and the second in a row is handed over; an accepted hand-back (`hand_back_accepted`) or a hand-over starts the count again. A failure line holds `repository`, `branch`, `refusal` (the case's value) and `reason`; an accepted line `repository`, `branch`, `base` and `head`. No line holds text from the bundle or the pull request text; the accepted line's `head` is the checked head's commit id. An append the ledger does not take is `HandBackRoundNotRecorded` (a `ReportableFailure`), because an unrecorded failure would be sent back again.
+16. `FailedHandBack` carries the `HandBackRefusal` and the `HandBackRoute`; its `reason()` is the refusal's fixed text, which is what goes back to the builder. Nothing sends it to a builder or the maintainer agent yet: the build lane (T56) and the maintainer agent will act on the route.
