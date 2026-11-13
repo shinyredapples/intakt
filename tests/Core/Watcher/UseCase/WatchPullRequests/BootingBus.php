@@ -37,7 +37,7 @@ final class BootingBus implements MessageBusInterface
             throw new RuntimeException('The query bus is down.');
         }
 
-        if (null !== $this->meanwhile) {
+        if ($this->meanwhile instanceof Closure) {
             ($this->meanwhile)();
         }
 

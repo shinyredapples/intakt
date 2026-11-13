@@ -22,8 +22,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Throwable;
 
-// Main boots once per commit and tool fingerprint, because every head of the project is judged against the same main result.
-// Nothing here throws: a cache that cannot be read or written, or a ledger line that cannot be written, is logged, because a boot only gates the review and must never stop it.
+// Main boots once per commit and tool fingerprint, because every head of the project is judged against the same main result; nothing here throws, because a boot only gates the review and must never stop it.
 final readonly class BootResults
 {
     public function __construct(
@@ -72,7 +71,7 @@ final readonly class BootResults
 
         try {
             // In a savepoint, because PostgreSQL refuses every further statement of a caller's transaction in which one failed.
-            $this->entities->getConnection()->transactional(fn (Connection $inner): int|string => $inner->insert(BootRecord::TABLE, BootRecord::rowOf($key, $outcome, $this->clock->now()), BootRecord::rowTypes()));
+            $this->entities->getConnection()->transactional(fn (Connection $inner): int|string => $inner->insert(BootRecord::TABLE, new BootRecord($key, $outcome, $this->clock->now())->row(), BootRecord::rowTypes()));
         } catch (UniqueConstraintViolationException) {
             // Ignored, because then another worker booted the same main meanwhile, and its row answers the next ask as well as this one would.
         } catch (Throwable $unstored) {

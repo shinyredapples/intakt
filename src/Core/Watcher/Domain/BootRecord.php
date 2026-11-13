@@ -35,15 +35,25 @@ final readonly class BootRecord
     #[ORM\Column(type: 'text')]
     private string $reason;
 
-    #[ORM\Column(name: 'recorded_at', type: 'utc_datetime_immutable')]
-    private DateTimeImmutable $recordedAt;
+    public function __construct(
+        BootKey $key,
+        BootOutcome $outcome,
+        #[ORM\Column(name: 'recorded_at', type: 'utc_datetime_immutable')]
+        private DateTimeImmutable $recordedAt,
+    ) {
+        $this->project = $key->project;
+        $this->main = $key->main->hash;
+        $this->toolFingerprint = $key->toolFingerprint;
+        $this->state = $outcome->state;
+        $this->reason = $outcome->reason;
+    }
 
     /**
      * @return array{project: string, main_commit: string, tool_fingerprint: string, state: string, reason: string, recorded_at: DateTimeImmutable}
      */
-    public static function rowOf(BootKey $key, BootOutcome $outcome, DateTimeImmutable $recordedAt): array
+    public function row(): array
     {
-        return ['project' => $key->project, 'main_commit' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'state' => $outcome->state->value, 'reason' => $outcome->reason, 'recorded_at' => $recordedAt];
+        return ['project' => $this->project, 'main_commit' => $this->main, 'tool_fingerprint' => $this->toolFingerprint, 'state' => $this->state->value, 'reason' => $this->reason, 'recorded_at' => $this->recordedAt];
     }
 
     /**
