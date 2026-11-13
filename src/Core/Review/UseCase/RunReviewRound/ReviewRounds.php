@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
@@ -84,6 +85,22 @@ final readonly class ReviewRounds
         $this->entities->clear();
 
         return $this->entities->find(ReviewRound::class, Uuid::fromString($roundId)) ?? throw RoundNotFound::for($roundId);
+    }
+
+    // A forge status belongs to a commit, so only a later round that reviewed the same head speaks for it; a round of another head of the change leaves this head's status to this round.
+    public function judgedAfter(ReviewRound $round): bool
+    {
+        /** @var list<ReviewRound> $later */
+        $later = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.change.number > :number AND r.state = :judged', ReviewRound::class))
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->setParameter('number', $round->number())
+            ->setParameter('judged', RoundState::Judged->value)
+            ->getResult();
+
+        $head = $round->identity()->commits->head;
+
+        return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash);
     }
 
     /**

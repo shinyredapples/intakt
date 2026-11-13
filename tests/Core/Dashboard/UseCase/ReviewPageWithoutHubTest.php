@@ -85,7 +85,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
         self::assertCount(1, $crawler->filter('.page-head form.stop-round button[data-arm-confirm="Click again to stop the round"]'));
         self::assertSame(
-            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { highlightFindings } from '%s'; import { foldColumns } from '%s'; import { toggleBanners } from '%s'; holdBackDangerButtons(document); offerSearch(document); highlightFindings(document); foldColumns(document); toggleBanners(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('finding-highlight.js'), $packages->getUrl('column-fold.js'), $packages->getUrl('banner-toggle.js'))],
+            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { switchTaskPanes } from '%s'; import { highlightFindings } from '%s'; import { foldColumns } from '%s'; import { showMoreCards } from '%s'; import { toggleBanners } from '%s'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document); highlightFindings(document); foldColumns(document); showMoreCards(document); toggleBanners(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('task-panes.js'), $packages->getUrl('finding-highlight.js'), $packages->getUrl('column-fold.js'), $packages->getUrl('column-more.js'), $packages->getUrl('banner-toggle.js'))],
             $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),
         );
     }
@@ -140,6 +140,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertStringContainsString('export function highlightFindings(page)', $this->browser->getInternalResponse()->getContent());
     }
 
+    public function testThePaneSwitchScriptThePlainPageImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('task-panes.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function switchTaskPanes(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
     public function testTheColumnFoldScriptThePlainPageImportsIsServedByTheInstall(): void
     {
         $packages = self::getContainer()->get(Packages::class);
@@ -149,6 +160,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('export function foldColumns(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
+    public function testTheShowMoreScriptThePlainPageImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('column-more.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function showMoreCards(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void

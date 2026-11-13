@@ -447,31 +447,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame($unstreamedLedger->payloads()[1]['usages'], $streamedLedger->payloads()[1]['usages']);
     }
 
-    public function testAStreamCutOffMidAnswerFailsTheReviewAsAnIncompleteAnswerAndLeavesItsUsageUnsettledOnce(): void
-    {
-        $ledger = new InMemoryLedger();
-        $cutOff = static fn (): StreamResult => new StreamResult((static function (): Generator {
-            yield new TokenUsage(
-                promptTokens: 100,
-                model: 'big',
-            );
-            yield new TextDelta('{"verdict":"approve",');
-
-            throw new IncompleteStreamException('The stream ended before its last event.');
-        })());
-
-        $verdict = $this->vendor($cutOff, $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
-
-        self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
-        [, $unsettled] = $ledger->payloads();
-        self::assertSame(2, $ledger->count());
-        self::assertSame(['unsettled', IncompleteStreamException::class], [$unsettled['phase'], $unsettled['failure']]);
-        /** @var list<array<string, int>> $usages */
-        $usages = $unsettled['usages'];
-        self::assertSame([100], array_column($usages, 'prompt'));
-    }
-
-    public function testAStreamCutMidTextAfterAToolRoundBlocksTheReviewWithTheCutAsItsReasonAndLeavesOneUnsettledRowWithBothRounds(): void
+    public function testAStreamCutMidTextAfterAToolRoundLeavesOneUnsettledRowWithBothRoundsAndIsTriedOnceMore(): void
     {
         $ledger = new InMemoryLedger();
 
@@ -480,8 +456,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
         self::assertSame(Severity::P1, $verdict->findings[0]->severity);
-        self::assertStringContainsString('The stream ended before its terminal event.', $verdict->findings[0]->text);
-        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame(['started', 'unsettled', 'started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame($ledger->payloads()[0]['call'], $ledger->payloads()[1]['call']);
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[1]['usages'];
@@ -493,14 +468,13 @@ final class SymfonyAiVendorTest extends KernelTestCase
      */
     public static function midStreamOutages(): iterable
     {
-        yield 'a cut stream' => [new IncompleteStreamException('Stream cut.')];
         yield 'a server error' => [new ServerException(503)];
         yield 'a server error event' => [new ServerException(errorMessage: 'Overloaded')];
         yield 'a rate limit' => [new RateLimitExceededException(30)];
     }
 
     #[DataProvider('midStreamOutages')]
-    public function testEveryOutageMidStreamAfterAToolRoundBlocksTheReviewWithAReasonAndLeavesOneUnsettledRowWithBothRounds(Throwable $outage): void
+    public function testEveryOutageMidStreamAfterAToolRoundBlocksTheReviewWithoutARetryAndLeavesOneUnsettledRowWithBothRounds(Throwable $outage): void
     {
         $ledger = new InMemoryLedger();
 
@@ -571,8 +545,9 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
         $rounds = [$this->toolRound(...), $lastRound];
 
+        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
         return static function () use (&$rounds): StreamResult {
-            $round = array_shift($rounds) ?? self::fail('The script has no round left.');
+            $round = array_shift($rounds) ?? self::cutAgain();
 
             return new StreamResult($round());
         };
@@ -1166,6 +1141,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resetter->reset();
 
         self::assertSame([], $this->dispatcher->getCalledListeners());
+    }
+
+    private static function cutAgain(): never
+    {
+        throw new IncompleteStreamException('The answer ended before it was complete.');
     }
 
     private function request(?Uuid $round = null): ReviewRequest

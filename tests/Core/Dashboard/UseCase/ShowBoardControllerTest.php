@@ -258,6 +258,64 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Round 1', $this->wordsWithoutExplanationOf($card->filter('.meta .term')));
     }
 
+    public function testACrowdedColumnShowsTwelveCardsAndOffersTheOtherTwentyEight(): void
+    {
+        $this->startRoundsOf(40);
+
+        $column = $this->column($this->browser->request('GET', '/'), 'In review');
+
+        self::assertSame('12', $column->attr('data-page-limit'));
+        self::assertCount(12, $column->filter('.col-cards > article:not([data-past-limit])'));
+        self::assertCount(28, $column->filter('.col-cards > article[data-past-limit]'));
+        self::assertSame(['Show 28 more', 'button'], [$column->filter('.col-cards > button.more-btn')->text(), $column->filter('.more-btn')->attr('type')]);
+    }
+
+    public function testACrowdedColumnCountsEveryCardNotOnlyTheShownOnes(): void
+    {
+        $this->startRoundsOf(40);
+
+        $column = $this->column($this->browser->request('GET', '/'), 'In review');
+
+        self::assertSame('40', $column->filter('.col-head .count')->text());
+    }
+
+    public function testAColumnOfThirteenCardsOffersOneMoreAfterTheFirstTwelveInTheBoardsOrder(): void
+    {
+        $this->startRoundsOf(13);
+
+        $column = $this->column($this->browser->request('GET', '/'), 'In review');
+
+        self::assertSame('Show 1 more', $column->filter('.more-btn')->text());
+        self::assertSame(['#13'], $column->filter('[data-past-limit] .top span:first-child')->each(static fn (Crawler $number): string => $number->text()));
+        self::assertSame('#12', $column->filter('article:not([data-past-limit]) .top span:first-child')->last()->text());
+    }
+
+    public function testAColumnOfTwelveCardsShowsThemAllWithoutShowMore(): void
+    {
+        $this->startRoundsOf(12);
+
+        $column = $this->column($this->browser->request('GET', '/'), 'In review');
+
+        self::assertCount(12, $column->filter('.col-cards > article'));
+        self::assertCount(0, $column->filter('.more-btn, [data-past-limit]'));
+        self::assertNull($column->attr('data-page-limit'));
+    }
+
+    // DESIGN.md: a card clamps a long title to three lines and the corner truncates a long project name, so the page carries both whole for the clamp and the tooltip.
+    public function testACardCarriesALongTitleAndALongProjectNameWhole(): void
+    {
+        $change = str_repeat('a-change-with-a-long-name-', 8);
+        $project = 'a-project-with-a-name-longer-than-its-corner';
+        $this->ledger->startRoundOf($change, 'round-1', 1);
+        $this->ledger->startRound('round-2', $project);
+
+        $cards = $this->column($this->browser->request('GET', '/'), 'In review')->filter('.card');
+
+        self::assertSame('Review of '.$change, $cards->first()->filter('.title')->text());
+        self::assertSame(['#'.$change, '#'.$change], [$cards->first()->filter('.top .num')->text(), $cards->first()->filter('.top .num')->attr('title')]);
+        self::assertSame([$project, $project], [$cards->last()->filter('.pname')->text(), $cards->last()->filter('.pname')->attr('title')]);
+    }
+
     public function testEachRunningReviewerIsALaneWithItsProjectChangeAndRound(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
@@ -430,6 +488,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     private function column(Crawler $page, string $name): Crawler
     {
         return $page->filter('.board > section.col')->reduce(static fn (Crawler $column): bool => $column->filter('.col-head h3')->text() === $name);
+    }
+
+    private function startRoundsOf(int $changes): void
+    {
+        foreach (range(1, $changes) as $change) {
+            $this->ledger->startRoundOf((string) $change, 'round-'.$change, 1);
+        }
     }
 
     private function wordsWithoutExplanationOf(Crawler $term): string

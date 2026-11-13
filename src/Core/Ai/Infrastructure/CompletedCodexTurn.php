@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewServerReads;
 use Override;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RuntimeException;
@@ -11,7 +13,7 @@ use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\Component\Process\Process;
 
 // The bridge answers with the last message even when the stream ended before turn.completed, which carries the usage; naming it keeps a cut-off stream from passing for a complete answer, as with Claude Code (FinishedProcessResult; upstream/ai-codex-platform-cut-off-stream).
-final readonly class CompletedCodexTurn implements RawResultInterface
+final readonly class CompletedCodexTurn implements RawResultInterface, ReviewServerReads
 {
     private const string ITEM = 'item';
 
@@ -45,6 +47,39 @@ final readonly class CompletedCodexTurn implements RawResultInterface
         unset($data[self::TOOL_CALLS]);
 
         return isset($data[self::ITEM]) ? $this->completed($data) : $this->withReportedUsage($data);
+    }
+
+    // Only a completed, unrefused call of one of its tools on that server counts, because a failed or refused call or one to another server showed the reviewer nothing of the change.
+    #[Override]
+    public function readThrough(ReviewServerAccess $access): bool
+    {
+        foreach ($this->events() as $event) {
+            $item = 'item.completed' === ($event[self::TYPE] ?? null) ? $event[self::ITEM] ?? null : null;
+            if (is_array($item) && $this->readOf($item, $access)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<mixed> $item
+     */
+    private function readOf(array $item, ReviewServerAccess $access): bool
+    {
+        return 'mcp_tool_call' === ($item[self::TYPE] ?? null)
+            && $access->name === ($item['server'] ?? null)
+            && in_array($item['tool'] ?? null, $access->tools, true)
+            && 'completed' === ($item['status'] ?? null)
+            && null === ($item['error'] ?? null)
+            && $this->answered($item['result'] ?? null);
+    }
+
+    // A tool refusal (a judged round, a path outside the change) still completes the call, so only a result that is not marked as an error showed the reviewer anything.
+    private function answered(mixed $result): bool
+    {
+        return is_array($result) && false === ($result['isError'] ?? false);
     }
 
     #[Override]

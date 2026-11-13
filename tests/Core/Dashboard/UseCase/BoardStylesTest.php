@@ -121,6 +121,40 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/background:\s*var\(--amber\)/', $rules['.count.needs'] ?? '');
     }
 
+    // Because DESIGN.md (Awkward data and states) clamps long titles to three lines and truncates project names at 60%.
+    public function testACardClampsALongTitleToThreeLinesAndTruncatesALongProjectName(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/-webkit-line-clamp:\s*3;\s*overflow:\s*hidden;\s*overflow-wrap:\s*anywhere;/', $rules['.card .title'] ?? '');
+        self::assertMatchesRegularExpression('/max-width:\s*60%;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;\s*white-space:\s*nowrap;/', $rules['.card .top .pname'] ?? '');
+    }
+
+    // Because a change name as long as a branch wrapped over nine lines in the corner and squeezed the project name to one letter.
+    public function testACardTruncatesALongNumberAndLeavesTheProjectNameItsShare(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*min-width:\s*0;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;\s*white-space:\s*nowrap;\s*$/', $rules['.card .top .num'] ?? '');
+        self::assertMatchesRegularExpression('/flex:\s*none;/', $rules['.card .top .pname'] ?? '');
+    }
+
+    public function testACardPastAColumnsPageLimitIsNotShown(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.col-cards > [data-past-limit]'] ?? '');
+    }
+
+    // A button's own display would otherwise show it once every card is out.
+    public function testShowMoreTakesTheColumnsWidthAndHidesWhenItHasNothingToShow(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.more-btn'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.more-btn[hidden]'] ?? '');
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
