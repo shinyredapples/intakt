@@ -54,6 +54,8 @@ if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     rebuild_container
     php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
     rebuild_container
+    # The notes about providers without a key go to standard error, so discarding standard output leaves them once in the start log.
+    php bin/console intakt:ai:tiers >/dev/null
 fi
 
 # Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.
