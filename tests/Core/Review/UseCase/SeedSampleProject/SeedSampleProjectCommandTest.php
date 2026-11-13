@@ -93,13 +93,12 @@ final class SeedSampleProjectCommandTest extends TestCase
     {
         $this->seed(...$keyed);
 
-        $written = Yaml::parseFile($this->configuration());
-        $named = array_values(array_unique(array_column($written['projects']['sample']['tiers'], 'model')));
-        $priced = array_keys($written['budget']['prices']);
+        $named = array_values(array_unique(array_column($this->writtenProject()['tiers'], 'model')));
+        $priced = array_keys($this->writtenPrices());
         sort($named);
         sort($priced);
         self::assertSame($named, $priced);
-        foreach ($written['budget']['prices'] as $price) {
+        foreach ($this->writtenPrices() as $price) {
             self::assertGreaterThan(0, $price['input']);
             self::assertGreaterThan(0, $price['output']);
         }
@@ -109,9 +108,8 @@ final class SeedSampleProjectCommandTest extends TestCase
     {
         $this->seed(Provider::OpenAiCompatible);
 
-        $written = Yaml::parseFile($this->configuration());
-        self::assertArrayHasKey('openai/gpt-oss-120b:novita', $written['budget']['prices']);
-        self::assertArrayHasKey('moonshotai/Kimi-K3:deepinfra', $written['budget']['prices']);
+        self::assertArrayHasKey('openai/gpt-oss-120b:novita', $this->writtenPrices());
+        self::assertArrayHasKey('moonshotai/Kimi-K3:deepinfra', $this->writtenPrices());
     }
 
     public function testOneKeyPutsTheWholePanelOnThatProvider(): void
@@ -333,10 +331,26 @@ final class SeedSampleProjectCommandTest extends TestCase
      */
     private function writtenProject(): array
     {
-        /** @var array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}} $written */
+        return $this->written()['projects']['sample'];
+    }
+
+    /**
+     * @return array<string, array{input: int|float, output: int|float}>
+     */
+    private function writtenPrices(): array
+    {
+        return $this->written()['budget']['prices'];
+    }
+
+    /**
+     * @return array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{prices: array<string, array{input: int|float, output: int|float}>}}
+     */
+    private function written(): array
+    {
+        /** @var array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{prices: array<string, array{input: int|float, output: int|float}>}} $written */
         $written = Yaml::parseFile($this->configuration());
 
-        return $written['projects']['sample'];
+        return $written;
     }
 
     private function git(string ...$arguments): string
