@@ -75,7 +75,7 @@ final readonly class SymfonyAiVendor implements Vendor
         $retry = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnce($first,$retry), $substitute));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnce($first, $retry), $substitute));
     }
 
     // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again; a second one fails the reviewer.

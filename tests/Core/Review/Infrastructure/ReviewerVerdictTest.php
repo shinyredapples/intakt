@@ -553,7 +553,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->json());
 
-        $messages =$this->conversations->load($this->conversation)->getMessages();
+        $messages = $this->conversations->load($this->conversation)->getMessages();
         self::assertInstanceOf(UserMessage::class, $messages[2]);
         self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff), $messages[2]->asText());
     }
