@@ -50,7 +50,7 @@ use RuntimeException;
 #[UsesClass(RepositoryAttributesRefused::class)]
 final class LocalGitForgeTest extends TestCase
 {
-    // A PNG signature and the start of its header chunk: a NUL byte and bytes that are not UTF-8.
+    // The start of a real PNG, because it holds both a NUL byte and bytes that are not UTF-8.
     private const string PNG = "\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x02\0\0\0";
 
     private TemporaryRepository $repository;

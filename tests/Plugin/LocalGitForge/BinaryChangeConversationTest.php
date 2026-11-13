@@ -23,7 +23,7 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Tester\ApplicationTester;
 use Symfony\Component\Uid\UuidV7;
 
-// The reviewer's conversation holds the change's diff and is stored as JSON before the model is called, which is where a PNG's bytes failed a review with NotEncodableValueException.
+// Through the stored conversation, because the reviewer's conversation holds the change's diff and is stored as JSON before the model is called, which is where a PNG's bytes failed a review with NotEncodableValueException.
 #[Group('persistence')]
 #[CoversClass(LocalGitForge::class)]
 #[CoversClass(BinaryFiles::class)]

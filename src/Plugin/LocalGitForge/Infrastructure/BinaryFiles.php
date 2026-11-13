@@ -13,17 +13,21 @@ final readonly class BinaryFiles
     // A line of a file's content always starts with its marker, so only git's own header starts a line with "diff --git ".
     private const string FILE_START = '/^(?=diff --git )/m';
 
-    // Up to the end of the index line, which --full-index makes carry both whole blob ids.
+    // Kept up to the index line, because --full-index makes it carry both whole blob ids, which give the sizes.
     private const string HEADER = '/\A.*?^index ([0-9a-f]+)\.\.([0-9a-f]+)[^\n]*\n/ms';
 
     private const string ABSENT = '/\A0+\z/';
 
     /**
-     * @param Closure(string): int $sizeOf the size in bytes of a blob, by its id
+     * @param Closure(string): int $sizeOf
      */
     public function named(string $patch, Closure $sizeOf): string
     {
-        $files = preg_split(self::FILE_START, $patch) ?: [$patch];
+        $files = preg_split(self::FILE_START, $patch);
+
+        if (false === $files) {
+            throw new ForgeReadFailed('The diff could not be split into its files.');
+        }
 
         return implode('', array_map(fn (string $file): string => $this->isText($file) ? $file : $this->binary($file, $sizeOf), $files));
     }

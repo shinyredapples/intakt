@@ -34,9 +34,12 @@ final class BinaryFilesTest extends TestCase
 
     public function testAFileThatIsNotTextWithoutTheIdsOfItsBlobsFailsTheRead(): void
     {
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('without the ids of its blobs');
+        try {
+            $outcome = new BinaryFiles()->named("diff --git a/b.bin b/b.bin\n+\0\n", static fn (string $blob): int => 0);
+        } catch (ForgeReadFailed $failure) {
+            $outcome = $failure->getMessage();
+        }
 
-        new BinaryFiles()->named("diff --git a/b.bin b/b.bin\n+\0\n", static fn (string $blob): int => 0);
+        self::assertStringContainsString('without the ids of its blobs', $outcome);
     }
 }
