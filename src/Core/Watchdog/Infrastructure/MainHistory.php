@@ -7,7 +7,7 @@ namespace Intakt\Core\Watchdog\Infrastructure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
-use Intakt\Core\Watchdog\Contract\OwnerKeys;
+use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\SeenCommit;
 use Intakt\Core\Watchdog\Domain\SignatureStatus;
 use Symfony\Component\Filesystem\Filesystem;
@@ -54,7 +54,7 @@ final readonly class MainHistory
      */
     public function stillHolds(string $repository, string $checkedUpTo, string $head): bool
     {
-        // A commit the repository no longer has was dropped by a rewrite.
+        // Because a commit the repository no longer has was dropped by a rewrite.
         if (!$this->run($repository, ['cat-file', '-e', $checkedUpTo.'^{commit}'])->isSuccessful()) {
             return false;
         }
@@ -71,15 +71,14 @@ final readonly class MainHistory
     }
 
     /**
-     * @return list<SeenCommit> oldest first
+     * @return list<SeenCommit>
      *
      * @throws MainNotRead
      */
-    public function commitsOnMain(string $repository, string $head, ?string $checkedUpTo, OwnerKeys $ownerKeys): array
+    public function commitsOnMain(string $repository, string $head, WatchedMain $main): array
     {
         $signers = $this->files->tempnam(sys_get_temp_dir(), 'intakt-signers-');
-        $this->files->dumpFile($signers, $ownerKeys->allowedSigners());
-
+        $this->files->dumpFile($signers, $main->ownerKeys->allowedSigners());
 
         try {
             $process = $this->run($repository, [
@@ -87,7 +86,7 @@ final readonly class MainHistory
                 '-c', 'gpg.ssh.program=ssh-keygen',
                 '-c', 'gpg.ssh.allowedSignersFile='.$signers,
                 'log', '--first-parent', '--reverse', '--format=%H %G?',
-                $head, ...null === $checkedUpTo ? [] : ['--not', $checkedUpTo],
+                $head, ...null === $main->checkedUpTo ? [] : ['--not', $main->checkedUpTo],
             ]);
         } finally {
             $this->files->remove($signers);
@@ -102,7 +101,7 @@ final readonly class MainHistory
     private function seen(string $listing): array
     {
         $commits = [];
-        foreach (array_filter(explode("\n", $listing)) as $line) {
+        foreach (array_filter(explode("\n", $listing), static fn (string $line): bool => '' !== $line) as $line) {
             [$name, $letter] = explode(' ', $line, 2) + [1 => ''];
             $commits[] = new SeenCommit($name, SignatureStatus::fromGit($letter));
         }

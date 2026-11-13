@@ -4,14 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watchdog\UseCase\CheckMain;
 
-use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\OwnerKeys;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use InvalidArgumentException;
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
-use Symfony\Component\Console\Attribute\Option;
+use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -20,28 +18,14 @@ final readonly class CheckMainCommand
 {
     public function __construct(
         private CheckMain $check,
-        private Mirrors $mirrors,
     ) {
     }
 
-    /**
-     * @param list<string> $ownerKey
-     * @param list<string> $recordedMerge
-     */
-    public function __invoke(
-        SymfonyStyle $io,
-        #[Argument(description: 'The project name, whose bare mirror holds main')]
-        string $project,
-        #[Option(description: 'The head of main the last check passed; omitted, all of main is checked')]
-        ?string $since = null,
-        #[Option(description: 'A public key file of the owner (OpenSSH format, one key per line); repeatable')]
-        array $ownerKey = [],
-        #[Option(description: 'A merge commit Intakt recorded; repeatable')]
-        array $recordedMerge = [],
-    ): int {
+    public function __invoke(SymfonyStyle $io, #[MapInput] CheckMainInput $input): int
+    {
         try {
-            $main = new WatchedMain($since, $recordedMerge, OwnerKeys::of($this->keysIn($ownerKey)));
-            $verdict = $this->check->of($this->mirrors->pathOf($project), $main);
+            $main = new WatchedMain($input->since, $input->recordedMerge, OwnerKeys::of($this->keysIn($input->ownerKey)));
+            $verdict = $this->check->of($input->repository, $main);
         } catch (InvalidArgumentException|MainNotRead $refused) {
             $io->error($refused->getMessage());
 

@@ -33,7 +33,7 @@ final readonly class CheckMain
             return new MainVerdict($head, [new Violation(ViolationKind::HistoryRewritten, (string) $main->checkedUpTo)]);
         }
 
-        $commits = $this->history->commitsOnMain($repository, $head, $main->checkedUpTo, $main->ownerKeys);
+        $commits = $this->history->commitsOnMain($repository, $head, $main);
 
         return new MainVerdict($head, $this->classifier->violationsIn($commits, $main->recordedMerges));
     }

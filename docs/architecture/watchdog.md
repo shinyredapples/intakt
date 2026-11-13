@@ -1,6 +1,6 @@
 # Watchdog over main
 
-How Intakt classifies the new commits on main (plan task T63, part 1; design: [Overview](../design/05-architecture/01-overview.md)). `CheckMain` in `src/Core/Watchdog/UseCase/CheckMain/` answers it for a repository whose `HEAD` names main (the project's bare mirror); `php bin/console intakt:watchdog:check <project>` runs it on the project's mirror. It only classifies: the project halt, the owner card and the owner's own push as an info event are later parts of T63, so nothing stops on a violation yet.
+How Intakt classifies the new commits on main (plan task T63, part 1; design: [Overview](../design/05-architecture/01-overview.md)). `CheckMain` in `src/Core/Watchdog/UseCase/CheckMain/` answers it for a repository whose `HEAD` names main (a project's bare mirror); `php bin/console intakt:watchdog:check <repository>` runs it on a mirror or a `.git` folder. It only classifies: the project halt, the owner card and the owner's own push as an info event are later parts of T63, so nothing stops on a violation yet.
 
 ## The rules
 
@@ -35,4 +35,4 @@ Only SSH signatures are checked. `Infrastructure/MainHistory` asks git for each 
 
 ## The command
 
-`intakt:watchdog:check <project> [--since=<sha>] [--owner-key=<file>]... [--recorded-merge=<sha>]...` prints one `<kind> <commit>` line per violation, the head it read and `main is clean` or `main is violated`. It exits 0 when clean, 1 on a violation and 2 for a refused argument or a repository it could not read. The owner's keys and the recorded merges are options because the places that keep them (the owner's config, the ledger) arrive with the later parts.
+`intakt:watchdog:check <repository> [--since=<sha>] [--owner-key=<file>]... [--recorded-merge=<sha>]...` prints one `<kind> <commit>` line per violation, the head it read and `main is clean` or `main is violated`. It exits 0 when clean, 1 on a violation and 2 for a refused argument or a repository it could not read. The owner's keys and the recorded merges are options because the places that keep them (the owner's config, the ledger) arrive with the later parts.

@@ -56,7 +56,7 @@ final readonly class TemporaryRepository
         return $this->git('rev-parse', 'HEAD');
     }
 
-    // What a force push leaves: main points at a commit that does not descend from the old head.
+    // Because a force push leaves main at a commit that does not descend from the old head.
     public function moveHeadTo(string $commit): void
     {
         $this->git('reset', '--quiet', '--hard', $commit);

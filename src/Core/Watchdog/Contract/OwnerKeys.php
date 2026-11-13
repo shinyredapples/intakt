@@ -12,7 +12,7 @@ final readonly class OwnerKeys
     private const string PUBLIC_KEY = '/\A([a-z0-9@.-]+) ([A-Za-z0-9+\/]+={0,3})(?: [^\n\r]*)?\z/';
 
     /**
-     * @param list<string> $keys type and body of each registered public key
+     * @param list<string> $keys
      */
     private function __construct(
         private array $keys,
@@ -20,7 +20,7 @@ final readonly class OwnerKeys
     }
 
     /**
-     * @param list<string> $publicKeys public keys as OpenSSH writes them (`<type> <body> [comment]`)
+     * @param list<string> $publicKeys
      *
      * @throws InvalidArgumentException
      */
@@ -38,7 +38,7 @@ final readonly class OwnerKeys
         return new self($keys);
     }
 
-    // The format ssh-keygen reads for its allowed signers; one principal, limited to git signatures.
+    // One principal limited to git signatures, because ssh-keygen would otherwise accept a key's signature in any namespace.
     public function allowedSigners(): string
     {
         $lines = array_map(static fn (string $key): string => 'owner namespaces="git" '.$key."\n", $this->keys);

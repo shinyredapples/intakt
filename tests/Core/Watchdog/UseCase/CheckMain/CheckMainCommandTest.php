@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Watchdog\UseCase\CheckMain;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
-use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Watchdog\Contract\MainVerdict;
 use Intakt\Core\Watchdog\Contract\OwnerKeys;
 use Intakt\Core\Watchdog\Contract\Violation;
@@ -17,6 +16,7 @@ use Intakt\Core\Watchdog\Domain\SignatureStatus;
 use Intakt\Core\Watchdog\Infrastructure\MainHistory;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
 use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
+use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainInput;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Watchdog\SigningKeys;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -29,6 +29,7 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(CheckMainCommand::class)]
 #[UsesClass(CheckMain::class)]
+#[UsesClass(CheckMainInput::class)]
 #[UsesClass(MainHistory::class)]
 #[UsesClass(CommitClassifier::class)]
 #[UsesClass(SignatureStatus::class)]
@@ -37,21 +38,16 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(MainVerdict::class)]
 #[UsesClass(WatchedMain::class)]
 #[UsesClass(OwnerKeys::class)]
-#[UsesClass(Mirrors::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
 final class CheckMainCommandTest extends TestCase
 {
-    private string $mirrors;
-
     private TemporaryRepository $repository;
 
     private SigningKeys $keys;
 
     protected function setUp(): void
     {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        mkdir($this->mirrors);
         $this->repository = new TemporaryRepository();
         $this->repository->commitEmpty('Base');
         $this->keys = new SigningKeys();
@@ -59,7 +55,7 @@ final class CheckMainCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove([$this->mirrors, $this->repository->path]);
+        $this->repository->remove();
         $this->keys->remove();
     }
 
@@ -93,9 +89,9 @@ final class CheckMainCommandTest extends TestCase
         self::assertStringContainsString('cannot be read', $tester->getDisplay());
     }
 
-    public function testAProjectWithoutAMirrorIsRefused(): void
+    public function testARepositoryThatDoesNotExistIsRefused(): void
     {
-        $tester = $this->whenRunWith([], 'unknown');
+        $tester = $this->whenRunWith([], $this->keys->directory.'/missing.git');
 
         self::assertSame(Command::INVALID, $tester->getStatusCode());
     }
@@ -103,14 +99,13 @@ final class CheckMainCommandTest extends TestCase
     /**
      * @param array<string, mixed> $options
      */
-    private function whenRunWith(array $options, string $project = 'demo'): CommandTester
+    private function whenRunWith(array $options, ?string $repository = null): CommandTester
     {
-        new Filesystem()->mirror($this->repository->path.'/.git', $this->mirrors.'/demo.git');
         $check = new CheckMain(new MainHistory(new HardenedGit(), new Filesystem()), new CommitClassifier());
         $application = new Application();
-        $application->addCommand(new CheckMainCommand($check, new Mirrors($this->mirrors)));
+        $application->addCommand(new CheckMainCommand($check));
         $tester = new CommandTester($application->find('intakt:watchdog:check'));
-        $tester->execute(['project' => $project, ...$options]);
+        $tester->execute(['repository' => $repository ?? $this->repository->path.'/.git', ...$options]);
 
         return $tester;
     }

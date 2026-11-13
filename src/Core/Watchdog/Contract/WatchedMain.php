@@ -12,8 +12,7 @@ final readonly class WatchedMain
     private const string COMMIT_NAME = '/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/';
 
     /**
-     * @param ?string      $checkedUpTo    the head of main the watchdog last passed; null for a main never checked
-     * @param list<string> $recordedMerges merge commits Intakt recorded in its ledger
+     * @param list<string> $recordedMerges
      *
      * @throws InvalidArgumentException
      */
