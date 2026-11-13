@@ -28,7 +28,7 @@ final class IssueReferencesTest extends TestCase
         yield 'what it provides after a colon' => ['Waits for #1600: the forge reads', [1600]];
         yield 'a colon after the words' => ['Waits for: #9', [9]];
         yield 'Windows line ends' => ["Waits for #9\r\nWaits for #10 (part 2)\r\n", [9, 10]];
-        yield 'in a markdown list' =>["- Waits for #9\n* Waits for #10", [9, 10]];
+        yield 'in a markdown list' => ["- Waits for #9\n* Waits for #10", [9, 10]];
         yield 'prose that mentions an issue' => ['This task waits for #9 to land in its own time.', []];
         yield 'a plain reference' => ['See #9', []];
         yield 'nothing' => ['', []];
