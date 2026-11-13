@@ -150,9 +150,9 @@ final class StatusReadModelTest extends TestCase
         $this->ledger->answer('r1', 'correctness', 0);
         $this->ledger->startReviewer('r1', 'security');
 
-        $steps = $this->projectOf($this->read(), 'alpha')['lanes']['review'][0]['steps'];
+        $steps = array_column($this->projectOf($this->read(), 'alpha')['lanes']['review'], 'steps');
 
-        self::assertSame([['role' => 'correctness', 'tier' => 'standard', 'progress' => 'verdict'], ['role' => 'security', 'tier' => 'standard', 'progress' => 'running']], $steps);
+        self::assertSame([[['role' => 'correctness', 'tier' => 'standard', 'progress' => 'verdict'], ['role' => 'security', 'tier' => 'standard', 'progress' => 'running']]], $steps);
     }
 
     public function testAJudgedRoundIsALastOutcomeAndLeavesTheLane(): void
@@ -293,39 +293,46 @@ final class StatusReadModelTest extends TestCase
 
     public function testTheSchemaNamesEveryHoldReviewerProgressAndDecisionTheCodeHas(): void
     {
-        $schema = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($schema);
-        $project = $schema['properties']['projects']['items']['properties'];
+        $project = ['properties', 'projects', 'items', 'properties'];
 
-        self::assertSame(array_column(SharedHold::cases(), 'value'), $schema['properties']['holds']['items']['enum']);
-        self::assertSame(array_column(ReviewerProgress::cases(), 'value'), $project['lanes']['properties']['review']['items']['properties']['steps']['items']['properties']['progress']['enum']);
-        self::assertSame([...array_column(Decision::cases(), 'value'), null], $project['last_outcomes']['items']['properties']['decision']['enum']);
+        self::assertSame(array_column(SharedHold::cases(), 'value'), $this->schemaAt('properties', 'holds', 'items', 'enum'));
+        self::assertSame(array_column(ReviewerProgress::cases(), 'value'), $this->schemaAt(...$project, ...['lanes', 'properties', 'review', 'items', 'properties', 'steps', 'items', 'properties', 'progress', 'enum']));
+        self::assertSame([...array_column(Decision::cases(), 'value'), null], $this->schemaAt(...$project, ...['last_outcomes', 'items', 'properties', 'decision', 'enum']));
+    }
+
+    private function schemaAt(string ...$path): mixed
+    {
+        $node = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
+
+        foreach ($path as $key) {
+            self::assertIsArray($node);
+            $node = $node[$key] ?? null;
+        }
+
+        return $node;
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>}
      */
     private function read(): array
     {
+        /** @var array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status */
         $status = json_decode($this->readModel()->json(), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($status);
 
-        /* @var array<string, mixed> $status */
         return $status;
     }
 
     /**
-     * @param array<string, mixed> $status
+     * @param array{projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status
      *
-     * @return array<string, mixed>
+     * @return array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}
      */
     private function projectOf(array $status, string $name): array
     {
-        self::assertIsArray($status['projects']);
-        $project = array_find($status['projects'], static fn (mixed $project): bool => is_array($project) && $name === $project['name']);
-        self::assertIsArray($project);
+        $project = array_find($status['projects'], static fn (array $project): bool => $name === $project['name']);
+        self::assertNotNull($project);
 
-        /* @var array<string, mixed> $project */
         return $project;
     }
 
@@ -362,6 +369,7 @@ final class StatusReadModelTest extends TestCase
     {
         $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
         $queue->method('getMessageCount')->willReturn($messages);
+        self::assertInstanceOf(ReceiverInterface::class, $queue);
 
         return $queue;
     }

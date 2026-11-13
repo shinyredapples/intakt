@@ -48,16 +48,16 @@ final readonly class LedgerWaitingHeads
             }
 
             // Keyed by project, then pull request, so no name either side sends can make two keys meet.
-            $latest[$project][$change] = $this->waitOf($kind, $project, $change, $payload['read_again_at'] ?? null);
+            $latest[$project][$change] = $this->waitOf($kind, $payload['read_again_at'] ?? null);
         }
 
-        return array_values(array_filter(array_merge(...array_map(array_values(...), array_values($latest)))));
+        return $this->waiting($latest);
     }
 
     /**
-     * @return array{project: string, change: string, decision: 'pending'|'red', read_again_at: ?string}|null
+     * @return array{decision: 'pending'|'red', read_again_at: ?string}|null
      */
-    private function waitOf(LedgerEventKind $kind, string $project, string $change, mixed $readAgainAt): ?array
+    private function waitOf(LedgerEventKind $kind, mixed $readAgainAt): ?array
     {
         $decision = match ($kind) {
             LedgerEventKind::HeadPending => 'pending',
@@ -65,7 +65,26 @@ final readonly class LedgerWaitingHeads
             default => null,
         };
 
-        return null === $decision ? null : ['project' => $project, 'change' => $change, 'decision' => $decision, 'read_again_at' => $this->momentOf($readAgainAt)];
+        return null === $decision ? null : ['decision' => $decision, 'read_again_at' => $this->momentOf($readAgainAt)];
+    }
+
+    // Names are strings again here, because PHP turns a project or pull request name of digits into an integer key.
+    /**
+     * @param array<array-key, array<array-key, array{decision: 'pending'|'red', read_again_at: ?string}|null>> $latest
+     *
+     * @return list<array{project: string, change: string, decision: 'pending'|'red', read_again_at: ?string}>
+     */
+    private function waiting(array $latest): array
+    {
+        $waiting = [];
+
+        foreach ($latest as $project => $changes) {
+            foreach (array_filter($changes) as $change => $wait) {
+                $waiting[] = ['project' => strval($project), 'change' => strval($change)] + $wait;
+            }
+        }
+
+        return $waiting;
     }
 
     // Read and written again, so a malformed moment in a row reads as none instead of reaching the status as it was stored.
