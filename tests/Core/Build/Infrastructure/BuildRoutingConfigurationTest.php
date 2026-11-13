@@ -62,6 +62,13 @@ final class BuildRoutingConfigurationTest extends TestCase
         self::assertSame(['stall'], $build['escalate_on']);
     }
 
+    public function testANullEscalateOnTurnsEveryEscalationOff(): void
+    {
+        $build = $this->process(['alpha' => ['build' => ['escalate_on' => null]]]);
+
+        self::assertSame([], $build['escalate_on']);
+    }
+
     public function testAnUnknownSetbackInEscalateOnIsRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);

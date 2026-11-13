@@ -394,7 +394,7 @@ To see which panel a change gets, without calling any model, run `php bin/consol
 
 ### Which tier a build starts on
 
-A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, `escalate_on` lists the setbacks that raise the next build to the strong tier (`failed-attempt`, `blocking-finding`, `stall`; all three by default, a shorter list turns triggers off), and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
+A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, `escalate_on` lists the setbacks that raise the next build to the strong tier (`failed-attempt`, `blocking-finding`, `stall`; all three by default, a shorter list turns triggers off, and an empty list or `escalate_on: ~` turns every escalation off), and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
 
 ```yaml
 projects:
