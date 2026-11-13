@@ -5,7 +5,7 @@ A guided first run: start Intakt with a sample project, watch it review a change
 ## What you need
 
 - Docker (or Podman).
-- One AI provider key, or a Hugging Face token instead of a paid key (with only the permission "Make calls to Inference Providers"); two keys from different companies show the full two-company review panel.
+- One AI provider key, or a Hugging Face token instead (with only the permission "Make calls to Inference Providers"); two keys from different companies show the full two-company review panel. The reviews' calls are billed to whoever owns the key or the token.
 - About five minutes.
 
 ## The path
@@ -24,7 +24,7 @@ flowchart LR
 2. **Add your keys:** copy `.env.dist` to `.env.local` and fill in one or two provider keys (or `HF_TOKEN`, a Hugging Face token), plus two secrets (any long random text; `openssl rand -hex 32` makes one).
 3. **Start it:** `docker compose up`. The first start sets up a **sample project**: a small codebase with a base version and a pull request that contains deliberate, findable problems, and a panel of two reviewers. With one key both reviewers come from that company; with two keys, from two companies. With only a Hugging Face token, both reviewers go through Hugging Face but run on models from two different makers. Later starts keep what the first one set up.
 4. **Open the dashboard** in your browser, at `http://localhost:7781`. It opens on the board.
-5. **Watch the review:** for now you start it yourself, with the command the start printed at the end of its log (`docker compose exec intakt php bin/console intakt:review sample-change ...`); Intakt starting it on its own is still planned. The sample pull request moves into **In review**. Open its card to see the reviewers working live: the files they read, the small tests they run.
+5. **Watch the review:** for now you start it yourself, with the command the start printed at the end of its log (`docker compose exec intakt php bin/console intakt:review sample-change ...`), copied as printed into a terminal in the repository folder; Intakt starting it on its own is still planned. The sample pull request moves into **In review**. Open its card to see the reviewers working live: the files they read, the small tests they run.
 6. **Read the verdicts:** each reviewer's verdict appears with its findings (P1, P2, P3), and the judge step's list of what to fix now. Compare the findings with the deliberate problems in the sample: the demo is designed so the reviewers find them.
 7. **Try it from your AI assistant:** connect your assistant to Intakt's MCP server (the first start prints the one line that does it, with a token made for you) and ask it to start a review of the sample branch, with the same values as the printed review command (project `sample`, branch `sample-change` against `main`, the folder `/app/var/data/sample-repository` and the task after `--task=`), then read the verdicts and the list of things to fix ([how](using-intakt-from-your-assistant.md)).
 
