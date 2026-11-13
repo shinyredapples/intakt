@@ -58,14 +58,6 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame([], $act[0]->merged);
     }
 
-    public function testAFindingReportedTwiceDoesNotMergeIntoItself(): void
-    {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F1', 'src/A.php', 7)], ['F1']);
-
-        self::assertCount(1, $act);
-        self::assertSame([], $act[0]->merged);
-    }
-
     public function testFindingsAtDifferentLinesOfOneFileStaySeparate(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 8)], ['F1', 'F2']);

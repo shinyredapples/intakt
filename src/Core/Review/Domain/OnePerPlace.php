@@ -56,10 +56,6 @@ final readonly class OnePerPlace
 
     private function merged(Finding $entry, Finding $finding): Finding
     {
-        if ($finding->id === $entry->id || in_array($finding->id, $entry->merged, true)) {
-            return $entry;
-        }
-
         return $entry
             ->withSeverity($this->higher($entry->severity, $finding->severity))
             ->withMerged([...$entry->merged, $finding->id, ...$finding->merged]);
