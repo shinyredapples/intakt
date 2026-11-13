@@ -1,3 +1,4 @@
 {# Matches no element once the block lists the reviewer, so a reviewer that started after the page loaded gets a row and a known row keeps its role and tier. #}
 <turbo-stream action="remove" target="round-{{ round }}-now-none"></turbo-stream>
+{% if state == 'running' %}<turbo-stream action="remove" target="round-{{ round }}-now-stop-idle"></turbo-stream>{% endif %}
 <turbo-stream action="append" targets="#round-{{ round }}-now-reviewers:not(:has(#round-{{ round }}-now-reviewer-{{ reviewer }}-state))"><template><li><span><strong>{{ reviewer }}</strong> (started after this page loaded): <span id="round-{{ round }}-now-reviewer-{{ reviewer }}-state">{{ state }}</span></span></li></template></turbo-stream>
