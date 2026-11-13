@@ -14,14 +14,31 @@ final readonly class IntakeRules
     ) {
     }
 
-    // Only these items can steer the queue, so only their history is worth a read: a task candidate, and a pull request whose closing keywords reorder or release tasks.
-    public function needsHistory(QueuedIssue $item): bool
+    // Only these items can steer the queue, so only their history is worth a read: a task candidate, a pull request whose closing keywords reorder or release tasks, and a pull request a candidate waits for, because one left unread would pass for an outsider's and the wait would be dropped.
+    /**
+     * @param list<QueuedIssue> $items
+     *
+     * @return list<QueuedIssue>
+     */
+    public function itemsNeedingHistory(array $items): array
     {
-        if ($item->isPullRequest()) {
-            return [] !== $item->closedBy();
-        }
+        $candidates = array_filter($items, $this->isCandidate(...));
+        $waited = array_merge([], ...array_map(static fn (QueuedIssue $task): array => $task->waitsFor(), $candidates));
 
-        return $item->hasLabel($this->eligibilityLabel) && !$item->hasLabel(WorkLabels::IDEA);
+        return array_values(array_filter($items, fn (QueuedIssue $item): bool => $this->isCandidate($item) || $this->steersAsPullRequest($item, $waited)));
+    }
+
+    private function isCandidate(QueuedIssue $item): bool
+    {
+        return !$item->isPullRequest() && $item->hasLabel($this->eligibilityLabel) && !$item->hasLabel(WorkLabels::IDEA);
+    }
+
+    /**
+     * @param list<int> $waited
+     */
+    private function steersAsPullRequest(QueuedIssue $item, array $waited): bool
+    {
+        return $item->isPullRequest() && ([] !== $item->closedBy() || in_array($item->number(), $waited, true));
     }
 
     // The failures hold every task of the project that failed for good, open or closed, because a closed failure still holds its dependents.
@@ -92,7 +109,7 @@ final readonly class IntakeRules
 
     private function isEligible(QueuedIssue $item): bool
     {
-        return !$item->isPullRequest() && $item->hasVouchedLabel($this->eligibilityLabel) && !$item->hasLabel(WorkLabels::IDEA) && $item->isTrusted();
+        return $this->isCandidate($item) && $item->hasVouchedLabel($this->eligibilityLabel) && $item->isTrusted();
     }
 
     /**

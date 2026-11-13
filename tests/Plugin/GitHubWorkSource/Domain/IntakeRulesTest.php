@@ -65,7 +65,7 @@ final class IntakeRulesTest extends TestCase
 
     public function testATaskWhoseHistoryWasNotReadIsNotEligible(): void
     {
-        self::assertSame([], $this->readyOf([new QueuedIssue(new ItemReading(Issues::task(1), [], [], []))]));
+        self::assertSame([], $this->readyOf($this->unread(Issues::task(1))));
     }
 
     public function testAPullRequestIsNoTask(): void
@@ -297,20 +297,34 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([2], $this->numbers($plan->ready));
     }
 
-    public function testOnlyATaskCandidateOrAPullRequestThatClosesATaskNeedsItsHistory(): void
+    public function testAWaitOnAPullRequestWithoutAClosingKeywordHoldsTheTaskWhenOnlyTheHistoryTheRuleAsksForIsRead(): void
     {
-        $rules = new IntakeRules('intakt');
+        $plan = $this->plan($this->readAsTheRuleAsks(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50']), Issues::pullRequest(50, 'A refactoring.')));
 
-        self::assertSame(
-            [true, false, false, true, false],
-            [
-                $rules->needsHistory($this->row(Issues::task(1))),
-                $rules->needsHistory($this->row(Issues::task(1, ['intakt', 'idea']))),
-                $rules->needsHistory($this->row(Issues::task(1, ['bug']))),
-                $rules->needsHistory($this->row(Issues::pullRequest(50, 'Fixes #4'))),
-                $rules->needsHistory($this->row(Issues::pullRequest(50, 'A refactoring.'))),
-            ],
+        self::assertSame([], $this->numbers($plan->ready));
+        self::assertSame('waits for #50', $plan->held[0]->reason);
+    }
+
+    public function testAnOutsidersPullRequestWithoutAClosingKeywordIsNoWaitWhenOnlyTheHistoryTheRuleAsksForIsRead(): void
+    {
+        self::assertSame([1], $this->readyOf($this->readAsTheRuleAsks(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50']), Issues::pullRequest(50, 'A refactoring.', 'mallory'))));
+    }
+
+    public function testATaskCandidateAPullRequestClosingATaskAndAPullRequestACandidateWaitsForNeedTheirHistory(): void
+    {
+        $items = $this->unread(
+            Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50, #52']),
+            Issues::task(2, ['intakt', 'idea'], with: ['body' => 'Waits for #53']),
+            Issues::task(3, ['bug'], with: ['body' => 'Waits for #54']),
+            Issues::pullRequest(50, 'A refactoring.'),
+            Issues::pullRequest(51, 'Fixes #4'),
+            Issues::pullRequest(52, 'A refactoring.', 'mallory'),
+            Issues::pullRequest(53, 'A refactoring.'),
+            Issues::pullRequest(54, 'A refactoring.'),
+            Issues::pullRequest(55, 'A refactoring.'),
         );
+
+        self::assertSame([1, 50, 51, 52], $this->numbers(new IntakeRules('intakt')->itemsNeedingHistory($items)));
     }
 
     /**
@@ -342,12 +356,36 @@ final class IntakeRulesTest extends TestCase
         return array_map(static fn (QueuedIssue $row): int => $row->number(), $rows);
     }
 
-    // Without a history the author last edited the item and applied every label, because most cases are about something else.
-    private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
+    /**
+     * @return list<QueuedIssue>
+     */
+    private function unread(ListedIssue ...$listed): array
     {
         $references = new IssueReferences();
-        $row = new QueuedIssue(new ItemReading($listed, $references->waitsFor($listed->body), $references->unreadableWaits($listed->body), $references->closedBy($listed->body)));
 
+        return array_map(static fn (ListedIssue $item): QueuedIssue => new QueuedIssue(new ItemReading($item, $references->waitsFor($item->body), $references->unreadableWaits($item->body), $references->closedBy($item->body))), $listed);
+    }
+
+    // Vouches only the items the rule asks for, as the caller will, because a row vouched regardless hides a pull request the rule forgot to ask for.
+    /**
+     * @return list<QueuedIssue>
+     */
+    private function readAsTheRuleAsks(ListedIssue ...$listed): array
+    {
+        $items = $this->unread(...$listed);
+        $asked = $this->numbers(new IntakeRules('intakt')->itemsNeedingHistory($items));
+
+        return array_map(fn (QueuedIssue $item, ListedIssue $source): QueuedIssue => in_array($item->number(), $asked, true) ? $this->vouched($item, $source) : $item, $items, $listed);
+    }
+
+    private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
+    {
+        return $this->vouched($this->unread($listed)[0], $listed, $history);
+    }
+
+    // Without a history the author last edited the item and applied every label, because most cases are about something else.
+    private function vouched(QueuedIssue $row, ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
+    {
         return $row->vouchedBy(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys($listed->labels, $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
     }
 
