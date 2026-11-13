@@ -31,6 +31,11 @@ final class RecordedIssueApi
     public array $requests = [];
     /** @var array<int, string> */
     public array $pages = [];
+    // The pages answered once `$movesAfter` page reads were answered, because an issue closed or opened during a listing moves the pages under the reader.
+    /** @var array<int, string> */
+    public array $movedPages = [];
+    public int $movesAfter = PHP_INT_MAX;
+    private int $pageReads = 0;
     public string $etag = 'W/"issues-1"';
     public bool $notModified = false;
     public string $historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"__typename":"User","login":"ana"},"editor":null,"lastEditedAt":null,"timelineItems":{"pageInfo":{"hasPreviousPage":false,"startCursor":"c1"},"nodes":[{"actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}},{"actor":{"__typename":"User","login":"ana"},"label":{"name":"priority:urgent"}}]}}}}}';
@@ -112,10 +117,11 @@ final class RecordedIssueApi
         }
 
         $page = 1 === preg_match('/[?&]page=(\d+)/', $url, $found) ? (int) $found[1] : 1;
-        $body = $this->pages[$page] ?? '[]';
+        $pages = $this->pageReads++ < $this->movesAfter ? $this->pages : $this->movedPages;
+        $body = $pages[$page] ?? '[]';
 
         $headers = ['ETag' => $this->etag];
-        if ($this->links && isset($this->pages[$page + 1])) {
+        if ($this->links && isset($pages[$page + 1])) {
             $headers['Link'] = sprintf('<https://api.github.com/repositories/1/issues?state=open&per_page=100&page=%d>; rel="next"', $page + 1);
         }
 

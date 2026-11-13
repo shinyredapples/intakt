@@ -72,7 +72,51 @@ final class GitHubIssueReadsTest extends TestCase
         $listing = $this->api->reads()->listOpen('alpha', null);
 
         self::assertSame(range(1, 249), array_map(static fn (ListedIssue $issue): int => $issue->number, $listing->issues()));
-        self::assertSame([1, 2, 3], $this->pagesRequested());
+        self::assertSame([1, 2, 3, 1, 2], $this->pagesRequested());
+    }
+
+    public function testAnIssueClosedWhileTheListingIsReadFailsTheListing(): void
+    {
+        $this->api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 50)];
+        // Issue 1 is closed after the first page was read, so issue 101 moves onto the page already read.
+        $this->api->movedPages = [1 => $this->page(2, 100), 2 => $this->page(102, 49)];
+        $this->api->movesAfter = 1;
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub moved an issue between pages while the listing was read.'));
+
+        $this->api->reads()->listOpen('alpha', null);
+    }
+
+    public function testAnIssueOpenedWhileTheListingIsReadFailsTheListing(): void
+    {
+        $this->api->pages = [1 => $this->page(2, 100), 2 => $this->page(102, 50)];
+        // Issue 1 is opened after both pages were read, so the earlier page no longer holds what was read from it.
+        $this->api->movedPages = [1 => $this->page(1, 100), 2 => $this->page(101, 51)];
+        $this->api->movesAfter = 2;
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub moved an issue between pages while the listing was read.'));
+
+        $this->api->reads()->listOpen('alpha', null);
+    }
+
+    public function testAnIssueEditedWhileTheListingIsReadKeepsTheListing(): void
+    {
+        $this->api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 50)];
+        $this->api->movedPages = [1 => str_replace('Task 7"', 'Task seven"', $this->page(1, 100)), 2 => $this->page(101, 50)];
+        $this->api->movesAfter = 2;
+
+        self::assertCount(150, $this->api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    public function testAnEarlierPageThatFailsWhenReadAgainFailsTheListing(): void
+    {
+        $this->api->pages = [1 => $this->page(1, 100), 2 => $this->page(101, 50)];
+        $this->api->movedPages = [1 => '502', 2 => $this->page(101, 50)];
+        $this->api->movesAfter = 2;
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered 502 to a read.'));
+
+        $this->api->reads()->listOpen('alpha', null);
     }
 
     public function testAnIssueIsReadFromTheRecordedListing(): void
@@ -186,7 +230,7 @@ final class GitHubIssueReadsTest extends TestCase
         $this->api->links = false;
 
         self::assertCount(100, $this->api->reads()->listOpen('alpha', null)->issues());
-        self::assertSame([1, 2], $this->pagesRequested());
+        self::assertSame([1, 2, 1], $this->pagesRequested());
     }
 
     public function testAFullPageWithoutANextLinkIsReadOnUntilAShortPage(): void

@@ -38,7 +38,7 @@ final readonly class GitHubIssueReads implements IssueReads
 
         $issues = $this->issuesOf($first);
         $complete = $this->isLastPage($first, $issues);
-        $later = $complete ? [] : $this->laterIssues($repository);
+        $later = $complete ? [] : $this->laterIssues($repository, $issues);
 
         // The validator belongs to the first page only, so a list of several pages has none and the next listing is full.
         return IssueListing::listed($this->onceEach(array_map($this->listed(...), [...$issues, ...$later])), $complete ? $first['etag'] : null);
@@ -58,21 +58,48 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
+     * @param list<array<mixed>> $first
+     *
      * @return list<array<mixed>>
      */
-    private function laterIssues(RepositoryAddress $repository): array
+    private function laterIssues(RepositoryAddress $repository, array $first): array
     {
-        $issues = [];
+        $pages = [1 => $first];
         for ($page = 2; $page <= self::MAX_PAGES; ++$page) {
             $answer = $this->get($repository->path().'/issues', $this->page($page));
-            $more = $this->issuesOf($answer);
-            $issues = [...$issues, ...$more];
-            if ($this->isLastPage($answer, $more)) {
-                return $issues;
+            $pages[$page] = $this->issuesOf($answer);
+            if ($this->isLastPage($answer, $pages[$page])) {
+                $this->unmoved($repository, $pages);
+
+                return array_merge(...array_slice($pages, 1));
             }
         }
 
         throw new ForgeReadFailed('GitHub lists more open issues than this forge reads.');
+    }
+
+    /**
+     * @param array<int, list<array<mixed>>> $pages
+     */
+    private function unmoved(RepositoryAddress $repository, array $pages): void
+    {
+        // An issue closed or opened between two page reads moves the others across a page boundary unseen, so every page but the last is read again and must still hold the same issues.
+        foreach (array_slice($pages, 0, -1, true) as $page => $issues) {
+            $again = $this->issuesOf($this->get($repository->path().'/issues', $this->page($page)));
+            if ($this->numbersOf($again) !== $this->numbersOf($issues)) {
+                throw new ForgeReadFailed('GitHub moved an issue between pages while the listing was read.');
+            }
+        }
+    }
+
+    /**
+     * @param list<array<mixed>> $issues
+     *
+     * @return list<mixed>
+     */
+    private function numbersOf(array $issues): array
+    {
+        return array_map(static fn (array $issue): mixed => $issue['number'] ?? null, $issues);
     }
 
     /**
