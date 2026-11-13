@@ -21,6 +21,7 @@ final class ReviewScriptTest extends TestCase
     private const string PROXY = 'http://egress-proxy:3128';
 
     private TemporaryRepository $repository;
+    private ?TemporaryRepository $otherRepository = null;
     private string $folder = '';
     private string $head = '';
     private string $cli = 'claude';
@@ -45,6 +46,7 @@ final class ReviewScriptTest extends TestCase
     {
         new Process(['chmod', '-R', 'u+w', $this->repository->path])->run();
         $this->repository->remove();
+        $this->otherRepository?->remove();
         new Filesystem()->remove($this->folder);
     }
 
@@ -116,6 +118,31 @@ final class ReviewScriptTest extends TestCase
         self::assertSame(1, $run->getExitCode());
         self::assertStringContainsString(sprintf(', not at %s', $this->head), $this->outputFile('review.log'));
         self::assertTheCliDidNotRun();
+    }
+
+    // An image's GIT_DIR and GIT_WORK_TREE would send every git call to the other repository, whose head is the one the review was told.
+    public function testACheckoutAtAnotherCommitIsNotReviewedWhenTheImagesGitVariablesNameAnotherRepositoryAtTheHead(): void
+    {
+        $this->otherRepository = $this->repository->copy();
+        $this->repository->commitFile('src/Later.php', "<?php\n");
+        $this->givenTheCheckoutIsReadOnly();
+
+        $run = $this->whenTheReviewRuns(['GIT_DIR' => $this->otherRepository->path.'/.git', 'GIT_WORK_TREE' => $this->otherRepository->path]);
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertStringContainsString(sprintf(', not at %s', $this->head), $this->outputFile('review.log'));
+        self::assertTheCliDidNotRun();
+    }
+
+    public function testTheCliFindsNoGitVariableAndNoNodeOptionsAnImageSet(): void
+    {
+        $this->givenTheCheckoutIsReadOnly();
+
+        $this->whenTheReviewRuns(['GIT_DIR' => $this->repository->path.'/.git', 'GIT_SSH_COMMAND' => 'planted', 'NODE_OPTIONS' => '--require /planted.js']);
+
+        preg_match_all('/^(GIT_|NODE_OPTIONS=).*$/m', $this->recorded('environment'), $gitLines);
+        sort($gitLines[0]);
+        self::assertSame(['GIT_CONFIG_GLOBAL=/dev/null', 'GIT_CONFIG_NOSYSTEM=1'], $gitLines[0]);
     }
 
     #[DataProvider('notFullCommitNames')]

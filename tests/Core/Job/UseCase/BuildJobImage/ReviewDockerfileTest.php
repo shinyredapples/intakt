@@ -56,6 +56,8 @@ final class ReviewDockerfileTest extends TestCase
         yield 'an escape line after a comment, which is a comment' => ["# The job image\n# escape=`\nFROM php:8.5-cli\n"];
         yield 'a closed continuation' => ["FROM php:8.5-cli\nRUN apt-get update \\\n    && apt-get clean\n"];
         yield 'a last comment ending in a backslash' => ["FROM php:8.5-cli\n# C:\\\n"];
+        yield 'an escaped backslash at the end, which Docker keeps as a literal' => ["FROM debian:bookworm\nRUN echo literal \\\\\n"];
+        yield 'an escaped backslash before trailing spaces' => ["FROM debian:bookworm\nRUN echo literal \\\\  \n"];
         yield 'Windows line ends' => ["FROM php:8.5-cli\r\nRUN true\r\n"];
     }
 
@@ -95,5 +97,7 @@ final class ReviewDockerfileTest extends TestCase
         yield 'before blank lines' => ["FROM php:8.5-cli\nRUN true \\\n\n\n"];
         yield 'before a comment' => ["FROM php:8.5-cli\nRUN true \\\n    # a comment\n"];
         yield 'with trailing spaces' => ["FROM php:8.5-cli\nRUN true \\  \n"];
+        yield 'a backslash alone on the line' => ["FROM php:8.5-cli\nRUN true \\\n\\\n"];
+        yield 'an escaped backslash and then one that continues' => ["FROM php:8.5-cli\nRUN echo \\\\ \\\n"];
     }
 }

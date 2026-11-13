@@ -10,6 +10,8 @@ final readonly class ReviewDockerfile
     // A file of Intakt's own beside the project's files, so the project's Dockerfile is sent as it is committed.
     public const string PATH = '.intakt-review.Dockerfile';
     private const string DIRECTIVE = '/^#\s*([a-z]+)\s*=\s*(\S*)\s*$/i';
+    // Docker's parser continues a line on a backslash that stands alone or follows another character than a backslash, so an escaped backslash ends the line.
+    private const string CONTINUATION = '/(?:^|[^\\\\])\\\\$/';
     private const string BYTE_ORDER_MARK = "\u{FEFF}";
 
     /**
@@ -46,7 +48,7 @@ final readonly class ReviewDockerfile
     {
         $instructions = array_filter(explode("\n", $dockerfile), static fn (string $line): bool => '' !== trim($line) && !str_starts_with(ltrim($line), '#'));
 
-        if (str_ends_with(rtrim((string) array_last($instructions)), '\\')) {
+        if (1 === preg_match(self::CONTINUATION, rtrim((string) array_last($instructions)))) {
             throw JobImageNotBuilt::notExtendable('its last line continues on a next line');
         }
     }

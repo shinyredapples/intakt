@@ -2,7 +2,7 @@
 # The review job's command: one reviewer reads the exact head in a checkout it cannot change, and reaches only its vendor through the job's proxy.
 # Usage: review.sh <checkout> <head> <prompt file> <cli> <model>
 # Runs the CLI (claude or codex) in the checkout with the prompt on its input, only once the checkout is at <head> with nothing changed,
-# cannot be written, the start check passed and every proxy setting names the job's proxy.
+# cannot be written, the start check passed and every proxy setting names the job's proxy; git and the CLI see no git or Node variable of the image.
 # Writes review.log, and answer (the CLI's standard output) only when the CLI ran, into INTAKT_JOB_OUTPUT.
 # Exits with 0 when the CLI ran (its status is in review.log), 1 when the checkout is not the head, 2 when it can be written,
 # 3 when the network is not the job's proxy alone, 4 when the start check failed, 64 for another CLI.
@@ -19,10 +19,27 @@ log="$output/review.log"
 # The address EgressProxy hands every job with an allowlist, so a setting that names anything else is not the job's proxy.
 proxy='http://egress-proxy:3128'
 
-# The review never commits, and an image's git settings could run a command or point git at another repository.
+# An image's git variables could point git at another repository (GIT_DIR, GIT_WORK_TREE), whose head would then pass the check in place of the checkout's,
+# or run a command, so none of them reaches git; the review never commits, so git reads no global or system settings either.
+while IFS= read -r exported; do
+    case "$exported" in
+        'export GIT_'*|'declare -x GIT_'*) ;;
+        *) continue ;;
+    esac
+    name="GIT_${exported#* GIT_}"
+    name="${name%%=*}"
+    case "$name" in
+        *[!A-Za-z0-9_]*) continue ;;
+    esac
+    unset "$name"
+done <<EOF
+$(export -p)
+EOF
 GIT_CONFIG_GLOBAL=/dev/null
 GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL GIT_CONFIG_NOSYSTEM
+# Node would load the code it names into the CLI's process, in place of the reviewer.
+unset NODE_OPTIONS
 
 refuse() {
     printf '%s\n' "$2" >> "$log"
