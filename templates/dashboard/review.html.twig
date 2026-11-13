@@ -2,6 +2,8 @@
 
 {% block title %}Review {{ review.change ?: round }} - Intakt{% endblock %}
 
+{% block content_width %} roomy{% endblock %}
+
 {% block body %}
 {% set total = review.tokens %}
 {% set latest = review.rounds|last %}
@@ -23,7 +25,7 @@
         {% endif %}
     </div>
     {% if can_start or active is not null %}
-    <div class="actions">
+    <div class="actions task-actions">
         {% if active is not null %}
         {# Rendered while nothing runs too, hidden by the idle marker, because a stream cannot carry this session's token: a reviewer's first update removes the marker. #}
         <div id="round-{{ active.round }}-now-stop">{% if active.outcomes|filter(o => o.progress.name == 'Running')|length == 0 %}<span id="round-{{ active.round }}-now-stop-idle" class="now-stop-idle"></span>{% endif %}
@@ -76,8 +78,14 @@
     </div>
 </section>
 {% endif %}
-<div class="task-grid">
-<section class="tl-pane" aria-labelledby="timeline-title">
+{% if active is not null %}
+<div class="ttabs"><div class="seg" role="tablist" aria-label="Task views">
+    <button type="button" role="tab" aria-selected="true" aria-controls="timeline-pane" data-pane="timeline">Timeline</button>
+    <button type="button" role="tab" aria-selected="false" aria-controls="live-log-pane" data-pane="log">Live log</button>
+</div></div>
+{% endif %}
+<div class="task-grid" data-pane="timeline">
+<section class="tl-pane" id="timeline-pane" aria-labelledby="timeline-title">
 <h2 class="timeline-title" id="timeline-title">Timeline</h2>
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
@@ -106,7 +114,7 @@
 {% endfor %}
 </section>
 {% if active is not null %}
-<aside class="log log-pane" aria-labelledby="live-log-title">
+<aside class="log log-pane" id="live-log-pane" aria-labelledby="live-log-title">
     <h2 id="live-log-title">Live log of round {{ active.number ?? '(number not recorded)' }}</h2>
     <div class="log-main">
     {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}
