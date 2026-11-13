@@ -99,10 +99,11 @@ final readonly class CiDefinition
     }
 
     // Every trailing part of a path ends in its file name, so a whole-word match of the file name covers them all; case is ignored because hosted Windows and macOS runners ignore it too.
+    // A name or text that is not valid UTF-8 cannot be matched, so it counts the path: the name before the pattern is built, the text through preg_match's false.
     private function namesTheFileOf(string $content, string $path): bool
     {
         $name = array_last(explode('/', $path));
 
-        return 0 !== preg_match('/(?<![\w.-])'.preg_quote($name, '/').'(?![\w-]|\.[\w.-])/i', $content);
+        return !mb_check_encoding($name, 'UTF-8') || 0 !== preg_match('/(?<![\w.-])'.preg_quote($name, '/').'(?![\w-]|\.[\w.-])/iu', $content);
     }
 }

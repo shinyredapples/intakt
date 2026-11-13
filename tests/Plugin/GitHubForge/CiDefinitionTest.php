@@ -43,6 +43,17 @@ final class CiDefinitionTest extends TestCase
         self::assertSame(['scripts/Test.SH'], $this->ciPaths(['scripts/Test.SH']));
     }
 
+    public function testANonAsciiFileNameIsMatchedInAnyCase(): void
+    {
+        self::assertSame(['scripts/étape.sh'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - run: ./scripts/ÉTAPE.sh\n", ['scripts/étape.sh', 'src/Foo.php']));
+    }
+
+    public function testAPathOrWorkflowTextThatIsNotValidUtf8IsACiChange(): void
+    {
+        self::assertSame(["scripts/\xC3("], $this->ciPaths(["scripts/\xC3(", 'src/Foo.php']));
+        self::assertSame(['src/Foo.php'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - run: ./scripts/\xC3(.sh\n", ['src/Foo.php']));
+    }
+
     public function testAFileNameEndingASentenceIsStillNamed(): void
     {
         self::assertSame(['scripts/test.sh'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - run: echo run test.sh.\n", ['scripts/test.sh']));
