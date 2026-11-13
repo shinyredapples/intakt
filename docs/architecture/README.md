@@ -53,6 +53,7 @@ Builds:
 
 Reviews:
 - [Review flow](review-flow.md)
+- [Review job](review-job.md): `docker/job/review.sh`, one reviewer's CLI on a read-only checkout of the exact head that reaches its vendor through the job's proxy alone; nothing starts a review job yet
 - [Boot step](boot-step.md): a commit booted once with `bin/instance` (main's for a head), its outcome booted, failed or crashed, never an exception
 - [Review rounds](review-rounds.md)
 - [Review verdicts](review-verdicts.md)
