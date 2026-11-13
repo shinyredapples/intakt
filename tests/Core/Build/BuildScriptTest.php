@@ -80,11 +80,11 @@ final class BuildScriptTest extends TestCase
             sleep 30
             SH);
 
-        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
         self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
-        self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
+        self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
     public function testASessionThatEndsByItsTurnLimitKeepsItsCommitsAndIsNotLoggedAsCut(): void
@@ -107,13 +107,14 @@ final class BuildScriptTest extends TestCase
     public function testASessionThatEndsBeforeItsAllowanceLeavesNoWatchdogBehind(): void
     {
         $this->givenTheCli('exit 0');
+        $this->givenSleepRecordsItsProcess();
 
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
 
         self::assertSame(0, $run->getExitCode());
-        $left = new Process(['pgrep', '-f', 'sleep 31']);
-        $left->run();
-        self::assertSame(1, $left->getExitCode());
+        $sleeps = array_map(intval(...), file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES) ?: []);
+        self::assertNotSame([], $sleeps);
+        self::assertSame([], array_values(array_filter($sleeps, $this->isRunning(...))));
     }
 
     public function testTheCliWorksInAFreshCloneOnTheTasksBranchWithOnlyTheBuildClonesBranches(): void
@@ -302,6 +303,23 @@ final class BuildScriptTest extends TestCase
     {
         file_put_contents($this->bin.'/claude', "#!/bin/sh\n".$script."\n");
         chmod($this->bin.'/claude', 0o755);
+    }
+
+    // The CI image has no procps, so the script's sleeps report their own process ids instead of being looked up.
+    private function givenSleepRecordsItsProcess(): void
+    {
+        $sleep = new ExecutableFinder()->find('sleep');
+        self::assertNotNull($sleep);
+        file_put_contents($this->bin.'/sleep', "#!/bin/sh\necho \$\$ >> \"\$RECORD/sleeps\"\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
+        chmod($this->bin.'/sleep', 0o755);
+    }
+
+    private function isRunning(int $process): bool
+    {
+        $stat = is_readable('/proc/'.$process.'/stat') ? file_get_contents('/proc/'.$process.'/stat') : false;
+
+        // A process nobody reaped yet is a zombie: it no longer runs.
+        return false !== $stat && 'Z' !== substr($stat, (int) strrpos($stat, ')') + 2, 1);
     }
 
     private function givenGitLeavesAPartialBundleAndFails(): void
