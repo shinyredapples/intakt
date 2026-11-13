@@ -8,10 +8,13 @@ use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -21,6 +24,9 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(BoardColumn::class)]
 #[CoversClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
+#[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(Lane::class)]
+#[UsesClass(WhoIsWorking::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(Cost::class)]
@@ -98,6 +104,14 @@ final class BoardTest extends TestCase
         ]);
 
         self::assertSame(['r2', 'r3', 'r1'], $this->roundsIn($board, BoardColumn::InReview));
+    }
+
+    public function testTheBoardTellsWhoIsWorkingFromItsReviews(): void
+    {
+        $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
+        $board = new Board([new Review([$running]), new Review([$this->round('r2', 'feat/b', 1)])]);
+
+        self::assertSame(['r1-a'], array_map(static fn (Lane $lane): string => $lane->reviewer, $board->whoIsWorking()->lanes()));
     }
 
     /**
