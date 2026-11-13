@@ -15,6 +15,7 @@ use Intakt\Plugin\PhpLanguage\Domain\GitHubCommit;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackage;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackageChanges;
 use Intakt\Plugin\PhpLanguage\Domain\PackageGroup;
+use Intakt\Plugin\PhpLanguage\Domain\PackageName;
 use Intakt\Plugin\PhpLanguage\Domain\RequirementChanges;
 use Intakt\Plugin\PhpLanguage\Domain\SettingChanges;
 use Intakt\Plugin\PhpLanguage\Domain\TrustedPackages;
@@ -39,6 +40,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(TrustedPackages::class)]
 #[CoversClass(ComposerFileUnreadable::class)]
 #[CoversClass(PackageGroup::class)]
+#[CoversClass(PackageName::class)]
 #[UsesClass(UpstreamTagNotRead::class)]
 #[UsesClass(DependencyDecision::class)]
 #[UsesClass(DependencyFiles::class)]

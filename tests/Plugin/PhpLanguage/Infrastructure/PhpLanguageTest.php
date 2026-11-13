@@ -12,6 +12,7 @@ use Intakt\Plugin\PhpLanguage\Domain\ComposerState;
 use Intakt\Plugin\PhpLanguage\Domain\GitHubCommit;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackage;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackageChanges;
+use Intakt\Plugin\PhpLanguage\Domain\PackageName;
 use Intakt\Plugin\PhpLanguage\Domain\RequirementChanges;
 use Intakt\Plugin\PhpLanguage\Domain\SettingChanges;
 use Intakt\Plugin\PhpLanguage\Domain\TrustedPackages;
@@ -28,6 +29,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(GitHubCommit::class)]
 #[UsesClass(LockedPackage::class)]
 #[UsesClass(LockedPackageChanges::class)]
+#[UsesClass(PackageName::class)]
 #[UsesClass(RequirementChanges::class)]
 #[UsesClass(SettingChanges::class)]
 #[UsesClass(TrustedPackages::class)]

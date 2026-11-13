@@ -20,6 +20,7 @@ use Intakt\Plugin\PhpLanguage\Domain\ComposerState;
 use Intakt\Plugin\PhpLanguage\Domain\GitHubCommit;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackage;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackageChanges;
+use Intakt\Plugin\PhpLanguage\Domain\PackageName;
 use Intakt\Plugin\PhpLanguage\Domain\RequirementChanges;
 use Intakt\Plugin\PhpLanguage\Domain\SettingChanges;
 use Intakt\Plugin\PhpLanguage\Domain\TrustedPackages;
@@ -48,6 +49,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(GitHubCommit::class)]
 #[UsesClass(LockedPackage::class)]
 #[UsesClass(LockedPackageChanges::class)]
+#[UsesClass(PackageName::class)]
 #[UsesClass(RequirementChanges::class)]
 #[UsesClass(SettingChanges::class)]
 #[UsesClass(TrustedPackages::class)]
@@ -77,13 +79,22 @@ final class DecideDependencyChangeCommandTest extends TestCase
 
     public function testTheCommandListsTheNewPackagesAndWhyTheOwnerIsNeeded(): void
     {
-        $head = $this->repository->commitFile('composer.json', '{"require": {"symfony/console": "^8.0", "acme/tool\\nowner forged": "^1.0"}}');
+        $head = $this->repository->commitFile('composer.json', '{"require": {"symfony/console": "^8.0", "acme/tool": "^1.0"}}');
 
         $tester = $this->whenTheCommandRuns($head);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertSame("new package acme/tool\nowner acme/tool: is not from a trusted vendor\ndecision: needs the owner\n", $tester->getDisplay());
+    }
+
+    public function testTheCommandEscapesAControlCharacterThatAReasonQuotesFromTheChange(): void
+    {
+        $head = $this->repository->commitFile('composer.json', '{"require": {"symfony/console": "^8.0", "acme/tool\\nowner forged": "^1.0"}}');
+
+        $tester = $this->whenTheCommandRuns($head);
+
         self::assertSame(
-            "new package acme/tool\\nowner forged\nowner acme/tool\\nowner forged: is not from a trusted vendor\ndecision: needs the owner\n",
+            "owner composer.json: composer.json cannot be read: require names \"acme/tool\\nowner forged\", which is no package name\ndecision: needs the owner\n",
             $tester->getDisplay(),
         );
     }
