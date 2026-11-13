@@ -9,8 +9,10 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\LoopReviewComment;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
@@ -23,8 +25,10 @@ use Intakt\Core\ReviewerForLoop\Contract\LoopVerdict;
 use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
 use Intakt\Core\ReviewerForLoop\Domain\LoopReviewReader;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
+use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
@@ -41,6 +45,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 // A real round on SQLite, judged by the application's workflow, published through the GitHub forge over a scripted GitHub, so the test sees the very requests the loop would read.
@@ -58,6 +63,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(PostedComments::class)]
 #[UsesClass(VerdictLocks::class)]
 #[UsesClass(ReviewToken::class)]
+#[UsesClass(MarkVerdictsStaleHandler::class)]
+#[UsesClass(MarkVerdictsStale::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -65,6 +72,7 @@ final class PublishVerdictTest extends KernelTestCase
     private const string STATUS = 'POST '.self::API.'/statuses/'.SampleIdentity::HEAD;
     private const string COMMENT = 'POST '.self::API.'/issues/7/comments';
     private const string HEADING = '**Review by Intakt** (head aaaaaaaaaaaa)';
+    private const array WITHDRAWN = ['state' => 'failure', 'context' => 'intakt/review', 'description' => 'Intakt withdrew its review: this head does not boot.'];
 
     private RoundFixture $fixture;
     private ScriptedGitHub $github;
@@ -175,6 +183,51 @@ final class PublishVerdictTest extends KernelTestCase
 
         self::assertSame(LoopVerdict::Changes, $reviews->reviews[0]->verdict);
         self::assertSame(['src/Thing.php', 3, Severity::P2], [$reviews->reviews[0]->findings[0]->file, $reviews->reviews[0]->findings[0]->line, $reviews->reviews[0]->findings[0]->severity]);
+    }
+
+    public function testAnApprovedRoundWhoseHeadLaterFailedToBootIsPublishedAsAFailureWithoutAComment(): void
+    {
+        $handler = $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->markStale($roundId);
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $handler($publication);
+        }
+
+        self::assertSame([[self::STATUS, self::WITHDRAWN]], array_unique($this->github->writes, SORT_REGULAR));
+    }
+
+    public function testAnApprovalAlreadyOnTheForgeIsWithdrawnOnceItsHeadFailsToBoot(): void
+    {
+        $roundId = $this->publishRoundJudgedOn([]);
+        $alreadyHandled = count($this->publicationsOf($roundId));
+
+        $this->markStale($roundId);
+        foreach (array_slice($this->publicationsOf($roundId), $alreadyHandled) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+
+        self::assertSame([self::STATUS, self::WITHDRAWN], array_last($this->github->writes));
+    }
+
+    public function testAStaleMarkThatLandsWhileTheApprovalIsOnTheWayIsWithdrawnByThatSamePublication(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $published = [];
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturnCallback(function (string $project, ChangeId $change, PublishedVerdict $verdict) use ($roundId, &$published): void {
+            // Marked here, because only a mark that commits after the verdict was decided and before its status is written forces the race.
+            if ([] === $published) {
+                $this->markStale($roundId);
+            }
+
+            $published[] = [$verdict->status, $verdict->description];
+        });
+
+        new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $this->verdicts(), $forge, $this->fixture->log)(new PublishVerdict($roundId));
+
+        self::assertSame([HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.'], array_last($published));
     }
 
     public function testAHeadNoReviewerCouldReviewGetsAnErrorStatusAndNoComment(): void
@@ -322,6 +375,15 @@ final class PublishVerdictTest extends KernelTestCase
         }
 
         return $roundId;
+    }
+
+    // The application's command bus, so the publication the mark queues lands on the application's queue.
+    private function markStale(string $roundId): void
+    {
+        $commands = self::getContainer()->get('command.bus');
+        self::assertInstanceOf(MessageBusInterface::class, $commands);
+
+        new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($roundId));
     }
 
     private function marker(string $roundId): string
