@@ -109,18 +109,25 @@ final class WorkflowFileScanTest extends TestCase
         self::assertSame([['runner', 6]], $this->kindsAndLines($findings));
     }
 
-    public function testARunnerFromAVariableIsRiskyEvenThoughTheVariableMayBeUnset(): void
+    public function testARunnerFromAVariableIsUnreadableEvenThoughTheVariableMayBeUnset(): void
     {
         $findings = $this->scan($this->withJob("runs-on: \${{ fromJSON(vars.CI_RUNS_ON || '\"ubuntu-24.04\"') }}"));
 
-        self::assertSame([['runner', 5, 'the job check takes its runner from an expression, whose value can change without a commit']], $this->summary($findings));
+        self::assertSame([['unreadable', 5, 'the job check takes its runner from an expression the scan does not read, whose value can change without a commit']], $this->summary($findings));
     }
 
-    public function testARunnerFromAMatrixIsRisky(): void
+    public function testARunnerFromAMatrixIsUnreadable(): void
     {
         $findings = $this->scan($this->withJob("strategy:\n  matrix:\n    os: [ubuntu-latest]\nruns-on: \${{ matrix.os }}"));
 
-        self::assertSame([['runner', 8]], $this->kindsAndLines($findings));
+        self::assertSame([['unreadable', 8]], $this->kindsAndLines($findings));
+    }
+
+    public function testAnExpressionInOneLabelOfAListedRunnerIsUnreadable(): void
+    {
+        $findings = $this->scan($this->withJob('runs-on: [ubuntu-24.04, "${{ vars.EXTRA_LABEL }}"]'));
+
+        self::assertSame([['unreadable', 5]], $this->kindsAndLines($findings));
     }
 
     public function testARunnerGroupIsRisky(): void
