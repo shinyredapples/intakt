@@ -332,18 +332,18 @@ final class InstanceBootTest extends TestCase
         file_put_contents($composerHome.'/auth.json', json_encode(['github-oauth' => ['github.com' => self::PROBE_TOKEN]]));
     }
 
+    // Boots a head whose Composer plugin reports the github-oauth config Composer loaded, with the given variables set (false: unset) in the booting process.
     /**
-     * Boots a head whose Composer plugin reports the github-oauth config Composer loaded, with the given variables set (false: unset) in the booting process.
-     *
      * @param array<string, string|false> $variables
      */
     private function githubOauthAPluginSeesWith(array $variables): string
     {
         $seen = $this->repository->path.'-plugin-saw';
         $head = $this->commitPlugin("file_put_contents('".$seen."', json_encode(\$composer->getConfig()->get('github-oauth')));");
-        $previous = array_map(getenv(...), array_combine(array_keys($variables), array_keys($variables)));
+        $previous = [];
 
         foreach ($variables as $name => $value) {
+            $previous[$name] = getenv($name);
             putenv(false === $value ? $name : $name.'='.$value);
         }
 

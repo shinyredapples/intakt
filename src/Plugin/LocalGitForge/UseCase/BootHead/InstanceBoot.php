@@ -29,14 +29,13 @@ final readonly class InstanceBoot
     // bin/instance writes its status on descriptor 3 only; moved to stdout and its log to stderr, so no log line can pass for the status.
     private const array STATUS_ON_STDOUT = ['sh', '-c', 'exec "$@" 3>&1 1>&2', 'sh'];
 
-    // An allowlist, so neither the install nor the commit's code gets a token of the booting install from its environment; COMPOSER_AUTH is left out for that reason.
-    // HOME and COMPOSER_HOME are left out too, because Composer loads auth.json from COMPOSER_HOME or, without it, from under HOME, and a plugin of the commit reads those tokens through Composer's config: both processes get a scratch home instead. COMPOSER_CACHE_DIR stays, so the package cache is shared when the install sets one (Composer never derives it from a scratch home).
+    // An allowlist, so neither the install nor the commit's code gets a token of the booting install from its environment (COMPOSER_AUTH); HOME and COMPOSER_HOME are left out too, because Composer loads the install's auth.json from COMPOSER_HOME or from under HOME and a plugin of the commit reads those tokens through Composer's config, so both processes get a scratch home instead; COMPOSER_CACHE_DIR stays, so the package cache is shared when the install sets one.
     private const array INHERITED_VARIABLES = [
         'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR', 'COMPOSER_CACHE_DIR',
         'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
     ];
 
-    private const string SCRATCH_HOME_PREFIX = 'intakt-boot-home-';
+    private const string SCRATCH_HOME_SUFFIX = '-home';
 
     // Every failure of the step itself is a crash outcome, because a boot step that throws would stop the review it only gates.
     public function of(BootAt $target, CommitId $harness): BootOutcome
@@ -47,25 +46,32 @@ final readonly class InstanceBoot
 
             return $forge->withSnapshotOf(
                 $target->commit,
-                fn (string $snapshot): BootOutcome => $this->withScratchHome(fn (string $home): BootOutcome => $this->bootIn($snapshot, $instance, $home)),
+                fn (string $snapshot): BootOutcome => $this->withScratchHomeOf($snapshot, fn (): BootOutcome => $this->bootIn($snapshot, $instance)),
             );
         } catch (Throwable $crash) {
             return BootOutcome::crashed($crash->getMessage());
         }
     }
 
-    // One empty home per boot, removed with the snapshot, so what Composer or the commit's code writes there (an auth.json, a config) outlives neither the boot nor reaches the next one. The commit's code still runs as the install's user without a filesystem sandbox, so a plugin that computes the real home can read it; only what the environment and Composer hand over is removed here, the sandbox is a later part.
-    private function withScratchHome(Closure $work): BootOutcome
+    // One empty home beside each snapshot, removed with it, so what Composer or the commit's code writes there (an auth.json, a config) reaches neither the install's home nor the next boot; without a filesystem sandbox (a later part) the commit's code can still compute the install's real home and read it, only what the environment and Composer hand over is removed here.
+    /**
+     * @param Closure(): BootOutcome $work
+     */
+    private function withScratchHomeOf(string $snapshot, Closure $work): BootOutcome
     {
         $filesystem = new Filesystem();
-        $home = sys_get_temp_dir().'/'.self::SCRATCH_HOME_PREFIX.bin2hex(random_bytes(8));
-        $filesystem->mkdir($home, 0o700);
+        $filesystem->mkdir($this->homeOf($snapshot), 0o700);
 
         try {
-            return $work($home);
+            return $work();
         } finally {
-            $filesystem->remove($home);
+            $filesystem->remove($this->homeOf($snapshot));
         }
+    }
+
+    private function homeOf(string $snapshot): string
+    {
+        return $snapshot.self::SCRATCH_HOME_SUFFIX;
     }
 
     private function forgeFor(ChangeSource $source): LocalGitForge
@@ -74,9 +80,9 @@ final readonly class InstanceBoot
     }
 
     // The harness is placed after the install, so nothing the install writes into bin can replace it.
-    private function bootIn(string $snapshot, FileContent $harness, string $home): BootOutcome
+    private function bootIn(string $snapshot, FileContent $harness): BootOutcome
     {
-        $install = $this->run(self::INSTALL, $snapshot, $home, self::INSTALL_SECONDS);
+        $install = $this->run(self::INSTALL, $snapshot, self::INSTALL_SECONDS);
 
         if (!$install->isSuccessful()) {
             return BootOutcome::failed('composer install failed: '.trim($install->getErrorOutput()));
@@ -88,7 +94,7 @@ final readonly class InstanceBoot
 
         $this->placeHarness($snapshot, $harness);
 
-        return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, $home, self::BOOT_SECONDS));
+        return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, self::BOOT_SECONDS));
     }
 
     // A link is refused, because writing the harness through it would change a file outside the snapshot.
@@ -110,9 +116,9 @@ final readonly class InstanceBoot
     /**
      * @param list<string> $command
      */
-    private function run(array $command, string $snapshot, string $home, int $seconds): Process
+    private function run(array $command, string $snapshot, int $seconds): Process
     {
-        $process = new Process($command, $snapshot, $this->environment($home), timeout: $seconds);
+        $process = new Process($command, $snapshot, $this->environment($this->homeOf($snapshot)), timeout: $seconds);
         $process->run();
 
         return $process;
