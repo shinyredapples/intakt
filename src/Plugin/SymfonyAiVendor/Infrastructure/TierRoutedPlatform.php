@@ -29,8 +29,9 @@ final class TierRoutedPlatform implements PlatformInterface
      */
     public function __construct(
         private readonly TierInvoker $tiers,
-        private readonly ResolvedModel $answering,
-        private readonly array $options = [],
+        public readonly ResolvedModel $answering,
+        public readonly array $options = [],
+        private readonly ?ModelCatalogInterface $catalog = null,
     ) {
     }
 
@@ -54,6 +55,6 @@ final class TierRoutedPlatform implements PlatformInterface
     #[Override]
     public function getModelCatalog(): ModelCatalogInterface
     {
-        return $this->answering->provider->streams() ? new FallbackModelCatalog() : new UnstreamedModelCatalog();
+        return $this->catalog ?? ($this->answering->provider->streams() ? new FallbackModelCatalog() : new UnstreamedModelCatalog());
     }
 }
