@@ -35,7 +35,8 @@
 </details>
 <section aria-labelledby="board-h">
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
-    {# The counts are totals over every project, so the project filter hides cards and never changes a count. #}
+    {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. #}
+    {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
     <div class="board">
     {% for column in columns %}
         {% set cards = board.cardsIn(column) %}
@@ -43,17 +44,19 @@
         {% set folds = column.startsCollapsed %}
         {% set slug = column.value|lower|replace({' ': '-'}) %}
         {% set count = board.countOf(column) %}
+        {% set crowded = cards|length > limit %}
         {# Backlog and Done stay open on phones because DESIGN.md asks for it. #}
-        <section class="col{{ needs ? ' col-needs' }}{{ folds ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}">
+        <section class="col{{ needs ? ' col-needs' }}{{ folds ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}"{% if crowded %} data-page-limit="{{ limit }}"{% endif %}>
             {# The name is built from hidden words around the visible ones rather than an aria-label, so it contains what a speech user sees and says (WCAG 2.5.3). #}
             {% if folds %}<button type="button" class="col-fold" aria-expanded="false" aria-controls="cards-{{ slug }}"><span><span class="sr-only">Show </span>{{ column.value }}</span>{{ include('dashboard/components/count.html.twig', {n: count}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span></button>{% endif %}
             <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: count, needs: needs and cards is not empty}, with_context = false) }}{% if folds %}<button type="button" class="btn quiet sm col-hide" aria-label="Hide {{ column.value }}">Hide</button>{% endif %}</div>
             <div class="col-cards" id="cards-{{ slug }}">
             {% for review in cards %}
-                {{ include('dashboard/_board_card.html.twig', {review: review}, with_context = false) }}
+                {{ include('dashboard/_board_card.html.twig', {review: review, past_limit: loop.index > limit}, with_context = false) }}
             {% else %}
                 {{ include('dashboard/components/column_empty.html.twig', needs ? {text: 'Nothing needs you'} : {}, with_context = false) }}
             {% endfor %}
+            {% if crowded %}<button type="button" class="btn secondary sm more-btn">Show {{ cards|length - limit }} more</button>{% endif %}
             </div>
         </section>
     {% endfor %}

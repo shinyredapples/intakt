@@ -1,0 +1,7 @@
+[[
+  {"number": 17, "state": "closed", "merged_at": "2026-10-26T09:00:00Z"},
+  {"number": 18, "state": "closed", "merged_at": "2026-10-26T11:00:00Z"},
+  {"number": 19, "state": "closed", "merged_at": "2026-10-27T11:00:00Z"},
+  {"number": 20, "state": "closed", "merged_at": null},
+  {"number": 21, "state": "open", "merged_at": null}
+]]
