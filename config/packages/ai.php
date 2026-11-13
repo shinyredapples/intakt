@@ -151,7 +151,7 @@ return static function (ContainerConfigurator $container): void {
     $projectProtectedPaths = new Processor()->processConfiguration(new ProtectedPathsConfiguration(), [['projects' => $protectedPaths]])['projects'];
     // A project without a build section routes by the defaults, so every configured project has rules.
     $builds = array_replace(array_fill_keys(array_keys($projects), []), $builds);
-    /** @var array<string, array{build: array{tier: string, sensitive_paths: list<string>}}> $projectBuilds */
+    /** @var array<string, array{build: array{tier: string, sensitive_paths: list<string>, escalate_on: list<string>}}> $projectBuilds */
     $projectBuilds = new Processor()->processConfiguration(new BuildRoutingConfiguration(), [['projects' => $builds]])['projects'];
     $catalog = new ProjectModelCatalog($projects);
     $modelCatalog = static fn (Provider $provider): array => ['models' => $catalog->models($provider)];

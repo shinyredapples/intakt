@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Build\Contract\Setback;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -36,10 +37,15 @@ final class BuildFactsTest extends TestCase
         self::assertSame(Tier::Light, BuildFacts::fromLabels(['model:strong', 'model:light'], [])->labelledTier);
     }
 
+    public function testTheSetbackPassedByTheLoopIsKept(): void
+    {
+        self::assertSame(Setback::Stall, BuildFacts::fromLabels([], [], Setback::Stall)->setback);
+    }
+
     public function testTheFactsHoldNoModelOrVendorOfTheJob(): void
     {
         $fields = array_map(static fn ($property): string => $property->getName(), new ReflectionClass(BuildFacts::class)->getProperties());
 
-        self::assertSame(['labelledTier', 'paths'], $fields);
+        self::assertSame(['labelledTier', 'paths', 'setback'], $fields);
     }
 }
