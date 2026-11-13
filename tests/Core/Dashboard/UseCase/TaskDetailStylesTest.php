@@ -84,6 +84,15 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere;/', $rules['.live-calls'] ?? '');
     }
 
+    // At 390 wide `anywhere` let the reviewer table shrink until "correctness" broke into three lines; `break-word` keeps words whole and the scroll box takes the width.
+    public function testACellOfARoundTableKeepsItsWordsWholeAndTheTableScrolls(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*overflow-wrap:\s*break-word;\s*$/', $rules['.round .ledger td'] ?? '');
+        self::assertMatchesRegularExpression('/overflow-x:\s*auto;/', $rules['.table-scroll'] ?? '');
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
