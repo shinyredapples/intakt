@@ -154,8 +154,8 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     // Each event as its login, account type and label, oldest first, because that is the order GitHub answers them in.
     /**
-     * @param array<string, string>|null                $editor
-     * @param list<array{?string, string, string}>      $events
+     * @param array<string, string>|null           $editor
+     * @param list<array{?string, string, string}> $events
      */
     private function history(?array $editor, array $events): string
     {
