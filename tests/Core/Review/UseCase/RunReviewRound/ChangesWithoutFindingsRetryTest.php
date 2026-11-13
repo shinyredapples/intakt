@@ -132,15 +132,11 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
     }
 
     /**
-     * @param list<string> $answers the answers of the calls in order
+     * @param list<string> $answers
      */
     private function answering(array $answers): SymfonyAiVendor
     {
-        $answer = function () use ($answers): string {
-            return $answers[$this->calls++];
-        };
-
-        return $this->vendor($answer);
+        return $this->vendor(fn (): string => $answers[$this->calls++]);
     }
 
     private function vendor(Closure $answer): SymfonyAiVendor
