@@ -22,6 +22,7 @@ use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SeedSampleProjectCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -69,6 +70,48 @@ final class SeedSampleProjectCommandTest extends TestCase
     protected function tearDown(): void
     {
         new Filesystem()->remove($this->directory);
+    }
+
+    /**
+     * @return iterable<string, array{list<Provider>}>
+     */
+    public static function keyCombinations(): iterable
+    {
+        yield 'anthropic' => [[Provider::Anthropic]];
+        yield 'openai' => [[Provider::OpenAi]];
+        yield 'the hugging face router' => [[Provider::OpenAiCompatible]];
+        yield 'anthropic and the router' => [[Provider::Anthropic, Provider::OpenAiCompatible]];
+        yield 'anthropic and openai' => [[Provider::Anthropic, Provider::OpenAi]];
+        yield 'openai and the router' => [[Provider::OpenAi, Provider::OpenAiCompatible]];
+    }
+
+    /**
+     * @param list<Provider> $keyed
+     */
+    #[DataProvider('keyCombinations')]
+    public function testTheSeededFilePricesEveryModelItsTiersNameAndNoOther(array $keyed): void
+    {
+        $this->seed(...$keyed);
+
+        $written = Yaml::parseFile($this->configuration());
+        $named = array_values(array_unique(array_column($written['projects']['sample']['tiers'], 'model')));
+        $priced = array_keys($written['budget']['prices']);
+        sort($named);
+        sort($priced);
+        self::assertSame($named, $priced);
+        foreach ($written['budget']['prices'] as $price) {
+            self::assertGreaterThan(0, $price['input']);
+            self::assertGreaterThan(0, $price['output']);
+        }
+    }
+
+    public function testWithOnlyTheRouterTheSecondMakersModelIsPriced(): void
+    {
+        $this->seed(Provider::OpenAiCompatible);
+
+        $written = Yaml::parseFile($this->configuration());
+        self::assertArrayHasKey('openai/gpt-oss-120b:novita', $written['budget']['prices']);
+        self::assertArrayHasKey('moonshotai/Kimi-K3:deepinfra', $written['budget']['prices']);
     }
 
     public function testOneKeyPutsTheWholePanelOnThatProvider(): void
