@@ -18,6 +18,7 @@ use Intakt\Core\Build\UseCase\ChooseBuildModel\BuildAttempt;
 use Intakt\Core\Build\UseCase\ChooseBuildModel\ChooseBuildModel;
 use Intakt\Core\Build\UseCase\ChooseBuildModel\ChosenModel;
 use Intakt\Core\Build\UseCase\ChooseBuildModel\ModelChoiceNotRecorded;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
@@ -31,6 +32,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(BuildAttempt::class)]
 #[CoversClass(ModelChoiceNotRecorded::class)]
 #[UsesClass(ChosenModel::class)]
+#[UsesClass(BuilderNotOnClaudeCode::class)]
 #[UsesClass(ConfiguredBuildRouting::class)]
 #[UsesClass(ModelRouting::class)]
 #[UsesClass(RoutingRules::class)]
@@ -107,7 +109,7 @@ final class ChooseBuildModelTest extends TestCase
         (void) $this->use($ledger)->chooseFor($this->attemptNumber(3), BuildFacts::fromLabels([], []));
 
         self::assertSame(
-            ['project' => 'alpha', 'task' => 'T60', 'attempt' => 3, 'tier' => 'standard', 'reason' => 'default', 'provider' => 'anthropic', 'model' => 'standard-model'],
+            ['project' => 'alpha', 'task' => 'T60', 'attempt' => 3, 'tier' => 'standard', 'reason' => 'default', 'provider' => 'claude_code', 'model' => 'standard-model'],
             $ledger->payloads()[0],
         );
     }
@@ -128,6 +130,22 @@ final class ChooseBuildModelTest extends TestCase
         (void) $this->use(new InMemoryLedger(0))->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels([], []));
     }
 
+    public function testATierOnAProviderABuildCannotRunOnIsRefusedWithoutRecording(): void
+    {
+        $ledger = new InMemoryLedger();
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'standard-model'));
+
+        try {
+            (void) $this->use($ledger, $tiers)->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels([], []));
+            self::fail('A provider other than Claude Code was accepted.');
+        } catch (BuilderNotOnClaudeCode $refusal) {
+            self::assertEquals(new BuilderNotOnClaudeCode('alpha', Tier::Standard, Provider::Anthropic), $refusal);
+        }
+
+        self::assertSame(0, $ledger->count());
+    }
+
     public function testAnAttemptNumberBelowOneIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -142,12 +160,18 @@ final class ChooseBuildModelTest extends TestCase
         return new BuildAttempt('alpha', 'T60', $number);
     }
 
-    private function use(InMemoryLedger $ledger): ChooseBuildModel
+    private function use(InMemoryLedger $ledger, ?TierResolver $tiers = null): ChooseBuildModel
     {
         $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['src/**/Security/**'], 'escalate_on' => ['failed-attempt', 'blocking-finding', 'stall']]], new ModelRouting());
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel(Provider::Anthropic, $tier->value.'-model'));
 
-        return new ChooseBuildModel($routing, $tiers, $ledger);
+        return new ChooseBuildModel($routing, $tiers ?? $this->claudeCodeTiers(), $ledger);
+    }
+
+    private function claudeCodeTiers(): TierResolver
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel(Provider::ClaudeCode, $tier->value.'-model'));
+
+        return $tiers;
     }
 }

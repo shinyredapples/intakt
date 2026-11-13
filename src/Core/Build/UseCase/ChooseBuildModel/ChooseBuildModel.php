@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\ChooseBuildModel;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -23,17 +27,30 @@ final readonly class ChooseBuildModel
     }
 
     /**
+     * @throws BuilderNotOnClaudeCode
      * @throws ModelChoiceNotRecorded
      */
     #[NoDiscard('the build runs on the model it returns')]
     public function chooseFor(BuildAttempt $attempt, BuildFacts $facts): ChosenModel
     {
         $choice = $this->routing->tierFor($attempt->project, $facts);
-        $chosen = new ChosenModel($choice, $this->tiers->resolve($attempt->project, $choice->tier));
+        $chosen = new ChosenModel($choice, $this->buildModelFor($attempt->project, $choice->tier));
 
         $this->record($attempt, $chosen);
 
         return $chosen;
+    }
+
+    // A build runs the Claude Code CLI, so the ledger must never name a model no build can run on.
+    private function buildModelFor(string $project, Tier $tier): ResolvedModel
+    {
+        $resolved = $this->tiers->resolve($project, $tier);
+
+        if (Provider::ClaudeCode !== $resolved->provider) {
+            throw new BuilderNotOnClaudeCode($project, $tier, $resolved->provider);
+        }
+
+        return $resolved;
     }
 
     private function record(BuildAttempt $attempt, ChosenModel $chosen): void

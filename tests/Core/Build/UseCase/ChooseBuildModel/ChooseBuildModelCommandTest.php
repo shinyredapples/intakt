@@ -20,6 +20,7 @@ use Intakt\Core\Build\UseCase\ChooseBuildModel\ChooseBuildModelCommand;
 use Intakt\Core\Build\UseCase\ChooseBuildModel\ChooseBuildModelInput;
 use Intakt\Core\Build\UseCase\ChooseBuildModel\ChosenModel;
 use Intakt\Core\Build\UseCase\ChooseBuildModel\ModelChoiceNotRecorded;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -35,6 +36,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(BuildAttempt::class)]
 #[UsesClass(ChosenModel::class)]
 #[UsesClass(ModelChoiceNotRecorded::class)]
+#[UsesClass(BuilderNotOnClaudeCode::class)]
 #[UsesClass(ConfiguredBuildRouting::class)]
 #[UsesClass(BuildRoutingNotConfigured::class)]
 #[UsesClass(ModelRouting::class)]
@@ -51,7 +53,7 @@ final class ChooseBuildModelCommandTest extends TestCase
         $tester = $this->execute($ledger, ['project' => 'alpha', 'task' => 'T60', 'attempt' => '2', '--setback' => 'stall']);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString('tier strong, reason setback, provider anthropic, model strong-model', $tester->getDisplay());
+        self::assertStringContainsString('tier strong, reason setback, provider claude_code, model strong-model', $tester->getDisplay());
         self::assertSame(1, $ledger->count());
     }
 
@@ -91,14 +93,25 @@ final class ChooseBuildModelCommandTest extends TestCase
         self::assertStringContainsString('did not record the model choice', $tester->getDisplay());
     }
 
+    public function testItReportsATierOnAProviderABuildCannotRunOnWithoutRecording(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, ['project' => 'alpha', 'task' => 'T60', 'attempt' => '1'], Provider::Anthropic);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('needs provider "claude_code"', $tester->getDisplay());
+        self::assertSame(0, $ledger->count());
+    }
+
     /**
      * @param array<string, mixed> $input
      */
-    private function execute(InMemoryLedger $ledger, array $input): CommandTester
+    private function execute(InMemoryLedger $ledger, array $input, Provider $provider = Provider::ClaudeCode): CommandTester
     {
         $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => [], 'escalate_on' => ['stall']]], new ModelRouting());
         $tiers = self::createStub(TierResolver::class);
-        $tiers->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel(Provider::Anthropic, $tier->value.'-model'));
+        $tiers->method('resolve')->willReturnCallback(static fn (string $project, Tier $tier): ResolvedModel => new ResolvedModel($provider, $tier->value.'-model'));
         $application = new Application();
         $application->addCommand(new ChooseBuildModelCommand(new ChooseBuildModel($routing, $tiers, $ledger)));
         $tester = new CommandTester($application->find('intakt:build:model'));
