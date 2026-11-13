@@ -6,11 +6,12 @@ namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use Throwable;
 
-// Everything the API answers is untrusted: a wrong shape is an explicit failure, never a default.
+// The API's answers are untrusted, so a wrong shape must fail explicitly rather than fall back to a default.
 final readonly class GitHubReader
 {
+    private const string MOMENT = 'Y-m-d\\TH:i:sp';
+
     public function __construct(private GitHubApi $api)
     {
     }
@@ -42,30 +43,35 @@ final readonly class GitHubReader
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return list<array<mixed>>
      */
     private function items(JourneyResource $resource): array
     {
-        $json = $this->api->pages($resource);
-        $pages = json_validate($json) ? json_decode($json, true) : null;
+        $items = array_merge([], ...array_map(fn (mixed $page): array => $this->listOf($page, $resource), $this->pages($resource)));
 
-        if (!is_array($pages) || !array_is_list($pages)) {
-            throw $this->malformed($resource);
-        }
-
-        $items = [];
-
-        foreach ($pages as $page) {
-            foreach (is_array($page) && array_is_list($page) ? $page : throw $this->malformed($resource) as $item) {
-                $items[] = is_array($item) && !array_is_list($item) ? $item : throw $this->malformed($resource);
-            }
-        }
-
-        return $items;
+        return array_map(fn (mixed $item): array => is_array($item) && !array_is_list($item) ? $item : throw $this->malformed($resource), $items);
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @return list<mixed>
+     */
+    private function pages(JourneyResource $resource): array
+    {
+        $json = $this->api->pages($resource);
+
+        return $this->listOf(json_validate($json) ? json_decode($json, true) : null, $resource);
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function listOf(mixed $value, JourneyResource $resource): array
+    {
+        return is_array($value) && array_is_list($value) ? $value : throw $this->malformed($resource);
+    }
+
+    /**
+     * @param array<mixed> $item
      */
     private function milestoneFrom(array $item): Milestone
     {
@@ -81,21 +87,22 @@ final readonly class GitHubReader
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @param array<mixed> $item
      */
     private function issueFrom(array $item): Issue
     {
         $milestone = $item['milestone'] ?? null;
         $number = is_array($milestone) ? $milestone['number'] ?? null : null;
+        $number = is_int($number) ? $number : null;
         $reason = $item['state_reason'] ?? null;
 
-        if ((null !== $milestone && !is_int($number)) || !in_array($item['state'] ?? null, ['open', 'closed'], true)) {
+        if ((null !== $milestone && null === $number) || !in_array($item['state'] ?? null, ['open', 'closed'], true)) {
             throw $this->malformed(JourneyResource::Issues);
         }
 
         $closed = 'closed' === $item['state'] ? $this->moment($item, 'closed_at') : null;
 
-        if ('closed' === $item['state'] && null === $closed) {
+        if ('closed' === $item['state'] && !$closed instanceof DateTimeImmutable) {
             throw $this->malformed(JourneyResource::Issues);
         }
 
@@ -103,7 +110,7 @@ final readonly class GitHubReader
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @param array<mixed> $item
      */
     private function moment(array $item, string $key): ?DateTimeImmutable
     {
@@ -113,11 +120,9 @@ final readonly class GitHubReader
             return null;
         }
 
-        try {
-            return is_string($text) ? new DateTimeImmutable($text, new DateTimeZone('UTC'))->setTimezone(new DateTimeZone('UTC')) : throw $this->malformed(JourneyResource::Issues);
-        } catch (Throwable) {
-            throw $this->malformed(JourneyResource::Issues);
-        }
+        $moment = is_string($text) ? DateTimeImmutable::createFromFormat(self::MOMENT, $text, new DateTimeZone('UTC')) : false;
+
+        return false === $moment ? throw new JourneyInputFailed('the GitHub answer holds a date that is not a UTC moment: '.json_encode($text)) : $moment->setTimezone(new DateTimeZone('UTC'));
     }
 
     private function malformed(JourneyResource $resource): JourneyInputFailed

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\JourneyPage;
 
-// Only the lines between a begin and an end marker change, so the hand-written text around them stays byte for byte.
+// Only the lines between the markers change, so that the hand-written text around them stays byte for byte.
 final readonly class MarkedRegions
 {
     /**
@@ -24,8 +24,8 @@ final readonly class MarkedRegions
             throw new JourneyInputFailed('the page needs exactly one begin and one end marker for '.$region->name);
         }
 
-        $start = strpos($page, $begin) + strlen($begin);
-        $finish = strpos($page, $end);
+        $start = (int) strpos($page, $begin) + strlen($begin);
+        $finish = (int) strpos($page, $end);
 
         if ($finish < $start) {
             throw new JourneyInputFailed('the end marker for '.$region->name.' comes before its begin marker');

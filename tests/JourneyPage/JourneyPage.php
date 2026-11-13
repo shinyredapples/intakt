@@ -18,7 +18,7 @@ final readonly class JourneyPage
     public function regenerated(string $page, string $usageFile): string
     {
         $issues = $this->github->issues();
-        $glance = new GlanceTable()->region($issues, $this->github->pullRequests(), $this->usage->tokensIn($usageFile), $this->clock->now());
+        $glance = new GlanceTable($this->clock->now())->region($issues, $this->github->pullRequests(), $this->usage->tokensIn($usageFile));
         $milestones = new MilestoneTable()->region($this->github->milestones(), $issues);
 
         return new MarkedRegions()->replaced($page, [$glance, $milestones]);

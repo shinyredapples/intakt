@@ -29,7 +29,7 @@ final class GitHubReaderTest extends TestCase
     public function testAMissingRecordedAnswerIsRefused(): void
     {
         $this->expectException(JourneyInputFailed::class);
-        $this->expectExceptionMessage('no recorded answer milestones.json');
+        $this->expectExceptionMessageMatches('/'.preg_quote('no recorded answer milestones.json', '/').'/');
 
         new GitHubReader(new RecordedApi(__DIR__.'/Fixtures/none'))->milestones();
     }
@@ -37,7 +37,7 @@ final class GitHubReaderTest extends TestCase
     #[DataProvider('malformedAnswers')]
     public function testAnAnswerThatIsNotTheExpectedShapeIsRefused(string $json): void
     {
-        $api = $this->createStub(GitHubApi::class);
+        $api = self::createStub(GitHubApi::class);
         $api->method('pages')->willReturn($json);
 
         $this->expectException(JourneyInputFailed::class);

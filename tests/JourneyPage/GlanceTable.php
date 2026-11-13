@@ -6,16 +6,20 @@ namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
 
-// The rows are the ones the API and the usage file can give; a first commit or a first release has no source there.
+// Rows are limited to what the API and the usage file can give, because a first commit or a first release has no source there.
 final readonly class GlanceTable
 {
     private const int MILLION = 1_000_000;
+
+    public function __construct(private DateTimeImmutable $today)
+    {
+    }
 
     /**
      * @param list<Issue>       $issues
      * @param list<PullRequest> $pullRequests
      */
-    public function region(array $issues, array $pullRequests, int $tokens, DateTimeImmutable $today): PageRegion
+    public function region(array $issues, array $pullRequests, int $tokens): PageRegion
     {
         $merges = array_values(array_filter(array_map(static fn (PullRequest $pullRequest): ?DateTimeImmutable => $pullRequest->merged, $pullRequests)));
         $perDay = array_count_values(array_map(static fn (DateTimeImmutable $merged): string => $merged->format('Y-m-d'), $merges));
@@ -23,7 +27,7 @@ final readonly class GlanceTable
 
         $rows = [
             ['First merged pull request', [] === $merges ? 'none yet' : min($merges)->format('Y-m-d')],
-            ['Pull requests merged', count($merges).' (to '.$today->format('Y-m-d').')'],
+            ['Pull requests merged', count($merges).' (to '.$this->today->format('Y-m-d').')'],
             ['Issues closed', $this->closed($issues)],
             ['Busiest day', [] === $perDay ? 'none yet' : max($perDay).' merges ('.array_search(max($perDay), $perDay, true).')'],
             ['Tokens per merged pull request', [] === $merges ? 'none yet' : $this->tokens(intdiv($tokens, count($merges))).' ('.$this->tokens($tokens).' tokens over '.count($merges).' merges)'],

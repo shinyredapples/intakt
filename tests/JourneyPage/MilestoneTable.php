@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\JourneyPage;
 
+use DateTimeImmutable;
+
 final readonly class MilestoneTable
 {
     /**
@@ -28,7 +30,7 @@ final readonly class MilestoneTable
         $done = array_filter($issues, static fn (Issue $issue): bool => $issue->isDone());
         $last = [] === $done ? null : max(array_map(static fn (Issue $issue) => $issue->closed, $done));
         $lastText = $open > 0 || null === $last ? 'open' : JourneyDates::short($last);
-        $due = null === $milestone->due ? 'none' : JourneyDates::short($milestone->due);
+        $due = $milestone->due instanceof DateTimeImmutable ? JourneyDates::short($milestone->due) : 'none';
 
         return '| '.implode(' | ', [$this->cell($milestone->title), $this->cell($milestone->goal), $due, $lastText, count($done).' / '.$open]).' |';
     }

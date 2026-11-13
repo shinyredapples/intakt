@@ -25,7 +25,7 @@ final class MarkedRegionsTest extends TestCase
     public function testAPageWithoutTheMarkersOfARegionIsRefused(): void
     {
         $this->expectException(JourneyInputFailed::class);
-        $this->expectExceptionMessage('exactly one begin and one end marker for milestones');
+        $this->expectExceptionMessageMatches('/'.preg_quote('exactly one begin and one end marker for milestones', '/').'/');
 
         new MarkedRegions()->replaced(self::PAGE, [new PageRegion('milestones', 'x')]);
     }
@@ -40,7 +40,7 @@ final class MarkedRegionsTest extends TestCase
     public function testAnEndMarkerBeforeItsBeginMarkerIsRefused(): void
     {
         $this->expectException(JourneyInputFailed::class);
-        $this->expectExceptionMessage('comes before');
+        $this->expectExceptionMessageMatches('/'.preg_quote('comes before', '/').'/');
 
         new MarkedRegions()->replaced("<!-- journey:end glance -->\n<!-- journey:begin glance -->\n", [new PageRegion('glance', 'x')]);
     }

@@ -17,11 +17,11 @@ final readonly class Issue
 
     public function isOpen(): bool
     {
-        return null === $this->closed;
+        return !$this->closed instanceof DateTimeImmutable;
     }
 
     public function isDone(): bool
     {
-        return null !== $this->closed && !$this->dropped;
+        return $this->closed instanceof DateTimeImmutable && !$this->dropped;
     }
 }

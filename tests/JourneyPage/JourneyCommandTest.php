@@ -94,7 +94,7 @@ final class JourneyCommandTest extends TestCase
 
     private function runJourney(): Process
     {
-        $process = new Process([PHP_BINARY, 'bin/journey', '--recorded='.(string) realpath(self::FIXTURES.'/api')], $this->root);
+        $process = new Process([PHP_BINARY, 'bin/journey', '--recorded='.realpath(self::FIXTURES.'/api')], $this->root);
         $process->run();
 
         return $process;

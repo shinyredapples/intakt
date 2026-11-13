@@ -42,7 +42,7 @@ final class UsageReaderTest extends TestCase
         file_put_contents($this->file, self::ROW."\n".$line."\n");
 
         $this->expectException(JourneyInputFailed::class);
-        $this->expectExceptionMessage($reason);
+        $this->expectExceptionMessageMatches('/'.preg_quote($reason, '/').'/');
 
         new UsageReader()->tokensIn($this->file);
     }
@@ -63,7 +63,7 @@ final class UsageReaderTest extends TestCase
     public function testAnUnreadableFileIsRefused(): void
     {
         $this->expectException(JourneyInputFailed::class);
-        $this->expectExceptionMessage('cannot read');
+        $this->expectExceptionMessageMatches('/'.preg_quote('cannot read', '/').'/');
 
         new UsageReader()->tokensIn($this->file);
     }

@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\JourneyPage;
 
-// Only the five named fields are read: nothing about limits, reset times or quotas passes through.
+// Only the five named fields are accepted, so that no limit, reset time or quota can pass through.
 final readonly class UsageReader
 {
     private const array FIELDS = ['day', 'vendor', 'account', 'lane', 'tokens'];
 
-    /**
-     * @return int the tokens of all rows
-     */
     public function tokensIn(string $file): int
     {
         $text = is_file($file) ? file_get_contents($file) : false;
