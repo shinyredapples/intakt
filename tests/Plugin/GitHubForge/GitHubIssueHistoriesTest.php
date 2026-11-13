@@ -255,7 +255,7 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     /**
      * @param array{editor: array<string, string>|null, lastEditedAt: ?string} $edit
-     * @param list<array{?string, string, string}>                            $events
+     * @param list<array{?string, string, string}>                             $events
      */
     private function answer(array $edit, array $events, ?string $earlier): string
     {
