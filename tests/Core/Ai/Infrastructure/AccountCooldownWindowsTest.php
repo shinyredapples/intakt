@@ -323,6 +323,36 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertTrue($cooldowns->isRejected($this->team()));
     }
 
+    // The error comes from another worker while this one still holds the lock it cleared the report under, so that worker finds the lock busy.
+    public function testAnAccountErrorWhileTheReportIsClearedIsReportedOnceTheLockIsReleased(): void
+    {
+        $pool = new SteppingInAfterDeleting('account-cooldown-reported-anthropic.team');
+        $store = new InMemoryStore();
+        $cooldowns = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns->coolDownRejected($this->team());
+        $pool->step = fn () => $otherWorker->coolDownRejected($this->team());
+
+        $cooldowns->answered($this->team(), new NativeClock()->now()->modify('+1 second'));
+
+        self::assertCount(2, $this->reports());
+    }
+
+    // The error comes from another worker while this one holds the lock it reports the same error under.
+    public function testTheSameAccountErrorWhileAnotherWorkerReportsItIsNotReportedAgainOnceTheLockIsReleased(): void
+    {
+        $pool = new SteppingInAfterDeleting('account-cooldown-pending-anthropic.team');
+        $store = new InMemoryStore();
+        $cooldowns = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = fn () => $otherWorker->coolDownRejected($this->team());
+
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+        self::assertFalse($pool->hasItem('account-cooldown-pending-anthropic.team'));
+    }
+
     public function testAReportTheLedgerRefusesIsLoggedAndMadeAgainOnTheNextError(): void
     {
         $logger = new BufferingLogger();

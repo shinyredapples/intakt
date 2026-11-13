@@ -170,23 +170,37 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         } finally {
             $lock->release();
         }
+
+        $this->reportPending($account);
     }
 
-    // Tried without waiting, because a busy lock means another worker is reporting this account or clearing its report, and the next error of a cleared one is reported again.
+    // Marked before the lock is tried, so an error that finds the lock busy is left to the worker holding it, which looks again once it lets go.
     private function reportOnce(Account $account): void
     {
-        $lock = $this->locks->createLock($this->reportKey($account));
-        if (!$lock->acquire()) {
-            return;
-        }
+        $this->pool->save($this->pool->getItem($this->pendingKey($account))->set(true));
+        $this->reportPending($account);
+    }
 
-        try {
-            if (!$this->pool->getItem($this->reportKey($account))->isHit()) {
-                $this->report($account);
+    // Tried without waiting and looked at again after each release, so an error marked while the lock was held is reported by whichever worker holds it last, and never twice.
+    private function reportPending(Account $account): void
+    {
+        $lock = $this->locks->createLock($this->reportKey($account));
+        while ($this->pool->getItem($this->pendingKey($account))->isHit() && $lock->acquire()) {
+            try {
+                $this->pool->deleteItem($this->pendingKey($account));
+                if (!$this->pool->getItem($this->reportKey($account))->isHit()) {
+                    $this->report($account);
+                }
+            } finally {
+                $lock->release();
             }
-        } finally {
-            $lock->release();
         }
+    }
+
+    // Named apart from the report so its key never contains the report's key.
+    private function pendingKey(Account $account): string
+    {
+        return self::LIMITER.'-pending-'.$account->key();
     }
 
     private function report(Account $account): void
