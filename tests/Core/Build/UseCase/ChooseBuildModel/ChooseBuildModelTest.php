@@ -150,9 +150,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        $attempt = new BuildAttempt('alpha', 'T60', 0);
-
-        self::assertSame(0, $attempt->number);
+        (void) new BuildAttempt('alpha', 'T60', 0);
     }
 
     private function attemptNumber(int $number): BuildAttempt
