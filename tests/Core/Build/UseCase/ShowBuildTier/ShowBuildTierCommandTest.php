@@ -7,7 +7,6 @@ namespace Intakt\Tests\Core\Build\UseCase\ShowBuildTier;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
-use Intakt\Core\Build\Contract\Setback;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\RoutingRules;

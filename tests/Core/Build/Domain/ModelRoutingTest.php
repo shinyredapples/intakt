@@ -88,7 +88,7 @@ final class ModelRoutingTest extends TestCase
 
     public function testAReworkAfterARoundWithoutAP1StaysOnTheDefaultTier(): void
     {
-        $choice = $this->choose(new BuildFacts(null, ['docs/a.md'], null));
+        $choice = $this->choose(new BuildFacts(null, ['docs/a.md']));
 
         self::assertSame(Tier::Standard, $choice->tier);
         self::assertSame(TierReason::Default, $choice->reason);
