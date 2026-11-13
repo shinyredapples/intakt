@@ -131,9 +131,12 @@ final readonly class LocalGitForge implements Forge
 
     public function fileAtHead(Change $change, string $path): FileContent
     {
-        $head = $change->commits->head;
+        return $this->fileAt($change->commits->head, $path);
+    }
 
-        return new FileContent($path, $head, $this->read(['cat-file', 'blob', $this->blobAt($head, $path)]));
+    public function fileAt(CommitId $commit, string $path): FileContent
+    {
+        return new FileContent($path, $commit, $this->read(['cat-file', 'blob', $this->blobAt($commit, $path)]));
     }
 
     private function addWorktree(CommitId $head, string $prefix): string
