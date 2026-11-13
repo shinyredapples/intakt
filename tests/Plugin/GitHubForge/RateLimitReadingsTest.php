@@ -167,6 +167,42 @@ final class RateLimitReadingsTest extends TestCase
         $this->process()->refuseWhileLimited('678', 'graphql');
     }
 
+    public function testAnUpgradeKeepsAnUnexpiredPauseStoredUnderTheEarlierKey(): void
+    {
+        $this->pauseStoredByAnEarlierVersion();
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->process()->refuseWhileLimited('678');
+    }
+
+    public function testAPauseStoredUnderTheEarlierKeyIsNotShortenedByALaterLimit(): void
+    {
+        $this->pauseStoredByAnEarlierVersion();
+
+        $later = $this->limitOf($this->process(), 429, ['retry-after' => ['30']]);
+
+        self::assertSame($this->clock->now()->getTimestamp() + 3600, $later->resetsAt->getTimestamp());
+    }
+
+    public function testAPauseStoredUnderTheEarlierKeyDoesNotHoldGraphqlQueries(): void
+    {
+        $this->pauseStoredByAnEarlierVersion();
+
+        $this->process()->refuseWhileLimited('678', 'graphql');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    // The key the version before the per-pool keys wrote: the kind and the hashed installation id alone.
+    private function pauseStoredByAnEarlierVersion(): void
+    {
+        $cache = new FilesystemAdapter('', 0, $this->directory);
+        $until = $this->clock->now()->modify('+1 hour');
+
+        $cache->save($cache->getItem('github-rate-limit-limited-'.hash('sha256', '678'))->set($until->getTimestamp())->expiresAt($until));
+    }
+
     /**
      * @return array<string, list<string>>
      */

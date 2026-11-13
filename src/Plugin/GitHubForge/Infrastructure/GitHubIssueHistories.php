@@ -21,18 +21,23 @@ final readonly class GitHubIssueHistories
     // A history of more label events than this fails, because a label applied later would go unread and its applier with it.
     private const int EVENTS = 100;
     private const int UNAUTHORIZED = 401;
+    private const string LABELED = 'LabeledEvent';
+    private const string UNLABELED = 'UnlabeledEvent';
+    // GraphQL names an App by its bare slug (`renovate`), while the REST API and the trust check name it `renovate[bot]`.
+    private const string APP = 'Bot';
+    private const string APP_SUFFIX = '[bot]';
     private const string QUERY = <<<'GRAPHQL'
         query ($owner: String!, $name: String!, $number: Int!, $events: Int!) {
           repository(owner: $owner, name: $name) {
             issue(number: $number) {
-              author { login }
-              userContentEdits(first: 1) { nodes { editor { login } } }
+              author { __typename login }
+              userContentEdits(first: 1) { nodes { editor { __typename login } } }
               timelineItems(first: $events, itemTypes: [LABELED_EVENT, UNLABELED_EVENT]) {
                 pageInfo { hasNextPage }
                 nodes {
                   __typename
-                  ... on LabeledEvent { actor { login } label { name } }
-                  ... on UnlabeledEvent { actor { login } label { name } }
+                  ... on LabeledEvent { actor { __typename login } label { name } }
+                  ... on UnlabeledEvent { actor { __typename login } label { name } }
                 }
               }
             }
@@ -137,7 +142,8 @@ final readonly class GitHubIssueHistories
     {
         $timeline = $this->at($issue, 'timelineItems');
         $events = is_array($timeline) ? ($timeline['nodes'] ?? null) : null;
-        if (!is_array($timeline) || !is_array($events) || true === $this->at($timeline, 'pageInfo', 'hasNextPage')) {
+        // Only a page that says it is the last proves the history whole; a missing flag is no such proof.
+        if (!is_array($timeline) || !is_array($events) || false !== $this->at($timeline, 'pageInfo', 'hasNextPage')) {
             throw new ForgeReadFailed('GitHub answered a label history this forge cannot read whole.');
         }
 
@@ -148,11 +154,17 @@ final readonly class GitHubIssueHistories
                 throw new ForgeReadFailed('GitHub listed a label event that is not an object.');
             }
 
+            // An event of another kind fails instead of counting as a removal, because a removal it did not record would drop a label's applier.
+            $kind = $event['__typename'] ?? null;
+            if (!in_array($kind, [self::LABELED, self::UNLABELED], true)) {
+                throw new ForgeReadFailed('GitHub listed a label event of a kind this forge does not read.');
+            }
+
             // The actor of a removal is checked too, because an answer without one is not the history GitHub recorded.
             $label = $this->text($event, 'label', 'name');
             $actor = $this->login($event, 'actor');
             unset($applied[$label]);
-            if ('LabeledEvent' === ($event['__typename'] ?? null)) {
+            if (self::LABELED === $kind) {
                 $applied[$label] = new LabelApplication($label, $actor);
             }
         }
@@ -165,7 +177,11 @@ final readonly class GitHubIssueHistories
      */
     private function login(array $data, string $key): string
     {
-        return $this->text($data, $key, 'login');
+        // The type is required, because without it an App and a person with the same login could not be told apart.
+        $type = $this->text($data, $key, '__typename');
+        $login = $this->text($data, $key, 'login');
+
+        return self::APP === $type ? $login.self::APP_SUFFIX : $login;
     }
 
     /**

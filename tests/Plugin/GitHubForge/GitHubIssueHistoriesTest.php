@@ -77,10 +77,65 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testARemovalWithoutAnActorFailsTheRead(): void
     {
-        $removal = '{"__typename":"UnlabeledEvent","actor":{"login":"ana"},"label":{"name":"bug"}}';
-        $api = new RecordedIssueApi();
-        $api->graphql = str_replace($removal, '{"__typename":"UnlabeledEvent","actor":null,"label":{"name":"bug"}}', RecordedIssueApi::fixture('history_labels_reapplied.json'), $replaced);
-        self::assertSame(1, $replaced);
+        $removal = '{"__typename":"UnlabeledEvent","actor":{"__typename":"User","login":"ana"},"label":{"name":"bug"}}';
+        $api = $this->answeringWith('history_labels_reapplied.json', $removal, '{"__typename":"UnlabeledEvent","actor":null,"label":{"name":"bug"}}');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12);
+    }
+
+    public function testAnEditByAnAppIsNamedWithTheBotSuffixAsTheRestApiNamesIt(): void
+    {
+        self::assertSame('renovate[bot]', $this->answering('history_app_actors.json')->histories()->of('alpha', 12)->lastEditor);
+    }
+
+    public function testALabelAppliedByAnAppNamesTheAppWithTheBotSuffixAndAPersonBare(): void
+    {
+        $history = $this->answering('history_app_actors.json')->histories()->of('alpha', 12);
+
+        self::assertSame(['intakt' => 'intakt-runner[bot]', 'priority:high' => 'bob'], $this->appliers($history));
+    }
+
+    public function testAnAccountWithoutItsTypeFailsTheRead(): void
+    {
+        $api = $this->answeringWith('history_edited.json', '"editor":{"__typename":"User","login":"bob"}', '"editor":{"login":"bob"}');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12);
+    }
+
+    public function testTheQueryAsksForTheTypeOfTheAuthorTheEditorAndEveryActor(): void
+    {
+        $api = $this->answering('history_edited.json');
+        $api->histories()->of('alpha', 12);
+
+        $query = json_decode($api->graphqlRequests[0], true, flags: JSON_THROW_ON_ERROR)['query'];
+        self::assertSame(4, preg_match_all('/(author|editor|actor) \{[^}]*__typename/', $query));
+    }
+
+    public function testANullEditorWithoutAnErrorFailsTheReadInsteadOfNamingTheAuthor(): void
+    {
+        $api = $this->answeringWith('history_editor_field_error.json', ',"errors":[{"type":"FORBIDDEN","path":["repository","issue","userContentEdits","nodes",0,"editor"],"message":"Resource not accessible by integration"}]', '');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12);
+    }
+
+    public function testAnAnswerWithoutThePagingFlagFailsTheRead(): void
+    {
+        $api = $this->answeringWith('history_edited.json', '"pageInfo":{"hasNextPage":false},', '');
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12);
+    }
+
+    public function testAnEventOfAnUnknownKindFailsTheReadInsteadOfRemovingTheLabel(): void
+    {
+        $api = $this->answeringWith('history_labels_reapplied.json', '{"__typename":"UnlabeledEvent","actor":{"__typename":"User","login":"carol"}', '{"__typename":"UnknownEvent","actor":{"__typename":"User","login":"carol"}');
 
         $this->expectException(ForgeReadFailed::class);
 
@@ -118,6 +173,16 @@ final class GitHubIssueHistoriesTest extends TestCase
     {
         $api = new RecordedIssueApi();
         $api->graphql = RecordedIssueApi::fixture($fixture);
+
+        return $api;
+    }
+
+    // The fixture is changed in exactly one place, so a test cannot pass on a replacement that matched nothing.
+    private function answeringWith(string $fixture, string $recorded, string $instead): RecordedIssueApi
+    {
+        $api = new RecordedIssueApi();
+        $api->graphql = str_replace($recorded, $instead, RecordedIssueApi::fixture($fixture), $replaced);
+        self::assertSame(1, $replaced);
 
         return $api;
     }

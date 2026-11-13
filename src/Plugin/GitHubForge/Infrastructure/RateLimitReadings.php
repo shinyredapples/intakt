@@ -43,7 +43,7 @@ final readonly class RateLimitReadings
      */
     public function refuseWhileLimited(string $installationId, string $pool = self::CORE): void
     {
-        $until = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId, $pool)));
+        $until = $this->storedPause($installationId, $pool);
 
         // Compared with the clock because the cache expiry runs on system time.
         if ($until instanceof DateTimeImmutable && $until > $this->clock->now()) {
@@ -160,14 +160,31 @@ final readonly class RateLimitReadings
         $lock->acquire(true);
 
         try {
-            $item = $this->pool->getItem($this->key('limited', $installationId, $pool));
-            $longest = max($until, $this->pausedUntil($item) ?? $until);
-            $this->pool->save($item->set($longest->getTimestamp())->expiresAt($longest));
+            $longest = max($until, $this->storedPause($installationId, $pool) ?? $until);
+            $this->pool->save($this->pool->getItem($this->key('limited', $installationId, $pool))->set($longest->getTimestamp())->expiresAt($longest));
 
             return $longest;
         } finally {
             $lock->release();
         }
+    }
+
+    private function storedPause(string $installationId, string $pool): ?DateTimeImmutable
+    {
+        $current = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId, $pool)));
+        $earlier = $this->pauseStoredByAnEarlierVersion($installationId, $pool);
+
+        return null === $current || null === $earlier ? $current ?? $earlier : max($current, $earlier);
+    }
+
+    // Honored until it expires, because an install upgraded during a pause stored it under the key the earlier version used (the installation id alone, for REST calls only), and dropping it would resume calls before GitHub's reset.
+    private function pauseStoredByAnEarlierVersion(string $installationId, string $pool): ?DateTimeImmutable
+    {
+        if (self::CORE !== $pool) {
+            return null;
+        }
+
+        return $this->pausedUntil($this->pool->getItem('github-rate-limit-limited-'.hash('sha256', $installationId)));
     }
 
     private function pausedUntil(CacheItemInterface $item): ?DateTimeImmutable
