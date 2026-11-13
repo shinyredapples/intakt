@@ -54,6 +54,28 @@ final class ShowBuildTierCommandTest extends TestCase
         self::assertStringContainsString('tier strong, reason sensitive-path', $tester->getDisplay());
     }
 
+    public function testItPrintsTheStrongTierAndSetbackReasonForABlockingFinding(): void
+    {
+        $tester = $this->execute(['project' => 'alpha', '--setback' => 'blocking-finding']);
+
+        self::assertStringContainsString('tier strong, reason setback', $tester->getDisplay());
+    }
+
+    public function testItKeepsTheDefaultTierForASetbackTheProjectDoesNotEscalateOn(): void
+    {
+        $tester = $this->execute(['project' => 'alpha', '--setback' => 'failed-attempt']);
+
+        self::assertStringContainsString('tier standard, reason default', $tester->getDisplay());
+    }
+
+    public function testItRefusesAnUnknownSetback(): void
+    {
+        $tester = $this->execute(['project' => 'alpha', '--setback' => 'oops']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('Unknown setback "oops"', $tester->getDisplay());
+    }
+
     public function testItFailsForAProjectThatIsNotConfigured(): void
     {
         $tester = $this->execute(['project' => 'gamma']);
@@ -67,7 +89,7 @@ final class ShowBuildTierCommandTest extends TestCase
      */
     private function execute(array $input): CommandTester
     {
-        $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['src/**/Security/**']]], new ModelRouting());
+        $routing = new ConfiguredBuildRouting(['alpha' => ['tier' => Tier::Standard->value, 'sensitive_paths' => ['src/**/Security/**'], 'escalate_on' => ['blocking-finding', 'stall']]], new ModelRouting());
         $application = new Application();
         $application->addCommand(new ShowBuildTierCommand($routing));
         $tester = new CommandTester($application->find('intakt:build:tier'));
