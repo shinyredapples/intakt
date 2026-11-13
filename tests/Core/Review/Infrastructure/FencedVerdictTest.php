@@ -96,6 +96,46 @@ final class FencedVerdictTest extends TestCase
     }
 
     #[DataProvider('subscriptionModels')]
+    public function testAnIndentedBlockBesideAPlainOneIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Draft:\n   ```json\n   ".self::VERDICT."\n   ```\nFinal:\n```json\n".self::VERDICT."\n```");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testAFourBacktickBlockBesideAPlainOneIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Draft:\n````json\n".self::VERDICT."\n````\nFinal:\n```json\n".self::VERDICT."\n```");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testATildeBlockBesideAPlainOneIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Draft:\n~~~json\n".self::VERDICT."\n~~~\nFinal:\n```json\n".self::VERDICT."\n```");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testAnUppercaseJsonBlockBesideAPlainOneIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Draft:\n```JSON\n".self::VERDICT."\n```\nFinal:\n```json\n".self::VERDICT."\n```");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testALoneIndentedBlockIsNotRead(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Here:\n ```json\n ".self::VERDICT."\n ```");
+    }
+
+    #[DataProvider('subscriptionModels')]
     public function testAFencedBlockThatIsNotAVerdictIsInvalid(Model $model): void
     {
         $this->expectException(RuntimeException::class);
