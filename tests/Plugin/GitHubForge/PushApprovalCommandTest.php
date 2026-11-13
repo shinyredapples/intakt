@@ -41,7 +41,9 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\MirrorChange;
 use Intakt\Plugin\GitHubForge\Infrastructure\MirrorWorkflows;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
+use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use Intakt\Plugin\GitHubForge\UseCase\ApprovePush\PushApprovalCommand;
+use Intakt\Plugin\GitHubForge\UseCase\ApprovePush\PushApprovalInput;
 use Intakt\Plugin\GitHubForge\UseCase\ApprovePush\PushDecision;
 use Intakt\Plugin\GitHubForge\UseCase\ApprovePush\PushGate;
 use Intakt\Plugin\GitHubForge\UseCase\ApprovePush\PushOutcome;
@@ -59,6 +61,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(PushGate::class)]
 #[CoversClass(PushDecision::class)]
 #[CoversClass(PushOutcome::class)]
+#[CoversClass(PushApprovalInput::class)]
+#[UsesClass(TaskIssue::class)]
 #[UsesClass(MirrorChange::class)]
 #[UsesClass(MirrorWorkflows::class)]
 #[UsesClass(GitHubIssueComments::class)]
@@ -162,7 +166,7 @@ final class PushApprovalCommandTest extends TestCase
     {
         $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
         $this->execute();
-        $this->issue->byOwner('approve '.$head);
+        $this->issue->byPerson('approve '.$head);
 
         $tester = $this->execute();
 
@@ -173,7 +177,7 @@ final class PushApprovalCommandTest extends TestCase
     public function testAnApprovalOfAnEarlierHeadDoesNotLetANewHeadPush(): void
     {
         $earlier = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
-        $this->issue->byOwner('approve '.$earlier);
+        $this->issue->byPerson('approve '.$earlier);
         $this->repository->commitFile('deploy.sh', "#!/bin/sh\n");
 
         $tester = $this->execute();
@@ -185,7 +189,7 @@ final class PushApprovalCommandTest extends TestCase
     public function testAnotherAccountsApprovalLeavesTheHeadHeld(): void
     {
         $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
-        $this->issue->byOwner('approve '.$head, 'maintainer');
+        $this->issue->byPerson('approve '.$head, 'maintainer');
 
         self::assertSame(Command::FAILURE, $this->execute()->getStatusCode());
     }
@@ -251,7 +255,7 @@ final class PushApprovalCommandTest extends TestCase
     public function testASecondRunWhileOneAsksTheOwnerHoldsThePushAndPostsNothing(): void
     {
         $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
-        $busy = $this->locks->createLock(GitHubForgeServices::PUSH_REQUEST_LOCK_PREFIX.ScriptedIssue::NUMBER.'.'.$head);
+        $busy = $this->locks->createLock(GitHubForgeServices::PUSH_REQUEST_LOCK_PREFIX.'6:widget.7.'.$head);
         $busy->acquire();
 
         $tester = $this->execute();

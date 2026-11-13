@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
+use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
@@ -36,9 +37,19 @@ final class ScriptedIssue
 
     public ?int $refusal = null;
 
-    public function byOwner(string $body, string $login = 'owner', string $type = 'User', string $updated = self::MOMENT): void
+    public static function task(): TaskIssue
     {
-        $this->comments[] = ['body' => $body, 'user' => ['login' => $login, 'type' => $type], 'created_at' => self::MOMENT, 'updated_at' => $updated, 'performed_via_github_app' => null];
+        return new TaskIssue(self::PROJECT, self::NUMBER);
+    }
+
+    public function byPerson(string $body, string $login = 'owner'): void
+    {
+        $this->comments[] = ['body' => $body, 'user' => ['login' => $login, 'type' => 'User'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => null];
+    }
+
+    public function editedByOwner(string $body): void
+    {
+        $this->comments[] = ['body' => $body, 'user' => ['login' => 'owner', 'type' => 'User'], 'created_at' => self::MOMENT, 'updated_at' => '2026-11-25T10:05:00Z', 'performed_via_github_app' => null];
     }
 
     /**

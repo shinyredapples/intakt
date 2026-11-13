@@ -12,6 +12,7 @@ use Intakt\Plugin\GitHubForge\Contract\InstallationDoesNotMatchConfiguration;
 use Intakt\Plugin\GitHubForge\Contract\InstallationNotReadBack;
 use Intakt\Plugin\GitHubForge\Contract\InstallationTokenNotMinted;
 use Intakt\Plugin\GitHubForge\Domain\IssueComment;
+use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use JsonException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
@@ -39,9 +40,9 @@ final readonly class GitHubIssueComments
      * @throws ForgeReadFailed
      * @throws ForgeRateLimited
      */
-    public function of(string $project, int $issue): array
+    public function of(TaskIssue $issue): array
     {
-        $path = $this->commentsPath($project, $issue);
+        $path = $this->commentsPath($issue);
         $comments = [];
         for ($page = 1; $page <= self::MAX_PAGES; ++$page) {
             $listed = $this->page($path, $page);
@@ -58,10 +59,10 @@ final readonly class GitHubIssueComments
      * @throws ForgeWriteFailed
      * @throws ForgeRateLimited
      */
-    public function post(string $project, int $issue, string $body): void
+    public function post(TaskIssue $issue, string $body): void
     {
         try {
-            $path = $this->commentsPath($project, $issue);
+            $path = $this->commentsPath($issue);
         } catch (ForgeReadFailed $unknown) {
             throw new ForgeWriteFailed($unknown->getMessage(), previous: $unknown);
         }
@@ -74,7 +75,7 @@ final readonly class GitHubIssueComments
             $status = $response->getStatusCode();
             $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure::class));
+            throw $this->unreachableForWrite($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -85,9 +86,21 @@ final readonly class GitHubIssueComments
     /**
      * @throws ForgeReadFailed
      */
-    private function commentsPath(string $project, int $issue): string
+    private function commentsPath(TaskIssue $issue): string
     {
-        return $issue > 0 ? $this->repositories->addressOf($project)->path().'/issues/'.$issue.'/comments' : throw new ForgeReadFailed(sprintf('%d is no issue number.', $issue));
+        return $issue->number > 0 ? $this->repositories->addressOf($issue->project)->path().'/issues/'.$issue->number.'/comments' : throw new ForgeReadFailed(sprintf('%d is no issue number.', $issue->number));
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    // Not chained either, because the trace of a failed post holds the bearer token too.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
+    {
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 
     /**
@@ -105,8 +118,7 @@ final readonly class GitHubIssueComments
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {

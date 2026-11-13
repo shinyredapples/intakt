@@ -17,6 +17,7 @@ use Intakt\Plugin\GitHubForge\Domain\HeldChange;
 use Intakt\Plugin\GitHubForge\Domain\IssueComment;
 use Intakt\Plugin\GitHubForge\Domain\PushApproval;
 use Intakt\Plugin\GitHubForge\Domain\PushRequest;
+use Intakt\Plugin\GitHubForge\Domain\TaskIssue;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\MirrorChange;
 use Intakt\Plugin\GitHubForge\Infrastructure\MirrorWorkflows;
@@ -52,7 +53,7 @@ final readonly class PushGate
      * @throws ForgeWriteFailed
      * @throws ForgeRateLimited
      */
-    public function decide(string $repository, string $head, string $project, int $issue): PushOutcome
+    public function decide(string $repository, string $head, TaskIssue $issue): PushOutcome
     {
         // The head is resolved once and the scan reads that commit, so a branch moved meanwhile cannot slip another commit past the approval.
         $change = $this->changes->of($repository, $head);
@@ -61,7 +62,7 @@ final readonly class PushGate
             return new PushOutcome(PushDecision::Free, $change->commit, $scan);
         }
 
-        return new PushOutcome($this->whileAskingAlone($change, $scan, $project, $issue), $change->commit, $scan);
+        return new PushOutcome($this->whileAskingAlone($change, $scan, $issue), $change->commit, $scan);
     }
 
     /**
@@ -70,16 +71,16 @@ final readonly class PushGate
      * @throws ForgeWriteFailed
      * @throws ForgeRateLimited
      */
-    private function whileAskingAlone(HeldChange $change, CiScanResult $scan, string $project, int $issue): PushDecision
+    private function whileAskingAlone(HeldChange $change, CiScanResult $scan, TaskIssue $issue): PushDecision
     {
-        // Not waited for, because the busy run's caller tries again and then finds the request the other one posted; the commit id and the issue number hold no dot, so the key is unambiguous.
-        $lock = $this->locks->createLock(GitHubForgeServices::PUSH_REQUEST_LOCK_PREFIX.$issue.'.'.$change->commit);
+        // Not waited for, because the busy run's caller tries again and then finds the request the other one posted.
+        $lock = $this->locks->createLock($this->lockKey($issue, $change->commit));
         if (!$lock->acquire()) {
             throw new ForgeWriteFailed('Another run is asking the owner about this head.');
         }
 
         try {
-            return $this->askTheOwner($change, $scan, $project, $issue);
+            return $this->askTheOwner($change, $scan, $issue);
         } finally {
             $lock->release();
         }
@@ -91,9 +92,21 @@ final readonly class PushGate
      * @throws ForgeWriteFailed
      * @throws ForgeRateLimited
      */
-    private function askTheOwner(HeldChange $change, CiScanResult $scan, string $project, int $issue): PushDecision
+    // The project name is length-prefixed, because a project name may hold the dots that separate the other parts.
+    private function lockKey(TaskIssue $issue, string $commit): string
     {
-        $comments = $this->comments->of($project, $issue);
+        return sprintf('%s%d:%s.%d.%s', GitHubForgeServices::PUSH_REQUEST_LOCK_PREFIX, strlen($issue->project), $issue->project, $issue->number, $commit);
+    }
+
+    /**
+     * @throws ChangeNotShown
+     * @throws ForgeReadFailed
+     * @throws ForgeWriteFailed
+     * @throws ForgeRateLimited
+     */
+    private function askTheOwner(HeldChange $change, CiScanResult $scan, TaskIssue $issue): PushDecision
+    {
+        $comments = $this->comments->of($issue);
         if ($this->approval->isGivenIn($comments, $this->owner, $change->commit)) {
             return PushDecision::Approved;
         }
@@ -102,7 +115,7 @@ final readonly class PushGate
             return PushDecision::StillAsked;
         }
 
-        $this->comments->post($project, $issue, $this->shownRequest($change, $scan));
+        $this->comments->post($issue, $this->shownRequest($change, $scan));
 
         return PushDecision::Asked;
     }
