@@ -149,15 +149,23 @@ final class InstanceBootTest extends TestCase
         self::assertStringContainsString('composer.json', $outcome->reason);
     }
 
-    public function testAComposerPluginOfTheHeadDoesNotRunDuringTheInstall(): void
+    public function testAComposerPluginOfTheHeadDoesNotSeeASecretOfTheBootingInstall(): void
     {
-        $ran = $this->repository->path.'-plugin-ran';
-        $head = $this->commitPlugin("file_put_contents('".$ran."', 'ran');");
+        $seen = $this->repository->path.'-plugin-saw';
+        $head = $this->commitPlugin("file_put_contents('".$seen."', var_export(getenv('INTAKT_TEST_SECRET'), true));");
+        $_ENV['INTAKT_TEST_SECRET'] = 'from-dotenv';
+        putenv('INTAKT_TEST_SECRET=from-environment');
 
-        $outcome = $this->bootWithMainsHarness($head);
+        try {
+            $outcome = $this->bootWithMainsHarness($head);
+        } finally {
+            unset($_ENV['INTAKT_TEST_SECRET']);
+            putenv('INTAKT_TEST_SECRET');
+        }
 
         self::assertSame(BootState::Booted, $outcome->state);
-        self::assertFileDoesNotExist($ran);
+        self::assertSame('false', file_get_contents($seen));
+        unlink($seen);
     }
 
     public function testAComposerPluginOfTheHeadCannotReplaceMainsHarness(): void

@@ -20,8 +20,8 @@ use Throwable;
 final readonly class InstanceBoot
 {
     private const string HARNESS = 'bin/instance';
-    // Without plugins and scripts, so no code of the commit runs while its packages are installed.
-    private const array INSTALL = ['composer', 'install', '--no-interaction', '--no-progress', '--no-scripts', '--no-plugins'];
+    // Plugins stay on, because symfony/runtime writes vendor/autoload_runtime.php as one; a plugin is the commit's code like the code bin/instance boots.
+    private const array INSTALL = ['composer', 'install', '--no-interaction', '--no-progress', '--no-scripts'];
     private const int INSTALL_SECONDS = 600;
     private const int BOOT_SECONDS = 180;
 
