@@ -135,9 +135,8 @@ final readonly class WorkflowFileScan
         };
     }
 
+    // A group or label is still read from a variable when it sits in a mapping, so an expression anywhere in it is a failed read too.
     /**
-     * A group or label is still read from a variable when it sits in a mapping, so an expression anywhere in it is a failed read too.
-     *
      * @return list<WorkflowFinding>
      */
     private function expressions(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $value): array
