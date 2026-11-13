@@ -84,7 +84,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
         self::assertSame(
-            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { highlightFindings } from '%s'; holdBackDangerButtons(document); offerSearch(document); highlightFindings(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('finding-highlight.js'))],
+            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { highlightFindings } from '%s'; import { foldColumns } from '%s'; holdBackDangerButtons(document); offerSearch(document); highlightFindings(document); foldColumns(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('finding-highlight.js'), $packages->getUrl('column-fold.js'))],
             $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),
         );
     }
@@ -137,6 +137,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('export function highlightFindings(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
+    public function testTheColumnFoldScriptThePlainPageImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('column-fold.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function foldColumns(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void
