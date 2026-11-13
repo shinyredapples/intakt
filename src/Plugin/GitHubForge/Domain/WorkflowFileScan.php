@@ -10,8 +10,7 @@ use NoDiscard;
 final readonly class WorkflowFileScan
 {
     public function __construct(
-        private WorkflowInlineValue $inline,
-        private WorkflowBlockValue $blocks,
+        private WorkflowReader $reader,
         private TokenPermissions $permissions,
         private SecretReferences $secrets,
     ) {
@@ -24,7 +23,7 @@ final readonly class WorkflowFileScan
     public function scan(string $workflowText): array
     {
         try {
-            $workflow = new WorkflowLines($workflowText, $this->inline, $this->blocks)->workflow();
+            $workflow = $this->reader->workflow($workflowText);
         } catch (WorkflowFormNotRead $unread) {
             return [new WorkflowFinding(WorkflowRisk::Unreadable, $unread->lineNumber, $unread->getMessage())];
         }
@@ -42,7 +41,7 @@ final readonly class WorkflowFileScan
     {
         $on = $workflow->entry('on');
         $findings = match (true) {
-            $on === null => [new WorkflowFinding(WorkflowRisk::Unreadable, $workflow->line, 'the workflow names no trigger (on)')],
+            !$on instanceof WorkflowEntry => [new WorkflowFinding(WorkflowRisk::Unreadable, $workflow->line, 'the workflow names no trigger (on)')],
             $on->value instanceof WorkflowMapping => array_map(fn (WorkflowEntry $event): ?WorkflowFinding => $this->trigger($event->key, $event->line), $on->value->entries),
             $on->value instanceof WorkflowSequence => array_map($this->listedTrigger(...), $on->value->items),
             default => [$this->trigger($on->value->text, $on->line)],
@@ -61,8 +60,8 @@ final readonly class WorkflowFileScan
     private function trigger(string $event, int $line): ?WorkflowFinding
     {
         return match (true) {
-            $event === '' => new WorkflowFinding(WorkflowRisk::Unreadable, $line, 'an empty trigger'),
-            ContainedTrigger::tryFrom($event) === null => new WorkflowFinding(WorkflowRisk::Trigger, $line, sprintf('the trigger %s may run with the base repository\'s rights', $event)),
+            '' === $event => new WorkflowFinding(WorkflowRisk::Unreadable, $line, 'an empty trigger'),
+            null === ContainedTrigger::tryFrom($event) => new WorkflowFinding(WorkflowRisk::Trigger, $line, sprintf('the trigger %s may run with the base repository\'s rights', $event)),
             default => null,
         };
     }
@@ -73,12 +72,12 @@ final readonly class WorkflowFileScan
     private function jobs(WorkflowMapping $workflow): array
     {
         $jobs = $workflow->entry('jobs');
-        if ($jobs === null || !$jobs->value instanceof WorkflowMapping) {
-            return [new WorkflowFinding(WorkflowRisk::Unreadable, $jobs->line ??$workflow->line, 'the workflow names no jobs')];
+        if (!$jobs instanceof WorkflowEntry || !$jobs->value instanceof WorkflowMapping) {
+            return [new WorkflowFinding(WorkflowRisk::Unreadable, $jobs->line ?? $workflow->line, 'the workflow names no jobs')];
         }
 
         $inherited = $workflow->entry('permissions');
-        $findings = $inherited === null ? [] : $this->permissions->findings($inherited);
+        $findings = $inherited instanceof WorkflowEntry ? $this->permissions->findings($inherited) : [];
         foreach ($jobs->value->entries as $job) {
             $findings = [...$findings, ...$this->job($job, $inherited)];
         }
@@ -98,8 +97,8 @@ final readonly class WorkflowFileScan
         $own = $job->value->entry('permissions');
 
         return [...$this->runner($job->key, $job->value), ...match (true) {
-            $own !== null => $this->permissions->findings($own),
-            $inherited === null => [new WorkflowFinding(WorkflowRisk::Permissions, $job->line, sprintf('the job %s leaves its token\'s permissions to the repository default, which may write', $job->key))],
+            $own instanceof WorkflowEntry => $this->permissions->findings($own),
+            !$inherited instanceof WorkflowEntry => [new WorkflowFinding(WorkflowRisk::Permissions, $job->line, sprintf('the job %s leaves its token\'s permissions to the repository default, which may write', $job->key))],
             default => [],
         }];
     }
@@ -110,13 +109,13 @@ final readonly class WorkflowFileScan
     private function runner(string $job, WorkflowMapping $definition): array
     {
         $called = $definition->entry('uses');
-        if ($called !== null) {
+        if ($called instanceof WorkflowEntry) {
             return [new WorkflowFinding(WorkflowRisk::Unreadable, $called->line, sprintf('the job %s calls another workflow, which this scan does not read', $job))];
         }
 
         $runsOn = $definition->entry('runs-on');
         $findings = match (true) {
-            $runsOn === null => [new WorkflowFinding(WorkflowRisk::Unreadable, $definition->line, sprintf('the job %s names no runner (runs-on)', $job))],
+            !$runsOn instanceof WorkflowEntry => [new WorkflowFinding(WorkflowRisk::Unreadable, $definition->line, sprintf('the job %s names no runner (runs-on)', $job))],
             $runsOn->value instanceof WorkflowMapping => [new WorkflowFinding(WorkflowRisk::Runner, $runsOn->line, sprintf('the job %s picks its runner by group or labels', $job))],
             $runsOn->value instanceof WorkflowSequence => array_map(fn (WorkflowScalar|WorkflowMapping|WorkflowSequence $label): ?WorkflowFinding => $this->label($job, $label), $runsOn->value->items),
             default => [$this->label($job, $runsOn->value)],
@@ -128,9 +127,9 @@ final readonly class WorkflowFileScan
     private function label(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $label): ?WorkflowFinding
     {
         return match (true) {
-            !$label instanceof WorkflowScalar || $label->text === '' => new WorkflowFinding(WorkflowRisk::Unreadable, $label->line, sprintf('a runner label of the job %s that is not a single name', $job)),
+            !$label instanceof WorkflowScalar || '' === $label->text => new WorkflowFinding(WorkflowRisk::Unreadable, $label->line, sprintf('a runner label of the job %s that is not a single name', $job)),
             str_contains($label->text, '${{') => new WorkflowFinding(WorkflowRisk::Runner, $label->line, sprintf('the job %s takes its runner from an expression, whose value can change without a commit', $job)),
-            HostedRunnerLabel::tryFrom($label->text) === null => new WorkflowFinding(WorkflowRisk::Runner, $label->line, sprintf('the job %s runs on %s, not a GitHub-hosted runner label', $job, $label->text)),
+            null === HostedRunnerLabel::tryFrom($label->text) => new WorkflowFinding(WorkflowRisk::Runner, $label->line, sprintf('the job %s runs on %s, not a GitHub-hosted runner label', $job, $label->text)),
             default => null,
         };
     }

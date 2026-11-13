@@ -8,14 +8,14 @@ use Intakt\Plugin\GitHubForge\Domain\ContainedTrigger;
 use Intakt\Plugin\GitHubForge\Domain\HostedRunnerLabel;
 use Intakt\Plugin\GitHubForge\Domain\SecretReferences;
 use Intakt\Plugin\GitHubForge\Domain\TokenPermissions;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowBlockValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowEntry;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFileScan;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFinding;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFormNotRead;
-use Intakt\Plugin\GitHubForge\Domain\WorkflowLine;
-use Intakt\Plugin\GitHubForge\Domain\WorkflowBlockValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowInlineValue;
-use Intakt\Plugin\GitHubForge\Domain\WorkflowLines;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowLine;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowReader;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowMapping;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRisk;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowScalar;
@@ -31,7 +31,7 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(ScanWorkflowCommand::class)]
 #[UsesClass(WorkflowFileScan::class)]
-#[UsesClass(WorkflowLines::class)]
+#[UsesClass(WorkflowReader::class)]
 #[UsesClass(WorkflowInlineValue::class)]
 #[UsesClass(WorkflowBlockValue::class)]
 #[UsesClass(TokenPermissions::class)]
@@ -92,7 +92,7 @@ final class ScanWorkflowCommandTest extends TestCase
     private function execute(string $file): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ScanWorkflowCommand(new WorkflowFileScan(new WorkflowInlineValue(), new WorkflowBlockValue(), new TokenPermissions(), new SecretReferences()), new Filesystem()));
+        $application->addCommand(new ScanWorkflowCommand(new WorkflowFileScan(new WorkflowReader(new WorkflowInlineValue(), new WorkflowBlockValue()), new TokenPermissions(), new SecretReferences()), new Filesystem()));
         $tester = new CommandTester($application->find('intakt:forge:workflow-risk'));
         $tester->execute(['file' => $file]);
 

@@ -40,8 +40,8 @@ final readonly class ScanWorkflowCommand
             $io->writeln(sprintf('line %d: %s: %s', $finding->line, $finding->risk->value, $finding->detail));
         }
 
-        $io->writeln($findings === [] ? 'no risk: hosted runners, a read-only token, no secrets' : sprintf('risky: %d findings', count($findings)));
+        $io->writeln([] === $findings ? 'no risk: hosted runners, a read-only token, no secrets' : sprintf('risky: %d findings', count($findings)));
 
-        return $findings === [] ? Command::SUCCESS : Command::FAILURE;
+        return [] === $findings ? Command::SUCCESS : Command::FAILURE;
     }
 }

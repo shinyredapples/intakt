@@ -8,14 +8,14 @@ use Intakt\Plugin\GitHubForge\Domain\ContainedTrigger;
 use Intakt\Plugin\GitHubForge\Domain\HostedRunnerLabel;
 use Intakt\Plugin\GitHubForge\Domain\SecretReferences;
 use Intakt\Plugin\GitHubForge\Domain\TokenPermissions;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowBlockValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowEntry;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFileScan;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFinding;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFormNotRead;
-use Intakt\Plugin\GitHubForge\Domain\WorkflowLine;
-use Intakt\Plugin\GitHubForge\Domain\WorkflowBlockValue;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowInlineValue;
-use Intakt\Plugin\GitHubForge\Domain\WorkflowLines;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowLine;
+use Intakt\Plugin\GitHubForge\Domain\WorkflowReader;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowMapping;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowRisk;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowScalar;
@@ -26,7 +26,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(WorkflowFileScan::class)]
-#[CoversClass(WorkflowLines::class)]
+#[CoversClass(WorkflowReader::class)]
 #[CoversClass(WorkflowInlineValue::class)]
 #[CoversClass(WorkflowBlockValue::class)]
 #[CoversClass(TokenPermissions::class)]
@@ -363,7 +363,7 @@ final class WorkflowFileScanTest extends TestCase
      */
     private function scan(string $workflow): array
     {
-        return new WorkflowFileScan(new WorkflowInlineValue(), new WorkflowBlockValue(), new TokenPermissions(), new SecretReferences())->scan($workflow);
+        return new WorkflowFileScan(new WorkflowReader(new WorkflowInlineValue(), new WorkflowBlockValue()), new TokenPermissions(), new SecretReferences())->scan($workflow);
     }
 
     private function withJob(string $job): string

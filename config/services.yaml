@@ -32,8 +32,6 @@ services:
         exclude:
             # Built per review with the checkout under review, so the container cannot wire them.
             - '../src/Core/Review/Infrastructure/Repository/'
-            # Built per scan with the workflow's text, so the container cannot wire it.
-            - '../src/Plugin/GitHubForge/Domain/WorkflowLines.php'
             # Defined in config/packages/ai.php beside the parameters they read, because the scan runs later and would replace those definitions.
             - '../src/Core/Budget/Domain/CeilingStartGuard.php'
             - '../src/Core/Ai/UseCase/ProbeCodexLogin/ProbeCodexLoginCommand.php'
