@@ -310,7 +310,7 @@ final class StatusReadModelTest extends TestCase
         $status = json_decode($this->readModel()->json(), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($status);
 
-        /** @var array<string, mixed> $status */
+        /* @var array<string, mixed> $status */
         return $status;
     }
 
@@ -325,7 +325,7 @@ final class StatusReadModelTest extends TestCase
         $project = array_find($status['projects'], static fn (mixed $project): bool => is_array($project) && $name === $project['name']);
         self::assertIsArray($project);
 
-        /** @var array<string, mixed> $project */
+        /* @var array<string, mixed> $project */
         return $project;
     }
 
