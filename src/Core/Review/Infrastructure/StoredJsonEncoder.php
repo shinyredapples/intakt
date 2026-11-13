@@ -22,13 +22,13 @@ final class StoredJsonEncoder extends JsonEncoder
     {
         $decoded = parent::decode($data, $format, [...$context, JsonDecode::ASSOCIATIVE => false]);
 
-        return $this->asArrays($decoded, false);
+        return $this->asArrays($decoded, null);
     }
 
-    private function asArrays(mixed $value, bool $keepObject): mixed
+    private function asArrays(mixed $value, int|string|null $key): mixed
     {
         if ($value instanceof stdClass) {
-            if ($keepObject) {
+            if (self::MERGED === $key) {
                 return $value;
             }
 
@@ -40,8 +40,8 @@ final class StoredJsonEncoder extends JsonEncoder
         }
 
         $converted = [];
-        foreach ($value as $key => $item) {
-            $converted[$key] = $this->asArrays($item, self::MERGED === $key);
+        foreach ($value as $name => $item) {
+            $converted[$name] = $this->asArrays($item, $name);
         }
 
         return $converted;
