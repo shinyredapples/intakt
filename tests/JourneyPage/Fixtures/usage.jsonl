@@ -1,0 +1,2 @@
+{"day": "2026-10-27", "vendor": "claude", "account": "claude-1", "lane": "build", "tokens": 9000000}
+{"day": "2026-10-27", "vendor": "gpt", "account": "gpt-1", "lane": "review", "tokens": 3000000}

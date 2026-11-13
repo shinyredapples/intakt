@@ -1,0 +1,10 @@
+[[
+  {"number": 10, "state": "closed", "state_reason": "completed", "closed_at": "2026-11-05T10:00:00Z", "milestone": {"number": 1}},
+  {"number": 11, "state": "closed", "state_reason": "completed", "closed_at": "2026-11-04T10:00:00Z", "milestone": {"number": 1}},
+  {"number": 12, "state": "closed", "state_reason": "not_planned", "closed_at": "2026-11-09T10:00:00Z", "milestone": {"number": 1}},
+  {"number": 13, "state": "closed", "state_reason": "completed", "closed_at": "2026-11-12T10:00:00Z", "milestone": {"number": 2}},
+  {"number": 14, "state": "open", "state_reason": null, "closed_at": null, "milestone": {"number": 2}},
+  {"number": 15, "state": "open", "state_reason": null, "closed_at": null, "milestone": {"number": 3}},
+  {"number": 16, "state": "closed", "state_reason": "completed", "closed_at": "2026-11-06T10:00:00Z", "milestone": null},
+  {"number": 17, "state": "closed", "state_reason": null, "closed_at": "2026-11-06T10:00:00Z", "milestone": null, "pull_request": {"url": "x"}}
+]]
