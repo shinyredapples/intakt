@@ -38,7 +38,7 @@ Exactly two hard floors remain. They are deterministic rules over the whole chan
 - **The approval system:** the protected-path list, the floors, the checks that apply them, the Security engineer's prompts and the canary corpus (below), so Intakt can never widen its own approvals.
 - **Secrets and permissions:** any change to how secrets or credentials are stored, read, injected, redacted or scanned, including the secret scan's rules and its allowlist; a workflow that reads a repository secret; raised workflow permissions, new triggers or a runner change.
 
-Other CI edits, gate tests, agent instructions and the boot harness are not floors: they go through the mechanical checks, the security review and the penetration test. One rule besides the floors still sends a change to the owner: a panel reviewer that classifies the protected part as loosening, or gives no valid class ([Reviews](07-reviews.md)). A classification never approves on its own.
+Other CI edits, gate tests, agent instructions and the boot harness are not floors: they go through the mechanical checks, the security review and the penetration test. They are approved on the spot only where a mechanical check covers the change (gate tests and the harness by their checks); a workflow file or an agent instructions file that no check covers still goes to the owner. One rule besides the floors still sends a change to the owner: a panel reviewer that classifies the protected part as loosening, or gives no valid class ([Reviews](07-reviews.md)). A classification never approves on its own.
 
 ### Mechanical checks
 
