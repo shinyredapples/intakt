@@ -29,7 +29,7 @@ final readonly class BuildJobImage
      */
     public function build(string $directory, string $tag): BuiltJobImage
     {
-        self::refuseAnotherThanATag($tag);
+        $this->refuseAnotherThanATag($tag);
 
         return $this->built($this->planner->planFor($directory), $directory, $tag);
     }
@@ -43,12 +43,12 @@ final readonly class BuildJobImage
      */
     public function buildForReview(string $directory, string $tag): BuiltJobImage
     {
-        self::refuseAnotherThanATag($tag);
+        $this->refuseAnotherThanATag($tag);
 
         return $this->built($this->planner->planForReview($directory), $directory, $tag);
     }
 
-    private static function refuseAnotherThanATag(string $tag): void
+    private function refuseAnotherThanATag(string $tag): void
     {
         if (!ImageReference::isTag($tag)) {
             throw JobImageNotBuilt::notATag($tag);
