@@ -58,7 +58,7 @@ While a review runs, Intakt sends each reviewer's tool calls, its text and each 
 
 ### The status document (in progress)
 
-Intakt can describe what it is doing as one JSON document, the status, which the owner's own dashboard reads until Intakt's dashboard replaces it. Its fields are documented in [status.schema.json](status.schema.json), a JSON Schema, and Intakt's tests check every document they build against that file. No command or address prints it yet: a console command and a local address come next. The status is read from Intakt's database only, so it still answers while no worker runs; a stopped worker then shows as messages waiting in a queue.
+Intakt can describe what it is doing as one JSON document, the status, which the owner's own dashboard reads until Intakt's dashboard replaces it. Its fields are documented in [status.schema.json](status.schema.json), a JSON Schema, and Intakt's tests check every document they build against that file. Print it with `php bin/console intakt:status --format=json` (JSON is also the format when `--format` is left out, and any other format is refused with an error): the command writes the document as one line and exits with 0. A local address that serves it comes next. The status is read from Intakt's database only, so it still answers while no worker runs; a stopped worker then shows as messages waiting in a queue.
 
 - `generated_at`: when the status was read (UTC).
 - `holds`: the install-wide holds in effect (`drain`, `failure-back-off`, `pause`, `budget-back-off`), the one that wins first. Only the name is given, never when it ends.
