@@ -94,14 +94,13 @@ flowchart TD
   q2 -- yes --> you[You get one message<br/>with the options and a recommendation]
 ```
 
-**Changes to the project's rules** (the checks that judge the code, the CI setup, the instructions for the agents) get extra care, because a loop that could loosen its own rules could talk itself into anything:
+**Changes to the project's rules** (the checks that judge the code, the CI setup, the instructions for the agents) get extra care (planned: until this is built, every rule change goes to you), because a loop that could loosen its own rules could talk itself into anything:
 
 | The change... | Who approves it |
 |---|---|
-| only adds to the rules (for a check: a new check, its registration and its tests, with a mechanical proof that nothing existing changed), and every reviewer agrees (at least two, from different companies) | Intakt approves it itself, and lists it on the dashboard for a week (planned: until this is built, every rule change goes to you) |
-| edits or removes an existing check, its tests or its settings | you |
-| removes, relaxes or skips a check | you |
-| touches the CI setup, the list of protected files, or the rules for what Intakt may approve | always you |
+| passes the mechanical checks, the Security engineer's security review and penetration test, and no reviewer calls it loosening (this includes new checks, edited tests of a check with the proof that it got no weaker, other CI edits and the agents' instructions) | Intakt approves it itself, and lists it on the dashboard for a week |
+| changes how Intakt approves (the list of protected files, the limits, the checks that apply them, the Security engineer's instructions, the known bad changes), or touches secrets and permissions (how secrets are kept or scanned, a workflow that reads a secret, more workflow permissions, new triggers, other machines) | always you |
+| fails a check, or the security review or penetration test finds a way around it | you |
 
 You never approve something whose checks are failing: Intakt asks you only once the checks are green and the review panel has approved.
 
