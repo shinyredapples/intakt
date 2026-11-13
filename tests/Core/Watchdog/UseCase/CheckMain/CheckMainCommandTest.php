@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Watchdog\Contract\MainVerdict;
 use Intakt\Core\Watchdog\Contract\OwnerKeys;
+use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use Intakt\Core\Watchdog\Domain\CommitClassifier;
@@ -37,6 +38,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(Violation::class)]
 #[UsesClass(MainVerdict::class)]
 #[UsesClass(WatchedMain::class)]
+#[UsesClass(RecordedMerge::class)]
 #[UsesClass(OwnerKeys::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
@@ -79,6 +81,27 @@ final class CheckMainCommandTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertStringContainsString('main is clean', $tester->getDisplay());
+    }
+
+    public function testACommitARecordedMergeBroughtToMainLeavesMainClean(): void
+    {
+        $base = $this->repository->objectAt('HEAD');
+        $head = $this->repository->commitEmpty('Task');
+
+        $tester = $this->whenRunWith(['--since' => $base, '--recorded-merge' => [$base.'..'.$head]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString('main is clean', $tester->getDisplay());
+    }
+
+    public function testARecordedMergeThatIsNoRangeOfTwoCommitNamesIsRefused(): void
+    {
+        $head = $this->repository->commitEmpty('Task');
+
+        $tester = $this->whenRunWith(['--recorded-merge' => [$head]]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('<base>..<head>', $tester->getDisplay());
     }
 
     public function testAKeyFileThatCannotBeReadIsRefused(): void

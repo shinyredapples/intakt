@@ -27,6 +27,6 @@ final class CheckMainInput
     /**
      * @var list<string>
      */
-    #[Option('A merge commit Intakt recorded; repeatable')]
+    #[Option('A merge Intakt recorded, as <base>..<head>: the main it landed on and the head it merged (full commit names); repeatable')]
     public array $recordedMerge = [];
 }

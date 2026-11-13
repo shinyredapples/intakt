@@ -35,7 +35,7 @@ final readonly class CheckMain
 
         $commits = $this->history->commitsOnMain($repository, $head, $main);
 
-        return new MainVerdict($head, $this->classifier->violationsIn($commits, $main->recordedMerges));
+        return new MainVerdict($head, $this->classifier->violationsIn($commits, $this->history->broughtByRecordedMerges($repository, $main)));
     }
 
     /**

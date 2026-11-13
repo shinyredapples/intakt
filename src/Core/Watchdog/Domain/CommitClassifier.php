@@ -11,15 +11,15 @@ final readonly class CommitClassifier
 {
     /**
      * @param list<SeenCommit> $commits
-     * @param list<string>     $recordedMerges
+     * @param list<string>     $broughtByRecordedMerges
      *
      * @return list<Violation>
      */
-    public function violationsIn(array $commits, array $recordedMerges): array
+    public function violationsIn(array $commits, array $broughtByRecordedMerges): array
     {
         $violations = [];
         foreach ($commits as $commit) {
-            $kind = $this->kindOf($commit, $recordedMerges);
+            $kind = $this->kindOf($commit, $broughtByRecordedMerges);
 
             if ($kind instanceof ViolationKind) {
                 $violations[] = new Violation($kind, $commit->name);
@@ -30,12 +30,12 @@ final readonly class CommitClassifier
     }
 
     /**
-     * @param list<string> $recordedMerges
+     * @param list<string> $broughtByRecordedMerges
      */
-    private function kindOf(SeenCommit $commit, array $recordedMerges): ?ViolationKind
+    private function kindOf(SeenCommit $commit, array $broughtByRecordedMerges): ?ViolationKind
     {
-        // Because a recorded merge's provenance is the pull request Intakt recorded, whatever its signature says.
-        if (in_array($commit->name, $recordedMerges, true)) {
+        // Because a recorded merge's provenance is the pull request Intakt recorded, whatever the signatures of the commits it brought say.
+        if (in_array($commit->name, $broughtByRecordedMerges, true)) {
             return null;
         }
 

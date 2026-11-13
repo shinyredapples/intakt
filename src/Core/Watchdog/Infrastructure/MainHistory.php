@@ -98,6 +98,25 @@ final readonly class MainHistory
     }
 
     /**
+     * @return list<string>
+     *
+     * @throws MainNotRead
+     */
+    public function broughtByRecordedMerges(string $repository, WatchedMain $main): array
+    {
+        $brought = [];
+        foreach ($main->recordedMerges as $merge) {
+            // Only what the merge added to its base, because an unsigned commit below the base reaches the head too; the checked head bounds the walk to the new commits.
+            $listing = $this->mustSucceed($this->run($repository, [
+                'rev-list', $merge->head, '--not', $merge->base, ...null === $main->checkedUpTo ? [] : [$main->checkedUpTo],
+            ]), 'rev-list');
+            $brought = [...$brought, $merge->head, ...array_filter(explode("\n", $listing), static fn (string $line): bool => '' !== $line)];
+        }
+
+        return array_values(array_unique($brought));
+    }
+
+    /**
      * @throws MainNotRead
      */
     private function mustBeComplete(string $repository): void

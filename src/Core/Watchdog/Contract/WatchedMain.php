@@ -12,7 +12,7 @@ final readonly class WatchedMain
     private const string COMMIT_NAME = '/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/';
 
     /**
-     * @param list<string> $recordedMerges
+     * @param list<RecordedMerge> $recordedMerges
      *
      * @throws InvalidArgumentException
      */
@@ -21,10 +21,18 @@ final readonly class WatchedMain
         public array $recordedMerges,
         public OwnerKeys $ownerKeys,
     ) {
-        foreach ([...null === $checkedUpTo ? [] : [$checkedUpTo], ...$recordedMerges] as $commit) {
-            if (1 !== preg_match(self::COMMIT_NAME, $commit)) {
-                throw new InvalidArgumentException(sprintf('"%s" is not a full commit name', $commit));
-            }
+        if (null !== $checkedUpTo) {
+            self::mustBeACommitName($checkedUpTo);
+        }
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    public static function mustBeACommitName(string $commit): void
+    {
+        if (1 !== preg_match(self::COMMIT_NAME, $commit)) {
+            throw new InvalidArgumentException(sprintf('"%s" is not a full commit name', $commit));
         }
     }
 }

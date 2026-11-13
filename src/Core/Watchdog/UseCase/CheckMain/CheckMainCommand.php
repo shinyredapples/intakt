@@ -6,6 +6,7 @@ namespace Intakt\Core\Watchdog\UseCase\CheckMain;
 
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\OwnerKeys;
+use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
 use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -24,7 +25,7 @@ final readonly class CheckMainCommand
     public function __invoke(SymfonyStyle $io, #[MapInput] CheckMainInput $input): int
     {
         try {
-            $main = new WatchedMain($input->since, $input->recordedMerge, OwnerKeys::of($this->keysIn($input->ownerKey)));
+            $main = new WatchedMain($input->since, array_map(RecordedMerge::fromRange(...), $input->recordedMerge), OwnerKeys::of($this->keysIn($input->ownerKey)));
             $verdict = $this->check->of($input->repository, $main);
         } catch (InvalidArgumentException|MainNotRead $refused) {
             $io->error($refused->getMessage());

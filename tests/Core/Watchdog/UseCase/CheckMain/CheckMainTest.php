@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Watchdog\Contract\MainNotRead;
 use Intakt\Core\Watchdog\Contract\MainVerdict;
 use Intakt\Core\Watchdog\Contract\OwnerKeys;
+use Intakt\Core\Watchdog\Contract\RecordedMerge;
 use Intakt\Core\Watchdog\Contract\Violation;
 use Intakt\Core\Watchdog\Contract\ViolationKind;
 use Intakt\Core\Watchdog\Contract\WatchedMain;
@@ -33,6 +34,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(SeenCommit::class)]
 #[UsesClass(Violation::class)]
 #[UsesClass(WatchedMain::class)]
+#[UsesClass(RecordedMerge::class)]
 #[UsesClass(OwnerKeys::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
@@ -93,9 +95,80 @@ final class CheckMainTest extends TestCase
         $this->repository->checkout('main');
         $merge = $this->repository->merge('feat/task');
 
-        $verdict = $this->whenMainIsChecked($base, [$merge]);
+        $verdict = $this->whenMainIsChecked($base, [new RecordedMerge($base, $merge)]);
 
         self::assertTrue($verdict->isClean(), 'the commits the merge brought in are covered by it');
+    }
+
+    public function testATaskBranchThatMergedMainAndBecameMainIsCleanWhenItsMergeIsRecordedWithItsBase(): void
+    {
+        $this->repository->commitEmpty('Root');
+        $this->repository->checkoutNewBranch('feat/task');
+        $this->repository->commitFile('task.txt', 'Task');
+        $this->repository->checkout('main');
+        $base = $this->repository->commitEmptySignedWith($this->keys->privateKeyOf('owner'), 'Main moved on');
+        $this->repository->checkout('feat/task');
+        $head = $this->repository->merge('main');
+        $this->repository->checkout('main');
+        $this->repository->moveHeadTo($head);
+
+        $verdict = $this->whenMainIsChecked($base, [new RecordedMerge($base, $head)]);
+
+        self::assertSame([], $verdict->violations, 'the task commit on the first-parent line came in with the recorded merge');
+    }
+
+    public function testATaskCommitAboveTheRecordedHeadIsStillJudgedByItsSignature(): void
+    {
+        $this->repository->commitEmpty('Root');
+        $this->repository->checkoutNewBranch('feat/task');
+        $this->repository->commitFile('task.txt', 'Task');
+        $this->repository->checkout('main');
+        $base = $this->repository->commitEmptySignedWith($this->keys->privateKeyOf('owner'), 'Main moved on');
+        $this->repository->checkout('feat/task');
+        $head = $this->repository->merge('main');
+        $extra = $this->repository->commitEmpty('Not reviewed');
+        $this->repository->checkout('main');
+        $this->repository->moveHeadTo($extra);
+
+        $verdict = $this->whenMainIsChecked($base, [new RecordedMerge($base, $head)]);
+
+        self::assertSame([[$extra, ViolationKind::Unsigned]], array_map(static fn (Violation $violation): array => [$violation->commit, $violation->kind], $verdict->violations));
+    }
+
+    public function testAFastForwardToARecordedTaskHeadIsClean(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $this->repository->checkoutNewBranch('feat/task');
+        $this->repository->commitEmpty('First task commit');
+        $head = $this->repository->commitEmpty('Second task commit');
+        $this->repository->checkout('main');
+        $this->repository->moveHeadTo($head);
+
+        self::assertTrue($this->whenMainIsChecked($base, [new RecordedMerge($base, $head)])->isClean());
+    }
+
+    public function testAnUnsignedCommitBelowARecordedBaseIsStillAViolationOnAFirstCheck(): void
+    {
+        $unsigned = $this->repository->commitEmpty('Straight to main');
+        $base = $this->repository->commitEmptySignedWith($this->keys->privateKeyOf('owner'), 'Owner push');
+        $this->repository->checkoutNewBranch('feat/task');
+        $head = $this->repository->commitEmpty('Task');
+        $this->repository->checkout('main');
+        $this->repository->moveHeadTo($head);
+
+        $verdict = $this->whenMainIsChecked(null, [new RecordedMerge($base, $head)]);
+
+        self::assertSame([[$unsigned, ViolationKind::Unsigned]], array_map(static fn (Violation $violation): array => [$violation->commit, $violation->kind], $verdict->violations));
+    }
+
+    public function testARecordedMergeTheRepositoryDoesNotHoldIsNotRead(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $this->repository->commitEmpty('Straight to main');
+
+        $this->expectException(MainNotRead::class);
+
+        $this->whenMainIsChecked($base, [new RecordedMerge($base, str_repeat('a', 40))]);
     }
 
     public function testAMergeNobodyRecordedIsAViolation(): void
@@ -162,7 +235,7 @@ final class CheckMainTest extends TestCase
 
     public function testAMainWithAShallowHistoryIsNotReadEvenWhenTheCommitsAboveTheCutAreClean(): void
     {
-        $this->repository->commitEmpty('Unsigned ancestor');
+        $base = $this->repository->commitEmpty('Unsigned ancestor');
         $this->repository->checkoutNewBranch('feat/task');
         $this->repository->commitFile('task.txt', 'Task');
         $this->repository->checkout('main');
@@ -172,7 +245,7 @@ final class CheckMainTest extends TestCase
         $this->expectException(MainNotRead::class);
         $this->expectExceptionMessageMatches('/history is shallow/');
 
-        $this->whenMainIsChecked(null, [$merge]);
+        $this->whenMainIsChecked(null, [new RecordedMerge($base, $merge)]);
     }
 
     public function testARepositoryNamedByARelativePathIsReadLikeItsAbsolutePath(): void
@@ -199,7 +272,7 @@ final class CheckMainTest extends TestCase
     }
 
     /**
-     * @param list<string> $recorded
+     * @param list<RecordedMerge> $recorded
      */
     private function whenMainIsChecked(?string $since, array $recorded): MainVerdict
     {
@@ -207,7 +280,7 @@ final class CheckMainTest extends TestCase
     }
 
     /**
-     * @param list<string> $recorded
+     * @param list<RecordedMerge> $recorded
      */
     private function watched(?string $since, array $recorded): WatchedMain
     {
