@@ -117,7 +117,7 @@ final readonly class CompletedCodexTurn implements RawResultInterface
     {
         foreach ($this->events() as $event) {
             $failure = CodexAccountFailure::of($this->errorMessage($event));
-            if (null !== $failure) {
+            if ($failure instanceof CodexAccountFailure) {
                 throw $failure->exception();
             }
         }
