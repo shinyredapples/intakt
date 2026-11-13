@@ -80,6 +80,17 @@ final readonly class GivenHistory
         return $this->reached(['--objects', $head]);
     }
 
+    /**
+     * @throws HandBackNotChecked
+     */
+    public function newObjectContents(string $head): string
+    {
+        // Every object and not the head's files alone, because a key a later commit deletes is still in the file an earlier commit added, and a tree names its files.
+        $objects = $this->reachedObjects($head) ?? throw HandBackNotChecked::in($this->repository, 'the new objects could not be listed');
+
+        return [] === $objects ? '' : $this->git->exactOutputWithInput($this->repository, ['cat-file', '--batch'], implode("\n", $objects)."\n");
+    }
+
     public function isFastForwardTo(string $head): bool
     {
         // Because merge-base peels an annotated tag to its commit, and a branch can only take a commit.
