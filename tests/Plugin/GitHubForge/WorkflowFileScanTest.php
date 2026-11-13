@@ -137,6 +137,27 @@ final class WorkflowFileScanTest extends TestCase
         self::assertSame([['runner', 5]], $this->kindsAndLines($findings));
     }
 
+    public function testAnExpressionInTheLabelsOfARunnerMappingIsUnreadable(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on:\n  labels: \${{ vars.RUNNER }}"));
+
+        self::assertSame([['runner', 5], ['unreadable', 6]], $this->kindsAndLines($findings));
+    }
+
+    public function testAnExpressionInAListedLabelOrTheGroupOfARunnerMappingIsUnreadable(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on:\n  group: \${{ vars.GROUP }}\n  labels:\n    - ubuntu-latest\n    - \${{ vars.EXTRA }}"));
+
+        self::assertSame([['runner', 5], ['unreadable', 6], ['unreadable', 9]], $this->kindsAndLines($findings));
+    }
+
+    public function testARunnerMappingWithoutExpressionsIsOnlyARunnerFinding(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on:\n  group: large\n  labels: [ubuntu-latest, gpu]"));
+
+        self::assertSame([['runner', 5]], $this->kindsAndLines($findings));
+    }
+
     public function testAJobWithoutARunnerIsUnreadable(): void
     {
         $findings = $this->scan($this->withJob('timeout-minutes: 5'));

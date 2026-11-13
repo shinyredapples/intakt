@@ -116,7 +116,7 @@ final readonly class WorkflowFileScan
         $runsOn = $definition->entry('runs-on');
         $findings = match (true) {
             !$runsOn instanceof WorkflowEntry => [new WorkflowFinding(WorkflowRisk::Unreadable, $definition->line, sprintf('the job %s names no runner (runs-on)', $job))],
-            $runsOn->value instanceof WorkflowMapping => [new WorkflowFinding(WorkflowRisk::Runner, $runsOn->line, sprintf('the job %s picks its runner by group or labels', $job))],
+            $runsOn->value instanceof WorkflowMapping => [new WorkflowFinding(WorkflowRisk::Runner, $runsOn->line, sprintf('the job %s picks its runner by group or labels', $job)), ...$this->expressions($job, $runsOn->value)],
             $runsOn->value instanceof WorkflowSequence => array_map(fn (WorkflowScalar|WorkflowMapping|WorkflowSequence $label): ?WorkflowFinding => $this->label($job, $label), $runsOn->value->items),
             default => [$this->label($job, $runsOn->value)],
         };
@@ -132,6 +132,21 @@ final readonly class WorkflowFileScan
             str_contains($label->text, '${{') => new WorkflowFinding(WorkflowRisk::Unreadable, $label->line, sprintf('the job %s takes its runner from an expression the scan does not read, whose value can change without a commit', $job)),
             null === HostedRunnerLabel::tryFrom($label->text) => new WorkflowFinding(WorkflowRisk::Runner, $label->line, sprintf('the job %s runs on %s, not a GitHub-hosted runner label', $job, $label->text)),
             default => null,
+        };
+    }
+
+    /**
+     * A group or label is still read from a variable when it sits in a mapping, so an expression anywhere in it is a failed read too.
+     *
+     * @return list<WorkflowFinding>
+     */
+    private function expressions(string $job, WorkflowScalar|WorkflowMapping|WorkflowSequence $value): array
+    {
+        return match (true) {
+            $value instanceof WorkflowMapping => array_merge([], ...array_map(fn (WorkflowEntry $entry): array => $this->expressions($job, $entry->value), $value->entries)),
+            $value instanceof WorkflowSequence => array_merge([], ...array_map(fn (WorkflowScalar|WorkflowMapping|WorkflowSequence $item): array => $this->expressions($job, $item), $value->items)),
+            str_contains($value->text, '${{') => [new WorkflowFinding(WorkflowRisk::Unreadable, $value->line, sprintf('the job %s takes its runner from an expression the scan does not read, whose value can change without a commit', $job))],
+            default => [],
         };
     }
 }
