@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Infrastructure\CodexAccountFailure;
 use Intakt\Core\Ai\Infrastructure\CodexLogin;
 use Intakt\Core\Ai\Infrastructure\CodexLoginUnusable;
 use Intakt\Core\Ai\Infrastructure\CodexTokenRefresh;
@@ -19,6 +20,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[CoversClass(CodexTokenRefresh::class)]
 #[UsesClass(CodexLogin::class)]
 #[UsesClass(CodexLoginUnusable::class)]
+#[UsesClass(CodexAccountFailure::class)]
 final class CodexTokenRefreshTest extends TestCase
 {
     public function testTheRefreshTokenIsSentTheWayTheCliSendsIt(): void
@@ -63,7 +65,9 @@ final class CodexTokenRefreshTest extends TestCase
      */
     public static function unusableAnswers(): iterable
     {
-        yield 'a refused refresh' => [new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 401])];
+        yield 'a bad request' => [new JsonMockResponse(['error' => 'invalid_request'], ['http_code' => 400])];
+        yield 'a forbidden refresh' => [new JsonMockResponse(['error' => 'forbidden'], ['http_code' => 403])];
+        yield 'an endpoint that fails' => [new MockResponse('', ['http_code' => 500])];
         yield 'no JSON' => [new MockResponse('<html>')];
         yield 'no access token' => [new JsonMockResponse(['id_token' => 'id-2'])];
         yield 'an empty access token' => [new JsonMockResponse(['access_token' => ''])];
@@ -76,6 +80,13 @@ final class CodexTokenRefreshTest extends TestCase
         $this->expectException(CodexLoginUnusable::class);
 
         $this->refresh($answer)->refreshedIfDue($this->dueLogin());
+    }
+
+    public function testARefreshTheEndpointRefusesAsUnauthorizedIsALostLogin(): void
+    {
+        $this->expectExceptionObject(CodexAccountFailure::LoginLost->exception());
+
+        $this->refresh(new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 401]))->refreshedIfDue($this->dueLogin());
     }
 
     private function refresh(MockResponse $answer): CodexTokenRefresh

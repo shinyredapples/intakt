@@ -77,6 +77,26 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
         $marker = $this->pool->getItem($this->rejectionKey($account))->set(true)->expiresAt($this->window($account)->getRetryAfter());
         $this->pool->save($marker);
+        $this->reportOnce($account);
+    }
+
+    // Under the report's lock, so a report another worker makes meanwhile is never cleared; asked once before it, because almost every answer comes with nothing reported.
+    public function answered(Account $account, DateTimeImmutable $sentAt): void
+    {
+        if (!$this->isReportedBefore($account, $sentAt)) {
+            return;
+        }
+
+        $lock = $this->locks->createLock($this->reportKey($account));
+        $lock->acquire(true);
+
+        try {
+            if ($this->isReportedBefore($account, $sentAt)) {
+                $this->pool->deleteItem($this->reportKey($account));
+            }
+        } finally {
+            $lock->release();
+        }
     }
 
     public function isCoolingDown(Account $account): bool
@@ -132,6 +152,53 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     private function rejectionKey(Account $account): string
     {
         return self::LIMITER.'-rejected-'.$account->key();
+    }
+
+    // Kept without an expiry, unlike the rejection, so an error that outlasts its cooldown is not reported again on each retry; only an answer clears it.
+    private function reportKey(Account $account): string
+    {
+        return self::LIMITER.'-reported-'.$account->key();
+    }
+
+    // Strictly before, because an answer to a call sent before the report or at its moment may have been read after the error that came later.
+    private function isReportedBefore(Account $account, DateTimeImmutable $sentAt): bool
+    {
+        $reportedAt = $this->pool->getItem($this->reportKey($account))->get();
+
+        return $reportedAt instanceof DateTimeImmutable && $reportedAt < $sentAt;
+    }
+
+    // Tried without waiting, because a busy lock means another worker is reporting this account or clearing its report, and the next error of a cleared one is reported again.
+    private function reportOnce(Account $account): void
+    {
+        $lock = $this->locks->createLock($this->reportKey($account));
+        if (!$lock->acquire()) {
+            return;
+        }
+
+        try {
+            if (!$this->pool->getItem($this->reportKey($account))->isHit()) {
+                $this->report($account);
+            }
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function report(Account $account): void
+    {
+        $reportedAt = $this->clock->now();
+        $payload = $this->serializer->serialize(new AccountErrorReported($account->key(), $reportedAt), 'json');
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountErrorReported, $payload));
+
+        // Marked only once recorded, so a report the ledger refused is made again on the next error; logged, not thrown, for the same reason as a cooldown's record.
+        if (!$appended->succeeded()) {
+            $this->logger->error('An account error was not reported.', ['report' => $payload, 'reason' => $appended->failure]);
+
+            return;
+        }
+
+        $this->pool->save($this->pool->getItem($this->reportKey($account))->set($reportedAt));
     }
 
     private function record(Account $account, DateTimeImmutable $until): void
