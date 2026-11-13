@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 
-// gitleaks with its built-in rules over every object the bundle adds, because the build controls those objects and so any scanner settings among them.
+// gitleaks with its built-in rules over every object the bundle adds and over the pull request text, because the build controls both and so any scanner settings among them.
 final readonly class BundleSecretScan
 {
     private const int FOUND = 3;
@@ -34,11 +34,29 @@ final readonly class BundleSecretScan
         $contents = $history->newObjectContents($head);
 
         // The commits were redacted already, so a credential found here is in a file or a file name, which is the build's work and is not rewritten.
-        if (array_any($credentials->values, static fn (string $credential): bool => str_contains($contents, $credential))) {
+        if ($this->holdsAny($contents, $credentials)) {
             return HandBackRefusal::HoldsCredential;
         }
 
         return $this->findsSecretIn($contents, $history->repository) ? HandBackRefusal::HoldsSecret : null;
+    }
+
+    /**
+     * @throws HandBackNotChecked
+     */
+    public function refusalOfText(string $text, string $repository, JobCredentials $credentials): ?HandBackRefusal
+    {
+        // Refused, not redacted, because the builder wrote the text and can write it again without the value.
+        if ($this->holdsAny($text, $credentials)) {
+            return HandBackRefusal::TextHoldsCredential;
+        }
+
+        return $this->findsSecretIn($text, $repository) ? HandBackRefusal::TextHoldsSecret : null;
+    }
+
+    private function holdsAny(string $contents, JobCredentials $credentials): bool
+    {
+        return array_any($credentials->values, static fn (string $credential): bool => str_contains($contents, $credential));
     }
 
     /**

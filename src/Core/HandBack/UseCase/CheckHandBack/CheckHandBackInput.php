@@ -21,6 +21,9 @@ final class CheckHandBackInput
     #[Argument('The git bundle the build returned')]
     public string $bundle;
 
+    #[Argument('A file holding the pull request text the build returned')]
+    public string $pullRequestText;
+
     #[Option('The task asked for a merge of main, so a merge commit that merges main is allowed')]
     public bool $mergeMain = false;
 
