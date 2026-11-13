@@ -171,7 +171,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $round = $request->conversation->round;
 
-        if (Provider::ClaudeCode !== $answering->provider || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
+        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
             return [];
         }
 
