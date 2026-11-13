@@ -63,13 +63,8 @@ final readonly class PublishVerdictHandler
             return;
         }
 
-        $this->publishAgainIfMarkedDuringTheWrite($roundId, $published);
-    }
-
-    // Read again after the write until nothing changed, because a failed boot marks the round without the lock, so its mark may commit while this round's approval is on the way.
-    private function publishAgainIfMarkedDuringTheWrite(string $roundId, bool $publishedStale): void
-    {
-        if ($this->rounds->stored($roundId)->hasStaleVerdicts() !== $publishedStale) {
+        // Read again after the write until nothing changed, because a failed boot marks the round without the lock, so its mark may commit while this round's approval is on the way.
+        if ($this->rounds->stored($roundId)->hasStaleVerdicts() !== $published) {
             $this->publishLatestStateOf($roundId);
         }
     }
