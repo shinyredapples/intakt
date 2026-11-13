@@ -353,6 +353,25 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertFalse($pool->hasItem('account-cooldown-pending-anthropic.team'));
     }
 
+    // This worker pauses between its look at the pending item and the lock, while another worker reports the same error and an answer to a later call clears that report.
+    public function testAWorkerThatReadThePendingItemBeforeTheLockDoesNotReportTheSameErrorAgain(): void
+    {
+        $pool = new SteppingInAfterReading('account-cooldown-pending-anthropic.team');
+        $store = new InMemoryStore();
+        $clock = new MockClock('2026-11-04T12:00:00Z');
+        $cooldowns = new AccountCooldownWindows($pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = function () use ($otherWorker, $clock): void {
+            $otherWorker->coolDownRejected($this->team());
+            $clock->sleep(1);
+            $otherWorker->answered($this->team(), $clock->now());
+        };
+
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+    }
+
     public function testAReportTheLedgerRefusesIsLoggedAndMadeAgainOnTheNextError(): void
     {
         $logger = new BufferingLogger();

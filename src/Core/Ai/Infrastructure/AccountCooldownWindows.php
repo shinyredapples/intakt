@@ -185,8 +185,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     private function reportPending(Account $account): void
     {
         $lock = $this->locks->createLock($this->reportKey($account));
-        while ($this->pool->getItem($this->pendingKey($account))->isHit() && $lock->acquire()) {
+        while ($this->isPending($account) && $lock->acquire()) {
             try {
+                // Asked again under the lock, because another worker may have reported the pending error since the look before the lock, and an answer may have cleared that report already.
+                if (!$this->isPending($account)) {
+                    return;
+                }
+
                 $this->pool->deleteItem($this->pendingKey($account));
                 if (!$this->pool->getItem($this->reportKey($account))->isHit()) {
                     $this->report($account);
@@ -195,6 +200,11 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
                 $lock->release();
             }
         }
+    }
+
+    private function isPending(Account $account): bool
+    {
+        return $this->pool->getItem($this->pendingKey($account))->isHit();
     }
 
     // Named apart from the report so its key never contains the report's key.
