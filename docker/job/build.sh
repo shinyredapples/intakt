@@ -40,6 +40,9 @@ claude -p --model "$model" --output-format json --dangerously-skip-permissions <
 status=$?
 printf 'claude exited with %d\n' "$status" >> "$log"
 
+# The builder can write to the output folder too, so only what this script writes after the session is handed back.
+rm -rf -- "$output/pull-request.md" "$output/handback.bundle"
+
 # A link is not followed, because it could point the text at any file the job can read.
 if [ -f PR.md ] && [ ! -L PR.md ]; then
     cp PR.md "$output/pull-request.md"

@@ -91,6 +91,24 @@ final class BuildScriptTest extends TestCase
         self::assertFileExists($this->output.'/pull-request.md');
     }
 
+    public function testABundleTheCliWritesIntoTheOutputIsNotHandedBack(): void
+    {
+        $this->givenTheCli("echo planted > \"\$INTAKT_JOB_OUTPUT/handback.bundle\"; printf 'docs: nothing\\n' > PR.md");
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+    }
+
+    public function testAPullRequestTextTheCliWritesIntoTheOutputIsNotHandedBack(): void
+    {
+        $this->givenTheCli('echo planted > "$INTAKT_JOB_OUTPUT/pull-request.md"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertFileDoesNotExist($this->output.'/pull-request.md');
+    }
+
     public function testAPullRequestTextThatIsALinkIsNotHandedBack(): void
     {
         $this->givenTheCli('ln -s "$RECORD/prompt.md" PR.md');
