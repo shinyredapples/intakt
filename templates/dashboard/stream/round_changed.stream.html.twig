@@ -6,6 +6,9 @@
 {{ include('dashboard/stream/_now_reviewer_placed.stream.html.twig', {round: round, reviewer: reviewer, state: state.value}, with_context = false) }}
 <turbo-stream action="replace" target="round-{{ round }}-now-reviewer-{{ reviewer }}-state"><template><span id="round-{{ round }}-now-reviewer-{{ reviewer }}-state">{{ state.value }}</span></template></turbo-stream>
 {% endfor %}
+{% if progress.judged or progress.reviewersFinished >= progress.reviewers %}
+<turbo-stream action="replace" target="round-{{ round }}-now-stop"><template><div id="round-{{ round }}-now-stop"></div></template></turbo-stream>
+{% endif %}
 {% if progress.judged %}
 <turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">judged</span></template></turbo-stream>
 {# The stream carries no findings, so the judge's call itself is read from the ledger on the next load. #}
