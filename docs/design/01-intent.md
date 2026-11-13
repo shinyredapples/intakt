@@ -30,11 +30,11 @@ For a new project, the spec is Ready to plan when the Tech lead can break it int
 
 ## Definition of Done
 
-This is the only statement of it; every self-check rule in the design points here. The Developer owns it together with the checks. A change is *Done* when:
+This is the only statement of it; every self-check rule in the design points here. The Developer owns it together with the checks. A change is *Done* when the Developer hands it back with:
 
-1. Every acceptance criterion is met, and every Evidence item is shown from a running install in the pull request.
-2. The project's checks pass: the Developer's own run of the fast checks before it hands back, then the check job in a clean place and CI, which are the ones trusted.
-3. The docs it touches state what the code now does: every name and behavior it changed was searched for in the docs and corrected.
-4. The recurring blocking findings in the Developer's briefing were checked against it.
+1. Every acceptance criterion met, and every Evidence item the Developer can produce shown from a running install in the pull request; evidence marked as the owner's or the orchestrator's is theirs to provide, not the Developer's.
+2. The Developer's own run of the fast checks passing.
+3. The docs it touches stating what the code now does: every name and behavior it changed was searched for in the docs and corrected.
+4. The recurring blocking findings in the Developer's briefing checked against it.
 
-Done is what the Developer hands back; the Code reviewers then judge it, and only a merge ends the task.
+After the hand-back, the trusted verification follows: the check job in a clean place and CI must pass, the Code reviewers judge the change, and only a merge ends the task.
