@@ -39,13 +39,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
-use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
-use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
-use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Model;
-use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -53,8 +50,6 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
-use Symfony\Component\Uid\AbstractUid;
-use Symfony\Component\Uid\TimeBasedUidInterface;
 
 #[Group('persistence')]
 #[CoversClass(SymfonyAiVendor::class)]
@@ -77,12 +72,12 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
     /** @var list<mixed> */
     private array $limits = [];
 
-    /** @var list<string> */
-    private array $conversations = [];
+    private SavedConversations $conversations;
 
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
+        $this->conversations = new SavedConversations();
     }
 
     public function testAChangesVerdictWithoutFindingsOnceGivesTheVerdictOfTheRetry(): void
@@ -95,7 +90,7 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
         self::assertSame([LedgerEventKind::VerdictReceived], $this->endings());
         self::assertSame(2, $this->calls);
         self::assertSame([8000, 8000], $this->limits);
-        self::assertCount(2, array_unique($this->conversations));
+        self::assertCount(2, array_unique($this->conversations->ids));
     }
 
     public function testAnEmptyChangesVerdictThenAnOutputLimitStopFailsTheReviewerWithoutAThirdCall(): void
@@ -179,41 +174,10 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => 8000]]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $tiers = new TierPlatform($resolver, new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns($this->recordingStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns($this->conversations, new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 2);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock);
-    }
-
-    private function recordingStore(): MessageStoreInterface
-    {
-        $inner = new InMemoryMessageStore();
-        $saved = &$this->conversations;
-
-        return new class($inner, $saved) implements MessageStoreInterface {
-            /**
-             * @param list<string> $saved
-             */
-            public function __construct(private readonly InMemoryMessageStore $inner, private array &$saved)
-            {
-            }
-
-            public function load(AbstractUid&TimeBasedUidInterface $id): MessageBag
-            {
-                return $this->inner->load($id);
-            }
-
-            public function save(MessageBag $messages): void
-            {
-                $this->saved[] = $messages->getId()->toRfc4122();
-                $this->inner->save($messages);
-            }
-
-            public function delete(AbstractUid&TimeBasedUidInterface $id): void
-            {
-                $this->inner->delete($id);
-            }
-        };
     }
 
     /**
