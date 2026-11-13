@@ -64,7 +64,7 @@ final readonly class GitHubIssueComments
         try {
             $path = $this->commentsPath($issue);
         } catch (ForgeReadFailed $unknown) {
-            throw new ForgeWriteFailed($unknown->getMessage(), previous: $unknown);
+            throw new ForgeWriteFailed($unknown->getMessage(), $unknown->getCode(), previous: $unknown);
         }
 
         // Never retried, because GitHub can store a comment and still answer 502, and a retry would post it twice.
