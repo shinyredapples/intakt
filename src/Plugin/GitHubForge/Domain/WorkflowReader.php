@@ -97,7 +97,7 @@ final readonly class WorkflowReader
         $entries = [];
         $line = $first;
         $next = $first->number;
-        while (null !== $line && $line->indent === $first->indent && !$this->isItem($line->content)) {
+        while ($line instanceof WorkflowLine && $line->indent === $first->indent && !$this->isItem($line->content)) {
             [$entry, $next] = $this->entry($lines, $line);
             if (array_key_exists($entry->key, $entries)) {
                 throw new WorkflowFormNotRead($line->number, sprintf('the key "%s" appears twice', $entry->key));
@@ -107,7 +107,7 @@ final readonly class WorkflowReader
             $line = $this->peek($lines, $next);
         }
 
-        if (null !== $line && $line->indent >= $first->indent) {
+        if ($line instanceof WorkflowLine && $line->indent >= $first->indent) {
             throw new WorkflowFormNotRead($line->number, 'a line that belongs to no key above it');
         }
 
@@ -135,12 +135,12 @@ final readonly class WorkflowReader
     private function entryChild(array $lines, WorkflowLine $line): array
     {
         $next = $this->peek($lines, $line->number);
-        if (null !== $next && $next->indent > $line->indent) {
+        if ($next instanceof WorkflowLine && $next->indent > $line->indent) {
             return $this->collection($lines, $next);
         }
 
         // YAML lets a list under a key start at the key's own indentation, so such items must stay under the key.
-        if (null !== $next && $next->indent === $line->indent && $this->isItem($next->content)) {
+        if ($next instanceof WorkflowLine && $next->indent === $line->indent && $this->isItem($next->content)) {
             return $this->sequence($lines, $next);
         }
 
@@ -157,12 +157,12 @@ final readonly class WorkflowReader
         $items = [];
         $line = $first;
         $next = $first->number;
-        while (null !== $line && $line->indent === $first->indent && $this->isItem($line->content)) {
+        while ($line instanceof WorkflowLine && $line->indent === $first->indent && $this->isItem($line->content)) {
             [$items[], $next] = $this->item($lines, $line);
             $line = $this->peek($lines, $next);
         }
 
-        if (null !== $line && $line->indent > $first->indent) {
+        if ($line instanceof WorkflowLine && $line->indent > $first->indent) {
             throw new WorkflowFormNotRead($line->number, 'a line that belongs to no item above it');
         }
 
@@ -198,7 +198,7 @@ final readonly class WorkflowReader
     {
         $next = $this->peek($lines, $line->number);
 
-        return null !== $next && $next->indent > $line->indent ? $this->collection($lines, $next) : [new WorkflowScalar($line->number, ''), $line->number];
+        return $next instanceof WorkflowLine && $next->indent > $line->indent ? $this->collection($lines, $next) : [new WorkflowScalar($line->number, ''), $line->number];
     }
 
     /**
@@ -214,7 +214,7 @@ final readonly class WorkflowReader
 
         $value = $this->inline->read($rest, $line->number);
         $next = $this->peek($lines, $line->number);
-        if (null !== $next && $next->indent > $line->indent) {
+        if ($next instanceof WorkflowLine && $next->indent > $line->indent) {
             throw new WorkflowFormNotRead($next->number, 'a value that goes on over the next line');
         }
 
