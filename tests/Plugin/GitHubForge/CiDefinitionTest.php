@@ -79,11 +79,36 @@ final class CiDefinitionTest extends TestCase
         self::assertSame(['tools/build/action.yml'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - uses: \"./tools/build/\"\n", ['tools/build/action.yml', 'src/Foo.php']));
     }
 
+    public function testALocalActionFolderWithAnAtSignIsNoRemoteAction(): void
+    {
+        self::assertSame(['tools/x@v1/action.yml', 'tools/x@v1/run.sh'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - uses: ./tools/x@v1\n", ['tools/x@v1/action.yml', 'tools/x@v1/run.sh', 'src/Foo.php']));
+    }
+
+    public function testALocalActionFolderIsMatchedInAnyCase(): void
+    {
+        self::assertSame(['tools/BUILD/helper.php'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - uses: ./tools/build\n", ['tools/BUILD/helper.php', 'src/Foo.php']));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function usesKeys(): iterable
+    {
+        yield 'a double-quoted key' => ['"uses":'];
+        yield 'a single-quoted key' => ["'uses':"];
+        yield 'a space before the colon' => ['uses :'];
+    }
+
+    #[DataProvider('usesKeys')]
+    public function testALocalActionUnderAnyFormOfTheUsesKeyIsACiChange(string $key): void
+    {
+        self::assertSame(['tools/build/helper.php'], $this->ciPathsOf("jobs:\n  t:\n    steps:\n      - {$key} ./tools/build\n", ['tools/build/helper.php', 'src/Foo.php']));
+    }
+
     /** @return iterable<string, array{string}> */
     public static function actionsThatMayBeAnyFolder(): iterable
     {
         yield 'the root' => ['./'];
         yield 'a parent part' => ['./tools/../src'];
+        yield 'a parent folder with an at sign' => ['../x@v1'];
         yield 'an unclosed quote' => ['"./tools/my'];
         yield 'a value on the next line' => [''];
         yield 'a block value' => ['>-'];

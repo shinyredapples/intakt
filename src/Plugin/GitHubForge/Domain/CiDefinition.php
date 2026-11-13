@@ -12,11 +12,13 @@ final readonly class CiDefinition
     private const string GITHUB_FOLDER = '.github/';
     // Every Dockerfile counts, because a workflow can build an image from one in its build context without naming it.
     private const string DOCKERFILE = '/(?:^|\/)(?:Dockerfile(?:\..+)?|[^\/]+\.Dockerfile)$/i';
-    private const string USES = '/uses:[ \t]*(\S*)/';
+    // A quoted key or a space before the colon is the same YAML key, so both still name an action.
+    private const string USES = '/uses[\'"]?[ \t]*:[ \t]*(\S*)/i';
     private const string QUOTED = '/^([\'"])(.*)\1$/';
-    private const string REMOTE_ACTION = '#^(?:docker://\S+|[\w.-]+/[\w./-]+@[\w./-]+)$#';
+    // The owner never starts with a dot, so ./tools/x@v1 and ../x@v1 stay local actions.
+    private const string REMOTE_ACTION = '#^(?:docker://\S+|[\w-][\w.-]*/[\w./-]+@[\w./-]+)$#';
     private const string LOCAL_ACTION = './';
-    private const string PLAIN_FOLDER = '#^(?:(?!\.\.?/)[\w.-]+/)*$#';
+    private const string PLAIN_FOLDER = '#^(?:(?!\.\.?/)[\w.@-]+/)*$#';
 
     /**
      * @param list<WorkflowFile> $workflows
@@ -50,7 +52,7 @@ final readonly class CiDefinition
         return $this->runsAsLocalAction($workflow->content, $path) || $this->namesTheFileOf($workflow->content, $path);
     }
 
-    // Every file under a local action's folder, because its action.yml may run any of them without the workflow naming it.
+    // Every file under a local action's folder, because its action.yml may run any of them without the workflow naming it; case is ignored as for file names.
     private function runsAsLocalAction(string $content, string $path): bool
     {
         preg_match_all(self::USES, $content, $uses);
@@ -58,7 +60,7 @@ final readonly class CiDefinition
 
         return array_any(
             array_filter($actions, static fn (string $action): bool => 1 !== preg_match(self::REMOTE_ACTION, $action)),
-            fn (string $action): bool => str_starts_with($path, $this->folderOf($action)),
+            fn (string $action): bool => str_starts_with(mb_strtolower($path), mb_strtolower($this->folderOf($action))),
         );
     }
 
