@@ -122,6 +122,64 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('needs', (string) $count->attr('class'));
     }
 
+    public function testOnlyBacklogAndDoneStartCollapsed(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame(['col-backlog', 'col-done'], $page->filter('.board > section.col.collapsed')->each(static fn (Crawler $column): string => (string) $column->attr('id')));
+        self::assertCount(2, $page->filter('.board .col-fold'));
+        self::assertCount(2, $page->filter('.board .col-hide'));
+    }
+
+    public function testACollapsedColumnsStripShowsItsNameAndCountSideBySide(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $strip = $this->column($this->browser->request('GET', '/'), 'Done')->filter('button.col-fold');
+
+        self::assertSame(['Show Done', '1', 'task'], $strip->children()->each(static fn (Crawler $part): string => $part->text()));
+        self::assertSame('count', $strip->filter('.count')->attr('class'));
+    }
+
+    // A speech user says the words they see, so the name holds them instead of an aria-label that would replace them.
+    public function testACollapsedColumnsStripIsNamedByItsVisibleWordsBetweenHiddenOnes(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Show Done1 task', $this->column($page, 'Done')->filter('button.col-fold')->text());
+        self::assertSame('Show Backlog0 tasks', $this->column($page, 'Backlog')->filter('button.col-fold')->text());
+        self::assertSame(['Show ', ' task'], $this->column($page, 'Done')->filter('button.col-fold .sr-only')->each(static fn (Crawler $hidden): string => $hidden->text(normalizeWhitespace: false)));
+        self::assertNull($this->column($page, 'Done')->filter('button.col-fold')->attr('aria-label'));
+    }
+
+    public function testACollapsedColumnsStripSaysItIsCollapsedAndControlsTheColumnsCards(): void
+    {
+        $column = $this->column($this->browser->request('GET', '/'), 'Done');
+        $strip = $column->filter('button.col-fold');
+
+        self::assertSame(['false', 'cards-done'], [$strip->attr('aria-expanded'), $strip->attr('aria-controls')]);
+        self::assertSame('cards-done', $column->filter('.col-cards')->attr('id'));
+    }
+
+    public function testACollapsedColumnOffersHideInItsHeadNamingTheColumn(): void
+    {
+        $hide = $this->column($this->browser->request('GET', '/'), 'Backlog')->filter('.col-head button.col-hide');
+
+        self::assertSame(['Hide', 'Hide Backlog', 'button'], [$hide->text(), $hide->attr('aria-label'), $hide->attr('type')]);
+    }
+
+    public function testAnOpenColumnHasNoStripAndNoHide(): void
+    {
+        $column = $this->column($this->browser->request('GET', '/'), 'In review');
+
+        self::assertStringNotContainsString('collapsed', (string) $column->attr('class'));
+        self::assertCount(0, $column->filter('.col-fold, .col-hide'));
+    }
+
     public function testEachColumnCountsEveryCardOfEveryProject(): void
     {
         $this->ledger->startRound('round-alpha', 'alpha');
