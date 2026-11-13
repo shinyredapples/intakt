@@ -4,7 +4,7 @@ Intakt was started on 2026-10-24 for the Symfony AI & MCP Hackathon (deadline 20
 build loop, the runner Intakt is designed to replace: sessions wrote the design and the plan, the loop built the
 issues, and a panel of AI reviewers approved or sent back every pull request. This page follows that path milestone by
 milestone: what was planned, what happened, what changed, and what we learned. The Symfony and Symfony AI features
-behind it are on [Highlights](highlights.md).
+behind it are on [Highlights](https://shinyredapples.github.io/intakt/).
 
 ## At a glance
 
@@ -14,11 +14,11 @@ behind it are on [Highlights](highlights.md).
 | First commit | 2026-10-24 |
 | First merged pull request | 2026-10-26 |
 | Pull requests merged | 614 (to 2026-11-13) |
-| Issues closed as done | 772 |
+| Issues closed | 773 (761 done, 12 dropped) |
 | Busiest day | 73 merges (2026-11-12) |
 | First release | v0.1.0, 2026-11-11; v0.3.0 on 2026-11-12 |
-| First-pass approvals | 53% of builds approved without a send-back (94 of 177), up from 38% |
-| Tokens per merge | 1.78M, down 38% against the same baseline |
+| First-pass approvals | 53% of builds approved without a send-back since a builder self-check started on 11-08 (100 of 190), against 38% from 11-03 to 11-08 (165 merges) |
+| Tokens per merged pull request | 1.48M (908M tokens over 614 merges) |
 <!-- journey:end glance -->
 
 
@@ -50,8 +50,8 @@ Merged pull requests per day:
 
 ## Token usage
 
-Tokens per day the loop spent on Intakt across every account: 903M from 10-27 to 11-13, 780M on Claude and 123M on
-GPT. Building took 69%, reviewing 31% (Claude 17%, GPT 14%). Tokens are counted the same way for both vendors: input
+Tokens per day the loop spent on Intakt across every account: 908M from 10-27 to 11-13, 785M on Claude and 124M on
+GPT. Building took 69%, reviewing 31% (Claude 17.5%, GPT 13.6%). Tokens are counted the same way for both vendors: input
 and output in full, cached input at a tenth.
 
 <!-- journey:begin tokens-by-lane -->
@@ -60,7 +60,7 @@ and output in full, cached input at a tenth.
 
 By account. Until 10-31 the loop ran on Claude account 1 alone; from 10-31 each job picks the account with the most
 room that would otherwise go unused, and from 11-04 an API key takes over only when the
-subscriptions are spent (32M tokens so far, on 11-06 to 11-08). GPT reviews every head from its own subscription.
+subscriptions are spent (32M tokens so far: 30M on 11-06 to 11-08 and 2M on 11-13). GPT reviews every head from its own subscription.
 
 <!-- journey:begin tokens-by-account -->
 ![Tokens per day by account](journey/tokens-by-account.svg)
@@ -142,7 +142,7 @@ robustness issue a demo visitor could hit moved into it.
 
 **Planned:** one reviewer, then a panel with quorum and a judge.
 **Happened:** the design was written in two days and split into 31 plan tasks with acceptance criteria
-(#5 to #35). From there the loop built and reviewed each task.
+([#5](https://github.com/shinyredapples/intakt/issues/5) to [#35](https://github.com/shinyredapples/intakt/issues/35)). From there the loop built and reviewed each task.
 **Decided on the way (10-26):** PHP 8.5 and Symfony, MIT license, several projects per install, vendor accounts as
 a prioritized list, and Symfony AI 1.0 beta used to its limits, with bugs reported upstream.
 
@@ -152,17 +152,17 @@ a prioritized list, and Symfony AI 1.0 beta used to its limits, with bugs report
 schedule.
 **Learned:** a stall needs a named cause. On 11-02 one pull request blocked the whole critical path for hours: the CI
 image lacked FrankenPHP, and the owner's approval for a new package was only asked after CI went green, which it could
-not. Since then every stall gets a cause and a route, and owner decisions are asked on first sight (#595).
+not. Since then every stall gets a cause and a route, and owner decisions are asked on first sight ([#595](https://github.com/shinyredapples/intakt/issues/595)).
 
 ### The plan changes (10-31 to 11-09)
 
 - **10-31, switch plan.** The hackathon release covers reviews. Three milestones were added after it: M6 Shadow,
-  M7 Builder half, M8 Switch, built from Intakt's design with the old loop as reference only (#318).
+  M7 Builder half, M8 Switch, built from Intakt's design with the old loop as reference only ([#318](https://github.com/shinyredapples/intakt/issues/318)).
 - **11-03, take over as soon as possible.** The loop starts M7 before the deadline, protected by a strict pick order:
-  urgent first, then milestone by milestone (#742).
+  urgent first, then milestone by milestone ([#742](https://github.com/shinyredapples/intakt/issues/742)).
 - **11-09, no observe-only stage.** Intakt's review replaces one of the loop's reviewers on real pull requests at once
-  (#1251). The first hand trial matched the loop's verdicts on three pull requests, but every recorded verdict failed
-  validation (#1253): fixed before anything else.
+  ([#1251](https://github.com/shinyredapples/intakt/issues/1251)). The first hand trial matched the loop's verdicts on three pull requests, but every recorded verdict failed
+  validation ([#1253](https://github.com/shinyredapples/intakt/issues/1253)): fixed before anything else.
 
 ### M5: the demo (to 11-21)
 
@@ -188,7 +188,7 @@ measured first.
 | 11-03 | GPT reviews every head, next to Claude | every head gets a second vendor's review, low-risk ones included |
 | 11-04 | An API key as overflow after the subscriptions | paid capacity only when the subscriptions are spent |
 | 11-12 | Second review worker | builders stood idle 158 times in one day waiting for review |
-| 11-13 | Build slots 4 and 5 (subscriptions first, the API key as backup), a third review worker | the API key had spent nothing while 118 ready issues waited |
+| 11-13 | Build slots 4 and 5 (subscriptions first, the API key as backup), a third review worker | the API key had spent nothing in the week to 11-12 while 118 ready issues waited |
 | 11-13 | CPU weights: reviews 400, slots 1 to 3 100, slots 4 and 5 25 | extra builders use only idle CPU, reviews never wait behind tests |
 
 ### CI
@@ -218,22 +218,23 @@ team, history, settings, setup) follow after the hackathon.
   the same items as a follow-up issue cost about 490k. Polish-before-merge became the default (89 polish rounds,
   77 merged in one week).
 - **Rules belong in gates, not in prompts.** Coding rules the reviewers kept repeating (final classes, no magic
-  strings, typed module contracts) became static gates (#604, #841 to #845); `AGENTS.md` keeps judgement only.
+  strings, typed module contracts) became static gates ([#604](https://github.com/shinyredapples/intakt/issues/604), [#841](https://github.com/shinyredapples/intakt/issues/841) to [#845](https://github.com/shinyredapples/intakt/issues/845)); `AGENTS.md` keeps judgement only.
 - **Prove races by construction.** A flaky test is reproduced with a forced order, never by running it a hundred times.
 - **CI and the local check must match.** Failures that only appeared in CI came from a ZTS build of PHP in CI against
   NTS locally; the check now runs in the CI image itself.
-- **Hosted runners need a dependency cache.** Withheld CI logs (#897) were Composer downloads failing on an empty
+- **Hosted runners need a dependency cache.** Withheld CI logs ([#897](https://github.com/shinyredapples/intakt/issues/897)) were Composer downloads failing on an empty
   cache, not test failures.
 - **New work starves old work.** With 30 to 70 new issues a day, tasks from the original plan sat behind fresh
-  high-priority ones. Ready issues and open pull requests now gain priority with age (#1733).
-- **A test audit pays for itself.** A dedicated test engineer role reviewed coverage and filed 15 tasks (#1297 to
-  #1312).
+  high-priority ones. Ready issues and open pull requests now gain priority with age ([#1733](https://github.com/shinyredapples/intakt/issues/1733)).
+- **A test audit pays for itself.** A dedicated test engineer role reviewed coverage and filed 15 tasks ([#1297](https://github.com/shinyredapples/intakt/issues/1297) to
+  [#1312](https://github.com/shinyredapples/intakt/issues/1312)).
 
 ## How this page is made
 
-`bin/journey` (#1740) writes the regions between `journey:begin` and `journey:end` markers and the charts in
-`docs/journey/`: GitHub numbers from the API when the page is built, token use from `docs/journey/usage.jsonl`. That file
+Planned in [#1740](https://github.com/shinyredapples/intakt/issues/1740): `bin/journey` will write the regions between `journey:begin` and `journey:end` markers and the charts
+in `docs/journey/` (GitHub numbers from the API when the page is built, token use from `docs/journey/usage.jsonl`). Until
+then the numbers and charts on this page are a snapshot of 2026-11-13. `docs/journey/usage.jsonl`
 holds tokens per day, vendor, account and lane, nothing about limits; Claude and GPT are counted the same way (input and
 output in full, cached input at a tenth). A step that was killed (out of memory, a host restart) reports no usage and
 counts at its reservation: 21M tokens, about 2%. The milestone stories and lessons are written by hand and link to the issue or
-pull request behind each claim.
+pull request behind a claim where there is one.
