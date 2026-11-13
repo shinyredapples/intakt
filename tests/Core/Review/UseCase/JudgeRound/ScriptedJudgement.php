@@ -48,4 +48,10 @@ final class ScriptedJudgement implements Vendor
 
         return $this->judgement;
     }
+
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        return true;
+    }
 }

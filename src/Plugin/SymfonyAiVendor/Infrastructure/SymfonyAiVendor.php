@@ -14,6 +14,7 @@ use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\ReviewServerReads;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
+use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
@@ -245,6 +246,19 @@ final readonly class SymfonyAiVendor implements Vendor
         $this->usage->settle($reservation, ...$platform->rounds());
 
         return $judgement;
+    }
+
+    // Read from the mapping that throws TierNotMapped on a call, so the answer and the call never disagree; a disabled provider still counts, because a substitute may answer for it.
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        try {
+            $this->resolver->configured($project, $tier);
+        } catch (TierNotMapped) {
+            return false;
+        }
+
+        return true;
     }
 
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
