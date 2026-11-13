@@ -6,8 +6,10 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
+use Intakt\Plugin\GitHubForge\Infrastructure\BudgetReserve;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueHistories;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubIssueReads;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
@@ -35,8 +37,30 @@ final class RecordedIssueApi
     public array $namingNext = [];
     /** @var list<string> */
     public array $conditions = [];
+    // The answer to the GraphQL history read: a body, or three digits for an HTTP status.
+    public string $graphql = '{}';
+    /** @var list<string> */
+    public array $graphqlRequests = [];
+    private BudgetReserve $reserve;
 
     public function reads(): GitHubIssueReads
+    {
+        [$calls, $checked] = $this->wiring();
+
+        return new GitHubIssueReads($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), $this->reserve);
+    }
+
+    public function histories(): GitHubIssueHistories
+    {
+        [$calls, $checked] = $this->wiring();
+
+        return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]));
+    }
+
+    /**
+     * @return array{GitHubCalls, CheckedInstallationTokens}
+     */
+    private function wiring(): array
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $http = new MockHttpClient($this->answer(...), 'https://api.github.com');
@@ -47,7 +71,9 @@ final class RecordedIssueApi
         $readings = FreshReadings::at($clock);
         $readBack = new InstallationReadBack(new InstallationReader($jwt, $tokens, new GitHubCalls($identity, $readings, $tokens)), $expected, new NullLogger());
 
-        return new GitHubIssueReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
+        $this->reserve = FreshReadings::reserveOf($readings, $tokens, $clock);
+
+        return [new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens)];
     }
 
     public static function fixture(string $name): string
@@ -77,6 +103,12 @@ final class RecordedIssueApi
     {
         $this->requests[] = $method.' '.$url;
         $this->keepConditions($options);
+
+        if (str_ends_with($url, '/graphql')) {
+            $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
+
+            return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql);
+        }
 
         if ($this->notModified) {
             return new MockResponse('', ['http_code' => 304]);
