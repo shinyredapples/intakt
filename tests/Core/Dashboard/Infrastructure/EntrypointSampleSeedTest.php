@@ -49,6 +49,19 @@ final class EntrypointSampleSeedTest extends TestCase
         ], $this->theDefaultDemo()['consoleCalls']);
     }
 
+    public function testARestartOnTheSameDataVolumeDoesNotPrintTheProviderNotesAgain(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+        $this->entrypoint?->stop(15);
+        new Filesystem()->remove($this->callsFile());
+
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        self::assertNotContains('bin/console intakt:ai:tiers', $this->consoleCallsBeforeTheConsumers());
+    }
+
     public function testEveryOldContainerIsRemovedBeforeItsWarmup(): void
     {
         self::assertFalse($this->theDefaultDemo()['cacheDirectoryExists'], 'the image container or the one the seed left survived');
