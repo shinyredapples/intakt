@@ -53,7 +53,7 @@ final readonly class ListCiChangesCommand
         } catch (IOException $failure) {
             $io->writeln(sprintf('unreadable %s: %s', $file, $failure->getMessage()));
 
-            return new WorkflowFile($file, null);
+            return WorkflowFile::unread($file, $failure->getMessage());
         }
     }
 }
