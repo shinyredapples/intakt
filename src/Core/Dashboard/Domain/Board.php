@@ -26,6 +26,12 @@ final readonly class Board
         return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
     }
 
+    // From the cards in their order, so the newest review's reviewers come first.
+    public function whoIsWorking(): WhoIsWorking
+    {
+        return new WhoIsWorking($this->cards);
+    }
+
     // Every card of every project, so a later cap on the cards shown never lowers the count.
     public function countOf(BoardColumn $column): int
     {
