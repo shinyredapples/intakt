@@ -6,7 +6,7 @@
 2. **Modular.** Forges, AI vendors, gates and work sources are plugins behind small interfaces.
 3. **Efficient.** Idle costs nothing: no polling model agents (the cheap forge poll is plain code), no long-lived model sessions. Each job is one short-lived container.
 4. **Uses the capacity it has.** It knows each vendor's limits (subscription windows or API spend), measures what is left, and plans model choice and pace to end each window near its ceiling, not far below it.
-5. **Safe by construction.** A builder can never push, sign, merge or read secrets. What it hands back is checked in a clean place before anyone trusts it.
+5. **Safe by construction.** A Developer can never push, sign, merge or read secrets. What it hands back is checked in a clean place before anyone trusts it.
 6. **Visible.** A dashboard shows what each lane is doing, what it costs, and what needs a human.
 
 ## Non-goals (v1)
@@ -28,7 +28,7 @@
 ## Milestones
 
 1. Orchestrator skeleton: SQLite ledger, lanes, one forge (Gitea), one vendor, job containers, check job.
-2. Reviews with JSON verdicts, two vendors, budget probes and the planner.
+2. Reviews with JSON verdicts, two vendors, budget probes and the model planner.
 3. GitHub forge, wizard with detection for existing codebases and the foundation flow for new projects, dashboard. Test both paths on real repos: a Symfony monorepo, a Node app, a Go service, and an empty repo.
 4. Shared memory.
 5. Adoption in stages on a live project that a loop already builds: first reviewer for the loop (Intakt's review takes the place of one of the loop's reviewers and counts, while the loop keeps building and merging and Intakt never merges, pushes, labels or approves protected heads; Intakt publishes its verdict on each exact head under its App identity as a commit status `intakt/review`, `success` for approve, `failure` for changes and `error` when it could not review, and one pull request comment headed `**Review by Intakt** (head <12-hex>)` with `[P1|P2|P3] file:line: text` finding lines and a final fenced JSON block `{"verdict": "approve"|"changes", "head": "<40-hex>", "summary": "..."}`, the shape of the loop's own reviewer comments, which is the whole contract with the loop; the rollback is the loop switching back to its own reviewer; a weekly report compares Intakt's published verdicts with the loop's remaining reviewer on the same heads), then Intakt's verdicts count, then it builds a labeled share of tasks, then full takeover once parity is checked item by item.
