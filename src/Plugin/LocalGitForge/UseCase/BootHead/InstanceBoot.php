@@ -29,6 +29,9 @@ final readonly class InstanceBoot
     // bin/instance writes its status on descriptor 3 only; moved to stdout and its log to stderr, so no log line can pass for the status.
     private const array STATUS_ON_STDOUT = ['sh', '-c', 'exec "$@" 3>&1 1>&2', 'sh'];
 
+    // Exact lines, as bin/probe accepts them, because a ready line with any other key or mode is outside the contract of bin/instance.
+    private const array READY_LINES = ['{"status":"ready"}', '{"status":"ready","mode":"worker"}'];
+
     // An allowlist, so neither the install nor the commit's code gets a token of the booting install from its environment (COMPOSER_AUTH); HOME and COMPOSER_HOME are left out too, because Composer loads the install's auth.json from COMPOSER_HOME or from under HOME and a plugin of the commit reads those tokens through Composer's config, so both processes get a scratch home instead; COMPOSER_CACHE_DIR stays, so the package cache is shared when the install sets one.
     private const array INHERITED_VARIABLES = [
         'PATH', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR', 'COMPOSER_CACHE_DIR',
@@ -150,9 +153,21 @@ final readonly class InstanceBoot
 
         return match (true) {
             !is_array($status) => BootOutcome::crashed('bin/instance reported no status line.'),
-            'ready' === ($status['status'] ?? null) && $boot->isSuccessful() => BootOutcome::booted(),
-            'failed' === ($status['status'] ?? null) && is_string($status['reason'] ?? null) => BootOutcome::failed($status['reason']),
+            in_array($line, self::READY_LINES, true) && $boot->isSuccessful() => BootOutcome::booted(),
+            null !== ($reason = $this->failureReasonOf($status)) => BootOutcome::failed($reason),
             default => BootOutcome::crashed('bin/instance reported a status line it does not define: '.$line),
         };
+    }
+
+    /**
+     * @param array<mixed> $status
+     */
+    private function failureReasonOf(array $status): ?string
+    {
+        $reason = $status['reason'] ?? null;
+        // Strict array comparison, so a failed line with any other key, key order or mode is outside the contract.
+        $defined = [['status' => 'failed', 'reason' => $reason], ['status' => 'failed', 'mode' => 'worker', 'reason' => $reason]];
+
+        return in_array($status, $defined, true) && is_string($reason) && '' !== trim($reason) ? $reason : null;
     }
 }

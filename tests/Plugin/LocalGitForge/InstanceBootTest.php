@@ -21,6 +21,7 @@ use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\UseCase\BootHead\InstanceBoot;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
@@ -273,6 +274,47 @@ final class InstanceBootTest extends TestCase
 
         self::assertSame(BootState::Crashed, $outcome->state);
         self::assertSame('bin/instance reported a status line it does not define: {"status":"maybe"}', $outcome->reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function statusLinesOutsideTheContract(): iterable
+    {
+        yield 'ready with an undefined mode' => ['{"status":"ready","mode":"bogus"}'];
+        yield 'ready with an extra key' => ['{"status":"ready","extra":1}'];
+        yield 'failed with an empty reason' => ['{"status":"failed","reason":""}'];
+        yield 'failed with an extra key' => ['{"status":"failed","reason":"broken","extra":1}'];
+        yield 'failed with an undefined mode' => ['{"status":"failed","mode":"bogus","reason":"broken"}'];
+        yield 'two status lines' =>["{\"status\":\"ready\"}\n{\"status\":\"ready\"}"];
+    }
+
+    #[DataProvider('statusLinesOutsideTheContract')]
+    public function testAHarnessThatReportsAStatusLineOutsideTheContractIsACrash(string $line): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nfile_put_contents('php://fd/3', ".var_export($line, true).");\n");
+
+        $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Crashed, $outcome->state, $outcome->reason);
+    }
+
+    public function testAHarnessThatReportsReadyInWorkerModeIsBooted(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nfile_put_contents('php://fd/3', '{\"status\":\"ready\",\"mode\":\"worker\"}'.\"\\n\");\n");
+
+        $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Booted, $outcome->state, $outcome->reason);
+    }
+
+    public function testAHarnessThatReportsFailedInWorkerModeIsFailedWithItsReason(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nfile_put_contents('php://fd/3', '{\"status\":\"failed\",\"mode\":\"worker\",\"reason\":\"no port\"}'.\"\\n\");\nexit(1);\n");
+
+        $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame([BootState::Failed, 'no port'], [$outcome->state, $outcome->reason]);
     }
 
     public function testAHarnessThatReportsReadyButExitsWithAnErrorIsACrash(): void
