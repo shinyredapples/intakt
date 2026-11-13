@@ -27,13 +27,21 @@ final readonly class WatcherLedger
     {
         $kind = match ($decision->admission) {
             HeadAdmission::Pending => LedgerEventKind::HeadPending,
-            HeadAdmission::Red => LedgerEventKind::HeadRed,
+            HeadAdmission::Red, HeadAdmission::FailedBoot => LedgerEventKind::HeadRed,
             HeadAdmission::Green => null,
         };
 
         if (null !== $kind) {
-            $this->append($kind, $this->headOf($project, $decision) + ['read_again_at' => $decision->readAgainAt?->format(DATE_ATOM)]);
+            $this->append($kind, $this->headOf($project, $decision) + ['read_again_at' => $decision->readAgainAt?->format(DATE_ATOM)] + $this->bootCauseOf($decision));
         }
+    }
+
+    /**
+     * @return array{cause?: string, reason?: string}
+     */
+    private function bootCauseOf(HeadDecision $decision): array
+    {
+        return HeadAdmission::FailedBoot === $decision->admission ? ['cause' => 'boot_failed', 'reason' => $decision->bootReason] : [];
     }
 
     public function roundQueued(StartedRound $round): void

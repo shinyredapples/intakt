@@ -34,6 +34,8 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadsWithoutRound;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\LookAtHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundStarts;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
@@ -61,6 +63,7 @@ use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\RecordingCommandBus;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\StandingQueryBus;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
@@ -135,7 +138,8 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($commands, $rounds, $ledger);
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
-        $settle = new SettleHeads(new SettleHead(new StaleVerdicts(new StandingQueryBus($recorded, $this->entities), $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
+        $queries = new StandingQueryBus($recorded, $this->entities);
+        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts, new BootGate($queries, new BootResults($queries, $this->entities, $clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger)), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));

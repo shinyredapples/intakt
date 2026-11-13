@@ -21,7 +21,11 @@ use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\BootHarness;
+use Intakt\Core\Review\Contract\BootHarnessAtMain;
+use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -50,6 +54,8 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadsWithoutRound;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\LookAtHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundStarts;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
@@ -815,6 +821,52 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testAGreenHeadIsBootedBeforeItsReviewRoundIsQueued(): void
+    {
+        $this->startRoundOnGreenHead();
+
+        self::assertSame([MainCommit::class, BootHarness::class, BootHarnessAtMain::class], array_map(get_class(...), $this->queries->boots));
+        self::assertCount(1, $this->commands->started);
+    }
+
+    public function testAHeadThatFailsToBootQueuesNoRoundAndIsForgottenLikeRedCi(): void
+    {
+        $this->queries->head = BootOutcome::failed('The server did not start.');
+
+        $this->startRoundOnGreenHead();
+
+        self::assertSame([], $this->commands->started);
+        self::assertSame([LedgerEventKind::HeadRed], $this->ledger->kinds());
+        self::assertSame(['boot_failed', 'The server did not start.'], [$this->ledger->payloads()[0]['cause'], $this->ledger->payloads()[0]['reason']]);
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testAFailedBootBeatsTheApprovalsOfAnEarlierHeadAndNoRoundStartsForTheNewOne(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->queries->head = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertTrue($this->storedStale(self::GREEN));
+        self::assertCount(1, $this->commands->started);
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
+    }
+
+    public function testAnApprovedHeadThatDoesNotBootIsNotMergedBecauseNoRoundIsQueuedForIt(): void
+    {
+        $this->queries->head = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+        $this->clock->modify('+10 minutes');
+        $this->tick();
+
+        self::assertSame([], $this->commands->started);
+    }
+
     public function testARedHeadWhoseStaleCheckSucceedsIsNoLongerWaitedOn(): void
     {
         $this->startRoundOnGreenHead();
@@ -1069,7 +1121,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
-        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
+        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts, new BootGate($this->queries, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger)), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));

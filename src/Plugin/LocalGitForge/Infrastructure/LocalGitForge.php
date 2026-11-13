@@ -150,6 +150,11 @@ final readonly class LocalGitForge implements Forge
         return false === $snapshot ? throw new ForgeReadFailed('git worktree add left no directory at '.$directory.'.') : $snapshot;
     }
 
+    public function baseCommit(): CommitId
+    {
+        return $this->commitFrom($this->read(['show-ref', '--verify', '--hash', 'refs/heads/'.$this->repository->baseBranch]));
+    }
+
     private function headOf(ChangeId $id): CommitId
     {
         // An exact ref only, so tags and revision expressions such as "feature~1" are not branches.

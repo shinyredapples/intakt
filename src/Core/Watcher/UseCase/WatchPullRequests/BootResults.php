@@ -10,11 +10,13 @@ use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
+use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\BootState;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\BootRecord;
+use Intakt\Plugin\Forge\Contract\CommitId;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -44,11 +46,17 @@ final readonly class BootResults
             return $stored->outcome();
         }
 
-        $outcome = $this->safe($this->boot(new BootAt($source, $key->main)));
+        $outcome = $this->safe($this->boot(new BootHarness(new BootAt($source, $key->main))));
         $this->remember($key, $outcome);
         $this->record($key, $outcome);
 
         return $outcome;
+    }
+
+    // Never cached, because a head is booted once per round and its commit is not asked again; booted with main's harness so the head cannot certify itself.
+    public function ofHead(BootAt $head, CommitId $main): BootOutcome
+    {
+        return $this->safe($this->boot(new BootHarnessAtMain($head, $main)));
     }
 
     private function storedFor(BootKey $key): ?BootRecord
@@ -63,10 +71,10 @@ final readonly class BootResults
     }
 
     // Turned into an outcome because a boot that throws would stop the review it only gates.
-    private function boot(BootAt $at): BootOutcome
+    private function boot(BootHarness|BootHarnessAtMain $query): BootOutcome
     {
         try {
-            $result = $this->queries->dispatch(new BootHarness($at))->last(HandledStamp::class)?->getResult();
+            $result = $this->queries->dispatch($query)->last(HandledStamp::class)?->getResult();
         } catch (Throwable $failure) {
             return BootOutcome::crashed($failure::class.': '.$failure->getMessage());
         }

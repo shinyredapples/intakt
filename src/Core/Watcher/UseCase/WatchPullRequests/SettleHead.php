@@ -12,11 +12,15 @@ final readonly class SettleHead
         private StaleVerdicts $stale,
         private HeadsWithoutRound $withoutRound,
         private RoundStarts $starts,
+        private BootGate $boot,
     ) {
     }
 
-    public function settle(WatchedProject $project, HeadDecision $decision): void
+    public function settle(WatchedProject $project, HeadDecision $ci): void
     {
+        // Asked only for a green head and before any round, so a pending or red head never pays for a boot.
+        $decision = $ci->startsRound() ? $this->boot->admit($project, $ci) : $ci;
+
         if ($decision->startsRound()) {
             $this->stale->noteMovedHead($project, $decision->change);
             $this->starts->startFor($project, $decision);
