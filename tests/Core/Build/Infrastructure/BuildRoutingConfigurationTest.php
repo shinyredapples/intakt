@@ -15,14 +15,14 @@ final class BuildRoutingConfigurationTest extends TestCase
 {
     public function testAProjectWithoutABuildSectionRoutesToTheStandardTierWithNoSensitivePaths(): void
     {
-        $build = $this->process(['alpha' => []])['alpha']['build'];
+        $build = $this->process(['alpha' => []]);
 
         self::assertSame(['tier' => 'standard', 'sensitive_paths' => []], $build);
     }
 
     public function testABuildSectionSetsTheTierAndTheSensitivePaths(): void
     {
-        $build = $this->process(['alpha' => ['build' => ['tier' => 'light', 'sensitive_paths' => ['src/**/Security/**']]]])['alpha']['build'];
+        $build = $this->process(['alpha' => ['build' => ['tier' => 'light', 'sensitive_paths' => ['src/**/Security/**']]]]);
 
         self::assertSame(['tier' => 'light', 'sensitive_paths' => ['src/**/Security/**']], $build);
     }
@@ -65,11 +65,13 @@ final class BuildRoutingConfigurationTest extends TestCase
     /**
      * @param array<string, mixed> $projects
      *
-     * @return array<string, array{build: array{tier: string, sensitive_paths: list<string>}}>
+     * @return array<mixed>
      */
     private function process(array $projects): array
     {
-        /* @var array<string, array{build: array{tier: string, sensitive_paths: list<string>}}> */
-        return new Processor()->processConfiguration(new BuildRoutingConfiguration(), [['projects' => $projects]])['projects'];
+        $processed = new Processor()->processConfiguration(new BuildRoutingConfiguration(), [['projects' => $projects]])['projects'];
+        assert(is_array($processed) && is_array($processed['alpha']) && is_array($processed['alpha']['build']));
+
+        return $processed['alpha']['build'];
     }
 }
