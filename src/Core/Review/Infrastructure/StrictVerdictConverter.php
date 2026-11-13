@@ -144,14 +144,38 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         }
     }
 
-    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block; any other count of blocks or of openings (an unclosed second one is still ambiguous) leaves the text as it is, which then fails as invalid.
+    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block. The rule is deliberately simpler than Markdown and fails closed: anything but one plain top-level block leaves the text as it is, which then fails as invalid, because refusing a verdict costs a review while reading the wrong one of two costs the change.
     private function fencedBlockOf(string $content): string
     {
-        // Openings are counted in every form Markdown renders as a json code block (indented up to three spaces, three or more backticks or tildes, any case), because a second block in one of them would otherwise hide behind the plain one that is read.
-        $openings = preg_match_all('/^ {0,3}(?:`{3,}|~{3,})[ \t]*json\b/mi', $content);
-        $found = preg_match_all('/^```json[ \t]*\r?\n(.*?)\r?\n```[ \t]*\r?$/ms', $content, $blocks);
+        // Counted anywhere, whatever comes before it on the line, so a second block in any Markdown form, or a mention in the prose, makes the answer ambiguous.
+        if (1 !== preg_match_all('/(?:`{3,}|~{3,})[ \t]*json\b/i', $content)) {
+            return $content;
+        }
 
-        return 1 === $openings && 1 === $found ? $blocks[1][0] : $content;
+        if (1 !== preg_match('/^```json[ \t]*\r?\n(.*?)\r?\n```[ \t]*(?=\r?\n|\z)/ms', $content, $block, PREG_OFFSET_CAPTURE)) {
+            return $content;
+        }
+
+        return $this->isNested(substr($content, 0, $block[0][1])) ? $content : $block[1][0];
+    }
+
+    // An odd count of fence lines before the block, or a fence opened before it and not closed by a bare fence of its character at least as long, means the block sits inside another one.
+    private function isNested(string $before): bool
+    {
+        $open = null;
+        foreach (preg_split('/\r?\n/', $before) ?: [] as $line) {
+            if (1 !== preg_match('/^[ \t>*+\-\d.)]*(`{3,}|~{3,})[ \t]*(.*?)[ \t]*$/', $line, $fence)) {
+                continue;
+            }
+
+            if (null === $open) {
+                $open = $fence[1];
+            } elseif ('' === $fence[2] && $fence[1][0] === $open[0] && strlen($fence[1]) >= strlen($open)) {
+                $open = null;
+            }
+        }
+
+        return null !== $open || 1 === preg_match_all('/^.*(?:`{3}|~{3}).*$/m', $before) % 2;
     }
 
     /**

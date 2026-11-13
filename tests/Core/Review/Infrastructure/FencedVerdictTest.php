@@ -128,6 +128,70 @@ final class FencedVerdictTest extends TestCase
     }
 
     #[DataProvider('subscriptionModels')]
+    public function testABlockquotedBlockBesideAPlainOneIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Draft:\n> ```json\n> ".self::VERDICT."\n> ```\n\nFinal:\n```json\n".self::VERDICT."\n```");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testAListItemBlockBesideAPlainOneIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Drafts:\n- ```json\n  ".self::VERDICT."\n  ```\n\nFinal:\n```json\n".self::VERDICT."\n```");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testABlockNestedInALongerTextFenceIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Example:\n````text\n```json\n".self::VERDICT."\n```\n````\n");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testABlockAfterAnOpenFenceWithAnEvenCountOfFenceLinesIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Example:\n```text\n```python\n```json\n".self::VERDICT."\n```\n```\n");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testABlockAfterAnOddCountOfFenceLinesIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Example:\n```text\n```python\n```\n```json\n".self::VERDICT."\n```\n");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testAnInlineJsonFenceMentionBesideAPlainBlockIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "I answer in a ```json block as asked.\n```json\n".self::VERDICT."\n```");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testAClosedPhpBlockBesideThePlainOneIsRead(Model $model): void
+    {
+        $verdict = $this->answered($model, "The change adds:\n```php\necho 1;\n```\nVerdict:\n```json\n".self::VERDICT."\n```\n");
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testALoneFourBacktickBlockIsNotRead(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Here:\n````json\n".self::VERDICT."\n````");
+    }
+
+    #[DataProvider('subscriptionModels')]
     public function testALoneIndentedBlockIsNotRead(Model $model): void
     {
         $this->expectException(RuntimeException::class);
