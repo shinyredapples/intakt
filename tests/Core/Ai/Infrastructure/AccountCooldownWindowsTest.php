@@ -338,7 +338,7 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertCount(2, $this->reports());
     }
 
-    // The error comes from another worker while this one holds the lock it reports the same error under.
+    // The error comes from another worker while this one holds the lock it reports the same error under, so that worker finds the lock busy.
     public function testTheSameAccountErrorWhileAnotherWorkerReportsItIsNotReportedAgainOnceTheLockIsReleased(): void
     {
         $pool = new SteppingInAfterDeleting('account-cooldown-pending-anthropic.team');

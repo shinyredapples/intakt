@@ -8,7 +8,7 @@ use Closure;
 use Override;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
-// Runs another worker's step once, right after the watched key is deleted, to force that step into the moment the deleting worker still holds its lock.
+// A cache pool, because only the deleting worker's own call reaches into the moment it still holds its lock, so a test can force another worker's step there.
 final class SteppingInAfterDeleting extends ArrayAdapter
 {
     public ?Closure $step = null;
@@ -23,7 +23,7 @@ final class SteppingInAfterDeleting extends ArrayAdapter
     {
         $deleted = parent::deleteItem($key);
         $step = $this->step;
-        if (null !== $step && $this->watched === $key) {
+        if ($step instanceof Closure && $this->watched === $key) {
             $this->step = null;
             $step();
         }
