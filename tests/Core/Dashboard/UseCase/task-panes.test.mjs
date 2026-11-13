@@ -5,7 +5,9 @@ import { FakeElement, root } from './stimulus-controller.mjs';
 const { switchTaskPanes } = await import(new URL('assets/task-panes.js', root));
 
 const TAB = '.ttabs [data-pane]';
-const TIMELINE_LINK = '[data-highlight-finding], a.sb-finding';
+const FINDING_BUTTON = '[data-highlight-finding]';
+const FINDING_LINK = 'a.sb-finding';
+const TIMELINE_ENTRY = 'td[data-finding]';
 
 class FakeTarget extends FakeElement {
     constructor(matches) {
@@ -14,13 +16,14 @@ class FakeTarget extends FakeElement {
     }
 
     closest(selector) {
-        return this.matches.includes(selector) ? this : null;
+        return selector.split(', ').some((part) => this.matches.includes(part)) ? this : null;
     }
 }
 
 class FakePage {
     grid = new FakeElement();
     tabs = [];
+    entries = [];
 
     constructor() {
         this.grid.setAttribute('data-pane', 'timeline');
@@ -30,6 +33,10 @@ class FakePage {
             tab.setAttribute('aria-selected', selected);
             this.tabs.push(tab);
         }
+        const entry = new FakeElement();
+        entry.setAttribute('id', 'round-1-finding-F1');
+        entry.setAttribute('data-finding', 'F1');
+        this.entries.push(entry);
     }
 
     addEventListener(type, listener) {
@@ -44,9 +51,9 @@ class FakePage {
     }
 
     querySelectorAll(selector) {
-        assert.equal(selector, TAB);
+        assert.ok([TAB, TIMELINE_ENTRY].includes(selector));
 
-        return this.tabs;
+        return selector === TAB ? this.tabs : this.entries;
     }
 
     selected() {
@@ -59,6 +66,20 @@ function reviewPageOnAPhone() {
     switchTaskPanes(page);
 
     return page;
+}
+
+function findingButton(id) {
+    const button = new FakeTarget([FINDING_BUTTON]);
+    button.setAttribute('data-highlight-finding', id);
+
+    return button;
+}
+
+function findingLink(href) {
+    const link = new FakeTarget([FINDING_LINK]);
+    link.setAttribute('href', href);
+
+    return link;
 }
 
 test('choosing the live log shows its pane and marks its tab as chosen', () => {
@@ -84,10 +105,38 @@ test('a finding id in the session summary brings the timeline back, where its en
     const page = reviewPageOnAPhone();
     page.click({ target: page.tabs[1] });
 
-    page.click({ target: new FakeTarget([TIMELINE_LINK]) });
+    page.click({ target: findingButton('F1') });
 
     assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
     assert.deepEqual(page.selected(), ['true', 'false']);
+});
+
+test('a finding link in the state block brings the timeline back, where its entry is', () => {
+    const page = reviewPageOnAPhone();
+    page.click({ target: page.tabs[1] });
+
+    page.click({ target: findingLink('#round-1-finding-F1') });
+
+    assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
+});
+
+test('a reported finding without a timeline entry keeps the live log', () => {
+    const page = reviewPageOnAPhone();
+    page.click({ target: page.tabs[1] });
+
+    page.click({ target: findingButton('F2') });
+
+    assert.equal(page.grid.getAttribute('data-pane'), 'log');
+    assert.deepEqual(page.selected(), ['false', 'true']);
+});
+
+test('a finding link without a timeline entry keeps the live log', () => {
+    const page = reviewPageOnAPhone();
+    page.click({ target: page.tabs[1] });
+
+    page.click({ target: findingLink('#round-2-finding-F1') });
+
+    assert.equal(page.grid.getAttribute('data-pane'), 'log');
 });
 
 test('a click elsewhere keeps the chosen pane', () => {
@@ -103,5 +152,5 @@ test('a page without the task grid ignores a finding link', () => {
     const page = reviewPageOnAPhone();
     page.grid = null;
 
-    assert.doesNotThrow(() => page.click({ target: new FakeTarget([TIMELINE_LINK]) }));
+    assert.doesNotThrow(() => page.click({ target: findingButton('F1') }));
 });
