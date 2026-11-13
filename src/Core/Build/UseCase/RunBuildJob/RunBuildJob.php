@@ -49,8 +49,14 @@ final readonly class RunBuildJob
 
     private const float CPUS = 2.0;
 
-    // An hour for the whole session, because no turn limit or allowance bounds it yet (plan task T49, part 2).
-    private const int SECONDS = 3600;
+    // Fixed until the allowance is sized per task (plan task T60); the CLI ends its session after this many turns.
+    private const int MAX_TURNS = 100;
+
+    // The script cuts a session at this age, and keeps what it committed.
+    private const int ALLOWANCE_SECONDS = 3000;
+
+    // Beyond the allowance for the script's cleanup and bundle, so the runner's kill, which keeps no output, is a backstop that never fires first.
+    private const int SECONDS = self::ALLOWANCE_SECONDS + 600;
 
     public function __construct(
         private TierResolver $tiers,
@@ -138,7 +144,7 @@ final readonly class RunBuildJob
         return new JobSpec(
             $this->idOf($job),
             $job->image,
-            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model],
+            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS],
             $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),

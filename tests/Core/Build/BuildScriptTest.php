@@ -66,9 +66,58 @@ final class BuildScriptTest extends TestCase
 
         self::assertSame("Build the task.\n", (string) file_get_contents($this->history->folder.'/input'));
         self::assertSame(
-            ['-p', '--model', 'claude-opus-5-5', '--output-format', 'json', '--dangerously-skip-permissions'],
+            ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions'],
             explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments'))),
         );
+    }
+
+    public function testASessionCutAtItsAllowanceAfterCommittingHandsBackABundleOfItsCommits(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            sleep 30
+            SH);
+        $started = microtime(true);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertLessThan(15, microtime(true) - $started);
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatEndsByItsTurnLimitKeepsItsCommitsAndIsNotLoggedAsCut(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            echo '{"subtype":"error_max_turns"}'
+            exit 1
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatEndsBeforeItsAllowanceLeavesNoWatchdogBehind(): void
+    {
+        $this->givenTheCli('exit 0');
+        $started = microtime(true);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertLessThan(15, microtime(true) - $started);
+        $left = new Process(['pgrep', '-f', 'sleep 31']);
+        $left->run();
+        self::assertSame(1, $left->getExitCode());
     }
 
     public function testTheCliWorksInAFreshCloneOnTheTasksBranchWithOnlyTheBuildClonesBranches(): void
@@ -273,10 +322,10 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/git', 0o755);
     }
 
-    private function whenTheBuildRuns(string $branch, string $model): Process
+    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance],
             null,
             $this->environment(),
             timeout: 20,
