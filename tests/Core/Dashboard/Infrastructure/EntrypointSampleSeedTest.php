@@ -45,6 +45,7 @@ final class EntrypointSampleSeedTest extends TestCase
             'bin/console cache:warmup --no-interaction',
             'bin/console intakt:sample:seed /data/sample <directory>/intakt.yaml',
             'bin/console cache:warmup --no-interaction',
+            'bin/console intakt:ai:tiers',
         ], $this->theDefaultDemo()['consoleCalls']);
     }
 

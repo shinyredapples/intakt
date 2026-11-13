@@ -31,7 +31,7 @@ final readonly class DisabledProvidersWarning
     #[AsEventListener(event: ConsoleCommandEvent::class)]
     public function onConsoleCommand(ConsoleCommandEvent $event): void
     {
-        if (!\in_array($event->getCommand()?->getName(), self::COMMANDS, true)) {
+        if (!in_array($event->getCommand()?->getName(), self::COMMANDS, true)) {
             return;
         }
 
