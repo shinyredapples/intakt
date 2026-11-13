@@ -18,7 +18,7 @@ use Throwable;
 // One lock per pull request, held from the stale check to the round start, because a tick that looked at a newer head while an older one was still starting would miss that round.
 final readonly class HeadLocks
 {
-    // The 300 seconds the other steps had, before the boots were added.
+    // Kept from before the boots were added, because the CI reads, the stale check and the round start still run under the lock.
     private const int OTHER_STEPS_SECONDS = 300;
 
     public function __construct(

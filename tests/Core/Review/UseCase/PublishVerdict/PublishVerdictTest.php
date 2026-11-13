@@ -217,7 +217,7 @@ final class PublishVerdictTest extends KernelTestCase
         $published = [];
         $forge = self::createStub(ForgeWrites::class);
         $forge->method('publishVerdict')->willReturnCallback(function (string $project, ChangeId $change, PublishedVerdict $verdict) use ($roundId, &$published): void {
-            // The other worker's mark commits after this verdict was decided and before its status is written.
+            // Marked here, because only a mark that commits after the verdict was decided and before its status is written forces the race.
             if ([] === $published) {
                 $this->markStale($roundId);
             }
