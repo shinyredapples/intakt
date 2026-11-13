@@ -38,8 +38,11 @@ final readonly class LocalGitForge implements Forge
     private const int REFERENCE_INVALID = 1;
     private const int NOT_AN_ANCESTOR = 1;
 
-    // Every file is text, because a binary attribute would hide a change as "Binary files differ"; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
+    // Every file is text to git, because an attribute or git's guess from the first bytes would decide what is binary, which BinaryFiles decides from all the bytes shown; submodules are never ignored, because diff.ignoreSubmodules would hide a changed submodule commit.
     private const array DIFF_OPTIONS = ['--no-color', '--no-ext-diff', '--no-textconv', '--text', '--no-renames', '--ignore-submodules=none'];
+
+    // Because a name that is not ASCII is then written in escapes, so a file's header is UTF-8 whatever bytes its name holds.
+    private const array QUOTED_NAMES = ['-c', 'core.quotePath=true'];
 
     // Because a merge attribute that is set picks git's own text merge, while merge.default, even "text", picks a driver the repository's config defines and git would run it.
     private const string BUILTIN_MERGE_ATTRIBUTES = __DIR__.'/builtin-merge.gitattributes';
@@ -51,6 +54,7 @@ final readonly class LocalGitForge implements Forge
         private LocalRepository $repository,
         private NameStatusParser $nameStatus,
         private HardenedGit $hardened = new HardenedGit(),
+        private BinaryFiles $binaryFiles = new BinaryFiles(),
     ) {
     }
 
@@ -179,7 +183,16 @@ final readonly class LocalGitForge implements Forge
 
     private function diff(CommitRange $commits): Diff
     {
-        return new Diff($this->read(['diff', ...self::DIFF_OPTIONS, ...$this->range($commits)]), $this->changedFiles($commits));
+        $patch = $this->read([...self::QUOTED_NAMES, 'diff', '--full-index', ...self::DIFF_OPTIONS, ...$this->range($commits)]);
+
+        return new Diff($this->binaryFiles->named($patch, $this->sizeOf(...)), $this->changedFiles($commits));
+    }
+
+    private function sizeOf(string $blob): int
+    {
+        $size = trim($this->read(['cat-file', '-s', $blob]));
+
+        return ctype_digit($size) ? (int) $size : throw new ForgeReadFailed(sprintf('git cat-file printed "%s" as the size of a blob.', $size));
     }
 
     private function changedFiles(CommitRange $commits): ChangedFiles
