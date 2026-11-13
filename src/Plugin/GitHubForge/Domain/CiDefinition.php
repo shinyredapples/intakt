@@ -67,7 +67,7 @@ final readonly class CiDefinition
         return 1 === preg_match(self::QUOTED, $value, $quoted) ? $quoted[2] : $value;
     }
 
-    // The empty prefix stands for every path: ./ is the repository root, and any other form (a value on the next line, an expression, a dot part) may be any folder.
+    // Answers the empty prefix, so every path counts, because ./ is the repository root and any other form (a value on the next line, an expression, a dot part) may be any folder.
     private function folderOf(string $action): string
     {
         if (!str_starts_with($action, self::LOCAL_ACTION)) {
