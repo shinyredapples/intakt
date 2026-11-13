@@ -123,8 +123,8 @@ final readonly class LockedPackageChanges
             $findings[] = new DependencyFinding($package->name, 'sets an include path');
         }
 
-        // Appended to the install path, so the package could be written outside its vendor folder.
-        if ($package->hasTargetDir) {
+        // Appended to the install path, so the package could be written outside its vendor folder; null reads as absent, as Composer's isset() does.
+        if (null !== $package->targetDir) {
             $findings[] = new DependencyFinding($package->name, 'sets a target directory');
         }
 
@@ -136,7 +136,7 @@ final readonly class LockedPackageChanges
      */
     private function unjudgedKeys(LockedPackage $package): array
     {
-        // Extra is read only by Composer plugins, which the owner allows one by one.
+        // Extra is allowed because only Composer plugins read it, and the owner allows each plugin.
         $unjudged = array_diff($package->effectKeys(), ['type', 'bin', 'autoload', 'include-path', 'target-dir', 'extra']);
 
         return array_map(static fn (string $key): DependencyFinding => new DependencyFinding($package->name, sprintf('has the key "%s", which the policy does not judge', $key)), array_values($unjudged));

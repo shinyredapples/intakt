@@ -35,7 +35,7 @@ final readonly class LockedPackage
         public array $binaries,
         public mixed $autoload,
         public array $includePaths,
-        public bool $hasTargetDir,
+        public mixed $targetDir,
         public array $places,
         public array $effects,
         public ?GitHubCommit $commit,
@@ -61,7 +61,7 @@ final readonly class LockedPackage
             self::listed($entry['bin'] ?? []),
             $entry['autoload'] ?? [],
             self::listed($entry['include-path'] ?? []),
-            array_key_exists('target-dir', $entry),
+            $entry['target-dir'] ?? null,
             array_intersect_key($entry, array_flip(self::PLACES)),
             self::effects($entry),
             GitHubCommit::fromLockEntry($entry),
@@ -101,7 +101,7 @@ final readonly class LockedPackage
         $changed = array_filter($keys, fn (int|string $key): bool => ($this->effects[$key] ?? null) !== ($earlier->effects[$key] ?? null));
         sort($changed);
 
-        return array_map(strval(...), array_values($changed));
+        return array_map(strval(...), $changed);
     }
 
     /**
