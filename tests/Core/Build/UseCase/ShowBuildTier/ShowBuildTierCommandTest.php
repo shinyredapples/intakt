@@ -8,7 +8,6 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Build\Contract\BuildFacts;
 use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\TierChoice;
-use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;

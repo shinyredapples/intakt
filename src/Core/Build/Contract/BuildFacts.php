@@ -33,7 +33,7 @@ final readonly class BuildFacts
                 continue;
             }
 
-            // A value that names no tier (a model, a vendor) is ignored, never guessed at.
+            // Ignored, never guessed at, because a value that names no tier (a model, a vendor) must not pick one.
             $tier = Tier::tryFrom(substr($label, strlen(self::TIER_LABEL_PREFIX)));
 
             if (null !== $tier) {

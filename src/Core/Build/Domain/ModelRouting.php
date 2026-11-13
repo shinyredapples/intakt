@@ -14,12 +14,12 @@ final readonly class ModelRouting
 {
     public function choose(RoutingRules $rules, BuildFacts $facts): TierChoice
     {
-        // Safety rules beat labels, and labels beat the default.
+        // A sensitive path comes first because a safety rule must hold whatever the label says; the label then beats the default.
         if ($this->touchesSensitivePath($rules, $facts)) {
             return new TierChoice(Tier::Strong, TierReason::SensitivePath);
         }
 
-        if (null !== $facts->labelledTier) {
+        if ($facts->labelledTier instanceof Tier) {
             return new TierChoice($facts->labelledTier, TierReason::Label);
         }
 

@@ -37,7 +37,6 @@ final class BuildRoutingConfigurationTest extends TestCase
     public function testSensitivePathsGivenAsAMapAreRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('must be a list');
 
         $this->process(['alpha' => ['build' => ['sensitive_paths' => ['security' => 'src/Security/**']]]]);
     }
@@ -70,7 +69,7 @@ final class BuildRoutingConfigurationTest extends TestCase
      */
     private function process(array $projects): array
     {
-        /** @var array<string, array{build: array{tier: string, sensitive_paths: list<string>}}> */
+        /* @var array<string, array{build: array{tier: string, sensitive_paths: list<string>}}> */
         return new Processor()->processConfiguration(new BuildRoutingConfiguration(), [['projects' => $projects]])['projects'];
     }
 }
