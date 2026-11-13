@@ -14,6 +14,13 @@
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
     </div>
 </div>
+{% for head in failing %}
+    {% set headline = 'Pull request ' ~ head.change ~ ' of ' ~ head.project ~ ' failed' %}
+    {% set state = head.handedOver ? 'Handed over to the maintainer agent after ' ~ head.fault.failures ~ ' failures' : head.fault.failures ~ (head.fault.failures == 1 ? ' failure' : ' failures') ~ ' in a row, next try at ' ~ head.fault.retryAt|date('H:i', 'UTC') ~ ' UTC' %}
+    {% embed 'dashboard/components/banner.html.twig' with {icon: 'broken', broken: true, project: head.project, short: headline, title: headline ~ '.', text: state ~ ': ' ~ head.fault.cause} only %}
+        {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
+    {% endembed %}
+{% endfor %}
 <details class="working" id="working">
     <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working ? working.working ~ ' working' : 'Nobody is working yet' }}</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
     <div class="lanes">

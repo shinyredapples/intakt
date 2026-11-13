@@ -7,12 +7,15 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
@@ -34,6 +37,9 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(Lane::class)]
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(RefuseForeignHost::class)]
+#[UsesClass(LedgerFailingHeads::class)]
+#[UsesClass(FailingHead::class)]
+#[UsesClass(HeadFault::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     public function testTheRootAddressShowsTheBoard(): void
@@ -308,6 +314,77 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertSame('/reviews', $link->attr('href'));
         self::assertSame('Open the review list', $link->text());
+    }
+
+    public function testABoardWithoutFailingHeadsShowsNoBanner(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        self::assertCount(0, $this->browser->request('GET', '/')->filter('.banner'));
+    }
+
+    public function testEachFailingHeadIsABrokenBannerOfItsProjectAboveWhoIsWorking(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+        $this->ledger->failHead('beta', '8', 1);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame(['alpha', 'beta'], $page->filter('.page-head ~ .banner.broken')->each(static fn (Crawler $banner): ?string => $banner->attr('data-project')));
+        self::assertCount(1, $page->filter('.banner + details.working'));
+        self::assertCount(0, $page->filter('details.working ~ .banner'));
+    }
+
+    public function testABackingOffHeadsBannerNamesItsPullRequestItsCauseAndItsNextTry(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $banner = $this->browser->request('GET', '/')->filter('.banner');
+
+        self::assertSame('Pull request 7 of alpha failed', $banner->filter('.banner-toggle span')->text());
+        self::assertSame('Pull request 7 of alpha failed. 1 failure in a row, next try at 12:08 UTC: RuntimeException: commit a not fetched', $banner->filter('p')->text());
+    }
+
+    public function testAHandedOverHeadsBannerSaysTheMaintainerAgentHasIt(): void
+    {
+        $this->ledger->handOverHead('alpha', '7', 'c');
+
+        $text = $this->browser->request('GET', '/')->filter('.banner p')->text();
+
+        self::assertSame('Pull request 7 of alpha failed. Handed over to the maintainer agent after 4 failures: RuntimeException: commit c not fetched', $text);
+    }
+
+    public function testABannerLinksToTheFailedPullRequestsOnTheReviewList(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $link = $this->browser->request('GET', '/')->filter('.banner > a.btn');
+
+        self::assertSame('/reviews#failing-heads', $link->attr('href'));
+        self::assertSame('See the failed pull requests', $link->text());
+    }
+
+    public function testACredentialInTheCauseIsRedactedOnTheBanner(): void
+    {
+        $token = 'ghp_'.str_repeat('a1', 18);
+        $this->ledger->failHeadBecause('alpha', '7', 'clone refused for token '.$token);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertStringContainsString('clone refused for token [redacted]', $page->filter('.banner p')->text());
+        self::assertStringNotContainsString($token, (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testMarkupInTheProjectAndTheCauseIsShownAsTextOnTheBanner(): void
+    {
+        $this->ledger->failHeadBecause('<i>alpha</i>', '7', '<b>exit 1</b>');
+
+        $banner = $this->browser->request('GET', '/')->filter('.banner');
+
+        self::assertSame('<i>alpha</i>', $banner->attr('data-project'));
+        self::assertSame('Pull request 7 of <i>alpha</i> failed', $banner->filter('.banner-toggle span')->text());
+        self::assertStringEndsWith('of <i>alpha</i> failed. 2 failures in a row, next try at 12:08 UTC: <b>exit 1</b>', $banner->filter('p')->text());
+        self::assertCount(0, $banner->filter('i, b'));
     }
 
     public function testTheBoardUsesTheFullWidthOfThePage(): void

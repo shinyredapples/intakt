@@ -127,6 +127,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::HeadFailed, $this->headFailure($project, $change, 'a') + ['failures' => $failures]);
     }
 
+    public function failHeadBecause(string $project, string $change, string $cause): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, ['cause' => $cause, 'failures' => 2] + $this->headFailure($project, $change, 'a'));
+    }
+
     public function failMovedHead(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, $this->headFailure($project, $change, 'b') + ['failures' => 1]);
