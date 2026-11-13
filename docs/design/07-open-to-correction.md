@@ -9,7 +9,7 @@
 
 These are decided, but a measured result from a running install may overturn them. Change them through a decision record, not silently.
 
-- The default review panel of two reviewers from different vendors ([Reviews](05-architecture/07-reviews.md)).
+- The default panel of two Code reviewers from different vendors ([Reviews](05-architecture/07-reviews.md)).
 - The start rule of the model planner: the cheaper model first, escalation on a blocking finding or a stall, a small random holdout ([Budget and model planner](05-architecture/06-budget-and-model-planner.md)).
 - The size tiers and the plan-approval thresholds ([Choosing work](05-architecture/03-choosing-work.md), decision 7).
 - Serializing tasks only at high overlap-forecast confidence (decision 8).
