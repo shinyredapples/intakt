@@ -39,7 +39,7 @@ final readonly class RunBuildJob
 
     public const string LOG = 'build.log';
 
-    // The build script's exit code when files the builder planted in the output could not be removed.
+    // An exit code, because a builder that can plant files in the output can plant any marker there too, but cannot set the script's exit code.
     public const int OUTPUT_NOT_CLEARED = 3;
 
     // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.

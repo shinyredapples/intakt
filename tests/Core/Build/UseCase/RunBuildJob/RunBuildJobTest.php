@@ -192,8 +192,8 @@ final class RunBuildJobTest extends TestCase
     {
         $output = new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n", 'build.log' => "cut\n"]);
 
-        $killed = $this->runBuilds($output, cause: JobCause::MemoryKilled)->run($this->job());
-        $timedOut = $this->runBuilds($output, cause: JobCause::TimedOut)->run($this->job());
+        $killed = $this->runBuilds($output, end: new JobEnd(JobCause::MemoryKilled, 137))->run($this->job());
+        $timedOut = $this->runBuilds($output, end: new JobEnd(JobCause::TimedOut, 137))->run($this->job());
 
         self::assertSame([BuildVerdict::MemoryKilled, null, "cut\n"], [$killed->verdict, $killed->bundle, $killed->log]);
         self::assertSame(BuildVerdict::TimedOut, $timedOut->verdict);
@@ -203,7 +203,7 @@ final class RunBuildJobTest extends TestCase
     {
         $output = new JobOutput(['handback.bundle' => 'PLANTED', 'pull-request.md' => "planted\n", 'build.log' => "log\n"]);
 
-        $outcome = $this->runBuilds($output, exitCode: RunBuildJob::OUTPUT_NOT_CLEARED)->run($this->job());
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, RunBuildJob::OUTPUT_NOT_CLEARED))->run($this->job());
 
         self::assertSame([BuildVerdict::NoResult, null, null, "log\n"], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText, $outcome->log]);
     }
@@ -212,7 +212,7 @@ final class RunBuildJobTest extends TestCase
     {
         $output = new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]);
 
-        $outcome = $this->runBuilds($output, exitCode: 1)->run($this->job());
+        $outcome = $this->runBuilds($output, end: new JobEnd(JobCause::Exited, 1))->run($this->job());
 
         self::assertSame(BuildVerdict::Built, $outcome->verdict);
     }
@@ -232,14 +232,14 @@ final class RunBuildJobTest extends TestCase
         return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
     }
 
-    private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobCause $cause = JobCause::Exited, int $exitCode = 0): RunBuildJob
+    private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobEnd $end = new JobEnd(JobCause::Exited, 0)): RunBuildJob
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($output, $cause, $exitCode): JobResult {
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($output, $end): JobResult {
             $this->ran = $spec;
             $this->promptSeen = (string) file_get_contents($spec->inputs[1]->hostPath);
 
-            return new JobResult(new JobEnd($cause, $exitCode), $output);
+            return new JobResult($end, $output);
         });
 
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
