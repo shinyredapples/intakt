@@ -163,6 +163,31 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
     }
 
+    public function testAStartedReviewerCarriesTheMomentItStarted(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}', new DateTimeImmutable('2026-10-28T12:05:00+00:00')),
+        );
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:05:00+00:00'), $review?->rounds[0]->outcomes[0]->since);
+    }
+
+    public function testAReviewerStartedAgainCarriesTheMomentOfItsLatestStart(): void
+    {
+        $reviewer = '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, $reviewer, new DateTimeImmutable('2026-10-28T12:05:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStopped, $reviewer, new DateTimeImmutable('2026-10-28T12:10:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStarted, $reviewer, new DateTimeImmutable('2026-10-28T12:20:00+00:00')),
+        );
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:20:00+00:00'), $review?->rounds[0]->outcomes[0]->since);
+    }
+
     #[DataProvider('modes')]
     public function testAVerdictCarriesItsRecordedModeAndReadsAsOrdinaryWithoutOne(string $field, ProjectMode $expected): void
     {
