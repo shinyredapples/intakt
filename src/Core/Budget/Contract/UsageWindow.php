@@ -6,7 +6,7 @@ namespace Intakt\Core\Budget\Contract;
 
 use DateTimeImmutable;
 
-// Vendor-neutral: a vendor's window is told by its stated length or by its reset (see told()), never by the name the vendor gives it.
+// Vendor-neutral because a vendor's own names for its windows say nothing about their length: see told().
 enum UsageWindow: string
 {
     case FiveHour = 'five-hour';
@@ -20,8 +20,7 @@ enum UsageWindow: string
         };
     }
 
-    // A vendor that has one window reports it under a name like "primary" whatever its length, so names say nothing:
-    // the stated length decides, else a reset more than five hours and at most a week ahead is the weekly window.
+    // A vendor with one window reports it as "primary", so a name would mislead: the stated length decides, else the reset does.
     public static function told(?int $windowMinutes, DateTimeImmutable $resetsAt, DateTimeImmutable $now): ?self
     {
         if (null !== $windowMinutes) {
