@@ -85,6 +85,7 @@ final class RouteHandBackTest extends TestCase
         self::assertSame([LedgerEventKind::HandBackSentBack], $this->ledger->kinds());
         self::assertSame(HandBackRefusal::TextHoldsSecret->reason(), $this->ledger->lastPayload()['reason']);
         self::assertStringNotContainsString($key, $this->ledger->payloads());
+        self::assertInstanceOf(FailedHandBack::class, $result);
         self::assertStringNotContainsString($key, $result->reason());
     }
 
@@ -154,6 +155,7 @@ final class RouteHandBackTest extends TestCase
 
         self::assertEquals(new FailedHandBack(HandBackRefusal::TextHoldsCredential, HandBackRoute::SentBack), $result);
         self::assertStringNotContainsString($credential, $this->ledger->payloads());
+        self::assertInstanceOf(FailedHandBack::class, $result);
         self::assertStringNotContainsString($credential, $result->reason());
     }
 
