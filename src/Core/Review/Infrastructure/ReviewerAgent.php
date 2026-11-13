@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
@@ -63,7 +64,7 @@ final readonly class ReviewerAgent implements Reviewer
 
         // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
         if ($tools->seen() && !$verdict->isStopped()) {
-            return Verdict::invalidOutput('the reviewer made a malformed tool call.');
+            throw VerdictUnreadable::because('the reviewer made a malformed tool call.');
         }
 
         if ($this->approvesCutText($verdict, $request->brief, $fenced)) {
@@ -87,13 +88,13 @@ final readonly class ReviewerAgent implements Reviewer
         $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
 
         if ([] !== $unknown) {
-            return Verdict::invalidOutput(sprintf('the verdict names ids that were not open: %s.', implode(', ', $unknown)));
+            throw VerdictUnreadable::because(sprintf('the verdict names ids that were not open: %s.', implode(', ', $unknown)));
         }
 
         // Refused, because the ledger cannot tell which of the two the reviewer meant.
         $contradicted = array_unique(array_intersect($verdict->resolved, $repeated));
 
-        return [] === $contradicted ? $verdict : Verdict::invalidOutput(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
+        return [] === $contradicted ? $verdict : throw VerdictUnreadable::because(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
     }
 
     // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
@@ -138,7 +139,7 @@ final readonly class ReviewerAgent implements Reviewer
         try {
             return $this->prompt->verdictIn($execution);
         } catch (MaxIterationsExceededException) {
-            return Verdict::invalidOutput(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
+            throw VerdictUnreadable::because(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
         } catch (ReviewServerLost) {
             return Verdict::noTools();
         } catch (RuntimeException $failure) {
