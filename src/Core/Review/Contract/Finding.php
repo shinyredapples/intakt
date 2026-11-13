@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
+use Symfony\Component\Serializer\Attribute\Ignore;
 use Symfony\Component\Validator\Constraints\GreaterThanOrEqual;
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\Valid;
@@ -13,6 +14,9 @@ use Symfony\Component\Validator\Constraints\Valid;
 #[Exclude]
 final readonly class Finding
 {
+    /**
+     * @param list<string> $merged
+     */
     public function __construct(
         #[NotBlank]
         public string $id,
@@ -30,12 +34,23 @@ final readonly class Finding
         #[Valid]
         public ?Evidence $evidence,
         public bool $regression = false,
+        // Ignored, so the schema never asks a reviewer for it and an answer naming it is refused; only plain code merges findings, and StoredFindingNormalizer keeps it in stored JSON.
+        #[Ignore]
+        public array $merged = [],
     ) {
     }
 
     public function withSeverity(Severity $severity): self
     {
         return clone ($this, ['severity' => $severity]);
+    }
+
+    /**
+     * @param list<string> $ids
+     */
+    public function withMerged(array $ids): self
+    {
+        return clone ($this, ['merged' => $ids]);
     }
 
     public function withId(string $id): self

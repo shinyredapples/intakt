@@ -5,8 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Support;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Infrastructure\StoredFindingNormalizer;
+use Intakt\Core\Review\Infrastructure\StoredJsonEncoder;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -16,6 +21,9 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(UsageStarted::class)]
 #[UsesClass(JudgeDone::class)]
 #[UsesClass(JudgeDoneFinding::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(StoredFindingNormalizer::class)]
+#[UsesClass(StoredJsonEncoder::class)]
 final class StoredSerializerFactoryTest extends KernelTestCase
 {
     // A started row outside a round, because it needs the enum, the name converter and the attribute context the container's serializer has.
@@ -36,5 +44,15 @@ final class StoredSerializerFactoryTest extends KernelTestCase
         self::assertInstanceOf(SerializerInterface::class, $stored);
 
         self::assertEquals($stored->deserialize($json, JudgeDone::class, 'json'), StoredSerializerFactory::create()->deserialize($json, JudgeDone::class, 'json'));
+    }
+
+    // A finding with merged ids, because only the stored finding normalizer keeps them.
+    public function testTheFactoryWritesAFindingWithMergedIdsAsTheContainersStoredSerializerDoes(): void
+    {
+        $finding = new Finding('F1', Severity::P1, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, null, merged: ['F2']);
+        $stored = self::getContainer()->get('serializer.stored');
+        self::assertInstanceOf(SerializerInterface::class, $stored);
+
+        self::assertSame($stored->serialize($finding, 'json'), StoredSerializerFactory::create()->serialize($finding, 'json'));
     }
 }
