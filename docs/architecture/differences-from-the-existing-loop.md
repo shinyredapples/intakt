@@ -11,7 +11,7 @@ Intakt is to replace the existing loop for the owner's own use ([plan](../plan.m
 ## No job image without the project's PHP
 
 - **The loop:** a project without its PHP record gets no probes rather than the system's PHP (its `test_entry_harness.py`).
-- **Intakt:** there is no system PHP to fall back to: a project's job image comes from its devcontainer, its Dockerfile or `composer.json`, and when `composer.json` names no PHP version no image is built at all. Every built image is asked for its PHP version and extensions, and one that does not match `composer.json` is refused. Built in `Core/Job` ([Job images](job-images.md)); no build runs in such an image yet.
+- **Intakt:** there is no system PHP to fall back to: a project's job image comes from its devcontainer, its Dockerfile or `composer.json`, and when `composer.json` names no PHP version no image is built at all. Every built image is asked for its PHP version and extensions, and one that does not match `composer.json` is refused. Built in `Core/Job` ([Job images](job-images.md)); `intakt:build:run` runs a [build job](build-job.md) in the image its caller names, and the build lane that runs builds in the checked image is not built yet.
 - **Why:** the PHP a job runs is a property of the project's image, so it is checked once when the image is built instead of in each step that runs PHP.
 
 ## An egress allowlist per job through its own proxy

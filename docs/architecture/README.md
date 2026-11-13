@@ -48,6 +48,7 @@ Models and budget:
 
 Builds:
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
+- [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns
 
 Reviews:
 - [Review flow](review-flow.md)
