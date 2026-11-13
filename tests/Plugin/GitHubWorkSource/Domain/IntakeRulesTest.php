@@ -30,7 +30,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ItemReading::class)]
 final class IntakeRulesTest extends TestCase
 {
-    // Accounts with write access; every other account (`tom` triages, `mallory` only reads) has none.
+    // Named apart from the others, because `tom` (triage) and `mallory` (read) stand for the accounts whose word must not count.
     private const array WRITERS = ['ana', 'ben'];
 
     public function testAnOpenTrustedTaskWithTheEligibilityLabelIsReady(): void
@@ -61,6 +61,11 @@ final class IntakeRulesTest extends TestCase
     public function testATaskIsEligibleAgainOnceAnAccountWithWriteAccessSavesItAfterAnOutsidersEdit(): void
     {
         self::assertSame([1], $this->readyOf([$this->row(Issues::task(1), $this->history('ben', ['intakt' => 'ana']))]));
+    }
+
+    public function testATaskWhoseHistoryWasNotReadIsNotEligible(): void
+    {
+        self::assertSame([], $this->readyOf([new QueuedIssue(new ItemReading(Issues::task(1), [], []))]));
     }
 
     public function testAPullRequestIsNoTask(): void
@@ -321,13 +326,14 @@ final class IntakeRulesTest extends TestCase
     {
         $references = new IssueReferences();
         $row = new QueuedIssue(new ItemReading($listed, $references->waitsFor($listed->body), $references->closedBy($listed->body)));
-        $row->vouch(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys($listed->labels, $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
 
-        return $row;
+        return $row->vouchedBy(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys($listed->labels, $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
     }
 
+    // Keyed by label, earliest application first, because a label applied again takes its later place.
+
     /**
-     * @param array<string, string> $applications the account that applied each label last, earliest first
+     * @param array<string, string> $applications
      */
     private function history(string $lastEditor, array $applications): IssueHistory
     {

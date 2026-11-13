@@ -9,7 +9,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
 use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// What an item's history says for the rules: whether author and last editor have write access, and the labels such an account applied last, in the order of those applications.
+// Only text and labels from accounts with write access steer the loop, so the rules keep whether author and last editor have such access and the labels such an account applied last, in the order of those applications.
 #[Exclude]
 final readonly class Vouching
 {
