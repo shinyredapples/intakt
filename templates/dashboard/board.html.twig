@@ -19,7 +19,7 @@
     <div class="lanes">
     {% for lane in working.lanes %}
         <div class="lane" data-project="{{ lane.project }}">
-            <div class="who"><span class="dot ok"></span>{{ lane.role }}, {{ lane.tier }}<span class="elapsed">since <time datetime="{{ lane.since|date('c', 'UTC') }}">{{ lane.since|date('H:i', 'UTC') }}</time></span></div>
+            <div class="who"><span class="dot ok"></span>{{ lane.role }}, {{ lane.tier }}<span class="elapsed">since <time datetime="{{ lane.since|date('c', 'UTC') }}">{{ lane.since|date('H:i', 'UTC') }} UTC</time></span></div>
             <div class="what">{{ lane.change }}</div>
             <p class="meta"><span>{{ lane.project }}</span>{% if lane.round is not null %}<span>Round {{ lane.round }}</span>{% endif %}</p>
         </div>
