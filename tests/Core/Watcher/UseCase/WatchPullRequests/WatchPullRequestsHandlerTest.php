@@ -22,8 +22,8 @@ use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootHarness;
-use Intakt\Core\Review\Contract\BootLimits;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
+use Intakt\Core\Review\Contract\BootLimits;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\MainCommit;
@@ -889,7 +889,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->startRoundOnGreenHead();
 
         self::assertNotSame([], $this->locks->changeLockLifetimes);
-        self::assertGreaterThan(2 * BootLimits::LONGEST_SECONDS, min($this->locks->changeLockLifetimes));
+        foreach ($this->locks->changeLockLifetimes as $lifetime) {
+            self::assertGreaterThan(2 * BootLimits::LONGEST_SECONDS, $lifetime);
+        }
     }
 
     public function testAnApprovedHeadThatDoesNotBootIsNotMergedBecauseNoRoundIsQueuedForIt(): void
