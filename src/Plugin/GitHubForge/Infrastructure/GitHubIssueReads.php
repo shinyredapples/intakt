@@ -19,7 +19,7 @@ use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
 // Apart from the pull request reads, because intake lists issues, pull requests among them, and must read every page of them.
 final readonly class GitHubIssueReads implements IssueReads
 {
-    public const int PAGE_SIZE = 100;
+    private const int PAGE_SIZE = 100;
     // A listing of more pages than this fails, because reading on has no end a tick could wait for.
     private const int MAX_PAGES = 10;
     private const int NOT_MODIFIED = 304;
