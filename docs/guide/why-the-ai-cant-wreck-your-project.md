@@ -35,6 +35,12 @@ A builder hands back **a package of commits and a short description**, nothing e
 
 The project's own checks run again in a **separate, fresh container**, then again on GitHub's machines (CI). The builder saying "all tests pass" counts for nothing; the checks do.
 
+### One PHP setup for everyone
+
+A check only means something if it runs on the same PHP every time. So the PHP the project needs is written down once, in the project itself: the PHP version and the list of PHP extensions in `composer.json`, and the few settings the checks rely on (for example that PHP's internal self-checks are switched on) in `config/gates/php/check.ini`. It is the one setup for the builders, the reviewers and CI: CI's container loads those settings, and refuses to be built when it lacks an extension from the list.
+
+Nobody has to take that on trust. The first thing `bin/check` (the [checks](glossary.md)) does is compare the PHP it runs on with that setup. When they differ, it fails and names each difference, for example a PHP that is too old, a missing extension, or a setting with another value than the file asks for, together with how to load the right settings. A change can therefore not pass on a PHP that happens to be more forgiving than everyone else's.
+
 The checks also scan the project's CI workflows for known security mistakes, such as text from a pull request run as a command or an action not pinned to an exact version. A change that weakens the CI that way fails before any reviewer sees it.
 
 Sometimes a warning is wrong for this project, for example an image that cannot be pinned yet. It may then be silenced on its own line only, and only with the reason written right after it: `# zizmor: ignore[unpinned-images] tag only until digests come`. The same comment without a reason fails the checks, so every exception explains itself to the next reader. There is no settings file that turns a whole kind of warning off.
