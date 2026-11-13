@@ -43,20 +43,23 @@ export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
 setsid claude -p --model "$model" --max-turns "$turns" --output-format json --dangerously-skip-permissions < "$prompt" >> "$log" 2>&1 &
 session=$!
 # The allowance ends the session only, never this script, so a cut session still reaches the bundle below; the watchdog is in a session of its own too, so its sleep goes with it.
-cut="${TMPDIR:-/work}/cut"
-rm -f -- "$cut"
-setsid sh -c 'sleep "$1"; : > "$3"; kill -s KILL -- "-$2"' watchdog "$allowance" "$session" "$cut" > /dev/null 2>&1 &
+# It reports the cut by its exit status, not by a file, because the builder can write anywhere a file could be and so stop the kill or fake a cut.
+setsid sh -c 'sleep "$1" && kill -s KILL -- "-$2"' watchdog "$allowance" "$session" > /dev/null 2>&1 &
 watchdog=$!
 wait "$session"
 status=$?
-# Its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
-for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
-    kill -s KILL -- "-$watchdog" 2>/dev/null && break
-    sleep 0.1
-done
+# A session ended by SIGKILL may be the watchdog's cut, which ending the watchdog now would hide; waiting for it ends at the allowance at the latest.
+if [ "$status" -ne 137 ]; then
+    # Its group exists only once setsid has run, which a session that ends at once can beat, so the kill is tried again.
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+        kill -s KILL -- "-$watchdog" 2>/dev/null && break
+        sleep 0.1
+    done
+fi
 wait "$watchdog" 2>/dev/null
+cut=$?
 printf 'claude exited with %d\n' "$status" >> "$log"
-if [ -e "$cut" ]; then
+if [ "$cut" -eq 0 ]; then
     printf 'claude cut after %d seconds, its commits are kept\n' "$allowance" >> "$log"
 fi
 

@@ -52,7 +52,7 @@ final readonly class RunBuildJob
     // Fixed, because sizing the limits for each task is plan task T60 (#1710); the CLI ends its session after this many turns.
     private const int MAX_TURNS = 100;
 
-    // The script cuts a session at this age, and keeps what it committed.
+    // Below the job's own limit, because the runner's kill keeps no output, while the script's cut still bundles what the session committed.
     private const int ALLOWANCE_SECONDS = 3000;
 
     // Beyond the allowance for the script's cleanup and bundle, so the runner's kill, which keeps no output, is a backstop that never fires first.

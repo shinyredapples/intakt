@@ -87,6 +87,43 @@ final class BuildScriptTest extends TestCase
         self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
 
+    public function testASessionThatPutsAFolderWhereACutMarkerCouldBeIsStillCutAtItsAllowance(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo 'built' > built.txt
+            git add built.txt
+            git commit --quiet -m 'feat: build the task'
+            mkdir "$TMPDIR/cut"
+            sleep 30
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
+        self::assertStringContainsString("claude cut after 3 seconds, its commits are kept\n", $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatWritesACutMarkerItselfIsNotLoggedAsCut(): void
+    {
+        $this->givenTheCli('touch "$TMPDIR/cut"');
+
+        $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
+    public function testASessionThatKillsItselfBeforeItsAllowanceIsNotLoggedAsCut(): void
+    {
+        $this->givenTheCli('kill -s KILL $$');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 3);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertStringContainsString("claude exited with 137\n", $this->outputFile('build.log'));
+        self::assertStringNotContainsString('cut after', $this->outputFile('build.log'));
+    }
+
     public function testASessionThatEndsByItsTurnLimitKeepsItsCommitsAndIsNotLoggedAsCut(): void
     {
         $this->givenTheCli(<<<'SH'
@@ -106,7 +143,8 @@ final class BuildScriptTest extends TestCase
 
     public function testASessionThatEndsBeforeItsAllowanceLeavesNoWatchdogBehind(): void
     {
-        $this->givenTheCli('exit 0');
+        // The session ends only once the watchdog sleeps, else the watchdog could end before it is recorded.
+        $this->givenTheCli('until [ -s "$RECORD/sleeps" ]; do :; done; exit 0');
         $this->givenSleepRecordsItsProcess();
 
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
