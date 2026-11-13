@@ -36,6 +36,11 @@ final readonly class PublishVerdictHandler
             return;
         }
 
+        // Dropped, because the later round's status is the one its commit stands at, and an older publication arriving after it (a retry, a stale mark's withdrawal) would replace it.
+        if ($this->rounds->judgedAfter($round)) {
+            return;
+        }
+
         try {
             $this->publish($round, $this->verdicts->of($round));
             $this->withdrawIfMadeStaleMeanwhile($round);

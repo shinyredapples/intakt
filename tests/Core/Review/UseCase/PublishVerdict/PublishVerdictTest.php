@@ -230,6 +230,27 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertSame([HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.'], array_last($published));
     }
 
+    public function testAReturningHeadThatFailsToBootHasItsApprovalWithdrawnThoughARoundOfAnotherHeadWasJudgedMeanwhile(): void
+    {
+        $first = $this->publishedApprovalAt(SampleIdentity::HEAD);
+        $this->publishedApprovalAt(SampleIdentity::NEW_HEAD);
+
+        $this->publishStaleMarkOf($first);
+
+        self::assertSame(self::WITHDRAWN, array_last($this->statusesOn(SampleIdentity::HEAD)));
+    }
+
+    public function testAWithdrawalWritesNothingOnceALaterRoundOfTheSameHeadWasJudged(): void
+    {
+        $first = $this->publishedApprovalAt(SampleIdentity::HEAD);
+        $this->publishedApprovalAt(SampleIdentity::HEAD);
+        $writes = $this->github->writes;
+
+        $this->publishStaleMarkOf($first);
+
+        self::assertSame($writes, $this->github->writes);
+    }
+
     public function testAHeadNoReviewerCouldReviewGetsAnErrorStatusAndNoComment(): void
     {
         $blocked = new Verdict(Decision::Blocked, [], [], []);
@@ -384,6 +405,46 @@ final class PublishVerdictTest extends KernelTestCase
         self::assertInstanceOf(MessageBusInterface::class, $commands);
 
         new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($roundId));
+    }
+
+    // Only the messages of this round, so an earlier round of the change is not delivered or judged again.
+    private function publishedApprovalAt(string $head): string
+    {
+        $vendor = new VerdictPerRole([]);
+        $sent = count($this->fixture->bus->messages);
+        $judged = count($this->fixture->judgings());
+        $roundId = $this->fixture->startAtHead(self::PULL, $head);
+        foreach (array_slice($this->fixture->bus->messages, $sent) as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
+        foreach (array_slice($this->fixture->judgings(), $judged) as $judging) {
+            $this->fixture->judge($vendor)($judging);
+        }
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+
+        return $roundId;
+    }
+
+    private function publishStaleMarkOf(string $roundId): void
+    {
+        $alreadyHandled = count($this->publicationsOf($roundId));
+        $this->markStale($roundId);
+
+        foreach (array_slice($this->publicationsOf($roundId), $alreadyHandled) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function statusesOn(string $head): array
+    {
+        $statuses = array_filter($this->github->writes, static fn (array $write): bool => 'POST '.self::API.'/statuses/'.$head === $write[0]);
+
+        return array_values(array_column($statuses, 1));
     }
 
     private function marker(string $roundId): string
