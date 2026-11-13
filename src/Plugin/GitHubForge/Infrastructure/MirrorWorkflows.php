@@ -45,7 +45,8 @@ final readonly class MirrorWorkflows
             $this->workflowsAt($repository, $head),
             $this->workflowsAt($repository, $main),
             null === $merged ? [WorkflowFile::unread(self::WORKFLOWS, 'the head does not merge with main without a conflict')] : $this->workflowsAt($repository, $merged),
-            $this->changedPaths($repository, $main, $head, $merged),
+            // Against the head, because pushing it runs its own files even where main already holds or has reverted them; against the merge too, because that is what the change brings to main.
+            $this->changedPaths($repository, $main, $head, ...(null === $merged ? [] : [$merged])),
         );
     }
 
@@ -164,18 +165,14 @@ final readonly class MirrorWorkflows
      * @throws CommitNotRead
      * @throws RepositoryAttributesRefused
      */
-    private function changedPaths(string $repository, string $main, string $head, ?string $merged): array
+    private function changedPaths(string $repository, string $main, string ...$changes): array
     {
-        // Against the head, because pushing it runs its own files even where main already holds or has reverted them; against the merge too, because that is what the change brings to main.
-        $paths = $this->pathsBetween($repository, $main, $head);
-        if (null !== $merged) {
-            $paths = [...$paths, ...$this->pathsBetween($repository, $main, $merged)];
+        $paths = [];
+        foreach ($changes as $change) {
+            $paths = [...$paths, ...$this->pathsBetween($repository, $main, $change)];
         }
 
-        $paths = array_unique($paths);
-        sort($paths, \SORT_STRING);
-
-        return $paths;
+        return array_values(array_unique($paths));
     }
 
     /**
