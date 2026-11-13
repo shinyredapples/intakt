@@ -99,6 +99,24 @@ final readonly class StartedRounds
         return $rounds;
     }
 
+    /**
+     * @return list<StartedRound>
+     */
+    public function openRoundsAt(string $project, OpenChange $change): array
+    {
+        $rounds = [];
+
+        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]) as $loaded) {
+            $round = $this->readAgain($loaded);
+
+            if (false === $round?->isStale()) {
+                $rounds[] = $round;
+            }
+        }
+
+        return $rounds;
+    }
+
     // Marked and recorded in one transaction with the ledger's own write, so a failed append leaves the round unmarked for a later tick and a second worker that marks the same round finds it taken.
     /**
      * @param Closure(StartedRound): void $record

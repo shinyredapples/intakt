@@ -35,6 +35,14 @@ final readonly class StaleVerdicts
         }
     }
 
+    // No query to Review, because the head itself is the one refused: whatever its round approved no longer counts.
+    public function noteFailedBoot(WatchedProject $project, OpenChange $open): void
+    {
+        foreach ($this->rounds->openRoundsAt($project->name, $open) as $round) {
+            $this->rounds->markStaleOnce($round, $this->ledger->verdictsStale(...));
+        }
+    }
+
     private function check(WatchedProject $project, OpenChange $open, StartedRound $round): void
     {
         $current = $this->ask(new IdentityAtHead($project->startAt($open), new CommitId($round->head())), HeadIdentity::class);

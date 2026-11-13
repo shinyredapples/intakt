@@ -855,6 +855,29 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
     }
 
+    public function testAHeadWhoseRoundStartedBeforeItFailedToBootHasThatRoundsVerdictsMadeStale(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->head = BootOutcome::failed('The same head no longer boots.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertTrue($this->storedStale(self::GREEN));
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
+    }
+
+    public function testAHeadThatBootsAgainKeepsTheVerdictsOfItsRound(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertFalse($this->storedStale(self::GREEN));
+        self::assertCount(1, $this->commands->started);
+    }
+
     public function testAnApprovedHeadThatDoesNotBootIsNotMergedBecauseNoRoundIsQueuedForIt(): void
     {
         $this->queries->head = BootOutcome::failed('The server did not start.');

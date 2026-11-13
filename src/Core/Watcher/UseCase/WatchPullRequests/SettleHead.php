@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
+use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 
 final readonly class SettleHead
@@ -31,6 +32,11 @@ final readonly class SettleHead
         // Recorded before the stale check, because that check reads the new head from the repository and a commit not fetched yet must not keep a pending head from waiting its interval.
         $this->withoutRound->record($project->name, $decision);
         $this->stale->noteMovedHead($project, $decision->change);
+
+        if (HeadAdmission::FailedBoot === $decision->admission) {
+            $this->stale->noteFailedBoot($project, $decision->change);
+        }
+
         // Settled only after the stale check, because an unchanged listing never names the head again, so a failed check must leave it queued.
         $this->withoutRound->settled($project->name, $decision);
     }
