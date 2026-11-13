@@ -353,7 +353,7 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertFalse($pool->hasItem('account-cooldown-pending-anthropic.team'));
     }
 
-    // This worker pauses between its look at the pending item and the lock, while another worker reports the same error and an answer to a later call clears that report.
+    // The other worker reports the same error between this worker's look at the pending item and its lock, and an answer to a later call clears that report, so this worker must find nothing pending under the lock.
     public function testAWorkerThatReadThePendingItemBeforeTheLockDoesNotReportTheSameErrorAgain(): void
     {
         $pool = new SteppingInAfterReading('account-cooldown-pending-anthropic.team');
