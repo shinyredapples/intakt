@@ -327,7 +327,7 @@ final class CodexReviewerTest extends KernelTestCase
             'mcp_servers.intakt-review.enabled_tools=["read_file","list_directory","search_files"]',
             'mcp_servers.intakt-review.required=true',
         ], $this->serverSettings());
-        self::assertSame(self::MODEL, $arguments[array_search('--model', $arguments, true) + 1]);
+        self::assertSame(['--model', self::MODEL], array_slice($arguments, (int) array_search('--model', $arguments, true), 2));
         self::assertContains('model_reasoning_effort="high"', $arguments);
         self::assertContains('web_search="disabled"', $arguments);
         self::assertContains('--ignore-user-config', $arguments);

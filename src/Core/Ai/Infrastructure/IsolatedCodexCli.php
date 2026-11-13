@@ -101,7 +101,7 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
     /**
      * @param string|list<string> $value
      */
-    // A JSON string or list of strings is a valid TOML value, which the CLI parses each override as.
+    // Encoded as JSON because the CLI parses each override as TOML, and a JSON string or list of strings is valid TOML, so a quote in a value cannot end it early.
     private function toml(string|array $value): string
     {
         return json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
