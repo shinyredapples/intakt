@@ -39,6 +39,9 @@ final readonly class RunBuildJob
 
     public const string LOG = 'build.log';
 
+    // The build script's exit code when files the builder planted in the output could not be removed.
+    public const int OUTPUT_NOT_CLEARED = 3;
+
     // Allowlisted with the gate's registries, because the CLI talks to this host only and the builder installs the project's dependencies.
     private const string VENDOR_HOST = 'api.anthropic.com';
 
@@ -159,8 +162,10 @@ final readonly class RunBuildJob
         return match ($result->end->cause) {
             JobCause::MemoryKilled => new BuildJobOutcome(BuildVerdict::MemoryKilled, log: $log),
             JobCause::TimedOut => new BuildJobOutcome(BuildVerdict::TimedOut, log: $log),
-            // The container's exit code is not read, because what a build hands back leaves the job through its output directory only.
-            JobCause::Exited => $this->handedBack($result->output, $log),
+            // The builder cannot set the script's exit code, so the one code that says its files may still be in the output is trusted; what a build hands back is read from the output only.
+            JobCause::Exited => self::OUTPUT_NOT_CLEARED === $result->end->exitCode
+                ? new BuildJobOutcome(BuildVerdict::NoResult, log: $log)
+                : $this->handedBack($result->output, $log),
         };
     }
 

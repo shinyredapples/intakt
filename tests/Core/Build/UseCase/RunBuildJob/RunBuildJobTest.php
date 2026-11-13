@@ -199,6 +199,24 @@ final class RunBuildJobTest extends TestCase
         self::assertSame(BuildVerdict::TimedOut, $timedOut->verdict);
     }
 
+    public function testAJobWhoseScriptCouldNotClearTheOutputIsNoResultWhateverItsOutputSays(): void
+    {
+        $output = new JobOutput(['handback.bundle' => 'PLANTED', 'pull-request.md' => "planted\n", 'build.log' => "log\n"]);
+
+        $outcome = $this->runBuilds($output, exitCode: RunBuildJob::OUTPUT_NOT_CLEARED)->run($this->job());
+
+        self::assertSame([BuildVerdict::NoResult, null, null, "log\n"], [$outcome->verdict, $outcome->bundle, $outcome->pullRequestText, $outcome->log]);
+    }
+
+    public function testAJobThatExitedWithAnotherFailingCodeIsStillReadFromItsOutput(): void
+    {
+        $output = new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: x\n"]);
+
+        $outcome = $this->runBuilds($output, exitCode: 1)->run($this->job());
+
+        self::assertSame(BuildVerdict::Built, $outcome->verdict);
+    }
+
     public function testAnOutputTheRunnerRefusesIsNoResult(): void
     {
         $runner = self::createStub(JobRunner::class);
@@ -214,14 +232,14 @@ final class RunBuildJobTest extends TestCase
         return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
     }
 
-    private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobCause $cause = JobCause::Exited): RunBuildJob
+    private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobCause $cause = JobCause::Exited, int $exitCode = 0): RunBuildJob
     {
         $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($output, $cause): JobResult {
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($output, $cause, $exitCode): JobResult {
             $this->ran = $spec;
             $this->promptSeen = (string) file_get_contents($spec->inputs[1]->hostPath);
 
-            return new JobResult(new JobEnd($cause, 0), $output);
+            return new JobResult(new JobEnd($cause, $exitCode), $output);
         });
 
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));

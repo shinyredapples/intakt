@@ -21,7 +21,7 @@ enum BuildVerdict: string
             self::NoPullRequestText => 'the build wrote no pull request text to PR.md',
             self::MemoryKilled => 'the build job ran out of memory',
             self::TimedOut => 'the build job ran out of time',
-            self::NoResult => 'the build job left an output the runner refuses to read',
+            self::NoResult => 'the build job left an output the runner refuses to read or could not clear its output',
         };
     }
 }

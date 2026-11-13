@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build;
 
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
@@ -35,6 +36,8 @@ final class BuildScriptTest extends TestCase
 
     protected function tearDown(): void
     {
+        // A scripted CLI may take the output's permissions away, which would stop the removal.
+        new Filesystem()->chmod($this->output, 0o700);
         $this->history->remove();
     }
 
@@ -107,6 +110,59 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
 
         self::assertFileDoesNotExist($this->output.'/pull-request.md');
+    }
+
+    public function testFilesTheCliPlantsAreNotHandedBackWhenItTakesAwayTheOutputsWritePermission(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            echo planted > "$INTAKT_JOB_OUTPUT/handback.bundle"
+            echo planted > "$INTAKT_JOB_OUTPUT/pull-request.md"
+            chmod 500 "$INTAKT_JOB_OUTPUT"
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+        self::assertFileDoesNotExist($this->output.'/pull-request.md');
+    }
+
+    public function testAFolderTheCliPlantsWithoutPermissionsIsNotHandedBack(): void
+    {
+        $this->givenTheCli(<<<'SH'
+            mkdir -p "$INTAKT_JOB_OUTPUT/handback.bundle/locked"
+            chmod 000 "$INTAKT_JOB_OUTPUT/handback.bundle/locked"
+            chmod 500 "$INTAKT_JOB_OUTPUT/handback.bundle"
+            printf 'docs: nothing\n' > PR.md
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+    }
+
+    public function testAnOutputThatCannotBeClearedEndsWithTheCodeThatHandsNothingBack(): void
+    {
+        // A remove that does nothing stands in for a removal the job cannot do.
+        file_put_contents($this->bin.'/rm', "#!/bin/sh\nexit 0\n");
+        chmod($this->bin.'/rm', 0o755);
+        $this->givenTheCli('echo planted > "$INTAKT_JOB_OUTPUT/pull-request.md"');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(RunBuildJob::OUTPUT_NOT_CLEARED, $run->getExitCode());
+        self::assertStringContainsString('the output folder could not be cleared', $this->outputFile('build.log'));
+    }
+
+    public function testTheScriptEndsWithSuccessWhateverTheClisStatusAndLogsThatStatus(): void
+    {
+        $this->givenTheCli('exit '.RunBuildJob::OUTPUT_NOT_CLEARED);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertStringContainsString('claude exited with '.RunBuildJob::OUTPUT_NOT_CLEARED."\n", $this->outputFile('build.log'));
     }
 
     public function testAPullRequestTextThatIsALinkIsNotHandedBack(): void

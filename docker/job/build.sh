@@ -40,8 +40,22 @@ claude -p --model "$model" --output-format json --dangerously-skip-permissions <
 status=$?
 printf 'claude exited with %d\n' "$status" >> "$log"
 
-# The builder can write to the output folder too, so only what this script writes after the session is handed back.
+# The builder can write to the output folder too, and take its permissions away, so only what this script writes after the session is handed back.
+# chmod follows a link, so a link the builder left is removed without being touched.
+chmod u+rwx -- "$output"
+for planted in "$output/pull-request.md" "$output/handback.bundle"; do
+    if [ -d "$planted" ] && [ ! -L "$planted" ]; then
+        chmod -R u+rwx -- "$planted"
+    fi
+done
 rm -rf -- "$output/pull-request.md" "$output/handback.bundle"
+
+# The orchestrator reads this exit code as no result, because a planted file left here would otherwise be handed back.
+if [ -e "$output/pull-request.md" ] || [ -L "$output/pull-request.md" ] \
+    || [ -e "$output/handback.bundle" ] || [ -L "$output/handback.bundle" ]; then
+    echo 'the output folder could not be cleared' >> "$log"
+    exit 3
+fi
 
 # A link is not followed, because it could point the text at any file the job can read.
 if [ -f PR.md ] && [ ! -L PR.md ]; then
@@ -51,4 +65,5 @@ fi
 # The branch by its full name, so a branch the builder checked out instead is never what is handed back; git refuses an empty bundle.
 git bundle create --quiet "$output/handback.bundle" "refs/heads/$branch" "^$base" >> "$log" 2>&1
 
-exit "$status"
+# Not the CLI's status, which the log holds, so the CLI can never end the job with the code that means an output not cleared.
+exit 0
