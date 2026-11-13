@@ -260,12 +260,32 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Like the upgrade decision below: a change only under docs/, tests/ or upstream/ skips the Docker steps, and the
+      # later checks with the build. A failing git or script fails the job, never skips the image.
+      - name: Decide whether the change needs the app image
+        id: image
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          needed=yes
+          if [ "$EVENT" != push ]; then
+            base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
+            needed=$(.github/ci/image-needed.sh "$base" "$HEAD_SHA")
+          fi
+          echo "needed=$needed" | tee -a "$GITHUB_OUTPUT"
+      - name: Log in to Docker Hub
+        if: steps.image.outputs.needed == 'yes'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
       # Decided in a step, not by a paths filter, so the job reports on every pull request. The base is the pull request's
-      # merge base, or on main the commit before the push; every push to main runs everything. A failing git or filter
-      # fails the step and the job, never skips the image. A change only under docs/, tests/ or upstream/ skips the image
-      # steps below (the later checks need a built image).
-      - name: Decide whether the change needs the app image and the upgrade check
-        id: decide
+      # merge base, or on main the commit before the push; every push to main runs the check. A failing git fails the step.
+      - name: Decide whether the change needs the upgrade check
+        id: upgrade
         env:
           EVENT: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref }}
@@ -274,29 +294,20 @@ jobs:
           set -euo pipefail
           if [ "$EVENT" = push ]; then
             base=$(git rev-parse HEAD~1)
-            image=yes
-            upgrade=yes
+            needed=yes
           else
             base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
-            image=$(.github/ci/image-needed.sh "$base" "$HEAD_SHA")
-            upgrade=$(.github/ci/upgrade-needed.sh "$base" "$HEAD_SHA")
+            needed=$(.github/ci/upgrade-needed.sh "$base" "$HEAD_SHA")
           fi
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "image=$image" >> "$GITHUB_OUTPUT"
-          echo "upgrade=$upgrade" >> "$GITHUB_OUTPUT"
-          echo "app image needed: $image, upgrade check needed: $upgrade (base $base)"
-      - name: Log in to Docker Hub
-        if: steps.decide.outputs.image == 'yes'
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: .github/ci/docker-hub-login.sh
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          echo "upgrade check needed: $needed (base $base)"
       - name: Build the app image
         id: build
-        if: steps.decide.outputs.image == 'yes'
+        if: steps.image.outputs.needed == 'yes'
         run: docker build --tag intakt:ci .
       - name: Smoke-test the app image
-        if: steps.decide.outputs.image == 'yes'
+        if: steps.image.outputs.needed == 'yes'
         run: docker/smoke-test.sh intakt:ci
       # Runs after a failed smoke test too, so a run reports both checks of the image, as two workflows did before.
       - name: Start the image on an empty volume and show the seeded panel
@@ -304,7 +315,7 @@ jobs:
         run: bash docker/verify-first-start.sh intakt:ci
       # Runs after a failed smoke test too, for the same reason.
       - name: Start this image on a copy of the base's data, then the base on the original
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.decide.outputs.upgrade == 'yes' }}
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.upgrade.outputs.needed == 'yes' }}
         env:
-          BASE: ${{ steps.decide.outputs.base }}
+          BASE: ${{ steps.upgrade.outputs.base }}
         run: bash docker/verify-upgrade.sh intakt:ci "$BASE"
