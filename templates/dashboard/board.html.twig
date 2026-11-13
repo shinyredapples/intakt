@@ -14,6 +14,22 @@
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
     </div>
 </div>
+{# The CI banner of the design; the infrastructure one waits for the server's row on the dashboard, its only source. #}
+{% for head in failing %}
+{% set name = 'Pull request ' ~ head.change ~ ' of ' ~ head.project ~ ' is failing' %}
+{% set tries = head.fault.failures ~ (head.fault.failures == 1 ? ' failure' : ' failures') ~ ' in a row; next try ' ~ head.fault.retryAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC.' %}
+<div data-project="{{ head.project }}">
+    {% embed 'dashboard/components/banner.html.twig' with {
+        icon: 'broken',
+        broken: true,
+        short: name,
+        title: name ~ '.',
+        text: (head.handedOver ? 'Handed over to the maintainer agent after ' ~ tries : tries) ~ ' Cause: ' ~ head.fault.cause,
+    } only %}
+        {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
+    {% endembed %}
+</div>
+{% endfor %}
 <details class="working" id="working">
     <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working ? working.working ~ ' working' : 'Nobody is working yet' }}</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
     <div class="lanes">

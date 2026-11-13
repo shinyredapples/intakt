@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Symfony\Component\HttpFoundation\Request;
@@ -16,6 +17,7 @@ final readonly class ShowBoardController
 {
     public function __construct(
         private LedgerReviewPages $reviewPages,
+        private LedgerFailingHeads $failingHeads,
         private LivePageRendering $pages,
     ) {
     }
@@ -26,6 +28,7 @@ final readonly class ShowBoardController
         $board = $this->reviewPages->board();
 
         return new Response($this->pages->render($request, 'dashboard/board.html.twig', [
+            'failing' => $this->failingHeads->now(),
             'board' => $board,
             'working' => $board->whoIsWorking(),
             'columns' => BoardColumn::cases(),
