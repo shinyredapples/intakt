@@ -95,7 +95,7 @@ final readonly class GitHubIssueComments
             $decoded = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);
             $stored = $this->comment(is_array($decoded) ? $decoded : throw new ForgeReadFailed('GitHub answered something other than a comment.'));
         } catch (JsonException|ForgeReadFailed $unread) {
-            throw new ForgeWriteFailed('GitHub answered the post without the comment it stored: '.($unread instanceof JsonException ? 'the answer is not JSON.' : $unread->getMessage()));
+            throw new ForgeWriteFailed('GitHub answered the post without the comment it stored: '.($unread instanceof JsonException ? 'the answer is not JSON.' : $unread->getMessage()), $unread->getCode(), previous: $unread);
         }
 
         if (!$stored->byThisApp) {

@@ -37,7 +37,8 @@ final class ScriptedIssue
 
     public ?int $refusal = null;
 
-    /** @var array<string, mixed> what GitHub stores other than what was posted, for a post GitHub does not keep as sent */
+    // What GitHub stores other than what was posted, for a post GitHub does not keep as sent.
+    /** @var array<string, mixed> */
     public array $storedOtherwise = [];
 
     public static function task(): TaskIssue
