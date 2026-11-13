@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
 use Intakt\Core\Review\Contract\BootOutcome;
@@ -20,9 +25,12 @@ use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\Log\LogRecords;
+use Intakt\Tests\Support\Log\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 
 #[Group('persistence')]
@@ -35,6 +43,7 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(ChangeSource::class)]
 #[UsesClass(CommitId::class)]
 #[UsesClass(WatcherLedger::class)]
+#[UsesClass(HeldCredentialRedactor::class)]
 final class BootResultsTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
@@ -163,9 +172,122 @@ final class BootResultsTest extends KernelTestCase
         self::assertTrue($this->key('a', 'tools-1')->equals($record->key()));
     }
 
+    public function testACacheMissThatAnotherWorkerStoredMeanwhileStillReturnsItsOutcome(): void
+    {
+        $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
+        $otherWorker = new BootResults(new BootingBus(BootOutcome::booted()), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        $bus = new BootingBus(BootOutcome::booted());
+        $bus->meanwhile = fn (): BootOutcome => $otherWorker->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $outcome = $this->results($bus)->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertTrue($this->entities->isOpen());
+    }
+
+    public function testABootResultThatCannotBeStoredIsStillReturnedAndTheFailureIsLogged(): void
+    {
+        $bus = new BootingBus(BootOutcome::failed('The server did not start.'));
+        $bus->meanwhile = fn (): int|string => $this->entities->getConnection()->executeStatement('DROP TABLE watcher_boot_result');
+
+        $outcome = $this->results($bus)->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertTrue($this->entities->isOpen());
+        self::assertLoggedError('error', "Main's boot result could not be stored, so main boots again next time.");
+    }
+
+    public function testAStoredResultThatCannotBeReadIsBootedAgainAndTheFailureIsLogged(): void
+    {
+        $this->entities->getConnection()->executeStatement('DROP TABLE watcher_boot_result');
+        $bus = new BootingBus(BootOutcome::booted());
+
+        $outcome = $this->results($bus)->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertCount(1, $bus->booted);
+        self::assertLoggedError('error', "Main's stored boot result could not be read, so main boots again.");
+        self::assertLoggedError('error', "Main's boot result could not be stored, so main boots again next time.");
+    }
+
+    public function testACredentialInTheMessageOfAThrowingBootReachesNeitherTheCallerNorTheLedger(): void
+    {
+        $bus = new BootingBus(BootOutcome::booted());
+        $bus->meanwhile = static fn (): never => throw new RuntimeException('Authorization: Bearer synthetic-private-token');
+
+        $outcome = $this->results($bus)->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertStringStartsWith('RuntimeException: Authorization: ', $outcome->reason);
+        self::assertStringNotContainsString('synthetic-private-token', $outcome->reason);
+        self::assertStringNotContainsString('synthetic-private-token', $this->recordedPayload());
+    }
+
+    public function testACredentialInTheReasonOfAFailedBootIsNotStored(): void
+    {
+        $this->results(new BootingBus(BootOutcome::failed('clone failed: https://user:synthetic-private-token@localhost/alpha.git')))->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->entities->clear();
+
+        $stored = $this->results(new BootingBus(BootOutcome::booted()))->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $stored->state);
+        self::assertStringNotContainsString('synthetic-private-token', $stored->reason);
+    }
+
+    public function testACrashReasonThatIsNotUtf8IsStillReturnedAndRecordedInTheLedger(): void
+    {
+        $outcome = $this->results(new BootingBus(BootOutcome::crashed("tool error: \xFF")))->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+        self::assertSame('tool error: ?', $outcome->reason);
+        self::assertStringContainsString('tool error: ?', $this->recordedPayload());
+    }
+
+    public function testAFailedReasonThatIsNotUtf8IsStoredScrubbed(): void
+    {
+        $this->results(new BootingBus(BootOutcome::failed("server said \xFF")))->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->entities->clear();
+
+        $stored = $this->results(new BootingBus(BootOutcome::booted()))->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame('server said ?', $stored->reason);
+    }
+
+    public function testALedgerLineThatCannotBeWrittenStillReturnsTheOutcomeAndIsLogged(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturn(AppendResult::failed('The ledger is down.'));
+        $results = new BootResults(new BootingBus(BootOutcome::booted()), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+
+        $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertLoggedError('error', "Main's computed boot result could not be recorded in the ledger.");
+    }
+
+    private function recordedPayload(): string
+    {
+        $events = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed));
+        self::assertCount(1, $events);
+
+        return $events[0]->event->payload;
+    }
+
     private function results(BootingBus $bus): BootResults
     {
-        return new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($this->ledger));
+        return new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+    }
+
+    private function redactor(): Redactor
+    {
+        $redactor = self::getContainer()->get(Redactor::class);
+        self::assertInstanceOf(Redactor::class, $redactor);
+
+        return $redactor;
+    }
+
+    private function logger(): RecordingLogger
+    {
+        return new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.'));
     }
 
     private function key(string $commit, string $fingerprint): BootKey
