@@ -143,7 +143,7 @@ final class BuildScriptTest extends TestCase
 
     public function testASessionThatEndsBeforeItsAllowanceLeavesNoWatchdogBehind(): void
     {
-        // The session ends only once the watchdog sleeps, else the watchdog could end before it is recorded.
+        // Waits for the watchdog's sleep, because a session that ends at once could end the watchdog before its sleep is recorded.
         $this->givenTheCli('until [ -s "$RECORD/sleeps" ]; do :; done; exit 0');
         $this->givenSleepRecordsItsProcess();
 
