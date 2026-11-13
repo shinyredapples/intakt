@@ -16,15 +16,17 @@ COPY --from=zizmor /usr/bin/zizmor /usr/local/bin/zizmor
 
 # Like the old binary: no file capability (secure-exec drops TMPDIR); uid 1000 owns Caddy's XDG_*_HOME dirs.
 # A fixed list before the copy, so a composer.json edit reuses this layer; pdo_mysql and pdo_pgsql serve persistence.
+# openssh-client: the watchdog verifies main's SSH-signed commits with ssh-keygen, and its tests sign with throwaway keys.
 RUN set -eu; \
     apt-get update; \
-    apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev python3 unzip; \
+    apt-get install --yes --no-install-recommends git iproute2 jq libicu-dev libpq-dev libzip-dev openssh-client python3 unzip; \
     rm -rf /var/lib/apt/lists/*; \
     docker-php-ext-install -j"$(nproc)" intl pcntl zip pdo_mysql pdo_pgsql; \
     php --ini; \
     composer --version; \
     gitleaks version; \
     zizmor --version; \
+    keys="$(mktemp -d)"; ssh-keygen -q -t ed25519 -N '' -C '' -f "$keys/key"; ssh-keygen -l -f "$keys/key.pub"; rm -r "$keys"; \
     setcap -r /usr/local/bin/frankenphp; \
     frankenphp version; \
     php -v; \
