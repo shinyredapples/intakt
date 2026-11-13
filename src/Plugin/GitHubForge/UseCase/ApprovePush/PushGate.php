@@ -22,6 +22,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\MirrorChange;
 use Intakt\Plugin\GitHubForge\Infrastructure\MirrorWorkflows;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\DependencyInjection\Attribute\Lazy;
 use Symfony\Component\Lock\LockFactory;
 
 // A risky CI change stays local until the owner's account approves exactly its head, because the forge runs a pushed workflow before anyone looked.
@@ -31,6 +32,8 @@ final readonly class PushGate
         private MirrorChange $changes,
         private MirrorWorkflows $workflows,
         private CiScan $scan,
+        // Built when first used, so a head that needs no approval is decided on an install without GitHub settings.
+        #[Lazy]
         private GitHubIssueComments $comments,
         private PushApproval $approval,
         private PushRequest $request,
