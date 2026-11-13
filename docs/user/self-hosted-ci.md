@@ -62,6 +62,7 @@ The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp
 
 ## When it goes wrong
 
+- **The `image` job built nothing:** the pull request changes only `docs/`, `tests/` or `upstream/`, so the job skips the image and still reports.
 - **Jobs stay queued:** no online runner has every label in `CI_RUNS_ON`. Check the list against the runner's labels, and that an ephemeral runner is registered again after each job.
 - **`check` fails with errors about namespaces or mounting `/proc`:** user namespaces are restricted or an AppArmor profile blocks mount on the host (see the table).
 - **`permission denied` on the Docker socket:** the runner's user cannot use Docker.
