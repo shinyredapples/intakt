@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
+use Intakt\Core\Ai\Infrastructure\AccountErrorReported;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\CodexAccountFailure;
@@ -89,6 +90,7 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
@@ -111,6 +113,7 @@ use Throwable;
 #[UsesClass(AccountFailoverPlatform::class)]
 #[UsesClass(AccountPlatform::class)]
 #[UsesClass(AccountCooldownWindows::class)]
+#[UsesClass(AccountErrorReported::class)]
 #[UsesClass(SendFailures::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Verdict::class)]
@@ -163,6 +166,8 @@ final class CodexReviewerTest extends KernelTestCase
 
     private AccountCooldownWindows $cooldowns;
 
+    private MockHttpClient $tokenEndpoint;
+
     protected function setUp(): void
     {
         $this->root = sys_get_temp_dir().'/intakt-codex-reviewer-'.bin2hex(random_bytes(6));
@@ -170,6 +175,7 @@ final class CodexReviewerTest extends KernelTestCase
         $this->path = (string) getenv('PATH');
         putenv('PATH='.$this->root.'/bin:'.$this->path);
         $this->ledger = new InMemoryLedger();
+        $this->tokenEndpoint = new MockHttpClient();
         $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), ['codex' => ['team']]);
     }
 
@@ -474,9 +480,46 @@ final class CodexReviewerTest extends KernelTestCase
 
         $this->failureOfReview();
 
-        self::assertSame([LedgerEventKind::UsageRecorded, LedgerEventKind::AccountCooledDown, LedgerEventKind::UsageRecorded], $this->ledger->kinds());
+        self::assertSame([LedgerEventKind::UsageRecorded, LedgerEventKind::AccountCooledDown, LedgerEventKind::AccountErrorReported, LedgerEventKind::UsageRecorded], $this->ledger->kinds());
         self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
-        self::assertSame([], $this->ledger->payloads()[2]['usages']);
+        self::assertSame([], $this->ledger->payloads()[3]['usages']);
+    }
+
+    public function testALostLoginIsReportedToTheOwnerOnceWithItsAccount(): void
+    {
+        $this->replaying('login-lost', 1);
+
+        $this->failureOfReview();
+        $this->failureOfReview();
+
+        $reported = array_keys($this->ledger->kinds(), LedgerEventKind::AccountErrorReported, true);
+        self::assertCount(1, $reported);
+        self::assertSame('codex.team', $this->ledger->payloads()[$reported[0]]['account']);
+    }
+
+    public function testAUsageLimitOfThePlanIsNotReportedToTheOwner(): void
+    {
+        $this->replaying('usage-limit', 1);
+
+        $this->failureOfReview();
+
+        self::assertNotContains(LedgerEventKind::AccountErrorReported, $this->ledger->kinds());
+    }
+
+    public function testARefreshTheTokenEndpointRefusesBeforeTheCallIsSentIsAnAccountErrorReportedOnce(): void
+    {
+        $this->replaying('complete');
+        new Filesystem()->dumpFile($this->root.'/codex/logins/team/auth.json', CodexLoginTest::json('2026-10-01T00:00:00Z'));
+        $this->tokenEndpoint = new MockHttpClient(new JsonMockResponse(['error' => 'invalid_grant'], ['http_code' => 401]));
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(ProviderRejectedTheKey::class, $failure::class);
+        self::assertTrue($this->cooldowns->isRejected(new Account(Provider::Codex, 'team')));
+        self::assertFileDoesNotExist($this->root.'/arguments');
+        self::assertSame([LedgerEventKind::UsageRecorded, LedgerEventKind::AccountCooledDown, LedgerEventKind::AccountErrorReported, LedgerEventKind::UsageRecorded], $this->ledger->kinds());
+        self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+        self::assertSame([], $this->ledger->payloads()[3]['usages']);
     }
 
     public function testAReviewerTextThatRepeatsTheLostLoginMessageIsNoAccountError(): void
@@ -580,7 +623,7 @@ final class CodexReviewerTest extends KernelTestCase
     {
         $resolver = new ConfiguredTierResolver(self::PROJECTS, []);
         $clock = new MockClock(self::NOW);
-        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh(new MockHttpClient(), $clock), new LockFactory(new InMemoryStore()));
+        $logins = new CodexLogins($this->root.'/codex', new CodexTokenRefresh($this->tokenEndpoint, $clock), new LockFactory(new InMemoryStore()));
         $cli = new IsolatedCodexCli($logins, new CodexSettings(self::MODEL, CodexEffort::High), 'team');
         $codex = new CodexPlatformFactory(ScriptedReviewer::in(self::getContainer())->dispatcher)->create($cli, new ProjectModelCatalog(self::PROJECTS)->models(Provider::Codex));
         $accounts = new AccountFailoverPlatform(Provider::Codex, ['team' => $codex], $this->cooldowns, $clock, new NullLogger());
