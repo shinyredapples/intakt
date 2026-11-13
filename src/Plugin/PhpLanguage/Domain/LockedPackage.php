@@ -51,6 +51,10 @@ final readonly class LockedPackage
             throw ComposerFileUnreadable::because(ComposerState::LOCK, 'a locked package has no name or version');
         }
 
+        if (!PackageName::isReadable($entry['name'])) {
+            throw ComposerFileUnreadable::because(ComposerState::LOCK, sprintf('a locked package is named "%s", which is no package name', $entry['name']));
+        }
+
         $type = $entry['type'] ?? self::DEFAULT_TYPE;
 
         return new self(

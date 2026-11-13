@@ -199,6 +199,10 @@ final readonly class ComposerState
                 throw ComposerFileUnreadable::because($path, sprintf('%s names a package by a number', $key));
             }
 
+            if (!PackageName::isReadable($name)) {
+                throw ComposerFileUnreadable::because($path, sprintf('%s names "%s", which is no package name', $key, $name));
+            }
+
             $named[$name] = $value;
         }
 
