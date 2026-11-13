@@ -109,7 +109,7 @@ final readonly class PushGate
         // Built before any approval is read, so a change the issue cannot show in full stays held even when an approve for it stands.
         $request = $this->shownRequest($change, $scan);
         $comments = $this->comments->of($issue);
-        $asked = $this->requestIndex($comments, $change->commit);
+        $asked = $this->requestIndex($comments, $request);
         if (null === $asked) {
             $this->comments->post($issue, $request);
 
@@ -127,12 +127,10 @@ final readonly class PushGate
     /**
      * @param list<IssueComment> $comments
      */
-    // Only the marker that ends the request counts, because a request shows another head's diff, which may hold this head's marker anywhere.
-    private function requestIndex(array $comments, string $commit): ?int
+    // Only the request exactly as built now, never edited, counts, because the owner approves the diff the issue shows, and an admin can replace or edit a comment of the App.
+    private function requestIndex(array $comments, string $request): ?int
     {
-        $marker = "\n".$this->request->marker($commit);
-
-        return array_find_key($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && str_ends_with($comment->body, $marker));
+        return array_find_key($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && !$comment->edited && $request === $comment->body);
     }
 
     /**

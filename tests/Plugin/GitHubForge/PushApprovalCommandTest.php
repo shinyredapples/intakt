@@ -212,6 +212,35 @@ final class PushApprovalCommandTest extends TestCase
         self::assertCount(2, $this->issue->posted());
     }
 
+    public function testARequestWhoseTextWasReplacedIsNoRequestForTheHead(): void
+    {
+        $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $this->execute();
+        $this->issue->comments[0]['body'] = "Only a harmless README edit.\n".new PushRequest()->marker($head);
+        $this->issue->comments[0]['updated_at'] = '2026-11-25T10:05:00Z';
+        $this->issue->byPerson('approve '.$head);
+
+        $tester = $this->execute();
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringEndsWith(sprintf("push: held, the owner was asked on issue #7 to approve %s\n", $head), $tester->getDisplay());
+        self::assertCount(2, $this->issue->posted());
+    }
+
+    public function testARequestEditedBackToItsTextIsNoRequestForTheHead(): void
+    {
+        $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $this->execute();
+        $this->issue->comments[0]['updated_at'] = '2026-11-25T10:05:00Z';
+        $this->issue->byPerson('approve '.$head);
+
+        $tester = $this->execute();
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringEndsWith(sprintf("push: held, the owner was asked on issue #7 to approve %s\n", $head), $tester->getDisplay());
+        self::assertCount(2, $this->issue->posted());
+    }
+
     public function testAnApprovedChangeTheIssueCannotShowStaysHeldAndPostsNothing(): void
     {
         $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
