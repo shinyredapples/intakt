@@ -159,23 +159,25 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $this->isNested(substr($content, 0, $block[0][1])) ? $content : $block[1][0];
     }
 
-    // An odd count of fence lines before the block, or a fence opened before it and not closed by a bare fence of its character at least as long, means the block sits inside another one.
+    // Refused because a block inside another fence is an example in the prose, not the answer; the odd count is the maintainer's rule, the open fence also catches a fence line with an info string, which never closes a block.
     private function isNested(string $before): bool
     {
-        $open = null;
-        foreach (preg_split('/\r?\n/', $before) ?: [] as $line) {
-            if (1 !== preg_match('/^[ \t>*+\-\d.)]*(`{3,}|~{3,})[ \t]*(.*?)[ \t]*$/', $line, $fence)) {
-                continue;
-            }
+        return null !== $this->fenceLeftOpenIn($before) || 1 === (int) preg_match_all('/^.*(?:`{3}|~{3}).*$/m', $before) % 2;
+    }
 
-            if (null === $open) {
-                $open = $fence[1];
-            } elseif ('' === $fence[2] && $fence[1][0] === $open[0] && strlen($fence[1]) >= strlen($open)) {
-                $open = null;
-            }
+    private function fenceLeftOpenIn(string $text): ?string
+    {
+        preg_match_all('/^[ \t>*+\-\d.)]*(`{3,}|~{3,})[ \t]*(.*?)[ \t]*\r?$/m', $text, $fences, PREG_SET_ORDER);
+        $open = null;
+        foreach ($fences as [, $run, $info]) {
+            $open = match (true) {
+                null === $open => $run,
+                '' === $info && $run[0] === $open[0] && strlen($run) >= strlen($open) => null,
+                default => $open,
+            };
         }
 
-        return null !== $open || 1 === preg_match_all('/^.*(?:`{3}|~{3}).*$/m', $before) % 2;
+        return $open;
     }
 
     /**
