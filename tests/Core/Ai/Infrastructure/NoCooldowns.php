@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
@@ -19,6 +20,11 @@ final readonly class NoCooldowns implements AccountCooldowns
 
     #[Override]
     public function coolDownRejected(Account $account): void
+    {
+    }
+
+    #[Override]
+    public function answered(Account $account, DateTimeImmutable $sentAt): void
     {
     }
 
