@@ -17,7 +17,7 @@ final readonly class JobEgress
     {
     }
 
-    // Meant for check and probe jobs, because they must get no network at all.
+    // Meant for probe jobs and a check job whose gate names no registry, because they must get no network at all.
     public static function none(): self
     {
         return new self([]);
