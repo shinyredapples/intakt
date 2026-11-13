@@ -29,6 +29,9 @@ final class IssueReferencesTest extends TestCase
         yield 'a colon after the words' => ['Waits for: #9', [9]];
         yield 'Windows line ends' => ["Waits for #9\r\nWaits for #10 (part 2)\r\n", [9, 10]];
         yield 'in a markdown list' => ["- Waits for #9\n* Waits for #10", [9, 10]];
+        yield 'bold words' => ['**Waits for** #9', [9]];
+        yield 'bold words with a colon' => ['**Waits for:** #9', [9]];
+        yield 'in a quote' => ['> Waits for #9', [9]];
         yield 'prose that mentions an issue' => ['This task waits for #9 to land in its own time.', []];
         yield 'a plain reference' => ['See #9', []];
         yield 'nothing' => ['', []];
@@ -52,6 +55,7 @@ final class IssueReferencesTest extends TestCase
         yield 'no number' => ["Do it.\nWaits for the forge reads\n", ['Waits for the forge reads']];
         yield 'another repository' => ['Waits for billing#12', ['Waits for billing#12']];
         yield 'a number without its sign' => ['Waits for #9 and 10', ['Waits for #9 and 10']];
+        yield 'a bare number after a word' => ['Waits for #9 then 10', ['Waits for #9 then 10']];
         yield 'another number in the note' => ['  - Waits for #9 (after #8)', ['- Waits for #9 (after #8)']];
         yield 'nothing after the words' => ['Waits for', ['Waits for']];
     }
