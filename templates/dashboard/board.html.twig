@@ -21,9 +21,14 @@
     {% for column in columns %}
         {% set cards = board.cardsIn(column) %}
         {% set needs = column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') %}
-        <section class="col{{ needs ? ' col-needs' }}" id="col-{{ column.value|lower|replace({' ': '-'}) }}" aria-label="{{ column.value }}">
-            <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: board.countOf(column), needs: needs and cards is not empty}, with_context = false) }}</div>
-            <div class="col-cards">
+        {% set folds = column.startsCollapsed %}
+        {% set slug = column.value|lower|replace({' ': '-'}) %}
+        {% set count = board.countOf(column) %}
+        {# assets/column-fold.js opens and collapses it; below 761 px the stylesheet keeps every column open, so Backlog and Done are not collapsed on phones. #}
+        <section class="col{{ needs ? ' col-needs' }}{{ folds ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}">
+            {% if folds %}<button type="button" class="col-fold" aria-expanded="false" aria-controls="cards-{{ slug }}" aria-label="Show {{ column.value }}, {{ count }} {{ count == 1 ? 'task' : 'tasks' }}"><span>{{ column.value }}</span>{{ include('dashboard/components/count.html.twig', {n: count}, with_context = false) }}</button>{% endif %}
+            <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: count, needs: needs and cards is not empty}, with_context = false) }}{% if folds %}<button type="button" class="btn quiet sm col-hide" aria-label="Hide {{ column.value }}">Hide</button>{% endif %}</div>
+            <div class="col-cards" id="cards-{{ slug }}">
             {% for review in cards %}
                 {{ include('dashboard/_board_card.html.twig', {review: review}, with_context = false) }}
             {% else %}
