@@ -2,7 +2,7 @@
 # The review job's command: one reviewer reads the exact head in a checkout it cannot change, and reaches only its vendor through the job's proxy.
 # Usage: review.sh <checkout> <head> <prompt file> <cli> <model>
 # Runs the CLI (claude or codex) in the checkout with the prompt on its input, only once the checkout is at <head> with nothing changed,
-# cannot be written, the start check passed and every proxy setting names the job's proxy; git and the CLI see no git or Node variable of the image.
+# its repository holds only the git settings a clone writes, cannot be written, the start check passed and every proxy setting names the job's proxy; git and the CLI see no git or Node variable of the image.
 # Writes review.log, and answer (the CLI's standard output) only when the CLI ran, into INTAKT_JOB_OUTPUT.
 # Exits with 0 when the CLI ran (its status is in review.log), 1 when the checkout is not the head, 2 when it can be written,
 # 3 when the network is not the job's proxy alone, 4 when the start check failed, 64 for another CLI.
@@ -71,20 +71,40 @@ if [ ! -e "$checkout/.git" ]; then
     refuse 1 "$checkout holds no repository"
 fi
 
-at="$(git -C "$checkout" rev-parse --verify --end-of-options 'HEAD^{commit}' 2>> "$log")"
+# Pinned to the checkout's own repository and files, so a core.worktree setting cannot point the checks at another folder.
+checkout_git() {
+    git --no-optional-locks --git-dir="$checkout/.git" --work-tree="$checkout" "$@"
+}
+
+# The repository's settings can run commands while git reads the checkout (a clean filter, fsmonitor) or point it elsewhere (core.worktree, an include),
+# so only the settings git init, git clone and a sha256 repository write are trusted. Listing them runs nothing.
+if ! settings="$(checkout_git config --list --name-only 2>> "$log")"; then
+    refuse 1 "the settings of the checkout cannot be read"
+fi
+while IFS= read -r setting; do
+    case "$setting" in
+        ''|core.repositoryformatversion|core.filemode|core.bare|core.logallrefupdates|core.ignorecase|core.precomposeunicode|core.symlinks) ;;
+        extensions.objectformat|remote.*.url|remote.*.fetch|branch.*.remote|branch.*.merge) ;;
+        *) refuse 1 "the checkout's git setting $setting is not one a review trusts" ;;
+    esac
+done <<EOF
+$settings
+EOF
+
+at="$(checkout_git rev-parse --verify --end-of-options 'HEAD^{commit}' 2>> "$log")"
 if [ "$at" != "$head" ]; then
     refuse 1 "the checkout is at ${at:-no commit}, not at $head"
 fi
 
 # Without optional locks and without fsmonitor, so reading the status writes nothing and runs no command of the repository's settings.
-if ! changes="$(git --no-optional-locks -C "$checkout" -c core.fsmonitor=false status --porcelain --untracked-files=all 2>> "$log")"; then
+if ! changes="$(checkout_git -c core.fsmonitor=false status --porcelain --untracked-files=all 2>> "$log")"; then
     refuse 1 "the status of the checkout cannot be read"
 fi
 if [ -n "$changes" ]; then
     refuse 1 "the checkout differs from $head"
 fi
 # git status takes a file marked skip-worktree or assume-unchanged as unchanged without reading it, so no file may carry either mark.
-if ! entries="$(git --no-optional-locks -C "$checkout" -c core.fsmonitor=false ls-files -v 2>> "$log")"; then
+if ! entries="$(checkout_git -c core.fsmonitor=false ls-files -v 2>> "$log")"; then
     refuse 1 "the files of the checkout cannot be listed"
 fi
 while IFS= read -r entry; do

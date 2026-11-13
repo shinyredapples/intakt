@@ -135,6 +135,75 @@ final class ReviewScriptTest extends TestCase
         self::assertTheCliDidNotRun();
     }
 
+    // With core.worktree naming a clean copy, git would compare that copy with the head and pass a checkout whose files the reviewer reads changed.
+    public function testACheckoutWhoseGitSettingsNameACleanWorkTreeElsewhereIsNotReviewed(): void
+    {
+        $elsewhere = $this->folder.'/elsewhere';
+        new Filesystem()->dumpFile($elsewhere.'/src/Change.php', "<?php\n");
+        file_put_contents($this->repository->path.'/src/Change.php', "<?php\n// not the head\n");
+        $this->repository->configure('core.worktree', $elsewhere);
+        $this->givenTheCheckoutIsReadOnly();
+
+        $run = $this->whenTheReviewRuns();
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertStringContainsString("the checkout's git setting core.worktree is not one a review trusts", $this->outputFile('review.log'));
+        self::assertTheCliDidNotRun();
+    }
+
+    public function testACheckoutWhoseGitSettingsRunACleanFilterIsNotReviewedAndTheFilterNeverRuns(): void
+    {
+        file_put_contents($this->repository->path.'/.git/info/attributes', "* filter=planted\n");
+        $this->repository->configure('filter.planted.clean', sprintf('touch %s/filter-ran; cat', $this->folder));
+        $this->givenTheCheckoutIsReadOnly();
+
+        $run = $this->whenTheReviewRuns();
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertStringContainsString("the checkout's git setting filter.planted.clean is not one a review trusts", $this->outputFile('review.log'));
+        self::assertFileDoesNotExist($this->folder.'/filter-ran');
+        self::assertTheCliDidNotRun();
+    }
+
+    public function testACheckoutWhoseGitSettingsIncludeAnotherFileIsNotReviewed(): void
+    {
+        new Filesystem()->dumpFile($this->folder.'/included', "[core]\n\tbare = false\n");
+        $this->repository->configure('include.path', $this->folder.'/included');
+        $this->givenTheCheckoutIsReadOnly();
+
+        $run = $this->whenTheReviewRuns();
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertStringContainsString("the checkout's git setting include.path is not one a review trusts", $this->outputFile('review.log'));
+        self::assertTheCliDidNotRun();
+    }
+
+    public function testACloneWithItsRemoteAndBranchSettingsIsReviewed(): void
+    {
+        $this->repository->configure('remote.origin.url', 'https://forge.example/intakt.git');
+        $this->repository->configure('remote.origin.fetch', '+refs/heads/*:refs/remotes/origin/*');
+        $this->repository->configure('branch.main.remote', 'origin');
+        $this->repository->configure('branch.main.merge', 'refs/heads/main');
+        $this->givenTheCheckoutIsReadOnly();
+
+        $run = $this->whenTheReviewRuns();
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertSame("Review the change.\n", $this->outputFile('answer'));
+    }
+
+    public function testASha256CheckoutAtTheHeadIsReviewed(): void
+    {
+        $this->repository->remove();
+        $this->repository = new TemporaryRepository('sha256');
+        $this->head = $this->repository->commitFile('src/Change.php', "<?php\n");
+        $this->givenTheCheckoutIsReadOnly();
+
+        $run = $this->whenTheReviewRuns();
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
+    }
+
     public function testTheCliFindsNoGitVariableAndNoNodeOptionsAnImageSet(): void
     {
         $this->givenTheCheckoutIsReadOnly();
