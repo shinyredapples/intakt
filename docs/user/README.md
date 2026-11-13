@@ -196,6 +196,8 @@ The `tests` gate runs the test files in several workers at once: one for each pr
 
 `bin/check` runs the selected gates at the same time, as many at once as there are processors it may use (capped by a CPU quota of its container, rounded up), but fewer when its container has a memory limit (its own control group, each group above it and the top group it can see are all read): each test worker and each gate gets 2 GiB of it, the test workers first, because a gate such as `phpstan` may use that much (at least one gate runs). The gates that run your change's code (`tests`, `container`, `journeys`, and `phpstan`, which starts your change's kernel to dump the test container) start only after every other gate has finished, because a test could otherwise change the files or tools another gate is still checking. The other gates start first, in the usual gate order as earlier ones finish; then the `tests` gate starts first, so it never waits, and `phpstan` and `container` follow, in that order. Because the test workers need processors too, the `tests` gate counts for as many gates as it runs workers, but always leaves room for one other gate beside it. When the `tests` gate runs and more than one gate runs at once, the `phpstan` and `container` gates beside it run at the lowest processor priority, so they only use processor time the test workers leave idle; every other gate (and every gate with `--only=phpstan`, or `INTAKT_GATE_SLOTS=1`) keeps its usual priority. Set `INTAKT_GATE_SLOTS` to choose how many gates run at once (from 1 to 999); `INTAKT_GATE_SLOTS=1` runs them one after another. Any other value stops `bin/check` with exit code 2 before any gate starts. The lines, the result line and the exit code are the same however many run at once.
 
+The `rector` gate starts at most 4 workers of its own, each allowed 300 s (`withParallel` in `config/gates/rector.php`), whatever the processor count. With Rector's defaults (a worker per core, 120 s), several `bin/check` runs at once on one machine starved each other's workers until they timed out, and the gate failed with `Child process timed out after 120 seconds` and no finding of its own.
+
 ## Listing the static gates and the gate order
 
 `bin/check --static-gates`, with no other argument, runs no gate. It prints one JSON line with two lists and exits with 0:
@@ -394,7 +396,7 @@ To see which panel a change gets, without calling any model, run `php bin/consol
 
 ### Which tier a build starts on
 
-A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
+A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, `escalate_on` lists the setbacks that raise the next build to the strong tier (`failed-attempt`, `blocking-finding`, `stall`; all three by default, a shorter list turns triggers off, and an empty list or `escalate_on: ~` turns every escalation off), and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
 
 ```yaml
 projects:
@@ -402,11 +404,12 @@ projects:
         build:
             tier: standard
             sensitive_paths: [config/**, src/**/Security/**]
+            escalate_on: [failed-attempt, blocking-finding, stall]
 ```
 
-A build that touches a sensitive path starts on the strong tier, whatever its label says. Otherwise a `model:<tier>` label (for example `model:strong`) sets the tier, and without either the build starts on `tier`. A `model:` value that names no tier, such as a model name, is ignored. The rules look only at the labels and the touched paths of the build, so a job can never choose its own model. A bad tier, or sensitive paths that are not a list, stop Intakt from starting and name the key.
+A build that touches a sensitive path starts on the strong tier, whatever its label says. Otherwise, after a listed setback (an earlier failed attempt, a blocking P1 finding or a stall) the build is raised to the strong tier; a rework after a round without a P1 stays on the cheaper tier. Otherwise a `model:<tier>` label (for example `model:strong`) sets the tier, and without either the build starts on `tier`. A `model:` value that names no tier, such as a model name, is ignored. The rules look only at the labels, the touched paths and the setback the loop passes, so a job can never choose its own model. A bad tier, an unknown setback, or sensitive paths or setbacks that are not a list, stop Intakt from starting and name the key.
 
-To see the tier the rules choose, without calling any model, run `php bin/console intakt:build:tier <project> --label=model:strong --path=src/Foo.php` (`--label` and `--path` can be repeated and are optional). It prints the tier and why (`default`, `label` or `sensitive-path`); an unknown project fails with a message. Starting a build on the chosen tier is not wired yet, and a later part adds raising the tier after a failure.
+To see the tier the rules choose, without calling any model, run `php bin/console intakt:build:tier <project> --label=model:strong --path=src/Foo.php --setback=stall` (`--label` and `--path` can be repeated; all options are optional). It prints the tier and why (`default`, `label`, `setback` or `sensitive-path`); an unknown project fails with a message. Starting a build on the chosen tier is not wired yet.
 
 ## Looking inside the development install with Mate
 

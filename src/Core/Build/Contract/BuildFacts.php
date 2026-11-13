@@ -17,6 +17,7 @@ final readonly class BuildFacts
     public function __construct(
         public ?Tier $labelledTier,
         public array $paths,
+        public ?Setback $setback = null,
     ) {
     }
 
@@ -24,7 +25,7 @@ final readonly class BuildFacts
      * @param list<string> $labels
      * @param list<string> $paths
      */
-    public static function fromLabels(array $labels, array $paths): self
+    public static function fromLabels(array $labels, array $paths, ?Setback $setback = null): self
     {
         $tiers = [];
 
@@ -41,6 +42,6 @@ final readonly class BuildFacts
             }
         }
 
-        return new self(array_last($tiers), $paths);
+        return new self(array_last($tiers), $paths, $setback);
     }
 }
