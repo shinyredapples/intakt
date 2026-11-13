@@ -14,6 +14,7 @@ final class RecordedTrust
 {
     public const string WRITER = 'alice';
     public const string TRIAGE = 'mallory';
+    public const string READ = 'bob';
     public const string BOT_BY_TYPE = 'ci-machine';
     public const string OWN_IDENTITY = 'acme-intakt[bot]';
     public const string MAINTAINER_SLUG = 'acme-intakt-maintainer';
@@ -25,6 +26,7 @@ final class RecordedTrust
     private const array PERMISSIONS = [
         self::WRITER => 'permission_writer.json',
         self::TRIAGE => 'permission_triage.json',
+        self::READ => 'permission_read.json',
         self::BOT_BY_TYPE => 'permission_bot_type.json',
         self::OWN_IDENTITY => 'permission_own_identity.json',
         self::MAINTAINER => 'permission_maintainer.json',
