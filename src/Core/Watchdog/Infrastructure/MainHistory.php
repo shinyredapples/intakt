@@ -128,13 +128,16 @@ final readonly class MainHistory
      */
     private function run(string $repository, array $arguments): Process
     {
-        if (!is_dir($repository)) {
+        // Resolved first, because git would read a relative --git-dir again from inside the process directory.
+        $folder = is_dir($repository) ? realpath($repository) : false;
+
+        if (false === $folder) {
             throw MainNotRead::because(sprintf('%s is no folder', $repository));
         }
 
         try {
             // A -c in the arguments follows the hardened settings, so it is the one git keeps.
-            $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
+            $call = $this->hardened->call(['--git-dir='.$folder, ...$arguments], $folder);
         } catch (RepositoryAttributesRefused $refused) {
             throw MainNotRead::because($refused->getMessage());
         }

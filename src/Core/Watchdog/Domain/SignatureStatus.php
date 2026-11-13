@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watchdog\Domain;
 
-enum SignatureStatus
+enum SignatureStatus: string
 {
-    case ByOwnerKey;
-    case NoSignature;
-    case NotByOwnerKey;
+    case ByOwnerKey = 'by_owner_key';
+    case NoSignature = 'no_signature';
+    case NotByOwnerKey = 'not_by_owner_key';
 
     public static function fromGit(string $letter): self
     {

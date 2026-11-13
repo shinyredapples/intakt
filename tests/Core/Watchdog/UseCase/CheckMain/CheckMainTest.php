@@ -160,6 +160,22 @@ final class CheckMainTest extends TestCase
         $this->whenMainIsChecked(null, []);
     }
 
+    public function testARepositoryNamedByARelativePathIsReadLikeItsAbsolutePath(): void
+    {
+        $base = $this->repository->commitEmpty('Base');
+        $unsigned = $this->repository->commitEmpty('Straight to main');
+        $before = (string) getcwd();
+        chdir($this->repository->path);
+
+        try {
+            $verdict = $this->check()->of('.git', $this->watched($base, []));
+        } finally {
+            chdir($before);
+        }
+
+        self::assertSame([$unsigned], array_map(static fn (Violation $violation): string => $violation->commit, $verdict->violations));
+    }
+
     public function testAFolderThatIsNoRepositoryIsNotRead(): void
     {
         $this->expectException(MainNotRead::class);
