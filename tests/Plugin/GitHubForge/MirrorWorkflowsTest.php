@@ -37,7 +37,7 @@ final class MirrorWorkflowsTest extends TestCase
         $this->repository->remove();
     }
 
-    public function testTheHeadsMainsAndTheMergedWorkflowsAreReadWithWhatTheMergeChanges(): void
+    public function testTheHeadsMainsAndTheMergedWorkflowsAreReadWithEveryPathWhereTheHeadOrTheMergeDiffersFromMain(): void
     {
         $this->repository->commitFile('.github/workflows/deploy.yml', "head's deploy\n");
         $this->repository->commitFile('scripts/test.sh', "test\n");
@@ -49,7 +49,7 @@ final class MirrorWorkflowsTest extends TestCase
         self::assertSame(['.github/workflows/ci.yml' => "main's ci\n", '.github/workflows/deploy.yml' => "head's deploy\n"], $this->texts($workflows->head));
         self::assertSame(['.github/workflows/ci.yml' => "main's ci\n", '.github/workflows/nightly.yaml' => "main's nightly\n"], $this->texts($workflows->main));
         self::assertSame(['.github/workflows/ci.yml' => "main's ci\n", '.github/workflows/deploy.yml' => "head's deploy\n", '.github/workflows/nightly.yaml' => "main's nightly\n"], $this->texts($workflows->merged));
-        self::assertSame(['.github/workflows/deploy.yml', 'scripts/test.sh'], $workflows->changedPaths);
+        self::assertSame(['.github/workflows/deploy.yml', '.github/workflows/nightly.yaml', 'scripts/test.sh'], $workflows->changedPaths);
     }
 
     public function testOnlyYamlFilesDirectlyInTheWorkflowsFolderAreRead(): void
@@ -79,6 +79,39 @@ final class MirrorWorkflowsTest extends TestCase
 
         self::assertSame(['.github/workflows' => 'the head does not merge with main without a conflict'], $this->texts($workflows->merged));
         self::assertSame(['.github/workflows/ci.yml'], $workflows->changedPaths);
+    }
+
+    public function testAHeadsChangeThatMainMergedAndRevertedStillCounts(): void
+    {
+        $this->repository->commitFile('scripts/check.sh', "unapproved\n");
+        $this->repository->checkout('main');
+        $this->repository->merge('head');
+        $this->repository->commitFile('scripts/check.sh', "safe\n");
+
+        self::assertSame(['scripts/check.sh'], $this->read()->changedPaths);
+    }
+
+    public function testARelativeGitDirectoryIsReadFromTheCurrentDirectory(): void
+    {
+        $this->repository->commitFile('.github/workflows/deploy.yml', "head's deploy\n");
+        $this->repository->checkout('main');
+        $directory = (string) getcwd();
+        chdir($this->repository->path);
+
+        try {
+            $workflows = new MirrorWorkflows(new HardenedGit())->of('.git', 'head');
+        } finally {
+            chdir($directory);
+        }
+
+        self::assertSame(['.github/workflows/deploy.yml'], $workflows->changedPaths);
+    }
+
+    public function testAWorkflowWhoseObjectIsMissingIsUnread(): void
+    {
+        $this->repository->removeObject($this->repository->objectAt('head:.github/workflows/ci.yml'));
+
+        self::assertStringStartsWith('git cat-file failed: ', $this->texts($this->read()->head)['.github/workflows/ci.yml']);
     }
 
     public function testAHeadWithoutWorkflowsHasNone(): void

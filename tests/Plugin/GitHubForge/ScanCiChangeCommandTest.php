@@ -119,6 +119,7 @@ final class ScanCiChangeCommandTest extends TestCase
             merged .github/workflows/deploy.yml line 16: runner: the job build runs on linux, not a GitHub-hosted runner label
             merged .github/workflows/lint.yml line 10: unreadable: a line of a block value indented less than its first line
             ci .github/workflows/deploy.yml
+            ci .github/workflows/lint.yml
             risky: yes
             CI change: yes
             push waits for the owner: yes

@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Plugin\GitHubForge\Domain\CiWorkflows;
 use Intakt\Plugin\GitHubForge\Domain\CommitNotRead;
 use Intakt\Plugin\GitHubForge\Domain\WorkflowFile;
+use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Process\Process;
 
 // Reads the workflows from git objects, never from a checkout, so the scan sees exactly what the forge runs for each commit.
@@ -35,6 +36,7 @@ final readonly class MirrorWorkflows
      */
     public function of(string $repository, string $head): CiWorkflows
     {
+        $repository = $this->absolute($repository);
         $main = $this->commit($repository, $this->mainBranch($repository));
         $head = $this->commit($repository, $head);
         $merged = $this->merged($repository, $main, $head);
@@ -43,9 +45,22 @@ final readonly class MirrorWorkflows
             $this->workflowsAt($repository, $head),
             $this->workflowsAt($repository, $main),
             null === $merged ? [WorkflowFile::unread(self::WORKFLOWS, 'the head does not merge with main without a conflict')] : $this->workflowsAt($repository, $merged),
-            // Against the merge when there is one, because that is what the change brings to main; a conflict leaves the merged workflows unread, which makes every path count anyway.
-            $this->changedPaths($repository, $main, $merged ?? $head),
+            $this->changedPaths($repository, $main, $head, $merged),
         );
+    }
+
+    /**
+     * @throws CommitNotRead
+     */
+    private function absolute(string $repository): string
+    {
+        // Because git runs inside the repository, where a relative --git-dir would resolve a second time.
+        $directory = getcwd();
+        if (false === $directory) {
+            throw CommitNotRead::because('the current directory is unknown, so the repository path does not resolve');
+        }
+
+        return Path::makeAbsolute($repository, $directory);
     }
 
     /**
@@ -149,7 +164,27 @@ final readonly class MirrorWorkflows
      * @throws CommitNotRead
      * @throws RepositoryAttributesRefused
      */
-    private function changedPaths(string $repository, string $main, string $change): array
+    private function changedPaths(string $repository, string $main, string $head, ?string $merged): array
+    {
+        // Against the head, because pushing it runs its own files even where main already holds or has reverted them; against the merge too, because that is what the change brings to main.
+        $paths = $this->pathsBetween($repository, $main, $head);
+        if (null !== $merged) {
+            $paths = [...$paths, ...$this->pathsBetween($repository, $main, $merged)];
+        }
+
+        $paths = array_unique($paths);
+        sort($paths, \SORT_STRING);
+
+        return $paths;
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws CommitNotRead
+     * @throws RepositoryAttributesRefused
+     */
+    private function pathsBetween(string $repository, string $main, string $change): array
     {
         $process = $this->run($repository, ['diff-tree', '-r', '-z', '--name-only', '--no-renames', '--ignore-submodules=none', $main, $change]);
         if (!$process->isSuccessful()) {
