@@ -10,4 +10,5 @@ final readonly class GitHubForgeServices
     public const string RATE_LIMITS = 'intakt.github.rate_limits';
     public const string RESERVE_PERCENT = 'intakt.github.reserve_percent';
     public const string VERDICT_LOCK_PREFIX = 'intakt.verdict.';
+    public const string PUSH_REQUEST_LOCK_PREFIX = 'intakt.push-request.';
 }
