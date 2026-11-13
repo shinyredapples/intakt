@@ -45,7 +45,21 @@ final class EntrypointSampleSeedTest extends TestCase
             'bin/console cache:warmup --no-interaction',
             'bin/console intakt:sample:seed /data/sample <directory>/intakt.yaml',
             'bin/console cache:warmup --no-interaction',
+            'bin/console intakt:ai:tiers',
         ], $this->theDefaultDemo()['consoleCalls']);
+    }
+
+    public function testARestartOnTheSameDataVolumeDoesNotPrintTheProviderNotesAgain(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+        $this->entrypoint?->stop(15);
+        new Filesystem()->remove($this->callsFile());
+
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        self::assertNotContains('bin/console intakt:ai:tiers', $this->consoleCallsBeforeTheConsumers());
     }
 
     public function testEveryOldContainerIsRemovedBeforeItsWarmup(): void

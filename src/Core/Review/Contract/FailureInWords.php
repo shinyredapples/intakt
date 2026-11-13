@@ -15,6 +15,7 @@ final readonly class FailureInWords
         MaxOutputTokensException::class => 'stopped at its output limit',
         ProviderRejectedTheKey::class => 'the provider rejected the key',
         ProviderFailedTransiently::class => 'the provider kept failing',
+        ChangesWithoutFindings::class => 'asked for changes without naming a finding',
     ];
 
     public function of(string $failure): string

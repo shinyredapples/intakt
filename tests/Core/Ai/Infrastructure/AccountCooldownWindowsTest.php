@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
+use Intakt\Core\Ai\Infrastructure\AccountErrorReported;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
@@ -24,6 +26,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Provider::class)]
+#[UsesClass(AccountErrorReported::class)]
 final class AccountCooldownWindowsTest extends TestCase
 {
     private ArrayAdapter $pool;
@@ -106,7 +109,7 @@ final class AccountCooldownWindowsTest extends TestCase
 
         self::assertTrue($cooldowns->isRejected($this->default()));
         self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
-        self::assertSame([LedgerEventKind::AccountCooledDown], $this->ledger->kinds());
+        self::assertSame(LedgerEventKind::AccountCooledDown, $this->ledger->kinds()[0]);
     }
 
     public function testALimitedAccountIsNotRememberedAsARejection(): void
@@ -225,6 +228,164 @@ final class AccountCooldownWindowsTest extends TestCase
         self::assertSame('error', $logs[0][0]);
     }
 
+    public function testARejectionIsReportedToTheOwnerWithItsAccount(): void
+    {
+        $this->cooldowns()->coolDownRejected($this->team());
+
+        self::assertSame([LedgerEventKind::AccountCooledDown, LedgerEventKind::AccountErrorReported], $this->ledger->kinds());
+        $payload = $this->ledger->payloads()[1];
+        self::assertSame('anthropic.team', $payload['account']);
+        self::assertIsString($payload['reported_at']);
+    }
+
+    public function testALimitIsNoAccountErrorAndIsNotReported(): void
+    {
+        $this->cooldowns()->coolDown($this->team(), 300);
+
+        self::assertNotContains(LedgerEventKind::AccountErrorReported, $this->ledger->kinds());
+    }
+
+    public function testTheSameAccountErrorOnAnotherWorkerIsNotReportedAgain(): void
+    {
+        $this->cooldowns()->coolDownRejected($this->team());
+
+        $this->cooldowns()->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+    }
+
+    public function testAnAccountErrorOfAnotherAccountIsReportedOnItsOwn(): void
+    {
+        $cooldowns = $this->cooldowns();
+
+        $cooldowns->coolDownRejected($this->team());
+        $cooldowns->coolDownRejected($this->default());
+
+        self::assertSame(['anthropic.team', 'anthropic.default'], array_column($this->reports(), 'account'));
+    }
+
+    public function testAnAnswerToACallSentBeforeTheReportKeepsTheErrorReported(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $sentAt = new NativeClock()->now()->modify('-1 second');
+        $cooldowns->coolDownRejected($this->team());
+
+        $cooldowns->answered($this->team(), $sentAt);
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+    }
+
+    public function testAnAnswerToACallSentAfterTheReportLetsTheNextErrorBeReported(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDownRejected($this->team());
+
+        $cooldowns->answered($this->team(), new NativeClock()->now()->modify('+1 second'));
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(2, $this->reports());
+    }
+
+    public function testAnAnswerToACallSentAtTheMomentOfTheReportKeepsTheErrorReported(): void
+    {
+        $clock = new MockClock();
+        $cooldowns = new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns->coolDownRejected($this->team());
+
+        $cooldowns->answered($this->team(), $clock->now());
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+    }
+
+    public function testAnAnswerOfAnotherAccountKeepsTheErrorReported(): void
+    {
+        $cooldowns = $this->cooldowns();
+        $cooldowns->coolDownRejected($this->team());
+
+        $cooldowns->answered($this->default(), new NativeClock()->now()->modify('+1 second'));
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+    }
+
+    public function testAnAccountErrorAnotherWorkerIsReportingRightNowIsLeftToIt(): void
+    {
+        $store = new InMemoryStore();
+        $reporting = new LockFactory($store)->createLock('account-cooldown-reported-anthropic.team');
+        $reporting->acquire();
+        $cooldowns = new AccountCooldownWindows($this->pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertSame([], $this->reports());
+        self::assertTrue($cooldowns->isRejected($this->team()));
+    }
+
+    // The error comes from another worker while this one still holds the lock it cleared the report under, so that worker finds the lock busy.
+    public function testAnAccountErrorWhileTheReportIsClearedIsReportedOnceTheLockIsReleased(): void
+    {
+        $pool = new SteppingInAfterDeleting('account-cooldown-reported-anthropic.team');
+        $store = new InMemoryStore();
+        $cooldowns = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns->coolDownRejected($this->team());
+        $pool->step = fn () => $otherWorker->coolDownRejected($this->team());
+
+        $cooldowns->answered($this->team(), new NativeClock()->now()->modify('+1 second'));
+
+        self::assertCount(2, $this->reports());
+    }
+
+    // The error comes from another worker while this one holds the lock it reports the same error under, so that worker finds the lock busy.
+    public function testTheSameAccountErrorWhileAnotherWorkerReportsItIsNotReportedAgainOnceTheLockIsReleased(): void
+    {
+        $pool = new SteppingInAfterDeleting('account-cooldown-pending-anthropic.team');
+        $store = new InMemoryStore();
+        $cooldowns = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = fn () => $otherWorker->coolDownRejected($this->team());
+
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+        self::assertFalse($pool->hasItem('account-cooldown-pending-anthropic.team'));
+    }
+
+    // The other worker reports the same error between this worker's look at the pending item and its lock, and an answer to a later call clears that report, so this worker must find nothing pending under the lock.
+    public function testAWorkerThatReadThePendingItemBeforeTheLockDoesNotReportTheSameErrorAgain(): void
+    {
+        $pool = new SteppingInAfterReading('account-cooldown-pending-anthropic.team');
+        $store = new InMemoryStore();
+        $clock = new MockClock('2026-11-04T12:00:00Z');
+        $cooldowns = new AccountCooldownWindows($pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $pool->step = function () use ($otherWorker, $clock): void {
+            $otherWorker->coolDownRejected($this->team());
+            $clock->sleep(1);
+            $otherWorker->answered($this->team(), $clock->now());
+        };
+
+        $cooldowns->coolDownRejected($this->team());
+
+        self::assertCount(1, $this->reports());
+    }
+
+    public function testAReportTheLedgerRefusesIsLoggedAndMadeAgainOnTheNextError(): void
+    {
+        $logger = new BufferingLogger();
+        $ledger = new InMemoryLedger(accepted: 1);
+        $cooldowns = new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns->coolDownRejected($this->team());
+
+        $cooldowns->coolDownRejected($this->team());
+
+        /** @var list<array{0: string, 1: string}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertSame([['error', 'An account error was not reported.'], ['error', 'An account error was not reported.']], array_map(static fn (array $log): array => [$log[0], $log[1]], $logs));
+    }
+
     public function testAProviderWithoutAccountsHasNothingToWaitFor(): void
     {
         self::assertSame(0, $this->cooldowns()->secondsUntilAnAccountIsFree(Provider::ClaudeCode));
@@ -235,6 +396,16 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         return new AccountCooldownWindows($this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [$account->name]])
             ->secondsUntilAnAccountIsFree(Provider::Anthropic);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function reports(): array
+    {
+        $kinds = $this->ledger->kinds();
+
+        return array_values(array_filter($this->ledger->payloads(), static fn (int $index): bool => LedgerEventKind::AccountErrorReported === $kinds[$index], ARRAY_FILTER_USE_KEY));
     }
 
     private function cooldowns(): AccountCooldownWindows

@@ -21,7 +21,7 @@ final class DisabledProvidersWarningTest extends TestCase
     {
         $output = new BufferedOutput();
 
-        new DisabledProvidersWarning(['a' => 'first message', 'b' => 'second message'], [])->onConsoleCommand($this->eventWith($output));
+        new DisabledProvidersWarning(['a' => 'first message', 'b' => 'second message'], [])->onConsoleCommand($this->eventWith($output, 'intakt:ai:tiers'));
 
         self::assertSame("first message\nsecond message\n", $output->fetch());
     }
@@ -30,7 +30,7 @@ final class DisabledProvidersWarningTest extends TestCase
     {
         $output = new BufferedOutput();
 
-        new DisabledProvidersWarning(['a' => 'provider message'], ['account message'])->onConsoleCommand($this->eventWith($output));
+        new DisabledProvidersWarning(['a' => 'provider message'], ['account message'])->onConsoleCommand($this->eventWith($output, 'intakt:ai:tiers'));
 
         self::assertSame("provider message\naccount message\n", $output->fetch());
     }
@@ -39,7 +39,7 @@ final class DisabledProvidersWarningTest extends TestCase
     {
         $output = new BufferedOutput();
 
-        new DisabledProvidersWarning([], [])->onConsoleCommand($this->eventWith($output));
+        new DisabledProvidersWarning([], [])->onConsoleCommand($this->eventWith($output, 'intakt:ai:tiers'));
 
         self::assertSame('', $output->fetch());
     }
@@ -52,13 +52,40 @@ final class DisabledProvidersWarningTest extends TestCase
         $output->expects(self::never())->method('write');
         $output->expects(self::never())->method('writeln');
 
-        new DisabledProvidersWarning(['a' => 'first message'], [])->onConsoleCommand($this->eventWith($output));
+        new DisabledProvidersWarning(['a' => 'first message'], [])->onConsoleCommand($this->eventWith($output, 'intakt:ai:tiers'));
 
         self::assertSame("first message\n", $errors->fetch());
     }
 
-    private function eventWith(OutputInterface $output): ConsoleCommandEvent
+    public function testTheReviewCommandPrintsNoProviderNoteBeforeItsResult(): void
     {
-        return new ConsoleCommandEvent(new Command('probe'), new ArrayInput([]), $output);
+        $output = new BufferedOutput();
+
+        new DisabledProvidersWarning(['a' => 'first message'], ['account message'])->onConsoleCommand($this->eventWith($output, 'intakt:review'));
+
+        self::assertSame('', $output->fetch());
+    }
+
+    public function testTheProbeCommandStillNamesEachDisabledProvider(): void
+    {
+        $output = new BufferedOutput();
+
+        new DisabledProvidersWarning(['a' => 'first message'], [])->onConsoleCommand($this->eventWith($output, 'intakt:vendor:probe'));
+
+        self::assertSame("first message\n", $output->fetch());
+    }
+
+    public function testACommandWithoutANamePrintsNoProviderNote(): void
+    {
+        $output = new BufferedOutput();
+
+        new DisabledProvidersWarning(['a' => 'first message'], [])->onConsoleCommand(new ConsoleCommandEvent(null, new ArrayInput([]), $output));
+
+        self::assertSame('', $output->fetch());
+    }
+
+    private function eventWith(OutputInterface $output, string $command): ConsoleCommandEvent
+    {
+        return new ConsoleCommandEvent(new Command($command), new ArrayInput([]), $output);
     }
 }

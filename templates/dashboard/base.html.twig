@@ -25,8 +25,8 @@
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
     {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
     {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
-    {# Imported by their own address, not through the import map, so a danger button asks first, the search opens, a finding id highlights its entry and a collapsed board column and a phone banner open also on a page without one. After the import map, which a browser ignores once a module has started to load. #}
-    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; import { offerSearch } from '{{ asset('search.js') }}'; import { switchTaskPanes } from '{{ asset('task-panes.js') }}'; import { highlightFindings } from '{{ asset('finding-highlight.js') }}'; import { foldColumns } from '{{ asset('column-fold.js') }}'; import { toggleBanners } from '{{ asset('banner-toggle.js') }}'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document); highlightFindings(document); foldColumns(document); toggleBanners(document);</script>
+    {# Imported by their own address, not through the import map, so a danger button asks first, the search opens, the review page switches panes, a finding id highlights its entry, a collapsed board column, a crowded one and a phone banner open also on a page without one. After the import map, which a browser ignores once a module has started to load. #}
+    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; import { offerSearch } from '{{ asset('search.js') }}'; import { switchTaskPanes } from '{{ asset('task-panes.js') }}'; import { highlightFindings } from '{{ asset('finding-highlight.js') }}'; import { foldColumns } from '{{ asset('column-fold.js') }}'; import { showMoreCards } from '{{ asset('column-more.js') }}'; import { toggleBanners } from '{{ asset('banner-toggle.js') }}'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document); highlightFindings(document); foldColumns(document); showMoreCards(document); toggleBanners(document);</script>
 </head>
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
@@ -106,6 +106,8 @@
             item.hidden = chosen !== '' && item.dataset.project !== chosen;
         });
         shownFilter.title = shownFilter.selectedOptions[0].textContent;
+        // assets/column-more.js counts a crowded column's page limit over the cards left shown, so it hears of each run.
+        document.dispatchEvent(new Event('intakt:project-shown'));
     };
     const showMore = (open) => {
         moreSheet.hidden = !open;
