@@ -99,22 +99,16 @@ final readonly class StartedRounds
         return $rounds;
     }
 
-    /**
-     * @return list<StartedRound>
-     */
-    public function openRoundsAt(string $project, OpenChange $change): array
+    // Also a round the watcher already found stale, because a head that moved away and returned has an unchanged identity again, so Review would count that round's verdicts once more.
+    public function roundAt(string $project, OpenChange $change): ?StartedRound
     {
-        $rounds = [];
+        return $this->storedRound($project, $change);
+    }
 
-        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]) as $loaded) {
-            $round = $this->readAgain($loaded);
-
-            if (false === $round?->isStale()) {
-                $rounds[] = $round;
-            }
-        }
-
-        return $rounds;
+    // A round found stale no longer stands, so its returning head is booted again before a fresh round replaces it.
+    public function standsAt(string $project, OpenChange $change): bool
+    {
+        return false === $this->storedRound($project, $change)?->isStale();
     }
 
     // Marked and recorded in one transaction with the ledger's own write, so a failed append leaves the round unmarked for a later tick and a second worker that marks the same round finds it taken.

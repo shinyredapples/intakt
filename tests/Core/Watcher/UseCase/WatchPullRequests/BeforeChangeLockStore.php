@@ -20,6 +20,8 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
     public bool $changeLocksStayDown = false;
     /** @var list<string> */
     public array $changeLocksGivenBack = [];
+    /** @var list<float> */
+    public array $changeLockLifetimes = [];
     private readonly InMemoryStore $inner;
 
     public function __construct()
@@ -71,6 +73,10 @@ final class BeforeChangeLockStore implements PersistingStoreInterface
     #[Override]
     public function putOffExpiration(Key $key, float $ttl): void
     {
+        if (str_starts_with((string) $key, 'watcher-change-')) {
+            $this->changeLockLifetimes[] = $ttl;
+        }
+
         $this->inner->putOffExpiration($key, $ttl);
     }
 

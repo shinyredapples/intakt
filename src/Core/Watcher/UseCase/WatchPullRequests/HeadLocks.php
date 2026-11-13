@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
 use Intakt\Core\Budget\Contract\InstallWideFailures;
+use Intakt\Core\Review\Contract\BootLimits;
 use Intakt\Plugin\Forge\Contract\OpenChange;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
@@ -17,6 +18,9 @@ use Throwable;
 // One lock per pull request, held from the stale check to the round start, because a tick that looked at a newer head while an older one was still starting would miss that round.
 final readonly class HeadLocks
 {
+    // Long enough for main's boot on a cache miss and the head's boot, both run while the lock is held, plus the 300 seconds the other steps had; a lock that ran out mid-boot would let a second tick settle the same head.
+    private const float TTL_SECONDS = 2 * BootLimits::LONGEST_SECONDS + 300;
+
     public function __construct(
         private PendingHeads $pending,
         private LockFactory $locks,
@@ -64,7 +68,7 @@ final readonly class HeadLocks
     private function lockOf(string $project, OpenChange $open): LockInterface
     {
         // Not released on destruction, because releaseEach() already gives every lock back, and a destructor asking a store that is still down would replace the failure this tick rethrows.
-        return $this->locks->createLock('watcher-change-'.hash('sha256', json_encode([$project, $open->id->value], JSON_THROW_ON_ERROR)), autoRelease: false);
+        return $this->locks->createLock('watcher-change-'.hash('sha256', json_encode([$project, $open->id->value], JSON_THROW_ON_ERROR)), self::TTL_SECONDS, autoRelease: false);
     }
 
     // Reported outside any head's back-off, because every head's lock lives in the one store, so its failure is no head's own.

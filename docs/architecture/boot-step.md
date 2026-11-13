@@ -23,7 +23,7 @@ Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`pers
 
 ## The gate before a round (part 1 of the watcher side)
 
-`SettleHead` asks `BootGate::admit(WatchedProject, HeadDecision)` for a head whose CI is green, before `RoundStarts::startFor`; a pending or red head is never booted. The gate:
+`SettleHead` asks `BootGate::admit(WatchedProject, HeadDecision)` for a head whose CI is green, before `RoundStarts::startFor`; a pending or red head is never booted, and neither is a head whose round stands (`StartedRounds::standsAt()`: a `watcher_started_round` row for that head not found stale), so a head the listing names again (a comment, a label) is not booted again, where a transient install failure (`failed`) would withdraw the approval of an unchanged head. A head is booted again only when no round was recorded for it (its start failed and is retried after its back-off) or its round went stale (it moved away and returned). The gate:
 
 1. asks the query bus for `MainCommit(ChangeSource)`, the commit the base branch points at (answered by the local git forge's `MainCommitHandler`, which the module list always loads and which reads the base branch from the project's `repository` path for every watched project, a `github` one included; when that commit cannot be read, the gate logs an error and the review starts);
 2. asks `BootResults::ofMain` for main's result under the `BootKey` of the project, that commit and the constant `BootGate::TOOL_FINGERPRINT` (nothing computes a fingerprint of the boot tools yet, so one constant stands for them);
@@ -31,13 +31,15 @@ Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`pers
 
 | main | head | outcome |
 | --- | --- | --- |
-| booted | failed | `HeadAdmission::FailedBoot`: like red CI, no round, the pending head is forgotten, the stale check of earlier rounds still runs, a round already started on this same head is marked stale (`StaleVerdicts::noteFailedBoot` dispatches Review's `MarkVerdictsStale`, so `VerdictsOfRound` answers `stale` with the changed field `head` from then on, and marks the watcher's row stale with one `verdicts_stale` line), and `WatcherLedger` appends `head_red` with `cause` `boot_failed` and the redacted `reason` |
+| booted | failed | `HeadAdmission::FailedBoot`: like red CI, no round, the pending head is forgotten, the stale check of earlier rounds still runs, the round recorded for this same head, also one the watcher already found stale (A, B, A), is marked stale (`StaleVerdicts::noteFailedBoot` dispatches Review's `MarkVerdictsStale`, so `VerdictsOfRound` answers `stale` with the changed field `head` from then on and a publication still queued for the round posts `Failure` with no comment, and marks the watcher's row stale with one `verdicts_stale` line unless it already was), and `WatcherLedger` appends `head_red` with `cause` `boot_failed` and the redacted `reason` |
 | booted | booted or crashed | green: the round starts |
 | failed or crashed | not booted | green: the round starts (alerting the owner that the gate is off is part 2) |
 
 Any `Throwable` from the gate is logged as an error and the round starts, so a crashing gate never stops the review. The dashboard reads the `head_red` line like a red head.
 
-Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootGateTest.php`, the boot cases of `WatchPullRequestsHandlerTest.php` and the main commit case of `tests/Plugin/LocalGitForge/BootHeadHandlersTest.php`.
+The boots run inside the watcher tick while the head's lock is held. The lock lives long enough for both boots (`HeadLocks`: `2 * BootLimits::LONGEST_SECONDS + 300` seconds; the limits of `InstanceBoot` come from `Review/Contract/BootLimits`), so no second tick settles the same head mid-boot. The tick runs on the one `scheduler_watcher` consumer, so a long boot also delays the ticks of every other project until it ends (at most twice 780 seconds); moving the boot off the tick is not built.
+
+Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootGateTest.php`, the boot cases of `WatchPullRequestsHandlerTest.php` (also the returning head, the head named again and the lock's lifetime), `StaleVerdictsTest.php`, the stale case of `tests/Core/Review/UseCase/PublishVerdict/PublishVerdictTest.php` and the main commit case of `tests/Plugin/LocalGitForge/BootHeadHandlersTest.php`.
 
 ## How a commit boots
 

@@ -66,13 +66,31 @@ final class StaleVerdictsTest extends KernelTestCase
         self::assertSame(Standing::Stale, $verdicts->standing->standing);
     }
 
-    private function staleVerdicts(): StaleVerdicts
+    public function testAHeadThatReturnsAndFailsToBootMakesItsEarlierRoundStaleInReviewTooWhenTheWatcherHadAlreadyMarkedIt(): void
+    {
+        $round = $this->fixture->start(2)->id()->toRfc4122();
+        $returning = new OpenChange(new ChangeId('7'), new CommitId(SampleIdentity::HEAD), new DateTimeImmutable('2026-11-13T10:00:00Z'));
+        $this->fixture->entities->persist(new StartedRound('alpha', $returning, $round));
+        $this->fixture->entities->flush();
+        $moved = new StandingQueryBus($this->fixture->identityAt(SampleIdentity::HEAD, 2), $this->fixture->entities);
+        $moved->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $project = new WatchedProject('alpha', new ChangeSource('repo', 'main'), 'Review it.');
+        $stale = $this->staleVerdicts($moved);
+        $stale->noteMovedHead($project, new OpenChange(new ChangeId('7'), new CommitId(str_repeat('b', 40)), new DateTimeImmutable('2026-11-13T10:05:00Z')));
+
+        $stale->noteFailedBoot($project, $returning);
+
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+        self::assertSame(Standing::Stale, $verdicts->standing->standing);
+    }
+
+    private function staleVerdicts(?MessageBusInterface $queries = null): StaleVerdicts
     {
         $commands = self::getContainer()->get('command.bus');
         self::assertInstanceOf(MessageBusInterface::class, $commands);
         $entities = $this->fixture->entities;
         $rounds = new StartedRounds($entities, new PendingHeads($entities, new MockClock('2026-11-13T10:00:00Z')), new DiscardedRounds($commands, new NullLogger()));
 
-        return new StaleVerdicts(self::createStub(MessageBusInterface::class), $commands, $rounds, new WatcherLedger(new InMemoryLedger()));
+        return new StaleVerdicts($queries ?? self::createStub(MessageBusInterface::class), $commands, $rounds, new WatcherLedger(new InMemoryLedger()));
     }
 }

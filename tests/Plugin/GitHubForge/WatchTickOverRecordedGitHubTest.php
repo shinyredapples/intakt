@@ -139,7 +139,7 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $starts = new RoundStarts($commands, $rounds, $ledger);
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
         $queries = new StandingQueryBus($recorded, $this->entities);
-        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts, new BootGate($queries, new BootResults($queries, $this->entities, $clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger)), $starts, $backOff);
+        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts, new BootGate($queries, new BootResults($queries, $this->entities, $clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger), $rounds), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));

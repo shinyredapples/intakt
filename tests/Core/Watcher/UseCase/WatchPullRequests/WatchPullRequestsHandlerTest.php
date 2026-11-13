@@ -22,6 +22,7 @@ use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootHarness;
+use Intakt\Core\Review\Contract\BootLimits;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -855,29 +856,40 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
     }
 
-    public function testAHeadWhoseRoundStartedBeforeItFailedToBootHasThatRoundsVerdictsMadeStale(): void
+    public function testAHeadThatReturnsAndFailsToBootHasTheVerdictsOfItsEarlierRoundMadeStaleInReview(): void
     {
         $this->startRoundOnGreenHead();
-        $this->queries->head = BootOutcome::failed('The same head no longer boots.');
-        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+        $this->queries->move = new HeadMove(HeadMoveKind::Rewritten, []);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->queries->head = BootOutcome::failed('The head no longer boots.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
 
         $this->tick();
 
-        self::assertTrue($this->storedStale(self::GREEN));
         self::assertSame(['round-1'], $this->commands->markedStale);
-        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
+        self::assertCount(2, $this->commands->started);
     }
 
-    public function testAHeadThatBootsAgainKeepsTheVerdictsOfItsRound(): void
+    public function testAHeadWhoseRoundStandsIsNotBootedAgainWhenTheListingNamesItOnceMore(): void
     {
         $this->startRoundOnGreenHead();
+        $this->queries->head = BootOutcome::failed('A registry hiccup failed the install.');
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
 
         $this->tick();
 
+        self::assertSame([MainCommit::class, BootHarness::class, BootHarnessAtMain::class], array_map(get_class(...), $this->queries->boots));
         self::assertFalse($this->storedStale(self::GREEN));
         self::assertSame([], $this->commands->markedStale);
-        self::assertCount(1, $this->commands->started);
+    }
+
+    public function testAHeadStaysLockedLongerThanMainsBootAndItsOwnBootCanTakeTogether(): void
+    {
+        $this->startRoundOnGreenHead();
+
+        self::assertNotSame([], $this->locks->changeLockLifetimes);
+        self::assertGreaterThan(2 * BootLimits::LONGEST_SECONDS, min($this->locks->changeLockLifetimes));
     }
 
     public function testAnApprovedHeadThatDoesNotBootIsNotMergedBecauseNoRoundIsQueuedForIt(): void
@@ -1146,7 +1158,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
-        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts, new BootGate($this->queries, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger)), $starts, $backOff);
+        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts, new BootGate($this->queries, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger), $rounds), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));

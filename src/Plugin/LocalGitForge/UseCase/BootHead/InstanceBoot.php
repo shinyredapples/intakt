@@ -6,6 +6,7 @@ namespace Intakt\Plugin\LocalGitForge\UseCase\BootHead;
 
 use Closure;
 use Intakt\Core\Review\Contract\BootAt;
+use Intakt\Core\Review\Contract\BootLimits;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Plugin\Forge\Contract\CommitId;
@@ -25,9 +26,6 @@ final readonly class InstanceBoot
     private const array INSTALL = ['composer', 'install', '--no-interaction', '--no-progress', '--no-scripts'];
     // The shell's codes for a command it cannot execute (126) or cannot find (127), because a missing or broken composer is the boot step's fault, never the commit's.
     private const array COULD_NOT_RUN = [126, 127];
-    private const int INSTALL_SECONDS = 600;
-    private const int BOOT_SECONDS = 180;
-
     // bin/instance writes its status on descriptor 3 only; moved to stdout and its log to stderr, so no log line can pass for the status.
     private const array STATUS_ON_STDOUT = ['sh', '-c', 'exec "$@" 3>&1 1>&2', 'sh'];
 
@@ -87,7 +85,7 @@ final readonly class InstanceBoot
     // The harness is placed after the install, so nothing the install writes into bin can replace it.
     private function bootIn(string $snapshot, FileContent $harness): BootOutcome
     {
-        $install = $this->run(self::INSTALL, $snapshot, self::INSTALL_SECONDS);
+        $install = $this->run(self::INSTALL, $snapshot, BootLimits::INSTALL_SECONDS);
 
         if (in_array($install->getExitCode(), self::COULD_NOT_RUN, true)) {
             return BootOutcome::crashed('composer could not run: '.trim($install->getErrorOutput()));
@@ -103,7 +101,7 @@ final readonly class InstanceBoot
 
         $this->placeHarness($snapshot, $harness);
 
-        return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, self::BOOT_SECONDS));
+        return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, BootLimits::BOOT_SECONDS));
     }
 
     // A link is refused, because writing the harness through it would change a file outside the snapshot.

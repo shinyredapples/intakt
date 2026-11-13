@@ -9,8 +9,10 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\LoopReviewComment;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
@@ -58,6 +60,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(PostedComments::class)]
 #[UsesClass(VerdictLocks::class)]
 #[UsesClass(ReviewToken::class)]
+#[UsesClass(MarkVerdictsStaleHandler::class)]
+#[UsesClass(MarkVerdictsStale::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -175,6 +179,19 @@ final class PublishVerdictTest extends KernelTestCase
 
         self::assertSame(LoopVerdict::Changes, $reviews->reviews[0]->verdict);
         self::assertSame(['src/Thing.php', 3, Severity::P2], [$reviews->reviews[0]->findings[0]->file, $reviews->reviews[0]->findings[0]->line, $reviews->reviews[0]->findings[0]->severity]);
+    }
+
+    public function testAnApprovedRoundWhoseHeadLaterFailedToBootIsPublishedAsAFailureWithoutAComment(): void
+    {
+        $handler = $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $roundId = $this->judgedRound(self::PULL, []);
+        new MarkVerdictsStaleHandler($this->fixture->transactions())(new MarkVerdictsStale($roundId));
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $handler($publication);
+        }
+
+        self::assertSame([[self::STATUS, ['state' => 'failure', 'context' => 'intakt/review', 'description' => 'Intakt withdrew its review: this head does not boot.']]], $this->github->writes);
     }
 
     public function testAHeadNoReviewerCouldReviewGetsAnErrorStatusAndNoComment(): void

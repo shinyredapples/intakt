@@ -84,6 +84,11 @@ final class ReviewRound implements HasPlace
         $this->verdictsStale = true;
     }
 
+    public function hasStaleVerdicts(): bool
+    {
+        return $this->verdictsStale;
+    }
+
     // Throws for a round stored before identities were recorded, because such a round names no head to publish on.
     public function identity(): VerdictIdentity
     {

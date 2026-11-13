@@ -40,7 +40,9 @@ final readonly class StaleVerdicts
     // Told to Review rather than asked, because the head itself is the one refused: whatever its round approved no longer counts, and Review must say so to every later reader too.
     public function noteFailedBoot(WatchedProject $project, OpenChange $open): void
     {
-        foreach ($this->rounds->openRoundsAt($project->name, $open) as $round) {
+        $round = $this->rounds->roundAt($project->name, $open);
+
+        if ($round instanceof StartedRound) {
             $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
             $this->rounds->markStaleOnce($round, $this->ledger->verdictsStale(...));
         }

@@ -53,7 +53,7 @@ final readonly class BootResults
         return $outcome;
     }
 
-    // Never cached, because a head is booted once per round and its commit is not asked again; booted with main's harness so the head cannot certify itself.
+    // Never cached, because the watcher boots a head only while no round stands at it, so a head is asked again only when its start failed or its round went stale; booted with main's harness so the head cannot certify itself.
     public function ofHead(BootAt $head, CommitId $main): BootOutcome
     {
         return $this->safe($this->boot(new BootHarnessAtMain($head, $main)));
