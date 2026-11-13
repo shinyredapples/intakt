@@ -56,10 +56,9 @@ final readonly class RateLimitReadings
      *
      * @throws ForgeRateLimited
      */
-    public function observe(string $installationId, int $status, array $headers, string $requestPool = self::CORE): void
+    public function observe(string $installationId, int $status, array $headers): void
     {
-        // The pool GitHub names wins, because it is the one that counted the call; the request's pool stands in when it names none.
-        $pool = $headers['x-ratelimit-resource'][0] ?? $requestPool;
+        $pool = $headers['x-ratelimit-resource'][0] ?? self::CORE;
 
         $reading = $this->readingOf($headers);
         if (self::CORE === $pool && $reading instanceof RateLimitReading) {

@@ -77,11 +77,10 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testARemovalWithoutAnActorFailsTheRead(): void
     {
-        $answer = json_decode(RecordedIssueApi::fixture('history_labels_reapplied.json'), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($answer);
-        $answer['data']['repository']['issue']['timelineItems']['nodes'][3]['actor'] = null;
+        $removal = '{"__typename":"UnlabeledEvent","actor":{"login":"ana"},"label":{"name":"bug"}}';
         $api = new RecordedIssueApi();
-        $api->graphql = json_encode($answer, JSON_THROW_ON_ERROR);
+        $api->graphql = str_replace($removal, '{"__typename":"UnlabeledEvent","actor":null,"label":{"name":"bug"}}', RecordedIssueApi::fixture('history_labels_reapplied.json'), $replaced);
+        self::assertSame(1, $replaced);
 
         $this->expectException(ForgeReadFailed::class);
 

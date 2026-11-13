@@ -30,7 +30,7 @@ final readonly class GitHubCalls
      */
     public function asInstallation(string $method, string $url, #[SensitiveParameter] array $options): ResponseInterface
     {
-        return $this->inPool(RateLimitReadings::CORE, $method, $url, $options);
+        return $this->inPool(RateLimitReadings::CORE, fn (): ResponseInterface => $this->http->request($method, $url, $options));
     }
 
     // Apart from the REST calls, because GitHub counts GraphQL queries in their own pool.
@@ -42,22 +42,23 @@ final readonly class GitHubCalls
      */
     public function query(#[SensitiveParameter] array $options): ResponseInterface
     {
-        return $this->inPool(RateLimitReadings::GRAPHQL, 'POST', '/graphql', $options);
+        return $this->inPool(RateLimitReadings::GRAPHQL, fn (): ResponseInterface => $this->http->request('POST', '/graphql', $options));
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param callable(): ResponseInterface $request
      *
      * @throws ForgeRateLimited
      * @throws ExceptionInterface
      */
-    private function inPool(string $pool, string $method, string $url, #[SensitiveParameter] array $options): ResponseInterface
+    private function inPool(string $pool, callable $request): ResponseInterface
     {
         $installationId = $this->tokens->installationId;
         $this->readings->refuseWhileLimited($installationId, $pool);
 
-        $response = $this->http->request($method, $url, $options);
-        $this->readings->observe($installationId, $response->getStatusCode(), $response->getHeaders(false), $pool);
+        $response = $request();
+        // The request's pool only where GitHub names none, because the pool GitHub names is the one that counted the call.
+        $this->readings->observe($installationId, $response->getStatusCode(), $response->getHeaders(false) + ['x-ratelimit-resource' => [$pool]]);
 
         return $response;
     }

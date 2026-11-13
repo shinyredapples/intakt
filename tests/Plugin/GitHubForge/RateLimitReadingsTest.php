@@ -167,19 +167,6 @@ final class RateLimitReadingsTest extends TestCase
         $this->process()->refuseWhileLimited('678', 'graphql');
     }
 
-    public function testAnAnswerWithoutAPoolCountsInThePoolOfItsRequest(): void
-    {
-        try {
-            $this->process()->observe('678', 429, ['retry-after' => ['90']], 'graphql');
-        } catch (ForgeRateLimited) {
-        }
-
-        $this->process()->refuseWhileLimited('678');
-        $this->expectException(ForgeRateLimited::class);
-
-        $this->process()->refuseWhileLimited('678', 'graphql');
-    }
-
     /**
      * @return array<string, list<string>>
      */
