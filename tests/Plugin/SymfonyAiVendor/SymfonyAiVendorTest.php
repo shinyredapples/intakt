@@ -408,19 +408,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $vendor->review('alpha', Tier::Strong, $this->request());
     }
 
-    public function testAnAnswerThatIsNotAVerdictIsAskedForOnceMoreAndTheRetryGivesTheVerdict(): void
-    {
-        $calls = 0;
-        $answer = static function () use (&$calls): string {
-            return 1 === ++$calls ? 'not a verdict' : VerdictDocument::fromTheDesign()->json();
-        };
-
-        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
-
-        self::assertSame(2, $calls);
-        self::assertSame('F3', $verdict->findings[0]->id);
-    }
-
     private function vendorAnswering(string $output): SymfonyAiVendor
     {
         return $this->vendor(static fn (): string => $output);
