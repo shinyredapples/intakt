@@ -8,40 +8,46 @@ use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\BootState;
+use Intakt\Plugin\Forge\Contract\CommitId;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'watcher_boot_result')]
-final class BootRecord
+final readonly class BootRecord
 {
     #[ORM\Id]
     #[ORM\Column(length: 255)]
-    private readonly string $project;
+    private string $project;
 
     #[ORM\Id]
     #[ORM\Column(name: 'main_commit', length: 64)]
-    private readonly string $main;
+    private string $main;
 
     #[ORM\Id]
     #[ORM\Column(name: 'tool_fingerprint', length: 255)]
-    private readonly string $toolFingerprint;
+    private string $toolFingerprint;
 
     #[ORM\Column(length: 16, enumType: BootState::class)]
-    private readonly BootState $state;
+    private BootState $state;
 
     #[ORM\Column(type: 'text')]
-    private readonly string $reason;
+    private string $reason;
 
     public function __construct(
         BootKey $key,
         BootOutcome $outcome,
         #[ORM\Column(name: 'recorded_at', type: 'utc_datetime_immutable')]
-        private readonly DateTimeImmutable $recordedAt,
+        private DateTimeImmutable $recordedAt,
     ) {
         $this->project = $key->project;
         $this->main = $key->main->hash;
         $this->toolFingerprint = $key->toolFingerprint;
         $this->state = $outcome->state;
         $this->reason = $outcome->reason;
+    }
+
+    public function key(): BootKey
+    {
+        return new BootKey($this->project, new CommitId($this->main), $this->toolFingerprint);
     }
 
     public function outcome(): BootOutcome

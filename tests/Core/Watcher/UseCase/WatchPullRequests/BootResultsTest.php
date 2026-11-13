@@ -160,6 +160,7 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertInstanceOf(BootRecord::class, $record);
         self::assertSame('2026-11-13T10:00:00+00:00', $record->recordedAt()->format(DATE_ATOM));
+        self::assertTrue($this->key('a', 'tools-1')->equals($record->key()));
     }
 
     private function results(BootingBus $bus): BootResults
