@@ -286,7 +286,7 @@ final class InstanceBootTest extends TestCase
         yield 'failed with an empty reason' => ['{"status":"failed","reason":""}'];
         yield 'failed with an extra key' => ['{"status":"failed","reason":"broken","extra":1}'];
         yield 'failed with an undefined mode' => ['{"status":"failed","mode":"bogus","reason":"broken"}'];
-        yield 'two status lines' =>["{\"status\":\"ready\"}\n{\"status\":\"ready\"}"];
+        yield 'two status lines' => ["{\"status\":\"ready\"}\n{\"status\":\"ready\"}"];
     }
 
     #[DataProvider('statusLinesOutsideTheContract')]
