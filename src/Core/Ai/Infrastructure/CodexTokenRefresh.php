@@ -7,7 +7,9 @@ namespace Intakt\Core\Ai\Infrastructure;
 use SensitiveParameter;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
+use Symfony\Contracts\HttpClient\Exception\HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Throwable;
 
 // The endpoint and public client id the Codex CLI refreshes its own login with, so the orchestrator refreshes it the same way and the CLI never has to.
 final readonly class CodexTokenRefresh
@@ -45,10 +47,20 @@ final readonly class CodexTokenRefresh
                 'scope' => 'openid profile email',
             ]])->toArray();
         } catch (ExceptionInterface $failure) {
-            throw new CodexLoginUnusable('The Codex login could not be refreshed: '.$failure->getMessage(), $failure->getCode(), previous: $failure);
+            throw $this->refusal($failure);
         }
 
         return $this->validated($answer);
+    }
+
+    // A 401 refuses the refresh token itself, which only a new login mends, so it is the CLI's own lost login and takes the account out; anything else may pass.
+    private function refusal(ExceptionInterface $failure): Throwable
+    {
+        if ($failure instanceof HttpExceptionInterface && 401 === $failure->getResponse()->getStatusCode()) {
+            return CodexAccountFailure::LoginLost->exception();
+        }
+
+        return new CodexLoginUnusable('The Codex login could not be refreshed: '.$failure->getMessage(), $failure->getCode(), previous: $failure);
     }
 
     // The access token must come back; the others are replaced only when the answer carries them, as the CLI does.
