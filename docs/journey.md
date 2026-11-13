@@ -58,9 +58,10 @@ and output in full, cached input at a tenth.
 ![Tokens per day by lane](journey/tokens-by-lane.svg)
 <!-- journey:end tokens-by-lane -->
 
-By account. Until 10-31 the loop ran on one Claude subscription and did not record which; from 10-31 each job picks the
-account with the most room that would otherwise go unused, and from 11-04 an API key takes over only when the
-subscriptions are spent (30M tokens so far, on 11-06 to 11-08). GPT reviews every head from its own subscription.
+By account. Until 10-31 the loop ran on Claude account 1 alone; from 10-31 each job picks the account with the most
+room that would otherwise go unused, and from 11-04 an API key takes over only when the
+subscriptions are spent (32M tokens so far, on 11-06 to 11-08). A small share from early November (21M) has no
+account recorded. GPT reviews every head from its own subscription.
 
 <!-- journey:begin tokens-by-account -->
 ![Tokens per day by account](journey/tokens-by-account.svg)
