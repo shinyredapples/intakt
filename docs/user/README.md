@@ -394,7 +394,7 @@ To see which panel a change gets, without calling any model, run `php bin/consol
 
 ### Which tier a build starts on
 
-A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
+A project can carry a `build:` section that sets the rules for the tier a build starts on. `tier` (`strong`, `standard` or `light`; default `standard`) is the tier for an ordinary build, `escalate_on` lists the setbacks that raise the next build to the strong tier (`failed-attempt`, `blocking-finding`, `stall`; all three by default, a shorter list turns triggers off), and `sensitive_paths` is a list of path patterns (same patterns as a review rule's `paths`) for the files that need the strong tier:
 
 ```yaml
 projects:
@@ -402,11 +402,12 @@ projects:
         build:
             tier: standard
             sensitive_paths: [config/**, src/**/Security/**]
+            escalate_on: [failed-attempt, blocking-finding, stall]
 ```
 
-A build that touches a sensitive path starts on the strong tier, whatever its label says. Otherwise a `model:<tier>` label (for example `model:strong`) sets the tier, and without either the build starts on `tier`. A `model:` value that names no tier, such as a model name, is ignored. The rules look only at the labels and the touched paths of the build, so a job can never choose its own model. A bad tier, or sensitive paths that are not a list, stop Intakt from starting and name the key.
+A build that touches a sensitive path starts on the strong tier, whatever its label says. Otherwise, after a listed setback (an earlier failed attempt, a blocking P1 finding or a stall) the build is raised to the strong tier; a rework after a round without a P1 stays on the cheaper tier. Otherwise a `model:<tier>` label (for example `model:strong`) sets the tier, and without either the build starts on `tier`. A `model:` value that names no tier, such as a model name, is ignored. The rules look only at the labels and the touched paths of the build, so a job can never choose its own model. A bad tier, an unknown setback, or sensitive paths or setbacks that are not a list, stop Intakt from starting and name the key.
 
-To see the tier the rules choose, without calling any model, run `php bin/console intakt:build:tier <project> --label=model:strong --path=src/Foo.php` (`--label` and `--path` can be repeated and are optional). It prints the tier and why (`default`, `label` or `sensitive-path`); an unknown project fails with a message. Starting a build on the chosen tier is not wired yet, and a later part adds raising the tier after a failure.
+To see the tier the rules choose, without calling any model, run `php bin/console intakt:build:tier <project> --label=model:strong --path=src/Foo.php --setback=stall` (`--label` and `--path` can be repeated; all options are optional). It prints the tier and why (`default`, `label`, `setback` or `sensitive-path`); an unknown project fails with a message. Starting a build on the chosen tier is not wired yet.
 
 ## Looking inside the development install with Mate
 

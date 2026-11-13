@@ -17,14 +17,14 @@ final class BuildRoutingConfigurationTest extends TestCase
     {
         $build = $this->process(['alpha' => []]);
 
-        self::assertSame(['tier' => 'standard', 'sensitive_paths' => []], $build);
+        self::assertSame(['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => ['failed-attempt', 'blocking-finding', 'stall']], $build);
     }
 
     public function testABuildSectionSetsTheTierAndTheSensitivePaths(): void
     {
         $build = $this->process(['alpha' => ['build' => ['tier' => 'light', 'sensitive_paths' => ['src/**/Security/**']]]]);
 
-        self::assertSame(['tier' => 'light', 'sensitive_paths' => ['src/**/Security/**']], $build);
+        self::assertSame(['tier' => 'light', 'sensitive_paths' => ['src/**/Security/**'], 'escalate_on' => ['failed-attempt', 'blocking-finding', 'stall']], $build);
     }
 
     public function testAnUnknownTierNameIsRefused(): void
@@ -53,6 +53,27 @@ final class BuildRoutingConfigurationTest extends TestCase
         $this->expectException(InvalidConfigurationException::class);
 
         $this->process(['alpha' => ['build' => ['sensitive_paths' => ['']]]]);
+    }
+
+    public function testEscalateOnCanTurnATriggerOff(): void
+    {
+        $build = $this->process(['alpha' => ['build' => ['escalate_on' => ['stall']]]]);
+
+        self::assertSame(['stall'], $build['escalate_on']);
+    }
+
+    public function testAnUnknownSetbackInEscalateOnIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['alpha' => ['build' => ['escalate_on' => ['panic']]]]);
+    }
+
+    public function testEscalateOnGivenAsAMapIsRefused(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process(['alpha' => ['build' => ['escalate_on' => ['a' => 'stall']]]]);
     }
 
     public function testAnUnknownBuildKeyIsRefused(): void

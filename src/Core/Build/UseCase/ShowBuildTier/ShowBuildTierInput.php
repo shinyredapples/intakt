@@ -19,6 +19,9 @@ final class ShowBuildTierInput
     #[Option('A label of the build, such as model:strong, repeatable')]
     public array $label = [];
 
+    #[Option('The setback of the earlier round: failed-attempt, blocking-finding or stall')]
+    public ?string $setback = null;
+
     /** @var list<string> */
     #[Option('A path the build touches, repeatable')]
     public array $path = [];

@@ -40,10 +40,12 @@ projects:
                   reviewers:
                       - { role: security, tier: strong, provider: anthropic, prompt: Look for ways the change weakens a check., budget: 8 }
         # An optional build section routes the tier a build starts on: tier (strong, standard or light; standard by default) for an ordinary build;
-        # a build touching a sensitive path starts strong whatever its label says, else a model:<tier> label sets the tier.
+        # a build touching a sensitive path starts strong whatever its label says, else a model:<tier> label sets the tier;
+        # escalate_on lists the setbacks (failed-attempt, blocking-finding, stall) that raise the next build to strong (all three by default).
         build:
             tier: standard
             sensitive_paths: [config/**, src/**/Security/**]
+            escalate_on: [failed-attempt, blocking-finding, stall]
         # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
         # the task text is given to every round until the pull request text is read from the forge.
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
