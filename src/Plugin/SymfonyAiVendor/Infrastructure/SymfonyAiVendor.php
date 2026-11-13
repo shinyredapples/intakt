@@ -156,7 +156,10 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $this->readOrRefused($answering->provider, $options, $this->namingAFinding($verdict), ...$platform->rounds());
+        $verdict = $this->namingAFinding($verdict);
+
+        // Decided here in plain code, because a reviewer that never saw the change can still answer approve.
+        return Decision::Approve !== $verdict->verdict || $this->readTheChange($answering->provider, $options, ...$platform->rounds()) ? $verdict : Verdict::unreadApproval();
     }
 
     // Refused after the usage is settled, because the call itself finished and was paid for.
@@ -213,19 +216,19 @@ final readonly class SymfonyAiVendor implements Vendor
         return $judgement;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
+    // Per call, because a subscription CLI reads the change only through the review server this call gave it.
     /**
      * @param array<string, mixed> $serverOptions
      */
-    private function readOrRefused(Provider $answeredBy, array $serverOptions, Verdict $verdict, DeferredResult ...$rounds): Verdict
+    private function readTheChange(Provider $answeredBy, array $serverOptions, DeferredResult ...$rounds): bool
     {
-        if (Decision::Approve !== $verdict->verdict || $answeredBy->readsTheCheckout()) {
-            return $verdict;
+        if ($answeredBy->readsTheCheckout()) {
+            return true;
         }
 
         $access = $serverOptions[ReviewServerAccess::OPTION] ?? null;
 
-        return $access instanceof ReviewServerAccess && $this->readInThisCall($answeredBy, $access, ...$rounds) ? $verdict : Verdict::unreadApproval();
+        return $access instanceof ReviewServerAccess && $this->readInThisCall($answeredBy, $access, ...$rounds);
     }
 
     // A codex call must show a read in its own events, because being given the server does not make the CLI use it; claude_code's output is not read for its tool calls, so a call given the server still counts for it (#1278).
