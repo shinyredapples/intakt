@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\EveryProviderOut;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewServerReads;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -38,6 +39,7 @@ use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
+use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Uid\Uuid;
@@ -205,7 +207,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $round = $request->conversation->round;
 
-        if (Provider::ClaudeCode !== $answering->provider || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
+        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
             return [];
         }
 
@@ -248,11 +250,23 @@ final readonly class SymfonyAiVendor implements Vendor
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
     private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $platform->answering->provider->readsTheCheckout() || isset($platform->options[ReviewServerAccess::OPTION])) {
+        if (Decision::Approve !== $verdict->verdict || $platform->answering->provider->readsTheCheckout()) {
             return $verdict;
         }
 
-        return Verdict::unreadApproval();
+        $access = $platform->options[ReviewServerAccess::OPTION] ?? null;
+
+        return $access instanceof ReviewServerAccess && $this->readInThisCall($platform->answering->provider, $access, ...$platform->rounds()) ? $verdict : Verdict::unreadApproval();
+    }
+
+    // A codex call must show a read in its own events, because being given the server does not make the CLI use it; claude_code's output is not read for its tool calls, so a call given the server still counts for it (#1278).
+    private function readInThisCall(Provider $answeredBy, ReviewServerAccess $access, DeferredResult ...$rounds): bool
+    {
+        if (Provider::ClaudeCode === $answeredBy) {
+            return true;
+        }
+
+        return array_any($rounds, static fn (DeferredResult $round): bool => ($raw = $round->getRawResult()) instanceof ReviewServerReads && $raw->readThrough($access));
     }
 
     // Matched on the exception type because the provider's text can change and carries anything (plan T5).
