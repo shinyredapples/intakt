@@ -22,6 +22,7 @@ use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SeedSampleProjectCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -71,6 +72,47 @@ final class SeedSampleProjectCommandTest extends TestCase
     protected function tearDown(): void
     {
         new Filesystem()->remove($this->directory);
+    }
+
+    /**
+     * @return iterable<string, array{list<Provider>}>
+     */
+    public static function keyCombinations(): iterable
+    {
+        yield 'anthropic' => [[Provider::Anthropic]];
+        yield 'openai' => [[Provider::OpenAi]];
+        yield 'the hugging face router' => [[Provider::OpenAiCompatible]];
+        yield 'anthropic and the router' => [[Provider::Anthropic, Provider::OpenAiCompatible]];
+        yield 'anthropic and openai' => [[Provider::Anthropic, Provider::OpenAi]];
+        yield 'openai and the router' => [[Provider::OpenAi, Provider::OpenAiCompatible]];
+        yield 'anthropic, openai and the router' => [[Provider::Anthropic, Provider::OpenAi, Provider::OpenAiCompatible]];
+    }
+
+    /**
+     * @param list<Provider> $keyed
+     */
+    #[DataProvider('keyCombinations')]
+    public function testTheSeededFilePricesEveryModelItsTiersNameAndNoOther(array $keyed): void
+    {
+        $this->seed(...$keyed);
+
+        $named = array_values(array_unique(array_column($this->writtenProject()['tiers'], 'model')));
+        $priced = array_keys($this->writtenPrices());
+        sort($named);
+        sort($priced);
+        self::assertSame($named, $priced);
+        foreach ($this->writtenPrices() as $price) {
+            self::assertGreaterThan(0, $price['input']);
+            self::assertGreaterThan(0, $price['output']);
+        }
+    }
+
+    public function testWithOnlyTheRouterTheSecondMakersModelIsPriced(): void
+    {
+        $this->seed(Provider::OpenAiCompatible);
+
+        self::assertArrayHasKey('openai/gpt-oss-120b:novita', $this->writtenPrices());
+        self::assertArrayHasKey('moonshotai/Kimi-K3:deepinfra', $this->writtenPrices());
     }
 
     public function testOneKeyPutsTheWholePanelOnThatProvider(): void
@@ -301,10 +343,26 @@ final class SeedSampleProjectCommandTest extends TestCase
      */
     private function writtenProject(): array
     {
-        /** @var array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}} $written */
+        return $this->written()['projects']['sample'];
+    }
+
+    /**
+     * @return array<string, array{input: int|float, output: int|float}>
+     */
+    private function writtenPrices(): array
+    {
+        return $this->written()['budget']['prices'];
+    }
+
+    /**
+     * @return array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{prices: array<string, array{input: int|float, output: int|float}>}}
+     */
+    private function written(): array
+    {
+        /** @var array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{prices: array<string, array{input: int|float, output: int|float}>}} $written */
         $written = Yaml::parseFile($this->configuration());
 
-        return $written['projects']['sample'];
+        return $written;
     }
 
     private function git(string ...$arguments): string

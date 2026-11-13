@@ -7,10 +7,12 @@ namespace Intakt\Tests\Application;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
+use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -88,6 +90,23 @@ final class SampleProjectSeedTest extends KernelTestCase
         $expected = [Tier::Strong->value => Provider::Anthropic, Tier::Standard->value => Provider::OpenAiCompatible, Tier::Light->value => Provider::Anthropic];
         foreach (Tier::cases() as $tier) {
             self::assertSame($expected[$tier->value], $resolver->resolve('sample', $tier)->provider);
+        }
+    }
+
+    public function testASeededInstallPricesTheModelsOfItsTiersSoACostIsAFigure(): void
+    {
+        $_SERVER['ANTHROPIC_API_KEY'] = 'test-value';
+        $this->setTheHuggingFaceRouter();
+        $this->seed();
+
+        $container = $this->bootSeeded();
+        $prices = $container->get(Prices::class);
+        $resolver = $container->get(TierResolver::class);
+        self::assertInstanceOf(Prices::class, $prices);
+        self::assertInstanceOf(TierResolver::class, $resolver);
+        foreach (Tier::cases() as $tier) {
+            $cost = $prices->costOf($resolver->resolve('sample', $tier)->model, new TokenFigures(1000, 0, 0, 0, 100));
+            self::assertNotNull($cost->usd);
         }
     }
 
