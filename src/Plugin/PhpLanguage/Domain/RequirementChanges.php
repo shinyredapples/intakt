@@ -53,9 +53,17 @@ final readonly class RequirementChanges
      */
     private function added(ComposerState $before, ComposerState $after): array
     {
-        $untrusted = array_filter($this->names(array_diff_key($after->requirements, $before->requirements)), fn (string $name): bool => !$this->trusted->trusts($name));
+        $findings = [];
+        foreach ($this->names(array_diff_key($after->requirements, $before->requirements)) as $name) {
+            if (!$this->trusted->trusts($name)) {
+                $findings[] = new DependencyFinding($name, 'is not from a trusted vendor');
+            } elseif (!array_key_exists($name, $after->locked)) {
+                // Only the lock entry names its repository, tag, type and autoloading, which the package rules check.
+                $findings[] = new DependencyFinding($name, 'is not locked in composer.lock');
+            }
+        }
 
-        return array_values(array_map(static fn (string $name): DependencyFinding => new DependencyFinding($name, 'is not from a trusted vendor'), $untrusted));
+        return $findings;
     }
 
     /**

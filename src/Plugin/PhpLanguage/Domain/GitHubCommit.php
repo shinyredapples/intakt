@@ -14,6 +14,11 @@ final readonly class GitHubCommit
 
     private const string COMMIT = '/\A[0-9a-f]{40}\z/';
 
+    // No other key, because Composer downloads from a preferred mirror before the URL, so only a place that names nothing else can be checked.
+    private const array SOURCE_KEYS = ['type', 'url', 'reference'];
+
+    private const array DIST_KEYS = ['type', 'url', 'reference', 'shasum'];
+
     private function __construct(
         public string $owner,
         public string $repository,
@@ -27,6 +32,11 @@ final readonly class GitHubCommit
      */
     public static function fromLockEntry(array $entry): ?self
     {
+        // Its stream options could send the download through a proxy that serves other code.
+        if (array_key_exists('transport-options', $entry)) {
+            return null;
+        }
+
         $places = array_filter([self::source($entry['source'] ?? null), self::dist($entry['dist'] ?? null)]);
         $keys = array_unique(array_map(static fn (self $place): string => $place->key(), $places));
 
@@ -35,12 +45,6 @@ final readonly class GitHubCommit
         }
 
         return array_first($places);
-    }
-
-    // Either side may have no checkable commit, so both missing counts as the same and one missing as different.
-    public static function same(?self $one, ?self $other): bool
-    {
-        return $one?->key() === $other?->key();
     }
 
     public function cloneUrl(): string
@@ -64,7 +68,7 @@ final readonly class GitHubCommit
             return null;
         }
 
-        if (!is_array($source) || 'git' !== ($source['type'] ?? null) || !is_string($source['url'] ?? null) || !is_string($source['reference'] ?? null)
+        if (!is_array($source) || [] !== array_diff_key($source, array_flip(self::SOURCE_KEYS)) || 'git' !== ($source['type'] ?? null) || !is_string($source['url'] ?? null) || !is_string($source['reference'] ?? null)
             || 1 !== preg_match(self::SOURCE, $source['url'], $match) || 1 !== preg_match(self::COMMIT, $source['reference'])) {
             return self::nowhere();
         }
@@ -78,7 +82,7 @@ final readonly class GitHubCommit
             return null;
         }
 
-        if (!is_array($dist) || 'zip' !== ($dist['type'] ?? null) || !is_string($dist['url'] ?? null)
+        if (!is_array($dist) || [] !== array_diff_key($dist, array_flip(self::DIST_KEYS)) || 'zip' !== ($dist['type'] ?? null) || !is_string($dist['url'] ?? null)
             || 1 !== preg_match(self::DIST, $dist['url'], $match) || $match[3] !== ($dist['reference'] ?? null)) {
             return self::nowhere();
         }

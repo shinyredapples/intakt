@@ -6,6 +6,7 @@ namespace Intakt\Plugin\PhpLanguage\Domain;
 
 use Intakt\Plugin\Language\Contract\DependencyFiles;
 use JsonException;
+use stdClass;
 
 // A file the revision lacks reads as empty, because a project may have no lock file yet, or none any more.
 final readonly class ComposerState
@@ -74,12 +75,14 @@ final readonly class ComposerState
         }
 
         try {
+            $object = json_decode($contents, flags: JSON_THROW_ON_ERROR);
             $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $invalid) {
             throw ComposerFileUnreadable::because($path, $invalid->getMessage());
         }
 
-        if (!is_array($decoded) || ([] !== $decoded && array_is_list($decoded))) {
+        // Decoded as an object first, because decoded into arrays an empty list and an empty object look the same.
+        if (!$object instanceof stdClass || !is_array($decoded)) {
             throw ComposerFileUnreadable::because($path, 'it holds no JSON object');
         }
 

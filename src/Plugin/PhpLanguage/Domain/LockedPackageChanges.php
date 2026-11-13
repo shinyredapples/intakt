@@ -11,6 +11,9 @@ final readonly class LockedPackageChanges
 {
     private const string COMPOSER_PLUGIN = 'composer-plugin';
 
+    // A root, a drive or a stream wrapper.
+    private const string ABSOLUTE = '~\A(?:[/\\\\]|[A-Za-z]:|[A-Za-z][A-Za-z0-9+.-]*://)~';
+
     public function __construct(
         private TrustedPackages $trusted,
         private UpstreamTags $tags,
@@ -64,7 +67,7 @@ final readonly class LockedPackageChanges
      */
     private function updated(LockedPackage $earlier, LockedPackage $package): array
     {
-        $findings = $earlier->sameEffectsAs($package) ? [] : [new DependencyFinding($package->name, 'its type, binaries or autoload files changed')];
+        $findings = $earlier->sameEffectsAs($package) ? [] : [new DependencyFinding($package->name, 'its type, binaries or autoload changed')];
 
         if (!$package->commit instanceof GitHubCommit || !$earlier->commit instanceof GitHubCommit || !$earlier->commit->sameRepositoryAs($package->commit)) {
             return [...$findings, new DependencyFinding($package->name, 'its repository changed or cannot be checked')];
@@ -102,11 +105,57 @@ final readonly class LockedPackageChanges
             $findings[] = new DependencyFinding($package->name, 'ships binaries');
         }
 
-        if ([] !== $package->autoloadFiles) {
-            $findings[] = new DependencyFinding($package->name, 'has autoload files');
+        return [...$findings, ...$this->autoload($package)];
+    }
+
+    /**
+     * @return list<DependencyFinding>
+     */
+    private function autoload(LockedPackage $package): array
+    {
+        if (!is_array($package->autoload)) {
+            return [new DependencyFinding($package->name, 'its autoload cannot be checked')];
         }
 
-        return $findings;
+        $reasons = [];
+        foreach ($package->autoload as $kind => $rules) {
+            $reasons[] = match ($kind) {
+                // It only leaves files out.
+                'exclude-from-classmap' => null,
+                'files' => [] === $rules ? null : 'has autoload files',
+                'classmap' => [] === $rules ? null : 'has an autoload classmap',
+                'psr-4', 'psr-0' => $this->ownsEveryMapping($package, $rules) ? null : 'maps autoload outside its own namespace or folder',
+                default => 'its autoload cannot be checked',
+            };
+        }
+
+        return array_map(static fn (string $reason): DependencyFinding => new DependencyFinding($package->name, $reason), array_values(array_unique(array_filter($reasons, is_string(...)))));
+    }
+
+    private function ownsEveryMapping(LockedPackage $package, mixed $mappings): bool
+    {
+        if (!is_array($mappings)) {
+            return false;
+        }
+
+        foreach ($mappings as $namespace => $folders) {
+            $folders = is_array($folders) ? $folders : [$folders];
+            if (!$package->ownsNamespace((string) $namespace) || [] === $folders || [] !== array_filter($folders, static fn (mixed $folder): bool => !self::insidePackage($folder))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Relative and without a step up, because the autoloader would otherwise load files from the project or another package.
+    private static function insidePackage(mixed $folder): bool
+    {
+        if (!is_string($folder) || 1 === preg_match(self::ABSOLUTE, $folder)) {
+            return false;
+        }
+
+        return !in_array('..', preg_split('~[/\\\\]~', $folder) ?: [], true);
     }
 
     /**

@@ -227,6 +227,16 @@ final class ComposerPolicyTest extends TestCase
         yield 'binaries' => [['bin' => ['bin/uid']], 'ships binaries'];
         yield 'a single binary' => [['bin' => 'bin/uid'], 'ships binaries'];
         yield 'autoload files' => [['autoload' => ['files' => ['bootstrap.php']]], 'has autoload files'];
+        yield 'an autoload classmap' => [['autoload' => ['classmap' => ['../../src/']]], 'has an autoload classmap'];
+        yield 'another vendor\'s namespace' => [['autoload' => ['psr-4' => ['Intakt\\' => 'src/']]], 'maps autoload outside its own namespace or folder'];
+        yield 'the fallback namespace' => [['autoload' => ['psr-4' => ['' => 'src/']]], 'maps autoload outside its own namespace or folder'];
+        yield 'a folder above the package' => [['autoload' => ['psr-4' => ['Symfony\\' => '../../payload/']]], 'maps autoload outside its own namespace or folder'];
+        yield 'a folder above the package in a list' => [['autoload' => ['psr-4' => ['Symfony\\' => ['src/', 'src\\..\\..\\..\\payload']]]], 'maps autoload outside its own namespace or folder'];
+        yield 'an absolute folder' => [['autoload' => ['psr-4' => ['Symfony\\' => '/srv/payload/']]], 'maps autoload outside its own namespace or folder'];
+        yield 'a stream wrapper' => [['autoload' => ['psr-0' => ['Symfony\\' => 'phar://payload.phar/']]], 'maps autoload outside its own namespace or folder'];
+        yield 'another vendor\'s namespace in PSR-0' => [['autoload' => ['psr-0' => ['Intakt_' => 'src/']]], 'maps autoload outside its own namespace or folder'];
+        yield 'autoload that is no map' => [['autoload' => 'bootstrap.php'], 'its autoload cannot be checked'];
+        yield 'an autoload key Composer may add later' => [['autoload' => ['psr-5' => ['Symfony\\' => 'src/']]], 'its autoload cannot be checked'];
         yield 'a Composer plugin' => [['type' => 'composer-plugin'], 'is a Composer plugin'];
         yield 'a type not allowed' => [['type' => 'symfony-pack'], 'has the package type "symfony-pack", which is not allowed'];
     }
@@ -240,6 +250,84 @@ final class ComposerPolicyTest extends TestCase
         $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking([...ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0), ...$effect]);
 
         self::assertSame(['symfony/uid: '.$reason], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
+    public function testANewPackageMappingItsOwnNamespaceToItsOwnFoldersIsRoutine(): void
+    {
+        $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking([
+            ...ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0),
+            'autoload' => ['psr-4' => ['Symfony\\Component\\Uid\\' => ['', 'src/..dir']], 'psr-0' => ['Symfony\\Legacy\\' => 'lib/'], 'exclude-from-classmap' => ['/Tests/'], 'classmap' => [], 'files' => []],
+        ]);
+
+        self::assertSame([], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function placesWithMirrors(): iterable
+    {
+        $entry = ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0);
+        $mirrors = [['url' => 'https://example.com/%package%/%reference%.%type%', 'preferred' => true]];
+        $source = is_array($entry['source']) ? $entry['source'] : [];
+        $dist = is_array($entry['dist']) ? $entry['dist'] : [];
+
+        yield 'archive mirrors' => [[...$entry, 'dist' => [...$dist, 'mirrors' => $mirrors]]];
+        yield 'source mirrors' => [[...$entry, 'source' => [...$source, 'mirrors' => $mirrors]]];
+        yield 'transport options' => [[...$entry, 'transport-options' => ['http' => ['proxy' => 'tcp://example.com:8080']]]];
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
+    #[DataProvider('placesWithMirrors')]
+    public function testANewPackageThatNamesAnotherPlaceToDownloadFromNeedsTheOwner(array $entry): void
+    {
+        $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking($entry);
+
+        self::assertSame(
+            ['symfony/uid: does not come from its own vendor\'s repository at one commit'],
+            $this->findingsOf($this->decide(ComposerFiles::sample(), $after)),
+        );
+    }
+
+    public function testAnExistingPackageThatGainsAPreferredMirrorNeedsTheOwner(): void
+    {
+        $entry = ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0);
+        $dist = is_array($entry['dist']) ? $entry['dist'] : [];
+        $after = ComposerFiles::sample()->locking([...$entry, 'dist' => [...$dist, 'mirrors' => [['url' => 'https://example.com/%package%.%type%', 'preferred' => true]]]]);
+
+        self::assertSame(['symfony/console: its repository changed or cannot be checked'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
+    public function testAnotherDownloadAddressForAPackageThatCannotBeCheckedNeedsTheOwner(): void
+    {
+        $entry = ['name' => 'acme/tool', 'version' => '1.0.0', 'type' => 'library', 'dist' => ['type' => 'zip', 'url' => 'https://example.com/old.zip']];
+        $before = ComposerFiles::sample()->locking($entry);
+        $after = ComposerFiles::sample()->locking([...$entry, 'dist' => ['type' => 'zip', 'url' => 'https://example.com/replacement.zip']]);
+
+        self::assertSame(['acme/tool: its repository changed or cannot be checked'], $this->findingsOf($this->decide($before, $after)));
+    }
+
+    public function testAnUnchangedPackageThatCannotBeCheckedStaysRoutine(): void
+    {
+        $before = ComposerFiles::sample()->locking(['name' => 'acme/tool', 'version' => '1.0.0', 'type' => 'library', 'dist' => ['type' => 'zip', 'url' => 'https://example.com/tool.zip']]);
+
+        self::assertSame([], $this->findingsOf($this->decide($before, $before->withLockKey('content-hash', 'ddd'))));
+    }
+
+    public function testANewTrustedRequirementWithoutALockEntryNeedsTheOwner(): void
+    {
+        $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0');
+
+        self::assertSame(['symfony/uid: is not locked in composer.lock'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
+    public function testANewTrustedRequirementLockedForDevelopmentIsRoutine(): void
+    {
+        $after = ComposerFiles::sample()->requiringForDevelopment('symfony/uid', '^8.0')->lockingForDevelopment(ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0));
+
+        self::assertSame([], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
     }
 
     public function testAComposerPluginNeedsTheOwnerEvenWhenTheOwnerAllowsItsType(): void
@@ -299,7 +387,14 @@ final class ComposerPolicyTest extends TestCase
     {
         $after = ComposerFiles::sample()->locking([...ComposerFiles::entry('symfony/console', 'v8.1.0', LockedCommits::CONSOLE_8_1_0), 'bin' => ['bin/console']]);
 
-        self::assertSame(['symfony/console: its type, binaries or autoload files changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+        self::assertSame(['symfony/console: its type, binaries or autoload changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
+    public function testAnUpdateThatChangesItsNamespaceMappingNeedsTheOwner(): void
+    {
+        $after = ComposerFiles::sample()->locking([...ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0), 'autoload' => ['psr-4' => ['Intakt\\' => '../../payload/']]]);
+
+        self::assertSame(['symfony/console: its type, binaries or autoload changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
     }
 
     public function testATrustedPackageMovedUnchangedToTheDevelopmentRequirementsIsRoutine(): void
@@ -421,6 +516,7 @@ final class ComposerPolicyTest extends TestCase
         yield 'no JSON' => ['{"packages": [', 'composer.lock cannot be read: Syntax error'];
         yield 'no object' => ['"packages"', 'composer.lock cannot be read: it holds no JSON object'];
         yield 'a list' => ['[1]', 'composer.lock cannot be read: it holds no JSON object'];
+        yield 'an empty list' => ['[]', 'composer.lock cannot be read: it holds no JSON object'];
         yield 'packages that are no list' => ['{"packages": {"a": {}}}', 'composer.lock cannot be read: packages is no list'];
         yield 'a package without a name' => ['{"packages": [{"version": "1.0.0"}]}', 'composer.lock cannot be read: a locked package has no name or version'];
         yield 'a package locked twice' => ['{"packages": [{"name": "symfony/uid", "version": "v8.0.0"}, {"name": "Symfony/Uid", "version": "v8.0.1"}]}', 'composer.lock cannot be read: packages locks a package twice'];
@@ -443,6 +539,7 @@ final class ComposerPolicyTest extends TestCase
      */
     public static function unreadableManifests(): iterable
     {
+        yield 'an empty list' => ['[]', 'composer.json cannot be read: it holds no JSON object'];
         yield 'a constraint that is no string' => ['{"require": {"symfony/uid": 8}}', 'composer.json cannot be read: the constraint of symfony/uid in require is no string'];
         yield 'a requirement named twice' => ['{"require": {"symfony/uid": "^8.0", "Symfony/Uid": "^7.0"}}', 'composer.json cannot be read: require names a package twice'];
         yield 'a requirement in both sections' => ['{"require": {"symfony/uid": "^8.0"}, "require-dev": {"symfony/uid": "^8.0"}}', 'composer.json cannot be read: a package is in both the main and the development group'];
@@ -456,6 +553,13 @@ final class ComposerPolicyTest extends TestCase
         $decision = new ComposerPolicy($this->trusted(), LockedCommits::upstream())->decide(ComposerFiles::none()->files(), $after);
 
         self::assertSame(['composer.json: '.$reason], $this->findingsOf($decision));
+    }
+
+    public function testAnEmptyLockFileObjectIsRoutine(): void
+    {
+        $decision = new ComposerPolicy($this->trusted(), LockedCommits::upstream())->decide(new DependencyFiles([]), new DependencyFiles(['composer.lock' => '{}']));
+
+        self::assertSame([], $this->findingsOf($decision));
     }
 
     public function testAnUnreadableLockFileAtTheBaseNeedsTheOwnerToo(): void

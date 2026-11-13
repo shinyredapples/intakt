@@ -44,7 +44,7 @@ final readonly class ComposerFiles
             'source' => ['type' => 'git', 'reference' => $reference],
             'dist' => ['type' => 'zip', 'reference' => $reference, 'shasum' => ''],
             'type' => 'library',
-            'autoload' => ['psr-4' => ['Vendor\\' => 'src/']],
+            'autoload' => ['psr-4' => [ucfirst(explode('/', $name)[0]).'\\' => 'src/']],
             'notification-url' => 'https://packagist.org/downloads/',
         ], $name);
     }

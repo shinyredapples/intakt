@@ -12,9 +12,12 @@ final readonly class LockedPackage
     // A release tag: no branch (dev-main, 1.x-dev), and no character git or the command line would read otherwise.
     private const string TAG = '/\A[A-Za-z0-9][A-Za-z0-9._+-]*\z/';
 
+    // Every key Composer downloads the code by, so a release with any of them changed is judged again.
+    private const array PLACES = ['source', 'dist', 'transport-options'];
+
     /**
-     * @param list<mixed> $binaries
-     * @param list<mixed> $autoloadFiles
+     * @param list<mixed>          $binaries
+     * @param array<string, mixed> $places
      */
     private function __construct(
         public string $name,
@@ -22,7 +25,8 @@ final readonly class LockedPackage
         public PackageGroup $group,
         public string $type,
         public array $binaries,
-        public array $autoloadFiles,
+        public mixed $autoload,
+        public array $places,
         public ?GitHubCommit $commit,
     ) {
     }
@@ -37,7 +41,6 @@ final readonly class LockedPackage
         }
 
         $type = $entry['type'] ?? self::DEFAULT_TYPE;
-        $autoload = $entry['autoload'] ?? [];
 
         return new self(
             strtolower($entry['name']),
@@ -45,7 +48,8 @@ final readonly class LockedPackage
             $group,
             is_string($type) ? $type : '',
             self::listed($entry['bin'] ?? []),
-            self::listed(is_array($autoload) ? $autoload['files'] ?? [] : [$autoload]),
+            $entry['autoload'] ?? [],
+            array_intersect_key($entry, array_flip(self::PLACES)),
             GitHubCommit::fromLockEntry($entry),
         );
     }
@@ -60,15 +64,23 @@ final readonly class LockedPackage
         return 1 === preg_match(self::TAG, $this->version) && !str_starts_with(strtolower($this->version), 'dev-') && !str_ends_with(strtolower($this->version), '-dev');
     }
 
-    // The group is left out, because a move between the groups is judged on its own.
+    // The vendor's own top-level namespace, because a package mapping any other one could replace the project's classes or another package's.
+    public function ownsNamespace(string $namespace): bool
+    {
+        $topLevel = strstr($namespace, '\\', true);
+
+        return false !== $topLevel && strtolower($topLevel) === $this->vendor();
+    }
+
+    // The group is left out, because a move between the groups is judged on its own; the places are compared as written, because an uncheckable place has no commit to compare.
     public function sameReleaseAs(self $other): bool
     {
-        return $this->version === $other->version && GitHubCommit::same($this->commit, $other->commit) && $this->sameEffectsAs($other);
+        return $this->version === $other->version && $this->places === $other->places && $this->sameEffectsAs($other);
     }
 
     public function sameEffectsAs(self $other): bool
     {
-        return $this->type === $other->type && $this->binaries === $other->binaries && $this->autoloadFiles === $other->autoloadFiles;
+        return $this->type === $other->type && $this->binaries === $other->binaries && $this->autoload === $other->autoload;
     }
 
     /**
