@@ -27,7 +27,10 @@ final readonly class OnePerPlace
         foreach (array_filter($reported, static fn (Finding $finding): bool => in_array($finding->id, $actIds, true)) as $finding) {
             $at = $this->entryAt($places, $finding);
             if (null !== $at) {
-                $entries[$at] = $this->merged($entries[$at], $finding);
+                $entry = $entries[$at];
+                if ($finding->id !== $entry->id && !in_array($finding->id, $entry->merged, true)) {
+                    $entries[$at] = $this->merged($entry, $finding);
+                }
 
                 continue;
             }
