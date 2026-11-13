@@ -64,7 +64,7 @@ final readonly class SeedSampleProjectCommand
         )));
     }
 
-    // The demo's reader copies the line into the host shell, where PHP and the console exist only inside the service's container.
+    // Prefixed in the compose demo, because its reader copies the line into the host shell and PHP runs only inside the service's container.
     private function hostPrefix(): string
     {
         return '' === $this->composeService ? '' : sprintf('docker compose exec %s ', $this->composeService);
