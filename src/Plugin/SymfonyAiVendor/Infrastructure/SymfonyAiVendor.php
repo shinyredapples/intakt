@@ -77,7 +77,7 @@ final readonly class SymfonyAiVendor implements Vendor
         $retry = fn (MaxOutputTokensException|ChangesWithoutFindings|IncompleteStreamException $failure): Verdict => match (true) {
             $failure instanceof MaxOutputTokensException => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request)),
             $failure instanceof ChangesWithoutFindings => $attempt($answering, $this->inNewConversation($request)),
-            $answering->provider->streams() => $this->unstreamedAfter($failure, fn (): Verdict => $unstreamed($this->inNewConversation($request))),
+            $answering->provider->streams() && !$failure->getPrevious() instanceof RetryableExceptionInterface => $this->unstreamedAfter($failure, fn (): Verdict => $unstreamed($this->inNewConversation($request))),
             default => throw $failure,
         };
 
@@ -85,7 +85,7 @@ final readonly class SymfonyAiVendor implements Vendor
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut(fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
     }
 
-    // Retried once, because a call stopped by the output limit leaves no verdict and the same room would stop it again, a changes verdict without findings is no verdict either, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer, and a stream that a subscription CLI cut is not retried, because its call never streamed.
+    // Retried once, because a call stopped by the output limit leaves no verdict and the same room would stop it again, a changes verdict without findings is no verdict either, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
     /**
      * @param Closure(): Verdict                                                                          $first
      * @param Closure(MaxOutputTokensException|ChangesWithoutFindings|IncompleteStreamException): Verdict $retry

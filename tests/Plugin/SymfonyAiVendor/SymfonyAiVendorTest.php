@@ -473,14 +473,13 @@ final class SymfonyAiVendorTest extends KernelTestCase
      */
     public static function midStreamOutages(): iterable
     {
-        yield 'a cut stream' => [new IncompleteStreamException('Stream cut.')];
         yield 'a server error' => [new ServerException(503)];
         yield 'a server error event' => [new ServerException(errorMessage: 'Overloaded')];
         yield 'a rate limit' => [new RateLimitExceededException(30)];
     }
 
     #[DataProvider('midStreamOutages')]
-    public function testEveryOutageMidStreamAfterAToolRoundThatIsCutAgainOnItsRetryBlocksTheReviewAndLeavesOneUnsettledRowWithBothRounds(Throwable $outage): void
+    public function testEveryOutageMidStreamAfterAToolRoundBlocksTheReviewWithoutARetryAndLeavesOneUnsettledRowWithBothRounds(Throwable $outage): void
     {
         $ledger = new InMemoryLedger();
 
@@ -488,7 +487,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
-        self::assertSame(['started', 'unsettled', 'started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
+        self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
         self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[1]['usages'];
@@ -551,7 +550,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         /** @var list<callable(): Generator<mixed, DeltaInterface, mixed, mixed>> $rounds */
         $rounds = [$this->toolRound(...), $lastRound];
 
-        // A call after the script is the unstreamed retry of a cut stream, and it is cut again, so the reviewer still ends blocked.
+        // A call after the script is the unstreamed retry of a stream cut without a provider outage, and it is cut again, so the reviewer still ends blocked.
         return static function () use (&$rounds): StreamResult {
             $round = array_shift($rounds) ?? self::cutAgain();
 

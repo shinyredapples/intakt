@@ -67,7 +67,7 @@ final class StreamedAnswer extends AbstractStreamListener
         yield $this->answer = new TextDelta($text);
     }
 
-    // A transient failure once the answer has started streaming is a cut answer, because the provider cannot resume it, so the vendor starts the review over once without streaming; before the first answer delta it stays the provider's failure, so another account or a substitute can take the call. Usage and metadata do not start the answer, because a provider reports them on opening the message, often right before an overload error.
+    // A transient failure once the answer has started streaming is a cut answer, because the provider cannot resume it and asking again would start the review over; before the first answer delta it stays the provider's failure, so another account or a substitute can take the call. Usage and metadata do not start the answer, because a provider reports them on opening the message, often right before an overload error.
     /**
      * @return Generator<DeltaInterface>
      */

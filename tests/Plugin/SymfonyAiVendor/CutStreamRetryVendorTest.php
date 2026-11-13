@@ -6,9 +6,13 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
 use Generator;
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
+use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -59,6 +63,7 @@ use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Lock\LockFactory;
@@ -79,6 +84,8 @@ use Throwable;
 #[UsesClass(Verdict::class)]
 #[UsesClass(VendorAccountLimit::class)]
 #[UsesClass(ProviderFailedTransiently::class)]
+#[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(AccountCooldownWindows::class)]
 final class CutStreamRetryVendorTest extends KernelTestCase
 {
     private const string NOW = '2026-11-13 12:00:00.000 UTC';
@@ -143,19 +150,33 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         self::assertSame(ServerException::class, $this->ledger->payloads()[3]['failure']);
     }
 
+    public function testAProviderOutageAfterTheFirstAnswerDeltaOnTheOnlyAccountBlocksTheReviewerWithoutARetry(): void
+    {
+        $cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), ['anthropic' => [Account::DEFAULT]]);
+        $outage = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->json()), new ServerException(503));
+        $onlyAccount = static fn (PlatformInterface $platform): PlatformInterface => new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], $cooldowns, new MockClock(self::NOW), new NullLogger());
+
+        $verdict = $this->vendor($outage, $onlyAccount, $cooldowns)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Blocked, Verdict::INCOMPLETE_STREAM], [$verdict->verdict, $verdict->findings[0]->id]);
+        self::assertStringContainsString('The provider failed after the answer had started streaming.', $verdict->findings[0]->text);
+        self::assertSame([true], $this->streamed);
+        self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+    }
+
     /**
      * @param Closure(): ResultInterface $retry
      */
-    private function cutThen(Closure $retry): Closure
+    private function cutThen(Closure $retry, ?Throwable $cut = null): Closure
     {
-        return function (Model $model, array|string|object $input, array $options) use ($retry): ResultInterface {
+        return function (Model $model, array|string|object $input, array $options) use ($retry, $cut): ResultInterface {
             $this->streamed[] = true === ($options['stream'] ?? false);
 
-            return 1 === count($this->streamed) ? new StreamResult($this->cutMidAnswer()) : $retry();
+            return 1 === count($this->streamed) ? new StreamResult($this->cutMidAnswer($cut ?? new IncompleteStreamException('The stream ended before its last event.'))) : $retry();
         };
     }
 
-    private function cutMidAnswer(): Generator
+    private function cutMidAnswer(Throwable $cut): Generator
     {
         yield new TokenUsage(
             promptTokens: 100,
@@ -163,7 +184,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         );
         yield new TextDelta('{"verdict":"approve",');
 
-        throw new IncompleteStreamException('The stream ended before its last event.');
+        throw $cut;
     }
 
     private function cutAgain(): never
@@ -189,11 +210,15 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
-    private function vendor(Closure $answer): SymfonyAiVendor
+    /**
+     * @param ?Closure(PlatformInterface): PlatformInterface $accounts
+     */
+    private function vendor(Closure $answer, ?Closure $accounts = null, AccountCooldowns $cooldowns = new NoCooldowns()): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
+        $mock = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platform = null === $accounts ? $mock : $accounts($mock);
+        $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), $cooldowns, new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
