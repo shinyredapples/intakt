@@ -172,6 +172,16 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSame(['4 failures in a row', 'Next try 2026-10-28 12:08:00 UTC'], $crawler->filter('.failing-heads .card .meta > span')->each(static fn ($fact): string => $fact->text()));
     }
 
+    // Needed because the board's banners link to this anchor.
+    public function testTheFailedHeadsSectionIsTheTargetOfItsOwnAnchor(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertCount(1, $crawler->filter('section#failing-heads.failing-heads'));
+    }
+
     public function testAHeadThatIsNotHandedOverSaysItIsBackingOff(): void
     {
         $this->ledger->failHead('alpha', '7', 1);
