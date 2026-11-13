@@ -31,7 +31,7 @@ Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`pers
 
 | main | head | outcome |
 | --- | --- | --- |
-| booted | failed | `HeadAdmission::FailedBoot`: like red CI, no round, the pending head is forgotten, the stale check of earlier rounds still runs, a round already started on this same head is marked stale (`StaleVerdicts::noteFailedBoot`, one `verdicts_stale` line), and `WatcherLedger` appends `head_red` with `cause` `boot_failed` and the redacted `reason` |
+| booted | failed | `HeadAdmission::FailedBoot`: like red CI, no round, the pending head is forgotten, the stale check of earlier rounds still runs, a round already started on this same head is marked stale (`StaleVerdicts::noteFailedBoot` dispatches Review's `MarkVerdictsStale`, so `VerdictsOfRound` answers `stale` with the changed field `head` from then on, and marks the watcher's row stale with one `verdicts_stale` line), and `WatcherLedger` appends `head_red` with `cause` `boot_failed` and the redacted `reason` |
 | booted | booted or crashed | green: the round starts |
 | failed or crashed | not booted | green: the round starts (alerting the owner that the gate is off is part 2) |
 

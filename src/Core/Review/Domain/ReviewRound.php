@@ -48,6 +48,9 @@ final class ReviewRound implements HasPlace
     #[ORM\Column(name: 'resolved_finding_ids', type: 'text', nullable: true)]
     private ?string $resolvedFindingIds = null;
 
+    #[ORM\Column(name: 'verdicts_stale', options: ['default' => false])]
+    private bool $verdictsStale = false;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
@@ -68,7 +71,17 @@ final class ReviewRound implements HasPlace
             return VerdictStanding::stale(IdentityField::cases());
         }
 
+        // The head itself was refused after the round started, so no identity, however unchanged, brings its verdicts back.
+        if ($this->verdictsStale) {
+            return VerdictStanding::stale([IdentityField::Head]);
+        }
+
         return VerdictIdentity::fromRecorded($this->identity)->standingAt($current, $move);
+    }
+
+    public function markVerdictsStale(): void
+    {
+        $this->verdictsStale = true;
     }
 
     // Throws for a round stored before identities were recorded, because such a round names no head to publish on.

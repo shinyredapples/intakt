@@ -6,6 +6,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Review\Contract\HeadIdentity;
 use Intakt\Core\Review\Contract\IdentityAtHead;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
@@ -23,6 +24,7 @@ final readonly class StaleVerdicts
     public function __construct(
         #[Autowire(service: 'query.bus')]
         private MessageBusInterface $queries,
+        private MessageBusInterface $commands,
         private StartedRounds $rounds,
         private WatcherLedger $ledger,
     ) {
@@ -35,10 +37,11 @@ final readonly class StaleVerdicts
         }
     }
 
-    // No query to Review, because the head itself is the one refused: whatever its round approved no longer counts.
+    // Told to Review rather than asked, because the head itself is the one refused: whatever its round approved no longer counts, and Review must say so to every later reader too.
     public function noteFailedBoot(WatchedProject $project, OpenChange $open): void
     {
         foreach ($this->rounds->openRoundsAt($project->name, $open) as $round) {
+            $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
             $this->rounds->markStaleOnce($round, $this->ledger->verdictsStale(...));
         }
     }

@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Closure;
 use Intakt\Core\Review\Contract\DiscardQueuedRound;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\QueuedRound;
 use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Override;
@@ -21,6 +22,8 @@ final class RecordingCommandBus implements MessageBusInterface
     public array $started = [];
     /** @var list<QueuedRound> */
     public array $discarded = [];
+    /** @var list<string> */
+    public array $markedStale = [];
     public ?Closure $whileStarting = null;
     public ?Throwable $discardFailure = null;
 
@@ -33,6 +36,12 @@ final class RecordingCommandBus implements MessageBusInterface
             if ($this->discardFailure instanceof Throwable) {
                 throw $this->discardFailure;
             }
+
+            return new Envelope($message);
+        }
+
+        if ($message instanceof MarkVerdictsStale) {
+            $this->markedStale[] = $message->roundId;
 
             return new Envelope($message);
         }
