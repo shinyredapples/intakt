@@ -1,0 +1,143 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Intakt status",
+    "description": "What Intakt is doing per project, read from its database. Carries no secret: failure causes are redacted and holds carry no end.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["generated_at", "holds", "queues", "projects"],
+    "definitions": {
+        "moment": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$"},
+        "change": {"type": "string"},
+        "round": {"type": "string", "minLength": 1},
+        "number": {"type": ["integer", "null"]}
+    },
+    "properties": {
+        "generated_at": {"$ref": "#/definitions/moment"},
+        "holds": {
+            "description": "Install-wide holds in effect, the winning one first.",
+            "type": "array",
+            "items": {"enum": ["drain", "failure-back-off", "pause", "budget-back-off"]}
+        },
+        "queues": {
+            "description": "Messages waiting in each message transport for a worker; null when the transport cannot count them.",
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "messages"],
+                "properties": {
+                    "name": {"type": "string", "minLength": 1},
+                    "messages": {"type": ["integer", "null"], "minimum": 0}
+                }
+            }
+        },
+        "projects": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "lanes", "guard_decisions", "waiting_for_owner", "needs_you", "last_outcomes"],
+                "properties": {
+                    "name": {"type": "string", "minLength": 1},
+                    "lanes": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["review"],
+                        "properties": {
+                            "review": {
+                                "description": "Rounds in progress, newest first.",
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": ["change", "round", "number", "started_at", "reviewers", "steps"],
+                                    "properties": {
+                                        "change": {"$ref": "#/definitions/change"},
+                                        "round": {"$ref": "#/definitions/round"},
+                                        "number": {"$ref": "#/definitions/number"},
+                                        "started_at": {"$ref": "#/definitions/moment"},
+                                        "reviewers": {"type": "integer"},
+                                        "steps": {
+                                            "description": "One per reviewer a worker has started; fewer steps than reviewers means the rest wait for a worker.",
+                                            "type": "array",
+                                            "items": {
+                                                "type": "object",
+                                                "additionalProperties": false,
+                                                "required": ["role", "tier", "progress"],
+                                                "properties": {
+                                                    "role": {"type": "string"},
+                                                    "tier": {"type": "string"},
+                                                    "progress": {"enum": ["running", "verdict", "failed", "blocked", "stopped"]}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "guard_decisions": {
+                        "description": "Pull requests the watcher holds back: waiting for CI, red CI, or failed and retried at read_again_at.",
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["change", "decision", "cause", "failures", "read_again_at"],
+                            "properties": {
+                                "change": {"$ref": "#/definitions/change"},
+                                "decision": {"enum": ["pending", "red", "failed"]},
+                                "cause": {"type": ["string", "null"]},
+                                "failures": {"type": ["integer", "null"]},
+                                "read_again_at": {"oneOf": [{"$ref": "#/definitions/moment"}, {"type": "null"}]}
+                            }
+                        }
+                    },
+                    "waiting_for_owner": {
+                        "description": "Changes on the board's Waiting on you column.",
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["change", "round"],
+                            "properties": {
+                                "change": {"$ref": "#/definitions/change"},
+                                "round": {"$ref": "#/definitions/round"}
+                            }
+                        }
+                    },
+                    "needs_you": {
+                        "description": "Pull requests the watcher handed over after repeated failures.",
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["change", "cause", "failures"],
+                            "properties": {
+                                "change": {"$ref": "#/definitions/change"},
+                                "cause": {"type": "string"},
+                                "failures": {"type": "integer"}
+                            }
+                        }
+                    },
+                    "last_outcomes": {
+                        "description": "The last judged round of each change, newest first, at most ten.",
+                        "type": "array",
+                        "maxItems": 10,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["change", "round", "number", "decision", "judged_at"],
+                            "properties": {
+                                "change": {"$ref": "#/definitions/change"},
+                                "round": {"$ref": "#/definitions/round"},
+                                "number": {"$ref": "#/definitions/number"},
+                                "decision": {"enum": ["approve", "changes", "blocked", null]},
+                                "judged_at": {"oneOf": [{"$ref": "#/definitions/moment"}, {"type": "null"}]}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

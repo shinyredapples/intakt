@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // Payloads are decoded to arrays here, because the Watcher module writes its lines without payload classes, so the card needs nothing from it.
 final readonly class LedgerFailingHeads
@@ -31,12 +32,20 @@ final readonly class LedgerFailingHeads
      */
     public function now(): array
     {
+        return $this->in($this->ledger->readInOrder());
+    }
+
+    /**
+     * @return list<FailingHead>
+     */
+    public function in(RecordedEvents $events): array
+    {
         /** @var array<string, array<string, FailingHead>> $failing */
         $failing = [];
         /** @var array<string, array<string, ?string>> $handedOver */
         $handedOver = [];
 
-        foreach ($this->ledger->readInOrder() as $recorded) {
+        foreach ($events as $recorded) {
             $kind = $recorded->event->kind;
 
             if (!in_array($kind, [...self::FAILED, ...self::SETTLED], true)) {
