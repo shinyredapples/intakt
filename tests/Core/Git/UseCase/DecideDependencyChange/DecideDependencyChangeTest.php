@@ -18,6 +18,7 @@ use Intakt\Plugin\PhpLanguage\Domain\ComposerState;
 use Intakt\Plugin\PhpLanguage\Domain\GitHubCommit;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackage;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackageChanges;
+use Intakt\Plugin\PhpLanguage\Domain\PackageName;
 use Intakt\Plugin\PhpLanguage\Domain\RequirementChanges;
 use Intakt\Plugin\PhpLanguage\Domain\SettingChanges;
 use Intakt\Plugin\PhpLanguage\Domain\TrustedPackages;
@@ -42,6 +43,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(GitHubCommit::class)]
 #[UsesClass(LockedPackage::class)]
 #[UsesClass(LockedPackageChanges::class)]
+#[UsesClass(PackageName::class)]
 #[UsesClass(RequirementChanges::class)]
 #[UsesClass(SettingChanges::class)]
 #[UsesClass(TrustedPackages::class)]
@@ -118,6 +120,15 @@ final class DecideDependencyChangeTest extends TestCase
     public function testAHeadThatIsNoCommitOfTheRepositoryNeedsTheOwner(): void
     {
         self::assertTrue($this->decide(str_repeat('a', 40))->needsOwner());
+    }
+
+    // A folder that is gone makes Symfony Process throw the same RuntimeException family a timeout does.
+    public function testAGitCallThatCannotRunIsAChangeThatCannotBeRead(): void
+    {
+        $this->expectException(ChangeNotRead::class);
+        $this->expectExceptionMessage('git ls-tree did not run: ');
+
+        new RevisionFiles(new HardenedGit())->at($this->repository->path.'/gone', str_repeat('a', 40), ['composer.lock']);
     }
 
     public function testAHeadThatIsNoFullCommitNameIsRefused(): void

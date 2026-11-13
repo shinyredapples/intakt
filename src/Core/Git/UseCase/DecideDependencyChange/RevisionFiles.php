@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\ChangeNotRead;
 use Intakt\Plugin\Language\Contract\DependencyFiles;
+use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
 final readonly class RevisionFiles
@@ -72,7 +73,13 @@ final readonly class RevisionFiles
         $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
         // Because a work tree beside --git-dir would make git treat the bare mirror as a checkout.
         $process = new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false]);
-        $process->run();
+
+        // A git that cannot start or runs out of time is a change that cannot be read, which needs the owner, not a crash.
+        try {
+            $process->run();
+        } catch (RuntimeException $failed) {
+            throw ChangeNotRead::because(sprintf('git %s did not run: %s', $arguments[0], $failed->getMessage()));
+        }
 
         if (!$process->isSuccessful()) {
             throw ChangeNotRead::because(sprintf('git %s failed: %s', $arguments[0], trim($process->getErrorOutput())));
