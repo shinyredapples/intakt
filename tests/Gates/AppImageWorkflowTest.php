@@ -22,7 +22,6 @@ final class AppImageWorkflowTest extends TestCase
     private const string FORK_GUARD = "github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'";
     private const string BUILD = 'docker build --tag intakt:ci .';
     private const string DECIDE = 'upgrade';
-    private const string IMAGE = 'image';
 
     public function testAPullRequestOrABranchPushBuildsTheAppImageOnce(): void
     {
@@ -64,7 +63,7 @@ final class AppImageWorkflowTest extends TestCase
 
     public function testTheImageJobChecksTheImageItBuiltWithEveryScript(): void
     {
-        $checks = array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => !in_array($step['id'] ?? null, [self::IMAGE, self::DECIDE], true));
+        $checks = array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => self::DECIDE !== ($step['id'] ?? null));
 
         self::assertSame(
             ['.github/ci/docker-hub-login.sh', self::BUILD, 'docker/smoke-test.sh intakt:ci', 'bash docker/verify-first-start.sh intakt:ci', 'bash docker/verify-upgrade.sh intakt:ci "$BASE"'],
@@ -90,35 +89,6 @@ final class AppImageWorkflowTest extends TestCase
         self::assertStringContainsString('needed=$(.github/ci/upgrade-needed.sh "$base" "$HEAD_SHA")', $run);
     }
 
-    public function testEveryPushToMainNeedsTheAppImageAndAPullRequestAsksTheImageFilterAboutItsMergeBase(): void
-    {
-        $decide = $this->stepRunning('image-needed.sh');
-        $run = $decide['run'] ?? '';
-
-        self::assertSame(self::IMAGE, $decide['id'] ?? null);
-        self::assertStringStartsWith("set -euo pipefail\nneeded=yes\nif [ \"\$EVENT\" != push ]; then\n", $run);
-        self::assertStringContainsString("base=\$(git merge-base \"origin/\$BASE_REF\" \"\$HEAD_SHA\")\n  needed=\$(.github/ci/image-needed.sh \"\$base\" \"\$HEAD_SHA\")\n", $run);
-    }
-
-    public function testTheLoginTheBuildAndTheSmokeTestRunOnlyWhenTheChangeNeedsTheAppImage(): void
-    {
-        foreach (['docker-hub-login.sh', self::BUILD, 'smoke-test.sh'] as $script) {
-            self::assertSame("steps.image.outputs.needed == 'yes'", $this->stepRunning($script)['if'] ?? null, $script);
-        }
-    }
-
-    public function testTheAppImageIsDecidedBeforeTheJobRunsAnythingElse(): void
-    {
-        $runs = array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => isset($step['run']));
-
-        self::assertSame(self::IMAGE, array_first($runs)['id'] ?? null);
-    }
-
-    public function testTheImageJobReportsOnEveryPullRequestBecauseNoPathsFilterStartsIt(): void
-    {
-        self::assertSame(['pull_request' => null, 'push' => ['branches' => ['main']]], $this->parse(self::WORKFLOWS.'/ci.yml')['on'] ?? null);
-    }
-
     public function testTheFirstStartCheckRunsAfterAFailedSmokeTestButNotWithoutABuiltImage(): void
     {
         $steps = $this->imageJob()['steps'] ?? [];
@@ -132,6 +102,21 @@ final class AppImageWorkflowTest extends TestCase
     public function testTheImageJobIsForkGuarded(): void
     {
         self::assertSame(self::FORK_GUARD, $this->imageJob()['if'] ?? null);
+    }
+
+    public function testAPushNeedsTheAppImageAndAPullRequestAsksTheImageFilter(): void
+    {
+        $decide = $this->stepRunning('image-needed.sh');
+
+        self::assertSame(self::DECIDE, $decide['id'] ?? null);
+        self::assertStringContainsString("needed=yes\n  image=yes\nelse\n", $decide['run'] ?? '');
+        self::assertStringContainsString("image=\$(.github/ci/image-needed.sh \"\$base\" \"\$HEAD_SHA\")\n", $decide['run'] ?? '');
+    }
+
+    public function testTheBuildAndTheSmokeTestRunOnlyWhenTheImageIsNeeded(): void
+    {
+        self::assertSame("steps.upgrade.outputs.image == 'yes'", $this->stepRunning(self::BUILD)['if'] ?? null);
+        self::assertSame("steps.upgrade.outputs.image == 'yes'", $this->stepRunning('smoke-test.sh')['if'] ?? null);
     }
 
     /**

@@ -60,10 +60,9 @@ The script that registers your ephemeral runner should do three things before ea
 
 The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: they set the sysctl and `apparmor=unconfined` only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, both thrown away after the job. Prepare the clean state so the host meets them.
 
-A pull request that changes only `docs/`, `tests/` or `upstream/` does not use Docker in the `image` job: the job skips the build and the image checks, and still reports.
-
 ## When it goes wrong
 
+- **The `image` job built nothing:** the pull request changes only `docs/`, `tests/` or `upstream/`, so the job skips the image and still reports.
 - **Jobs stay queued:** no online runner has every label in `CI_RUNS_ON`. Check the list against the runner's labels, and that an ephemeral runner is registered again after each job.
 - **`check` fails with errors about namespaces or mounting `/proc`:** user namespaces are restricted or an AppArmor profile blocks mount on the host (see the table).
 - **`permission denied` on the Docker socket:** the runner's user cannot use Docker.
