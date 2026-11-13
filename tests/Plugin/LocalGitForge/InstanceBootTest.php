@@ -149,6 +149,63 @@ final class InstanceBootTest extends TestCase
         self::assertStringContainsString('composer.json', $outcome->reason);
     }
 
+    public function testAComposerPluginOfTheHeadDoesNotRunDuringTheInstall(): void
+    {
+        $ran = $this->repository->path.'-plugin-ran';
+        $head = $this->commitPlugin("file_put_contents('".$ran."', 'ran');");
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertFileDoesNotExist($ran);
+    }
+
+    public function testAComposerPluginOfTheHeadCannotReplaceMainsHarness(): void
+    {
+        $this->repository->commitFile('broken', "the kernel does not boot\n");
+        $head = $this->commitPlugin("file_put_contents('bin/instance', ".var_export(self::ALWAYS_READY, true).');');
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertSame('the kernel does not boot', $outcome->reason);
+    }
+
+    public function testAPackageBinaryOfTheHeadNamedInstanceDoesNotReplaceMainsHarness(): void
+    {
+        $this->repository->commitFile('broken', "the kernel does not boot\n");
+        $this->repository->commitFile('package/instance', self::ALWAYS_READY);
+        $this->repository->commitFile('package/composer.json', (string) json_encode(['name' => 'intakt-test/instance', 'version' => '1.0.0', 'bin' => ['instance']]));
+        $head = $this->repository->commitFile('composer.json', (string) json_encode([
+            'name' => 'intakt-test/boot',
+            'repositories' => [['type' => 'path', 'url' => 'package', 'options' => ['symlink' => false]], ['packagist.org' => false]],
+            'require' => ['intakt-test/instance' => '1.0.0'],
+            'config' => ['bin-dir' => 'bin'],
+        ]));
+
+        $outcome = $this->bootWithMainsHarness($head);
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertSame('the kernel does not boot', $outcome->reason);
+    }
+
+    public function testASecretOfTheBootingInstallReachesNeitherTheInstallNorTheHarness(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\nfile_put_contents('php://fd/3', json_encode(['status' => 'failed', 'reason' => var_export(getenv('INTAKT_TEST_SECRET'), true)]));\n");
+        $_ENV['INTAKT_TEST_SECRET'] = 'from-dotenv';
+        putenv('INTAKT_TEST_SECRET=from-environment');
+
+        try {
+            $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+        } finally {
+            unset($_ENV['INTAKT_TEST_SECRET']);
+            putenv('INTAKT_TEST_SECRET');
+        }
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertSame('false', $outcome->reason);
+    }
+
     public function testAHarnessThatReportsNoStatusIsACrashRatherThanAnException(): void
     {
         $harness = $this->repository->commitFile('bin/instance', "<?php\necho \"log only\\n\";\n");
@@ -218,6 +275,29 @@ final class InstanceBootTest extends TestCase
     private function bootWithMainsHarness(string $head): BootOutcome
     {
         return new InstanceBoot()->of($this->at($head), $this->main);
+    }
+
+    // A local path package the head allows as a Composer plugin, so its activation runs the given PHP unless plugins are off.
+    private function commitPlugin(string $onActivate): string
+    {
+        $this->repository->commitFile('plugin/composer.json', (string) json_encode([
+            'name' => 'intakt-test/plugin', 'version' => '1.0.0', 'type' => 'composer-plugin',
+            'require' => ['composer-plugin-api' => '^2.0'],
+            'autoload' => ['classmap' => ['TestPlugin.php']],
+            'extra' => ['class' => 'TestPlugin'],
+        ]));
+        $this->repository->commitFile('plugin/TestPlugin.php', "<?php\nuse Composer\\Composer;\nuse Composer\\IO\\IOInterface;\n"
+            ."final class TestPlugin implements \\Composer\\Plugin\\PluginInterface {\n"
+            .'public function activate(Composer $composer, IOInterface $io): void { '.$onActivate." }\n"
+            ."public function deactivate(Composer \$composer, IOInterface \$io): void {}\n"
+            ."public function uninstall(Composer \$composer, IOInterface \$io): void {}\n}\n");
+
+        return $this->repository->commitFile('composer.json', (string) json_encode([
+            'name' => 'intakt-test/boot',
+            'repositories' => [['type' => 'path', 'url' => 'plugin', 'options' => ['symlink' => false]], ['packagist.org' => false]],
+            'require' => ['intakt-test/plugin' => '1.0.0'],
+            'config' => ['allow-plugins' => ['intakt-test/plugin' => true]],
+        ]));
     }
 
     private function at(string $commit): BootAt

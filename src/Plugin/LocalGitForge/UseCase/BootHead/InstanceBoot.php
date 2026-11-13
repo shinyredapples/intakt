@@ -20,15 +20,19 @@ use Throwable;
 final readonly class InstanceBoot
 {
     private const string HARNESS = 'bin/instance';
-    private const array INSTALL = ['composer', 'install', '--no-interaction', '--no-progress', '--no-scripts'];
+    // Without plugins and scripts, so no code of the commit runs while its packages are installed.
+    private const array INSTALL = ['composer', 'install', '--no-interaction', '--no-progress', '--no-scripts', '--no-plugins'];
     private const int INSTALL_SECONDS = 600;
     private const int BOOT_SECONDS = 180;
 
     // bin/instance writes its status on descriptor 3 only; moved to stdout and its log to stderr, so no log line can pass for the status.
     private const array STATUS_ON_STDOUT = ['sh', '-c', 'exec "$@" 3>&1 1>&2', 'sh'];
 
-    // Unset, so the commit boots with the defaults of bin/instance rather than the settings of the install that boots it.
-    private const array ENVIRONMENT = ['APP_ENV' => false, 'APP_SECRET' => false];
+    // An allowlist, so neither the install nor the commit's code sees a token of the install that boots it; COMPOSER_AUTH is left out for that reason.
+    private const array INHERITED_VARIABLES = [
+        'PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR', 'COMPOSER_HOME', 'COMPOSER_CACHE_DIR',
+        'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy',
+    ];
 
     // Every failure of the step itself is a crash outcome, because a boot step that throws would stop the review it only gates.
     public function of(BootAt $target, CommitId $harness): BootOutcome
@@ -48,18 +52,20 @@ final readonly class InstanceBoot
         return new LocalGitForge(LocalRepository::existingAt($source->repository, $source->base), new NameStatusParser());
     }
 
+    // The harness is placed after the install, so nothing the install writes into bin can replace it.
     private function bootIn(string $snapshot, FileContent $harness): BootOutcome
     {
-        if (!$this->hasPlainBinFolder($snapshot)) {
-            return BootOutcome::failed('The commit has a bin that is not a plain folder, so the harness cannot be placed in it.');
-        }
-
-        $this->placeHarness($snapshot, $harness);
         $install = $this->run(self::INSTALL, $snapshot, self::INSTALL_SECONDS);
 
         if (!$install->isSuccessful()) {
             return BootOutcome::failed('composer install failed: '.trim($install->getErrorOutput()));
         }
+
+        if (!$this->hasPlainBinFolder($snapshot)) {
+            return BootOutcome::failed('The commit has a bin that is not a plain folder, so the harness cannot be placed in it.');
+        }
+
+        $this->placeHarness($snapshot, $harness);
 
         return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, self::BOOT_SECONDS));
     }
@@ -85,10 +91,29 @@ final readonly class InstanceBoot
      */
     private function run(array $command, string $snapshot, int $seconds): Process
     {
-        $process = new Process($command, $snapshot, self::ENVIRONMENT, timeout: $seconds);
+        $process = new Process($command, $snapshot, $this->environment(), timeout: $seconds);
         $process->run();
 
         return $process;
+    }
+
+    /**
+     * @return array<string, string|false>
+     */
+    private function environment(): array
+    {
+        // Process adds every variable of getenv() and $_ENV that is not named here, so each of them is named as unset.
+        $environment = array_fill_keys(array_map(strval(...), array_keys(getenv() + $_ENV)), false);
+
+        foreach (self::INHERITED_VARIABLES as $name) {
+            $value = getenv($name);
+
+            if (false !== $value) {
+                $environment[$name] = $value;
+            }
+        }
+
+        return $environment;
     }
 
     private function outcomeOf(Process $boot): BootOutcome
