@@ -59,6 +59,26 @@ final class ReviewerStopsTest extends TestCase
         self::assertNull($this->stopsOn($ledger)->requestStopOf('round-1', 'round-1-security'));
     }
 
+    public function testARoundWhoseAppendsAreRefusedGivesAnErrorLineThatCountsTheRefusedRequests(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->startReviewer('round-1', 'security');
+        $ledger->startReviewer('round-1', 'style');
+        $failing = new AppendRefusingLedger($ledger);
+
+        self::assertSame(['error', '2 of 2 stop requests could not be recorded in the ledger.'], $this->stopsOn($failing)->requestStopOfRound('round-1'));
+    }
+
+    public function testARoundWithAReviewerWhoseStartedRowDoesNotDeserializeHasNothingToStop(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{"round":"round-1","reviewer":"round-1-security","role":"security","tier":"mighty"}'));
+
+        self::assertNull($this->stopsOn($ledger)->requestStopOfRound('round-1'));
+    }
+
     private function stopsOn(Ledger $ledger): ReviewerStops
     {
         return new ReviewerStops(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new RoundLedgerReading($ledger, new LedgerPayloads(StoredSerializerFactory::create()), new ConfiguredPrices([])), new ChangeDecision(), new FailureInWords()), $ledger);
