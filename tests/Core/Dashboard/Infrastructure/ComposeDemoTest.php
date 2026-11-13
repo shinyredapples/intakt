@@ -35,6 +35,16 @@ final class ComposeDemoTest extends TestCase
         self::assertStringStartsWith('/app/var/data/', $service['environment']['INTAKT_SAMPLE_REPOSITORY']);
     }
 
+    public function testTheServiceNamesItselfSoThePrintedReviewCommandRunsFromTheHost(): void
+    {
+        /** @var array{services: array<string, array{environment: array<string, string>}>} $compose */
+        $compose = Yaml::parseFile(self::ROOT.'/compose.yaml');
+
+        foreach ($compose['services'] as $name => $service) {
+            self::assertSame($name, $service['environment']['INTAKT_COMPOSE_SERVICE']);
+        }
+    }
+
     public function testTheDashboardIsPublishedOnLoopbackAtTheImagesDashboardPort(): void
     {
         self::assertMatchesRegularExpression('/^\s+DASHBOARD_PORT=7781\b/m', new Filesystem()->readFile(self::ROOT.'/Dockerfile'));
