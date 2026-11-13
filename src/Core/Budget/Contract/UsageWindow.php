@@ -6,7 +6,7 @@ namespace Intakt\Core\Budget\Contract;
 
 use DateTimeImmutable;
 
-// Vendor-neutral, so a vendor plugin maps its own names here (Claude's five_hour and seven_day, Codex's primary and secondary).
+// Vendor-neutral: a vendor's window is told by its stated length or by its reset (see told()), never by the name the vendor gives it.
 enum UsageWindow: string
 {
     case FiveHour = 'five-hour';
@@ -17,6 +17,23 @@ enum UsageWindow: string
         return match ($this) {
             self::FiveHour => 5 * 3600,
             self::Weekly => 7 * 86400,
+        };
+    }
+
+    // A vendor that has one window reports it under a name like "primary" whatever its length, so names say nothing:
+    // the stated length decides, else a reset more than five hours and at most a week ahead is the weekly window.
+    public static function told(?int $windowMinutes, DateTimeImmutable $resetsAt, DateTimeImmutable $now): ?self
+    {
+        if (null !== $windowMinutes) {
+            return array_find(self::cases(), static fn (self $window): bool => $window->seconds() === $windowMinutes * 60);
+        }
+
+        $secondsToReset = $resetsAt->getTimestamp() - $now->getTimestamp();
+
+        return match (true) {
+            $secondsToReset <= 0, $secondsToReset > self::Weekly->seconds() => null,
+            $secondsToReset > self::FiveHour->seconds() => self::Weekly,
+            default => self::FiveHour,
         };
     }
 
