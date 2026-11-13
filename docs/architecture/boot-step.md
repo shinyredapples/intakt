@@ -17,9 +17,27 @@ In `src/Core/Review/Contract/`:
 
 `BootResults::ofMain(BootKey, ChangeSource)` in `src/Core/Watcher/UseCase/WatchPullRequests/` (part 2) answers main's boot result from the table `watcher_boot_result` and boots only on a miss. `BootKey` is the project, main's commit and a tool fingerprint (a string the caller passes; nothing computes one yet), so main's result is reused while both stay the same and recomputed when either changes. On a miss it asks the query bus with `BootHarness`, stores the row of a `BootRecord` (the state, the reason and the moment, from `ClockInterface`) and appends the ledger event `boot_result_computed` (project, main commit, tool fingerprint, state, reason); a cache hit appends nothing. A `crashed` outcome is returned but not stored, because it is the boot step's fault and not main's, so the next ask boots again; a query bus that throws is turned into a `crashed` outcome with the exception's class and message. Before the reason is stored, logged in the ledger or returned, bytes that are not UTF-8 are replaced with `?` and it is redacted through the `Redactor` as a log line is, so a token in a tool's output or an exception message is neither stored nor shown.
 
-The record is read through the entity manager but written with one insert on the connection, inside a savepoint, never with a flush: the default entity manager is the ledger's, and a failed flush would close it. When two workers miss the same key at once, the one whose insert loses (a unique constraint violation) still returns its own outcome. Nothing in `ofMain` throws: a cache that cannot be read is treated as a miss, a result that cannot be stored or a ledger line that cannot be written is logged as an error, and the computed outcome is returned in every case. Nothing calls `BootResults` yet: acting on the result in the watcher is a later part.
+The record is read through the entity manager but written with one insert on the connection, inside a savepoint, never with a flush: the default entity manager is the ledger's, and a failed flush would close it. When two workers miss the same key at once, the one whose insert loses (a unique constraint violation) still returns its own outcome. Nothing in `ofMain` throws: a cache that cannot be read is treated as a miss, a result that cannot be stored or a ledger line that cannot be written is logged as an error, and the computed outcome is returned in every case. `BootResults::ofHead(BootAt, CommitId main)` boots a head with `BootHarnessAtMain` through the same dispatch, crash and scrubbing steps, and caches nothing.
 
 Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`persistence` group) and `tests/Core/Watcher/Domain/BootKeyTest.php`.
+
+## The gate before a round (part 1 of the watcher side)
+
+`SettleHead` asks `BootGate::admit(WatchedProject, HeadDecision)` for a head whose CI is green, before `RoundStarts::startFor`; a pending or red head is never booted. The gate:
+
+1. asks the query bus for `MainCommit(ChangeSource)`, the commit the base branch points at (answered by the local git forge's `MainCommitHandler`; no other forge answers it yet, so the gate logs an error and the review starts);
+2. asks `BootResults::ofMain` for main's result under the `BootKey` of the project, that commit and the constant `BootGate::TOOL_FINGERPRINT` (nothing computes a fingerprint of the boot tools yet, so one constant stands for them);
+3. only when main is `booted`, boots the head with `BootResults::ofHead`.
+
+| main | head | outcome |
+| --- | --- | --- |
+| booted | failed | `HeadAdmission::FailedBoot`: like red CI, no round, the pending head is forgotten, the stale check of earlier rounds still runs, and `WatcherLedger` appends `head_red` with `cause` `boot_failed` and the redacted `reason` |
+| booted | booted or crashed | green: the round starts |
+| failed or crashed | not booted | green: the round starts (alerting the owner that the gate is off is part 2) |
+
+Any `Throwable` from the gate is logged as an error and the round starts, so a crashing gate never stops the review. The dashboard reads the `head_red` line like a red head.
+
+Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootGateTest.php`, the boot cases of `WatchPullRequestsHandlerTest.php` and the main commit case of `tests/Plugin/LocalGitForge/BootHeadHandlersTest.php`.
 
 ## How a commit boots
 

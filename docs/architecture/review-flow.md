@@ -31,6 +31,8 @@ flowchart TD
     judge --> publish["PublishVerdict: a reviewer-for-loop round publishes its status and comment on the head"]
 ```
 
+A head the watcher finds reaches `RunReviewRound` only after its CI is green and its boot passes: `SettleHead` boots it with main's harness first, and a head that fails to boot while main boots goes back like red CI ([Boot step](boot-step.md#the-gate-before-a-round-part-1-of-the-watcher-side)).
+
 A built head reaches this flow only after its hand-back round ([Hand-back checks](hand-back.md#the-round)): `intakt:hand-back:check` checks the bundle and the pull request text, and a refusal goes back to the builder once with its fixed reason (`hand_back_sent_back`) and hands the task over the second time in a row (`hand_back_handed_over`), so no review is spent on it. Today nothing connects the two: the build lane (T56) will run the round, push an accepted head and send the reason to the builder or the hand-over to the maintainer agent.
 
 Every arrow into the ledger is an append of one event (`review_started`, `verdict_received`, `judge_done`, ...); the dashboard pages are rendered from the ledger (apart from the forge budget on `/reviews`, which comes from the forge's recorded readings, see [Dashboard](dashboard.md)), while the live updates reach the page through the Review module's `RoundUpdates` contract, which the Dashboard publishes to Mercure: the workers stream each tool call and text piece as they go (`LiveProgress`), and the round's latest state is published after each verdict and after the judge (`LiveRoundProgress::publishLatest()`); opening the round publishes nothing.
