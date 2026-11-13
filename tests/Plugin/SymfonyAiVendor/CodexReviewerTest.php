@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
@@ -42,10 +43,12 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
+use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
@@ -59,6 +62,7 @@ use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Kernel;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
@@ -144,6 +148,9 @@ use Throwable;
 #[UsesClass(FencedToolbox::class)]
 #[UsesClass(MalformedToolCalls::class)]
 #[UsesClass(VendorAccountLimit::class)]
+#[UsesClass(ReviewServerAccess::class)]
+#[UsesClass(IssuedReviewServerAccesses::class)]
+#[UsesClass(ReviewCredential::class)]
 #[UsesClass(Kernel::class)]
 final class CodexReviewerTest extends KernelTestCase
 {
@@ -292,6 +299,113 @@ final class CodexReviewerTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliThatReadThroughTheReviewServerCounts(): void
+    {
+        $this->replaying('review-server-read');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    public function testAnApprovalFromACliGivenTheReviewServerThatOnlyFailedAReadOnAnotherServerIsRefused(): void
+    {
+        $this->replaying('tool-use');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliGivenTheReviewServerWhoseReadThroughItFailedIsRefused(): void
+    {
+        $this->replaying('review-server-read-failed');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliGivenTheReviewServerThatRefusedItsOnlyReadIsRefused(): void
+    {
+        $this->replaying('review-server-read-refused');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliGivenTheReviewServerThatReadOnlyThroughAnotherServerIsRefused(): void
+    {
+        $this->replaying('other-server-read');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliStartedWithoutTheReviewServerForWantOfARoundIsStillRefused(): void
+    {
+        $this->replaying('review-server-read');
+
+        $verdict = $this->review($this->servers())->verdict;
+
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+        self::assertSame([], $this->serverSettings());
+    }
+
+    public function testTheCliArgumentsNameExactlyTheReviewServerAndThePinnedModelAndEffort(): void
+    {
+        $this->replaying('review-server-read');
+
+        $this->review($this->servers(), $this->requestInRound());
+
+        $arguments = $this->arguments();
+        self::assertSame([
+            'mcp_servers.intakt-review.url="http://localhost:7780/mcp/review"',
+            'mcp_servers.intakt-review.bearer_token_env_var="INTAKT_REVIEW_SERVER_BEARER"',
+            'mcp_servers.intakt-review.enabled_tools=["read_file","list_directory","search_files"]',
+            'mcp_servers.intakt-review.required=true',
+        ], $this->serverSettings());
+        self::assertSame(['--model', self::MODEL], array_slice($arguments, (int) array_search('--model', $arguments, true), 2));
+        self::assertContains('model_reasoning_effort="high"', $arguments);
+        self::assertContains('web_search="disabled"', $arguments);
+        self::assertContains('--ignore-user-config', $arguments);
+    }
+
+    public function testTheRoundsBearerReachesTheCliOnlyThroughItsEnvironment(): void
+    {
+        $this->replaying('review-server-read');
+
+        $this->review($this->servers(), $this->requestInRound());
+
+        self::assertSame('round-credential', file_get_contents($this->root.'/bearer'));
+        self::assertStringNotContainsString('round-credential', implode(' ', $this->arguments()));
+    }
+
+    public function testTheCliIsToldToReadTheFilesItNeedsThroughTheToolsWhenItIsGivenTheReviewServer(): void
+    {
+        $this->replaying('review-server-read');
+
+        $this->review($this->servers(), $this->requestInRound());
+
+        $prompt = (string) array_last($this->arguments());
+        self::assertStringContainsString('only the read-only tools of the server intakt-review are available: read the files you need through them before you give a verdict', $prompt);
+        self::assertStringNotContainsString('no tool is available', $prompt);
+    }
+
+    public function testAReviewWhoseServerAccessCannotBeIssuedIsBlockedForWantOfToolsWithoutStartingTheCli(): void
+    {
+        $this->replaying('review-server-read');
+
+        $verdict = $this->review(new IssuedReviewServerAccesses(new ReviewCredential(''), 'http://localhost:7780/mcp/review'), $this->requestInRound())->verdict;
+
+        self::assertSame(Verdict::NO_TOOLS, $verdict->findings[0]->id);
+        self::assertFileDoesNotExist($this->root.'/arguments');
     }
 
     public function testTextThatOnlyMentionsALimitIsAFailedReviewAndNoCooldown(): void
@@ -453,7 +567,7 @@ final class CodexReviewerTest extends KernelTestCase
     // Replays a recording as the codex CLI on PATH, so the call goes through the login handoff and the bridge's own process result as a live run would.
     private function replaying(string $recording, int $exitCode = 0): void
     {
-        $script = sprintf("#!/bin/sh\nprintf '%%s\\0' \"\$@\" > '%s'\ncat '%s'\nexit %d\n", $this->root.'/arguments', __DIR__.'/Fixtures/codex/'.$recording.'.jsonl', $exitCode);
+        $script = sprintf("#!/bin/sh\nprintf '%%s\\0' \"\$@\" > '%s'\nprintf '%%s' \"\$INTAKT_REVIEW_SERVER_BEARER\" > '%s'\ncat '%s'\nexit %d\n", $this->root.'/arguments', $this->root.'/bearer', __DIR__.'/Fixtures/codex/'.$recording.'.jsonl', $exitCode);
         new Filesystem()->dumpFile($this->root.'/bin/codex', $script);
         chmod($this->root.'/bin/codex', 0o700);
     }
@@ -464,6 +578,22 @@ final class CodexReviewerTest extends KernelTestCase
     private function arguments(): array
     {
         return explode("\0", rtrim((string) file_get_contents($this->root.'/arguments'), "\0"));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function serverSettings(): array
+    {
+        return array_values(array_filter($this->arguments(), static fn (string $argument): bool => str_starts_with($argument, 'mcp_servers.')));
+    }
+
+    private function servers(): ReviewServerAccesses
+    {
+        $servers = self::createStub(ReviewServerAccesses::class);
+        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
+
+        return $servers;
     }
 
     private function failureOfReview(): Throwable
@@ -477,9 +607,9 @@ final class CodexReviewerTest extends KernelTestCase
         self::fail('The review gave a verdict.');
     }
 
-    private function review(): VendorReview
+    private function review(?ReviewServerAccesses $servers = null, ?ReviewRequest $request = null): VendorReview
     {
-        return $this->vendor()->review('alpha', Tier::Strong, $this->request());
+        return $this->vendor($servers)->review('alpha', Tier::Strong, $request ?? $this->request());
     }
 
     private function request(): ReviewRequest
@@ -487,12 +617,19 @@ final class CodexReviewerTest extends KernelTestCase
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
+    private function requestInRound(): ReviewRequest
+    {
+        $request = $this->request();
+
+        return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
+    }
+
     private function openFinding(string $id): Finding
     {
         return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 
-    private function vendor(): SymfonyAiVendor
+    private function vendor(?ReviewServerAccesses $servers): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(self::PROJECTS, []);
         $clock = new MockClock(self::NOW);
@@ -504,6 +641,6 @@ final class CodexReviewerTest extends KernelTestCase
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers);
     }
 }
