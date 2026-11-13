@@ -105,6 +105,7 @@ export class Browser {
             documentElement: root,
             body: null,
             addEventListener: (type, listener) => documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener]),
+            dispatchEvent: (event) => (documentListeners.get(event.type) ?? []).forEach((listener) => listener(event)),
             querySelector: (selector) => shown[selector] ?? null,
             querySelectorAll: (selector) => shownAll[selector] ?? [],
         };
@@ -116,6 +117,7 @@ export class Browser {
             location: { href: this.address },
             history,
             URL,
+            Event,
         };
         const window = {
             page,
@@ -178,6 +180,13 @@ export class Browser {
             projectFilter,
             history,
             shownRows: () => rows.filter((row) => !row.hidden).map((row) => row.dataset.project),
+            // What a script listening on the document, such as assets/column-more.js, sees of each filter run: the rows it left shown.
+            listenForShownProjects: () => {
+                const seen = [];
+                documentListeners.set('intakt:project-shown', [...(documentListeners.get('intakt:project-shown') ?? []), () => seen.push(rows.filter((row) => !row.hidden).map((row) => row.dataset.project))]);
+
+                return seen;
+            },
             more,
             tapMore: () => more.dispatch('click'),
             tapBackdrop: () => sheet.dispatch('click', { target: sheet }),

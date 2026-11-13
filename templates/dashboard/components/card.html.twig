@@ -4,7 +4,7 @@
 <{{ tag }} class="card{% if needs %} needs{% endif %}{% if forced|default(null) %} is-{{ forced }}{% endif %}"{% if href is defined %} href="{{ href }}"{% endif %}>
     <div class="top">
         {%- if needs %}<span class="dot needs"></span>{% endif -%}
-        <span>#{{ number }}</span><span class="pname" title="{{ project }}">{{ project }}</span>
+        <span class="num" title="#{{ number }}">#{{ number }}</span><span class="pname" title="{{ project }}">{{ project }}</span>
     </div>
     <div class="title">{{ title }}</div>
     {%- if needs %}
