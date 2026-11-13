@@ -8,9 +8,6 @@ use InvalidArgumentException;
 
 final readonly class BuildAttempt
 {
-    /**
-     * @param positive-int $number
-     */
     public function __construct(
         public string $project,
         public string $task,

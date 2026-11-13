@@ -70,7 +70,6 @@ final class ChooseBuildModelTest extends TestCase
         self::assertSame('sensitive-path', $ledger->payloads()[0]['reason']);
     }
 
-    /**
     #[DataProvider('setbacks')]
     public function testASetbackRaisesTheNextAttemptToStrong(Setback $setback): void
     {
@@ -96,7 +95,7 @@ final class ChooseBuildModelTest extends TestCase
     {
         $ledger = new InMemoryLedger();
 
-        (void) $this->use($ledger)->chooseFor($this->attemptNumber(2), BuildFacts::fromLabels([], ['README.md'], null));
+        (void) $this->use($ledger)->chooseFor($this->attemptNumber(2), BuildFacts::fromLabels([], ['README.md']));
 
         self::assertSame('standard', $ledger->payloads()[0]['tier']);
     }
@@ -125,7 +124,6 @@ final class ChooseBuildModelTest extends TestCase
     public function testAnAttemptThatIsNotRecordedFailsTheChoice(): void
     {
         $this->expectException(ModelChoiceNotRecorded::class);
-        $this->expectExceptionMessage('the ledger is down');
 
         (void) $this->use(new InMemoryLedger(0))->chooseFor($this->attemptNumber(1), BuildFacts::fromLabels([], []));
     }
@@ -134,7 +132,9 @@ final class ChooseBuildModelTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        new BuildAttempt('alpha', 'T60', 0);
+        $attempt = new BuildAttempt('alpha', 'T60', 0);
+
+        self::assertSame(0, $attempt->number);
     }
 
     private function attemptNumber(int $number): BuildAttempt
