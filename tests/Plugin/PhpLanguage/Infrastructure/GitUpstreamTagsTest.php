@@ -16,6 +16,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Filesystem\Filesystem;
 
 // A local repository over file:// stands in for GitHub, because no test may reach the network and the network call allows file besides https.
 #[CoversClass(GitUpstreamTags::class)]
@@ -36,6 +37,17 @@ final class GitUpstreamTagsTest extends TestCase
     protected function tearDown(): void
     {
         $this->upstream->remove();
+        new Filesystem()->remove($this->lookupFolder());
+    }
+
+    public function testTheLookupRunsInAnEmptyFolderOfItsOwnThatItCreates(): void
+    {
+        $commit = $this->upstream->commitFile('src/Uid.php', 'one');
+        $this->upstream->tag('v8.0.0');
+
+        self::assertSame($commit, $this->tags()->commitOf($this->url(), 'v8.0.0'));
+        self::assertDirectoryExists($this->lookupFolder());
+        self::assertSame([], array_diff((array) scandir($this->lookupFolder()), ['.', '..']));
     }
 
     public function testALightweightTagNamesItsCommit(): void
@@ -75,7 +87,7 @@ final class GitUpstreamTagsTest extends TestCase
         $clock = new RecordingClock();
 
         try {
-            $_ = new GitUpstreamTags(new HardenedGit(), new NetworkGit($clock, new NullLogger()))->commitOf('file://'.$this->upstream->path.'/missing', 'v8.0.0');
+            $_ = new GitUpstreamTags(new HardenedGit(), new NetworkGit($clock, new NullLogger()), $this->lookupFolder())->commitOf('file://'.$this->upstream->path.'/missing', 'v8.0.0');
             self::fail('A repository that cannot be read must not name a commit.');
         } catch (UpstreamTagNotRead $unread) {
             self::assertStringStartsWith('the upstream tag could not be read: ', $unread->getMessage());
@@ -85,7 +97,12 @@ final class GitUpstreamTagsTest extends TestCase
 
     private function tags(): GitUpstreamTags
     {
-        return new GitUpstreamTags(new HardenedGit(), new NetworkGit(new RecordingClock(), new NullLogger()));
+        return new GitUpstreamTags(new HardenedGit(), new NetworkGit(new RecordingClock(), new NullLogger()), $this->lookupFolder());
+    }
+
+    private function lookupFolder(): string
+    {
+        return $this->upstream->path.'-lookup';
     }
 
     private function url(): string
