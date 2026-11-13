@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Job\UseCase\BuildJobImage;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\Devcontainer;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
@@ -22,6 +23,7 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(JobImagePlanner::class)]
 #[CoversClass(ProjectFiles::class)]
+#[UsesClass(CliManifest::class)]
 #[UsesClass(Devcontainer::class)]
 #[UsesClass(GeneratedDockerfile::class)]
 #[UsesClass(GitCall::class)]

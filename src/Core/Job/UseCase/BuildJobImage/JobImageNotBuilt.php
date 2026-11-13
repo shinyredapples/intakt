@@ -60,6 +60,11 @@ final class JobImageNotBuilt extends RuntimeException implements ReportableFailu
         return new self(sprintf('No supported PHP minor (%s) meets require.php %s.', implode(', ', $minors), $rule));
     }
 
+    public static function unusableCliManifest(string $manifest, string $reason): self
+    {
+        return new self(sprintf('The CLI manifest %s cannot be used: %s.', $manifest, $reason));
+    }
+
     public static function composeUnsupported(): self
     {
         return new self(sprintf('%s uses dockerComposeFile, which Intakt does not build a job image from yet.', Devcontainer::PATH));
