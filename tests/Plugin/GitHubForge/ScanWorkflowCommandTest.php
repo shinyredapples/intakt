@@ -64,7 +64,7 @@ final class ScanWorkflowCommandTest extends TestCase
         self::assertSame(<<<'TEXT'
             line 4: trigger: the trigger pull_request_target may run with the base repository's rights
             line 6: permissions: the token may write contents
-            line 9: runner: the job deploy takes its runner from an expression, whose value can change without a commit
+            line 9: unreadable: the job deploy takes its runner from an expression the scan does not read, whose value can change without a commit
             line 11: secret: reads a repository secret (secrets.DEPLOY_KEY)
             line 16: runner: the job build runs on self-hosted, not a GitHub-hosted runner label
             line 16: runner: the job build runs on linux, not a GitHub-hosted runner label
