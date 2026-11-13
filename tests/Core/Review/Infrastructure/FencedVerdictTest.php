@@ -72,6 +72,30 @@ final class FencedVerdictTest extends TestCase
     }
 
     #[DataProvider('subscriptionModels')]
+    public function testOneFencedBlockWithWindowsLineEndingsIsReadAsThatBlock(Model $model): void
+    {
+        $verdict = $this->answered($model, "Review.\r\n```json\r\n".self::VERDICT."\r\n```\r\n");
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testTwoFencedBlocksWithMixedLineEndingsAreInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "First:\n```json\n".self::VERDICT."\n```\nSecond:\r\n```json\r\n".self::VERDICT."\r\n```\r\n");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testAClosedBlockBesideAnUnclosedOneIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "First:\n```json\n".self::VERDICT."\n```\nSecond:\n```json\n".self::VERDICT);
+    }
+
+    #[DataProvider('subscriptionModels')]
     public function testAFencedBlockThatIsNotAVerdictIsInvalid(Model $model): void
     {
         $this->expectException(RuntimeException::class);

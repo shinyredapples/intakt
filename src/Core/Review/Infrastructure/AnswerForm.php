@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
-enum AnswerForm
+enum AnswerForm: string
 {
-    case Json;
+    case Json = 'json';
 
-    case ProseAroundBlock;
+    case ProseAroundBlock = 'prose-around-block';
 }
