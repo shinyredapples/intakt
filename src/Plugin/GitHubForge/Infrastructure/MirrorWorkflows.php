@@ -149,27 +149,39 @@ final readonly class MirrorWorkflows
     {
         // Each folder on its own, because ls-tree lists nothing inside a link or a submodule, and an empty answer would read as no workflows.
         foreach ([dirname(self::WORKFLOWS), self::WORKFLOWS] as $folder) {
-            $process = $this->run($repository, ['ls-tree', '-z', '--full-tree', $tree, '--', $folder]);
-            if (!$process->isSuccessful()) {
-                return [WorkflowFile::unread($folder, sprintf('git ls-tree failed: %s', trim($process->getErrorOutput())))];
-            }
-
-            $entry = rtrim($process->getOutput(), "\0");
-            if ('' === $entry) {
-                return [];
-            }
-
-            if (1 !== preg_match(self::ENTRY, $entry, $match) || $folder !== $match[4]) {
-                return [WorkflowFile::unread($folder, 'git ls-tree printed an entry it does not read')];
-            }
-
-            [, $mode, $type] = $match;
-            if (self::TREE !== $type || self::FOLDER !== $mode) {
-                return [WorkflowFile::unread($folder, sprintf('a %s entry with mode %s, not a folder', $type, $mode))];
+            $blocked = $this->folder($repository, $tree, $folder);
+            if (null !== $blocked) {
+                return $blocked;
             }
         }
 
         return null;
+    }
+
+    /**
+     * @return list<WorkflowFile>|null
+     *
+     * @throws RepositoryAttributesRefused
+     */
+    private function folder(string $repository, string $tree, string $folder): ?array
+    {
+        $process = $this->run($repository, ['ls-tree', '-z', '--full-tree', $tree, '--', $folder]);
+        if (!$process->isSuccessful()) {
+            return [WorkflowFile::unread($folder, sprintf('git ls-tree failed: %s', trim($process->getErrorOutput())))];
+        }
+
+        $entry = rtrim($process->getOutput(), "\0");
+        if ('' === $entry) {
+            return [];
+        }
+
+        if (1 !== preg_match(self::ENTRY, $entry, $match) || $folder !== $match[4]) {
+            return [WorkflowFile::unread($folder, 'git ls-tree printed an entry it does not read')];
+        }
+
+        [, $mode, $type] = $match;
+
+        return self::TREE === $type && self::FOLDER === $mode ? null : [WorkflowFile::unread($folder, sprintf('a %s entry with mode %s, not a folder', $type, $mode))];
     }
 
     /**
