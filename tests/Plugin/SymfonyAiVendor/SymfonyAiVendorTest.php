@@ -447,11 +447,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame($unstreamedLedger->payloads()[1]['usages'], $streamedLedger->payloads()[1]['usages']);
     }
 
-    private static function cutAgain(): never
-    {
-        throw new IncompleteStreamException('The answer ended before it was complete.');
-    }
-
     public function testAStreamCutMidTextAfterAToolRoundLeavesOneUnsettledRowWithBothRoundsAndIsTriedOnceMore(): void
     {
         $ledger = new InMemoryLedger();
@@ -1146,6 +1141,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $resetter->reset();
 
         self::assertSame([], $this->dispatcher->getCalledListeners());
+    }
+
+    private static function cutAgain(): never
+    {
+        throw new IncompleteStreamException('The answer ended before it was complete.');
     }
 
     private function request(?Uuid $round = null): ReviewRequest
