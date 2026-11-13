@@ -444,7 +444,7 @@ final class PublishVerdictTest extends KernelTestCase
     {
         $statuses = array_filter($this->github->writes, static fn (array $write): bool => 'POST '.self::API.'/statuses/'.$head === $write[0]);
 
-        return array_values(array_column($statuses, 1));
+        return array_column($statuses, 1);
     }
 
     private function marker(string $roundId): string
