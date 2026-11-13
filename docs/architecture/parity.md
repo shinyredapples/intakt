@@ -74,7 +74,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 - [ ] A conflict after the owner's approval parks it; an unchanged resolution merges without a new ask. `test_maintainer_ask_once.py::test_a_conflict_after_the_owners_approval_parks_it_and_an_unchanged_resolution_merges_without_a_new_ask` [T64]
 - [ ] Owner and maintainer pull requests are reviewed on every head and merge like a task's. `test_maintainer_merge.py::test_a_labelled_pull_request_goes_through_the_gate_and_merges_like_a_loop_merge`, `test_maintainer_unprotected.py` [T65]
 - [ ] A third party's priority label on a pull request is ignored. `test_maintainer_priority.py::test_a_third_partys_priority_label_or_one_on_a_pull_request_anyone_else_opened_is_ignored` [T65]
-- [ ] Main is watched: unsigned, unknown key or rewrite halts; the owner's push is one notice. `test_watchdog.py::test_unsigned_commit_still_halts`, `test_watchdog.py::test_force_push_detected_as_rewritten`, `test_watchdog.py::test_owner_signed_commit_is_a_notice_not_a_halt` [T63]
+- [ ] Main is watched (classification built in part 1 of T63: `CheckMainTest`; the halt, the card and the notice are later parts): unsigned, unknown key or rewrite halts; the owner's push is one notice. `test_watchdog.py::test_unsigned_commit_still_halts`, `test_watchdog.py::test_force_push_detected_as_rewritten`, `test_watchdog.py::test_owner_signed_commit_is_a_notice_not_a_halt` [T63]
 
 ## Operations
 - [ ] Every non-merge outcome records a cause. `test_causes.py` [T67]

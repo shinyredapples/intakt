@@ -1,0 +1,117 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Watchdog\UseCase\CheckMain;
+
+use Intakt\Core\Git\Contract\GitCall;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Watchdog\Contract\MainVerdict;
+use Intakt\Core\Watchdog\Contract\OwnerKeys;
+use Intakt\Core\Watchdog\Contract\Violation;
+use Intakt\Core\Watchdog\Contract\WatchedMain;
+use Intakt\Core\Watchdog\Domain\CommitClassifier;
+use Intakt\Core\Watchdog\Domain\SeenCommit;
+use Intakt\Core\Watchdog\Domain\SignatureStatus;
+use Intakt\Core\Watchdog\Infrastructure\MainHistory;
+use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMain;
+use Intakt\Core\Watchdog\UseCase\CheckMain\CheckMainCommand;
+use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Core\Watchdog\SigningKeys;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
+
+#[CoversClass(CheckMainCommand::class)]
+#[UsesClass(CheckMain::class)]
+#[UsesClass(MainHistory::class)]
+#[UsesClass(CommitClassifier::class)]
+#[UsesClass(SignatureStatus::class)]
+#[UsesClass(SeenCommit::class)]
+#[UsesClass(Violation::class)]
+#[UsesClass(MainVerdict::class)]
+#[UsesClass(WatchedMain::class)]
+#[UsesClass(OwnerKeys::class)]
+#[UsesClass(Mirrors::class)]
+#[UsesClass(HardenedGit::class)]
+#[UsesClass(GitCall::class)]
+final class CheckMainCommandTest extends TestCase
+{
+    private string $mirrors;
+
+    private TemporaryRepository $repository;
+
+    private SigningKeys $keys;
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        mkdir($this->mirrors);
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitEmpty('Base');
+        $this->keys = new SigningKeys();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->mirrors, $this->repository->path]);
+        $this->keys->remove();
+    }
+
+    public function testAnUnsignedCommitIsReportedAndFails(): void
+    {
+        $unsigned = $this->repository->commitEmpty('Straight to main');
+
+        $tester = $this->whenRunWith(['--owner-key' => [$this->keys->publicKeyFileOf('owner')]]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('unsigned '.$unsigned, $tester->getDisplay());
+        self::assertStringContainsString('main is violated', $tester->getDisplay());
+    }
+
+    public function testAnOwnerSignedCommitLeavesMainClean(): void
+    {
+        $this->repository->commitEmptySignedWith($this->keys->privateKeyOf('owner'), 'Owner push');
+        $since = $this->repository->objectAt('HEAD~1');
+
+        $tester = $this->whenRunWith(['--since' => $since, '--owner-key' => [$this->keys->publicKeyFileOf('owner')]]);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString('main is clean', $tester->getDisplay());
+    }
+
+    public function testAKeyFileThatCannotBeReadIsRefused(): void
+    {
+        $tester = $this->whenRunWith(['--owner-key' => [$this->keys->directory.'/missing.pub']]);
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertStringContainsString('cannot be read', $tester->getDisplay());
+    }
+
+    public function testAProjectWithoutAMirrorIsRefused(): void
+    {
+        $tester = $this->whenRunWith([], 'unknown');
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function whenRunWith(array $options, string $project = 'demo'): CommandTester
+    {
+        new Filesystem()->mirror($this->repository->path.'/.git', $this->mirrors.'/demo.git');
+        $check = new CheckMain(new MainHistory(new HardenedGit(), new Filesystem()), new CommitClassifier());
+        $application = new Application();
+        $application->addCommand(new CheckMainCommand($check, new Mirrors($this->mirrors)));
+        $tester = new CommandTester($application->find('intakt:watchdog:check'));
+        $tester->execute(['project' => $project, ...$options]);
+
+        return $tester;
+    }
+}

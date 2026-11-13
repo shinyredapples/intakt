@@ -33,9 +33,9 @@ RUN composer dump-autoload --no-dev --classmap-authoritative --no-scripts \
 
 FROM base
 
-# The base image has no git, which the local git forge reads a change with and the demo builds its sample repository with; Debian's is 2.45 or later (--no-lazy-fetch).
+# The base image has no git, which the local git forge reads a change with and the demo builds its sample repository with; Debian's is 2.45 or later (--no-lazy-fetch). ssh-keygen, from openssh-client, checks the SSH signatures of main's commits for the watchdog.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
+    && apt-get install -y --no-install-recommends git openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 ENV APP_ENV=prod \
