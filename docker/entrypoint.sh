@@ -45,6 +45,16 @@ export_owner_token() {
     export MCP_OWNER_TOKEN=$token
 }
 
+# The notes about providers without a key go to standard error, so discarding standard output leaves them in the start log; a mark on the data volume keeps a restart from printing them again.
+# A mark that cannot be written only prints the notes again at the next start, which is no reason to stop this one.
+print_provider_notes_once() {
+    local mark
+    mark="$(dirname "$INTAKT_CONFIG")/provider-notes-shown"
+    [[ -e $mark ]] && return 0
+    php bin/console intakt:ai:tiers >/dev/null
+    touch "$mark" 2>/dev/null || true
+}
+
 # Set by compose.yaml for the demo. The image's container was built without the provider keys, which arrive only now, so it is built again before the seed reads them and again after it writes the project.
 if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     : "${INTAKT_CONFIG:?set INTAKT_CONFIG to the project file the sample project is written to}"
@@ -54,6 +64,7 @@ if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     rebuild_container
     php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
     rebuild_container
+    print_provider_notes_once
 fi
 
 # Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.

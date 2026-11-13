@@ -131,9 +131,15 @@ final readonly class RoundFixture
         return $this->startWith($this->commandFor($change, $reviewers), $queue);
     }
 
+    // Two reviewers, as in startFor(), at the head the test names, so rounds of one change can review different commits.
+    public function startAtHead(string $change, string $head): string
+    {
+        return $this->startWith($this->commandAt($change, $head, 2), $this->bus);
+    }
+
     public function commandFor(string $change, int $reviewers): RunReviewRound
     {
-        return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
+        return $this->commandAt($change, SampleIdentity::HEAD, $reviewers);
     }
 
     public function startHandlerOn(MessageBusInterface $queue): RunReviewRoundHandler
@@ -350,6 +356,11 @@ final readonly class RoundFixture
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
         return $this->startHandlerOn($queue)($command);
+    }
+
+    private function commandAt(string $change, string $head, int $reviewers): RunReviewRound
+    {
+        return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt($head, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
     }
 
     private function subject(): ReviewSubject
