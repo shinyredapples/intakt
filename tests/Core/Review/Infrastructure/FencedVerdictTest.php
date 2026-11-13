@@ -95,12 +95,12 @@ final class FencedVerdictTest extends TestCase
         $this->answered($model, "First:\n```json\n".self::VERDICT."\n```\nSecond:\n```json\n".self::VERDICT);
     }
 
-    #[DataProvider('subscriptionModels')]
-    public function testAnIndentedBlockBesideAPlainOneIsInvalid(Model $model): void
+    #[DataProvider('subscriptionModelsWithFenceIndents')]
+    public function testAnIndentedBlockBesideAPlainOneIsInvalid(Model $model, string $indent): void
     {
         $this->expectException(RuntimeException::class);
 
-        $this->answered($model, "Draft:\n   ```json\n   ".self::VERDICT."\n   ```\nFinal:\n```json\n".self::VERDICT."\n```");
+        $this->answered($model, "Draft:\n{$indent}```json\n{$indent}".self::VERDICT."\n{$indent}```\nFinal:\n```json\n".self::VERDICT."\n```");
     }
 
     #[DataProvider('subscriptionModels')]
@@ -165,6 +165,19 @@ final class FencedVerdictTest extends TestCase
     {
         yield 'claude_code' => [new ClaudeCode('sonnet')];
         yield 'codex' => [new Codex('gpt-5')];
+    }
+
+    /**
+     * @return iterable<string, array{Model, string}>
+     */
+    public static function subscriptionModelsWithFenceIndents(): iterable
+    {
+        // Three spaces is the most Markdown still reads as a fence, so it is the boundary of what must be counted.
+        foreach (['one space' => ' ', 'three spaces' => '   '] as $name => $indent) {
+            foreach (self::subscriptionModels() as $provider => [$model]) {
+                yield sprintf('%s, %s', $provider, $name) => [$model, $indent];
+            }
+        }
     }
 
     private function answered(Model $model, string $text): Verdict
