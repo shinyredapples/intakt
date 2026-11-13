@@ -60,8 +60,7 @@ and output in full, cached input at a tenth.
 
 By account. Until 10-31 the loop ran on Claude account 1 alone; from 10-31 each job picks the account with the most
 room that would otherwise go unused, and from 11-04 an API key takes over only when the
-subscriptions are spent (32M tokens so far, on 11-06 to 11-08). A small share from early November (21M) has no
-account recorded. GPT reviews every head from its own subscription.
+subscriptions are spent (32M tokens so far, on 11-06 to 11-08). GPT reviews every head from its own subscription.
 
 <!-- journey:begin tokens-by-account -->
 ![Tokens per day by account](journey/tokens-by-account.svg)
@@ -235,5 +234,6 @@ team, history, settings, setup) follow after the hackathon.
 `bin/journey` (#1740) writes the regions between `journey:begin` and `journey:end` markers and the charts in
 `docs/journey/`: GitHub numbers from the API when the page is built, token use from `docs/journey/usage.jsonl`. That file
 holds tokens per day, vendor, account and lane, nothing about limits; Claude and GPT are counted the same way (input and
-output in full, cached input at a tenth). The milestone stories and lessons are written by hand and link to the issue or
+output in full, cached input at a tenth). A step that was killed (out of memory, a host restart) reports no usage and
+counts at its reservation: 21M tokens, about 2%. The milestone stories and lessons are written by hand and link to the issue or
 pull request behind each claim.
