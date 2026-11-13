@@ -9,6 +9,7 @@ use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 // The script runs inside the job's container, so it is tested by running it with sh -c as the container does, with a scripted CLI in place of Claude Code.
@@ -165,6 +166,54 @@ final class BuildScriptTest extends TestCase
         self::assertStringContainsString('claude exited with '.RunBuildJob::OUTPUT_NOT_CLEARED."\n", $this->outputFile('build.log'));
     }
 
+    public function testAProcessTheCliLeavesRunningCannotHandBackABundleAfterTheSession(): void
+    {
+        // Opening the pipe waits until git reads its global settings after the session, so without an end to that process the bundle would land after the cleanup.
+        $this->givenTheCli(<<<'SH'
+            echo 'docs: nothing' > PR.md
+            mkfifo "$TMPDIR/settings"
+            git config --global include.path "$TMPDIR/settings"
+            (
+                {
+                    echo planted > "$INTAKT_JOB_OUTPUT/handback.bundle"
+                    rm "$TMPDIR/settings"
+                    touch "$TMPDIR/settings"
+                } > "$TMPDIR/settings"
+            ) > /dev/null 2>&1 &
+            SH);
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertSame("docs: nothing\n", $this->outputFile('pull-request.md'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+    }
+
+    public function testWhatAFailedBundleLeftIsNotHandedBack(): void
+    {
+        $this->givenGitLeavesAPartialBundleAndFails();
+        $this->givenTheCli('echo built > built.txt && git add built.txt && git commit --quiet -m "feat: build"');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
+        self::assertFileDoesNotExist($this->output.'/handback.bundle');
+    }
+
+    public function testAFailedBundleThatCannotBeRemovedEndsWithTheCodeThatHandsNothingBack(): void
+    {
+        $this->givenGitLeavesAPartialBundleAndFails();
+        // A remove that does nothing stands in for a removal the job cannot do.
+        file_put_contents($this->bin.'/rm', "#!/bin/sh\nexit 0\n");
+        chmod($this->bin.'/rm', 0o755);
+        $this->givenTheCli('echo built > built.txt && git add built.txt && git commit --quiet -m "feat: build"');
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5');
+
+        self::assertSame(RunBuildJob::OUTPUT_NOT_CLEARED, $run->getExitCode());
+        self::assertStringContainsString('the output folder could not be cleared', $this->outputFile('build.log'));
+    }
+
     public function testAPullRequestTextThatIsALinkIsNotHandedBack(): void
     {
         $this->givenTheCli('ln -s "$RECORD/prompt.md" PR.md');
@@ -210,12 +259,27 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/claude', 0o755);
     }
 
+    private function givenGitLeavesAPartialBundleAndFails(): void
+    {
+        $git = (string) new ExecutableFinder()->find('git');
+        file_put_contents($this->bin.'/git', <<<SH
+            #!/bin/sh
+            if [ "\$1" = bundle ]; then
+                echo partial > "\$4"
+                exit 128
+            fi
+            exec '{$git}' "\$@"
+            SH);
+        chmod($this->bin.'/git', 0o755);
+    }
+
     private function whenTheBuildRuns(string $branch, string $model): Process
     {
         $run = new Process(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model],
             null,
             $this->environment(),
+            timeout: 20,
         );
         $run->run();
 
