@@ -137,7 +137,12 @@ final readonly class LockedPackageChanges
     private function unjudgedKeys(LockedPackage $package): array
     {
         // Extra is allowed because only Composer plugins read it, and the owner allows each plugin.
-        $unjudged = array_diff($package->effectKeys(), ['type', 'bin', 'autoload', 'include-path', 'target-dir', 'extra']);
+        $judged = ['type', 'bin', 'autoload', 'include-path', 'target-dir', 'extra'];
+        if (LockedPackage::PACKAGIST_NOTIFICATIONS === ($package->effects[LockedPackage::NOTIFICATION_URL] ?? null)) {
+            $judged[] = LockedPackage::NOTIFICATION_URL;
+        }
+
+        $unjudged = array_diff($package->effectKeys(), $judged);
 
         return array_map(static fn (string $key): DependencyFinding => new DependencyFinding($package->name, sprintf('has the key "%s", which the policy does not judge', $key)), array_values($unjudged));
     }

@@ -165,6 +165,24 @@ final class ComposerPolicyTest extends TestCase
         self::assertSame([], $tags->asked);
     }
 
+    public function testANewPackageLockedAtADevelopmentVersionNeedsTheOwnerWithoutALookup(): void
+    {
+        $tags = LockedCommits::upstream();
+        $after = ComposerFiles::sample()->requiring('symfony/uid', '8.0.x-dev')->locking(ComposerFiles::entry('symfony/uid', '8.0.x-dev', LockedCommits::UID_8_0_0));
+
+        $decision = $this->decide(ComposerFiles::sample(), $after, $tags);
+
+        self::assertSame(['symfony/uid: is locked at 8.0.x-dev, which is no release tag'], $this->findingsOf($decision));
+        self::assertSame([], $tags->asked);
+    }
+
+    public function testANewPackageWithANullTargetDirectoryIsRoutine(): void
+    {
+        $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking([...ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0), 'target-dir' => null]);
+
+        self::assertSame([], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
     public function testAnUpstreamThatCannotBeReadSendsTheChangeToTheOwner(): void
     {
         $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking(ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0));
@@ -245,6 +263,7 @@ final class ComposerPolicyTest extends TestCase
         yield 'a single include path' => [['include-path' => '../../'], 'sets an include path'];
         yield 'a target directory' => [['target-dir' => '../../x'], 'sets a target directory'];
         yield 'a key the policy does not judge' => [['scripts' => ['post-install-cmd' => 'acme-setup']], 'has the key "scripts", which the policy does not judge'];
+        yield 'a notification address besides Packagist' => [['notification-url' => 'https://example.com/downloads/'], 'has the key "notification-url", which the policy does not judge'];
     }
 
     public function testANewPackageWithMetadataAnAliasAndAnEmptyIncludePathIsRoutine(): void
@@ -431,6 +450,7 @@ final class ComposerPolicyTest extends TestCase
         yield 'extra read by a plugin' => [['extra' => ['phpstan' => ['includes' => ['extension.neon']]]], 'extra'];
         yield 'a key the policy does not judge' => [['scripts' => ['post-install-cmd' => 'acme-setup']], 'scripts'];
         yield 'several keys at once' => [['target-dir' => 'x', 'include-path' => ['lib']], 'include-path, target-dir'];
+        yield 'another notification address' => [['notification-url' => 'https://example.com/downloads/'], 'notification-url'];
     }
 
     /**
@@ -645,6 +665,59 @@ final class ComposerPolicyTest extends TestCase
         $decision = new ComposerPolicy($this->trusted(), LockedCommits::upstream())->decide(ComposerFiles::none()->files(), $after);
 
         self::assertSame(['composer.json: '.$reason], $this->findingsOf($decision));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function namesThatAreNoPackageNames(): iterable
+    {
+        yield 'a path out of the vendor folder' => ['symfony/../../src'];
+        yield 'a folder below the package' => ['symfony/a/b'];
+        yield 'a backslash' => ['symfony/u\\id'];
+        yield 'a space' => ['symfony/u id'];
+    }
+
+    #[DataProvider('namesThatAreNoPackageNames')]
+    public function testALockedPackageNamedOutsideComposersNameRuleNeedsTheOwner(string $name): void
+    {
+        $after = ComposerFiles::sample()->locking(ComposerFiles::inRepository(ComposerFiles::entry($name, 'v8.0.0', LockedCommits::UID_8_0_0), 'symfony/uid'));
+
+        self::assertSame(
+            [sprintf('composer.lock: composer.lock cannot be read: a locked package is named "%s", which is no package name', $name)],
+            $this->findingsOf($this->decide(ComposerFiles::sample(), $after)),
+        );
+    }
+
+    #[DataProvider('namesThatAreNoPackageNames')]
+    public function testARequirementNamedOutsideComposersNameRuleNeedsTheOwner(string $name): void
+    {
+        $after = ComposerFiles::sample()->requiring($name, '^8.0');
+
+        self::assertSame(
+            [sprintf('composer.json: composer.json cannot be read: require names "%s", which is no package name', $name)],
+            $this->findingsOf($this->decide(ComposerFiles::sample(), $after)),
+        );
+    }
+
+    #[DataProvider('namesThatAreNoPackageNames')]
+    public function testAStabilityFlagNamedOutsideComposersNameRuleNeedsTheOwner(string $name): void
+    {
+        $after = ComposerFiles::sample()->withLockKey('stability-flags', [$name => 10]);
+
+        self::assertSame(
+            [sprintf('composer.lock: composer.lock cannot be read: stability-flags names "%s", which is no package name', $name)],
+            $this->findingsOf($this->decide(ComposerFiles::sample(), $after)),
+        );
+    }
+
+    public function testPlatformRequirementsAndNamesWithCapitalsDotsAndDashesAreRead(): void
+    {
+        $before = ComposerFiles::sample()->requiring('ext-intl', '*')->requiring('lib-icu', '>=70')->requiring('composer-runtime-api', '^2.2')->requiring('php-64bit', '*')
+            ->requiring('Symfony/Polyfill--Php_8.5', '^1.0')->locking(ComposerFiles::entry('Symfony/Polyfill--Php_8.5', 'v1.0.0', LockedCommits::OTHER))
+            ->withLockKey('stability-flags', ['symfony/polyfill--php_8.5' => 10]);
+
+        self::assertSame([], $this->findingsOf($this->decide($before, $before->withLockKey('content-hash', 'eee'))));
     }
 
     public function testAnEmptyLockFileObjectIsRoutine(): void

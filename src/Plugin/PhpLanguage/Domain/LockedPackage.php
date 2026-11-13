@@ -16,7 +16,12 @@ final readonly class LockedPackage
     private const array PLACES = ['source', 'dist', 'transport-options'];
 
     // The keys a release rewrites without loading other code: its name and version, when it was made, what it needs and what it says about itself. The places are judged by the tag check. Every other key of the entry is an effect.
-    private const array RELEASE_DATA = ['name', 'version', 'version_normalized', 'time', 'published-time', 'require', 'require-dev', 'conflict', 'replace', 'provide', 'suggest', 'description', 'keywords', 'homepage', 'license', 'authors', 'support', 'funding', 'notification-url', 'readme', 'abandoned', 'default-branch', 'archive', 'non-feature-branches', '_comment'];
+    private const array RELEASE_DATA = ['name', 'version', 'version_normalized', 'time', 'published-time', 'require', 'require-dev', 'conflict', 'replace', 'provide', 'suggest', 'description', 'keywords', 'homepage', 'license', 'authors', 'support', 'funding', 'readme', 'abandoned', 'default-branch', 'archive', 'non-feature-branches', '_comment'];
+
+    // Composer posts the installed packages to the notification address after an install, so only Packagist's own is judged harmless.
+    public const string NOTIFICATION_URL = 'notification-url';
+
+    public const string PACKAGIST_NOTIFICATIONS = 'https://packagist.org/downloads/';
 
     // The alias follows the version (3.8-dev, then 3.9-dev), so comparing it would send every minor update to the owner.
     private const string BRANCH_ALIAS = 'branch-alias';
