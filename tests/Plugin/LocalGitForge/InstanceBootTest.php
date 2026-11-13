@@ -398,25 +398,16 @@ final class InstanceBootTest extends TestCase
         return new InstanceBoot()->of($this->at($head), $this->main);
     }
 
-    // A PATH of every command of the real one except composer, plus the given stubs, each a script that exits with 1, so a test decides whether composer is missing, not executable or failing; git and sh keep whatever they call.
+    // A PATH of every command of the real one except composer, plus the given stubs (name to file mode), each a script that exits with 1, so a test decides whether composer is missing, not executable or failing.
     /**
-     * @param array<string, int> $stubs mode per stub command
+     * @param array<string, int> $stubs
      */
     private function bootWithoutComposerAnd(string $head, array $stubs): BootOutcome
     {
         $tools = $this->repository->path.'-tools';
         mkdir($tools);
         $path = getenv('PATH');
-
-        foreach (explode(':', (string) $path) as $folder) {
-            foreach ((array) glob($folder.'/*') as $command) {
-                $name = basename((string) $command);
-
-                if ('composer' !== $name && !file_exists($tools.'/'.$name) && !is_link($tools.'/'.$name)) {
-                    symlink((string) $command, $tools.'/'.$name);
-                }
-            }
-        }
+        $this->linkCommandsExceptComposer((string) $path, $tools);
 
         foreach ($stubs as $stub => $mode) {
             file_put_contents($tools.'/'.$stub, "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n");
@@ -430,6 +421,20 @@ final class InstanceBootTest extends TestCase
         } finally {
             putenv(false === $path ? 'PATH' : 'PATH='.$path);
             new Filesystem()->remove($tools);
+        }
+    }
+
+    // Every command rather than only git and sh, because git may be a wrapper that calls other commands; the first folder of the PATH wins, as in a shell.
+    private function linkCommandsExceptComposer(string $path, string $tools): void
+    {
+        foreach (explode(':', $path) as $folder) {
+            foreach ((array) glob($folder.'/*') as $command) {
+                $link = $tools.'/'.basename((string) $command);
+
+                if ('composer' !== basename($link) && !is_link($link)) {
+                    symlink((string) $command, $link);
+                }
+            }
         }
     }
 
