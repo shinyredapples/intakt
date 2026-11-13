@@ -58,7 +58,7 @@ The penetration test tries to write a fixture that main's gate rejects and the h
 
 ### Earned autonomy
 
-There is no per-category dry-run mode and no per-category count. A project's automatic approval goes live once both hold:
+There is no per-category dry-run mode and no per-category count. A project's automatic approval can be switched on once both hold:
 - every **canary change** reaches the owner: canaries are owner-known changes that run through the pipeline regularly and must be sent to the owner, at least three per kind of protected change (comment-only, dependency, gate code, harness, and the floors: a workflow that reads a repository secret, an edited approval rule, an edited secret scan); and
 - a replay of the repository's past owner approvals agrees with the computed decision on at least 20 heads.
 
