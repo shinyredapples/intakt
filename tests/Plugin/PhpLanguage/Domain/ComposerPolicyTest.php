@@ -99,7 +99,7 @@ final class ComposerPolicyTest extends TestCase
         $tags = LockedCommits::upstream();
         $after = ComposerFiles::sample()->requiring('acme/tool', '^1.0')->locking(ComposerFiles::entry('acme/tool', '1.0.0', LockedCommits::OTHER));
 
-        $_ = $this->decide(ComposerFiles::sample(), $after, $tags);
+        $this->decide(ComposerFiles::sample(), $after, $tags);
 
         self::assertSame([], $tags->asked);
     }

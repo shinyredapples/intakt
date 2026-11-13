@@ -23,10 +23,10 @@ final readonly class ComposerState
 
     /**
      * @param array<string, array{section: string, constraint: string}> $requirements
-     * @param array<array-key, mixed>                                    $manifestSettings
-     * @param array<array-key, mixed>                                    $lockSettings
-     * @param array<string, mixed>                                       $stabilityFlags
-     * @param array<string, LockedPackage>                               $locked
+     * @param array<array-key, mixed>                                   $manifestSettings
+     * @param array<array-key, mixed>                                   $lockSettings
+     * @param array<string, mixed>                                      $stabilityFlags
+     * @param array<string, LockedPackage>                              $locked
      */
     private function __construct(
         public array $requirements,

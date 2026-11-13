@@ -25,7 +25,6 @@ use Intakt\Plugin\PhpLanguage\Domain\SettingChanges;
 use Intakt\Plugin\PhpLanguage\Domain\TrustedPackages;
 use Intakt\Plugin\PhpLanguage\Infrastructure\PhpLanguage;
 use Intakt\Tests\Core\Git\TemporaryRepository;
-use Intakt\Tests\Plugin\PhpLanguage\ComposerFiles;
 use Intakt\Tests\Plugin\PhpLanguage\LockedCommits;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -78,7 +77,7 @@ final class DecideDependencyChangeCommandTest extends TestCase
 
     public function testTheCommandListsTheNewPackagesAndWhyTheOwnerIsNeeded(): void
     {
-        $head = $this->repository->commitFile('composer.json', "{\"require\": {\"symfony/console\": \"^8.0\", \"acme/tool\\nowner forged\": \"^1.0\"}}");
+        $head = $this->repository->commitFile('composer.json', '{"require": {"symfony/console": "^8.0", "acme/tool\\nowner forged": "^1.0"}}');
 
         $tester = $this->whenTheCommandRuns($head);
 

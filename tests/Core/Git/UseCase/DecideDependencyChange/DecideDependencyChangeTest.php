@@ -122,7 +122,7 @@ final class DecideDependencyChangeTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        $_ = $this->decide('main');
+        $this->decide('main');
     }
 
     private function commit(ComposerFiles $files): string

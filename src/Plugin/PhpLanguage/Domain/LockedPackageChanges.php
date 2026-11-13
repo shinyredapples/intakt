@@ -52,7 +52,7 @@ final readonly class LockedPackageChanges
         $findings = $this->effects($package);
 
         // Its own vendor's organization, because GitHub serves a commit pushed to any fork under the upstream repository's address too, and the tag check below rules that out.
-        if (null === $package->commit || strtolower($package->commit->owner) !== $package->vendor()) {
+        if (!$package->commit instanceof GitHubCommit || strtolower($package->commit->owner) !== $package->vendor()) {
             return [...$findings, new DependencyFinding($package->name, 'does not come from its own vendor\'s repository at one commit')];
         }
 
@@ -66,7 +66,7 @@ final readonly class LockedPackageChanges
     {
         $findings = $earlier->sameEffectsAs($package) ? [] : [new DependencyFinding($package->name, 'its type, binaries or autoload files changed')];
 
-        if (null === $package->commit || null === $earlier->commit || !$earlier->commit->sameRepositoryAs($package->commit)) {
+        if (!$package->commit instanceof GitHubCommit || !$earlier->commit instanceof GitHubCommit || !$earlier->commit->sameRepositoryAs($package->commit)) {
             return [...$findings, new DependencyFinding($package->name, 'its repository changed or cannot be checked')];
         }
 
@@ -78,7 +78,7 @@ final readonly class LockedPackageChanges
      */
     private function moved(?LockedPackage $earlier, LockedPackage $package): array
     {
-        if (null === $earlier || $earlier->dev === $package->dev || $this->trusted->trusts($package->name)) {
+        if (!$earlier instanceof LockedPackage || $earlier->dev === $package->dev || $this->trusted->trusts($package->name)) {
             return [];
         }
 
