@@ -95,6 +95,13 @@ final class WorkflowFileScanTest extends TestCase
         self::assertSame([['runner', 5, 'the job check runs on build-box, not a GitHub-hosted runner label']], $this->summary($findings));
     }
 
+    public function testARunnerLabelFromABlockValueIsReportedWithoutItsLineBreak(): void
+    {
+        $findings = $this->scan($this->withJob("runs-on: |\n  self-hosted"));
+
+        self::assertSame([['runner', 5, 'the job check runs on self-hosted, not a GitHub-hosted runner label']], $this->summary($findings));
+    }
+
     public function testEachLabelOfAListedRunnerIsChecked(): void
     {
         $findings = $this->scan($this->withJob('runs-on: [self-hosted, ubuntu-24.04, linux]'));

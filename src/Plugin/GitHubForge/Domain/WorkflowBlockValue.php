@@ -11,8 +11,9 @@ final readonly class WorkflowBlockValue
      *
      * @return array{WorkflowScalar, int}
      */
-    public function read(array $lines, int $from, WorkflowLine $header): array
+    public function read(array $lines, WorkflowLine $header): array
     {
+        $from = $header->number;
         $indent = $this->textIndent($lines, $from, $header);
         $texts = [];
         $next = $from;
