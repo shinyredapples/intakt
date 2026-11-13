@@ -185,6 +185,11 @@ final readonly class BuildHistory
         return $this->git('rev-parse', 'HEAD');
     }
 
+    public function startMerge(string $branch): void
+    {
+        $this->git('merge', '--quiet', '--no-ff', '--no-commit', $branch);
+    }
+
     public function mergeUnrelated(string $branch): string
     {
         $this->git('merge', '--quiet', '--no-ff', '--no-edit', '--allow-unrelated-histories', $branch);

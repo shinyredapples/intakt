@@ -423,6 +423,26 @@ final class RunCheckJobTest extends TestCase
         self::assertSame([['important.txt', 120, 0]], $this->lostIn($outcome));
     }
 
+    public function testAFileMovedOntoANamedPathThatWasThenRemovedAndCreatedAnewInAMergeOfMainIsStillReportedLost(): void
+    {
+        $this->givenMainHolds('important.txt', $this->lines(120));
+        $this->history->moveFile('important.txt', 'named.txt', 'Move the important file onto the named path');
+        $this->history->removeFile('named.txt', 'Remove it');
+        $this->history->checkout('main');
+        $this->history->commitFile('other.txt', "other\n", 'Advance main');
+        $this->history->push('main');
+        $this->history->checkout('task');
+        $this->history->startMerge('main');
+        $this->history->commitFile('named.txt', "1\n", 'Merge main and create an unrelated file at the named path');
+
+        $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), true), 'job-image', null, ['named.txt']);
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $job);
+
+        self::assertInstanceOf(CheckJobOutcome::class, $outcome);
+        self::assertSame([['important.txt', 120, 0]], $this->lostIn($outcome));
+    }
+
     private function givenMainHolds(string $path, string $content): void
     {
         $this->history->checkout('main');

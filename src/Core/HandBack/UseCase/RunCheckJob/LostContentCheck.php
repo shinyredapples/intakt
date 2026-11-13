@@ -68,8 +68,8 @@ final readonly class LostContentCheck
      */
     private function movesOfEachCommit(string $repository, string $base, string $head): array
     {
-        // Commit by commit, the head's first, because a file moved and then rewritten below git's similarity threshold reads as removed in the diff of the whole branch; with each commit's hash, because a path is followed back through one commit's moves at a time. Additions too, because a path created anew holds another file than the one moved there before.
-        $fields = explode("\0", $this->git->exactOutput($repository, ['log', '--raw', '-z', '-M', '--no-abbrev', '--topo-order', '--format=%H', $base.'..'.$head, '--']));
+        // Commit by commit, the head's first, because a file moved and then rewritten below git's similarity threshold reads as removed in the diff of the whole branch; with each commit's hash, because a path is followed back through one commit's moves at a time. Additions too, because a path created anew holds another file than the one moved there before. Along the branch's first parents with each merge diffed against its first parent, because "log" prints no entries for a merge otherwise, so a path created in a merge of main would not end the walk.
+        $fields = explode("\0", $this->git->exactOutput($repository, ['log', '--raw', '-z', '-M', '--no-abbrev', '--first-parent', '--diff-merges=first-parent', '--format=%H', $base.'..'.$head, '--']));
         $commits = [];
         $moves = [];
         $index = 0;
