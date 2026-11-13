@@ -241,6 +241,27 @@ final class ComposerPolicyTest extends TestCase
         yield 'an autoload key Composer may add later' => [['autoload' => ['psr-5' => ['Symfony\\' => 'src/']]], 'its autoload cannot be checked'];
         yield 'a Composer plugin' => [['type' => 'composer-plugin'], 'is a Composer plugin'];
         yield 'a type not allowed' => [['type' => 'symfony-pack'], 'has the package type "symfony-pack", which is not allowed'];
+        yield 'an include path' => [['include-path' => ['../../../payload']], 'sets an include path'];
+        yield 'a single include path' => [['include-path' => '../../'], 'sets an include path'];
+        yield 'a target directory' => [['target-dir' => '../../x'], 'sets a target directory'];
+        yield 'a key the policy does not judge' => [['scripts' => ['post-install-cmd' => 'acme-setup']], 'has the key "scripts", which the policy does not judge'];
+    }
+
+    public function testANewPackageWithMetadataAnAliasAndAnEmptyIncludePathIsRoutine(): void
+    {
+        $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking([
+            ...ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0),
+            'extra' => ['branch-alias' => ['dev-main' => '8.0-dev'], 'thanks' => ['name' => 'symfony/symfony']],
+            'include-path' => [],
+            'require' => ['php' => '>=8.5'],
+            'description' => 'Provides an object-oriented API to generate and represent UIDs',
+            'time' => '2026-01-01T00:00:00+00:00',
+            'published-time' => '2026-01-01T00:00:00+00:00',
+            'archive' => ['exclude' => ['/Tests']],
+            'funding' => [['url' => 'https://symfony.com/sponsor', 'type' => 'custom']],
+        ]);
+
+        self::assertSame([], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
     }
 
     /**
@@ -389,14 +410,81 @@ final class ComposerPolicyTest extends TestCase
     {
         $after = ComposerFiles::sample()->locking([...ComposerFiles::entry('symfony/console', 'v8.1.0', LockedCommits::CONSOLE_8_1_0), 'bin' => ['bin/console']]);
 
-        self::assertSame(['symfony/console: its type, binaries or autoload changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+        self::assertSame(['symfony/console: its bin changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
     }
 
     public function testAnUpdateThatChangesItsNamespaceMappingNeedsTheOwner(): void
     {
         $after = ComposerFiles::sample()->locking([...ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0), 'autoload' => ['psr-4' => ['Intakt\\' => '../../payload/']]]);
 
-        self::assertSame(['symfony/console: its type, binaries or autoload changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+        self::assertSame(['symfony/console: its autoload changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function changedEffects(): iterable
+    {
+        yield 'an include path' => [['include-path' => ['../../../payload']], 'include-path'];
+        yield 'a target directory' => [['target-dir' => '../../x'], 'target-dir'];
+        yield 'another type' => [['type' => 'symfony-bundle'], 'type'];
+        yield 'extra read by a plugin' => [['extra' => ['phpstan' => ['includes' => ['extension.neon']]]], 'extra'];
+        yield 'a key the policy does not judge' => [['scripts' => ['post-install-cmd' => 'acme-setup']], 'scripts'];
+        yield 'several keys at once' => [['target-dir' => 'x', 'include-path' => ['lib']], 'include-path, target-dir'];
+    }
+
+    /**
+     * @param array<string, mixed> $effect
+     */
+    #[DataProvider('changedEffects')]
+    public function testAnExistingPackageWhoseEntryGainsAKeyBesidesItsReleaseDataNeedsTheOwner(array $effect, string $keys): void
+    {
+        $after = ComposerFiles::sample()->locking([...ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0), ...$effect]);
+
+        self::assertSame(['symfony/console: its '.$keys.' changed'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
+    }
+
+    public function testAnUpdateThatGainsAnIncludePathNeedsTheOwnerBesideItsTagCheck(): void
+    {
+        $after = ComposerFiles::sample()->locking([...ComposerFiles::entry('symfony/console', 'v8.1.0', LockedCommits::FORK), 'include-path' => ['../../../payload']]);
+
+        self::assertSame(
+            ['symfony/console: its include-path changed', 'symfony/console: commit '.LockedCommits::FORK.' is not the upstream tag v8.1.0'],
+            $this->findingsOf($this->decide(ComposerFiles::sample(), $after)),
+        );
+    }
+
+    public function testAnUpdateThatRewritesOnlyWhatAReleaseRewritesIsRoutine(): void
+    {
+        $before = ComposerFiles::sample()->locking([
+            ...ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0),
+            'extra' => ['branch-alias' => ['dev-main' => '8.0-dev']],
+            'require' => ['php' => '>=8.5'],
+            'time' => '2026-01-01T00:00:00+00:00',
+            'description' => 'Eases the creation of beautiful and testable command line interfaces',
+        ]);
+        $after = ComposerFiles::sample()->locking([
+            ...ComposerFiles::entry('symfony/console', 'v8.1.0', LockedCommits::CONSOLE_8_1_0),
+            'extra' => ['branch-alias' => ['dev-main' => '8.1-dev']],
+            'require' => ['php' => '>=8.5', 'symfony/string' => '^8.1'],
+            'require-dev' => ['symfony/uid' => '^8.1'],
+            'conflict' => ['symfony/uid' => '<8.1'],
+            'time' => '2026-02-01T00:00:00+00:00',
+            'published-time' => '2026-02-01T00:00:00+00:00',
+            'description' => 'Eases the creation of command line interfaces',
+            'suggest' => ['symfony/uid' => ''],
+            'abandoned' => false,
+        ]);
+
+        self::assertSame([], $this->findingsOf($this->decide($before, $after)));
+    }
+
+    public function testAnUpdateThatDropsItsBranchAliasWithItsExtraIsRoutine(): void
+    {
+        $before = ComposerFiles::sample()->locking([...ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0), 'extra' => ['branch-alias' => ['dev-main' => '8.0-dev']]]);
+        $after = ComposerFiles::sample()->locking(ComposerFiles::entry('symfony/console', 'v8.1.0', LockedCommits::CONSOLE_8_1_0));
+
+        self::assertSame([], $this->findingsOf($this->decide($before, $after)));
     }
 
     public function testATrustedPackageMovedUnchangedToTheDevelopmentRequirementsIsRoutine(): void
@@ -524,6 +612,7 @@ final class ComposerPolicyTest extends TestCase
         yield 'a package locked twice' => ['{"packages": [{"name": "symfony/uid", "version": "v8.0.0"}, {"name": "Symfony/Uid", "version": "v8.0.1"}]}', 'composer.lock cannot be read: packages locks a package twice'];
         yield 'a package in both groups' => ['{"packages": [{"name": "symfony/uid", "version": "v8.0.0"}], "packages-dev": [{"name": "symfony/uid", "version": "v8.0.0"}]}', 'composer.lock cannot be read: a package is in both the main and the development group'];
         yield 'stability flags that are no map' => ['{"stability-flags": [10]}', 'composer.lock cannot be read: stability-flags is no map of package names'];
+        yield 'a stability flag for a number' => ['{"stability-flags": {"symfony/console": 10, "0": 10}}', 'composer.lock cannot be read: stability-flags names a package by a number'];
     }
 
     #[DataProvider('unreadableLocks')]
@@ -545,6 +634,7 @@ final class ComposerPolicyTest extends TestCase
         yield 'a constraint that is no string' => ['{"require": {"symfony/uid": 8}}', 'composer.json cannot be read: the constraint of symfony/uid in require is no string'];
         yield 'a requirement named twice' => ['{"require": {"symfony/uid": "^8.0", "Symfony/Uid": "^7.0"}}', 'composer.json cannot be read: require names a package twice'];
         yield 'a requirement in both sections' => ['{"require": {"symfony/uid": "^8.0"}, "require-dev": {"symfony/uid": "^8.0"}}', 'composer.json cannot be read: a package is in both the main and the development group'];
+        yield 'a requirement named by a number' => ['{"require": {"symfony/uid": "^8.0", "0": "^1.0"}}', 'composer.json cannot be read: require names a package by a number'];
     }
 
     #[DataProvider('unreadableManifests')]

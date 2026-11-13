@@ -194,7 +194,12 @@ final readonly class ComposerState
 
         $named = [];
         foreach ($map as $name => $value) {
-            $named[(string) $name] = $value;
+            // PHP turns a numeric name into an integer key, and no package is named by a number.
+            if (!is_string($name)) {
+                throw ComposerFileUnreadable::because($path, sprintf('%s names a package by a number', $key));
+            }
+
+            $named[$name] = $value;
         }
 
         // Composer reads names in any case, so two that differ only in case would let one hide the other.

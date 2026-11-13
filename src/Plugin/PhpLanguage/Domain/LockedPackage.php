@@ -15,9 +15,17 @@ final readonly class LockedPackage
     // Every key Composer downloads the code by, so a release with any of them changed is judged again.
     private const array PLACES = ['source', 'dist', 'transport-options'];
 
+    // The keys a release rewrites without loading other code: its name and version, when it was made, what it needs and what it says about itself. The places are judged by the tag check. Every other key of the entry is an effect.
+    private const array RELEASE_DATA = ['name', 'version', 'version_normalized', 'time', 'published-time', 'require', 'require-dev', 'conflict', 'replace', 'provide', 'suggest', 'description', 'keywords', 'homepage', 'license', 'authors', 'support', 'funding', 'notification-url', 'readme', 'abandoned', 'default-branch', 'archive', 'non-feature-branches', '_comment'];
+
+    // The alias follows the version (3.8-dev, then 3.9-dev), so comparing it would send every minor update to the owner.
+    private const string BRANCH_ALIAS = 'branch-alias';
+
     /**
      * @param list<mixed>          $binaries
+     * @param list<mixed>          $includePaths
      * @param array<string, mixed> $places
+     * @param array<string, mixed> $effects
      */
     private function __construct(
         public string $name,
@@ -26,7 +34,10 @@ final readonly class LockedPackage
         public string $type,
         public array $binaries,
         public mixed $autoload,
+        public array $includePaths,
+        public bool $hasTargetDir,
         public array $places,
+        public array $effects,
         public ?GitHubCommit $commit,
     ) {
     }
@@ -49,7 +60,10 @@ final readonly class LockedPackage
             is_string($type) ? $type : '',
             self::listed($entry['bin'] ?? []),
             $entry['autoload'] ?? [],
+            self::listed($entry['include-path'] ?? []),
+            array_key_exists('target-dir', $entry),
             array_intersect_key($entry, array_flip(self::PLACES)),
+            self::effects($entry),
             GitHubCommit::fromLockEntry($entry),
         );
     }
@@ -75,12 +89,28 @@ final readonly class LockedPackage
     // The group is left out, because a move between the groups is judged on its own; the places are compared as written, because an uncheckable place has no commit to compare.
     public function sameReleaseAs(self $other): bool
     {
-        return $this->version === $other->version && $this->places === $other->places && $this->sameEffectsAs($other);
+        return $this->version === $other->version && $this->places === $other->places && [] === $this->effectsChangedSince($other);
     }
 
-    public function sameEffectsAs(self $other): bool
+    /**
+     * @return list<string>
+     */
+    public function effectsChangedSince(self $earlier): array
     {
-        return $this->type === $other->type && $this->binaries === $other->binaries && $this->autoload === $other->autoload;
+        $keys = array_keys($this->effects + $earlier->effects);
+        $changed = array_filter($keys, fn (int|string $key): bool => ($this->effects[$key] ?? null) !== ($earlier->effects[$key] ?? null));
+        sort($changed);
+
+        return array_map(strval(...), array_values($changed));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function effectKeys(): array
+    {
+        // Cast, because PHP turns a numeric key back into an integer.
+        return array_map(strval(...), array_keys($this->effects));
     }
 
     /**
@@ -90,5 +120,25 @@ final readonly class LockedPackage
     {
         // A single value counts as one entry, because Composer accepts a string where it expects a list.
         return is_array($value) ? array_values($value) : [$value];
+    }
+
+    /**
+     * @param array<array-key, mixed> $entry
+     *
+     * @return array<string, mixed>
+     */
+    private static function effects(array $entry): array
+    {
+        $effects = [];
+        foreach (array_diff_key($entry, array_flip([...self::RELEASE_DATA, ...self::PLACES])) as $key => $value) {
+            $effects[(string) $key] = $value;
+        }
+
+        if (is_array($effects['extra'] ?? null)) {
+            $extra = array_diff_key($effects['extra'], [self::BRANCH_ALIAS => true]);
+            $effects = [] === $extra ? array_diff_key($effects, ['extra' => true]) : [...$effects, 'extra' => $extra];
+        }
+
+        return $effects;
     }
 }

@@ -67,7 +67,8 @@ final readonly class LockedPackageChanges
      */
     private function updated(LockedPackage $earlier, LockedPackage $package): array
     {
-        $findings = $earlier->sameEffectsAs($package) ? [] : [new DependencyFinding($package->name, 'its type, binaries or autoload changed')];
+        $changed = $package->effectsChangedSince($earlier);
+        $findings = [] === $changed ? [] : [new DependencyFinding($package->name, sprintf('its %s changed', implode(', ', $changed)))];
 
         if (!$package->commit instanceof GitHubCommit || !$earlier->commit instanceof GitHubCommit || !$earlier->commit->sameRepositoryAs($package->commit)) {
             return [...$findings, new DependencyFinding($package->name, 'its repository changed or cannot be checked')];
@@ -107,7 +108,38 @@ final readonly class LockedPackageChanges
 
         $autoload = array_map(static fn (string $reason): DependencyFinding => new DependencyFinding($package->name, $reason), $this->autoload->reasonsAgainst($package));
 
-        return [...$findings, ...$autoload];
+        return [...$findings, ...$autoload, ...$this->loadingPlaces($package), ...$this->unjudgedKeys($package)];
+    }
+
+    /**
+     * @return list<DependencyFinding>
+     */
+    private function loadingPlaces(LockedPackage $package): array
+    {
+        $findings = [];
+
+        // Prepended to PHP's include path, so every bare require resolves there first.
+        if ([] !== $package->includePaths) {
+            $findings[] = new DependencyFinding($package->name, 'sets an include path');
+        }
+
+        // Appended to the install path, so the package could be written outside its vendor folder.
+        if ($package->hasTargetDir) {
+            $findings[] = new DependencyFinding($package->name, 'sets a target directory');
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @return list<DependencyFinding>
+     */
+    private function unjudgedKeys(LockedPackage $package): array
+    {
+        // Extra is read only by Composer plugins, which the owner allows one by one.
+        $unjudged = array_diff($package->effectKeys(), ['type', 'bin', 'autoload', 'include-path', 'target-dir', 'extra']);
+
+        return array_map(static fn (string $key): DependencyFinding => new DependencyFinding($package->name, sprintf('has the key "%s", which the policy does not judge', $key)), array_values($unjudged));
     }
 
     /**
