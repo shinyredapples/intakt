@@ -32,7 +32,7 @@ final readonly class ChangePublications
     }
 
     // Encoded as a list, so no project or change name can end where another begins.
-    private function lockOf(string $project, string $change): LockInterface
+    public function lockOf(string $project, string $change): LockInterface
     {
         return $this->locks->createLock('review-publication-'.hash('sha256', json_encode([$project, $change], JSON_THROW_ON_ERROR)));
     }
