@@ -144,8 +144,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         }
     }
 
-    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block; any other count leaves the text as it is, which then fails as invalid.
-    // Openings are counted on their own, so a second block that is unclosed or ends its lines differently still makes the answer ambiguous.
+    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block; any other count of blocks or of openings (an unclosed second one is still ambiguous) leaves the text as it is, which then fails as invalid.
     private function fencedBlockOf(string $content): string
     {
         $openings = preg_match_all('/^```json[ \t]*\r?$/m', $content);
