@@ -8,9 +8,12 @@ use Rector\Php55\Rector\String_\StringClassNameToClassConstantRector;
 
 return RectorConfig::configure()
     ->withCache(GatesCache::directory().'/rector')
-    // At most 4 workers, as many as the CI runner's vCPUs, and 300 s per worker: with Rector's defaults (a worker per
-    // core, 120 s) several checks running at once on one machine starve each other's workers into timeouts.
-    ->withParallel(timeoutSeconds: 300, maxNumberOfProcess: 4)
+    // 4 workers because the CI runner has 4 vCPUs, and 300 s each so a starved worker can still finish:
+    // otherwise several checks at once on one machine (a worker per core, 120 s) time each other's workers out
+    ->withParallel(
+        timeoutSeconds: 300,
+        maxNumberOfProcess: 4,
+    )
     ->withImportNames(removeUnusedImports: true)
     ->withPhpSets(php85: true)
     ->withPreparedSets(
