@@ -443,13 +443,13 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame('banner broken', $this->banner(['broken' => true])->filter('.banner')->attr('class'));
     }
 
-    public function testABannerCollapsesOnPhonesBehindAToggleTheDisclosureControllerOpens(): void
+    public function testABannerCollapsesOnPhonesBehindAToggleThatNeedsNoController(): void
     {
         $banner = $this->banner(['broken' => false])->filter('.banner');
 
-        $toggle = $banner->filter('button.banner-toggle');
-        self::assertSame('disclosure', $banner->attr('data-controller'));
-        self::assertSame('disclosure#toggle', $toggle->attr('data-action'));
+        $toggle = $banner->filter(':scope > button.banner-toggle');
+        self::assertNull($banner->attr('data-controller'));
+        self::assertNull($toggle->attr('data-action'));
         self::assertSame('false', $toggle->attr('aria-expanded'));
         self::assertSame('field-notes is paused', $toggle->text());
         self::assertCount(1, $toggle->filter('svg.chev'));
@@ -469,7 +469,6 @@ final class DashboardComponentsTest extends KernelTestCase
 
         self::assertSame('banner compact open', $banner->attr('class'));
         self::assertSame('true', $banner->filter('button.banner-toggle')->attr('aria-expanded'));
-        self::assertSame('disclosure', $banner->attr('data-controller'));
     }
 
     public function testOnlyTheCurrentSubTabIsMarked(): void

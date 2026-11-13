@@ -10,6 +10,12 @@ final readonly class WorkflowFile
     public function __construct(
         public string $path,
         public ?string $content,
+        public string $notReadBecause = '',
     ) {
+    }
+
+    public static function unread(string $path, string $reason): self
+    {
+        return new self($path, null, $reason);
     }
 }
