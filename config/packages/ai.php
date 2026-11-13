@@ -31,6 +31,8 @@ use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
+use Intakt\Plugin\PhpLanguage\Contract\PhpLanguageServices;
+use Intakt\Plugin\PhpLanguage\Infrastructure\ComposerPolicyConfiguration;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
@@ -128,6 +130,11 @@ return static function (ContainerConfigurator $container): void {
     unset($contents['budget']);
     /** @var array{budget: array{ceilings: array<string, float>, prices: array<string, array{input: float, output: float, cache_read: float, cache_write: float}>}} $ceilings */
     $ceilings = new Processor()->processConfiguration(new BudgetConfiguration(), [$budget]);
+    // The dependency rules are the owner's for every project too, so they go to the PHP language plugin's tree only.
+    $composerPolicy = array_key_exists('composer_policy', $contents) ? ['composer_policy' => $contents['composer_policy']] : [];
+    unset($contents['composer_policy']);
+    /** @var array{composer_policy: array{trusted_vendors: list<string>, package_types: list<string>}} $dependencyRules */
+    $dependencyRules = new Processor()->processConfiguration(new ComposerPolicyConfiguration(), [$composerPolicy]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
@@ -294,6 +301,8 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
+    $container->parameters()->set(PhpLanguageServices::TRUSTED_VENDORS, $dependencyRules['composer_policy']['trusted_vendors']);
+    $container->parameters()->set(PhpLanguageServices::PACKAGE_TYPES, $dependencyRules['composer_policy']['package_types']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)
         ->autowire()

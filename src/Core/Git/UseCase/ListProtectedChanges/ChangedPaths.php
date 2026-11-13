@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\ChangedPath;
 use Intakt\Core\Git\Domain\ChangeNotRead;
+use InvalidArgumentException;
 use Symfony\Component\Process\Process;
 
 final readonly class ChangedPaths
@@ -20,9 +21,37 @@ final readonly class ChangedPaths
     // Because merge-base exits with 1 and prints nothing when two commits share no history, which is no failure.
     private const int NO_COMMON_ANCESTOR = 1;
 
+    // A full object name of either format, because a ref name could move while the check runs, and one that starts with a dash would be an option.
+    private const string COMMIT_NAME = '/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/';
+
     public function __construct(
         private HardenedGit $hardened,
     ) {
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     */
+    public function mustBeFullCommitName(string $head): void
+    {
+        if (1 !== preg_match(self::COMMIT_NAME, $head)) {
+            throw new InvalidArgumentException(sprintf('"%s" is not a full commit name', $head));
+        }
+    }
+
+    /**
+     * @throws ChangeNotRead
+     */
+    public function repositoryAt(string $repository): string
+    {
+        // Because git runs inside the repository, where a relative --git-dir would point below the repository itself, and from a missing folder git would look upward into another one.
+        $path = realpath($repository);
+
+        if (false === $path || !is_dir($path)) {
+            throw ChangeNotRead::because(sprintf('%s is no folder', $repository));
+        }
+
+        return $path;
     }
 
     /**
@@ -122,7 +151,7 @@ final readonly class ChangedPaths
      * @throws ChangeNotRead
      * @throws RepositoryAttributesRefused
      */
-    private function mergeBases(string $repository, string $main, string $head): array
+    public function mergeBases(string $repository, string $main, string $head): array
     {
         $process = $this->run($repository, ['merge-base', '--all', $main, $head]);
         $output = trim($process->getOutput());

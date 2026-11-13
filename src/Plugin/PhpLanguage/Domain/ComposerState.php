@@ -1,0 +1,204 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Plugin\PhpLanguage\Domain;
+
+use Intakt\Plugin\Language\Contract\DependencyFiles;
+use JsonException;
+
+// The manifest and the lock file at one revision; a file the revision lacks reads as empty.
+final readonly class ComposerState
+{
+    public const string MANIFEST = 'composer.json';
+
+    public const string LOCK = 'composer.lock';
+
+    public const string REQUIRE = 'require';
+
+    public const string REQUIRE_DEV = 'require-dev';
+
+    // Composer writes these on every update or derives them from the requirements and packages the package rules judge; every other key of the lock file is a setting.
+    private const array LOCK_RECORDS = ['_readme', 'content-hash', 'packages', 'packages-dev', 'stability-flags', 'platform', 'platform-dev', 'plugin-api-version'];
+
+    /**
+     * @param array<string, array{section: string, constraint: string}> $requirements
+     * @param array<array-key, mixed>                                    $manifestSettings
+     * @param array<array-key, mixed>                                    $lockSettings
+     * @param array<string, mixed>                                       $stabilityFlags
+     * @param array<string, LockedPackage>                               $locked
+     */
+    private function __construct(
+        public array $requirements,
+        public array $manifestSettings,
+        public array $lockSettings,
+        public array $stabilityFlags,
+        public array $locked,
+    ) {
+    }
+
+    /**
+     * @throws ComposerFileUnreadable
+     */
+    public static function read(DependencyFiles $files): self
+    {
+        $manifest = self::decoded(self::MANIFEST, $files->of(self::MANIFEST));
+        $lock = self::decoded(self::LOCK, $files->of(self::LOCK));
+
+        return new self(
+            self::once(self::MANIFEST, self::requirements($manifest, self::REQUIRE), self::requirements($manifest, self::REQUIRE_DEV)),
+            array_diff_key($manifest, array_flip([self::REQUIRE, self::REQUIRE_DEV])),
+            array_diff_key($lock, array_flip(self::LOCK_RECORDS)),
+            self::stabilityFlags($lock),
+            self::once(self::LOCK, self::lockedPackages($lock, 'packages', false), self::lockedPackages($lock, 'packages-dev', true)),
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function packagesAddedSince(self $before): array
+    {
+        return array_map(strval(...), array_keys(array_diff_key($this->requirements, $before->requirements) + array_diff_key($this->locked, $before->locked)));
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     *
+     * @throws ComposerFileUnreadable
+     */
+    private static function decoded(string $path, ?string $contents): array
+    {
+        if (null === $contents) {
+            return [];
+        }
+
+        try {
+            $decoded = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw ComposerFileUnreadable::because($path, $invalid->getMessage());
+        }
+
+        if (!is_array($decoded) || ([] !== $decoded && array_is_list($decoded))) {
+            throw ComposerFileUnreadable::because($path, 'it holds no JSON object');
+        }
+
+        return $decoded;
+    }
+
+    /**
+     * @param array<array-key, mixed> $manifest
+     *
+     * @return array<string, array{section: string, constraint: string}>
+     *
+     * @throws ComposerFileUnreadable
+     */
+    private static function requirements(array $manifest, string $section): array
+    {
+        $requirements = [];
+        foreach (self::map($manifest, $section, self::MANIFEST) as $name => $constraint) {
+            if (!is_string($constraint)) {
+                throw ComposerFileUnreadable::because(self::MANIFEST, sprintf('the constraint of %s in %s is no string', $name, $section));
+            }
+
+            $requirements[strtolower($name)] = ['section' => $section, 'constraint' => $constraint];
+        }
+
+        return $requirements;
+    }
+
+    /**
+     * @template T
+     *
+     * @param array<string, T> $main
+     * @param array<string, T> $development
+     *
+     * @return array<string, T>
+     *
+     * @throws ComposerFileUnreadable
+     */
+    private static function once(string $path, array $main, array $development): array
+    {
+        // A package in both groups would have one entry hide the other.
+        if ([] !== array_intersect_key($main, $development)) {
+            throw ComposerFileUnreadable::because($path, 'a package is in both the main and the development group');
+        }
+
+        return $main + $development;
+    }
+
+    /**
+     * @param array<array-key, mixed> $lock
+     *
+     * @return array<string, mixed>
+     *
+     * @throws ComposerFileUnreadable
+     */
+    private static function stabilityFlags(array $lock): array
+    {
+        $flags = [];
+        foreach (self::map($lock, 'stability-flags', self::LOCK) as $name => $flag) {
+            $flags[strtolower($name)] = $flag;
+        }
+
+        return $flags;
+    }
+
+    /**
+     * @param array<array-key, mixed> $lock
+     *
+     * @return array<string, LockedPackage>
+     *
+     * @throws ComposerFileUnreadable
+     */
+    private static function lockedPackages(array $lock, string $group, bool $dev): array
+    {
+        $entries = $lock[$group] ?? [];
+
+        if (!is_array($entries) || !array_is_list($entries)) {
+            throw ComposerFileUnreadable::because(self::LOCK, sprintf('%s is no list', $group));
+        }
+
+        $packages = [];
+        foreach ($entries as $entry) {
+            $package = LockedPackage::fromLockEntry($entry, $dev);
+            $packages[$package->name] = $package;
+        }
+
+        // A name locked twice would let one entry hide the other.
+        if (count($packages) !== count($entries)) {
+            throw ComposerFileUnreadable::because(self::LOCK, sprintf('%s locks a package twice', $group));
+        }
+
+        return $packages;
+    }
+
+    /**
+     * @param array<array-key, mixed> $file
+     *
+     * @return array<string, mixed>
+     *
+     * @throws ComposerFileUnreadable
+     */
+    private static function map(array $file, string $key, string $path): array
+    {
+        $map = $file[$key] ?? [];
+
+        // Composer writes an empty map as [], which decodes as an empty list.
+        if (!is_array($map) || ([] !== $map && array_is_list($map))) {
+            throw ComposerFileUnreadable::because($path, sprintf('%s is no map of package names', $key));
+        }
+
+        $named = [];
+        foreach ($map as $name => $value) {
+            $named[(string) $name] = $value;
+        }
+
+        // Composer reads names in any case, so two that differ only in case would let one hide the other.
+        if (count(array_unique(array_map(strtolower(...), array_keys($named)))) !== count($named)) {
+            throw ComposerFileUnreadable::because($path, sprintf('%s names a package twice', $key));
+        }
+
+        return $named;
+    }
+}

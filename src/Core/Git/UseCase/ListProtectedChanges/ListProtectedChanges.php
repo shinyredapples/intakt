@@ -13,9 +13,6 @@ use NoDiscard;
 
 final readonly class ListProtectedChanges
 {
-    // A full object name of either format, because a ref name could move while the check runs, and one that starts with a dash would be an option.
-    private const string COMMIT_NAME = '/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/';
-
     public function __construct(
         private ChangedPaths $changed,
     ) {
@@ -27,12 +24,10 @@ final readonly class ListProtectedChanges
     #[NoDiscard]
     public function of(string $repository, string $head, ProtectedPaths $protected): ProtectedChanges
     {
-        if (1 !== preg_match(self::COMMIT_NAME, $head)) {
-            throw new InvalidArgumentException(sprintf('"%s" is not a full commit name', $head));
-        }
+        $this->changed->mustBeFullCommitName($head);
 
         try {
-            $repository = $this->existing($repository);
+            $repository = $this->changed->repositoryAt($repository);
             $main = $this->changed->mainOf($repository);
             $this->changed->mustBeCommit($repository, $head);
             $this->changed->mustBeComplete($repository);
@@ -47,20 +42,5 @@ final readonly class ListProtectedChanges
         }
 
         return ProtectedChanges::touching($protected->touchedBy($changes));
-    }
-
-    /**
-     * @throws ChangeNotRead
-     */
-    private function existing(string $repository): string
-    {
-        // Because git runs inside the repository, where a relative --git-dir would point below the repository itself, and from a missing folder git would look upward into another one.
-        $path = realpath($repository);
-
-        if (false === $path || !is_dir($path)) {
-            throw ChangeNotRead::because(sprintf('%s is no folder', $repository));
-        }
-
-        return $path;
     }
 }

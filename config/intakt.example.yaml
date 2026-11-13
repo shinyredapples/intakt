@@ -13,6 +13,12 @@ budget:
     prices:
         claude-opus-5-5: { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 }
         claude-haiku-5-5: { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 }
+# Optional: which new Composer packages are routine for every project (`php bin/console intakt:dependencies:decide alpha <head>`).
+# A new package from a trusted vendor, of one of these types, at its upstream tag, without binaries or autoload files, is routine;
+# anything else waits for the owner. Each list replaces its default; these are the defaults.
+composer_policy:
+    trusted_vendors: [symfony, doctrine]
+    package_types: [library, symfony-bundle, symfony-ai-platform, symfony-ai-store, symfony-ai-message-store, symfony-ai-tool, symfony-ai-mate]
 # Optional: the model and reasoning effort (minimal, low, medium, high or xhigh) every call on a Codex subscription login uses.
 # A tier on provider codex must name this model: { provider: codex, model: gpt-5.3-codex }.
 codex: { model: gpt-5.3-codex, effort: high }
