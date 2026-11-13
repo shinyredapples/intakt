@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelNotConfigured;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;

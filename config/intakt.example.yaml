@@ -39,6 +39,11 @@ projects:
                 - paths: [config/**, src/**/Security/**]
                   reviewers:
                       - { role: security, tier: strong, provider: anthropic, prompt: Look for ways the change weakens a check., budget: 8 }
+        # An optional build section routes the tier a build starts on: tier (strong, standard or light; standard by default) for an ordinary build;
+        # a build touching a sensitive path starts strong whatever its label says, else a model:<tier> label sets the tier.
+        build:
+            tier: standard
+            sensitive_paths: [config/**, src/**/Security/**]
         # An optional watch section makes the Scheduler tick read the project's open pull requests and start a round for each head whose CI is green;
         # the task text is given to every round until the pull request text is read from the forge.
         # `repository` is the local clone a round reads from; `github` is the same project on GitHub, where its open pull requests and their CI are read.
