@@ -14,6 +14,16 @@ final readonly class RepositoryAddress
     ) {
     }
 
+    public function owner(): string
+    {
+        return $this->owner;
+    }
+
+    public function name(): string
+    {
+        return $this->repository;
+    }
+
     public function path(): string
     {
         return '/repos/'.rawurlencode($this->owner).'/'.rawurlencode($this->repository);
