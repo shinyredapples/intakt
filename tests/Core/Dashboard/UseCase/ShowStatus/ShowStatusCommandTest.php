@@ -22,7 +22,7 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\Console\Exception\InvalidOptionException;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Transport\TransportInterface;
+use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 
 // Through the kernel and the Doctrine ledger, because the evidence of the status is this command on a running install.
 #[Group('persistence')]
@@ -35,17 +35,34 @@ final class ShowStatusCommandTest extends KernelTestCase
 {
     private const string SCHEMA = __DIR__.'/../../../../../docs/user/status.schema.json';
 
+    private const string TRANSPORT_DSN = 'MESSENGER_TRANSPORT_DSN';
+
+    private string $configuredDsn;
     private CommandTester $command;
 
     protected function setUp(): void
     {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
+        $this->configuredDsn = is_string($configured) ? $configured : '';
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         EmptyDatabase::in(self::getContainer());
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $queue = self::getContainer()->get('messenger.transport.async');
+        self::assertInstanceOf(DoctrineTransport::class, $queue);
+        $queue->setup();
         $kernel = self::$kernel;
         self::assertNotNull($kernel);
         $this->command = new CommandTester(new Application($kernel)->find('intakt:status'));
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+
+        parent::tearDown();
     }
 
     public function testTheJsonStatusValidatesAgainstTheDocumentedSchema(): void
@@ -59,14 +76,14 @@ final class ShowStatusCommandTest extends KernelTestCase
     public function testAStoppedConsumerStillYieldsAStatusWithTheMessageWaiting(): void
     {
         $queue = self::getContainer()->get('messenger.transport.async');
-        self::assertInstanceOf(TransportInterface::class, $queue);
+        self::assertInstanceOf(DoctrineTransport::class, $queue);
         $queue->send(new Envelope(new stdClass()));
 
         $this->command->execute(['--format' => 'json']);
 
         $this->command->assertCommandIsSuccessful();
         self::assertSame([], $this->schemaErrorsOf($this->command->getDisplay()));
-        self::assertStringContainsString('"queues":[{"name":"async"', $this->command->getDisplay());
+        self::assertStringContainsString('"queues":[{"name":"async","messages":1}', $this->command->getDisplay());
     }
 
     public function testJsonIsTheFormatWhenNoneIsGiven(): void
