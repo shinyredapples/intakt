@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\CodexAccountFailure;
 use Intakt\Core\Ai\Infrastructure\CodexEffort;
 use Intakt\Core\Ai\Infrastructure\CodexLogin;
 use Intakt\Core\Ai\Infrastructure\CodexLogins;
@@ -63,6 +64,8 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\TierRoutedPlatform;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
+use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
+use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\CodexLoginTest;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
@@ -94,6 +97,7 @@ use Throwable;
 #[CoversClass(CodexPlatformFactory::class)]
 #[CoversClass(CodexMessageBagNormalizer::class)]
 #[CoversClass(SymfonyAiVendor::class)]
+#[UsesClass(CodexAccountFailure::class)]
 #[UsesClass(IsolatedCodexCli::class)]
 #[UsesClass(CodexLogins::class)]
 #[UsesClass(CodexLogin::class)]
@@ -317,6 +321,69 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame(RuntimeException::class, $failure::class);
         self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
         self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+    }
+
+    public function testAUsageLimitOfThePlanCoolsTheAccountDownInsteadOfFailingTheReview(): void
+    {
+        $this->replaying('usage-limit', 1);
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(ProviderRateLimited::class, $failure::class);
+        self::assertTrue($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
+        self::assertFalse($this->cooldowns->isRejected(new Account(Provider::Codex, 'team')));
+    }
+
+    public function testAUsageLimitFromACliThatExitsZeroStillCoolsTheAccountDown(): void
+    {
+        $this->replaying('usage-limit', 0);
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(ProviderRateLimited::class, $failure::class);
+        self::assertTrue($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
+    }
+
+    public function testAModelNotAvailableForThePlanIsAnAccountErrorInsteadOfAFailedReview(): void
+    {
+        $this->replaying('model-not-in-plan', 1);
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(ProviderRejectedTheKey::class, $failure::class);
+        self::assertTrue($this->cooldowns->isRejected(new Account(Provider::Codex, 'team')));
+    }
+
+    public function testALostLoginIsAnAccountErrorInsteadOfAFailedReview(): void
+    {
+        $this->replaying('login-lost', 1);
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(ProviderRejectedTheKey::class, $failure::class);
+        self::assertTrue($this->cooldowns->isRejected(new Account(Provider::Codex, 'team')));
+    }
+
+    public function testAnAccountErrorCountsItsCallOnceAsUnsettledWithoutUsage(): void
+    {
+        $this->replaying('login-lost', 1);
+
+        $this->failureOfReview();
+
+        self::assertSame([LedgerEventKind::UsageRecorded, LedgerEventKind::AccountCooledDown, LedgerEventKind::UsageRecorded], $this->ledger->kinds());
+        self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+        self::assertSame([], $this->ledger->payloads()[2]['usages']);
+    }
+
+    public function testAReviewerTextThatRepeatsTheLostLoginMessageIsNoAccountError(): void
+    {
+        $this->replaying('login-text', 1);
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(RuntimeException::class, $failure::class);
+        self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
+        self::assertFalse($this->cooldowns->isRejected(new Account(Provider::Codex, 'team')));
     }
 
     public function testAStreamThatEndsBeforeItsTurnCompletedIsAFailedReview(): void
