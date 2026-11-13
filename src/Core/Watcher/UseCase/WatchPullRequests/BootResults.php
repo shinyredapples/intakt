@@ -62,6 +62,30 @@ final readonly class BootResults
         }
     }
 
+    // Turned into an outcome because a boot that throws would stop the review it only gates.
+    private function boot(BootAt $at): BootOutcome
+    {
+        try {
+            $result = $this->queries->dispatch(new BootHarness($at))->last(HandledStamp::class)?->getResult();
+        } catch (Throwable $failure) {
+            return BootOutcome::crashed($failure::class.': '.$failure->getMessage());
+        }
+
+        return $result instanceof BootOutcome ? $result : BootOutcome::crashed('The boot query did not answer an outcome.');
+    }
+
+    // Scrubbed first, because a reason may carry bytes of a tool's output that are not UTF-8, and the row and the ledger line must still be written; redacted as a log line is, because the reason is stored and shown.
+    private function safe(BootOutcome $outcome): BootOutcome
+    {
+        $reason = $this->redactor->redact(mb_scrub($outcome->reason, 'UTF-8'));
+
+        return match ($outcome->state) {
+            BootState::Booted => $outcome,
+            BootState::Failed => BootOutcome::failed($reason),
+            BootState::Crashed => BootOutcome::crashed($reason),
+        };
+    }
+
     // A crash is the boot step's, not main's, so it is never kept: the next ask boots again instead of trusting a broken tool for good.
     private function remember(BootKey $key, BootOutcome $outcome): void
     {
@@ -86,29 +110,5 @@ final readonly class BootResults
         } catch (Throwable $unrecorded) {
             $this->logger->error("Main's computed boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
         }
-    }
-
-    // Turned into an outcome because a boot that throws would stop the review it only gates.
-    private function boot(BootAt $at): BootOutcome
-    {
-        try {
-            $result = $this->queries->dispatch(new BootHarness($at))->last(HandledStamp::class)?->getResult();
-        } catch (Throwable $failure) {
-            return BootOutcome::crashed($failure::class.': '.$failure->getMessage());
-        }
-
-        return $result instanceof BootOutcome ? $result : BootOutcome::crashed('The boot query did not answer an outcome.');
-    }
-
-    // Scrubbed first, because a reason may carry bytes of a tool's output that are not UTF-8, and the row and the ledger line must still be written; redacted as a log line is, because the reason is stored and shown.
-    private function safe(BootOutcome $outcome): BootOutcome
-    {
-        $reason = $this->redactor->redact(mb_scrub($outcome->reason, 'UTF-8'));
-
-        return match ($outcome->state) {
-            BootState::Booted => $outcome,
-            BootState::Failed => BootOutcome::failed($reason),
-            BootState::Crashed => BootOutcome::crashed($reason),
-        };
     }
 }
