@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Domain;
 
+use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Lane;
@@ -38,8 +39,11 @@ final class WhoIsWorkingTest extends TestCase
         self::assertEquals([new Lane('r1-a', 'correctness', 'standard', 'alpha', 'feat/a', 2, $this->since())], $working->lanes());
     }
 
+    /**
+     * @param Closure(ReviewerOutcome): ReviewerOutcome $finish
+     */
     #[DataProvider('finished')]
-    public function testAReviewerThatIsNoLongerRunningIsNoLane(callable $finish): void
+    public function testAReviewerThatIsNoLongerRunningIsNoLane(Closure $finish): void
     {
         $working = new WhoIsWorking([$this->review('feat/a', 1, [$finish($this->running('r1-a'))])]);
 
@@ -47,7 +51,7 @@ final class WhoIsWorkingTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{callable}>
+     * @return iterable<string, array{Closure(ReviewerOutcome): ReviewerOutcome}>
      */
     public static function finished(): iterable
     {
@@ -68,7 +72,7 @@ final class WhoIsWorkingTest extends TestCase
     {
         $judged = $this->round('feat/a', 1, [$this->running('r1-a')])->judgedWith([], $this->since());
 
-        self::assertSame(0, (new WhoIsWorking([new Review([$judged])]))->working());
+        self::assertSame(0, new WhoIsWorking([new Review([$judged])])->working());
     }
 
     public function testOnlyTheLatestRoundOfAReviewCounts(): void
@@ -117,7 +121,7 @@ final class WhoIsWorkingTest extends TestCase
      */
     private function round(string $change, int $number, array $outcomes): ReviewedRound
     {
-        return (new ReviewedRound(new RoundStart('r'.$number.$change, 'alpha', 2), new RoundPlace($change, $number), $this->since(), null))->withOutcomes($outcomes);
+        return new ReviewedRound(new RoundStart('r'.$number.$change, 'alpha', 2), new RoundPlace($change, $number), $this->since(), null)->withOutcomes($outcomes);
     }
 
     private function running(string $id): ReviewerOutcome
