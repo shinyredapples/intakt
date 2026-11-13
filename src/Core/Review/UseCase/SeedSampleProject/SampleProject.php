@@ -119,21 +119,6 @@ final readonly class SampleProject
     }
 
     /**
-     * @param array<string, array{provider: string, model: string}> $models
-     *
-     * @return array<string, array<string, int|float>>
-     */
-    private function prices(array $models): array
-    {
-        $prices = [];
-        foreach ($models as $tier) {
-            $prices[$tier['model']] = self::PRICES[$tier['model']] ?? throw new LogicException(sprintf('The sample project has no price for %s.', $tier['model']));
-        }
-
-        return $prices;
-    }
-
-    /**
      * @param non-empty-list<Provider> $providers
      *
      * @return array<string, Provider>
@@ -211,5 +196,20 @@ final readonly class SampleProject
                 'budget' => $reviewer->budget,
             ], $panel->reviewers),
         ];
+    }
+
+    /**
+     * @param array<string, array{provider: string, model: string}> $models
+     *
+     * @return array<string, array<string, int|float>>
+     */
+    private function prices(array $models): array
+    {
+        $prices = [];
+        foreach ($models as $tier) {
+            $prices[$tier['model']] = self::PRICES[$tier['model']] ?? throw new LogicException(sprintf('The sample project has no price for %s.', $tier['model']));
+        }
+
+        return $prices;
     }
 }

@@ -85,6 +85,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         yield 'anthropic and the router' => [[Provider::Anthropic, Provider::OpenAiCompatible]];
         yield 'anthropic and openai' => [[Provider::Anthropic, Provider::OpenAi]];
         yield 'openai and the router' => [[Provider::OpenAi, Provider::OpenAiCompatible]];
+        yield 'anthropic, openai and the router' => [[Provider::Anthropic, Provider::OpenAi, Provider::OpenAiCompatible]];
     }
 
     /**
