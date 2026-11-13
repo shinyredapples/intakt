@@ -288,29 +288,28 @@ final class PublishVerdictTest extends KernelTestCase
     public function testAPublicationOfAChangeWhoseLockIsHeldIsRefusedForMessengerToBringBack(): void
     {
         $roundId = $this->judgedRound(self::PULL, []);
-        $held = new ChangePublications($this->locks)->lockOf('alpha', self::PULL);
-        $held->acquire();
+        $refused = null;
 
-        try {
-            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
-            self::fail('A busy change must refuse the publication.');
-        } catch (PublicationBusy $busy) {
-            self::assertTrue($busy->forceRetry());
-        } finally {
-            $held->release();
-        }
+        new ChangePublications($this->locks)->whileHeld('alpha', self::PULL, function () use ($roundId, &$refused): void {
+            try {
+                $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+            } catch (PublicationBusy $busy) {
+                $refused = $busy;
+            }
+        });
 
+        self::assertInstanceOf(PublicationBusy::class, $refused, 'A busy change must refuse the publication.');
+        self::assertTrue($refused->forceRetry());
         self::assertSame([], $this->github->writes);
     }
 
     public function testAPublicationOfAnotherChangeIsNotHeldUpByAChangeBeingPublished(): void
     {
         $roundId = $this->judgedRound(self::PULL, []);
-        $other = new ChangePublications($this->locks)->lockOf('alpha', 'https://github.com/acme/widgets/pull/8');
-        $other->acquire();
 
-        $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
-        $other->release();
+        new ChangePublications($this->locks)->whileHeld('alpha', 'https://github.com/acme/widgets/pull/8', function () use ($roundId): void {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+        });
 
         self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
     }
