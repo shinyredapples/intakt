@@ -61,7 +61,7 @@ final class StoredFindingNormalizerTest extends TestCase
         $normalized = $serializer->normalize($finding, 'json', $context);
         self::assertIsArray($normalized);
 
-        /** @var array<string, mixed> $normalized */
+        /* @var array<string, mixed> $normalized */
         return $normalized;
     }
 }

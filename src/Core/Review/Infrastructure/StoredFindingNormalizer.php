@@ -100,7 +100,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
         $left = $context[AbstractNormalizer::IGNORED_ATTRIBUTES] ?? [];
 
         return (!is_array($only) || in_array(self::MERGED, $only, true) || array_key_exists(self::MERGED, $only))
-            && !(is_array($left) && in_array(self::MERGED, $left, true));
+            && (!is_array($left) || !in_array(self::MERGED, $left, true));
     }
 
     // A stored row is read back as data, so merged ids that are not a list of strings fail instead of reading as none.
@@ -113,7 +113,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
             throw new UnexpectedValueException('The merged ids of a stored finding must be a list of strings.');
         }
 
-        /** @var list<string> $merged */
+        /* @var list<string> $merged */
         return $merged;
     }
 }
