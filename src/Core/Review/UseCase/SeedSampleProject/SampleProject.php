@@ -42,6 +42,18 @@ final readonly class SampleProject
     // Another maker's model for the second reviewer when the router carries the whole panel, so the panel still has two makers.
     private const string ROUTER_SECOND_MAKER = 'openai/gpt-oss-120b:novita';
 
+    // List prices read on 2026-11-13 in US dollars per million tokens, so the demo's first review shows a cost; the owner can change them in the seeded file.
+    private const array PRICES = [
+        'claude-opus-5-5' => ['input' => 5, 'output' => 25, 'cache_read' => 0.5, 'cache_write' => 6.25],
+        'claude-sonnet-5-5' => ['input' => 3, 'output' => 15, 'cache_read' => 0.3, 'cache_write' => 3.75],
+        'claude-haiku-5-5' => ['input' => 1, 'output' => 5, 'cache_read' => 0.1, 'cache_write' => 1.25],
+        'gpt-5' => ['input' => 1.25, 'output' => 10, 'cache_read' => 0.125],
+        'gpt-5-mini' => ['input' => 0.25, 'output' => 2, 'cache_read' => 0.025],
+        'gpt-5-nano' => ['input' => 0.05, 'output' => 0.4, 'cache_read' => 0.005],
+        'moonshotai/Kimi-K3:deepinfra' => ['input' => 0.6, 'output' => 2.5],
+        self::ROUTER_SECOND_MAKER => ['input' => 0.15, 'output' => 0.6],
+    ];
+
     public function __construct(
         private EnabledAccounts $accounts,
         #[Autowire(env: 'default::OPENAI_COMPATIBLE_BASE_URL')]
@@ -98,10 +110,12 @@ final readonly class SampleProject
     private function configuration(array $providers): string
     {
         $tiers = $this->tierProviders($providers);
-        $project = ['tiers' => $this->models($tiers), 'review' => $this->review($this->panel($tiers))];
+        $models = $this->models($tiers);
+        $project = ['tiers' => $models, 'review' => $this->review($this->panel($tiers))];
 
         return '# Written once by intakt:sample:seed; edit it and start again to change the sample project.'.PHP_EOL
-            .Yaml::dump(['projects' => [self::NAME => $project]], 6, 4);
+            .'# The prices are list prices read on 2026-11-13, in US dollars per million tokens.'.PHP_EOL
+            .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['prices' => $this->prices($models)]], 6, 4);
     }
 
     /**
@@ -182,5 +196,20 @@ final readonly class SampleProject
                 'budget' => $reviewer->budget,
             ], $panel->reviewers),
         ];
+    }
+
+    /**
+     * @param array<string, array{provider: string, model: string}> $models
+     *
+     * @return array<string, array<string, int|float>>
+     */
+    private function prices(array $models): array
+    {
+        $prices = [];
+        foreach ($models as $tier) {
+            $prices[$tier['model']] = self::PRICES[$tier['model']] ?? throw new LogicException(sprintf('The sample project has no price for %s.', $tier['model']));
+        }
+
+        return $prices;
     }
 }
