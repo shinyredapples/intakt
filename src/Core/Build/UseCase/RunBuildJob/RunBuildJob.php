@@ -49,7 +49,7 @@ final readonly class RunBuildJob
 
     private const float CPUS = 2.0;
 
-    // Fixed until the allowance is sized per task (plan task T60); the CLI ends its session after this many turns.
+    // Fixed, because sizing the limits for each task is plan task T60 (#1710); the CLI ends its session after this many turns.
     private const int MAX_TURNS = 100;
 
     // The script cuts a session at this age, and keeps what it committed.

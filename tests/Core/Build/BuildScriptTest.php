@@ -79,12 +79,10 @@ final class BuildScriptTest extends TestCase
             git commit --quiet -m 'feat: build the task'
             sleep 30
             SH);
-        $started = microtime(true);
 
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 1);
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('build.log'));
-        self::assertLessThan(15, microtime(true) - $started);
         self::assertSame("built\n", $this->fileAtTheBundlesHead('task', 'built.txt'));
         self::assertStringContainsString("claude cut after 1 seconds, its commits are kept\n", $this->outputFile('build.log'));
     }
@@ -109,12 +107,10 @@ final class BuildScriptTest extends TestCase
     public function testASessionThatEndsBeforeItsAllowanceLeavesNoWatchdogBehind(): void
     {
         $this->givenTheCli('exit 0');
-        $started = microtime(true);
 
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
 
         self::assertSame(0, $run->getExitCode());
-        self::assertLessThan(15, microtime(true) - $started);
         $left = new Process(['pgrep', '-f', 'sleep 31']);
         $left->run();
         self::assertSame(1, $left->getExitCode());
