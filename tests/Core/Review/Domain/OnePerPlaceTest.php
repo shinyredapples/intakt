@@ -27,14 +27,14 @@ final class OnePerPlaceTest extends TestCase
 
     public function testTheMergedEntryKeepsTheHighestPriority(): void
     {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7, Severity::P2), $this->finding('F2', 'src/A.php', 7, Severity::P1)], ['F1', 'F2']);
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7)->withSeverity(Severity::P1)], ['F1', 'F2']);
 
         self::assertSame(Severity::P1, $act[0]->severity);
     }
 
     public function testTheMergedEntryKeepsTheTextOfTheFirstReviewer(): void
     {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7, text: 'First.'), $this->finding('F2', 'src/A.php', 7, Severity::P1, 'Second.')], ['F1', 'F2']);
+        $act = new OnePerPlace()->actList([$this->atLineSeven('F1', 'First.'), $this->atLineSeven('F2', 'Second.')->withSeverity(Severity::P1)], ['F1', 'F2']);
 
         self::assertSame('First.', $act[0]->text);
     }
@@ -50,7 +50,7 @@ final class OnePerPlaceTest extends TestCase
 
     public function testFindingsAtOnePlaceThatTheJudgeMarksDifferentlyStaySeparate(): void
     {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7, Severity::P1)], ['F1']);
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7)->withSeverity(Severity::P1)], ['F1']);
 
         self::assertCount(1, $act);
         self::assertSame('F1', $act[0]->id);
@@ -97,8 +97,13 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame(['F3'], $act[0]->merged);
     }
 
-    private function finding(string $id, ?string $file, ?int $line, Severity $severity = Severity::P2, string $text = 'Broken.'): Finding
+    private function finding(string $id, ?string $file, ?int $line): Finding
     {
-        return new Finding($id, $severity, $file, $line, null, $text, FixableBy::Builder, false, null, null);
+        return new Finding($id, Severity::P2, $file, $line, null, 'Broken.', FixableBy::Builder, false, null, null);
+    }
+
+    private function atLineSeven(string $id, string $text): Finding
+    {
+        return new Finding($id, Severity::P2, 'src/A.php', 7, null, $text, FixableBy::Builder, false, null, null);
     }
 }

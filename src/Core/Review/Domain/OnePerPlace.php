@@ -12,9 +12,10 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class OnePerPlace
 {
+    // The reported findings come in panel order, because the first reviewer's text is the one kept; only act ids count, so a finding the judge marked otherwise never joins an act entry.
     /**
-     * @param list<Finding> $reported in panel order, because the first reviewer's text is the one kept
-     * @param list<string>  $actIds   the findings the judge marked act; any other mark never merges into an act entry
+     * @param list<Finding> $reported
+     * @param list<string>  $actIds
      *
      * @return list<Finding>
      */
@@ -37,7 +38,7 @@ final readonly class OnePerPlace
             }
         }
 
-        return $entries;
+        return array_values($entries);
     }
 
     // Keyed by file, then line, so no separator inside a path can make two places one.

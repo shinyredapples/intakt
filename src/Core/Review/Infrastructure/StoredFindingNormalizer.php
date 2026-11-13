@@ -29,7 +29,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
     /**
      * @param array<string, mixed> $context
      *
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     public function normalize(mixed $data, ?string $format = null, array $context = []): array
     {
@@ -60,29 +60,26 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
     /**
      * @param array<string, mixed> $context
      */
-    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): Finding
+    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): mixed
     {
         if (!is_array($data)) {
-            throw new UnexpectedValueException(sprintf('A stored "%s" must be an object.', Finding::class));
+            throw new LogicException(sprintf('Only a "%s" decoded as an array is denormalized here.', Finding::class));
         }
 
-        // A row written before merged ids existed has no key and reads with none.
+        // Read as none when the key is missing, because every row stored before merged ids existed lacks it.
         $merged = array_key_exists(self::MERGED, $data) ? $this->idsIn($data[self::MERGED]) : [];
         unset($data[self::MERGED]);
-        $finding = $this->denormalizer->denormalize($data, Finding::class, $format, [...$context, self::INNER => true]);
-        if (!$finding instanceof Finding) {
-            throw new UnexpectedValueException(sprintf('A stored finding did not read as a "%s".', Finding::class));
-        }
 
-        return $finding->withMerged($merged);
+        return $this->denormalizer->denormalize($data, Finding::class, $format, [...$context, self::INNER => true])->withMerged($merged);
     }
 
+    // Arrays only, because the reviewer's answer is decoded into objects and must stay refused when it names merged ids.
     /**
      * @param array<string, mixed> $context
      */
     public function supportsDenormalization(mixed $data, string $type, ?string $format = null, array $context = []): bool
     {
-        return Finding::class === $type && !isset($context[self::INNER]);
+        return Finding::class === $type && is_array($data) && !isset($context[self::INNER]);
     }
 
     public function getSupportedTypes(?string $format): array
@@ -90,7 +87,7 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
         return [Finding::class => false];
     }
 
-    // A caller that names the fields it writes (the review command's act list rows) or leaves some out gets merged ids only when it asks for them, as the inner normalizer does for every other field.
+    // Honors the attributes and ignored attributes of the context, because the review command's act list rows name the fields they write.
     /**
      * @param array<string, mixed> $context
      */
@@ -109,11 +106,24 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
      */
     private function idsIn(mixed $merged): array
     {
-        if (!is_array($merged) || !array_is_list($merged) || !array_all($merged, static fn (mixed $id): bool => is_string($id))) {
-            throw new UnexpectedValueException('The merged ids of a stored finding must be a list of strings.');
+        if (!is_array($merged) || !array_is_list($merged)) {
+            throw $this->notIds();
         }
 
-        /* @var list<string> $merged */
-        return $merged;
+        $ids = [];
+        foreach ($merged as $id) {
+            if (!is_string($id)) {
+                throw $this->notIds();
+            }
+
+            $ids[] = $id;
+        }
+
+        return $ids;
+    }
+
+    private function notIds(): UnexpectedValueException
+    {
+        return new UnexpectedValueException('The merged ids of a stored finding must be a list of strings.');
     }
 }

@@ -123,7 +123,6 @@ final class StoredJsonTest extends KernelTestCase
     {
         $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', 'json');
 
-        self::assertIsArray($read);
         self::assertInstanceOf(Finding::class, $read[0]);
         self::assertSame([], $read[0]->merged);
     }
