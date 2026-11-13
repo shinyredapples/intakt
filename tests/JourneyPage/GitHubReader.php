@@ -106,7 +106,7 @@ final readonly class GitHubReader
             throw $this->malformed(JourneyResource::Issues);
         }
 
-        return new Issue($number, $closed, 'not_planned' === $reason);
+        return new Issue($number, $closed, in_array($reason,['not_planned', 'duplicate'], true));
     }
 
     /**

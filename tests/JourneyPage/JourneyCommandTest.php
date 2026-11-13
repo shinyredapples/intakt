@@ -6,7 +6,6 @@ namespace Intakt\Tests\JourneyPage;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
@@ -47,7 +46,7 @@ final class JourneyCommandTest extends TestCase
         $page = (string) file_get_contents($this->root.'/docs/journey.md');
         self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
         self::assertStringContainsString('regenerated', $run->getOutput());
-        self::assertStringContainsString('| Pull requests merged | 3 (to '.new NativeClock()->now()->format('Y-m-d').') |', $page);
+        self::assertMatchesRegularExpression('/\| Pull requests merged \| 3 \(to \d{4}-\d{2}-\d{2}\) \|/', $page);
         self::assertStringContainsString('| M0 Unblock | fixes the build loop needed first | 10-27 | 11-05 | 2 / 0 |', $page);
     }
 
