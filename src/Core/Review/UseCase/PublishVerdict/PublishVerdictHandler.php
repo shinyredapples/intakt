@@ -25,6 +25,7 @@ final readonly class PublishVerdictHandler
         private ProjectModes $modes,
         private VerdictForTheLoop $verdicts,
         private ForgeWrites $forge,
+        private ChangePublications $publications,
         private LoggerInterface $logger,
     ) {
     }
@@ -36,33 +37,40 @@ final readonly class PublishVerdictHandler
             return;
         }
 
+        $this->publications->whileHeld($round->project(), $round->change(), fn () => $this->publishLatestStateOf($command->roundId));
+    }
+
+    // Read under the lock, because a judging or a stale mark committed while another publication of the change held it is only seen by a read after that one's write.
+    private function publishLatestStateOf(string $roundId): void
+    {
+        $round = $this->rounds->stored($roundId);
+
         // Dropped, because the later round's status is the one its commit stands at, and an older publication arriving after it (a retry, a stale mark's withdrawal) would replace it.
         if ($this->rounds->judgedAfter($round)) {
             return;
         }
 
+        $published = $round->hasStaleVerdicts();
+
         try {
             $this->publish($round, $this->verdicts->of($round));
-            $this->withdrawIfMadeStaleMeanwhile($round);
         } catch (ReviewTextHoldsSecret) {
             $this->publish($round, $this->verdicts->unpublishable($round));
         } catch (ChangeNotFound) {
             // Logged and dropped, because a round of a local branch has no pull request to publish on, and retrying cannot give it one.
-            $this->logger->warning('The round {round} of {project} names no pull request the forge knows, so its verdict is not published.', ['round' => $command->roundId, 'project' => $round->project()]);
-        }
-    }
+            $this->logger->warning('The round {round} of {project} names no pull request the forge knows, so its verdict is not published.', ['round' => $roundId, 'project' => $round->project()]);
 
-    // Read again after the write, because a failed boot may have marked the round while its approval was on the way: either this read sees the mark and withdraws it, or the mark came after the write, and the publication the mark queued withdraws it later.
-    private function withdrawIfMadeStaleMeanwhile(ReviewRound $published): void
-    {
-        if ($published->hasStaleVerdicts()) {
             return;
         }
 
-        $current = $this->rounds->stored($published->id()->toRfc4122());
+        $this->publishAgainIfMarkedDuringTheWrite($roundId, $published);
+    }
 
-        if ($current->hasStaleVerdicts()) {
-            $this->publish($current, $this->verdicts->of($current));
+    // Read again after the write until nothing changed, because a failed boot marks the round without the lock, so its mark may commit while this round's approval is on the way.
+    private function publishAgainIfMarkedDuringTheWrite(string $roundId, bool $publishedStale): void
+    {
+        if ($this->rounds->stored($roundId)->hasStaleVerdicts() !== $publishedStale) {
+            $this->publishLatestStateOf($roundId);
         }
     }
 
