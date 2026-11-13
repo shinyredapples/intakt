@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -26,6 +27,7 @@ final readonly class ProjectStatuses
      * @param array<string, mixed> $watched
      */
     public function __construct(
+        private Ledger $ledger,
         private LedgerReviewPages $reviewPages,
         private LedgerFailingHeads $failingHeads,
         private LedgerWaitingHeads $waitingHeads,
@@ -35,16 +37,18 @@ final readonly class ProjectStatuses
     ) {
     }
 
+    // One read of the ledger for every section, so a line the watcher writes meanwhile cannot show one head both waiting and failed.
     /**
      * @return list<array<string, mixed>>
      */
     public function now(): array
     {
-        $board = $this->reviewPages->board();
-        $failing = $this->failingHeads->now();
+        $events = $this->ledger->readInOrder();
+        $board = $this->reviewPages->boardOf($events);
+        $failing = $this->failingHeads->in($events);
         $sections = [
             'review_lane' => $this->reviewLane($board),
-            'guard_decisions' => $this->guardDecisions($failing),
+            'guard_decisions' => $this->guardDecisions($this->waitingHeads->in($events), $failing),
             'waiting_for_owner' => $this->waitingForOwner($board),
             'needs_you' => $this->needsYou($failing),
             'last_outcomes' => $this->lastOutcomes($board),
@@ -84,15 +88,16 @@ final readonly class ProjectStatuses
 
     // A handed-over head is a Needs-you item instead, because the watcher no longer retries it on its own.
     /**
-     * @param list<FailingHead> $failing
+     * @param list<array{project: string, change: string, decision: 'pending'|'red', read_again_at: ?string}> $waitingHeads
+     * @param list<FailingHead>                                                                                $failing
      *
      * @return array<string, list<array<string, mixed>>>
      */
-    private function guardDecisions(array $failing): array
+    private function guardDecisions(array $waitingHeads, array $failing): array
     {
         $decisions = [];
 
-        foreach ($this->waitingHeads->now() as $waiting) {
+        foreach ($waitingHeads as $waiting) {
             $decisions[$waiting['project']][] = ['change' => $waiting['change'], 'decision' => $waiting['decision'], 'cause' => null, 'failures' => null, 'read_again_at' => $waiting['read_again_at']];
         }
 

@@ -28,8 +28,15 @@ use Intakt\Core\Dashboard\Infrastructure\MessageQueues;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\ProjectStatuses;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\StatusReadModel;
+use ArrayObject;
+use Closure;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
@@ -78,6 +85,8 @@ final class StatusReadModelTest extends TestCase
     private const string SCHEMA = __DIR__.'/../../../../../docs/user/status.schema.json';
 
     private DashboardLedger $ledger;
+
+    private ?Ledger $readFrom = null;
 
     /** @var list<SharedHold> */
     private array $holds = [];
@@ -247,6 +256,14 @@ final class StatusReadModelTest extends TestCase
         self::assertSame(['pending'], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'decision'));
     }
 
+    public function testAHeadTheWatcherReadsAgainWhileTheStatusIsReadIsReportedOnce(): void
+    {
+        $this->ledger->failHead('alpha', '8', 1);
+        $this->readFrom = $this->ledgerWrittenAfterRead(2, fn () => $this->ledger->keepHeadPending('alpha', '8', 'a'));
+
+        self::assertSame(['8'], array_column($this->projectOf($this->read(), 'alpha')['guard_decisions'], 'change'));
+    }
+
     public function testAHandedOverHeadIsANeedsYouItemAndNoGuardDecision(): void
     {
         $this->ledger->handOverHead('alpha', '11', 'a');
@@ -359,10 +376,46 @@ final class StatusReadModelTest extends TestCase
         $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::none());
-        $pages = new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords());
-        $projects = new ProjectStatuses($pages, new LedgerFailingHeads($this->ledger), new LedgerWaitingHeads($this->ledger), $redactor, ['alpha' => [], 'beta' => []]);
+        $ledger = $this->readFrom ?? $this->ledger;
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords());
+        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), $redactor, ['alpha' => [], 'beta' => []]);
 
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
+    }
+
+    // The watcher appends while the status is read, right after the given read of the ledger returned.
+    private function ledgerWrittenAfterRead(int $read, Closure $write): Ledger
+    {
+        return new readonly class($this->ledger, $read, $write) implements Ledger {
+            private ArrayObject $reads;
+
+            public function __construct(private Ledger $ledger, private int $writeAfter, private Closure $write)
+            {
+                $this->reads = new ArrayObject();
+            }
+
+            public function append(LedgerEvent $event): AppendResult
+            {
+                return $this->ledger->append($event);
+            }
+
+            public function readOfKind(LedgerEventKind $kind): RecordedEvents
+            {
+                return $this->ledger->readOfKind($kind);
+            }
+
+            public function readInOrder(): RecordedEvents
+            {
+                $events = $this->ledger->readInOrder();
+                $this->reads->append(true);
+
+                if ($this->writeAfter === count($this->reads)) {
+                    ($this->write)();
+                }
+
+                return $events;
+            }
+        };
     }
 
     private function queueHolding(int $messages): ReceiverInterface

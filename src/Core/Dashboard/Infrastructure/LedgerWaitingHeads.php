@@ -6,8 +6,8 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
 use DateTimeZone;
-use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 
 // The latest watcher line of a pull request decides, as in LedgerFailingHeads, so a head read again after a failure waits again and a queued round or a closed pull request ends the wait.
 final readonly class LedgerWaitingHeads
@@ -21,18 +21,14 @@ final readonly class LedgerWaitingHeads
         LedgerEventKind::HeadForgotten,
     ];
 
-    public function __construct(private Ledger $ledger)
-    {
-    }
-
     /**
      * @return list<array{project: string, change: string, decision: 'pending'|'red', read_again_at: ?string}>
      */
-    public function now(): array
+    public function in(RecordedEvents $events): array
     {
         $latest = [];
 
-        foreach ($this->ledger->readInOrder() as $recorded) {
+        foreach ($events as $recorded) {
             $kind = $recorded->event->kind;
 
             if (!in_array($kind, self::WATCHER_LINES, true)) {
