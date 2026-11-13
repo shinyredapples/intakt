@@ -363,7 +363,7 @@ final class IntakeRulesTest extends TestCase
     {
         $references = new IssueReferences();
 
-        return array_map(static fn (ListedIssue $item): QueuedIssue => new QueuedIssue(new ItemReading($item, $references->waitsFor($item->body), $references->unreadableWaits($item->body), $references->closedBy($item->body))), $listed);
+        return array_values(array_map(static fn (ListedIssue $item): QueuedIssue => new QueuedIssue(new ItemReading($item, $references->waitsFor($item->body), $references->unreadableWaits($item->body), $references->closedBy($item->body))), $listed));
     }
 
     // Vouches only the items the rule asks for, as the caller will, because a row vouched regardless hides a pull request the rule forgot to ask for.
