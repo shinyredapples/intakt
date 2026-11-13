@@ -120,6 +120,16 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->output.'/handback.bundle');
     }
 
+    public function testABranchNameThatReadsAsAnOptionRunsNoCli(): void
+    {
+        $this->givenTheCli('touch "$RECORD/ran"');
+
+        $run = $this->whenTheBuildRuns('--orphan', 'claude-sonnet-5-5');
+
+        self::assertNotSame(0, $run->getExitCode());
+        self::assertFileDoesNotExist($this->history->folder.'/ran');
+    }
+
     private function givenTheCli(string $script): void
     {
         file_put_contents($this->bin.'/claude', "#!/bin/sh\n".$script."\n");

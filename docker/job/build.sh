@@ -16,7 +16,9 @@ log="$output/build.log"
 
 # Init and fetch instead of a clone, so the clone holds the build clone's branches and source refs and no remote.
 prepare() {
-    format="$(git -C "$source" rev-parse --show-object-format)" \
+    # Git's answer must be the name itself, so a name git expands, or one that reads as an option, never reaches the commands below.
+    [ "$(git check-ref-format --branch "$branch")" = "$branch" ] \
+        && format="$(git -C "$source" rev-parse --show-object-format)" \
         && git init --quiet --initial-branch="$branch" --object-format="$format" -- "$clone" \
         && git -C "$clone" fetch --quiet --no-tags --no-write-fetch-head --update-head-ok -- "$source" '+refs/heads/*:refs/heads/*' '+refs/source/*:refs/source/*' \
         && git -C "$clone" checkout --quiet --force "$branch" \
