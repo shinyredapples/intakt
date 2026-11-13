@@ -37,7 +37,7 @@ final readonly class PublishVerdictHandler
         }
 
         // Dropped, because a later judged round of the change published its own verdict, and a delayed one of this round, such as the withdrawal a stale mark queued, would replace it.
-        if (null !== $this->rounds->judgedAfter($round)) {
+        if ($this->rounds->judgedAfter($round) instanceof ReviewRound) {
             return;
         }
 
@@ -50,12 +50,12 @@ final readonly class PublishVerdictHandler
         }
     }
 
-    // Read again after the write: a later round judged or a stale mark landed meanwhile is published here, and one that comes after this read queues its own publication, which runs after this write.
+    // Read again after the write, because a later round judged or a stale mark landed while it was on the way may have published before it; one that comes after this read queues its own publication, which runs after this write.
     private function settleWhatChangedDuringTheWrite(ReviewRound $published): void
     {
         $replacement = $this->rounds->judgedAfter($published);
 
-        if (null !== $replacement) {
+        if ($replacement instanceof ReviewRound) {
             $this->publishVerdictOf($replacement);
 
             return;
