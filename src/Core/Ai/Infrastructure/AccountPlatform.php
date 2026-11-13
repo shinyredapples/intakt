@@ -65,7 +65,7 @@ final readonly class AccountPlatform implements PlatformInterface
         return $this->platform->getModelCatalog();
     }
 
-    // An answer the account gave clears its reported error, a streamed one only once it was read whole.
+    // A streamed answer clears the account's reported error only once it was read whole, because a stream can still fail after it converted.
     private function followAnswer(ResultInterface $result, DateTimeImmutable $sentAt): ResultInterface
     {
         if (!$result instanceof StreamResult) {

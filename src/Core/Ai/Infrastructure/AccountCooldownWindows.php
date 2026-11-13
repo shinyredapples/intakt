@@ -80,22 +80,11 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->reportOnce($account);
     }
 
-    // Under the report's lock, so a report another worker makes meanwhile is never cleared; asked once before it, because almost every answer comes with nothing reported.
+    // Asked before the lock is taken, because almost every answer comes with nothing reported.
     public function answered(Account $account, DateTimeImmutable $sentAt): void
     {
-        if (!$this->isReportedBefore($account, $sentAt)) {
-            return;
-        }
-
-        $lock = $this->locks->createLock($this->reportKey($account));
-        $lock->acquire(true);
-
-        try {
-            if ($this->isReportedBefore($account, $sentAt)) {
-                $this->pool->deleteItem($this->reportKey($account));
-            }
-        } finally {
-            $lock->release();
+        if ($this->isReportedBefore($account, $sentAt)) {
+            $this->clearReport($account, $sentAt);
         }
     }
 
@@ -166,6 +155,21 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $reportedAt = $this->pool->getItem($this->reportKey($account))->get();
 
         return $reportedAt instanceof DateTimeImmutable && $reportedAt < $sentAt;
+    }
+
+    // Asked again under the report's lock, because another worker may have reported a newer error since, and that report must stay.
+    private function clearReport(Account $account, DateTimeImmutable $sentAt): void
+    {
+        $lock = $this->locks->createLock($this->reportKey($account));
+        $lock->acquire(true);
+
+        try {
+            if ($this->isReportedBefore($account, $sentAt)) {
+                $this->pool->deleteItem($this->reportKey($account));
+            }
+        } finally {
+            $lock->release();
+        }
     }
 
     // Tried without waiting, because a busy lock means another worker is reporting this account or clearing its report, and the next error of a cleared one is reported again.
