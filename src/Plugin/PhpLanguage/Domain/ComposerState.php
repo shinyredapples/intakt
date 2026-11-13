@@ -194,16 +194,7 @@ final readonly class ComposerState
 
         $named = [];
         foreach ($map as $name => $value) {
-            // Refused because PHP turns a numeric name into an integer key, which the lower-casing below cannot take, and no package is named by a number.
-            if (!is_string($name)) {
-                throw ComposerFileUnreadable::because($path, sprintf('%s names a package by a number', $key));
-            }
-
-            if (!PackageName::isReadable($name)) {
-                throw ComposerFileUnreadable::because($path, sprintf('%s names "%s", which is no package name', $key, $name));
-            }
-
-            $named[$name] = $value;
+            $named[self::packageName($path, $key, $name)] = $value;
         }
 
         // Composer reads names in any case, so two that differ only in case would let one hide the other.
@@ -212,5 +203,22 @@ final readonly class ComposerState
         }
 
         return $named;
+    }
+
+    /**
+     * @throws ComposerFileUnreadable
+     */
+    private static function packageName(string $path, string $key, int|string $name): string
+    {
+        // Refused because PHP turns a numeric name into an integer key, which the lower-casing cannot take, and no package is named by a number.
+        if (!is_string($name)) {
+            throw ComposerFileUnreadable::because($path, sprintf('%s names a package by a number', $key));
+        }
+
+        if (!PackageName::isReadable($name)) {
+            throw ComposerFileUnreadable::because($path, sprintf('%s names "%s", which is no package name', $key, $name));
+        }
+
+        return $name;
     }
 }

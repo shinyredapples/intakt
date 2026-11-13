@@ -122,13 +122,15 @@ final class DecideDependencyChangeTest extends TestCase
         self::assertTrue($this->decide(str_repeat('a', 40))->needsOwner());
     }
 
-    // A folder that is gone makes Symfony Process throw the same RuntimeException family a timeout does.
+    // Through a folder that is gone, because Symfony Process throws the same RuntimeException family for it as for a timeout, which a test cannot wait for.
     public function testAGitCallThatCannotRunIsAChangeThatCannotBeRead(): void
     {
-        $this->expectException(ChangeNotRead::class);
-        $this->expectExceptionMessage('git ls-tree did not run: ');
-
-        new RevisionFiles(new HardenedGit())->at($this->repository->path.'/gone', str_repeat('a', 40), ['composer.lock']);
+        try {
+            new RevisionFiles(new HardenedGit())->at($this->repository->path.'/gone', str_repeat('a', 40), ['composer.lock']);
+            self::fail('A git call that cannot run must not read as files.');
+        } catch (ChangeNotRead $unread) {
+            self::assertStringContainsString('git ls-tree did not run: ', $unread->getMessage());
+        }
     }
 
     public function testAHeadThatIsNoFullCommitNameIsRefused(): void
