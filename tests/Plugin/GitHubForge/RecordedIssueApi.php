@@ -34,7 +34,8 @@ final class RecordedIssueApi
     public string $etag = 'W/"issues-1"';
     public bool $notModified = false;
     public string $historyAnswer = '{"data":{"repository":{"issueOrPullRequest":{"author":{"__typename":"User","login":"ana"},"editor":null,"lastEditedAt":null,"timelineItems":{"pageInfo":{"hasPreviousPage":false,"startCursor":"c1"},"nodes":[{"actor":{"__typename":"User","login":"ana"},"label":{"name":"intakt"}},{"actor":{"__typename":"User","login":"ana"},"label":{"name":"priority:urgent"}}]}}}}}';
-    /** @var array<string, string> the answers to a history request for the label events before a cursor */
+    // Keyed by the cursor a history request names in `before`, because a long label history is read back page by page.
+    /** @var array<string, string> */
     public array $earlierHistory = [];
     // Switchable, because GitHub names the next page in a Link header and a test must see what a listing does when the header is missing.
     public bool $links = true;

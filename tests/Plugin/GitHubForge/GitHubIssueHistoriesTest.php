@@ -139,9 +139,9 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testOlderLabelApplicationsAreReadFromTheEarlierPagesOfTheHistory(): void
     {
-        $this->api->historyAnswer = $this->history(null, [['bo', 'User', 'intakt']], earlier: 'c2');
-        $this->api->earlierHistory['c2'] = $this->history(null, [['mallory', 'User', 'priority:high']], earlier: 'c1');
-        $this->api->earlierHistory['c1'] = $this->history(null, [['ana', 'User', 'steer:pause'], ['ana', 'User', 'intakt']]);
+        $this->api->historyAnswer = $this->labelPage([['bo', 'User', 'intakt']], 'c2');
+        $this->api->earlierHistory['c2'] = $this->labelPage([['mallory', 'User', 'priority:high']], 'c1');
+        $this->api->earlierHistory['c1'] = $this->labelPage([['ana', 'User', 'steer:pause'], ['ana', 'User', 'intakt']], null);
 
         self::assertSame(['steer:pause' => 'ana', 'priority:high' => 'mallory', 'intakt' => 'bo'], $this->api->reads()->historyOf('alpha', 12)->labelAppliers);
         self::assertSame(['owner' => 'acme', 'name' => 'widgets', 'number' => 12, 'before' => 'c1'], $this->api->graphQlVariables);
@@ -149,9 +149,9 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testALabelHistoryLongerThanThePageCapFailsTheRead(): void
     {
-        $this->api->historyAnswer = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c1');
+        $this->api->historyAnswer = $this->labelPage([['ana', 'User', 'intakt']], 'c1');
         foreach (range(1, 10) as $page) {
-            $this->api->earlierHistory['c'.$page] = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c'.($page + 1));
+            $this->api->earlierHistory['c'.$page] = $this->labelPage([['ana', 'User', 'intakt']], 'c'.($page + 1));
         }
 
         try {
@@ -165,11 +165,11 @@ final class GitHubIssueHistoriesTest extends TestCase
 
     public function testALabelHistoryOfExactlyThePageCapIsRead(): void
     {
-        $this->api->historyAnswer = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c1');
+        $this->api->historyAnswer = $this->labelPage([['ana', 'User', 'intakt']], 'c1');
         foreach (range(1, 8) as $page) {
-            $this->api->earlierHistory['c'.$page] = $this->history(null, [['ana', 'User', 'intakt']], earlier: 'c'.($page + 1));
+            $this->api->earlierHistory['c'.$page] = $this->labelPage([['ana', 'User', 'intakt']], 'c'.($page + 1));
         }
-        $this->api->earlierHistory['c9'] = $this->history(null, [['bo', 'User', 'priority:high']]);
+        $this->api->earlierHistory['c9'] = $this->labelPage([['bo', 'User', 'priority:high']], null);
 
         self::assertSame(['priority:high' => 'bo', 'intakt' => 'ana'], $this->api->reads()->historyOf('alpha', 12)->labelAppliers);
         self::assertCount(10, $this->api->requests);
@@ -240,11 +240,28 @@ final class GitHubIssueHistoriesTest extends TestCase
      * @param array<string, string>|null           $editor
      * @param list<array{?string, string, string}> $events
      */
-    private function history(?array $editor, array $events, ?string $editedAt = null, ?string $earlier = null): string
+    private function history(?array $editor, array $events, ?string $editedAt = null): string
+    {
+        return $this->answer(['editor' => $editor, 'lastEditedAt' => $editedAt], $events, null);
+    }
+
+    /**
+     * @param list<array{?string, string, string}> $events
+     */
+    private function labelPage(array $events, ?string $earlier): string
+    {
+        return $this->answer(['editor' => null, 'lastEditedAt' => null], $events, $earlier);
+    }
+
+    /**
+     * @param array{editor: array<string, string>|null, lastEditedAt: ?string} $edit
+     * @param list<array{?string, string, string}>                            $events
+     */
+    private function answer(array $edit, array $events, ?string $earlier): string
     {
         $nodes = array_map(static fn (array $event): array => ['actor' => null === $event[0] ? null : ['__typename' => $event[1], 'login' => $event[0]], 'label' => ['name' => $event[2]]], $events);
         $pageInfo = ['hasPreviousPage' => null !== $earlier, 'startCursor' => $earlier];
-        $item = ['author' => ['__typename' => 'User', 'login' => 'ana'], 'editor' => $editor, 'lastEditedAt' => $editedAt, 'timelineItems' => ['pageInfo' => $pageInfo, 'nodes' => $nodes]];
+        $item = ['author' => ['__typename' => 'User', 'login' => 'ana'], ...$edit, 'timelineItems' => ['pageInfo' => $pageInfo, 'nodes' => $nodes]];
 
         return json_encode(['data' => ['repository' => ['issueOrPullRequest' => $item]]], JSON_THROW_ON_ERROR);
     }
