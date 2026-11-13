@@ -37,6 +37,9 @@ final class ScriptedIssue
 
     public ?int $refusal = null;
 
+    /** @var array<string, mixed> what GitHub stores other than what was posted, for a post GitHub does not keep as sent */
+    public array $storedOtherwise = [];
+
     public static function task(): TaskIssue
     {
         return new TaskIssue(self::PROJECT, self::NUMBER);
@@ -102,8 +105,9 @@ final class ScriptedIssue
         $body = $options['body'] ?? '';
         $payload = (array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR);
         // Stamped with the App's id, because GitHub stamps a comment posted with an installation token so.
-        $this->comments[] = [...$payload, 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => (int) self::APP_ID]];
+        $stored = [...$payload, 'user' => ['login' => 'intakt[bot]', 'type' => 'Bot'], 'created_at' => self::MOMENT, 'updated_at' => self::MOMENT, 'performed_via_github_app' => ['id' => (int) self::APP_ID], ...$this->storedOtherwise];
+        $this->comments[] = $stored;
 
-        return new MockResponse('{}', ['http_code' => 201]);
+        return new MockResponse(json_encode($stored, JSON_THROW_ON_ERROR), ['http_code' => 201]);
     }
 }

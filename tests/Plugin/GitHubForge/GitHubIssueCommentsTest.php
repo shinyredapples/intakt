@@ -92,6 +92,55 @@ final class GitHubIssueCommentsTest extends TestCase
         $issue->comments()->post(ScriptedIssue::task(), 'The request.');
     }
 
+    public function testAPostStoredByteForByteWithThisAppsMarkAndUneditedSucceeds(): void
+    {
+        $issue = new ScriptedIssue();
+
+        $issue->comments()->post(ScriptedIssue::task(), "The request.\r\n```diff\r\n+a\r\n```\n");
+
+        self::assertSame(["The request.\r\n```diff\r\n+a\r\n```\n"], $issue->posted());
+    }
+
+    public function testAPostGitHubStoresWithoutThisAppsMarkFails(): void
+    {
+        $issue = new ScriptedIssue();
+        $issue->storedOtherwise = ['performed_via_github_app' => null];
+
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub stored the comment without this App\'s mark, so no run would find it as the request.'));
+
+        $issue->comments()->post(ScriptedIssue::task(), 'The request.');
+    }
+
+    public function testAPostGitHubStoresWithOtherTextFails(): void
+    {
+        $issue = new ScriptedIssue();
+        $issue->storedOtherwise = ['body' => "The request.\n"];
+
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub stored other text than was posted, so no run would match it with the request.'));
+
+        $issue->comments()->post(ScriptedIssue::task(), "The request.\r\n");
+    }
+
+    public function testAPostGitHubStoresWithAChangeTimeApartFromItsPostTimeFails(): void
+    {
+        $issue = new ScriptedIssue();
+        $issue->storedOtherwise = ['updated_at' => '2026-11-25T10:00:01Z'];
+
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub stored the comment with a change time apart from its post time, so every run would read it as edited.'));
+
+        $issue->comments()->post(ScriptedIssue::task(), 'The request.');
+    }
+
+    public function testAPostAnsweredWithoutTheStoredCommentFails(): void
+    {
+        $issue = new ScriptedIssue();
+        $issue->storedOtherwise = ['user' => null];
+
+        $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered the post without the comment it stored: GitHub listed a comment without its author, text or times.'));
+
+        $issue->comments()->post(ScriptedIssue::task(), 'The request.');
+    }
+
     public function testAProjectWithoutAGitHubRepositoryPostsNothing(): void
     {
         $issue = new ScriptedIssue();

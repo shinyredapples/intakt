@@ -73,13 +73,41 @@ final readonly class GitHubIssueComments
         try {
             $response = $this->calls->asInstallation('POST', $path, $options);
             $status = $response->getStatusCode();
-            $response->getContent(false);
+            $stored = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
             throw $this->unreachableForWrite($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
             throw new ForgeWriteFailed(sprintf('GitHub answered %d to a write.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
+        }
+
+        $this->confirmStored($stored, $body);
+    }
+
+    /**
+     * @throws ForgeWriteFailed
+     */
+    // Checked on every post, because a later run finds the request only by this App's mark, its unchanged times and its exact text, and a comment GitHub keeps otherwise would leave the owner's approve matching nothing.
+    private function confirmStored(string $answer, string $posted): void
+    {
+        try {
+            $decoded = json_decode($answer, true, flags: JSON_THROW_ON_ERROR);
+            $stored = $this->comment(is_array($decoded) ? $decoded : throw new ForgeReadFailed('GitHub answered something other than a comment.'));
+        } catch (JsonException|ForgeReadFailed $unread) {
+            throw new ForgeWriteFailed('GitHub answered the post without the comment it stored: '.($unread instanceof JsonException ? 'the answer is not JSON.' : $unread->getMessage()));
+        }
+
+        if (!$stored->byThisApp) {
+            throw new ForgeWriteFailed('GitHub stored the comment without this App\'s mark, so no run would find it as the request.');
+        }
+
+        if ($stored->edited) {
+            throw new ForgeWriteFailed('GitHub stored the comment with a change time apart from its post time, so every run would read it as edited.');
+        }
+
+        if ($posted !== $stored->body) {
+            throw new ForgeWriteFailed('GitHub stored other text than was posted, so no run would match it with the request.');
         }
     }
 

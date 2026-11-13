@@ -297,6 +297,17 @@ final class PushApprovalCommandTest extends TestCase
         self::assertSame("push: held, nothing was decided: GitHub answered 502 to a read of the comments.\n", $tester->getDisplay());
     }
 
+    public function testARequestGitHubStoresWithoutThisAppsMarkHoldsThePushAndSaysSo(): void
+    {
+        $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $this->issue->storedOtherwise = ['performed_via_github_app' => null];
+
+        $tester = $this->execute();
+
+        self::assertSame(Command::INVALID, $tester->getStatusCode());
+        self::assertSame("push: held, nothing was decided: GitHub stored the comment without this App's mark, so no run would find it as the request.\n", $tester->getDisplay());
+    }
+
     public function testAHeadThatIsNoCommitHoldsThePush(): void
     {
         $tester = $this->execute('missing');
