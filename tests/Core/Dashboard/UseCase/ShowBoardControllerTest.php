@@ -286,8 +286,8 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $column = $this->column($this->browser->request('GET', '/'), 'In review');
 
         self::assertSame('Show 1 more', $column->filter('.more-btn')->text());
-        self::assertSame(['#13'], $column->filter('[data-past-limit] .top .num')->each(static fn (Crawler $number): string => $number->text()));
-        self::assertSame('#12', $column->filter('article:not([data-past-limit]) .top .num')->last()->text());
+        self::assertSame(['#13'], $column->filter('[data-past-limit] .top span:first-child')->each(static fn (Crawler $number): string => $number->text()));
+        self::assertSame('#12', $column->filter('article:not([data-past-limit]) .top span:first-child')->last()->text());
     }
 
     public function testAColumnOfTwelveCardsShowsThemAllWithoutShowMore(): void
