@@ -304,6 +304,34 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame(Decision::Approve, $verdict->verdict);
     }
 
+    public function testAnApprovalFromACliGivenTheReviewServerThatOnlyFailedAReadOnAnotherServerIsRefused(): void
+    {
+        $this->replaying('tool-use');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliGivenTheReviewServerWhoseReadThroughItFailedIsRefused(): void
+    {
+        $this->replaying('review-server-read-failed');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliGivenTheReviewServerThatReadOnlyThroughAnotherServerIsRefused(): void
+    {
+        $this->replaying('other-server-read');
+
+        $verdict = $this->review($this->servers(), $this->requestInRound())->verdict;
+
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
     public function testAnApprovalFromACliStartedWithoutTheReviewServerForWantOfARoundIsStillRefused(): void
     {
         $this->replaying('review-server-read');
