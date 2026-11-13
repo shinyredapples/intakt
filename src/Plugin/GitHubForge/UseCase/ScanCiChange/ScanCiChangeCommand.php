@@ -27,15 +27,13 @@ final readonly class ScanCiChangeCommand
 
     public function __invoke(
         SymfonyStyle $io,
-        #[Argument('The git directory of the repository, a bare mirror or a .git folder')]
+        #[Argument('The git directory of the repository, a bare mirror or a .git folder, whose HEAD names main')]
         string $repository,
-        #[Argument('The main branch or commit')]
-        string $main,
         #[Argument('The head branch or commit')]
         string $head,
     ): int {
         try {
-            $result = $this->scan->of($this->workflows->of($repository, $main, $head));
+            $result = $this->scan->of($this->workflows->of($repository, $head));
         } catch (CommitNotRead|RepositoryAttributesRefused $failure) {
             $io->error($failure->getMessage());
 

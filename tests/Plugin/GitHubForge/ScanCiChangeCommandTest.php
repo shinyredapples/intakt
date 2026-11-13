@@ -157,7 +157,8 @@ final class ScanCiChangeCommandTest extends TestCase
         $application = new Application();
         $application->addCommand(new ScanCiChangeCommand(new MirrorWorkflows(new HardenedGit()), $scan));
         $tester = new CommandTester($application->find('intakt:forge:ci-scan'));
-        $tester->execute(['repository' => $this->repository->path.'/.git', 'main' => 'main', 'head' => $head]);
+        $this->repository->checkout('main');
+        $tester->execute(['repository' => $this->repository->path.'/.git', 'head' => $head]);
 
         return $tester;
     }

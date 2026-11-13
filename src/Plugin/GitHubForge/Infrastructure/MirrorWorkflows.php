@@ -14,6 +14,7 @@ use Symfony\Component\Process\Process;
 // Reads the workflows from git objects, never from a checkout, so the scan sees exactly what the forge runs for each commit.
 final readonly class MirrorWorkflows
 {
+    private const string BRANCHES = 'refs/heads/';
     private const string WORKFLOWS = '.github/workflows';
     // GitHub runs the .yml and .yaml files directly in the folder; any case counts, so a spelling the forge may accept is never skipped.
     private const string WORKFLOW_NAME = '#^\.github/workflows/[^/]+\.ya?ml\z#i';
@@ -32,9 +33,9 @@ final readonly class MirrorWorkflows
      * @throws CommitNotRead
      * @throws RepositoryAttributesRefused
      */
-    public function of(string $repository, string $main, string $head): CiWorkflows
+    public function of(string $repository, string $head): CiWorkflows
     {
-        $main = $this->commit($repository, $main);
+        $main = $this->commit($repository, $this->mainBranch($repository));
         $head = $this->commit($repository, $head);
         $merged = $this->merged($repository, $main, $head);
 
@@ -45,6 +46,23 @@ final readonly class MirrorWorkflows
             // Against the merge when there is one, because that is what the change brings to main; a conflict leaves the merged workflows unread, which makes every path count anyway.
             $this->changedPaths($repository, $main, $merged ?? $head),
         );
+    }
+
+    /**
+     * @throws CommitNotRead
+     * @throws RepositoryAttributesRefused
+     */
+    private function mainBranch(string $repository): string
+    {
+        $process = $this->run($repository, ['symbolic-ref', '--quiet', 'HEAD']);
+        $branch = trim($process->getOutput());
+
+        // Main is the branch the repository's HEAD names, because a mirror's HEAD follows the remote's default branch.
+        if (!$process->isSuccessful() || !str_starts_with($branch, self::BRANCHES)) {
+            throw CommitNotRead::because('the repository\'s HEAD names no branch, so main is unknown');
+        }
+
+        return $branch;
     }
 
     /**
@@ -92,7 +110,7 @@ final readonly class MirrorWorkflows
         }
 
         $workflows = [];
-        foreach (array_filter(explode("\0", $process->getOutput())) as $entry) {
+        foreach (array_filter(explode("\0", $process->getOutput()), static fn (string $entry): bool => '' !== $entry) as $entry) {
             $workflows[] = $this->workflow($repository, $entry);
         }
 

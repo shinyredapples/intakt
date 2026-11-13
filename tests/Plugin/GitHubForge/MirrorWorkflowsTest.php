@@ -90,15 +90,46 @@ final class MirrorWorkflowsTest extends TestCase
 
     public function testANameThatIsNoCommitIsNotRead(): void
     {
-        $this->expectException(CommitNotRead::class);
-        $this->expectExceptionMessage('--output=x names no commit of the repository');
+        $this->repository->checkout('main');
 
-        $_ = new MirrorWorkflows(new HardenedGit())->of($this->repository->path.'/.git', 'main', '--output=x');
+        self::assertSame('--output=x names no commit of the repository', $this->failureReading('--output=x'));
+    }
+
+    public function testARepositoryWhoseHeadNamesNoBranchHasNoMain(): void
+    {
+        $this->repository->checkoutDetached('main');
+
+        self::assertSame('the repository\'s HEAD names no branch, so main is unknown', $this->failureReading('head'));
+    }
+
+    public function testMainIsTheBranchTheRepositorysHeadNames(): void
+    {
+        $this->repository->commitFile('.github/workflows/deploy.yml', "head's deploy\n");
+
+        self::assertSame([], $this->readAgainst('head')->changedPaths);
     }
 
     private function read(): CiWorkflows
     {
-        return new MirrorWorkflows(new HardenedGit())->of($this->repository->path.'/.git', 'main', 'head');
+        return $this->readAgainst('main');
+    }
+
+    private function readAgainst(string $main): CiWorkflows
+    {
+        $this->repository->checkout($main);
+
+        return new MirrorWorkflows(new HardenedGit())->of($this->repository->path.'/.git', 'head');
+    }
+
+    private function failureReading(string $head): string
+    {
+        try {
+            new MirrorWorkflows(new HardenedGit())->of($this->repository->path.'/.git', $head);
+        } catch (CommitNotRead $notRead) {
+            return $notRead->getMessage();
+        }
+
+        self::fail('The read did not fail.');
     }
 
     /**

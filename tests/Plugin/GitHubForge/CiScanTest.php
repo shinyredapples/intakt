@@ -34,6 +34,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(CiScanResult::class)]
 #[CoversClass(CiWorkflows::class)]
 #[UsesClass(CiFinding::class)]
+#[UsesClass(WorkflowSide::class)]
 #[UsesClass(CiDefinition::class)]
 #[UsesClass(WorkflowFile::class)]
 #[UsesClass(WorkflowFileScan::class)]
