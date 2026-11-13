@@ -1,6 +1,6 @@
 # Boot step
 
-The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md): nothing calls it before a review yet, and a failing head is not sent back yet; those parts come later.
+The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md). The watcher calls it before a review round through `BootGate`, and a head that fails to boot while main boots goes back like red CI ([The gate before a round](#the-gate-before-a-round-part-1-of-the-watcher-side)); the alert to the owner when main itself fails comes later.
 
 ## Contract
 
