@@ -46,23 +46,21 @@ final class LongRunTest extends KernelTestCase
         $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
-    public function testAReviewerStillAskingForToolsAtTheRoundLimitEndsTheRoundAsChangesWithThatReason(): void
+    public function testAReviewerStillAskingForToolsAtTheRoundLimitOnItsRetryTooFailsAndBlocksTheRoundWithThatReason(): void
     {
         $review = $this->stillAskingForTools();
 
-        self::assertSame(Decision::Changes, $review->decision);
-        self::assertSame([], $review->reasons);
-        self::assertCount(1, $review->verdicts);
-        self::assertCount(1, $review->verdicts[0]->verdict->findings);
-        self::assertSame('The reviewer output is not a valid verdict, so it counts as changes: the reviewer was still asking for tools after '.ReviewerRuns::MAX_ROUNDS.' rounds of tool calls.', $review->verdicts[0]->verdict->findings[0]->text);
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame(['role-1 reviewer failed, the reviewer\'s answer could not be read as a verdict'], $review->reasons);
+        self::assertSame([], $review->verdicts);
     }
 
-    public function testTheCallOfARunThatHitTheRoundLimitIsSettledOnce(): void
+    public function testTheCallOfARunThatHitTheRoundLimitAndTheCallOfItsRetryAreEachSettledOnce(): void
     {
         $this->stillAskingForTools();
 
-        self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
-        self::assertSame([ReviewerRuns::MAX_ROUNDS + 1], $this->usageRowsOfEndingEvents());
+        self::assertSame([['started', 'settled'], ['started', 'settled']], array_values($this->run->usagePhasesByCall()));
+        self::assertSame([ReviewerRuns::MAX_ROUNDS + 1, ReviewerRuns::MAX_ROUNDS + 1], $this->usageRowsOfEndingEvents());
     }
 
     public function testAProviderLimitAfterManyToolRoundsOnTheTierAndItsSubstituteEndsTheRoundBlockedWithTheReasonOfTheReviewer(): void

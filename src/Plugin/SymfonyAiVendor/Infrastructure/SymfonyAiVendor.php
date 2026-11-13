@@ -24,6 +24,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -74,19 +75,19 @@ final readonly class SymfonyAiVendor implements Vendor
         $retry = fn (): Verdict => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request));
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnceAtTheLimit($first, $retry), $substitute));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->retriedOnce($first,$retry), $substitute));
     }
 
-    // Retried once, because a call stopped by the output limit leaves no verdict and the same room would stop it again; a second stop fails the reviewer.
+    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again; a second one fails the reviewer.
     /**
      * @param Closure(): Verdict $first
      * @param Closure(): Verdict $retry
      */
-    private function retriedOnceAtTheLimit(Closure $first, Closure $retry): Verdict
+    private function retriedOnce(Closure $first, Closure $retry): Verdict
     {
         try {
             return $first();
-        } catch (MaxOutputTokensException) {
+        } catch (MaxOutputTokensException|VerdictUnreadable) {
             return $retry();
         }
     }
@@ -141,6 +142,11 @@ final readonly class SymfonyAiVendor implements Vendor
             $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
 
             return Verdict::incompleteStream($incomplete->getMessage());
+        } catch (VerdictUnreadable $unreadable) {
+            // Settled, because the call ended with an answer and its usage is known.
+            $this->usage->settle($reservation, ...$platform->rounds());
+
+            throw $unreadable;
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 

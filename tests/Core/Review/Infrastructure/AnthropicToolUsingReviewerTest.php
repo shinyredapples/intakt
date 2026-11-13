@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\AnthropicTextBlocks;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
@@ -67,6 +68,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(VerdictParser::class)]
+#[UsesClass(VerdictUnreadable::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReviewRequest::class)]
 #[UsesClass(ReviewBrief::class)]
@@ -108,32 +110,30 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         self::assertSame(['Cover the empty cart.'], $verdict->follow_ups);
     }
 
-    public function testAnAnswerAfterAToolCallThatMissesAVerdictFieldStillEndsAsChanges(): void
+    public function testAnAnswerAfterAToolCallThatMissesAVerdictFieldIsRefusedAsUnreadable(): void
     {
         $answer = RecordedAnthropicTurns::answering()->thinking('Done.')->saying('{"verdict":"approve","findings":[],"resolved":[]}');
 
-        $verdict = $this->review($this->unstreamed($answer));
+        $this->expectException(VerdictUnreadable::class);
 
-        self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        $this->review($this->unstreamed($answer));
     }
 
-    public function testAnAnswerWithThinkingButNoTextEndsAsChanges(): void
+    public function testAnAnswerWithThinkingButNoTextIsRefusedAsUnreadable(): void
     {
-        $verdict = $this->review($this->unstreamed(RecordedAnthropicTurns::answering()->thinking('I have nothing to say.')));
+        $this->expectException(VerdictUnreadable::class);
 
-        self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        $this->review($this->unstreamed(RecordedAnthropicTurns::answering()->thinking('I have nothing to say.')));
     }
 
-    public function testAnAnswerBesideItsThinkingThatBreaksAVerdictConstraintEndsAsChanges(): void
+    public function testAnAnswerBesideItsThinkingThatBreaksAVerdictConstraintIsRefusedAsUnreadableSayingWhy(): void
     {
         $answer = RecordedAnthropicTurns::answering()->thinking('Done.')->saying(VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('id', '')->json());
 
-        $verdict = $this->review($this->unstreamed($answer));
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessage('findings[0].id: This value should not be blank.');
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
-        self::assertStringContainsString('findings[0].id: This value should not be blank.', $verdict->findings[0]->text);
+        $this->review($this->unstreamed($answer));
     }
 
     public function testTheTextAModelNarratesBeforeAToolCallIsNotTakenForTheAnswer(): void
@@ -181,21 +181,21 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         self::assertSame(['Cover the empty cart.'], $verdict->follow_ups);
     }
 
-    public function testAnAnswerInTwoTextBlocksBesideItsThinkingEndsAsChanges(): void
+    public function testAnAnswerInTwoTextBlocksBesideItsThinkingIsRefusedAsUnreadable(): void
     {
-        $verdict = $this->review($this->unstreamed(RecordedAnthropicTurns::answering()->thinking('Done.')->saying(self::APPROVE)->saying(self::APPROVE)));
+        $this->expectException(VerdictUnreadable::class);
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        $this->review($this->unstreamed(RecordedAnthropicTurns::answering()->thinking('Done.')->saying(self::APPROVE)->saying(self::APPROVE)));
     }
 
-    public function testAStreamedAnswerSplitAcrossTwoTextBlocksEndsAsChanges(): void
+    public function testAStreamedAnswerSplitAcrossTwoTextBlocksIsRefusedAsUnreadable(): void
     {
         $tool = RecordedAnthropicTurns::askingForATool()->callingATool('toolu_01', 'read_file', ['path' => 'src/Cart.php']);
         $answer = RecordedAnthropicTurns::answering()->thinking('Done.')->saying('{"verdict":"approve",')->saying('"findings":[],"resolved":[],"follow_ups":[]}');
 
-        $verdict = $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
+        $this->expectException(VerdictUnreadable::class);
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id, json_encode($verdict, JSON_THROW_ON_ERROR));
+        $this->review([$tool->asServerSentEvents(), $answer->asServerSentEvents()], new ModelCatalog());
     }
 
     /**

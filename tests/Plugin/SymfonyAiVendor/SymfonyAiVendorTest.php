@@ -37,6 +37,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
@@ -160,6 +161,7 @@ use Throwable;
 #[UsesClass(Tier::class)]
 #[UsesClass(VerdictParser::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(VerdictUnreadable::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
@@ -397,14 +399,26 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([null, 2 * Tier::Strong->defaultMaxOutput()], $limits);
     }
 
-    public function testAnAnswerThatIsNotAVerdictCountsAsChanges(): void
+    public function testAnAnswerThatIsNotAVerdictOnTheRetryTooIsRefusedAsUnreadable(): void
     {
         $vendor = $this->vendorAnswering('not a verdict');
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
+        $this->expectException(VerdictUnreadable::class);
 
-        self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        $vendor->review('alpha', Tier::Strong, $this->request());
+    }
+
+    public function testAnAnswerThatIsNotAVerdictIsAskedForOnceMoreAndTheRetryGivesTheVerdict(): void
+    {
+        $calls = 0;
+        $answer = static function () use (&$calls): string {
+            return 1 === ++$calls ? 'not a verdict' : VerdictDocument::fromTheDesign()->json();
+        };
+
+        $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(2, $calls);
+        self::assertSame('F3', $verdict->findings[0]->id);
     }
 
     private function vendorAnswering(string $output): SymfonyAiVendor
@@ -952,16 +966,20 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([], $ledger->payloads()[1]['usages']);
     }
 
-    public function testAnAnswerThatIsNotAVerdictStillSettlesWithTheTokensItUsed(): void
+    public function testEachAnswerThatIsNotAVerdictStillSettlesWithTheTokensItUsed(): void
     {
         $ledger = new InMemoryLedger();
+        $vendor = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger);
 
-        $verdict = $this->vendor(static fn (): TextResult => self::withUsage('not a verdict'), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
+        $this->refusedAsUnreadable(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
-        /** @var list<array<string, int>> $usages */
-        $usages = $ledger->payloads()[1]['usages'];
-        self::assertSame([100, 20], [$usages[0]['prompt'], $usages[0]['completion']]);
+        $payloads = $ledger->payloads();
+        self::assertSame(['started', 'settled', 'started', 'settled'], array_column($payloads, 'phase'));
+        foreach ([$payloads[1], $payloads[3]] as $settled) {
+            /** @var list<array<string, int>> $usages */
+            $usages = $settled['usages'];
+            self::assertSame([100, 20], [$usages[0]['prompt'], $usages[0]['completion']]);
+        }
     }
 
     public function testAProviderAnswerThatFailsToMapSettlesWithTheTokensItsExtractorReads(): void
@@ -984,7 +1002,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(9, $usages[0]['prompt']);
     }
 
-    public function testAnAnswerWhoseUsageCannotBeReadKeepsItsVerdictAndIsLeftUnsettled(): void
+    public function testEachAnswerWhoseUsageCannotBeReadIsLeftUnsettledWithAWarning(): void
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);
         $extractor->method('extract')->willThrowException(new JsonException('Syntax error'));
@@ -1000,16 +1018,29 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $logger = new BufferingLogger();
         $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), $logger, StoredSerializerFactory::create()), $this->limit, new MockClock(self::NOW));
 
-        $verdict = $vendor->review('alpha', Tier::Strong, $this->request())->verdict;
+        $this->refusedAsUnreadable(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
-        [$started, $unsettled] = $ledger->payloads();
-        self::assertSame(2, $ledger->count());
-        self::assertSame(['started', 'unsettled', JsonException::class], [$started['phase'], $unsettled['phase'], $unsettled['failure']]);
+        $payloads = $ledger->payloads();
+        self::assertSame(['started', 'unsettled', 'started', 'unsettled'], array_column($payloads, 'phase'));
+        self::assertSame([JsonException::class, JsonException::class], [$payloads[1]['failure'], $payloads[3]['failure']]);
         /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
         $logs = $logger->cleanLogs();
         self::assertSame('warning', $logs[0][0]);
         self::assertInstanceOf(JsonException::class, $logs[0][2]['exception']);
+    }
+
+    /**
+     * @param Closure(): VendorReview $review
+     */
+    private function refusedAsUnreadable(Closure $review): void
+    {
+        try {
+            $review();
+        } catch (VerdictUnreadable) {
+            return;
+        }
+
+        self::fail('The answer was not refused as unreadable.');
     }
 
     public function testAnAggregatedUsageSettlesAsOneEntryPerPart(): void

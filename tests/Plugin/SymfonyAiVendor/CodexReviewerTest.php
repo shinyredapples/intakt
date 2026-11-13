@@ -43,6 +43,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
@@ -110,6 +111,7 @@ use Throwable;
 #[UsesClass(SendFailures::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(VerdictUnreadable::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(ProjectModelCatalog::class)]
@@ -288,28 +290,29 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
     }
 
-    public function testTextThatOnlyMentionsALimitIsAFailedReviewAndNoCooldown(): void
+    public function testTextThatOnlyMentionsALimitIsRefusedAsUnreadableAndCoolsNoAccountDown(): void
     {
         $this->replaying('limit-text');
 
-        $verdict = $this->review()->verdict;
+        $failure = $this->failureOfReview();
 
-        self::assertTrue($verdict->isFailedReview());
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        self::assertSame(VerdictUnreadable::class, $failure::class);
         self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
-        self::assertSame([LedgerEventKind::UsageRecorded, LedgerEventKind::UsageRecorded], $this->ledger->kinds());
     }
 
-    public function testTextThatOnlyMentionsALimitStillRecordsItsUsageOnce(): void
+    public function testTextThatOnlyMentionsALimitRecordsTheUsageOfItsCallAndOfTheRetryOnceEach(): void
     {
         $this->replaying('limit-text');
 
-        $this->review();
+        $this->failureOfReview();
 
-        self::assertSame(['started', 'settled'], array_column($this->ledger->payloads(), 'phase'));
-        /** @var list<array<string, int|string|null>> $usages */
-        $usages = $this->ledger->payloads()[1]['usages'];
-        self::assertSame([['codex.team', 2400]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt']], $usages));
+        $payloads = $this->ledger->payloads();
+        self::assertSame(['started', 'settled', 'started', 'settled'], array_column($payloads, 'phase'));
+        foreach ([$payloads[1], $payloads[3]] as $settled) {
+            /** @var list<array<string, int|string|null>> $usages */
+            $usages = $settled['usages'];
+            self::assertSame([['codex.team', 2400]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt']], $usages));
+        }
     }
 
     public function testAFailedTurnIsAFailureOfTheReviewAndNoAccountOutcome(): void
