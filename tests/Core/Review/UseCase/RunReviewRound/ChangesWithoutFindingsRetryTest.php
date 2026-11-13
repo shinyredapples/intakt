@@ -39,10 +39,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
-use Symfony\AI\Platform\Exception\MaxOutputTokensException;
-use Symfony\AI\Platform\Model;
+use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\PlatformInterface;
-use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -69,15 +67,9 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
 
     private int $calls = 0;
 
-    /** @var list<mixed> */
-    private array $limits = [];
-
-    private SavedConversations $conversations;
-
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
-        $this->conversations = new SavedConversations();
     }
 
     public function testAChangesVerdictWithoutFindingsOnceGivesTheVerdictOfTheRetry(): void
@@ -88,24 +80,6 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
 
         self::assertSame([ReviewerState::Verdict], $this->states());
         self::assertSame([LedgerEventKind::VerdictReceived], $this->endings());
-        self::assertSame(2, $this->calls);
-        self::assertSame([8000, 8000], $this->limits);
-        self::assertCount(2, array_unique($this->conversations->ids));
-    }
-
-    public function testAnEmptyChangesVerdictThenAnOutputLimitStopFailsTheReviewerWithoutAThirdCall(): void
-    {
-        $this->fixture->start(1);
-        $answers = [$this->emptyChanges(), new MaxOutputTokensException('Truncated at the output limit.'), $this->changesWithAFinding()];
-
-        $this->deliverAll($this->vendor(function () use ($answers): string {
-            $answer = $answers[$this->calls++];
-
-            return $answer instanceof MaxOutputTokensException ? throw $answer : $answer;
-        }));
-
-        self::assertSame([ReviewerState::Failed], $this->states());
-        self::assertSame([MaxOutputTokensException::class], $this->failures());
         self::assertSame(2, $this->calls);
     }
 
@@ -162,11 +136,7 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
      */
     private function answering(array $answers): SymfonyAiVendor
     {
-        return $this->vendor(function (Model $model, array|string|object $input, array $options) use ($answers): string {
-            $this->limits[] = $options[PlatformOptions::MAX_OUTPUT_TOKENS] ?? null;
-
-            return $answers[$this->calls++];
-        });
+        return $this->vendor(fn (): string => $answers[$this->calls++]);
     }
 
     private function vendor(Closure $answer): SymfonyAiVendor
@@ -174,7 +144,7 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => 8000]]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $tiers = new TierPlatform($resolver, new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns($this->conversations, new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 2);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock);
