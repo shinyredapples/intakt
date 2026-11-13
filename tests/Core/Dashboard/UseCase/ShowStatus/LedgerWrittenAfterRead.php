@@ -11,7 +11,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 
-// Forces the order in which the watcher appends a line between two reads of one status, after the given read returned its rows.
+// The watcher appends without waiting for a status read to end, so a line can land between two reads of the same status.
 final class LedgerWrittenAfterRead implements Ledger
 {
     private int $reads = 0;
