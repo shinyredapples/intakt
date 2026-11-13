@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
@@ -28,6 +29,11 @@ final class FailureInWordsTest extends TestCase
     public function testATransientProviderFailureIsToldInPlainWords(): void
     {
         self::assertSame('the provider kept failing', new FailureInWords()->of(ProviderFailedTransiently::class));
+    }
+
+    public function testAChangesVerdictWithoutFindingsIsToldInPlainWords(): void
+    {
+        self::assertSame('asked for changes without naming a finding', new FailureInWords()->of(ChangesWithoutFindings::class));
     }
 
     public function testAnUnknownFailureClassIsToldInGenericWordsWithoutTheClassName(): void
