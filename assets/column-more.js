@@ -31,7 +31,9 @@ function limit(column) {
         shown.slice(pageLimit).forEach((card) => card.setAttribute(PAST_LIMIT, ''));
     }
     more.hidden = expanded || shown.length <= pageLimit;
-    more.textContent = `Show ${shown.length - pageLimit} more`;
+    if (!more.hidden) {
+        more.textContent = `Show ${shown.length - pageLimit} more`;
+    }
 }
 
 function showEveryCard(column) {

@@ -130,6 +130,15 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/max-width:\s*60%;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;\s*white-space:\s*nowrap;/', $rules['.card .top .pname'] ?? '');
     }
 
+    // A change name as long as a branch wrapped over nine lines in the corner and squeezed the project name to one letter.
+    public function testACardTruncatesALongNumberAndLeavesTheProjectNameItsShare(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*min-width:\s*0;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;\s*white-space:\s*nowrap;\s*$/', $rules['.card .top .num'] ?? '');
+        self::assertMatchesRegularExpression('/flex:\s*none;/', $rules['.card .top .pname'] ?? '');
+    }
+
     public function testACardPastAColumnsPageLimitIsNotShown(): void
     {
         $rules = $this->rulesOf($this->sheet());

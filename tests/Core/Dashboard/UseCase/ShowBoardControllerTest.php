@@ -312,6 +312,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $cards = $this->column($this->browser->request('GET', '/'), 'In review')->filter('.card');
 
         self::assertSame('Review of '.$change, $cards->first()->filter('.title')->text());
+        self::assertSame(['#'.$change, '#'.$change], [$cards->first()->filter('.top .num')->text(), $cards->first()->filter('.top .num')->attr('title')]);
         self::assertSame([$project, $project], [$cards->last()->filter('.pname')->text(), $cards->last()->filter('.pname')->attr('title')]);
     }
 

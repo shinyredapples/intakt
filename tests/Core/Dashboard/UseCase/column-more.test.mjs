@@ -148,6 +148,7 @@ test('a chosen project with twelve cards or fewer in the column needs no show mo
 
     assert.equal(column.pastLimit(), 0);
     assert.equal(column.more.hidden, true);
+    assert.equal(column.more.textContent, 'Show 28 more');
 });
 
 test('choosing all projects again limits the column to twelve cards again', () => {
