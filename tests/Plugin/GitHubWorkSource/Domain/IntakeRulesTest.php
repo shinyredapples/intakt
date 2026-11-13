@@ -1,0 +1,336 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Plugin\GitHubWorkSource\Domain;
+
+use Intakt\Plugin\GitHubForge\Contract\IssueHistory;
+use Intakt\Plugin\GitHubForge\Contract\LabelApplication;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\HeldIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakePlan;
+use Intakt\Plugin\GitHubWorkSource\Domain\IntakeRules;
+use Intakt\Plugin\GitHubWorkSource\Domain\IssueReferences;
+use Intakt\Plugin\GitHubWorkSource\Domain\ItemReading;
+use Intakt\Plugin\GitHubWorkSource\Domain\Priority;
+use Intakt\Plugin\GitHubWorkSource\Domain\QueuedIssue;
+use Intakt\Plugin\GitHubWorkSource\Domain\Vouching;
+use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(IntakeRules::class)]
+#[CoversClass(Priority::class)]
+#[CoversClass(QueuedIssue::class)]
+#[CoversClass(Vouching::class)]
+#[UsesClass(IntakePlan::class)]
+#[UsesClass(HeldIssue::class)]
+#[UsesClass(IssueReferences::class)]
+#[UsesClass(ItemReading::class)]
+final class IntakeRulesTest extends TestCase
+{
+    // Accounts with write access; every other account (`tom` triages, `mallory` only reads) has none.
+    private const array WRITERS = ['ana', 'ben'];
+
+    public function testAnOpenTrustedTaskWithTheEligibilityLabelIsReady(): void
+    {
+        self::assertSame([1], $this->readyOf([$this->row(Issues::task(1))]));
+    }
+
+    public function testATaskWithoutTheEligibilityLabelIsNotEligible(): void
+    {
+        self::assertSame([], $this->readyOf([$this->row(Issues::task(1, ['bug']))]));
+    }
+
+    public function testAnIdeaIsNotEligibleEvenWithTheEligibilityLabel(): void
+    {
+        self::assertSame([], $this->readyOf([$this->row(Issues::task(1, ['intakt', 'idea']))]));
+    }
+
+    public function testATaskWrittenByAnAccountWithoutWriteAccessIsNotEligible(): void
+    {
+        self::assertSame([], $this->readyOf([$this->row(Issues::task(1, with: ['author' => 'mallory']), $this->history('ana', ['intakt' => 'ana']))]));
+    }
+
+    public function testATaskLastEditedByAnAccountWithoutWriteAccessIsNotEligible(): void
+    {
+        self::assertSame([], $this->readyOf([$this->row(Issues::task(1), $this->history('mallory', ['intakt' => 'ana']))]));
+    }
+
+    public function testATaskIsEligibleAgainOnceAnAccountWithWriteAccessSavesItAfterAnOutsidersEdit(): void
+    {
+        self::assertSame([1], $this->readyOf([$this->row(Issues::task(1), $this->history('ben', ['intakt' => 'ana']))]));
+    }
+
+    public function testAPullRequestIsNoTask(): void
+    {
+        self::assertSame([], $this->readyOf([$this->row(Issues::pullRequest(1, ''))]));
+    }
+
+    public function testATaskWaitingOnAnOpenIssueIsHeldWithTheIssue(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2'])), $this->row(Issues::task(2, ['bug']))]);
+
+        self::assertSame([], $this->numbers($plan->ready));
+        self::assertSame('waits for #2', $plan->held[0]->reason);
+    }
+
+    public function testATaskWaitingOnAnIssueTheListingDoesNotShowIsReady(): void
+    {
+        self::assertSame([1], $this->readyOf([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']))]));
+    }
+
+    public function testATaskIsReadyOnlyWhenEveryIssueItWaitsOnIsClosed(): void
+    {
+        $waiting = $this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2, #3']));
+        $open = $this->row(Issues::task(3, ['bug']));
+
+        self::assertSame([], $this->readyOf([$waiting, $open]));
+        self::assertSame([1], $this->readyOf([$waiting]));
+    }
+
+    public function testATaskWaitingOnItselfIsNotHeld(): void
+    {
+        self::assertSame([1], $this->readyOf([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #1']))]));
+    }
+
+    public function testATaskWaitingOnATaskThatFailedForGoodIsHeldWithTheReason(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2'])), $this->row(Issues::task(2))], [2 => 'the build ran out of rework rounds']);
+
+        self::assertSame([], $this->numbers($plan->ready));
+        self::assertSame(['depends on #2, which failed for good: the build ran out of rework rounds', 'failed for good: the build ran out of rework rounds'], array_map(static fn (HeldIssue $held): string => $held->reason, $plan->held));
+    }
+
+    public function testATaskWaitingOnAClosedTaskThatFailedForGoodIsHeldWithTheReason(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #2']))], [2 => 'cannot build']);
+
+        self::assertSame('depends on #2, which failed for good: cannot build', $plan->held[0]->reason);
+    }
+
+    public function testATaskWaitingOnItsOwnPullRequestIsNotHeld(): void
+    {
+        self::assertSame([1], $this->readyOf([
+            $this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])),
+            $this->row(Issues::pullRequest(50, 'Closes #1')),
+        ]));
+    }
+
+    public function testAWaitOnAPullRequestIsAWaitOnTheTaskItCloses(): void
+    {
+        $waiting = $this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50']));
+        $pullRequest = $this->row(Issues::pullRequest(50, 'Closes #3'));
+
+        self::assertSame('waits for #3', $this->plan([$waiting, $pullRequest, $this->row(Issues::task(3, ['bug']))])->held[0]->reason);
+        self::assertSame([1], $this->readyOf([$waiting, $pullRequest]));
+    }
+
+    public function testAWaitOnAPullRequestWhoseTaskFailedForGoodIsHeldWithTheReason(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #3'))], [3 => 'cannot build']);
+
+        self::assertSame('depends on #3, which failed for good: cannot build', $plan->held[0]->reason);
+    }
+
+    public function testAWaitOnAPullRequestOfAnAccountWithoutWriteAccessLastsUntilThePullRequestCloses(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #1', 'mallory'))]);
+
+        self::assertSame('waits for #50', $plan->held[0]->reason);
+    }
+
+    public function testAWaitOnAPullRequestLastEditedByAnAccountWithoutWriteAccessLastsUntilThePullRequestCloses(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'Closes #1'), $this->history('mallory', []))]);
+
+        self::assertSame('waits for #50', $plan->held[0]->reason);
+    }
+
+    public function testAWaitOnAPullRequestWithoutAClosingKeywordLastsUntilThePullRequestCloses(): void
+    {
+        $plan = $this->plan([$this->row(Issues::task(1, ['intakt'], with: ['body' => 'Waits for #50'])), $this->row(Issues::pullRequest(50, 'A refactoring.'))]);
+
+        self::assertSame('waits for #50', $plan->held[0]->reason);
+    }
+
+    public function testTheLowestTrustedOpenPullRequestClosingATaskIsItsRework(): void
+    {
+        $plan = $this->plan([
+            $this->row(Issues::task(1)),
+            $this->row(Issues::pullRequest(52, 'Fixes #1')),
+            $this->row(Issues::pullRequest(51, 'Fixes #1')),
+            $this->row(Issues::pullRequest(50, 'Fixes #1', 'mallory')),
+        ]);
+
+        self::assertSame([1 => 51], $plan->pullRequests);
+    }
+
+    public function testAnEligibilityLabelATriageAccountAppliedMakesNoTask(): void
+    {
+        self::assertSame([], $this->readyOf([$this->row(Issues::task(1), $this->history('ana', ['intakt' => 'tom']))]));
+    }
+
+    public function testATriageAppliedUrgentPriorityIsIgnored(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:urgent']), $this->history('ana', ['intakt' => 'ana', 'priority:urgent' => 'tom'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:high'])),
+        ]);
+
+        self::assertSame([2, 1], $ready);
+    }
+
+    public function testOfTwoPriorityLabelsTheOneAppliedLastCounts(): void
+    {
+        $lowLast = $this->row(Issues::task(1, ['intakt', 'priority:low', 'priority:urgent']), $this->history('ana', ['intakt' => 'ana', 'priority:urgent' => 'ana', 'priority:low' => 'ben']));
+        $urgentLast = $this->row(Issues::task(2, ['intakt', 'priority:low', 'priority:urgent']), $this->history('ana', ['intakt' => 'ana', 'priority:low' => 'ana', 'priority:urgent' => 'ben']));
+
+        self::assertSame([Priority::Low, Priority::Urgent], [$lowLast->priority(), $urgentLast->priority()]);
+        self::assertSame([2, 1], $this->readyOf([$lowLast, $urgentLast]));
+    }
+
+    public function testAPriorityLabelAppliedLastByATriageAccountLeavesTheEarlierOneOfAWriterCounting(): void
+    {
+        self::assertSame(Priority::High, $this->row(Issues::task(1, ['intakt', 'priority:high', 'priority:low']), $this->history('ana', ['intakt' => 'ana', 'priority:high' => 'ana', 'priority:low' => 'tom']))->priority());
+    }
+
+    public function testAVouchedLabelTheItemNoLongerCarriesDoesNotCount(): void
+    {
+        self::assertSame(Priority::Normal, $this->row(Issues::task(1), $this->history('ana', ['intakt' => 'ana', 'priority:urgent' => 'ana']))->priority());
+    }
+
+    public function testAnUnknownPriorityValueIsNormal(): void
+    {
+        self::assertSame(Priority::Normal, Priority::of(['intakt', 'priority:unknown']));
+    }
+
+    public function testAnUrgentTaskGoesBeforeATaskWhoseChangeIsOpen(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::pullRequest(50, 'Closes #1')),
+            $this->row(Issues::task(2, ['intakt', 'priority:urgent'])),
+        ]);
+
+        self::assertSame([2, 1], $ready);
+    }
+
+    public function testATaskWhoseChangeIsOpenGoesBeforeAHigherPriorityTask(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:low'])),
+            $this->row(Issues::pullRequest(50, 'Fixes #2')),
+        ]);
+
+        self::assertSame([2, 1], $ready);
+    }
+
+    public function testAnOutsidersFixesPullRequestLeavesTheOrderUnchanged(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:low'])),
+            $this->row(Issues::pullRequest(50, 'Fixes #2', 'mallory')),
+        ]);
+
+        self::assertSame([1, 2], $ready);
+    }
+
+    public function testAPullRequestLastEditedByAnOutsiderLeavesTheOrderUnchanged(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(2, ['intakt', 'priority:low'])),
+            $this->row(Issues::pullRequest(50, 'Fixes #2'), $this->history('mallory', [])),
+        ]);
+
+        self::assertSame([1, 2], $ready);
+    }
+
+    public function testPriorityThenMilestoneDueDateThenNumberOrderTheRest(): void
+    {
+        $ready = $this->readyOf([
+            $this->row(Issues::task(1, ['intakt', 'priority:low'])),
+            $this->row(Issues::task(2, ['intakt'])),
+            $this->row(Issues::task(3, ['intakt'], with: ['due' => '2026-12-01T00:00:00Z'])),
+            $this->row(Issues::task(4, ['intakt'], with: ['due' => '2026-11-20T00:00:00Z'])),
+            $this->row(Issues::task(5, ['intakt', 'priority:high'])),
+            $this->row(Issues::task(6, ['intakt'])),
+        ]);
+
+        self::assertSame([5, 4, 3, 2, 6, 1], $ready);
+    }
+
+    public function testAnotherEligibilityLabelIsTheProjectsOwn(): void
+    {
+        $plan = new IntakeRules('build')->planOf([$this->row(Issues::task(1, ['intakt'])), $this->row(Issues::task(2, ['build']))], []);
+
+        self::assertSame([2], $this->numbers($plan->ready));
+    }
+
+    public function testOnlyATaskCandidateOrAPullRequestThatClosesATaskNeedsItsHistory(): void
+    {
+        $rules = new IntakeRules('intakt');
+
+        self::assertSame(
+            [true, false, false, true, false],
+            [
+                $rules->needsHistory($this->row(Issues::task(1))),
+                $rules->needsHistory($this->row(Issues::task(1, ['intakt', 'idea']))),
+                $rules->needsHistory($this->row(Issues::task(1, ['bug']))),
+                $rules->needsHistory($this->row(Issues::pullRequest(50, 'Fixes #4'))),
+                $rules->needsHistory($this->row(Issues::pullRequest(50, 'A refactoring.'))),
+            ],
+        );
+    }
+
+    /**
+     * @param list<QueuedIssue> $rows
+     *
+     * @return list<int>
+     */
+    private function readyOf(array $rows): array
+    {
+        return $this->numbers($this->plan($rows)->ready);
+    }
+
+    /**
+     * @param list<QueuedIssue>  $rows
+     * @param array<int, string> $failures
+     */
+    private function plan(array $rows, array $failures = []): IntakePlan
+    {
+        return new IntakeRules('intakt')->planOf($rows, $failures);
+    }
+
+    /**
+     * @param list<QueuedIssue> $rows
+     *
+     * @return list<int>
+     */
+    private function numbers(array $rows): array
+    {
+        return array_map(static fn (QueuedIssue $row): int => $row->number(), $rows);
+    }
+
+    // Without a history the author last edited the item and applied every label, because most cases are about something else.
+    private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
+    {
+        $references = new IssueReferences();
+        $row = new QueuedIssue(new ItemReading($listed, $references->waitsFor($listed->body), $references->closedBy($listed->body)));
+        $row->vouch(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys($listed->labels, $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
+
+        return $row;
+    }
+
+    /**
+     * @param array<string, string> $applications the account that applied each label last, earliest first
+     */
+    private function history(string $lastEditor, array $applications): IssueHistory
+    {
+        return new IssueHistory($lastEditor, array_map(static fn (string $label, string $account): LabelApplication => new LabelApplication($label, $account), array_keys($applications), array_values($applications)));
+    }
+}
