@@ -139,6 +139,117 @@ final class RateLimitReadingsTest extends TestCase
         self::assertSame(12, $this->process()->latest('678')?->remaining);
     }
 
+    public function testAnAnswerFromTheGraphqlPoolLeavesTheRestReadingInPlace(): void
+    {
+        $reset = (string) ($this->clock->now()->getTimestamp() + 600);
+        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['4000'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => ['core']]);
+
+        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['3'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => ['graphql']]);
+
+        self::assertSame(4000, $this->process()->latest('678')?->remaining);
+    }
+
+    public function testAnExhaustedGraphqlPoolDoesNotPauseRestCalls(): void
+    {
+        $this->limitOf($this->process(), 403, $this->exhausted('graphql'));
+
+        $this->process()->refuseWhileLimited('678');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    public function testAnExhaustedGraphqlPoolPausesGraphqlCalls(): void
+    {
+        $this->limitOf($this->process(), 403, $this->exhausted('graphql'));
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->process()->refuseWhileLimited('678', 'graphql');
+    }
+
+    public function testAnExhaustedGraphqlPoolAnsweredWith200PausesGraphqlCalls(): void
+    {
+        $limited = $this->limitOf($this->process(), 200, $this->exhausted('graphql'));
+
+        self::assertSame($this->clock->now()->getTimestamp() + 3600, $limited->resetsAt->getTimestamp());
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->process()->refuseWhileLimited('678', 'graphql');
+    }
+
+    public function testAnExhaustedGraphqlPoolAnsweredWith200DoesNotPauseRestCalls(): void
+    {
+        $this->limitOf($this->process(), 200, $this->exhausted('graphql'));
+
+        $this->process()->refuseWhileLimited('678');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    public function testAGraphqlAnswerWith200AndARetryAfterButBudgetLeftIsNoRateLimit(): void
+    {
+        $reset = (string) ($this->clock->now()->getTimestamp() + 600);
+
+        $this->process()->observe('678', 200, ['retry-after' => ['60'], 'x-ratelimit-remaining' => ['3'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => ['graphql']]);
+        $this->process()->refuseWhileLimited('678', 'graphql');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    public function testARestAnswerWith200ThatSpentTheLastCallIsNoRateLimit(): void
+    {
+        $this->process()->observe('678', 200, $this->exhausted('core'));
+        $this->process()->refuseWhileLimited('678');
+
+        self::assertSame(0, $this->process()->latest('678')?->remaining);
+    }
+
+    public function testAnUpgradeKeepsAnUnexpiredPauseStoredUnderTheEarlierKey(): void
+    {
+        $this->pauseStoredByAnEarlierVersion();
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->process()->refuseWhileLimited('678');
+    }
+
+    public function testAPauseStoredUnderTheEarlierKeyIsNotShortenedByALaterLimit(): void
+    {
+        $this->pauseStoredByAnEarlierVersion();
+
+        $later = $this->limitOf($this->process(), 429, ['retry-after' => ['30']]);
+
+        self::assertSame($this->clock->now()->getTimestamp() + 3600, $later->resetsAt->getTimestamp());
+    }
+
+    public function testAPauseStoredUnderTheEarlierKeyDoesNotHoldGraphqlQueries(): void
+    {
+        $this->pauseStoredByAnEarlierVersion();
+
+        $this->process()->refuseWhileLimited('678', 'graphql');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    // Written under the kind and the hashed installation id alone, because that is the key the version before the per-pool keys used.
+    private function pauseStoredByAnEarlierVersion(): void
+    {
+        $cache = new FilesystemAdapter('', 0, $this->directory);
+        $until = $this->clock->now()->modify('+1 hour');
+
+        $cache->save($cache->getItem('github-rate-limit-limited-'.hash('sha256', '678'))->set($until->getTimestamp())->expiresAt($until));
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function exhausted(string $pool): array
+    {
+        $reset = (string) ($this->clock->now()->getTimestamp() + 3600);
+
+        return ['x-ratelimit-remaining' => ['0'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => [$pool]];
+    }
+
     /**
      * @param array<string, list<string>> $headers
      */

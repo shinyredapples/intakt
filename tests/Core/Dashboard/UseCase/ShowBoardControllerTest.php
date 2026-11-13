@@ -7,16 +7,22 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\HeadFault;
+use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Asset\Packages;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -29,7 +35,12 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(Lane::class)]
+#[UsesClass(WhoIsWorking::class)]
 #[UsesClass(RefuseForeignHost::class)]
+#[UsesClass(LedgerFailingHeads::class)]
+#[UsesClass(FailingHead::class)]
+#[UsesClass(HeadFault::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     public function testTheRootAddressShowsTheBoard(): void
@@ -83,17 +94,101 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame([], $this->cardNumbersIn($page, 'Done'));
     }
 
-    public function testEveryColumnWithoutACardSaysNothingHere(): void
+    public function testEveryFlowColumnWithoutACardSaysNothingHere(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(
-            ['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'Merging', 'Done'],
-            $page->filter('.board > section.col')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text()),
+            ['Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'Merging', 'Done'],
+            $page->filter('.board > section.col:not(.col-needs)')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text()),
         );
-        self::assertSame(['Nothing here'], array_values(array_unique($page->filter('.col-empty')->each(static fn (Crawler $empty): string => $empty->text()))));
+        self::assertSame(['Nothing here'], array_values(array_unique($page->filter('.col:not(.col-needs) .col-empty')->each(static fn (Crawler $empty): string => $empty->text()))));
+    }
+
+    public function testAnEmptyWaitingOnYouColumnSaysNothingNeedsYou(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $column = $this->column($this->browser->request('GET', '/'), 'Waiting on you');
+
+        self::assertSame('Nothing needs you', $column->filter('.col-empty')->text());
+    }
+
+    public function testOnlyTheFirstColumnIsPinnedAsWaitingOnYou(): void
+    {
+        $pinned = $this->browser->request('GET', '/')->filter('.board > section.col.col-needs');
+
+        self::assertCount(1, $pinned);
+        self::assertSame('Waiting on you', $pinned->filter('.col-head h3')->text());
+        self::assertSame('col-waiting-on-you', $this->browser->getCrawler()->filter('.board > section.col')->first()->attr('id'));
+    }
+
+    public function testAnEmptyWaitingOnYouColumnCountsZeroWithoutAmber(): void
+    {
+        $count = $this->column($this->browser->request('GET', '/'), 'Waiting on you')->filter('.col-head .count');
+
+        self::assertSame('0', $count->text());
+        self::assertStringNotContainsString('needs', (string) $count->attr('class'));
+    }
+
+    public function testOnlyBacklogAndDoneStartCollapsed(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame(['col-backlog', 'col-done'], $page->filter('.board > section.col.collapsed')->each(static fn (Crawler $column): string => (string) $column->attr('id')));
+        self::assertCount(2, $page->filter('.board .col-fold'));
+        self::assertCount(2, $page->filter('.board .col-hide'));
+    }
+
+    public function testACollapsedColumnsStripShowsItsNameAndCountSideBySide(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $strip = $this->column($this->browser->request('GET', '/'), 'Done')->filter('button.col-fold');
+
+        self::assertSame(['Show Done', '1', 'task'], $strip->children()->each(static fn (Crawler $part): string => $part->text()));
+        self::assertSame('count', $strip->filter('.count')->attr('class'));
+    }
+
+    // A speech user says the words they see, so the name holds them instead of an aria-label that would replace them.
+    public function testACollapsedColumnsStripIsNamedByItsVisibleWordsBetweenHiddenOnes(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Show Done1 task', $this->column($page, 'Done')->filter('button.col-fold')->text());
+        self::assertSame('Show Backlog0 tasks', $this->column($page, 'Backlog')->filter('button.col-fold')->text());
+        self::assertSame(['Show ', ' task'], $this->column($page, 'Done')->filter('button.col-fold .sr-only')->each(static fn (Crawler $hidden): string => $hidden->text(normalizeWhitespace: false)));
+        self::assertNull($this->column($page, 'Done')->filter('button.col-fold')->attr('aria-label'));
+    }
+
+    public function testACollapsedColumnsStripSaysItIsCollapsedAndControlsTheColumnsCards(): void
+    {
+        $column = $this->column($this->browser->request('GET', '/'), 'Done');
+        $strip = $column->filter('button.col-fold');
+
+        self::assertSame(['false', 'cards-done'], [$strip->attr('aria-expanded'), $strip->attr('aria-controls')]);
+        self::assertSame('cards-done', $column->filter('.col-cards')->attr('id'));
+    }
+
+    public function testACollapsedColumnOffersHideInItsHeadNamingTheColumn(): void
+    {
+        $hide = $this->column($this->browser->request('GET', '/'), 'Backlog')->filter('.col-head button.col-hide');
+
+        self::assertSame(['Hide', 'Hide Backlog', 'button'], [$hide->text(), $hide->attr('aria-label'), $hide->attr('type')]);
+    }
+
+    public function testAnOpenColumnHasNoStripAndNoHide(): void
+    {
+        $column = $this->column($this->browser->request('GET', '/'), 'In review');
+
+        self::assertStringNotContainsString('collapsed', (string) $column->attr('class'));
+        self::assertCount(0, $column->filter('.col-fold, .col-hide'));
     }
 
     public function testEachColumnCountsEveryCardOfEveryProject(): void
@@ -163,12 +258,161 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Round 1', $this->wordsWithoutExplanationOf($card->filter('.meta .term')));
     }
 
+    public function testEachRunningReviewerIsALaneWithItsProjectChangeAndRound(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $lanes = $this->browser->request('GET', '/')->filter('.working .lane');
+
+        self::assertCount(1, $lanes);
+        self::assertSame('42', $lanes->filter('.what')->text());
+        self::assertSame('Round 1', $lanes->filter('.meta span')->last()->text());
+        self::assertStringStartsWith('correctness', $lanes->filter('.who')->text());
+    }
+
+    public function testAReviewerThatHasAnsweredIsNoLane(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answer('round-1', 'correctness', 0);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('.working .lane'));
+    }
+
+    public function testTheSummaryCountsTheRunningReviewersInWords(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startReviewer('round-1', 'security');
+
+        $summary = $this->browser->request('GET', '/')->filter('.working .w-sum');
+
+        self::assertSame('2 working', $summary->text());
+    }
+
+    public function testABoardWithNobodyRunningSaysNobodyIsWorking(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Nobody is working yet', $page->filter('.working .w-sum')->text());
+        self::assertCount(0, $page->filter('.working .lane'));
+    }
+
+    public function testTheSummaryIsAClosedDisclosureWithAChevronAboveTheColumns(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('details.working:not([open]) > summary svg.chev'));
+        self::assertCount(1, $page->filter('details.working + section .board'));
+    }
+
     public function testTheBoardLinksToTheReviewListBehindIt(): void
     {
         $link = $this->browser->request('GET', '/')->filter('.page-head .actions a');
 
         self::assertSame('/reviews', $link->attr('href'));
         self::assertSame('Open the review list', $link->text());
+    }
+
+    public function testABoardWithoutFailingHeadsShowsNoBanner(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        self::assertCount(0, $this->browser->request('GET', '/')->filter('.banner'));
+    }
+
+    public function testEachFailingHeadIsABrokenBannerOfItsProjectAboveWhoIsWorking(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+        $this->ledger->failHead('beta', '8', 1);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame(['alpha', 'beta'], $page->filter('.page-head ~ .banner.broken')->each(static fn (Crawler $banner): ?string => $banner->attr('data-project')));
+        self::assertCount(1, $page->filter('.banner + details.working'));
+        self::assertCount(0, $page->filter('details.working ~ .banner'));
+    }
+
+    public function testABackingOffHeadsBannerNamesItsPullRequestItsCauseAndItsNextTry(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $banner = $this->browser->request('GET', '/')->filter('.banner');
+
+        self::assertSame('Pull request 7 of alpha failed', $banner->filter('.banner-toggle span')->text());
+        self::assertSame('Pull request 7 of alpha failed. 1 failure in a row, next try at 12:08 UTC: RuntimeException: commit a not fetched', $banner->filter('p')->text());
+    }
+
+    public function testAHandedOverHeadsBannerSaysTheMaintainerAgentHasIt(): void
+    {
+        $this->ledger->handOverHead('alpha', '7', 'c');
+
+        $text = $this->browser->request('GET', '/')->filter('.banner p')->text();
+
+        self::assertSame('Pull request 7 of alpha failed. Handed over to the maintainer agent after 4 failures: RuntimeException: commit c not fetched', $text);
+    }
+
+    public function testABannerLinksToTheFailedPullRequestsOnTheReviewList(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $link = $this->browser->request('GET', '/')->filter('.banner > a.btn');
+
+        self::assertSame('/reviews#failing-heads', $link->attr('href'));
+        self::assertSame('See the failed pull requests', $link->text());
+    }
+
+    public function testACredentialInTheCauseIsRedactedOnTheBanner(): void
+    {
+        $token = 'ghp_'.str_repeat('a1', 18);
+        $this->ledger->failHeadBecause('alpha', '7', 'clone refused for token '.$token);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertStringContainsString('clone refused for token [redacted]', $page->filter('.banner p')->text());
+        self::assertStringNotContainsString($token, (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testMarkupInTheProjectAndTheCauseIsShownAsTextOnTheBanner(): void
+    {
+        $this->ledger->failHeadBecause('<i>alpha</i>', '7', '<b>exit 1</b>');
+
+        $banner = $this->browser->request('GET', '/')->filter('.banner');
+
+        self::assertSame('<i>alpha</i>', $banner->attr('data-project'));
+        self::assertSame('Pull request 7 of <i>alpha</i> failed', $banner->filter('.banner-toggle span')->text());
+        self::assertStringEndsWith('of <i>alpha</i> failed. 2 failures in a row, next try at 12:08 UTC: <b>exit 1</b>', $banner->filter('p')->text());
+        self::assertCount(0, $banner->filter('i, b'));
+    }
+
+    public function testABoardWithoutLiveUpdatesWiresTheBannerToggleToTheBannerScript(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('script[type="importmap"]'));
+        self::assertCount(0, $page->filter('.banner[data-controller], .banner [data-action]'));
+        self::assertSame('false', $page->filter('.banner > button.banner-toggle')->attr('aria-expanded'));
+        $script = $page->filter('head script[type="module"]')->text();
+        self::assertStringContainsString(sprintf("import { toggleBanners } from '%s';", $packages->getUrl('banner-toggle.js')), $script);
+        self::assertStringContainsString('toggleBanners(document);', $script);
+    }
+
+    public function testTheBannerScriptTheBoardImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('banner-toggle.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function toggleBanners(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testTheBoardUsesTheFullWidthOfThePage(): void

@@ -1,6 +1,6 @@
 ## Container image
 
-CI builds the image and runs its smoke test (below) on every pull request and on main: the `image` job ([CI](ci.md)).
+CI builds the image and runs its smoke test (below) on main and on every pull request that changes more than `docs/`, `tests/` or `upstream/`: the `image` job ([CI](ci.md)).
 
 Every release publishes the image to `ghcr.io/shinyredapples/intakt` ([releasing](../releasing.md#the-container-image)).
 

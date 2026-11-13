@@ -47,6 +47,10 @@ flowchart TD
 
 If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.
 
+## What is Intakt doing right now?
+
+Run `php bin/console intakt:status --format=json`. It prints one line of JSON: for each project, the reviews in progress, the pull requests the watcher holds back and why, the ones handed over to you and the last results, plus any pause or drain in effect and how many messages wait in each background queue. It reads only Intakt's database, so it answers even when no background worker runs; a growing count in the `async` queue then tells you the workers are stopped. It never shows a secret. The fields are described in the [user documentation](../user/README.md#the-status-document-in-progress).
+
 ## Reading Intakt's log
 
 This is the service log, not the live job log on a task's card (described under "Still stuck?" below); they are two different things.

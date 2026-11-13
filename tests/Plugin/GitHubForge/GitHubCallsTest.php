@@ -73,6 +73,18 @@ final class GitHubCallsTest extends TestCase
         self::assertSame([['Authorization: Bearer '.self::SECRET]], $sent);
     }
 
+    public function testARateLimitedQueryPausesQueriesButNotRestCalls(): void
+    {
+        $answers = [new MockResponse('{}', ['http_code' => 429, 'response_headers' => ['retry-after' => '600']]), new MockResponse('{}')];
+        $calls = $this->callsAnswering(static function () use (&$answers): ResponseInterface {
+            return array_shift($answers) ?? self::fail('Only two requests were expected.');
+        });
+        self::assertInstanceOf(ForgeRateLimited::class, $this->failureOf(static fn () => $calls->query(['json' => ['query' => '{}']])));
+
+        self::assertSame(200, $calls->asInstallation('GET', 'https://api.github.com/installation/repositories', [])->getStatusCode());
+        self::assertInstanceOf(ForgeRateLimited::class, $this->failureOf(static fn () => $calls->query(['json' => ['query' => '{}']])));
+    }
+
     private function callsAnswering(callable $answer): GitHubCalls
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');

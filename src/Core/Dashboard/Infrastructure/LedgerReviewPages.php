@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\RoundCosts;
@@ -25,19 +26,24 @@ final readonly class LedgerReviewPages
     // Null for a round the ledger never started readably, so the page answers 404 instead of an empty review.
     public function reviewOf(string $round): ?Review
     {
-        return $this->rounds()->reviewOf($round);
+        return $this->rounds($this->ledger->readInOrder())->reviewOf($round);
     }
 
     public function board(): Board
     {
-        return new Board($this->rounds()->reviews());
+        return $this->boardOf($this->ledger->readInOrder());
     }
 
-    private function rounds(): LedgerRounds
+    public function boardOf(RecordedEvents $events): Board
+    {
+        return new Board($this->rounds($events)->reviews());
+    }
+
+    private function rounds(RecordedEvents $events): LedgerRounds
     {
         $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures);
 
-        foreach ($this->ledger->readInOrder() as $recorded) {
+        foreach ($events as $recorded) {
             $rounds->add($recorded);
         }
 

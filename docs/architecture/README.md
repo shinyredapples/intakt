@@ -9,7 +9,8 @@ Code and conventions:
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
 - [Build clone](build-clone.md)
-- [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward or holds a merge, and stripped of attribution
+- [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
+- [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
@@ -35,10 +36,12 @@ Running Intakt:
 Forges and identity:
 - [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
 - [GitHub App identity](github-app-identity.md)
+- [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`; the changed paths that are part of the CI definition; the head's, main's and the merged workflows of a change and whether its push waits for the owner
 
 Models and budget:
 - [AI providers](ai-providers.md)
 - [Capability tiers per project](capability-tiers.md): the mode per project (live or reviewer-for-loop)
+- [Model choice](model-choice.md): the routing rules that pick the build tier
 - [Vendor](vendor.md): the judge
 - [Measured use](measured-use.md): start ceiling and admission, cooldowns, shared holds and outage notices
 - [Round cost](round-cost.md): the price per model and the cost line of `intakt:review`
@@ -46,9 +49,11 @@ Models and budget:
 
 Builds:
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
+- [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns
 
 Reviews:
 - [Review flow](review-flow.md)
+- [Boot step](boot-step.md): a commit booted once with `bin/instance` (main's for a head), its outcome booted, failed or crashed, never an exception
 - [Review rounds](review-rounds.md)
 - [Review verdicts](review-verdicts.md)
 - [Quorum policies](quorum-policies.md)
@@ -61,5 +66,6 @@ Reviews:
 
 Dashboard:
 - [Dashboard](dashboard.md)
+- [Status read model](status.md): the status JSON per project and its schema, read without the message bus
 - [Server status](server-status.md)
 - [Live updates](live-updates.md)

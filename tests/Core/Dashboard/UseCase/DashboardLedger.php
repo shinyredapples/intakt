@@ -55,6 +55,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => $number, 'repository' => '/repos/alpha', 'base' => 'main', 'task' => 'Add the thing.']);
     }
 
+    public function startRoundOfQuorum(string $change, string $round, string $quorum): void
+    {
+        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => 1, 'quorum' => $quorum]);
+    }
+
     public function startReviewer(string $round, string $role): void
     {
         $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role));
@@ -122,6 +127,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::HeadFailed, $this->headFailure($project, $change, 'a') + ['failures' => $failures]);
     }
 
+    public function failHeadBecause(string $project, string $change, string $cause): void
+    {
+        $this->add(LedgerEventKind::HeadFailed, ['cause' => $cause, 'failures' => 2] + $this->headFailure($project, $change, 'a'));
+    }
+
     public function failMovedHead(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, $this->headFailure($project, $change, 'b') + ['failures' => 1]);
@@ -135,6 +145,11 @@ final class DashboardLedger implements Ledger
     public function keepHeadPending(string $project, string $change, string $head): void
     {
         $this->add(LedgerEventKind::HeadPending, ['project' => $project, 'change' => $change, 'head' => $head, 'read_again_at' => '2026-10-28T12:01:00+00:00']);
+    }
+
+    public function keepHeadPendingUntil(string $project, string $change, string $readAgainAt): void
+    {
+        $this->add(LedgerEventKind::HeadPending, ['project' => $project, 'change' => $change, 'head' => 'a', 'read_again_at' => $readAgainAt]);
     }
 
     public function recordRedHead(string $project, string $change, string $head): void

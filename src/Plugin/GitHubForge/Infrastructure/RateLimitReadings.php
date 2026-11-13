@@ -26,6 +26,10 @@ final readonly class RateLimitReadings
     // One minute because GitHub named no reset still ahead, which is also the shortest wait its secondary limits ask for.
     private const int SECONDS_WITHOUT_RESET = 60;
 
+    // GitHub counts REST calls and GraphQL queries in separate pools, so each pool keeps its own pause and only `core` feeds the reserve.
+    public const string CORE = 'core';
+    public const string GRAPHQL = 'graphql';
+
     public function __construct(
         #[Autowire(service: GitHubForgeServices::RATE_LIMITS)]
         private CacheItemPoolInterface $pool,
@@ -37,9 +41,9 @@ final readonly class RateLimitReadings
     /**
      * @throws ForgeRateLimited
      */
-    public function refuseWhileLimited(string $installationId): void
+    public function refuseWhileLimited(string $installationId, string $pool = self::CORE): void
     {
-        $until = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId)));
+        $until = $this->storedPause($installationId, $pool);
 
         // Compared with the clock because the cache expiry runs on system time.
         if ($until instanceof DateTimeImmutable && $until > $this->clock->now()) {
@@ -54,20 +58,22 @@ final readonly class RateLimitReadings
      */
     public function observe(string $installationId, int $status, array $headers): void
     {
+        $pool = $headers['x-ratelimit-resource'][0] ?? self::CORE;
+
         $reading = $this->readingOf($headers);
-        if ($reading instanceof RateLimitReading) {
+        if (self::CORE === $pool && $reading instanceof RateLimitReading) {
             $this->remember($installationId, $reading);
         }
 
-        $until = $this->limitedUntil($status, $headers);
+        $until = $this->limitedUntil($pool, $status, $headers);
         if ($until instanceof DateTimeImmutable) {
-            throw new ForgeRateLimited($this->pause($installationId, $until));
+            throw new ForgeRateLimited($this->pause($installationId, $pool, $until));
         }
     }
 
     public function latest(string $installationId): ?RateLimitReading
     {
-        $item = $this->pool->getItem($this->key('reading', $installationId));
+        $item = $this->pool->getItem($this->key('reading', $installationId, self::CORE));
         $value = $item->get();
 
         if (!$item->isHit() || !is_array($value) || !is_int($value['remaining'] ?? null) || !is_int($value['limit'] ?? null) || !is_int($value['reset'] ?? null)) {
@@ -95,14 +101,15 @@ final readonly class RateLimitReadings
     /**
      * @param array<string, list<string>> $headers
      */
-    private function limitedUntil(int $status, array $headers): ?DateTimeImmutable
+    private function limitedUntil(string $pool, int $status, array $headers): ?DateTimeImmutable
     {
-        // Any other 403 stays an ordinary refusal, because a missing permission answers it too.
-        if (!in_array($status, self::LIMITED_STATUSES, true)) {
+        // Any other 403 stays an ordinary refusal, because a missing permission answers it too. GitHub answers an exhausted GraphQL pool with 200 and a RATE_LIMITED error, so there an empty budget counts at any status; an answer that spent the last point is read again after the reset, because its headers do not tell it apart from the refusal.
+        $limitedStatus = in_array($status, self::LIMITED_STATUSES, true);
+        if (!$limitedStatus && self::GRAPHQL !== $pool) {
             return null;
         }
 
-        if (isset($headers['retry-after'])) {
+        if ($limitedStatus && isset($headers['retry-after'])) {
             return $this->ahead($this->retryAfter($headers['retry-after'][0] ?? ''));
         }
 
@@ -143,25 +150,42 @@ final readonly class RateLimitReadings
         }
 
         $value = ['remaining' => $reading->remaining, 'limit' => $reading->limit, 'reset' => $resetsAt->getTimestamp()];
-        $item = $this->pool->getItem($this->key('reading', $installationId))->set($value)->expiresAt($resetsAt);
+        $item = $this->pool->getItem($this->key('reading', $installationId, self::CORE))->set($value)->expiresAt($resetsAt);
         $this->pool->save($item);
     }
 
-    private function pause(string $installationId, DateTimeImmutable $until): DateTimeImmutable
+    private function pause(string $installationId, string $pool, DateTimeImmutable $until): DateTimeImmutable
     {
         // Under the lock every process takes, because two answers in flight could otherwise replace a longer pause with a shorter one.
-        $lock = $this->locks->createLock($this->key('pause', $installationId));
+        $lock = $this->locks->createLock($this->key('pause', $installationId, $pool));
         $lock->acquire(true);
 
         try {
-            $item = $this->pool->getItem($this->key('limited', $installationId));
-            $longest = max($until, $this->pausedUntil($item) ?? $until);
-            $this->pool->save($item->set($longest->getTimestamp())->expiresAt($longest));
+            $longest = max($until, $this->storedPause($installationId, $pool) ?? $until);
+            $this->pool->save($this->pool->getItem($this->key('limited', $installationId, $pool))->set($longest->getTimestamp())->expiresAt($longest));
 
             return $longest;
         } finally {
             $lock->release();
         }
+    }
+
+    private function storedPause(string $installationId, string $pool): ?DateTimeImmutable
+    {
+        $current = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId, $pool)));
+        $earlier = $this->pauseStoredByAnEarlierVersion($installationId, $pool);
+
+        return $current instanceof DateTimeImmutable && $earlier instanceof DateTimeImmutable ? max($current, $earlier) : $current ?? $earlier;
+    }
+
+    // Honored until it expires, because an install upgraded during a pause stored it under the key the earlier version used (the installation id alone, for REST calls only), and dropping it would resume calls before GitHub's reset.
+    private function pauseStoredByAnEarlierVersion(string $installationId, string $pool): ?DateTimeImmutable
+    {
+        if (self::CORE !== $pool) {
+            return null;
+        }
+
+        return $this->pausedUntil($this->pool->getItem('github-rate-limit-limited-'.hash('sha256', $installationId)));
     }
 
     private function pausedUntil(CacheItemInterface $item): ?DateTimeImmutable
@@ -186,9 +210,9 @@ final readonly class RateLimitReadings
         return is_string($value) && ctype_digit($value) && strlen($value) < 12 ? (int) $value : null;
     }
 
-    // Hashed, because the id comes from the owner's settings and a cache key allows only a narrow set of characters.
-    private function key(string $kind, string $installationId): string
+    // Hashed, because the id comes from the owner's settings, the pool from GitHub's answer, and a cache key allows only a narrow set of characters.
+    private function key(string $kind, string $installationId, string $pool): string
     {
-        return 'github-rate-limit-'.$kind.'-'.hash('sha256', $installationId);
+        return 'github-rate-limit-'.$kind.'-'.hash('sha256', strlen($pool).':'.$pool.$installationId);
     }
 }

@@ -20,4 +20,9 @@ final readonly class FailingHead
     {
         return clone ($this, ['handedOver' => true]);
     }
+
+    public function withCause(string $cause): self
+    {
+        return clone ($this, ['fault' => new HeadFault($cause, $this->fault->failures, $this->fault->retryAt)]);
+    }
 }

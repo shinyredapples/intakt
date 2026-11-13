@@ -104,6 +104,21 @@ final class AppImageWorkflowTest extends TestCase
         self::assertSame(self::FORK_GUARD, $this->imageJob()['if'] ?? null);
     }
 
+    public function testAPushNeedsTheAppImageAndAPullRequestAsksTheImageFilter(): void
+    {
+        $decide = $this->stepRunning('image-needed.sh');
+
+        self::assertSame(self::DECIDE, $decide['id'] ?? null);
+        self::assertStringContainsString("needed=yes\n  image=yes\nelse\n", $decide['run'] ?? '');
+        self::assertStringContainsString("image=\$(.github/ci/image-needed.sh \"\$base\" \"\$HEAD_SHA\")\n", $decide['run'] ?? '');
+    }
+
+    public function testTheBuildAndTheSmokeTestRunOnlyWhenTheImageIsNeeded(): void
+    {
+        self::assertSame("steps.upgrade.outputs.image == 'yes'", $this->stepRunning(self::BUILD)['if'] ?? null);
+        self::assertSame("steps.upgrade.outputs.image == 'yes'", $this->stepRunning('smoke-test.sh')['if'] ?? null);
+    }
+
     /**
      * @return Step
      */

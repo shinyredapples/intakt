@@ -81,6 +81,16 @@ final readonly class RepositoryGit
      *
      * @throws HandBackNotChecked
      */
+    public function exactOutputWithInput(string $repository, array $arguments, string $input): string
+    {
+        return $this->mustRun($repository, $arguments, $input);
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws HandBackNotChecked
+     */
     private function mustRun(string $repository, array $arguments, ?string $input): string
     {
         $process = $this->run($repository, $arguments, $input);
