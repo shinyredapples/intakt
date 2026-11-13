@@ -75,8 +75,7 @@ final readonly class GitHubIssueHistories
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
-            // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-            throw new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure::class));
+            throw $this->unreachable($failure::class);
         }
 
         if ($status < 200 || $status >= 300) {
@@ -90,6 +89,12 @@ final readonly class GitHubIssueHistories
         }
 
         return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object.');
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
     }
 
     /**
@@ -119,7 +124,7 @@ final readonly class GitHubIssueHistories
             throw new ForgeReadFailed('GitHub answered a history read without the body edits.');
         }
 
-        // A body never edited was last written by its author.
+        // Without an edit the author is the editor, because GitHub records an edit only after the first write.
         return [] === $edits ? $this->login($issue, 'author') : $this->login(is_array($edits[0] ?? null) ? $edits[0] : [], 'editor');
     }
 
@@ -136,7 +141,7 @@ final readonly class GitHubIssueHistories
             throw new ForgeReadFailed('GitHub answered a label history this forge cannot read whole.');
         }
 
-        // Keyed by label, so a label applied again takes its later place and a removed one leaves.
+        // Keyed by label, because a label applied again must take its later place and a removed one must leave.
         $applied = [];
         foreach ($events as $event) {
             if (!is_array($event)) {

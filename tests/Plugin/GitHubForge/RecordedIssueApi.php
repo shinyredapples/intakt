@@ -37,7 +37,7 @@ final class RecordedIssueApi
     public array $namingNext = [];
     /** @var list<string> */
     public array $conditions = [];
-    // The answer to the GraphQL history read: a body, or three digits for an HTTP status.
+    // A body, or three digits for an HTTP status, because the history read is scripted like the listing pages.
     public string $graphql = '{}';
     /** @var list<string> */
     public array $graphqlRequests = [];
@@ -99,15 +99,23 @@ final class RecordedIssueApi
     /**
      * @param array<string, mixed> $options
      */
+    private function answerHistory(array $options): ResponseInterface
+    {
+        $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
+
+        return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
         $this->requests[] = $method.' '.$url;
         $this->keepConditions($options);
 
         if (str_ends_with($url, '/graphql')) {
-            $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
-
-            return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql);
+            return $this->answerHistory($options);
         }
 
         if ($this->notModified) {
