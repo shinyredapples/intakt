@@ -170,7 +170,7 @@ final class CheckMainTest extends TestCase
         $this->repository->cutHistoryBelow($merge);
 
         $this->expectException(MainNotRead::class);
-        $this->expectExceptionMessage('shallow');
+        $this->expectExceptionMessageMatches('/history is shallow/');
 
         $this->whenMainIsChecked(null, [$merge]);
     }
