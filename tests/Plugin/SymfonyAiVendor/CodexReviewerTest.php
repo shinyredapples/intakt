@@ -334,6 +334,16 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertFalse($this->cooldowns->isRejected(new Account(Provider::Codex, 'team')));
     }
 
+    public function testAUsageLimitFromACliThatExitsZeroStillCoolsTheAccountDown(): void
+    {
+        $this->replaying('usage-limit', 0);
+
+        $failure = $this->failureOfReview();
+
+        self::assertSame(ProviderRateLimited::class, $failure::class);
+        self::assertTrue($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
+    }
+
     public function testAModelNotAvailableForThePlanIsAnAccountErrorInsteadOfAFailedReview(): void
     {
         $this->replaying('model-not-in-plan', 1);
