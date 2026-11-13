@@ -22,6 +22,7 @@ use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Asset\Packages;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -385,6 +386,33 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Pull request 7 of <i>alpha</i> failed', $banner->filter('.banner-toggle span')->text());
         self::assertStringEndsWith('of <i>alpha</i> failed. 2 failures in a row, next try at 12:08 UTC: <b>exit 1</b>', $banner->filter('p')->text());
         self::assertCount(0, $banner->filter('i, b'));
+    }
+
+    public function testABoardWithoutLiveUpdatesWiresTheBannerToggleToTheBannerScript(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('script[type="importmap"]'));
+        self::assertCount(0, $page->filter('.banner[data-controller], .banner [data-action]'));
+        self::assertSame('false', $page->filter('.banner > button.banner-toggle')->attr('aria-expanded'));
+        $script = $page->filter('head script[type="module"]')->text();
+        self::assertStringContainsString(sprintf("import { toggleBanners } from '%s';", $packages->getUrl('banner-toggle.js')), $script);
+        self::assertStringContainsString('toggleBanners(document);', $script);
+    }
+
+    public function testTheBannerScriptTheBoardImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('banner-toggle.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function toggleBanners(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testTheBoardUsesTheFullWidthOfThePage(): void
