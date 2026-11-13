@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\PhpLanguage;
 
-// Made-up commit names, one per release the tests lock.
+// Made-up commit names, so a test can tell a release's commit from a fork's at a glance.
 final readonly class LockedCommits
 {
     public const string CONSOLE_8_0_0 = '1111111111111111111111111111111111111111';

@@ -7,7 +7,7 @@ namespace Intakt\Plugin\PhpLanguage\Domain;
 use Intakt\Plugin\Language\Contract\DependencyFiles;
 use JsonException;
 
-// The manifest and the lock file at one revision; a file the revision lacks reads as empty.
+// A file the revision lacks reads as empty, because a project may have no lock file yet, or none any more.
 final readonly class ComposerState
 {
     public const string MANIFEST = 'composer.json';
@@ -18,7 +18,7 @@ final readonly class ComposerState
 
     public const string REQUIRE_DEV = 'require-dev';
 
-    // Composer writes these on every update or derives them from the requirements and packages the package rules judge; every other key of the lock file is a setting.
+    // No settings, because Composer rewrites these on every update or derives them from the requirements and packages, which the package rules judge.
     private const array LOCK_RECORDS = ['_readme', 'content-hash', 'packages', 'packages-dev', 'stability-flags', 'platform', 'platform-dev', 'plugin-api-version'];
 
     /**
@@ -50,7 +50,7 @@ final readonly class ComposerState
             array_diff_key($manifest, array_flip([self::REQUIRE, self::REQUIRE_DEV])),
             array_diff_key($lock, array_flip(self::LOCK_RECORDS)),
             self::stabilityFlags($lock),
-            self::once(self::LOCK, self::lockedPackages($lock, 'packages', false), self::lockedPackages($lock, 'packages-dev', true)),
+            self::once(self::LOCK, self::lockedPackages($lock, PackageGroup::Main), self::lockedPackages($lock, PackageGroup::Development)),
         );
     }
 
@@ -151,23 +151,23 @@ final readonly class ComposerState
      *
      * @throws ComposerFileUnreadable
      */
-    private static function lockedPackages(array $lock, string $group, bool $dev): array
+    private static function lockedPackages(array $lock, PackageGroup $group): array
     {
-        $entries = $lock[$group] ?? [];
+        $entries = $lock[$group->value] ?? [];
 
         if (!is_array($entries) || !array_is_list($entries)) {
-            throw ComposerFileUnreadable::because(self::LOCK, sprintf('%s is no list', $group));
+            throw ComposerFileUnreadable::because(self::LOCK, sprintf('%s is no list', $group->value));
         }
 
         $packages = [];
         foreach ($entries as $entry) {
-            $package = LockedPackage::fromLockEntry($entry, $dev);
+            $package = LockedPackage::fromLockEntry($entry, $group);
             $packages[$package->name] = $package;
         }
 
         // A name locked twice would let one entry hide the other.
         if (count($packages) !== count($entries)) {
-            throw ComposerFileUnreadable::because(self::LOCK, sprintf('%s locks a package twice', $group));
+            throw ComposerFileUnreadable::because(self::LOCK, sprintf('%s locks a package twice', $group->value));
         }
 
         return $packages;
@@ -184,7 +184,7 @@ final readonly class ComposerState
     {
         $map = $file[$key] ?? [];
 
-        // Composer writes an empty map as [], which decodes as an empty list.
+        // A list only when empty, because Composer writes an empty map as [].
         if (!is_array($map) || ([] !== $map && array_is_list($map))) {
             throw ComposerFileUnreadable::because($path, sprintf('%s is no map of package names', $key));
         }

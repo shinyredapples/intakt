@@ -36,18 +36,34 @@ final readonly class ComposerFiles
     /**
      * @return array<string, mixed>
      */
-    public static function entry(string $name, string $version, string $reference, ?string $repository = null): array
+    public static function entry(string $name, string $version, string $reference): array
     {
-        $repository ??= $name;
-
-        return [
+        return self::inRepository([
             'name' => $name,
             'version' => $version,
-            'source' => ['type' => 'git', 'url' => 'https://github.com/'.$repository.'.git', 'reference' => $reference],
-            'dist' => ['type' => 'zip', 'url' => 'https://api.github.com/repos/'.$repository.'/zipball/'.$reference, 'reference' => $reference, 'shasum' => ''],
+            'source' => ['type' => 'git', 'reference' => $reference],
+            'dist' => ['type' => 'zip', 'reference' => $reference, 'shasum' => ''],
             'type' => 'library',
             'autoload' => ['psr-4' => ['Vendor\\' => 'src/']],
             'notification-url' => 'https://packagist.org/downloads/',
+        ], $name);
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     *
+     * @return array<string, mixed>
+     */
+    public static function inRepository(array $entry, string $repository): array
+    {
+        $source = is_array($entry['source'] ?? null) ? $entry['source'] : [];
+        $dist = is_array($entry['dist'] ?? null) ? $entry['dist'] : [];
+        $reference = is_string($source['reference'] ?? null) ? $source['reference'] : '';
+
+        return [
+            ...$entry,
+            'source' => [...$source, 'url' => 'https://github.com/'.$repository.'.git'],
+            'dist' => [...$dist, 'url' => 'https://api.github.com/repos/'.$repository.'/zipball/'.$reference],
         ];
     }
 
@@ -121,12 +137,13 @@ final readonly class ComposerFiles
     private function withLocked(string $group, array $entry): self
     {
         $lock = $this->lock;
+        $kept = [];
         foreach (['packages', 'packages-dev'] as $each) {
             $entries = is_array($lock[$each] ?? null) ? $lock[$each] : [];
-            $lock[$each] = array_values(array_filter($entries, static fn (mixed $locked): bool => !is_array($locked) || ($locked['name'] ?? null) !== $entry['name']));
+            $kept[$each] = array_values(array_filter($entries, static fn (mixed $locked): bool => !is_array($locked) || ($locked['name'] ?? null) !== $entry['name']));
         }
 
-        $lock[$group] = [...$lock[$group], $entry];
+        $lock = [...$lock, ...$kept, $group => [...$kept[$group] ?? [], $entry]];
 
         return new self($this->manifest, $lock);
     }

@@ -55,7 +55,12 @@ final class ComposerPolicyConfigurationTest extends TestCase
      */
     private function processed(array $section): array
     {
-        /* @var array{composer_policy: array{trusted_vendors: list<string>, package_types: list<string>}} */
-        return new Processor()->processConfiguration(new ComposerPolicyConfiguration(), [$section]);
+        $processed = new Processor()->processConfiguration(new ComposerPolicyConfiguration(), [$section]);
+        self::assertIsArray($processed['composer_policy'] ?? null);
+        self::assertIsList($processed['composer_policy']['trusted_vendors'] ?? null);
+        self::assertIsList($processed['composer_policy']['package_types'] ?? null);
+
+        /** @var array{composer_policy: array{trusted_vendors: list<string>, package_types: list<string>}} $processed */
+        return $processed;
     }
 }

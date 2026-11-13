@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\PhpLanguage\Domain;
 
-// A locked package's code as Composer fetches it from GitHub: one repository at one commit.
+// One repository at one commit, because Composer fetches a locked package's code from GitHub by both.
 final readonly class GitHubCommit
 {
-    // Composer's GitHub forms: the clone URL of the source and the zipball of the dist at the same commit.
+    // Only Composer's GitHub forms, because any other place could serve other code: the clone URL of the source and the zipball of the dist.
     private const string SOURCE = '~\Ahttps://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?\z~';
 
     private const string DIST = '~\Ahttps://api\.github\.com/repos/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/zipball/([0-9a-f]{40})\z~';
@@ -35,6 +35,12 @@ final readonly class GitHubCommit
         }
 
         return array_first($places);
+    }
+
+    // Either side may have no checkable commit, so both missing counts as the same and one missing as different.
+    public static function same(?self $one, ?self $other): bool
+    {
+        return $one?->key() === $other?->key();
     }
 
     public function cloneUrl(): string

@@ -17,7 +17,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 
-// A local repository stands in for GitHub, reached through file://, which the network call allows besides https.
+// A local repository over file:// stands in for GitHub, because no test may reach the network and the network call allows file besides https.
 #[CoversClass(GitUpstreamTags::class)]
 #[UsesClass(UpstreamTagNotRead::class)]
 #[UsesClass(HardenedGit::class)]

@@ -16,7 +16,7 @@ final readonly class GitUpstreamTags implements UpstreamTags
     // No repository of its own, because ls-remote needs none, and one found above the working directory would bring its own config.
     private const string NO_REPOSITORY = '--git-dir=/nonexistent';
 
-    // Git lists the commit an annotated tag points to under this suffix.
+    // Asked for too, because git lists the commit an annotated tag points to only under this suffix.
     private const string PEELED = '^{}';
 
     public function __construct(

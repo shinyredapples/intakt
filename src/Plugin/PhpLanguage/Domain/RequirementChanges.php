@@ -9,13 +9,13 @@ use Intakt\Plugin\Language\Contract\DependencyFinding;
 // The requirements of composer.json and the stability flags the lock file keeps for them.
 final readonly class RequirementChanges
 {
-    // A constraint's stability flags, in any case, as Composer reads them.
+    // In any case, because Composer reads a stability flag in any case.
     private const string FLAG = '/@(stable|rc|beta|alpha|dev)\b/i';
 
-    // Flags a package the same change adds may carry: a pre-release of a new package is routine, a development build is not.
+    // Only for a package the same change adds, because a pre-release of a new package is routine and a development build is not.
     private const array ROUTINE_FLAGS = ['stable', 'rc', 'beta'];
 
-    // How the lock file writes them: RC is 5 and beta is 10 in Composer's BasePackage::STABILITIES.
+    // As numbers, because the lock file writes RC as 5 and beta as 10 (Composer's BasePackage::STABILITIES).
     private const array ROUTINE_LOCK_FLAGS = [5, 10];
 
     public function __construct(
@@ -68,8 +68,8 @@ final readonly class RequirementChanges
             $earlier = $before->requirements[$name];
 
             // Only a trusted package that keeps its constraint moves without the owner, so a move cannot hide a new version of another vendor's package.
-            if ($earlier['section'] !== $requirement['section'] && (!$this->trusted->trusts((string) $name) || $earlier['constraint'] !== $requirement['constraint'])) {
-                $findings[] = new DependencyFinding((string) $name, sprintf('moved from %s to %s', $earlier['section'], $requirement['section']));
+            if ($earlier['section'] !== $requirement['section'] && (!$this->trusted->trusts($name) || $earlier['constraint'] !== $requirement['constraint'])) {
+                $findings[] = new DependencyFinding($name, sprintf('moved from %s to %s', $earlier['section'], $requirement['section']));
             }
         }
 
@@ -87,7 +87,7 @@ final readonly class RequirementChanges
             $extra = array_diff($this->flagsOf($requirement['constraint']), $allowed, ['stable']);
 
             if ([] !== $extra) {
-                $findings[] = new DependencyFinding((string) $name, sprintf('has the stability flag @%s', implode(', @', $extra)));
+                $findings[] = new DependencyFinding($name, sprintf('has the stability flag @%s', implode(', @', $extra)));
             }
         }
 
@@ -105,7 +105,7 @@ final readonly class RequirementChanges
             $routineForNew = !array_key_exists($name, $before->requirements) && array_key_exists($name, $after->requirements) && in_array($flag, self::ROUTINE_LOCK_FLAGS, true);
 
             if (!$unchanged && !$routineForNew) {
-                $findings[] = new DependencyFinding((string) $name, 'its stability flag in composer.lock changed');
+                $findings[] = new DependencyFinding($name, 'its stability flag in composer.lock changed');
             }
         }
 

@@ -6,7 +6,7 @@ namespace Intakt\Plugin\PhpLanguage\Domain;
 
 use Intakt\Plugin\Language\Contract\DependencyFinding;
 
-// The packages composer.lock installs, transitive ones included: what code arrives, from where, and what it runs.
+// Transitive packages included, because composer.lock installs them like the ones the manifest names.
 final readonly class LockedPackageChanges
 {
     private const string COMPOSER_PLUGIN = 'composer-plugin';
@@ -78,7 +78,7 @@ final readonly class LockedPackageChanges
      */
     private function moved(?LockedPackage $earlier, LockedPackage $package): array
     {
-        if (!$earlier instanceof LockedPackage || $earlier->dev === $package->dev || $this->trusted->trusts($package->name)) {
+        if (!$earlier instanceof LockedPackage || $earlier->group === $package->group || $this->trusted->trusts($package->name)) {
             return [];
         }
 

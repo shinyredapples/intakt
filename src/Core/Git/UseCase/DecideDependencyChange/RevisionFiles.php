@@ -12,7 +12,7 @@ use Symfony\Component\Process\Process;
 
 final readonly class RevisionFiles
 {
-    // A file and an executable file; a symbolic link, a folder or a submodule in a manifest's place is no file git can hand over as it is installed.
+    // Only a file or an executable file, because a symbolic link, a folder or a submodule in a manifest's place would not read as what Composer installs.
     private const array REGULAR_FILES = ['100644', '100755'];
 
     public function __construct(

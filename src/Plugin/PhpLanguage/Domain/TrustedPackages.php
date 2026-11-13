@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\PhpLanguage\Domain;
 
-// The owner's rules for which new packages are routine: their vendors, and the package types those vendors may add.
+// Types beside vendors, because even a trusted vendor publishes kinds of package (a plugin, a project) that run more than library code.
 final readonly class TrustedPackages
 {
     /**

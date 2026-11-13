@@ -94,6 +94,8 @@ final class DecideDependencyChangeTest extends TestCase
     public function testAHeadWithoutHistoryInCommonWithMainHasEveryPackageNew(): void
     {
         $this->repository->checkoutOrphan('feat/orphan');
+        // A file of its own first, because a root commit equal to main's in tree, message and second would be main's own commit.
+        $this->repository->commitFile('README.md', 'orphan');
         $head = $this->commit(ComposerFiles::sample());
 
         self::assertSame(['php', 'symfony/console'], $this->decide($head)->newPackages);

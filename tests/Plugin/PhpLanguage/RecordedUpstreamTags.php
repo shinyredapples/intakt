@@ -13,8 +13,9 @@ final class RecordedUpstreamTags implements UpstreamTags
     /** @var list<string> */
     public array $asked = [];
 
+    // Keyed by repository URL and tag joined by a space, because neither a URL nor a tag holds one.
     /**
-     * @param array<string, string> $commits keyed by repository URL and tag, joined by a space
+     * @param array<string, string> $commits
      */
     public function __construct(
         private readonly array $commits = [],

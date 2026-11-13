@@ -13,6 +13,7 @@ use Intakt\Plugin\PhpLanguage\Domain\ComposerState;
 use Intakt\Plugin\PhpLanguage\Domain\GitHubCommit;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackage;
 use Intakt\Plugin\PhpLanguage\Domain\LockedPackageChanges;
+use Intakt\Plugin\PhpLanguage\Domain\PackageGroup;
 use Intakt\Plugin\PhpLanguage\Domain\RequirementChanges;
 use Intakt\Plugin\PhpLanguage\Domain\SettingChanges;
 use Intakt\Plugin\PhpLanguage\Domain\TrustedPackages;
@@ -35,6 +36,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(LockedPackageChanges::class)]
 #[CoversClass(TrustedPackages::class)]
 #[CoversClass(ComposerFileUnreadable::class)]
+#[CoversClass(PackageGroup::class)]
 #[UsesClass(UpstreamTagNotRead::class)]
 #[UsesClass(DependencyDecision::class)]
 #[UsesClass(DependencyFiles::class)]
@@ -61,7 +63,7 @@ final class ComposerPolicyTest extends TestCase
     public function testANewDoctrinePackageFromAnotherRepositoryOfItsVendorIsRoutine(): void
     {
         $after = ComposerFiles::sample()->requiring('doctrine/doctrine-bundle', '^3.0')
-            ->locking([...ComposerFiles::entry('doctrine/doctrine-bundle', '3.0.0', LockedCommits::OTHER, 'doctrine/DoctrineBundle'), 'type' => 'symfony-bundle']);
+            ->locking([...ComposerFiles::inRepository(ComposerFiles::entry('doctrine/doctrine-bundle', '3.0.0', LockedCommits::OTHER), 'doctrine/DoctrineBundle'), 'type' => 'symfony-bundle']);
 
         self::assertSame([], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
     }
@@ -173,7 +175,7 @@ final class ComposerPolicyTest extends TestCase
 
     public function testANewPackageFromAnotherOrganizationsRepositoryNeedsTheOwner(): void
     {
-        $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking(ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0, 'someone/uid'));
+        $after = ComposerFiles::sample()->requiring('symfony/uid', '^8.0')->locking(ComposerFiles::inRepository(ComposerFiles::entry('symfony/uid', 'v8.0.0', LockedCommits::UID_8_0_0), 'someone/uid'));
 
         self::assertSame(
             ['symfony/uid: does not come from its own vendor\'s repository at one commit'],
@@ -288,7 +290,7 @@ final class ComposerPolicyTest extends TestCase
 
     public function testAnUpdateFromAnotherRepositoryNeedsTheOwner(): void
     {
-        $after = ComposerFiles::sample()->locking(ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0, 'someone/console'));
+        $after = ComposerFiles::sample()->locking(ComposerFiles::inRepository(ComposerFiles::entry('symfony/console', 'v8.0.0', LockedCommits::CONSOLE_8_0_0), 'someone/console'));
 
         self::assertSame(['symfony/console: its repository changed or cannot be checked'], $this->findingsOf($this->decide(ComposerFiles::sample(), $after)));
     }

@@ -12,7 +12,7 @@ final class ComposerPolicyConfiguration implements ConfigurationInterface
 {
     public const array DEFAULT_VENDORS = ['symfony', 'doctrine'];
 
-    // Plain libraries and bundles, and the types of the official Symfony AI components; a Composer plugin is never routine, whatever this list holds.
+    // The official Symfony AI components beside libraries and bundles, because they ship under types of their own; a Composer plugin is never routine, whatever this list holds.
     public const array DEFAULT_TYPES = [
         'library',
         'symfony-bundle',

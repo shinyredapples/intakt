@@ -39,11 +39,16 @@ final readonly class DecideDependencyChange
             return DependencyDecision::unreadable('the change', $unreadable->getMessage());
         }
 
+        // Never routine, because without a base there is nothing the change was judged against.
+        if ([] === $decisions) {
+            return DependencyDecision::unreadable('the change', 'git named no merge base');
+        }
+
         return DependencyDecision::combined(...$decisions);
     }
 
     /**
-     * @return non-empty-list<DependencyDecision>
+     * @return list<DependencyDecision>
      *
      * @throws ChangeNotRead
      * @throws RepositoryAttributesRefused

@@ -6,7 +6,7 @@ namespace Intakt\Plugin\PhpLanguage\Domain;
 
 use Intakt\Plugin\Language\Contract\DependencyFinding;
 
-// Every key besides the packages is one of Composer's own settings (scripts, plugins, repositories, config, autoloading, stability), which only the owner changes.
+// Every key besides the packages counts as one of Composer's own settings, because scripts, plugins, repositories, config, autoloading and stability all decide what runs, so only the owner changes them.
 final readonly class SettingChanges
 {
     /**
