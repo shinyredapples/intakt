@@ -13,11 +13,15 @@ use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
+use Intakt\Core\Ai\Infrastructure\AccountErrorReported;
 use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\AccountStreamAnswered;
 use Intakt\Core\Ai\Infrastructure\AccountStreamFailures;
+use Intakt\Core\Ai\Infrastructure\CodexAccountFailure;
 use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -41,6 +45,8 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
@@ -51,6 +57,9 @@ use Throwable;
 #[CoversClass(AccountFailoverPlatform::class)]
 #[CoversClass(AccountPlatform::class)]
 #[CoversClass(AccountStreamFailures::class)]
+#[CoversClass(AccountStreamAnswered::class)]
+#[UsesClass(AccountErrorReported::class)]
+#[UsesClass(CodexAccountFailure::class)]
 #[CoversClass(SendFailures::class)]
 #[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
@@ -427,6 +436,68 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertSame($first->getModelCatalog(), $this->accounts($first, $this->answering('second'))->getModelCatalog());
     }
 
+    public function testAnAnswerToACallSentBeforeALostLoginWasReportedDoesNotReportTheSameErrorAgain(): void
+    {
+        $clock = new MockClock();
+        $ledger = new InMemoryLedger();
+        $cooldowns = $this->reporting($clock, $ledger);
+        $older = $this->onDefault($this->answering('An answer.'), $cooldowns, $clock)->invoke('big', 'Review.');
+        $clock->sleep(1);
+        $this->loseTheLogin($cooldowns, $clock);
+        $clock->sleep(1);
+
+        $older->getResult();
+        $this->loseTheLogin($cooldowns, $clock);
+
+        self::assertCount(1, array_keys($ledger->kinds(), LedgerEventKind::AccountErrorReported, true));
+    }
+
+    public function testAnAccountErrorAfterTheAccountAnsweredAgainIsReportedAgain(): void
+    {
+        $clock = new MockClock();
+        $ledger = new InMemoryLedger();
+        $cooldowns = $this->reporting($clock, $ledger);
+        $this->loseTheLogin($cooldowns, $clock);
+        $clock->sleep(1);
+
+        $this->onDefault($this->answering('An answer.'), $cooldowns, $clock)->invoke('big', 'Review.')->getResult();
+        $clock->sleep(1);
+        $this->loseTheLogin($cooldowns, $clock);
+
+        self::assertCount(2, array_keys($ledger->kinds(), LedgerEventKind::AccountErrorReported, true));
+    }
+
+    public function testAStreamReadToItsEndAfterTheReportLetsTheNextAccountErrorBeReported(): void
+    {
+        $clock = new MockClock();
+        $ledger = new InMemoryLedger();
+        $cooldowns = $this->reporting($clock, $ledger);
+        $this->loseTheLogin($cooldowns, $clock);
+        $clock->sleep(1);
+
+        $answer = $this->onDefault($this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult((static fn (): Generator => yield new TextDelta('An answer.'))())), $cooldowns, $clock)->invoke('big', 'Review.');
+        iterator_to_array($answer->asStream());
+        $clock->sleep(1);
+        $this->loseTheLogin($cooldowns, $clock);
+
+        self::assertCount(2, array_keys($ledger->kinds(), LedgerEventKind::AccountErrorReported, true));
+    }
+
+    public function testAnAnswerThatFailsAfterTheReportKeepsTheAccountErrorReported(): void
+    {
+        $clock = new MockClock();
+        $ledger = new InMemoryLedger();
+        $cooldowns = $this->reporting($clock, $ledger);
+        $this->loseTheLogin($cooldowns, $clock);
+        $clock->sleep(1);
+
+        $this->read($this->onDefault(new FailingWhenRead(new RuntimeException('Not an answer.')), $cooldowns, $clock)->invoke('big', 'Review.'));
+        $clock->sleep(1);
+        $this->loseTheLogin($cooldowns, $clock);
+
+        self::assertCount(1, array_keys($ledger->kinds(), LedgerEventKind::AccountErrorReported, true));
+    }
+
     public function testALimitThatArrivesBeforeTheFirstDeltaOfAStreamCoolsTheAccountDownOnce(): void
     {
         $cooldowns = $this->createMock(AccountCooldowns::class);
@@ -521,9 +592,29 @@ final class AccountFailoverPlatformTest extends TestCase
     private function streamed(Closure $deltas, AccountCooldowns $cooldowns, SendFailures $failures): DeferredResult
     {
         $platform = $this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult($deltas()));
-        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NullLogger(), $failures);
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NativeClock(), new NullLogger(), $failures);
 
         return $account->invoke('big', 'Review.');
+    }
+
+    // The cooldowns read the same mocked clock as the calls, so the order of a send and a report is the one the test forces.
+    private function reporting(ClockInterface $clock, InMemoryLedger $ledger): AccountCooldownWindows
+    {
+        return new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), $clock, $ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT]]);
+    }
+
+    private function onDefault(PlatformInterface $platform, AccountCooldowns $cooldowns, ClockInterface $clock): AccountPlatform
+    {
+        return new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, $clock, new NullLogger(), new SendFailures());
+    }
+
+    private function loseTheLogin(AccountCooldowns $cooldowns, ClockInterface $clock): void
+    {
+        try {
+            $this->onDefault($this->answering(static fn (): never => throw CodexAccountFailure::LoginLost->exception()), $cooldowns, $clock)->invoke('big', 'Review.');
+            self::fail('The lost login was expected to fail the call.');
+        } catch (AuthenticationException) {
+        }
     }
 
     private function read(DeferredResult $result): void
