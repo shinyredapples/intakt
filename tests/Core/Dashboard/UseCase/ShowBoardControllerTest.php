@@ -7,10 +7,12 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
@@ -29,6 +31,8 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(Lane::class)]
+#[UsesClass(WhoIsWorking::class)]
 #[UsesClass(RefuseForeignHost::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
@@ -245,6 +249,57 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('#round-7', $card->filter('.top span')->first()->text());
         self::assertSame('Review of round round-7', $card->filter('.title')->text());
         self::assertSame('Round 1', $this->wordsWithoutExplanationOf($card->filter('.meta .term')));
+    }
+
+    public function testEachRunningReviewerIsALaneWithItsProjectChangeAndRound(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $lanes = $this->browser->request('GET', '/')->filter('.working .lane');
+
+        self::assertCount(1, $lanes);
+        self::assertSame('42', $lanes->filter('.what')->text());
+        self::assertSame('Round 1', $lanes->filter('.meta span')->last()->text());
+        self::assertStringStartsWith('correctness', $lanes->filter('.who')->text());
+    }
+
+    public function testAReviewerThatHasAnsweredIsNoLane(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answer('round-1', 'correctness', 0);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('.working .lane'));
+    }
+
+    public function testTheSummaryCountsTheRunningReviewersInWords(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startReviewer('round-1', 'security');
+
+        $summary = $this->browser->request('GET', '/')->filter('.working .w-sum');
+
+        self::assertSame('2 working', $summary->text());
+    }
+
+    public function testABoardWithNobodyRunningSaysNobodyIsWorking(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Nobody is working yet', $page->filter('.working .w-sum')->text());
+        self::assertCount(0, $page->filter('.working .lane'));
+    }
+
+    public function testTheSummaryIsAClosedDisclosureWithAChevronAboveTheColumns(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('details.working:not([open]) > summary svg.chev'));
+        self::assertCount(1, $page->filter('details.working + section .board'));
     }
 
     public function testTheBoardLinksToTheReviewListBehindIt(): void

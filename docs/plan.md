@@ -22,9 +22,9 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M3 Agents and memory | MCP server and client, the Store briefing, GitHub, a subscription reviewer | T15 to T18, T33 | 2026-11-14 |
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
-| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, approving protected changes on the spot, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T75 to T80, T81, T32 (optional) | after the deadline |
+| After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T81, T32 (optional) | after the deadline |
 | M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
-| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
@@ -296,46 +296,6 @@ The demo works on a local repository, so these tasks wait until after the deadli
 - **Evidence:** the override's start output and one edit served without a restart.
 - **Waits for:** T22. **Size:** S. **Labels:** `class:tooling`, `priority:low`.
 
-T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T80 switches a category on, every protected change still goes to the owner.
-
-### T75 Hard floors and the approval decision in dry-run mode
-- **Description:** The decision for a protected head in the design's order (floors, mechanical checks, security review, attacker test), each step a typed result. The hard floors are deterministic rules over the whole change: secrets and credentials handling, every workflow file, existing gate tests, the protected-path list, the approval rules, agent instructions, and a panel reviewer's loosening or missing class. Every protected head still goes to the owner; the computed decision is recorded in the ledger and the request names the first floor or check that failed. A replay command computes the decision for a repository's past approvals.
-- **Acceptance:** each floor has a test that it sends a change to the owner and one that a neighboring change passes it; a request names its floor or check; no path approves by a timer, a veto window or a missing answer; a step that fails or cannot run sends the change to the owner; the replay reads recorded forge responses.
-- **Evidence:** the replay's report over a temporary repository with recorded approvals; the replay over this repository's 32 approvals (owner provides).
-- **PHP 8.5:** `#[NoDiscard]` on the decision.
-- **Waits for:** T18. **Size:** M. **Labels:** `class:process`, `priority:normal`.
-
-### T76 The `language` plugin kind and the comment-only check for PHP
-- **Description:** A `language` plugin kind ([Plugins](design/05-architecture/02-plugins.md)) and its PHP implementation: two versions of a file compare equal when their `PhpToken` streams match without comments and whitespace; docblocks, suppression and ignore markers and inline allow directives count as code. A file of a language without a plugin is not covered.
-- **Acceptance:** tests for an edited line comment (passes), an edited docblock type, an added ignore marker and a changed statement (each fails), a file that does not parse (fails), and a file of an unknown language (not covered, so the owner).
-- **Evidence:** the check's result for a comment-only edit of `bin/probe` and for an edit that changes a statement, from a running install.
-- **Waits for:** T75. **Size:** S. **Labels:** `class:process`, `priority:normal`.
-
-### T77 Dependency policy over Composer, OSV.dev and deps.dev
-- **Description:** A Composer adapter in the PHP `language` plugin turns the old and new manifest and lock file into neutral package changes; rules written once over them check allowed vendors, a clean OSV.dev audit of every new package including transitive ones, a minimum release age from deps.dev, and no change to scripts, plugins, repositories, Composer config, binaries or autoload files. The orchestrator makes the queries.
-- **Acceptance:** recorded OSV.dev and deps.dev responses drive the tests; each rule has a passing and a failing case; a new transitive package with an advisory fails; an unreachable source or an unknown answer sends the change to the owner.
-- **Evidence:** the policy's result for adding an official Symfony package and for a package from another vendor, against recorded responses; a run against the live sources (owner provides).
-- **Waits for:** T76. **Size:** M. **Labels:** `class:process`, `priority:normal`.
-
-### T78 Gate code no weaker, the violation corpus and the harness from main
-- **Description:** A check job runs main's gate tests unchanged, and the violation corpus, against the head's gate code through the project's check command, in its own container and as its own user, with the result leaving through a channel the code under test cannot rewrite. Every violation a gate catches on a head becomes a corpus fixture. The boot gate runs main's `bin/instance` and `bin/probe` against the head, and main's isolation probes run through the head's harness.
-- **Acceptance:** a new gate with new tests passes; an edited existing gate that lets a corpus fixture through fails; a head that rewrites the result file is still judged by the job's own channel; a harness change is booted by main's harness; a harness change that lets an isolation probe reach the network, a credential or a folder outside its own fails.
-- **Evidence:** the check's output for an additive gate and for a weakened one on a temporary repository.
-- **Waits for:** T75. **Size:** M. **Labels:** `class:process`, `priority:normal`.
-
-### T79 Independent security review and the attacker test
-- **Description:** Two reviewer roles in sessions of their own, apart from the panel: a security reviewer and an attacker. They read the diff, main's protected files and the check results, fenced, never the builder's pull request text. The attacker returns fixtures; plain code runs each against main's and the head's gate without network. Missing capacity sends the change to the owner; a second vendor is used when available. The threat model page lists both roles.
-- **Acceptance:** with `MockPlatformFactory`, an agreeing review passes, a disagreeing or invalid one sends the change to the owner, the builder's text never reaches either prompt, a fixture only the head's gate accepts sends the change to the owner with the fixture, and no stand-in or substitute replaces either role.
-- **Evidence:** a scripted attacker fixture that gets through a weakened gate, and the owner request it produces.
-- **Waits for:** T7, T78. **Size:** M. **Labels:** `class:process`, `priority:normal`.
-
-### T80 Canaries, earned autonomy and containment
-- **Description:** Owner-known canary changes, each category with its own ([Merge](design/05-architecture/08-merge.md#earned-autonomy-per-category)), run through the decision on a schedule. Per category, the dashboard shows canary detection and agreement with the owner; the owner switches a category on in the owner's config once both meet the bar, and it falls back to dry-run mode on its own when a canary is missed or the owner overrules it. After an automatic approval merges, a failing canary or corpus fixture on main reverts it at once only when it is the one automatic approval merged since they last passed and no later merge touched its files; otherwise Intakt reverts nothing on its own, asks the owner naming every candidate merge, and gives no automatic approval in that project until the owner answers. A daily cap per project bounds automatic approvals, and each one is listed on the dashboard for a week. The code that applies the approval rules joins the protected paths, and the owner narrows `.github/CODEOWNERS` to the owner-only files.
-- **Acceptance:** detection is counted per category over its own canaries; a category below 100% detection, or with fewer canaries than the minimum, cannot be switched on; a missed canary switches it off; a failing fixture on main after exactly one automatic approval, with no later merge on its files, produces a revert of exactly that merge; two candidate approvals, or a later merge on the same files, produce an owner request naming the candidates and no revert; the cap holds under two concurrent approvals (forced order); the dashboard line names the head, the category and its checks.
-- **Evidence:** a canary run and an automatic revert on a temporary repository; the narrowed `.github/CODEOWNERS` (owner provides).
-- **PHP 8.5:** the pipe operator for the canary run's steps.
-- **Waits for:** T20, T77, T79. **Size:** L. **Labels:** `class:process`, `priority:normal`, `plan:required`.
-
 ### T81 Every account works at once, and a limit never loses work
 - **Description:** The account model of the design ([Budget and model planner](design/05-architecture/06-budget-and-model-planner.md#order-of-use)), built on T40's per-account readings, reset times and ceilings (T40 stays the measured-use task; this one adds the pool, the ranking and the hand-off, and gives the Codex reading a second source besides its token counts). Every configured account of every vendor is in one pool for the roles the owner allows, unless the owner excludes it or a model; at each job start the planner ranks the allowed accounts by the room that resets soonest, then by the cheapest tier that fits; the number of jobs that start follows the total room, capped by the host, the CI runners and the review capacity. A job that hits a vendor limit stops cleanly: its commits are pushed to its work branch, its conversation stays in the message store (`symfony/ai-doctrine-message-store`), a hand-off note goes to the shared project memory, and the next ranked account continues at once through `MemoryInputProcessor`. A build may continue on another vendor within its role's tiers (the model change is recorded on the task); a review starts again on another account of the same vendor and is never continued by another vendor. The Codex vendor plugin reads a subscription account's usage from the endpoint Codex itself uses, best-effort, to feed the ranking.
 - **Acceptance:** a hand-off at a limit loses no commit (every commit of the stopped job is on the work branch) and the next account continues from the note and the kept conversation without waiting for the first account's reset; two jobs run at the same time on two accounts, and a third waits when the pool has no room or a cap is reached; a window that resets in an hour with room ranks above one that resets in four days, an account at its ceiling ranks nowhere however soon it resets, and a paid account never ranks above a subscription with room; a build continued on another vendor records the model change; a review cut off by a limit before its answer starts streaming starts again on an account of its own vendor and never on another vendor's, and with none left the stand-in and catch-up rules apply; the hand-off note reaches the next prompt fenced; an excluded account or model is never ranked; a failed usage read (an HTTP error, a changed shape or an expired token) falls back to the limit signals from real calls, the plugin records when the endpoint stops answering, and the read is repeated while an account is out until a stated reset. Races (two starts claiming the last room) are proven by forced order.
@@ -356,7 +316,7 @@ T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.m
 - After M1: T8 to T14 mostly in order; T11 and T14 in parallel after T9.
 - T15 to T18 and T20 to T21 in parallel after T13; T33 after T7; T29 after T20 and T22.
 - The demo tasks (T22 to T24) are the critical path to the deadline; T25 and T28 run alongside them.
-- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T81 after T14, T17 and T40; the optional T32 last, after T18.
+- After the hackathon: T19 and T30 after T18; T34 after T20; T35 after T22; T81 after T14, T17 and T40; the optional T32 last, after T18.
 
 ## Replacing the existing loop
 
@@ -383,7 +343,7 @@ Conventions, in addition to the ones above:
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
 | M6 Reviewer for the loop | Intakt's review takes the place of the existing loop's Claude reviewer on the owner's two projects and counts, and a weekly report compares its published verdicts with the loop's GPT reviews | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
-| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M6 Reviewer for the loop
@@ -432,7 +392,7 @@ T44 to T46 run in M6 alongside T37, T38, T40 and T43 (owner decision 2026-11-09,
 
 ## M7 Builder half
 
-M7 holds T39, T47 to T69 and T82. T39 moved here from M6 with D5 of #1434, while T43 stays in M6. T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); their sections stay here.
+M7 holds T39, T47 to T69, T75 to T80 and T82. T75 to T80 moved here from after the hackathon (issue #852), because approving protected changes on the spot belongs to the switch. T39 moved here from M6 with D5 of #1434, while T43 stays in M6. T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); their sections stay here.
 
 ### T39 A Codex subscription reviewer
 - **Description:** A reviewer role runs through the Codex platform bridge on a subscription login: the login file is kept per account in the orchestrator, refreshed there, and given to the call read-only; the model and effort are pinned in config. The vendor's structured errors (usage limit, model not available for the plan, login lost) become an account cooldown or an account error with one owner notice, never a failed review or `changes`; the measured use it reports is recorded per account. The package is a new dependency the owner approves.
@@ -630,6 +590,46 @@ M7 holds T39, T47 to T69 and T82. T39 moved here from M6 with D5 of #1434, while
 - **Evidence:** the forced-order tests' run; the default limit computed from a measured peak of the sample repository's check; a command over its group's limit killed while the agent keeps running, on a host with cgroup v2 delegation `(owner provides)`.
 - **Waits for:** T44, T45, T49, T51, T67, T68, T76 (the `language` plugin kind and the status it builds on). **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
+T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T80's switch turns a project on, every protected change still goes to the owner.
+
+### T75 The two hard floors and the approval decision
+- **Description:** The decision for a protected head in the design's order (floors, mechanical checks, security review, penetration test), each step a typed result, run by plain code that approves only when all pass. Exactly two hard floors are deterministic rules over the whole change: the approval system (the protected-path list, the floors, the checks that apply them, the Security engineer's prompts and the canary corpus), and secrets and permissions (how secrets or credentials are stored, read, injected, redacted or scanned, including the scan's rules and allowlist; a workflow that reads a repository secret; raised workflow permissions, new triggers or a runner change). A panel reviewer's loosening or missing class also sends the change to the owner, without being a floor. Every protected head still goes to the owner; the computed decision is recorded in the ledger and the request names the first floor or check that failed. A replay command computes the decision for a repository's past approvals.
+- **Acceptance:** each of the two floors has a test that it sends a change to the owner and one that a neighboring change passes it; a request names its floor or check; no path approves by a timer, a veto window or a missing answer; a step that fails or cannot run sends the change to the owner; the replay reads recorded forge responses.
+- **Evidence:** the replay's report over a temporary repository with recorded approvals; the replay over this repository's 57 approvals (owner provides).
+- **PHP 8.5:** `#[NoDiscard]` on the decision.
+- **Waits for:** T18. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T76 The `language` plugin kind and the comment-only check for PHP
+- **Description:** A `language` plugin kind ([Plugins](design/05-architecture/02-plugins.md)) and its PHP implementation: two versions of a file compare equal when their `PhpToken` streams match without comments and whitespace; docblocks, suppression and ignore markers and inline allow directives count as code. A file of a language without a plugin is not covered.
+- **Acceptance:** tests for an edited line comment (passes), an edited docblock type, an added ignore marker and a changed statement (each fails), a file that does not parse (fails), and a file of an unknown language (not covered, so the owner).
+- **Evidence:** the check's result for a comment-only edit of `bin/probe` and for an edit that changes a statement, from a running install.
+- **Waits for:** T75. **Size:** S. **Labels:** `class:process`, `priority:normal`.
+
+### T77 Dependency policy over Composer, OSV.dev and deps.dev
+- **Description:** A Composer adapter in the PHP `language` plugin turns the old and new manifest and lock file into neutral package changes; rules written once over them check allowed vendors, a clean OSV.dev audit of every new package including transitive ones, a minimum release age from deps.dev, and no change to scripts, plugins, repositories, Composer config, binaries or autoload files. The orchestrator makes the queries.
+- **Acceptance:** recorded OSV.dev and deps.dev responses drive the tests; each rule has a passing and a failing case; a new transitive package with an advisory fails; an unreachable source or an unknown answer sends the change to the owner.
+- **Evidence:** the policy's result for adding an official Symfony package and for a package from another vendor, against recorded responses; a run against the live sources (owner provides).
+- **Waits for:** T76. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T78 Gate code no weaker, the violation corpus and the harness from main
+- **Description:** A check job runs main's gate tests unchanged, and the violation corpus, against the head's gate code through the project's check command, in its own container and as its own user, with the result leaving through a channel the code under test cannot rewrite. Every violation a gate catches on a head becomes a corpus fixture. The boot gate runs main's `bin/instance` and `bin/probe` against the head, and main's isolation probes run through the head's harness.
+- **Acceptance:** a new gate with new tests passes; an edited existing gate that lets a corpus fixture through fails; a head that rewrites the result file is still judged by the job's own channel; a harness change is booted by main's harness; a harness change that lets an isolation probe reach the network, a credential or a folder outside its own fails.
+- **Evidence:** the check's output for an additive gate and for a weakened one on a temporary repository.
+- **Waits for:** T75. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T79 Independent security review and the penetration test
+- **Description:** Two model sessions run by the Security engineer (#864), apart from the panel: a security review and a penetration test. They read the diff, main's protected files and the check results, fenced, never the builder's pull request text. The penetration test returns fixtures; plain code runs each against main's and the head's gate without network. Missing capacity sends the change to the owner; a second vendor is used when available. The threat model page lists both sessions.
+- **Acceptance:** with `MockPlatformFactory`, an agreeing review passes, a disagreeing or invalid one sends the change to the owner, the builder's text never reaches either prompt, a fixture only the head's gate accepts sends the change to the owner with the fixture, and no stand-in or substitute replaces either session.
+- **Evidence:** a scripted penetration-test fixture that gets through a weakened gate, and the owner request it produces.
+- **Waits for:** T7, T78. **Size:** M. **Labels:** `class:process`, `priority:normal`.
+
+### T80 Canaries, earned autonomy and containment
+- **Description:** Owner-known canary changes, at least three per kind of protected change ([Merge](design/05-architecture/08-merge.md#earned-autonomy)), run through the decision on a schedule. The dashboard shows whether every canary reached the owner and how many past owner approvals the replay agrees on; once every canary has reached the owner and the replay agrees on at least 20 heads, the owner's one switch in the owner's config turns automatic approval on for the project, and it turns off on its own when a canary is missed or the owner overrules a decision, until both hold again. After an automatic approval merges, a failing canary or corpus fixture on main reverts it at once only when it is the one automatic approval merged since they last passed and no later merge touched its files; otherwise Intakt reverts nothing on its own, asks the owner naming every candidate merge, and gives no automatic approval in that project until the owner answers. There is no daily cap on automatic approvals; each one is listed on the dashboard for a week. The code that applies the approval rules joins the protected paths, and the owner narrows `.github/CODEOWNERS` to the owner-only files.
+- **Acceptance:** a project with a canary that did not reach the owner, with fewer than three canaries for a kind of protected change, or with a replay agreeing on fewer than 20 heads cannot be switched on; a missed canary or an owner overrule switches it off until both hold again; a failing fixture on main after exactly one automatic approval, with no later merge on its files, produces a revert of exactly that merge; two candidate approvals, or a later merge on the same files, produce an owner request naming the candidates and no revert; the dashboard line names the head and its checks.
+- **Evidence:** a canary run and an automatic revert on a temporary repository; the narrowed `.github/CODEOWNERS` (owner provides).
+- **PHP 8.5:** the pipe operator for the canary run's steps.
+- **Waits for:** T20, T77, T79. **Size:** L. **Labels:** `class:process`, `priority:normal`, `plan:required`.
+
 ## M8 Switch
 
 Each stage starts with the owner's go and can be rolled back to the previous one by config.
@@ -666,7 +666,7 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 ## Not in the switch
 
-- **Later:** approval by class and the additive gate proof; pacing and stand-ins for a second reviewer vendor; cross-checks; the plan trial arm, holdout and quality report; cost reports from CLI logs; webhooks (T32); branch cleanup beyond merged branches (T30); conflict resolution for generated files; deploy hooks after a merge; database sidecars for builds; the maintainer agent; a dashboard beyond the status JSON; the setup wizard; other forges, languages and vendors.
+- **Later:** pacing and stand-ins for a second reviewer vendor; cross-checks; the plan trial arm, holdout and quality report; cost reports from CLI logs; webhooks (T32); branch cleanup beyond merged branches (T30); conflict resolution for generated files; deploy hooks after a merge; database sidecars for builds; the maintainer agent; a dashboard beyond the status JSON; the setup wizard; other forges, languages and vendors.
 - **Dropped** (the existing loop's own constraints, replaced by the design): its round mode, tick and shared host locks, acknowledgment ranges and ledger branch seeding, its pre-App token history, its install scripts and resource slices, its CI slot wrappers, review verdicts parsed from Markdown, and its old config shims.
 
 ## Parallel paths (M6 to M8)
@@ -674,5 +674,5 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37.
 - The first weeks of the weekly report (after T43) run while M7 is built.
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
-- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T82 after T51, T67, T68 and T76.
+- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76.
 - M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.
