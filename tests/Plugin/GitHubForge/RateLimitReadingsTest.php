@@ -139,6 +139,57 @@ final class RateLimitReadingsTest extends TestCase
         self::assertSame(12, $this->process()->latest('678')?->remaining);
     }
 
+    public function testAnAnswerFromTheGraphqlPoolLeavesTheRestReadingInPlace(): void
+    {
+        $reset = (string) ($this->clock->now()->getTimestamp() + 600);
+        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['4000'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => ['core']]);
+
+        $this->process()->observe('678', 200, ['x-ratelimit-remaining' => ['3'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => ['graphql']]);
+
+        self::assertSame(4000, $this->process()->latest('678')?->remaining);
+    }
+
+    public function testAnExhaustedGraphqlPoolDoesNotPauseRestCalls(): void
+    {
+        $this->limitOf($this->process(), 403, $this->exhausted('graphql'));
+
+        $this->process()->refuseWhileLimited('678');
+
+        self::assertNull($this->process()->latest('678'));
+    }
+
+    public function testAnExhaustedGraphqlPoolPausesGraphqlCalls(): void
+    {
+        $this->limitOf($this->process(), 403, $this->exhausted('graphql'));
+
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->process()->refuseWhileLimited('678', 'graphql');
+    }
+
+    public function testAnAnswerWithoutAPoolCountsInThePoolOfItsRequest(): void
+    {
+        try {
+            $this->process()->observe('678', 429, ['retry-after' => ['90']], 'graphql');
+        } catch (ForgeRateLimited) {
+        }
+
+        $this->process()->refuseWhileLimited('678');
+        $this->expectException(ForgeRateLimited::class);
+
+        $this->process()->refuseWhileLimited('678', 'graphql');
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function exhausted(string $pool): array
+    {
+        $reset = (string) ($this->clock->now()->getTimestamp() + 3600);
+
+        return ['x-ratelimit-remaining' => ['0'], 'x-ratelimit-limit' => ['5000'], 'x-ratelimit-reset' => [$reset], 'x-ratelimit-resource' => [$pool]];
+    }
+
     /**
      * @param array<string, list<string>> $headers
      */

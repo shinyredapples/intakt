@@ -71,7 +71,7 @@ final readonly class GitHubIssueHistories
         ];
 
         try {
-            $response = $this->calls->asInstallation('POST', '/graphql', $options);
+            $response = $this->calls->query($options);
             $status = $response->getStatusCode();
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
@@ -148,10 +148,12 @@ final readonly class GitHubIssueHistories
                 throw new ForgeReadFailed('GitHub listed a label event that is not an object.');
             }
 
+            // The actor of a removal is checked too, because an answer without one is not the history GitHub recorded.
             $label = $this->text($event, 'label', 'name');
+            $actor = $this->login($event, 'actor');
             unset($applied[$label]);
             if ('LabeledEvent' === ($event['__typename'] ?? null)) {
-                $applied[$label] = new LabelApplication($label, $this->login($event, 'actor'));
+                $applied[$label] = new LabelApplication($label, $actor);
             }
         }
 

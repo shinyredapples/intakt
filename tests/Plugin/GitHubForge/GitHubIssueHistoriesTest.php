@@ -75,6 +75,19 @@ final class GitHubIssueHistoriesTest extends TestCase
         self::assertSame(['priority:high', 'intakt'], array_keys($this->appliers($history)));
     }
 
+    public function testARemovalWithoutAnActorFailsTheRead(): void
+    {
+        $answer = json_decode(RecordedIssueApi::fixture('history_labels_reapplied.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($answer);
+        $answer['data']['repository']['issue']['timelineItems']['nodes'][3]['actor'] = null;
+        $api = new RecordedIssueApi();
+        $api->graphql = json_encode($answer, JSON_THROW_ON_ERROR);
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $api->histories()->of('alpha', 12);
+    }
+
     public function testAHistoryWithMoreLabelEventsThanOnePageFailsTheRead(): void
     {
         $this->expectException(ForgeReadFailed::class);
