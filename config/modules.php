@@ -22,6 +22,7 @@ return [
     'Plugin/Forge',
     'Plugin/Gate',
     'Plugin/GitHubForge',
+    'Plugin/GitHubWorkSource',
     'Plugin/LocalGitForge',
     'Plugin/Notifier',
     'Plugin/PhpGate',

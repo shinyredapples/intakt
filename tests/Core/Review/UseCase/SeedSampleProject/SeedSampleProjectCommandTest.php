@@ -58,6 +58,8 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private string $ownerToken = '';
 
+    private string $composeService = '';
+
     private string $compatibleBaseUrl = SampleProject::HUGGING_FACE_ROUTER;
 
     protected function setUp(): void
@@ -208,7 +210,7 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     public function testAFailedBuildLeavesNoRepositoryForALaterStartToKeep(): void
     {
-        $command = new SeedSampleProjectCommand(new SampleRepository($this->directory.'/no-fixtures'), $this->project(Provider::Anthropic), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken);
+        $command = new SeedSampleProjectCommand(new SampleRepository($this->directory.'/no-fixtures'), $this->project(Provider::Anthropic), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken, $this->composeService);
 
         $failure = null;
         try {
@@ -220,11 +222,20 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertSame(['.', '..', 'intakt.yaml'], scandir($this->directory));
     }
 
-    public function testItPrintsTheCommandThatReviewsTheSampleChange(): void
+    public function testOutsideTheComposeDemoItPrintsTheReviewCommandAsTheConsoleRunsIt(): void
     {
         $display = $this->seed(Provider::Anthropic)->getDisplay();
 
-        self::assertStringContainsString('intakt:review sample-change --project=sample --repository='.$this->repository().' --base=main --task=', $display);
+        self::assertStringContainsString('Review the sample change: php bin/console intakt:review sample-change --project=sample --repository='.$this->repository().' --base=main --task=', $display);
+    }
+
+    public function testInTheComposeDemoItPrintsTheReviewCommandAsTheHostShellRunsIt(): void
+    {
+        $this->composeService = 'intakt';
+
+        $display = $this->seed(Provider::Anthropic)->getDisplay();
+
+        self::assertStringContainsString('Review the sample change: docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository='.$this->repository().' --base=main --task=', $display);
     }
 
     public function testItPrintsTheMcpAddressAndTheOwnerTokenNextToTheReviewCommand(): void
@@ -244,7 +255,7 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private function seed(Provider ...$keyed): CommandTester
     {
-        $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken);
+        $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken, $this->composeService);
         $tester = $this->tester($command);
         $tester->execute(['repository' => $this->repository(), 'configuration' => $this->configuration()]);
 
