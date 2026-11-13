@@ -1,6 +1,6 @@
 # Boot step
 
-The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md): nothing calls it before a review yet, main's result is not cached yet, and a failing head is not sent back yet; those parts come later.
+The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md): nothing calls it before a review yet, and a failing head is not sent back yet; those parts come later.
 
 ## Contract
 
@@ -12,6 +12,12 @@ In `src/Core/Review/Contract/`:
 - `BootOutcome`: the answer to both, a `BootState` (`booted`, `failed`, `crashed`) and a reason (empty when booted).
 
 `failed` is the commit's own result: its harness reported `{"status":"failed","reason":"..."}`, or `composer install` failed in it. `crashed` is the boot step's: no status could be read, or the step itself failed (the repository or the commit is missing, main has no `bin/instance`, git or a process could not run, or a process passed its time limit). A crash is an outcome, never an exception, so a crashing boot step can never stop the review it gates.
+
+## Main's cached result
+
+`BootResults::ofMain(BootKey, ChangeSource)` in `src/Core/Watcher/UseCase/WatchPullRequests/` (part 2) answers main's boot result from the table `watcher_boot_result` and boots only on a miss. `BootKey` is the project, main's commit and a tool fingerprint (a string the caller passes; nothing computes one yet), so main's result is reused while both stay the same and recomputed when either changes. On a miss it asks the query bus with `BootHarness`, stores a `BootRecord` (the state, the reason and the moment, from `ClockInterface`) and appends the ledger event `boot_result_computed` (project, main commit, tool fingerprint, state, reason); a cache hit appends nothing. A `crashed` outcome is returned but not stored, because it is the boot step's fault and not main's, so the next ask boots again; a query bus that throws is turned into a `crashed` outcome too, so the caller never gets an exception from the boot. Nothing calls `BootResults` yet: acting on the result in the watcher is a later part.
+
+Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`persistence` group) and `tests/Core/Watcher/Domain/BootKeyTest.php`.
 
 ## How a commit boots
 
