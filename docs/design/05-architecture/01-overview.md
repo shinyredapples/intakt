@@ -13,7 +13,7 @@ Intakt's model roles carry traditional team titles. There are seven of them, plu
 | **Code reviewers** | `code_reviewer` | the review panel, with the judge as their verdict step | Review correctness, readability, tests, docs and the framework's use. Specialists are settings of the panel, not roles of their own. |
 | **Security engineer** | `security_engineer` | the gatekeeper's security reviewer and attacker (now the penetration tester) | Security across infrastructure, backend and frontend. Its two verdicts, the security review and the penetration test, feed the approval of protected changes. Its own task designs it. |
 | **AI engineer** | `ai_engineer` | (new) | Models, prompts, skills, context and tokens; owns model routing. Its own task designs it. |
-| **Maintainer** | `maintainer` | the maintainer agent | Hand-overs, conflicts, re-queues, and the weekly flow and quality review ([The maintainer agent](09-maintainer-agent.md)). |
+| **Maintainer** | `maintainer` | the maintainer agent | Hand-overs, conflicts, re-queues, and the weekly flow and quality review ([The Maintainer](09-maintainer-agent.md)). |
 
 Machinery keeps technical names: the orchestrator, the scheduler, the watchdog, the checks (`bin/check` in Intakt itself, the check job for a project) and the dashboard. The approval of protected changes is plain code, not a role: the floors, the mechanical checks and the Security engineer's two verdicts ([Merge](08-merge.md#approving-protected-changes)).
 
