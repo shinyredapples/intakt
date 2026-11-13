@@ -106,28 +106,32 @@ final readonly class PushGate
      */
     private function askTheOwner(HeldChange $change, CiScanResult $scan, TaskIssue $issue): PushDecision
     {
+        // Built before any approval is read, so a change the issue cannot show in full stays held even when an approve for it stands.
+        $request = $this->shownRequest($change, $scan);
         $comments = $this->comments->of($issue);
-        if ($this->approval->isGivenIn($comments, $this->owner, $change->commit)) {
+        $asked = $this->requestIndex($comments, $change->commit);
+        if (null === $asked) {
+            $this->comments->post($issue, $request);
+
+            return PushDecision::Asked;
+        }
+
+        // Only an approve after the request counts, because the owner approves the diff the issue shows, not a head they never saw.
+        if ($this->approval->isGivenIn(array_slice($comments, $asked + 1), $this->owner, $change->commit)) {
             return PushDecision::Approved;
         }
 
-        if ($this->wasAsked($comments, $change->commit)) {
-            return PushDecision::StillAsked;
-        }
-
-        $this->comments->post($issue, $this->shownRequest($change, $scan));
-
-        return PushDecision::Asked;
+        return PushDecision::StillAsked;
     }
 
     /**
      * @param list<IssueComment> $comments
      */
-    private function wasAsked(array $comments, string $commit): bool
+    private function requestIndex(array $comments, string $commit): ?int
     {
         $marker = $this->request->marker($commit);
 
-        return array_any($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && str_contains($comment->body, $marker));
+        return array_find_key($comments, static fn (IssueComment $comment): bool => $comment->byThisApp && str_contains($comment->body, $marker));
     }
 
     /**

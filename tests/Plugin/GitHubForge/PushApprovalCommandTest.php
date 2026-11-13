@@ -186,6 +186,31 @@ final class PushApprovalCommandTest extends TestCase
         self::assertCount(1, $this->issue->posted());
     }
 
+    public function testAnApproveGivenBeforeTheRequestWasPostedLeavesTheHeadHeld(): void
+    {
+        $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $this->issue->byPerson('approve '.$head);
+        $this->execute();
+
+        $tester = $this->execute();
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringEndsWith(sprintf("push: held, still waiting for the owner's approve %s on issue #7\n", $head), $tester->getDisplay());
+    }
+
+    public function testAnApprovedChangeTheIssueCannotShowStaysHeldAndPostsNothing(): void
+    {
+        $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $head = $this->repository->commitFile('payload.bin', "hidden\0content\n");
+        $this->issue->byPerson('approve '.$head);
+
+        $tester = $this->execute();
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringStartsWith('push: held, the change cannot be shown in full and goes back to be split', $tester->getDisplay());
+        self::assertSame([], $this->issue->posted());
+    }
+
     public function testAnotherAccountsApprovalLeavesTheHeadHeld(): void
     {
         $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
