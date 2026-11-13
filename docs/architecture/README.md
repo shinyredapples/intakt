@@ -9,7 +9,7 @@ Code and conventions:
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
 - [Build clone](build-clone.md)
-- [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials
+- [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Watchdog over main](watchdog.md): each new commit on main is a recorded merge or owner-signed, or a violation (unsigned, unknown key, rewritten history); classification only so far
@@ -37,7 +37,7 @@ Running Intakt:
 Forges and identity:
 - [Forge contract and the local git forge](forge-contract.md): forge writes, open pull request listing, verdict identity
 - [GitHub App identity](github-app-identity.md)
-- [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`
+- [Workflow risk scan](workflow-risk-scan.md): one workflow file against the hosted, read-only, secret-free envelope; any form the strict line reader does not read is `unreadable`; the changed paths that are part of the CI definition
 
 Models and budget:
 - [AI providers](ai-providers.md)
@@ -65,5 +65,6 @@ Reviews:
 
 Dashboard:
 - [Dashboard](dashboard.md)
+- [Status read model](status.md): the status JSON per project and its schema, read without the message bus
 - [Server status](server-status.md)
 - [Live updates](live-updates.md)
