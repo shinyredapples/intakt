@@ -1,6 +1,10 @@
 # Workflow risk scan
 
-Whether one GitHub Actions workflow file stays inside the envelope a change may push in without the owner: forge-hosted runners, a read-only token, no secrets, no trigger with the base repository's rights (plan task T55, part 1; design: [Merge](../design/05-architecture/08-merge.md), [Threat model](../design/05-architecture/14-threat-model.md#ci-log-excerpts)). `Plugin/GitHubForge/Domain/WorkflowFileScan::scan($text)` (`#[NoDiscard]`) answers a list of `WorkflowFinding` (a `WorkflowRisk`, the line and a detail), empty when the file stays inside. `php bin/console intakt:forge:workflow-risk <file>` (`UseCase/ScanWorkflow/ScanWorkflowCommand`) runs it on a file read with Symfony's `Filesystem::readFile()`: exit 0 without findings, 1 with any, 2 when the file cannot be read. Nothing pushes or holds on the answer yet: reading the head's, main's and the merged workflows, and the files they run, are the later parts of T55.
+Whether one GitHub Actions workflow file stays inside the envelope a change may push in without the owner: forge-hosted runners, a read-only token, no secrets, no trigger with the base repository's rights (plan task T55, part 1; design: [Merge](../design/05-architecture/08-merge.md), [Threat model](../design/05-architecture/14-threat-model.md#ci-log-excerpts)). `Plugin/GitHubForge/Domain/WorkflowFileScan::scan($text)` (`#[NoDiscard]`) answers a list of `WorkflowFinding` (a `WorkflowRisk`, the line and a detail), empty when the file stays inside. `php bin/console intakt:forge:workflow-risk <file>` (`UseCase/ScanWorkflow/ScanWorkflowCommand`) runs it on a file read with Symfony's `Filesystem::readFile()`: exit 0 without findings, 1 with any, 2 when the file cannot be read. Nothing pushes or holds on the answer yet: reading the head's, main's and the merged workflows is the last part of T55.
+
+## The CI definition
+
+The files a workflow runs are part of the CI definition (T55, part 2): `Domain/CiDefinition::changedAmong($workflows, $changedPaths)` (`#[NoDiscard]`) answers the changed paths that are, given the workflows as `Domain/WorkflowFile` (a path and its text, `null` when it could not be read). It does not resolve paths and fails closed: a changed path is part of the CI definition when any workflow's text names any trailing part of it (in effect its file name, matched as a whole word in any case). A path under `.github/`, any Dockerfile (`Dockerfile`, `Dockerfile.<x>`, `<x>.Dockerfile`, in any case), every path under the folder of a local action (`uses: ./tools/build`), and every path when a workflow cannot be read or a `uses:` value is neither a plain `./` folder nor a remote action (`owner/repo@ref`, `docker://`) count too. Files a workflow runs without naming them (Makefile targets, Composer scripts) are not found; the owner approval of a push decides those. `php bin/console intakt:forge:ci-paths <path>... --workflow=<file>` (`UseCase/ListCiChanges/ListCiChangesCommand`) prints `ci <path>` for each such path, then `CI change: yes` or `no`, and exits with 0; a workflow file it cannot read is printed as `unreadable <file>: <reason>` and makes every path a CI change.
 
 ## A strict line reader
 
@@ -27,6 +31,6 @@ Findings are sorted by line. The `secret` rule is a word match on purpose: a fal
 
 ## Limits
 
-- One file at a time: the merge with main, the files a workflow runs (scripts, the CI image's Dockerfile, local actions) and a failed variable read are not part of this part.
+- One file at a time: the merge with main and a failed variable read are not part of this part.
 - The hosted label list is fixed in code; a new GitHub label counts as `runner` until it is added.
 - The scan cannot tell a self-hosted runner registered with a hosted label from GitHub's own runner.
