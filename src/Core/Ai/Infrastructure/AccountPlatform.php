@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Override;
@@ -18,6 +19,7 @@ use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 
@@ -29,6 +31,7 @@ final readonly class AccountPlatform implements PlatformInterface
         private Account $account,
         private PlatformInterface $platform,
         private AccountCooldowns $cooldowns,
+        private ClockInterface $clock,
         private LoggerInterface $logger,
         private SendFailures $failures,
     ) {
@@ -37,6 +40,8 @@ final readonly class AccountPlatform implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
+        $sentAt = $this->clock->now();
+
         try {
             $result = $this->platform->invoke($model, $input, $options);
         } catch (Throwable $failure) {
@@ -49,7 +54,7 @@ final readonly class AccountPlatform implements PlatformInterface
         // A provider's limit arrives when the answer is read, not when the call is sent, so the cooldown hangs on the result.
         $result->onError($this->failed(...));
         // A limit that arrives while the stream is read never reaches onError, so the stream reports it too.
-        $result->onConvert($this->listenToStream(...));
+        $result->onConvert(fn (ResultInterface $answer): ResultInterface => $this->followAnswer($answer, $sentAt));
 
         return $result;
     }
@@ -60,11 +65,17 @@ final readonly class AccountPlatform implements PlatformInterface
         return $this->platform->getModelCatalog();
     }
 
-    private function listenToStream(ResultInterface $result): ResultInterface
+    // A streamed answer clears the account's reported error only once it was read whole, because a stream can still fail after it converted.
+    private function followAnswer(ResultInterface $result, DateTimeImmutable $sentAt): ResultInterface
     {
-        if ($result instanceof StreamResult) {
-            $result->addListener(new AccountStreamFailures($this->failed(...)));
+        if (!$result instanceof StreamResult) {
+            $this->cooldowns->answered($this->account, $sentAt);
+
+            return $result;
         }
+
+        $result->addListener(new AccountStreamFailures($this->failed(...)));
+        $result->addListener(new AccountStreamAnswered(fn () => $this->cooldowns->answered($this->account, $sentAt)));
 
         return $result;
     }
