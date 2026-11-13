@@ -13,6 +13,7 @@ use Symfony\Component\Yaml\Yaml;
 final class DependabotImageGroupsTest extends TestCase
 {
     private const string CONFIGURATION = __DIR__.'/../../.github/dependabot.yml';
+    private const string JOB_IMAGE_CLI_MANIFEST = __DIR__.'/../../docker/job/cli/package.json';
 
     public function testTheGroupOfEveryImageLeavesTheGitleaksImageOut(): void
     {
@@ -29,6 +30,36 @@ final class DependabotImageGroupsTest extends TestCase
         $group = array_find($docker['groups'] ?? [], fn (array $group): bool => [$this->gitleaksImage()] === ($group['patterns'] ?? null));
 
         self::assertNotNull($group, 'The docker entry of .github/dependabot.yml has no group for the gitleaks image alone.');
+    }
+
+    public function testTheJobImageCliManifestHasAnNpmEntry(): void
+    {
+        self::assertNotNull($this->jobImageCliEntry(), 'The npm entry of .github/dependabot.yml for /docker/job/cli is missing.');
+    }
+
+    // One group for both CLIs, so one update round rebuilds the job image once.
+    public function testBothJobImageClisFallIntoOneGroup(): void
+    {
+        /** @var array{dependencies: array<string, string>} $manifest */
+        $manifest = json_decode((string) file_get_contents(self::JOB_IMAGE_CLI_MANIFEST), true, flags: JSON_THROW_ON_ERROR);
+        $clis = array_keys($manifest['dependencies']);
+        $groups = $this->jobImageCliEntry()['groups'] ?? [];
+        $groupsOfEveryCli = array_filter($groups, static fn (array $group): bool => array_all($clis, static fn (string $cli): bool => array_any($group['patterns'] ?? [], static fn (string $pattern): bool => fnmatch($pattern, $cli))));
+
+        self::assertCount(2, $clis, 'docker/job/cli/package.json must list Claude Code and Codex.');
+        self::assertCount(1, $groups, 'The npm entry for /docker/job/cli must hold exactly one group.');
+        self::assertCount(1, $groupsOfEveryCli, 'The one group of the npm entry for /docker/job/cli must match both CLIs.');
+    }
+
+    /**
+     * @return array{groups?: array<string, array{patterns?: list<string>}>}|null
+     */
+    private function jobImageCliEntry(): ?array
+    {
+        /** @var array{updates: list<array{'package-ecosystem': string, directory?: string, groups?: array<string, array{patterns?: list<string>}>}>} $configuration */
+        $configuration = Yaml::parseFile(self::CONFIGURATION);
+
+        return array_find($configuration['updates'], static fn (array $update): bool => 'npm' === $update['package-ecosystem'] && '/docker/job/cli' === ($update['directory'] ?? null));
     }
 
     /**

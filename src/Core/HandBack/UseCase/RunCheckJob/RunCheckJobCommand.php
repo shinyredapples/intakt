@@ -7,6 +7,7 @@ namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\Platform\Contract\ReportableFailure;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
@@ -47,7 +48,8 @@ final readonly class RunCheckJobCommand
     private function jobOf(RunCheckJobInput $input): CheckJob
     {
         return new CheckJob(
-            new HandBack($input->repository, $input->branch, $input->bundle, $input->mergeMain),
+            // No mounted credentials, because the check job takes none; the secret scan still runs.
+            new HandBack($input->repository, $input->branch, $input->bundle, $input->mergeMain, new JobCredentials()),
             $input->image,
             $input->checkCommand,
             $input->rewritten,

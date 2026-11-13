@@ -9,7 +9,7 @@ Code and conventions:
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
 - [Build clone](build-clone.md)
-- [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward or holds a merge, and stripped of attribution
+- [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only
 - [Protected paths of a head](protected-paths.md): the owner's list per project, read from the whole change and each commit; unreadable counts as protected
 - [Upstream reproductions](upstream-reproductions.md)

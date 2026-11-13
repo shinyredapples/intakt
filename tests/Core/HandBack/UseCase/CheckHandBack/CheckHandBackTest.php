@@ -14,11 +14,13 @@ use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -31,6 +33,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(IncomingObjects::class)]
 #[CoversClass(RepositoryGit::class)]
 #[CoversClass(StrippedCommits::class)]
+#[UsesClass(BundleSecretScan::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(RefusedHandBack::class)]
 #[UsesClass(HandBack::class)]
@@ -444,7 +448,7 @@ final class CheckHandBackTest extends TestCase
         chdir($this->history->folder);
 
         try {
-            $result = $this->checker()->check(new HandBack('mirror.git', 'task', $bundle, false));
+            $result = $this->checker()->check(new HandBack('mirror.git', 'task', $bundle, false, new JobCredentials()));
         } finally {
             chdir($directory);
         }
@@ -458,7 +462,7 @@ final class CheckHandBackTest extends TestCase
         $repository = $this->history->folder.'/with:colon"quote.git';
         rename($this->history->mirror, $repository);
 
-        $result = $this->checker()->check(new HandBack($repository, 'task', $this->history->bundle('main..task'), false));
+        $result = $this->checker()->check(new HandBack($repository, 'task', $this->history->bundle('main..task'), false, new JobCredentials()));
 
         self::assertEquals(new AcceptedHandBack(null, $head, 0), $result);
     }
@@ -467,7 +471,7 @@ final class CheckHandBackTest extends TestCase
     {
         $this->expectException(HandBackNotChecked::class);
 
-        (void) $this->checker()->check(new HandBack($this->history->folder.'/missing.git', 'task', $this->history->file(''), false));
+        (void) $this->checker()->check(new HandBack($this->history->folder.'/missing.git', 'task', $this->history->file(''), false, new JobCredentials()));
     }
 
     public function testTheRefusalNamesNoValueFromTheBundle(): void
@@ -486,21 +490,21 @@ final class CheckHandBackTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
 
-        (void) $this->checker()->check(new HandBack($this->history->mirror, 'main', $this->history->file(''), false));
+        (void) $this->checker()->check(new HandBack($this->history->mirror, 'main', $this->history->file(''), false, new JobCredentials()));
     }
 
     public function testABranchNameGitRefusesIsAnInvalidArgument(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        (void) $this->checker()->check(new HandBack($this->history->mirror, 'a..b', $this->history->file(''), false));
+        (void) $this->checker()->check(new HandBack($this->history->mirror, 'a..b', $this->history->file(''), false, new JobCredentials()));
     }
 
     public function testAFolderThatIsNoRepositoryIsNotChecked(): void
     {
         $this->expectException(HandBackNotChecked::class);
 
-        (void) $this->checker()->check(new HandBack($this->history->folder, 'task', $this->history->file(''), false));
+        (void) $this->checker()->check(new HandBack($this->history->folder, 'task', $this->history->file(''), false, new JobCredentials()));
     }
 
     private function movedMain(): string
@@ -525,16 +529,16 @@ final class CheckHandBackTest extends TestCase
 
     private function check(string $bundle): AcceptedHandBack|RefusedHandBack
     {
-        return $this->checker()->check(new HandBack($this->history->mirror, 'task', $bundle, false));
+        return $this->checker()->check(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()));
     }
 
     private function checkWithMergeOfMain(string $bundle): AcceptedHandBack|RefusedHandBack
     {
-        return $this->checker()->check(new HandBack($this->history->mirror, 'task', $bundle, true));
+        return $this->checker()->check(new HandBack($this->history->mirror, 'task', $bundle, true, new JobCredentials()));
     }
 
     private function checker(): CheckHandBack
     {
-        return new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects());
+        return new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks'));
     }
 }
