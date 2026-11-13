@@ -375,7 +375,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $this->ledger->failHead('alpha', '7', 2);
         $this->browser->disableReboot();
 
-        $action =$this->browser->request('GET', '/')->filter('.banner.broken > a.btn');
+        $action = $this->browser->request('GET', '/')->filter('.banner.broken > a.btn');
 
         self::assertSame(['See the failed pull requests', '/reviews#failing-heads'], [$action->text(), $action->attr('href')]);
         self::assertCount(1, $this->browser->request('GET', '/reviews')->filter('section#failing-heads h2'));
