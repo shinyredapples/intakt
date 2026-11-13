@@ -97,7 +97,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
 
     public function testAStreamCutOffMidAnswerLeavesItsUsageUnsettledOnceBeforeItsRetry(): void
     {
-        $this->vendor($this->cutThen(self::cutAgain(...)))->review('alpha', Tier::Strong, $this->request());
+        $this->vendor($this->cutThen($this->cutAgain(...)))->review('alpha', Tier::Strong, $this->request());
 
         [, $unsettled] = $this->ledger->payloads();
         self::assertSame(['unsettled', IncompleteStreamException::class], [$unsettled['phase'], $unsettled['failure']]);
@@ -123,7 +123,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
 
     public function testAStreamCutAgainOnItsUnstreamedTryBlocksTheReviewerWithTheFirstCutsReasonAndBothTriesLeftUnsettled(): void
     {
-        $verdict = $this->vendor($this->cutThen(self::cutAgain(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+        $verdict = $this->vendor($this->cutThen($this->cutAgain(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame([Decision::Blocked, Verdict::INCOMPLETE_STREAM], [$verdict->verdict, $verdict->findings[0]->id]);
         self::assertStringContainsString('The stream ended before its last event.', $verdict->findings[0]->text);
@@ -166,7 +166,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         throw new IncompleteStreamException('The stream ended before its last event.');
     }
 
-    private static function cutAgain(): never
+    private function cutAgain(): never
     {
         throw new IncompleteStreamException('The answer ended before it was complete.');
     }
