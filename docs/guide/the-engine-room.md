@@ -37,7 +37,7 @@ Some loops run on a **tick**: a clock that wakes every lane every few minutes ("
 | Event | What follows |
 |---|---|
 | a builder finishes | its work is checked and pushed |
-| GitHub reports CI is green | the review starts |
+| GitHub reports CI is green | the change is started once; it goes back to the builder if it does not start while main does, else the review starts |
 | a reviewer finishes | the verdicts are judged; merge or back to the builder |
 | you approve something | it moves on |
 

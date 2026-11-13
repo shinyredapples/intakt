@@ -83,11 +83,13 @@ One special case: if the change edits the **CI setup itself** and the new setup 
 
 ## 5. Reviewing
 
-Once CI is green, the **review panel** reads the change: a fixed core panel for every change, plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
+Once CI is green, Intakt first **starts the change**, the way main is started: a change that does not start while main does goes back to the builder like failed CI, with no review at all. A change that starts, or a check that could not run, goes on. If main itself does not start, the change goes on too; a warning to you about that is planned. Then the **review panel** reads the change: a fixed core panel for every change, plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
 
 ```mermaid
 flowchart TD
-  pr[Pull request, CI green] --> panel[Each reviewer reads it,<br/>on its own]
+  pr[Pull request, CI green] --> boot{Does it start<br/>while main starts?}
+  boot -- no --> back[Back to the builder,<br/>no review]
+  boot -- yes, or the check could not run --> panel[Each reviewer reads it,<br/>on its own]
   panel --> probes[Reviewers may run small tests<br/>in a sealed sandbox]
   probes --> verdicts[Each returns a verdict:<br/>approve, changes with findings,<br/>or blocked]
   verdicts --> judge[A quick judge step sorts each finding:<br/>fix now, later, or not needed]

@@ -25,13 +25,13 @@ Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`pers
 
 `SettleHead` asks `BootGate::admit(WatchedProject, HeadDecision)` for a head whose CI is green, before `RoundStarts::startFor`; a pending or red head is never booted. The gate:
 
-1. asks the query bus for `MainCommit(ChangeSource)`, the commit the base branch points at (answered by the local git forge's `MainCommitHandler`; no other forge answers it yet, so the gate logs an error and the review starts);
+1. asks the query bus for `MainCommit(ChangeSource)`, the commit the base branch points at (answered by the local git forge's `MainCommitHandler`, which the module list always loads and which reads the base branch from the project's `repository` path for every watched project, a `github` one included; when that commit cannot be read, the gate logs an error and the review starts);
 2. asks `BootResults::ofMain` for main's result under the `BootKey` of the project, that commit and the constant `BootGate::TOOL_FINGERPRINT` (nothing computes a fingerprint of the boot tools yet, so one constant stands for them);
 3. only when main is `booted`, boots the head with `BootResults::ofHead`.
 
 | main | head | outcome |
 | --- | --- | --- |
-| booted | failed | `HeadAdmission::FailedBoot`: like red CI, no round, the pending head is forgotten, the stale check of earlier rounds still runs, and `WatcherLedger` appends `head_red` with `cause` `boot_failed` and the redacted `reason` |
+| booted | failed | `HeadAdmission::FailedBoot`: like red CI, no round, the pending head is forgotten, the stale check of earlier rounds still runs, a round already started on this same head is marked stale (`StaleVerdicts::noteFailedBoot`, one `verdicts_stale` line), and `WatcherLedger` appends `head_red` with `cause` `boot_failed` and the redacted `reason` |
 | booted | booted or crashed | green: the round starts |
 | failed or crashed | not booted | green: the round starts (alerting the owner that the gate is off is part 2) |
 
