@@ -14,6 +14,7 @@ use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\LostContent;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
@@ -39,6 +40,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -56,6 +58,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BundleFile::class)]
 #[UsesClass(GivenHistory::class)]
 #[UsesClass(IncomingObjects::class)]
+#[UsesClass(BundleSecretScan::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(RepositoryGit::class)]
 #[UsesClass(StrippedCommits::class)]
 #[UsesClass(AcceptedHandBack::class)]
@@ -147,7 +151,7 @@ final class RunCheckJobTest extends TestCase
         $gate->method('registryHosts')->willReturn([]);
 
         (void) $this->checkJob($this->runnerLeaving(new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"]))), $gate)
-            ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false), 'job-image', null, []));
+            ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, []));
 
         self::assertTrue($this->ranSpec()->egress->isNone());
     }
@@ -435,7 +439,7 @@ final class RunCheckJobTest extends TestCase
         $this->history->startMerge('main');
         $this->history->commitFile('named.txt', "1\n", 'Merge main and create an unrelated file at the named path');
 
-        $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), true), 'job-image', null, ['named.txt']);
+        $job = new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), true, new JobCredentials()), 'job-image', null, ['named.txt']);
 
         $outcome = $this->whenTheJobLeaves(['check-result' => "passed\n"], $job);
 
@@ -478,7 +482,7 @@ final class RunCheckJobTest extends TestCase
      */
     private function job(string $bundle, ?string $command, array $named): CheckJob
     {
-        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false), 'job-image', $command, $named);
+        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, $named);
     }
 
     private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob
@@ -486,7 +490,7 @@ final class RunCheckJobTest extends TestCase
         $git = new RepositoryGit(new HardenedGit());
 
         return new RunCheckJob(
-            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects()),
+            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
             new LostContentCheck($git),
             $runner,
             $gate ?? new PhpGate(),

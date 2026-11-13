@@ -15,6 +15,7 @@ use Intakt\Core\HandBack\Domain\AttributionLines;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use Intakt\Core\HandBack\Domain\LostContent;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
@@ -41,6 +42,7 @@ use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -63,6 +65,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BundleFile::class)]
 #[UsesClass(GivenHistory::class)]
 #[UsesClass(IncomingObjects::class)]
+#[UsesClass(BundleSecretScan::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(RepositoryGit::class)]
 #[UsesClass(StrippedCommits::class)]
 #[UsesClass(AcceptedHandBack::class)]
@@ -211,7 +215,7 @@ final class RunCheckJobCommandTest extends TestCase
     {
         $git = new RepositoryGit(new HardenedGit());
         $checks = new RunCheckJob(
-            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects()),
+            new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
             new LostContentCheck($git),
             $runner,
             new PhpGate(),
