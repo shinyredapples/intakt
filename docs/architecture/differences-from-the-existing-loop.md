@@ -17,7 +17,7 @@ Intakt is to replace the existing loop for the owner's own use ([plan](../plan.m
 ## An egress allowlist per job through its own proxy
 
 - **The loop:** egress is denied by default (its `test_review_gpt_egress.py`).
-- **Intakt:** a check or probe job has no network at all; any other job names the exact hosts it may reach, sits on an internal network of its own, and its only way out is a proxy of its own that lets through TLS tunnels to those hosts and nothing else; each refused request is recorded in the ledger (`job_egress_refused`). Built in `Core/Job` ([Egress](job-containers.md#egress)). The parity item for this behavior stays open until it has run on a host with a Docker daemon.
+- **Intakt:** a probe job has no network at all; the PHP gate's check job may reach the package registry hosts the gate names ([Check job](check-job.md)) and nothing else; any other job names the exact hosts it may reach, sits on an internal network of its own, and its only way out is a proxy of its own that lets through TLS tunnels to those hosts and nothing else; each refused request is recorded in the ledger (`job_egress_refused`). Built in `Core/Job` ([Egress](job-containers.md#egress)). The parity item for this behavior stays open until it has run on a host with a Docker daemon.
 - **Why:** the allowlist is a property of the job, not of the machine or a user account, so two jobs never share one.
 
 ## A start check and a reduced mode instead of failing halfway

@@ -2,7 +2,7 @@
 
 A build hands back a git bundle. The module `Core/HandBack` (plan task T50, first part) checks that bundle before anything trusts it, and strips attribution from its commits. The secret scan, the redaction of mounted credentials, the send-back once and the hand-over on a second failure are later parts of T50 and are not built.
 
-`php bin/console intakt:hand-back:check <repository> <branch> <bundle> [--merge-main]` (`CheckHandBackCommand`) calls the use case. It prints `accepted <head>`, `base <commit>` (`base none` when the branch was not pushed yet) and `rewritten <count>` and exits with 0; a refusal prints `refused: <reason>` in an error block and exits with 1; an `InvalidArgumentException` or a `ReportableFailure` (`HandBackNotChecked`) prints its message and exits with 1. Nothing calls the use case from another module yet: the push (T53) and the build lane (T56) will.
+`php bin/console intakt:hand-back:check <repository> <branch> <bundle> [--merge-main]` (`CheckHandBackCommand`) calls the use case. It prints `accepted <head>`, `base <commit>` (`base none` when the branch was not pushed yet) and `rewritten <count>` and exits with 0; a refusal prints `refused: <reason>` in an error block and exits with 1; an `InvalidArgumentException` or a `ReportableFailure` (`HandBackNotChecked`) prints its message and exits with 1. The [check job](check-job.md) (`intakt:check:run`) runs it first in the same module; nothing calls it from another module yet: the push (T53) and the build lane (T56) will.
 
 ## Contract
 
