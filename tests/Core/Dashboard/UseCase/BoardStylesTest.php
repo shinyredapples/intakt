@@ -18,6 +18,47 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/flex:\s*1 1 0;\s*min-width:\s*176px/', $rules['.board .col'] ?? '');
     }
 
+    public function testTheWaitingOnYouColumnTakesTheMocksLargerShareAndMinimumWidth(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*flex-grow:\s*1\.25;\s*min-width:\s*224px;\s*$/', $rules['.board .col.col-needs'] ?? '');
+    }
+
+    public function testOutsideACollapsedColumnTheStripIsNotShown(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.col-fold'] ?? '');
+    }
+
+    public function testFrom761WideACollapsedColumnIsAStripOfTheMocks108Px(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlock('min-width: 761px'));
+
+        self::assertMatchesRegularExpression('/^\s*flex:\s*0 0 108px;\s*min-width:\s*108px;\s*$/', $rules['.board .col.collapsed'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.col.collapsed .col-head, .col.collapsed .col-cards'] ?? '');
+        self::assertMatchesRegularExpression('/display:\s*flex;.*justify-content:\s*space-between;.*width:\s*108px;\s*height:\s*32px;.*border-radius:\s*var\(--r-chip\);\s*background:\s*var\(--tint\)/s', $rules['.col.collapsed .col-fold'] ?? '');
+        self::assertMatchesRegularExpression('/background:\s*var\(--tint-2\)/', $rules['.col.collapsed .col-fold:hover'] ?? '');
+        self::assertMatchesRegularExpression('/background:\s*var\(--raised\)/', $rules['.col.collapsed .col-fold .count'] ?? '');
+    }
+
+    public function testHideSitsAtTheEndOfTheColumnHeadAtTheMocksHeight(): void
+    {
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/^\s*margin-left:\s*auto;\s*height:\s*28px;\s*$/', $rules['.col-hide'] ?? '');
+    }
+
+    // DESIGN.md: Backlog and Done are not collapsed on phones, so their cards stay open and Hide has nothing to do.
+    public function testOnAPhoneAColumnIsNeverCollapsedAndOffersNoHide(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlock('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.col-hide'] ?? '');
+        self::assertArrayNotHasKey('.board .col.collapsed', $this->rulesOf($this->sheetOutside('min-width: 761px')));
+    }
+
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void
     {
         $rules = $this->rulesOf($this->mediaBlock('min-width: 1700px'));
@@ -93,6 +134,11 @@ final class BoardStylesTest extends TestCase
         preg_match('/@media \('.preg_quote($query, '/').'\) \{(.*?)\n\}/s', $this->sheet(), $block);
 
         return $block[1] ?? self::fail($query);
+    }
+
+    private function sheetOutside(string $query): string
+    {
+        return str_replace($this->mediaBlock($query), '', $this->sheet());
     }
 
     /**
