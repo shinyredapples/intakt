@@ -451,7 +451,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
 
-        $verdict = $this->vendor(self::cutThen(self::cutAgain(...)), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
+        $verdict = $this->vendor($this->cutThen(self::cutAgain(...)), $ledger)->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
         [, $unsettled] = $ledger->payloads();
@@ -487,7 +487,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
         $calls = 0;
-        $answer = self::cutThen(static function () use (&$calls): never {
+        $answer = $this->cutThen(static function () use (&$calls): never {
             ++$calls;
             self::cutAgain();
         });
@@ -504,7 +504,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testAProviderFailureOnTheUnstreamedTryAfterACutStreamFollowsTheRuleOfThatFailure(): void
     {
         $ledger = new InMemoryLedger();
-        $answer = self::cutThen(static fn (): never => throw new ServerException(503));
+        $answer = $this->cutThen(static fn (): never => throw new ServerException(503));
 
         $failure = $this->thrownBy(fn (): VendorReview => $this->vendor($answer, $ledger)->review('alpha', Tier::Strong, $this->request()));
 
@@ -516,7 +516,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     /**
      * @param Closure(): ResultInterface $retry
      */
-    private static function cutThen(Closure $retry): Closure
+    private function cutThen(Closure $retry): Closure
     {
         $calls = 0;
 

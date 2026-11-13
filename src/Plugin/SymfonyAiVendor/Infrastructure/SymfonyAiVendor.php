@@ -87,7 +87,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
     // Retried once, because a call stopped by the output limit leaves no verdict and the same room would stop it again, a changes verdict without findings is no verdict either, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer, and a stream that a subscription CLI cut is not retried, because its call never streamed.
     /**
-     * @param Closure(): Verdict                                                                 $first
+     * @param Closure(): Verdict                                                                          $first
      * @param Closure(MaxOutputTokensException|ChangesWithoutFindings|IncompleteStreamException): Verdict $retry
      */
     private function retriedOnce(Closure $first, Closure $retry): Verdict
