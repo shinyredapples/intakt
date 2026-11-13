@@ -11,7 +11,6 @@ use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
 use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
-use Intakt\Core\Review\Contract\BootState;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Watcher\Domain\BootKey;
@@ -119,7 +118,7 @@ final class BootGateTest extends KernelTestCase
     {
         $this->gate()->admit($this->project(), $this->green());
 
-        $boot = array_values(array_filter($this->asked, static fn (object $query): bool => $query instanceof BootHarnessAtMain))[0];
+        $boot = array_first(array_filter($this->asked, static fn (object $query): bool => $query instanceof BootHarnessAtMain));
         self::assertInstanceOf(BootHarnessAtMain::class, $boot);
         self::assertSame(str_repeat('b', 40), $boot->head->commit->hash);
         self::assertSame(str_repeat('f', 40), $boot->main->hash);

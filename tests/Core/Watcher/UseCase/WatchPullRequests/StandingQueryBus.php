@@ -31,7 +31,7 @@ final class StandingQueryBus implements MessageBusInterface
     public array $asked = [];
     public HeadMove $move;
     public bool $fetched = true;
-    /** @var list<object> boots and main lookups, in the order they were asked */
+    /** @var list<object> */
     public array $boots = [];
     public BootOutcome $main;
     public BootOutcome $head;

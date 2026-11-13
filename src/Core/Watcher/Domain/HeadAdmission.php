@@ -9,6 +9,6 @@ enum HeadAdmission: string
     case Pending = 'pending';
     case Red = 'red';
     case Green = 'green';
-    // Green on CI but failing to boot while main boots; goes back like red.
+    // Kept apart from Red, because the ledger line and the owner must tell a head that does not boot from a failed CI run.
     case FailedBoot = 'failed_boot';
 }
