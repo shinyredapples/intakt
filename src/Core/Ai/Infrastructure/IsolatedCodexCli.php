@@ -19,7 +19,7 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
     // Its shell, browsers, apps, plugins and agents would read past the checkout's path checks and the fence, so each tool the CLI enables by default is off; the CLI refuses a feature name it does not know, so a renamed one fails the call instead of staying on. Public because the review job's script switches off the same tools.
     public const array DISABLED_FEATURES = ['shell_tool', 'unified_exec', 'apps', 'plugins', 'browser_use', 'in_app_browser', 'computer_use', 'multi_agent', 'image_generation', 'view_image', 'hooks'];
 
-    // No saved session, no user config or rules from the writable home, no Git check of a home that is no repository.
+    // The call home is writable, so no session is saved in it and no user config or rules are read from it; it is no repository, so the Git check is skipped.
     private const array CONFINEMENT = [
         'sandbox' => 'read-only',
         'ephemeral' => true,
