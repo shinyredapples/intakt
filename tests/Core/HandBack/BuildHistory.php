@@ -41,10 +41,32 @@ final readonly class BuildHistory
 
     public function commitFile(string $path, string $content, string $message): string
     {
-        file_put_contents($this->work.'/'.$path, $content);
+        new Filesystem()->dumpFile($this->work.'/'.$path, $content);
         $this->git('add', $path);
 
         return $this->commit($message);
+    }
+
+    public function removeFile(string $path, string $message): string
+    {
+        $this->git('rm', '--quiet', '--cached', '--', $path);
+        new Filesystem()->remove($this->work.'/'.$path);
+
+        return $this->commit($message);
+    }
+
+    public function moveFile(string $from, string $to, string $message): string
+    {
+        $this->git('mv', '--', $from, $to);
+
+        return $this->commit($message);
+    }
+
+    public function commitSubmodule(string $path, string $commit): string
+    {
+        $this->git('update-index', '--add', '--cacheinfo', '160000,'.$commit.','.$path);
+
+        return $this->commit('Point '.$path.' at '.$commit);
     }
 
     public function commitWithASignatureHeader(string $message): string
@@ -161,6 +183,11 @@ final readonly class BuildHistory
         $this->git('merge', '--quiet', '--no-ff', '--no-edit', $branch);
 
         return $this->git('rev-parse', 'HEAD');
+    }
+
+    public function startMerge(string $branch): void
+    {
+        $this->git('merge', '--quiet', '--no-ff', '--no-commit', $branch);
     }
 
     public function mergeUnrelated(string $branch): string

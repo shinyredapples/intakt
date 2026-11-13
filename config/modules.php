@@ -24,6 +24,7 @@ return [
     'Plugin/GitHubForge',
     'Plugin/LocalGitForge',
     'Plugin/Notifier',
+    'Plugin/PhpGate',
     'Plugin/SymfonyAiVendor',
     'Plugin/Vendor',
     'Plugin/WorkSource',
