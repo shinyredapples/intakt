@@ -83,17 +83,43 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame([], $this->cardNumbersIn($page, 'Done'));
     }
 
-    public function testEveryColumnWithoutACardSaysNothingHere(): void
+    public function testEveryFlowColumnWithoutACardSaysNothingHere(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(
-            ['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'Merging', 'Done'],
-            $page->filter('.board > section.col')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text()),
+            ['Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'Merging', 'Done'],
+            $page->filter('.board > section.col:not(.col-needs)')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text()),
         );
-        self::assertSame(['Nothing here'], array_values(array_unique($page->filter('.col-empty')->each(static fn (Crawler $empty): string => $empty->text()))));
+        self::assertSame(['Nothing here'], array_values(array_unique($page->filter('.col:not(.col-needs) .col-empty')->each(static fn (Crawler $empty): string => $empty->text()))));
+    }
+
+    public function testAnEmptyWaitingOnYouColumnSaysNothingNeedsYou(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $column = $this->column($this->browser->request('GET', '/'), 'Waiting on you');
+
+        self::assertSame('Nothing needs you', $column->filter('.col-empty')->text());
+    }
+
+    public function testOnlyTheFirstColumnIsPinnedAsWaitingOnYou(): void
+    {
+        $pinned = $this->browser->request('GET', '/')->filter('.board > section.col.col-needs');
+
+        self::assertCount(1, $pinned);
+        self::assertSame('Waiting on you', $pinned->filter('.col-head h3')->text());
+        self::assertSame('col-waiting-on-you', $this->browser->getCrawler()->filter('.board > section.col')->first()->attr('id'));
+    }
+
+    public function testAnEmptyWaitingOnYouColumnCountsZeroWithoutAmber(): void
+    {
+        $count = $this->column($this->browser->request('GET', '/'), 'Waiting on you')->filter('.col-head .count');
+
+        self::assertSame('0', $count->text());
+        self::assertStringNotContainsString('needs', (string) $count->attr('class'));
     }
 
     public function testEachColumnCountsEveryCardOfEveryProject(): void
