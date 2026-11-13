@@ -1,0 +1,2 @@
+banner-open light 390: {"open":true,"seriousOrCritical":[],"minText":15,"minTarget":44}
+banner-open dark 390: {"open":true,"seriousOrCritical":[],"minText":15,"minTarget":44}
