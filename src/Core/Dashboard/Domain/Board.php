@@ -6,7 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 final readonly class Board
 {
-    // DESIGN.md's crowded column: a column shows this many cards, then "Show n more".
+    // Twelve, because DESIGN.md's crowded column shows 12 cards before "Show n more".
     public const int PAGE_LIMIT = 12;
 
     /** @var list<Review> */

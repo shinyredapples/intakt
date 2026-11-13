@@ -121,7 +121,7 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/background:\s*var\(--amber\)/', $rules['.count.needs'] ?? '');
     }
 
-    // DESIGN.md, Awkward data and states: long titles clamp to three lines and break long words; project names truncate at 60%.
+    // Because DESIGN.md (Awkward data and states) clamps long titles to three lines and truncates project names at 60%.
     public function testACardClampsALongTitleToThreeLinesAndTruncatesALongProjectName(): void
     {
         $rules = $this->rulesOf($this->sheet());
@@ -130,7 +130,7 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/max-width:\s*60%;\s*overflow:\s*hidden;\s*text-overflow:\s*ellipsis;\s*white-space:\s*nowrap;/', $rules['.card .top .pname'] ?? '');
     }
 
-    // A change name as long as a branch wrapped over nine lines in the corner and squeezed the project name to one letter.
+    // Because a change name as long as a branch wrapped over nine lines in the corner and squeezed the project name to one letter.
     public function testACardTruncatesALongNumberAndLeavesTheProjectNameItsShare(): void
     {
         $rules = $this->rulesOf($this->sheet());
