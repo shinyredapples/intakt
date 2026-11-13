@@ -59,7 +59,7 @@ final readonly class GitHubIssueReads implements IssueReads
     {
         $issues = [];
         $answer = $first;
-        for ($page = 1; ; ++$page) {
+        for ($page = 1;; ++$page) {
             $listed = $this->issuesOf($answer['body']);
             // Only a missing next link ends the listing, so a short page that still names one means issues went unread.
             if ($answer['next'] && count($listed) < self::PAGE_SIZE) {

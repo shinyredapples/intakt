@@ -101,10 +101,7 @@ final class GitHubIssueReadsTest extends TestCase
         $api->pages = [1 => $this->page(1, 100), 2 => '500'];
         $api->namingNext = [1];
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('GitHub answered 500 to a read.');
-
-        $api->reads()->listOpen('alpha', null);
+        self::assertStringContainsString('GitHub answered 500 to a read.', $this->failureOf($api)->getMessage());
     }
 
     public function testARateLimitedLaterPageFailsTheListingAsRateLimited(): void
@@ -124,10 +121,7 @@ final class GitHubIssueReadsTest extends TestCase
         $api->pages = [1 => $this->page(1, 100), 2 => '{"message":"busy"}'];
         $api->namingNext = [1];
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('not a list');
-
-        $api->reads()->listOpen('alpha', null);
+        self::assertStringContainsString('not a list', $this->failureOf($api)->getMessage());
     }
 
     public function testAnEmptyLaterPageThatStillNamesANextPageFailsTheListing(): void
@@ -136,10 +130,7 @@ final class GitHubIssueReadsTest extends TestCase
         $api->pages = [1 => $this->page(1, 100), 2 => '[]'];
         $api->namingNext = [1, 2];
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('short page 2');
-
-        $api->reads()->listOpen('alpha', null);
+        self::assertStringContainsString('short page 2', $this->failureOf($api)->getMessage());
     }
 
     public function testAShortPageThatStillNamesANextPageFailsTheListing(): void
@@ -148,10 +139,7 @@ final class GitHubIssueReadsTest extends TestCase
         $api->pages = [1 => $this->page(1, 40), 2 => $this->page(41, 100)];
         $api->namingNext = [1];
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('short page 1');
-
-        $api->reads()->listOpen('alpha', null);
+        self::assertStringContainsString('short page 1', $this->failureOf($api)->getMessage());
     }
 
     public function testReachingThePageCapWithANextLinkFailsTheListing(): void
@@ -162,10 +150,7 @@ final class GitHubIssueReadsTest extends TestCase
         }
         $api->namingNext = range(1, 10);
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage('more open issues than this forge reads');
-
-        $api->reads()->listOpen('alpha', null);
+        self::assertStringContainsString('more open issues than this forge reads', $this->failureOf($api)->getMessage());
     }
 
     public function testTheLastAllowedPageWithoutANextLinkIsACompleteListing(): void
@@ -177,6 +162,17 @@ final class GitHubIssueReadsTest extends TestCase
         $api->namingNext = range(1, 9);
 
         self::assertCount(1000, $api->reads()->listOpen('alpha', null)->issues());
+    }
+
+    private function failureOf(RecordedIssueApi $api): ForgeReadFailed
+    {
+        try {
+            $api->reads()->listOpen('alpha', null);
+        } catch (ForgeReadFailed $failed) {
+            return $failed;
+        }
+
+        self::fail('The listing was expected to fail.');
     }
 
     private function page(int $from, int $count): string
