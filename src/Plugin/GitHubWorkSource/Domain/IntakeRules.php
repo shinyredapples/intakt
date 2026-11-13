@@ -137,8 +137,7 @@ final readonly class IntakeRules
         return array_values(array_unique(array_diff($targets, [$task->number()])));
     }
 
-    // A trusted pull request stands for the tasks it closes, because the work waited for is theirs; one that closes the waiting task is its own and no wait, because the build hands over instead.
-    // Anyone else's pull request is no wait at all, because anyone can open one and would hold a task for as long as it stays open.
+    // A trusted pull request stands for the tasks it closes, because the work waited for is theirs; one that closes the waiting task is its own and no wait, because the build hands over instead; anyone else's is no wait at all, because anyone can open one and hold a task with it.
     /**
      * @return list<int>
      */
