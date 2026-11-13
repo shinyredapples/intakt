@@ -1,0 +1,1 @@
+{"data":{"repository":{"issue":{"author":{"__typename":"User","login":"ana"},"userContentEdits":{"nodes":[{"editor":null}]},"timelineItems":{"pageInfo":{"hasNextPage":false},"nodes":[]}}}},"errors":[{"type":"FORBIDDEN","path":["repository","issue","userContentEdits","nodes",0,"editor"],"message":"Resource not accessible by integration"}]}
