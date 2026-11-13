@@ -155,6 +155,36 @@ final class InstanceBootTest extends TestCase
         self::assertStringContainsString('composer.json', $outcome->reason);
     }
 
+    public function testAMissingComposerIsACrashOfTheBootStepNotAFailureOfTheHead(): void
+    {
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithoutComposerAnd($head, []);
+
+        self::assertSame(BootState::Crashed, $outcome->state, $outcome->reason);
+        self::assertStringStartsWith('composer could not run: ', $outcome->reason);
+    }
+
+    public function testAComposerThatCannotBeExecutedIsACrashOfTheBootStepNotAFailureOfTheHead(): void
+    {
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o644]);
+
+        self::assertSame(BootState::Crashed, $outcome->state, $outcome->reason);
+        self::assertStringStartsWith('composer could not run: ', $outcome->reason);
+    }
+
+    public function testAComposerThatRunsAndExitsWithAnErrorIsAFailureOfTheHead(): void
+    {
+        $head = $this->repository->commitFile('src/Feature.php', "<?php\n");
+
+        $outcome = $this->bootWithoutComposerAnd($head, ['composer' => 0o755]);
+
+        self::assertSame(BootState::Failed, $outcome->state, $outcome->reason);
+        self::assertSame('composer install failed: the lock file does not match', $outcome->reason);
+    }
+
     public function testAComposerPluginOfTheHeadDoesNotSeeASecretOfTheBootingInstall(): void
     {
         $seen = $this->repository->path.'-plugin-saw';
@@ -366,6 +396,41 @@ final class InstanceBootTest extends TestCase
     private function bootWithMainsHarness(string $head): BootOutcome
     {
         return new InstanceBoot()->of($this->at($head), $this->main);
+    }
+
+    // A PATH of every command of the real one except composer, plus the given stubs, each a script that exits with 1, so a test decides whether composer is missing, not executable or failing; git and sh keep whatever they call.
+    /**
+     * @param array<string, int> $stubs mode per stub command
+     */
+    private function bootWithoutComposerAnd(string $head, array $stubs): BootOutcome
+    {
+        $tools = $this->repository->path.'-tools';
+        mkdir($tools);
+        $path = getenv('PATH');
+
+        foreach (explode(':', (string) $path) as $folder) {
+            foreach ((array) glob($folder.'/*') as $command) {
+                $name = basename((string) $command);
+
+                if ('composer' !== $name && !file_exists($tools.'/'.$name) && !is_link($tools.'/'.$name)) {
+                    symlink((string) $command, $tools.'/'.$name);
+                }
+            }
+        }
+
+        foreach ($stubs as $stub => $mode) {
+            file_put_contents($tools.'/'.$stub, "#!/bin/sh\necho 'the lock file does not match' >&2\nexit 1\n");
+            chmod($tools.'/'.$stub, $mode);
+        }
+
+        putenv('PATH='.$tools);
+
+        try {
+            return $this->bootWithMainsHarness($head);
+        } finally {
+            putenv(false === $path ? 'PATH' : 'PATH='.$path);
+            new Filesystem()->remove($tools);
+        }
     }
 
     private function writeComposerAuth(string $composerHome): void

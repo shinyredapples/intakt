@@ -23,6 +23,8 @@ final readonly class InstanceBoot
     private const string HARNESS = 'bin/instance';
     // Plugins stay on, because symfony/runtime writes vendor/autoload_runtime.php as one; a plugin is the commit's code like the code bin/instance boots.
     private const array INSTALL = ['composer', 'install', '--no-interaction', '--no-progress', '--no-scripts'];
+    // The shell's codes for a command it cannot execute (126) or cannot find (127), because a missing or broken composer is the boot step's fault, never the commit's.
+    private const array COULD_NOT_RUN = [126, 127];
     private const int INSTALL_SECONDS = 600;
     private const int BOOT_SECONDS = 180;
 
@@ -86,6 +88,10 @@ final readonly class InstanceBoot
     private function bootIn(string $snapshot, FileContent $harness): BootOutcome
     {
         $install = $this->run(self::INSTALL, $snapshot, self::INSTALL_SECONDS);
+
+        if (in_array($install->getExitCode(), self::COULD_NOT_RUN, true)) {
+            return BootOutcome::crashed('composer could not run: '.trim($install->getErrorOutput()));
+        }
 
         if (!$install->isSuccessful()) {
             return BootOutcome::failed('composer install failed: '.trim($install->getErrorOutput()));
