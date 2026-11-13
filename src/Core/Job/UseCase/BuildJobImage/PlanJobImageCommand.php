@@ -21,11 +21,11 @@ final readonly class PlanJobImageCommand
         SymfonyStyle $io,
         #[Argument('The project checkout; the files of its HEAD commit decide the image')]
         string $directory,
-        #[Option('Plan the image of a review job: a project Dockerfile or devcontainer image gets the job tools added')]
-        bool $review = false,
+        #[Option('The image of the project as its source gives it, or of a review job, which adds the job tools to a project Dockerfile or devcontainer image')]
+        JobImageKind $kind = JobImageKind::Project,
     ): int {
         try {
-            $plan = $review ? $this->planner->planForReview($directory) : $this->planner->planFor($directory);
+            $plan = $this->planner->planFor($directory, $kind);
         } catch (JobImageNotBuilt $refused) {
             $io->error($refused->getMessage());
 

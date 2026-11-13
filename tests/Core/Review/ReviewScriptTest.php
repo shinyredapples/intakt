@@ -22,6 +22,9 @@ final class ReviewScriptTest extends TestCase
     private TemporaryRepository $repository;
     private string $folder = '';
     private string $head = '';
+    private string $cli = 'claude';
+    private ?string $headArgument = null;
+    private ?string $checkout = null;
 
     protected function setUp(): void
     {
@@ -77,8 +80,9 @@ final class ReviewScriptTest extends TestCase
     public function testCodexGetsTheModelAndItsReadOnlySandbox(): void
     {
         $this->givenTheCheckoutIsReadOnly();
+        $this->cli = 'codex';
 
-        $run = $this->whenTheReviewRuns(cli: 'codex');
+        $run = $this->whenTheReviewRuns();
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
         self::assertSame(
@@ -113,8 +117,9 @@ final class ReviewScriptTest extends TestCase
     public function testAHeadThatIsNoFullCommitNameIsNotReviewed(string $head): void
     {
         $this->givenTheCheckoutIsReadOnly();
+        $this->headArgument = $head;
 
-        $run = $this->whenTheReviewRuns(head: $head);
+        $run = $this->whenTheReviewRuns();
 
         self::assertSame(1, $run->getExitCode());
         self::assertStringContainsString('is not a full commit name', $this->outputFile('review.log'));
@@ -157,7 +162,9 @@ final class ReviewScriptTest extends TestCase
 
     public function testAFolderWithoutItsOwnRepositoryIsNotReviewed(): void
     {
-        $run = $this->whenTheReviewRuns(checkout: $this->repository->path.'/src');
+        $this->checkout = $this->repository->path.'/src';
+
+        $run = $this->whenTheReviewRuns();
 
         self::assertSame(1, $run->getExitCode());
         self::assertStringContainsString('holds no repository', $this->outputFile('review.log'));
@@ -229,8 +236,9 @@ final class ReviewScriptTest extends TestCase
     public function testAnotherCliIsNotRun(): void
     {
         $this->givenTheCheckoutIsReadOnly();
+        $this->cli = 'sh';
 
-        $run = $this->whenTheReviewRuns(cli: 'sh');
+        $run = $this->whenTheReviewRuns();
 
         self::assertSame(64, $run->getExitCode());
         self::assertStringContainsString('unknown reviewer CLI: sh', $this->outputFile('review.log'));
@@ -261,10 +269,10 @@ final class ReviewScriptTest extends TestCase
     /**
      * @param array<string, string|false> $environment
      */
-    private function whenTheReviewRuns(array $environment = [], string $cli = 'claude', ?string $head = null, ?string $checkout = null): Process
+    private function whenTheReviewRuns(array $environment = []): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-review', $checkout ?? $this->repository->path, $head ?? $this->head, $this->folder.'/prompt.md', $cli, 'claude-opus-5-5'],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-review', $this->checkout ?? $this->repository->path, $this->headArgument ?? $this->head, $this->folder.'/prompt.md', $this->cli, 'claude-opus-5-5'],
             null,
             [...$this->jobEnvironment(), ...$environment],
             timeout: 20,

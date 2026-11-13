@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\Devcontainer;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobImageKind;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlanner;
@@ -270,6 +271,6 @@ final class JobImagePlannerTest extends TestCase
 
     private function reviewPlanFor(): JobImagePlan
     {
-        return new JobImagePlanner(new ProjectFiles())->planForReview($this->repository->path);
+        return new JobImagePlanner(new ProjectFiles())->planFor($this->repository->path, JobImageKind::Review);
     }
 }

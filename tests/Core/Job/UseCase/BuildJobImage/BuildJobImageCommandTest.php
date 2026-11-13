@@ -22,10 +22,12 @@ use Intakt\Core\Job\Infrastructure\ImageBuild;
 use Intakt\Core\Job\UseCase\BuildJobImage\BuildContext;
 use Intakt\Core\Job\UseCase\BuildJobImage\BuildJobImage;
 use Intakt\Core\Job\UseCase\BuildJobImage\BuildJobImageCommand;
+use Intakt\Core\Job\UseCase\BuildJobImage\BuildJobImageInput;
 use Intakt\Core\Job\UseCase\BuildJobImage\BuiltJobImage;
 use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\Devcontainer;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobImageKind;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlanner;
@@ -51,6 +53,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 #[CoversClass(BuildJobImageCommand::class)]
 #[CoversClass(BuildJobImage::class)]
+#[CoversClass(BuildJobImageInput::class)]
 #[CoversClass(BuildContext::class)]
 #[CoversClass(BuiltJobImage::class)]
 #[UsesClass(CliManifest::class)]
@@ -65,6 +68,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[UsesClass(JobEgress::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobId::class)]
+#[UsesClass(JobImageKind::class)]
 #[UsesClass(JobImageNotBuilt::class)]
 #[UsesClass(JobImagePlan::class)]
 #[UsesClass(JobImagePlanner::class)]
@@ -175,7 +179,7 @@ final class BuildJobImageCommandTest extends TestCase
     {
         $this->repository->commitFile('Dockerfile', "FROM php:8.5.12-cli\n");
 
-        $tester = $this->whenTheCommandRuns(self::BUILT, options: ['--review' => true]);
+        $tester = $this->whenTheCommandRuns(self::BUILT, options: ['--kind' => 'review']);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
         self::assertSame([ReviewDockerfile::PATH, 'Dockerfile', 'composer.json'], $this->filesInTheSentContext());
@@ -189,7 +193,7 @@ final class BuildJobImageCommandTest extends TestCase
     {
         $this->repository->commitFile('composer.json', '{"require": {"ext-intl": "*"}}');
 
-        $tester = $this->whenTheCommandRuns(self::BUILT, 'Demo:main tag', ['--review' => true]);
+        $tester = $this->whenTheCommandRuns(self::BUILT, 'Demo:main tag', ['--kind' => 'review']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('"Demo:main tag" is not an image tag', $this->display($tester));
@@ -225,7 +229,7 @@ final class BuildJobImageCommandTest extends TestCase
     }
 
     /**
-     * @param array<string, bool> $options
+     * @param array<string, string> $options
      */
     private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main', array $options = []): CommandTester
     {

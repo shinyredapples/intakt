@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\Devcontainer;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobImageKind;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlanner;
@@ -32,6 +33,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(GeneratedDockerfile::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
+#[UsesClass(JobImageKind::class)]
 #[UsesClass(JobImageNotBuilt::class)]
 #[UsesClass(JobImagePlan::class)]
 #[UsesClass(JobImagePlanner::class)]
@@ -80,7 +82,7 @@ final class PlanJobImageCommandTest extends TestCase
         $this->repository->commitFile('composer.json', '{"require": {"php": "^8.4"}}');
         $this->repository->commitFile('Dockerfile', "FROM php:8.4-cli\n");
 
-        $tester = $this->whenTheCommandRuns(['--review' => true]);
+        $tester = $this->whenTheCommandRuns(['--kind' => 'review']);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertStringContainsString('Job image from Dockerfile for PHP ^8.4.', $tester->getDisplay());
@@ -92,7 +94,7 @@ final class PlanJobImageCommandTest extends TestCase
     {
         $this->repository->commitFile('.devcontainer/devcontainer.json', '{"image": "mcr.microsoft.com/devcontainers/php:8.5"}');
 
-        $tester = $this->whenTheCommandRuns(['--review' => true]);
+        $tester = $this->whenTheCommandRuns(['--kind' => 'review']);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertStringContainsString("FROM mcr.microsoft.com/devcontainers/php:8.5\n\n# Added by Intakt for a review job.\n", $tester->getDisplay());
@@ -109,6 +111,15 @@ final class PlanJobImageCommandTest extends TestCase
         self::assertStringContainsString('Builds Dockerfile in the repository root.', $tester->getDisplay());
     }
 
+    public function testAnUnknownKindIsRefusedWithTheKindsThereAre(): void
+    {
+        $this->repository->commitFile('Dockerfile', "FROM php:8.4-cli\n");
+
+        $this->expectExceptionMessageMatches('/"build".*"project", "review"/');
+
+        $this->whenTheCommandRuns(['--kind' => 'build']);
+    }
+
     public function testARefusedProjectFailsWithTheReason(): void
     {
         $this->repository->commitFile('README.md', 'no PHP here');
@@ -120,7 +131,7 @@ final class PlanJobImageCommandTest extends TestCase
     }
 
     /**
-     * @param array<string, bool> $options
+     * @param array<string, string> $options
      */
     private function whenTheCommandRuns(array $options = []): CommandTester
     {

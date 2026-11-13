@@ -1,6 +1,6 @@
 # Job images
 
-`Core/Job/UseCase/BuildJobImage` builds the image a project's jobs run in (plan task T45) and checks that the image has the project's PHP. The doors are `intakt:job:build-image <directory> <tag>` (`BuildJobImage`: plan, build, probe) and `intakt:job:plan-image <directory>` (the plan alone, with the generated Dockerfile or where the project's Dockerfile is built, no engine call); both take `--review` for [the review job image](#the-review-job-image) (`BuildJobImage::buildForReview()`, `JobImagePlanner::planForReview()`), and `plan-image` then prints the Dockerfile Intakt writes and, for a project tree, where it is built. No lane builds an image or starts a job from one yet (the build job arrives with T49). The jobs themselves run as described in [Job containers](job-containers.md).
+`Core/Job/UseCase/BuildJobImage` builds the image a project's jobs run in (plan task T45) and checks that the image has the project's PHP. The doors are `intakt:job:build-image <directory> <tag>` (`BuildJobImage`: plan, build, probe) and `intakt:job:plan-image <directory>` (the plan alone, with the generated Dockerfile or where the project's Dockerfile is built, no engine call); both take `--kind=review` for [the review job image](#the-review-job-image) (`JobImageKind::Review`, passed to `BuildJobImage::build()` and `JobImagePlanner::planFor()`; the default is `project`, the image as its source gives it, and another value is refused by the console with the values there are), and `plan-image` then prints the Dockerfile Intakt writes and, for a project tree, where it is built. No lane builds an image or starts a job from one yet (the build job arrives with T49). The jobs themselves run as described in [Job containers](job-containers.md).
 
 ## Where the image comes from
 
@@ -39,7 +39,7 @@ Steps 3 and 4 are the job tools (`JobTools::steps()`), which [the review job ima
 
 ## The review job image
 
-A [review job](review-job.md) runs a reviewer's CLI with `git` in the image, and a project's own Dockerfile or devcontainer image need not hold them. `JobImagePlanner::planForReview()` therefore plans the image as above and then:
+A [review job](review-job.md) runs a reviewer's CLI with `git` in the image, and a project's own Dockerfile or devcontainer image need not hold them. `JobImagePlanner::planFor()` with `JobImageKind::Review` therefore plans the image as above and then:
 
 - a generated image is planned unchanged, since it holds the job tools already;
 - for a devcontainer `image`, the one-line `FROM <image>` Dockerfile gets the job tools;

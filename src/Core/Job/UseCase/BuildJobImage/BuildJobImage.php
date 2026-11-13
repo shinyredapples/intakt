@@ -27,36 +27,13 @@ final readonly class BuildJobImage
      * @throws JobOutputRefused
      * @throws JobEventNotRecorded
      */
-    public function build(string $directory, string $tag): BuiltJobImage
-    {
-        $this->refuseAnotherThanATag($tag);
-
-        return $this->built($this->planner->planFor($directory), $directory, $tag);
-    }
-
-    /**
-     * @throws JobImageNotBuilt
-     * @throws JobRefused
-     * @throws DockerEngineFailed
-     * @throws JobOutputRefused
-     * @throws JobEventNotRecorded
-     */
-    public function buildForReview(string $directory, string $tag): BuiltJobImage
-    {
-        $this->refuseAnotherThanATag($tag);
-
-        return $this->built($this->planner->planForReview($directory), $directory, $tag);
-    }
-
-    private function refuseAnotherThanATag(string $tag): void
+    public function build(string $directory, string $tag, JobImageKind $kind = JobImageKind::Project): BuiltJobImage
     {
         if (!ImageReference::isTag($tag)) {
             throw JobImageNotBuilt::notATag($tag);
         }
-    }
 
-    private function built(JobImagePlan $plan, string $directory, string $tag): BuiltJobImage
-    {
+        $plan = $this->planner->planFor($directory, $kind);
         $build = $this->engine->build($this->context->of($plan, $directory), $tag, $plan->dockerfile);
 
         if (null !== $build->error || null === $build->image) {
