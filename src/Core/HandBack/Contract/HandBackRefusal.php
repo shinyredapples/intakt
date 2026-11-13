@@ -18,6 +18,8 @@ enum HandBackRefusal: string
     case Malformed = 'malformed';
     case HoldsCredential = 'holds-credential';
     case HoldsSecret = 'holds-secret';
+    case TextHoldsCredential = 'text-holds-credential';
+    case TextHoldsSecret = 'text-holds-secret';
 
     public function reason(): string
     {
@@ -33,6 +35,8 @@ enum HandBackRefusal: string
             self::Malformed => 'the bundle holds a commit git would not write',
             self::HoldsCredential => 'a file or file name the bundle adds holds the value of a credential mounted into the build job',
             self::HoldsSecret => 'the secret scan finds a secret in a commit, message or file the bundle adds',
+            self::TextHoldsCredential => 'the pull request text holds the value of a credential mounted into the build job',
+            self::TextHoldsSecret => 'the secret scan finds a secret in the pull request text',
         };
     }
 }

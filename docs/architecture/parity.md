@@ -22,7 +22,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 - [ ] A hand-back never pushes main or force-pushes. `test_no_force.py`, `test_policy.py::test_main_and_ledger_cannot_be_pushed` [T50]
 - [x] Attribution trailers are stripped from builder commits. `test_attribution.py::test_rebase_strips_attribution_from_builder_commits` [T50]; Intakt: `CheckHandBackTest::testAttributionIsStrippedFromEveryNewCommitAndTheCommitsAfterItAreRebuiltOnTheStrippedOnes`
 - [ ] A secret in any new commit, message or the pull request text stops the push; the scanner missing fails closed. `test_secret_scan.py::test_a_missing_scanner_fails_closed`, `test_secret_scan.py::test_gitleaks_finds_a_stripe_key_even_when_a_later_commit_deletes_it` [T50]
-- [ ] A secret sent back to the builder is never repeated in feedback. `test_round.py::test_a_token_in_the_pr_body_is_sent_back_without_its_value` [T50]
+- [x] A secret sent back to the builder is never repeated in feedback. `test_round.py::test_a_token_in_the_pr_body_is_sent_back_without_its_value` [T50]; Intakt: `RouteHandBackTest::testATokenInThePullRequestTextIsSentBackWithTheReasonAndWithoutItsValue`
 - [ ] Only a green check pushes; the pre-check in the session catches refusals first. `test_fixpass_logic.py`, `test_precheck.py` [T49, T51]
 - [ ] Every Evidence item is referenced; a miss goes back once, a second miss goes to the reviewers. `test_evidence.py`, `test_round.py::test_a_second_evidence_miss_in_the_round_goes_to_the_reviewers` [T51]
 - [ ] A body over the cap goes back once with its commits kept. `test_round.py::test_a_pr_md_over_the_cap_goes_back_once_to_be_shortened_with_its_commits_kept` [T51]
