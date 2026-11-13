@@ -30,7 +30,9 @@ final class ComposerPolicyConfigurationTest extends TestCase
 
     public function testAnEmptyListOfVendorsTrustsNone(): void
     {
-        self::assertSame([], $this->processed(['composer_policy' => ['trusted_vendors' => []]])['composer_policy']['trusted_vendors']);
+        $processed = $this->processed(['composer_policy' => ['trusted_vendors' => []]]);
+
+        self::assertSame(['composer_policy' => ['trusted_vendors' => [], 'package_types' => ComposerPolicyConfiguration::DEFAULT_TYPES]], $processed);
     }
 
     public function testAVendorWrittenWithItsSlashIsRefused(): void
@@ -51,16 +53,10 @@ final class ComposerPolicyConfigurationTest extends TestCase
     /**
      * @param array<string, mixed> $section
      *
-     * @return array{composer_policy: array{trusted_vendors: list<string>, package_types: list<string>}}
+     * @return array<mixed>
      */
     private function processed(array $section): array
     {
-        $processed = new Processor()->processConfiguration(new ComposerPolicyConfiguration(), [$section]);
-        self::assertIsArray($processed['composer_policy'] ?? null);
-        self::assertIsList($processed['composer_policy']['trusted_vendors'] ?? null);
-        self::assertIsList($processed['composer_policy']['package_types'] ?? null);
-
-        /** @var array{composer_policy: array{trusted_vendors: list<string>, package_types: list<string>}} $processed */
-        return $processed;
+        return new Processor()->processConfiguration(new ComposerPolicyConfiguration(), [$section]);
     }
 }
