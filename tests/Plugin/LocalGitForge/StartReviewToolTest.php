@@ -19,6 +19,7 @@ use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
@@ -41,6 +42,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(StartReviewTool::class)]
 #[CoversClass(StartedReview::class)]
+#[UsesClass(ChangeReview::class)]
 #[UsesClass(LocalChangeReview::class)]
 #[UsesClass(NameStatusParser::class)]
 #[UsesClass(ForwardedProgress::class)]
@@ -74,6 +76,29 @@ final class StartReviewToolTest extends TestCase
         self::assertSame(['F1'], array_column($answer->act, 'id'));
         self::assertSame('Add the thing.', $seen?->task);
         self::assertSame('sample', $seen->round->change);
+    }
+
+    public function testAJudgedRoundIsShownAsEndedJudged(): void
+    {
+        $seen = null;
+        $answer = $this->tool($this->reviewing($seen))($this->gateway(), $this->review());
+
+        self::assertSame('judged', $answer->end);
+    }
+
+    public function testARoundWhoseJudgingFailedIsShownAsBlockedWithItsReason(): void
+    {
+        $answer = $this->tool($this->ending(RoundEnds::JudgingFailed, 'the judging failed'))($this->gateway(), $this->review());
+
+        self::assertSame(['blocked', 'judging_failed', ['the judging failed']], [$answer->decision, $answer->end, $answer->reasons]);
+    }
+
+    public function testARoundThatNeverReportsIsShownAsBlockedWithNoOutcomeInTime(): void
+    {
+        $answer = $this->tool($this->ending(RoundEnds::NoOutcomeInTime, 'no outcome in time: the round did not end within 5 seconds'))($this->gateway(), $this->review());
+
+        self::assertSame(['blocked', 'no_outcome_in_time', []], [$answer->decision, $answer->end, $answer->act]);
+        self::assertStringStartsWith('no outcome in time', $answer->reasons[0]);
     }
 
     public function testARoundTheNextOneIsNotIsAnMcpToolError(): void
@@ -123,6 +148,15 @@ final class StartReviewToolTest extends TestCase
         $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
 
         return new StartReviewTool(new LocalChangeReview($panels, $reviews));
+    }
+
+    private function ending(RoundEnds $end, string $reason): ChangeReviews
+    {
+        $blocked = new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, Decision::Approve, [], [], new RoundTokens(0, 0, 0, 0, 0, 0, 0), Cost::none());
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn($blocked->blockedFor($end, $reason));
+
+        return $reviews;
     }
 
     private function reviewing(?ChangeReviewRequest &$seen): ChangeReviews
