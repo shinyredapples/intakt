@@ -113,7 +113,7 @@ final class ReviewerPromptCachingTest extends KernelTestCase
     {
         $responses = [
             $this->anthropic([['type' => 'tool_use', 'id' => 'toolu_1', 'name' => 'read_file', 'input' => ['path' => 'src/Cart.php']]], ['cache_creation_input_tokens' => 1_200, 'input_tokens' => 40]),
-            $this->anthropic([['type' => 'text', 'text' => VerdictDocument::fromTheDesign()->json()]], ['cache_read_input_tokens' => 1_200, 'input_tokens' => 80]),
+            $this->anthropic([['type' => 'text', 'text' => VerdictDocument::fromTheDesign()->with('resolved', [])->json()]], ['cache_read_input_tokens' => 1_200, 'input_tokens' => 80]),
         ];
         $http = new MockHttpClient(function (string $method, string $url, array $options) use (&$responses): JsonMockResponse {
             self::assertIsString($options['body']);
