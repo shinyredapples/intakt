@@ -35,6 +35,9 @@ final readonly class ReviewerAgent implements Reviewer
 
     private const array STREAMED = self::UNSTREAMED + ['stream' => true];
 
+    // A capital letter and a short number, because FindingLedger numbers its findings that way and such an id is too short to hold a key.
+    private const string LEDGER_ID = '/^[A-Z]\d{1,9}$/';
+
     /**
      * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
      */
@@ -64,7 +67,7 @@ final readonly class ReviewerAgent implements Reviewer
 
         // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
         if ($tools->seen() && !$verdict->isStopped()) {
-            throw VerdictUnreadable::because('the reviewer made a malformed tool call.');
+            throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
 
         if ($this->approvesCutText($verdict, $request->brief, $fenced)) {
@@ -88,13 +91,24 @@ final readonly class ReviewerAgent implements Reviewer
         $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
 
         if ([] !== $unknown) {
-            throw VerdictUnreadable::because(sprintf('the verdict names ids that were not open: %s.', implode(', ', $unknown)));
+            throw $this->unknownIds($unknown);
         }
 
-        // Refused, because the ledger cannot tell which of the two the reviewer meant.
+        // Refused, because the ledger cannot tell which of the two the reviewer meant; key-safe, because every id named here is an open one the ledger gave.
         $contradicted = array_unique(array_intersect($verdict->resolved, $repeated));
 
-        return [] === $contradicted ? $verdict : throw VerdictUnreadable::because(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
+        return [] === $contradicted ? $verdict : throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
+    }
+
+    // The ids are the model's own text, so they are recorded only when each has the short shape of a ledger id, which leaves no room for a key.
+    /**
+     * @param array<string> $unknown
+     */
+    private function unknownIds(array $unknown): VerdictUnreadable
+    {
+        $reason = sprintf('the verdict names ids that were not open: %s.', implode(', ', $unknown));
+
+        return [] === preg_grep(self::LEDGER_ID, $unknown, PREG_GREP_INVERT) ? VerdictUnreadable::becauseKeySafe($reason) : VerdictUnreadable::because($reason);
     }
 
     // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
@@ -139,7 +153,7 @@ final readonly class ReviewerAgent implements Reviewer
         try {
             return $this->prompt->verdictIn($execution);
         } catch (MaxIterationsExceededException) {
-            throw VerdictUnreadable::because(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
+            throw VerdictUnreadable::becauseKeySafe(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
         } catch (ReviewServerLost) {
             return Verdict::noTools();
         } catch (RuntimeException $failure) {

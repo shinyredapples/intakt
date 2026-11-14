@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -247,8 +248,10 @@ final class BootGateTest extends KernelTestCase
         $bus->method('dispatch')->willReturnCallback(fn (object $query): Envelope => new Envelope($query, [new HandledStamp($this->answer($query), 'handler')]));
         $redactor = self::getContainer()->get(Redactor::class);
         self::assertInstanceOf(Redactor::class, $redactor);
+        $doctrine = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $doctrine);
         $logger = new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.'));
-        $results = new BootResults($bus, $this->entities, new MockClock('2026-11-13T10:00:00+00:00'), new WatcherLedger(new DashboardLedger()), $redactor, $logger);
+        $results = new BootResults($bus, $this->entities, new MockClock('2026-11-13T10:00:00+00:00'), new WatcherLedger(new DashboardLedger()), $redactor, $logger, $doctrine);
 
         return new BootGate($bus, $this->authors(), $results, new WatcherLedger($this->ledger), $logger);
     }
