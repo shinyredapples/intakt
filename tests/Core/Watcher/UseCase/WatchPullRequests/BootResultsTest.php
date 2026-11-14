@@ -483,6 +483,21 @@ final class BootResultsTest extends KernelTestCase
         self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
     }
 
+    public function testAFailureThatReplacesAnExpiredCrashRecordsOneAlert(): void
+    {
+        $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->clock->modify('+5 minutes');
+        $bus->outcome = BootOutcome::failed('No status.');
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(2, $bus->booted);
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
     public function testARolledBackAlertLeavesAManagerThatRecordsTheRetryOnceAndNoAlertForALaterCrash(): void
     {
         $stored = self::getContainer()->get(Ledger::class);
