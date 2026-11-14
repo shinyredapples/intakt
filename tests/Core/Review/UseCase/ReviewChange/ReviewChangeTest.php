@@ -34,6 +34,8 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
+use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
@@ -47,10 +49,12 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
+use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[Group('persistence')]
@@ -60,6 +64,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
+#[UsesClass(FailedJudgings::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(FailureInWords::class)]
@@ -74,6 +79,11 @@ final class ReviewChangeTest extends KernelTestCase
 
     // Answers that every tier is mapped, so only the tests of the check before a round set the mapping.
     private Vendor $tiers;
+
+    /**
+     * @var list<Envelope>
+     */
+    private array $parked = [];
 
     protected function setUp(): void
     {
@@ -177,6 +187,24 @@ final class ReviewChangeTest extends KernelTestCase
 
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertSame([], $review->actList);
+        self::assertStringContainsString('did not finish within 5 seconds', $review->reasons[0]);
+    }
+
+    public function testARoundWhoseJudgingFailedForGoodIsBlockedForTheFailedJudgingBeforeTheCeiling(): void
+    {
+        $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(fn (): string => $this->openRoundId()))->review($this->request());
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame([ReviewChange::JUDGING_FAILED], $review->reasons);
+        self::assertSame([], $review->actList);
+        self::assertSame('2026-10-30 12:00:01', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
+    }
+
+    public function testAFailedJudgingOfAnotherRoundLeavesTheWaitToTheCeiling(): void
+    {
+        $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), 5)->review($this->request());
+
+        self::assertSame(Decision::Blocked, $review->decision);
         self::assertStringContainsString('did not finish within 5 seconds', $review->reasons[0]);
     }
 
@@ -334,6 +362,23 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
+    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
+    /**
+     * @param Closure(): string $round
+     */
+    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
+    {
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+
+        return function () use ($vendor, $round): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, $vendor);
+            }
+
+            $this->parked = [new Envelope(new JudgeRound($round()))];
+        };
+    }
+
     private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS, ?MessageBusInterface $bus = null): ReviewChange
     {
         $serializer = $this->serializer();
@@ -349,8 +394,17 @@ final class ReviewChangeTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $this->tiers,
+            new FailedJudgings($this->failureTransport()),
             $ceiling,
         );
+    }
+
+    private function failureTransport(): ListableReceiverInterface
+    {
+        $transport = self::createStub(ListableReceiverInterface::class);
+        $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
+
+        return $transport;
     }
 
     // Messenger's own handling, so a refusal reaches the caller wrapped as the application's command bus wraps it; the reviewers' messages go to the test's workers.
