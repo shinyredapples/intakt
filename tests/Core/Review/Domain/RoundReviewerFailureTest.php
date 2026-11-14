@@ -55,7 +55,7 @@ final class RoundReviewerFailureTest extends TestCase
     {
         $reviewer = $this->reviewer();
 
-        $reviewer->recordFailure(str_repeat('a', 251).'é'.'bcd');
+        $reviewer->recordFailure(str_repeat('a', 251).'ébcd');
 
         self::assertSame(str_repeat('a', 251).'...', $reviewer->failure());
     }
