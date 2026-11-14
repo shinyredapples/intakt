@@ -102,11 +102,31 @@ require_the_head() {
     fi
 }
 
+is_an_empty_folder() {
+    [ -d "$1" ] && [ ! -L "$1" ] && entries="$(find "$1/." ! -name . -prune -print 2>> "$log")" && [ -z "$entries" ]
+}
+
+# A clone leaves every folder the head holds as a submodule (a gitlink) empty. The checks after this one do not look inside such a folder,
+# so a file planted there would stay hidden, and git status starts git in a repository planted there, which runs that repository's fsmonitor.
+require_empty_submodule_folders() {
+    tab="$(printf '\t')"
+    staged="$(checkout_git -c core.quotePath=false ls-files --stage 2>> "$log")" || refuse 'the head cannot be read'
+    # The loop is a subshell of its own, so a refusal ends only the loop, hence the exit after it.
+    printf '%s\n' "$staged" | sed -n "s/^160000 [^$tab]*$tab//p" | while IFS= read -r path; do
+        case "$path" in
+            # Not the folder's name but git's quoted form of it, and an empty folder with the quoted name could stand in for the real one.
+            \"*) refuse 'the head has a submodule path with a character git quotes' ;;
+        esac
+        is_an_empty_folder "$checkout/$path" || refuse 'the checkout has a submodule folder that is not an empty folder'
+    done || exit 1
+}
+
 # Untracked files are listed against the head's own .gitignore files only, never info/exclude; a .gitignore that is not the head's
 # could ignore itself and what it hides, so git listing one among the ignored files refuses the checkout too.
 require_no_change() {
     rm -f -- "$index"
     checkout_git read-tree HEAD 2>> "$log" || refuse 'the head cannot be read'
+    require_empty_submodule_folders
     # Attributes from the empty tree, not the head's .gitattributes, so no ident, eol or encoding rule can make changed content compare equal.
     empty_tree="$(checkout_git hash-object -t tree --stdin < /dev/null 2>> "$log")" || refuse 'the head cannot be read'
     changes="$(checkout_git --attr-source="$empty_tree" status --porcelain --untracked-files=no --ignore-submodules=none 2>> "$log")" || refuse 'the checkout status cannot be read'
