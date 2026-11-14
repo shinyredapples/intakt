@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 use WeakMap;
 
-// What each account of one call failed with as it was sent or as its answer was read, kept by the call because FailoverPlatform's own error names no cause; by class only, because the provider's message can echo a key; excluded from the container because AccountFailoverPlatform builds one per call.
+// Which account error (a limit, a rejection or a provider error) each account of one call failed with as it was sent or as its answer was read, kept by the call because FailoverPlatform's own error names no cause; by class only, because the provider's message can echo a key; excluded from the container because AccountFailoverPlatform builds one per call.
 #[Exclude]
 final class SendFailures
 {
