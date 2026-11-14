@@ -125,6 +125,15 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
     }
 
+    public function testAP1TheJudgeRejectsIsStillOnTheActListAndAP3IsNot(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('A', Severity::P1), $this->finding('B', Severity::P3)], [], []);
+
+        $review = $this->reviewWith(new RejectingJudge(new VerdictPerRole(['Look at part 1.' => $verdict])));
+
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
+    }
+
     public function testTwoReviewersReportingOnePlaceGiveOneActEntryThatNamesBothFindings(): void
     {
         $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 7)));
@@ -133,12 +142,20 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(['F2'], $review->actList[0]->merged);
     }
 
-    public function testTwoFindingsAtOnePlaceWithDifferentJudgeCallsStaySeparate(): void
+    public function testAP3TheJudgeRejectsAtThePlaceOfAP1StaysOutOfItsEntry(): void
+    {
+        $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole($this->bothReportLines(7, 7, Severity::P3)), ['F2']));
+
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
+        self::assertSame([], $review->actList[0]->merged);
+    }
+
+    public function testAP1TheJudgeRejectsAtThePlaceOfAnotherP1StillJoinsItsEntry(): void
     {
         $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole($this->bothReportLines(7, 7)), ['F2']));
 
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
-        self::assertSame([], $review->actList[0]->merged);
+        self::assertSame(['F2'], $review->actList[0]->merged);
     }
 
     public function testFindingsAtDifferentLinesOfOneFileStaySeparate(): void
@@ -349,17 +366,17 @@ final class ReviewChangeTest extends KernelTestCase
     /**
      * @return array<string, Verdict>
      */
-    private function bothReportLines(int $first, int $second): array
+    private function bothReportLines(int $first, int $second, Severity $secondSeverity = Severity::P1): array
     {
         return [
-            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', $first)], [], []),
-            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', $second)], [], []),
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', $first, Severity::P1)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', $second, $secondSeverity)], [], []),
         ];
     }
 
-    private function findingAt(string $id, int $line): Finding
+    private function findingAt(string $id, int $line, Severity $severity): Finding
     {
-        return new Finding($id, Severity::P1, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+        return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     private function finding(string $id, Severity $severity): Finding

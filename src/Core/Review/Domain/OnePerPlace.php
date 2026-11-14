@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class OnePerPlace
 {
-    // The reported findings come in panel order, because the first reviewer's text is the one kept; only act ids count, so a finding the judge marked otherwise never joins an act entry.
+    // The reported findings come in panel order, because the first reviewer's text is the one kept; only act ids count, so a P3 the judge marked otherwise never joins an act entry (a P1 or P2 is always an act id).
     /**
      * @param list<Finding> $reported
      * @param list<string>  $actIds
