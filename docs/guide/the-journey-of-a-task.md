@@ -83,7 +83,7 @@ One special case: if the change edits the **CI setup itself** and the new setup 
 
 ## 5. Reviewing
 
-Once CI is green, Intakt first starts the changed application once and checks that it comes up. If it does not while main does, the change goes back to the builder like red CI, and an earlier approval of that same version is taken back. If it comes up (or main itself does not, so the check says nothing about the change), the **review panel** reads the change: a fixed core panel for every change, plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
+Once CI is green, the **review panel** reads the change: a fixed core panel for every change, plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
 
 ```mermaid
 flowchart TD

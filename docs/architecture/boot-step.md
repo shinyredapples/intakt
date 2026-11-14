@@ -1,6 +1,6 @@
 # Boot step
 
-The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md). `BootGate` ([below](#the-gate-decision)) decides from it whether a head goes back, and the watcher asks it for every head whose CI is green before that head's round starts ([In the watcher](#in-the-watcher)).
+The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md). `BootGate` ([below](#the-gate-decision)) decides from it whether a head goes back. The watcher passes every head whose CI is green through a gate before that head's round starts, but the install's gate is still `BootGateOff`, which boots no head until the boot runs in an isolated job container, so no head is sent back yet ([In the watcher](#in-the-watcher)).
 
 ## Contract
 
@@ -23,7 +23,7 @@ Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`pers
 
 ## The gate decision
 
-`BootGate::admit(WatchedProject, HeadDecision)` in `src/Core/Watcher/UseCase/WatchPullRequests/` takes the decision of a head whose CI is green and answers the decision the head gets after its boot. It runs for every watched project:
+`BootGate::admit(WatchedProject, HeadDecision)` in `src/Core/Watcher/UseCase/WatchPullRequests/` takes the decision of a head whose CI is green and answers the decision the head gets after its boot. It implements `HeadGate`, but the watcher does not use it yet ([In the watcher](#in-the-watcher)). For every watched project:
 
 1. it asks the query bus for `MainCommit(ChangeSource)`, the commit the base branch points at, answered by the local git forge's `MainCommitHandler` (`git show-ref` of the base branch in the project's `repository` path);
 2. it asks `BootResults::ofMain` for main's result under the `BootKey` of the project, that commit and the constant `BootGate::TOOL_FINGERPRINT` (nothing computes a fingerprint of the boot tools yet, so one constant stands for them);
@@ -41,7 +41,9 @@ Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootGateTest.php` (`persist
 
 ## In the watcher
 
-`SettleHead` (plan task T58, part 2) passes every head whose CI is green through `BootGate::admit()` before anything else, so a head boots before its round starts and no reviewer runs on a head that fails while main boots. A pending or red head is not booted. A head that already has a round is booted again whenever the listing names it again, because a head that stopped booting must lose that round's approvals. The boot runs inside the tick, while the head's lock is held.
+`SettleHead` (plan task T58, part 2) passes every head whose CI is green through its `HeadGate` before anything else. In the install that gate is `BootGateOff` (`#[AsAlias(HeadGate::class)]`), which answers the green decision unchanged and boots nothing, neither the head nor main: booting a pull request head runs its code as the install's user, beside the install's home, keys and database ([below](#how-a-commit-boots)), so no head is booted until the boot runs in an isolated job container (the job sandbox of #340), and `BootGate` takes the alias then. Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootGateOffTest.php` (the container's `HeadGate` is `BootGateOff`, a green head admitted unchanged).
+
+The rest of this section is what `SettleHead` does with `BootGate` as its gate, as `WatchPullRequestsHandlerTest` wires it. A head boots before its round starts and no reviewer runs on a head that fails while main boots. A pending or red head is not booted. A head that already has a round is booted again whenever the listing names it again, because a head that stopped booting must lose that round's approvals. The boot runs inside the tick, while the head's lock is held.
 
 A `FailedBoot` decision goes back like red CI (`HeadDecision::goesBack()` is true for both):
 
@@ -68,6 +70,6 @@ Both commands get only an allowlist of the boot install's environment variables:
 
 6. Exactly `{"status":"ready"}` or `{"status":"ready","mode":"worker"}` (the two lines `bin/probe` accepts) with exit code 0 is `booted`; `{"status":"failed","reason":"..."}` or `{"status":"failed","mode":"worker","reason":"..."}` with a non-empty reason is `failed` with that reason; no status line, more than one line, any other status, key or mode (also `ready` with an undefined mode or an extra key), or `ready` with another exit code is `crashed`.
 
-What this does not do: the install and the commit's code run as the install's user with no filesystem isolation, so a plugin or `bin/instance` that computes the real home (for example through `posix_getpwuid`) can still read files there. The allowlist and the scratch home remove only what the environment and Composer hand over; keeping head code away from the install's files is the job sandbox of #340 (review job containers), not built yet.
+What this does not do: the install and the commit's code run as the install's user with no filesystem isolation, so a plugin or `bin/instance` that computes the real home (for example through `posix_getpwuid`) can still read files there. The allowlist and the scratch home remove only what the environment and Composer hand over; keeping head code away from the install's files is the job sandbox of #340 (review job containers), not built yet, which is why the watcher's gate is `BootGateOff` ([In the watcher](#in-the-watcher)).
 
 Tests: `tests/Plugin/LocalGitForge/InstanceBootTest.php` (each outcome on a scratch repository whose stub `bin/instance` reports what the commit holds, main's harness winning over the head's, a Composer plugin of the head that neither sees a secret of the boot install's environment, nor the token of an `auth.json` in its `COMPOSER_HOME` or under its `HOME`, nor replaces the harness, the scratch home removed after the boot, a package binary named `instance`, a secret of the boot install that does not reach the harness, the link cases, the crash cases (also a missing or non-executable `composer`, beside a `composer` that runs and fails, which is `failed`) and the removed snapshot) and `tests/Plugin/LocalGitForge/BootHeadHandlersTest.php` (which harness each query uses, and the commit `MainCommitHandler` answers).

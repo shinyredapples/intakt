@@ -9,7 +9,7 @@ use Intakt\Core\Watcher\Domain\HeadDecision;
 final readonly class SettleHead
 {
     public function __construct(
-        private BootGate $gate,
+        private HeadGate $gate,
         private StaleVerdicts $stale,
         private HeadsWithoutRound $withoutRound,
         private RoundStarts $starts,
