@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use JsonException;
 
@@ -16,6 +17,7 @@ use JsonException;
 final readonly class PushRecords
 {
     private const string TEXT_DIGEST = 'text_digest';
+    private const array CHANGE_KINDS = [LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened];
 
     public function __construct(
         private Ledger $ledger,
@@ -24,21 +26,27 @@ final readonly class PushRecords
 
     public function isIntended(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->latest(LedgerEventKind::PushIntended, $request, $head);
+        return null !== $this->last($this->ledger->readOfKind(LedgerEventKind::PushIntended), $request, $head);
     }
 
     public function hasPushed(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->latest(LedgerEventKind::BranchPushed, $request, $head);
+        return null !== $this->last($this->ledger->readOfKind(LedgerEventKind::BranchPushed), $request, $head);
     }
 
-    // Only for the text the pull request was last given: a rework can correct the text alone and keep the commits, and a text that went back to an earlier wording has to reach the forge again.
+    // Only when the last word on the pull request is a record of the text at hand: an intent after it is a write whose outcome the ledger never learned, so the forge may hold another text; a rework can also correct the text alone, and a text that went back to an earlier wording has to reach the forge again.
     public function openedChange(BranchPushRequest $request, string $head): ?string
     {
-        $latest = $this->latest(LedgerEventKind::ChangeOpened, $request, $head);
-        $change = $latest['change'] ?? null;
+        $last = $this->last($this->changeRecords(), $request, $head);
 
-        return is_string($change) && ($latest[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
+        if (LedgerEventKind::ChangeOpened !== $last?->kind) {
+            return null;
+        }
+
+        $record = $this->decoded($last->payload);
+        $change = $record['change'] ?? null;
+
+        return is_string($change) && ($record[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
     }
 
     /**
@@ -55,6 +63,15 @@ final readonly class PushRecords
     public function push(BranchPushRequest $request, string $head): void
     {
         $this->append(LedgerEventKind::BranchPushed, $this->keyOf($request, $head));
+    }
+
+    /**
+     * @throws BranchNotPushed
+     */
+    // Without a digest, because the intent only has to come after the last record: it says a write may have happened, not which text it carried.
+    public function intendChange(BranchPushRequest $request, string $head): void
+    {
+        $this->append(LedgerEventKind::ChangeIntended, $this->keyOf($request, $head));
     }
 
     /**
@@ -80,22 +97,35 @@ final readonly class PushRecords
     }
 
     /**
-     * @return array<mixed>|null
+     * @return iterable<RecordedEvent>
      */
-    private function latest(LedgerEventKind $kind, BranchPushRequest $request, string $head): ?array
+    // Read in ledger order across both kinds, because a read of one kind cannot say whether an intent came after the last record.
+    private function changeRecords(): iterable
+    {
+        foreach ($this->ledger->readInOrder() as $recorded) {
+            if (in_array($recorded->event->kind, self::CHANGE_KINDS, true)) {
+                yield $recorded;
+            }
+        }
+    }
+
+    /**
+     * @param iterable<RecordedEvent> $events
+     */
+    private function last(iterable $events, BranchPushRequest $request, string $head): ?LedgerEvent
     {
         $key = $this->keyOf($request, $head);
-        $latest = null;
+        $last = null;
 
-        foreach ($this->ledger->readOfKind($kind) as $event) {
-            $payload = $this->decoded($event->event->payload);
+        foreach ($events as $recorded) {
+            $payload = $this->decoded($recorded->event->payload);
 
             if (($payload['project'] ?? null) === $key['project'] && ($payload['branch'] ?? null) === $key['branch'] && ($payload['head'] ?? null) === $key['head']) {
-                $latest = $payload;
+                $last = $recorded->event;
             }
         }
 
-        return $latest;
+        return $last;
     }
 
     /**

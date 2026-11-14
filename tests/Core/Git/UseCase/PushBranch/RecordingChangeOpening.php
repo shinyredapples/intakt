@@ -26,12 +26,13 @@ final class RecordingChangeOpening implements ChangeOpening
     public function openOrUpdate(ProposedChange $change): ChangeId
     {
         ++$this->calls;
-        $this->text = $change->text;
 
         if ($this->during instanceof Closure) {
             ($this->during)();
         }
 
+        // After the hook, so a forge the hook takes down holds the text it held before.
+        $this->text = $change->text;
         $key = json_encode([$change->project, $change->branch], JSON_THROW_ON_ERROR);
 
         if (!isset($this->pulls[$key])) {

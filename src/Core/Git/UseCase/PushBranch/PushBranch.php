@@ -120,6 +120,9 @@ final readonly class PushBranch implements BranchPush
             return new ChangeId($recorded);
         }
 
+        // Recorded before the forge is written to, because a write whose own record is then refused must not leave an earlier text's record as the last word.
+        $this->records->intendChange($request, $head);
+
         // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one, and a corrected text of the same commits updates the open one.
         $change = $this->changes->openOrUpdate(new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text));
         $this->records->open($request, $head, $change->value);
