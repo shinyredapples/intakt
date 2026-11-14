@@ -107,7 +107,8 @@ final class ScriptedRound
         };
         $request = new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
 
-        return $this->reviewChange($work)->review($request);
+        // Asked of the scripted judge's vendor, because the real stack here maps only the reviewers' tier and the judge is scripted.
+        return $this->reviewChange($work, new ScriptedVendor())->review($request);
     }
 
     // Each recoverable failure queues its message again at once, as Messenger's retry does once the delay has passed; the cooldowns run on real time, so an account a provider limited stays out for the whole run.
@@ -260,7 +261,7 @@ final class ScriptedRound
     /**
      * @param Closure(): void $work
      */
-    private function reviewChange(Closure $work): ReviewChange
+    private function reviewChange(Closure $work, Vendor $tiers): ReviewChange
     {
         $serializer = StoredSerializerFactory::create();
         $commands = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$this->fixture->startHandlerOn($this->fixture->bus)]]))]);
@@ -274,6 +275,7 @@ final class ScriptedRound
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
+            $tiers,
         );
     }
 }

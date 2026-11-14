@@ -6,6 +6,7 @@ namespace Intakt\Plugin\Vendor\Contract;
 
 use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -13,6 +14,9 @@ use NoDiscard;
 
 interface Vendor
 {
+    // The light tier, because sorting findings is a small job; one home, so the check before a round asks for the tier the judge calls.
+    public const Tier JUDGE_TIER = Tier::Light;
+
     /**
      * @throws UsageNotRecorded
      * @throws ProviderRateLimited
@@ -20,11 +24,11 @@ interface Vendor
      * @throws VendorAccountOut
      * @throws NoProviderLeft
      * @throws ProviderRejectedTheKey
+     * @throws ChangesWithoutFindings
      */
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview;
 
-    // Always the light tier, because sorting findings is a small job.
     /**
      * @throws UsageNotRecorded
      * @throws ProviderRateLimited

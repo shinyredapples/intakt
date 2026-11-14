@@ -49,6 +49,11 @@ final readonly class InstanceBoot
             $forge = $this->forgeFor($target->source);
             $instance = $forge->fileAt($harness, self::HARNESS);
 
+            // Because a binary file is read by its size only, so placing it would write that name instead of the harness.
+            if (null !== $instance->binaryBytes) {
+                return BootOutcome::crashed(sprintf('%s is a binary file of %d bytes, not a harness.', self::HARNESS, $instance->binaryBytes));
+            }
+
             return $forge->withSnapshotOf(
                 $target->commit,
                 fn (string $snapshot): BootOutcome => $this->withScratchHomeOf($snapshot, fn (): BootOutcome => $this->bootIn($snapshot, $instance)),
