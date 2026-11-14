@@ -13,6 +13,9 @@ interface RoundUpdates
 
     public function textStreamed(Uuid $round, string $reviewer, string $text): void;
 
+    // Named by the retry's conversation id, because a retry that falls back to an unstreamed call reports its start twice and must be shown once.
+    public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void;
+
     public function roundChanged(Uuid $round, RoundProgress $progress): void;
 
     // After what the summary counts is stored, so a listener recomputes the summary of the round.

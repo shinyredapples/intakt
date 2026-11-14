@@ -48,6 +48,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     }
 
     #[Override]
+    public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void
+    {
+        $this->publish($round, RoundStream::ReviewerAskedAgain, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'try' => $try]);
+    }
+
+    #[Override]
     public function roundChanged(Uuid $round, RoundProgress $progress): void
     {
         if ($progress->judged) {
