@@ -66,12 +66,13 @@ final readonly class BranchGit
      */
     public function mergeTree(string $repository, string $main, string $head): ?array
     {
-        $process = $this->process($repository, ['merge-tree', '--write-tree', '--name-only', '--no-messages', $main, $head], []);
+        // Ended by NUL (-z), because git otherwise prints a path that holds a byte outside ASCII, a quote or a line break as a quoted string, and the builder needs the file's name.
+        $process = $this->process($repository, ['merge-tree', '--write-tree', '--name-only', '--no-messages', '-z', $main, $head], []);
         $process->run();
 
         return match ($process->getExitCode()) {
             0 => null,
-            1 => array_values(array_filter(array_slice(explode("\n", $process->getOutput()), 1), static fn (string $path): bool => '' !== $path)),
+            1 => array_values(array_filter(array_slice(explode("\0", $process->getOutput()), 1), static fn (string $path): bool => '' !== $path)),
             default => throw BranchNotPushed::because('git merge-tree could not test the merge with main'),
         };
     }

@@ -54,20 +54,36 @@ final readonly class PushBranch implements BranchPush
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
 
-        if (!$this->records->hasPushed($request, $head)) {
-            $remoteTip = $this->remoteTip($request);
+        $conflicts = $this->conflictsOrLanded($request, $head, $main);
 
-            // Not when the remote already holds this signed head: a crash after the push left only its record missing, and a main that conflicts since cannot take the push back.
-            $conflicts = $remoteTip === $head ? null : $this->conflictsWith($request, $main);
-
-            if ($conflicts instanceof MainConflicts) {
-                return $conflicts;
-            }
-
-            $this->pushOnce($request, $head, $remoteTip);
+        if ($conflicts instanceof MainConflicts) {
+            return $conflicts;
         }
 
         return new PushedBranch($head, $this->openedChange($request, $head, $main));
+    }
+
+    // Null once the remote branch is the signed head, else the conflicts that kept it from being pushed.
+    private function conflictsOrLanded(BranchPushRequest $request, string $head, string $main): ?MainConflicts
+    {
+        // Read on every call, also for a recorded push, because the ledger knows nothing of a later head or of another writer that moved the branch since.
+        $remoteTip = $this->remoteTip($request);
+
+        if ($this->records->hasPushed($request, $head)) {
+            // Refused before the pull request step, because a late retry of an earlier head must not overwrite the text of the head that replaced it.
+            return $remoteTip === $head ? null : throw BranchNotPushed::because(sprintf('the remote branch %s moved since this head was pushed', $request->branch));
+        }
+
+        // Not when the remote already holds this signed head: a crash after the push left only its record missing, and a main that conflicts since cannot take the push back.
+        $conflicts = $remoteTip === $head ? null : $this->conflictsWith($request, $main);
+
+        if ($conflicts instanceof MainConflicts) {
+            return $conflicts;
+        }
+
+        $this->pushOnce($request, $head, $remoteTip);
+
+        return null;
     }
 
     private function mainOf(string $repository): string

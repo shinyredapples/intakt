@@ -26,6 +26,7 @@ use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -101,6 +102,39 @@ final class PushBranchTest extends TestCase
         self::assertNull($this->scenario->remoteTip());
         self::assertSame([], $this->scenario->ledger->kinds());
         self::assertSame(0, $this->scenario->changes->calls);
+    }
+
+    #[DataProvider('fileNamesGitQuotesInItsLines')]
+    public function testAConflictNamesTheFileAsItIsCalled(string $name): void
+    {
+        $head = $this->scenario->commitOnTheBranch($name, "the builder's\n");
+        $this->scenario->repository->commitFile($name, "main's own\n");
+
+        $outcome = $this->scenario->push()->push($this->scenario->request(null, $head));
+
+        self::assertInstanceOf(MainConflicts::class, $outcome);
+        self::assertSame([$name], $outcome->paths);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function fileNamesGitQuotesInItsLines(): iterable
+    {
+        yield 'a letter outside ASCII' => ["caf\u{e9}.txt"];
+        yield 'a double quote' => ['say "hi".txt'];
+        yield 'a line break' => ["two\nlines.txt"];
+    }
+
+    public function testEveryConflictingFileIsNamedOnce(): void
+    {
+        $this->scenario->repository->commitFile('b.txt', "main's own b\n");
+        $this->scenario->repository->commitFile('c.txt', "main's own c\n");
+
+        $outcome = $this->scenario->push()->push($this->scenario->request());
+
+        self::assertInstanceOf(MainConflicts::class, $outcome);
+        self::assertSame(['b.txt', 'c.txt'], $outcome->paths);
     }
 
     public function testABranchThatDoesNotConflictWithAMovedMainIsPushed(): void
@@ -287,6 +321,74 @@ final class PushBranchTest extends TestCase
         self::assertEquals($first, $second);
         self::assertSame(1, $this->scenario->changes->calls);
         self::assertCount(4, $this->scenario->ledger->kinds());
+    }
+
+    public function testARetryOfAHeadTheBranchMovedPastWithACorrectedTextLeavesThePullRequestAlone(): void
+    {
+        $push = $this->scenario->push();
+        $first = $push->push($this->scenario->request());
+        self::assertInstanceOf(PushedBranch::class, $first);
+        $this->pushASecondBuildOnTopOf($push, $first->head);
+
+        $this->assertARetryOfTheFirstHeadIsRefused($push, new ChangeText('Late correction of the first build', 'Evidence of the first build.'));
+
+        self::assertSame('Second build', $this->scenario->changes->text?->title);
+    }
+
+    public function testARetryOfAHeadTheBranchMovedPastIsNotReportedAsPushed(): void
+    {
+        $push = $this->scenario->push();
+        $first = $push->push($this->scenario->request());
+        self::assertInstanceOf(PushedBranch::class, $first);
+        $second = $this->pushASecondBuildOnTopOf($push, $first->head);
+
+        $this->assertARetryOfTheFirstHeadIsRefused($push, $this->scenario->request()->text);
+
+        self::assertNotSame($first->head, $second->head);
+        self::assertSame($second->head, $this->scenario->remoteTip());
+    }
+
+    public function testARetryOfAHeadWhosePullRequestWriteWasNeverRecordedIsRefusedOnceTheBranchMovedPast(): void
+    {
+        $push = $this->scenario->push();
+        $this->scenario->changes->during = static fn () => throw BranchNotPushed::because('the forge is down');
+
+        try {
+            (void) $push->push($this->scenario->request());
+            self::fail('The opening was meant to fail.');
+        } catch (BranchNotPushed) {
+        }
+
+        $this->scenario->changes->during = null;
+        self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended], $this->scenario->ledger->kinds());
+        $this->pushASecondBuildOnTopOf($push, (string) $this->scenario->remoteTip());
+
+        $this->assertARetryOfTheFirstHeadIsRefused($push, $this->scenario->request()->text);
+
+        self::assertSame('Second build', $this->scenario->changes->text?->title);
+    }
+
+    public function testARetryOfARecordedHeadIsRefusedOnceAnotherWriterMovedTheBranch(): void
+    {
+        $push = $this->scenario->push();
+        (void) $push->push($this->scenario->request());
+        $theirs = $this->scenario->pushOtherCommit();
+
+        $this->assertARetryOfTheFirstHeadIsRefused($push, new ChangeText('Corrected title', 'E1: now referenced.'));
+
+        self::assertSame($theirs, $this->scenario->remoteTip());
+        self::assertSame('Add the files', $this->scenario->changes->text?->title);
+    }
+
+    public function testARetryOfARecordedHeadIsRefusedOnceTheBranchIsGoneFromTheRemote(): void
+    {
+        $push = $this->scenario->push();
+        (void) $push->push($this->scenario->request());
+        $this->scenario->deleteRemoteBranch();
+
+        $this->assertARetryOfTheFirstHeadIsRefused($push, new ChangeText('Corrected title', 'E1: now referenced.'));
+
+        self::assertNull($this->scenario->remoteTip());
     }
 
     public function testAnIntentOfAnotherProjectDoesNotSendThisProjectsTextAgain(): void
@@ -509,6 +611,37 @@ final class PushBranchTest extends TestCase
 
         self::assertInstanceOf(PushedBranch::class, $pushed);
         self::assertSame($mainTip, $this->scenario->repository->objectAt($pushed->head.'^2'));
+    }
+
+    // On top of the first build's signed head, because a retry of the first head then meets a branch that moved past it.
+    private function pushASecondBuildOnTopOf(PushBranch $push, string $firstSignedHead): PushedBranch
+    {
+        $next = $this->scenario->commitOnTheBranch('e.txt', "four\n");
+        $second = $push->push($this->scenario->withText($this->scenario->request($firstSignedHead, $next), new ChangeText('Second build', 'Evidence of the second build.')));
+
+        self::assertInstanceOf(PushedBranch::class, $second);
+        self::assertSame($second->head, $this->scenario->remoteTip());
+
+        return $second;
+    }
+
+    // Compares the forge and the ledger with what they held before the retry, because a refusal that comes after either was written to is too late.
+    private function assertARetryOfTheFirstHeadIsRefused(PushBranch $push, ChangeText $text): void
+    {
+        $textBefore = $this->scenario->changes->text;
+        $callsBefore = $this->scenario->changes->calls;
+        $recordsBefore = $this->scenario->ledger->kinds();
+
+        try {
+            (void) $push->push($this->scenario->withText($this->scenario->request(), $text));
+            self::fail('A head the remote branch moved past must be refused.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('moved since this head was pushed', $refused->getMessage());
+        }
+
+        self::assertSame($textBefore, $this->scenario->changes->text);
+        self::assertSame($callsBefore, $this->scenario->changes->calls);
+        self::assertSame($recordsBefore, $this->scenario->ledger->kinds());
     }
 
     // Ends the push right after the forge took the text, because that is the write whose outcome the ledger never learns.

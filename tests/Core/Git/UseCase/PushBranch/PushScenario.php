@@ -137,6 +137,21 @@ final readonly class PushScenario
         return $tip;
     }
 
+    // The builder's next commit on the task branch, because a rework hands back a head on top of the pushed one.
+    public function commitOnTheBranch(string $path, string $content): string
+    {
+        $this->repository->checkout(self::BRANCH);
+        $head = $this->repository->commitFile($path, $content);
+        $this->repository->checkout('main');
+
+        return $head;
+    }
+
+    public function deleteRemoteBranch(): void
+    {
+        $this->run(['update-ref', '-d', 'refs/heads/'.self::BRANCH], $this->remote);
+    }
+
     public function remove(): void
     {
         $this->repository->remove();
