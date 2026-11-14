@@ -83,7 +83,7 @@ final class ComposerAuditGate implements Gate
     }
 
     /**
-     * @return list<string> each exception as "package pattern constraint"
+     * @return list<string>
      */
     private function cooldownExceptions(Workspace $workspace): array
     {
