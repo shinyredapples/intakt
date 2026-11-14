@@ -34,10 +34,15 @@ final class ExpectationsTest extends TestCase
     #[DataProvider('brokenFiles')]
     public function testABrokenFileIsRefusedInWords(string $json, string $reason): void
     {
-        $this->expectException(InvalidExpectations::class);
-        $this->expectExceptionMessage($reason);
+        try {
+            Expectations::fromJson($json);
+        } catch (InvalidExpectations $refused) {
+            self::assertStringContainsString($reason, $refused->getMessage());
 
-        Expectations::fromJson($json);
+            return;
+        }
+
+        self::fail('The file was accepted.');
     }
 
     /**

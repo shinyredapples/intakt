@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Bench\Domain;
 
-final class InvalidExpectations extends \RuntimeException
+use RuntimeException;
+
+final class InvalidExpectations extends RuntimeException
 {
     public static function because(string $reason): self
     {

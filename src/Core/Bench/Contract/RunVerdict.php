@@ -2,17 +2,20 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Bench\Domain;
+namespace Intakt\Core\Bench\Contract;
 
 use Intakt\Core\Review\Contract\Finding;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
+// Excluded because the bench builds it, not the container.
+#[Exclude]
 final readonly class RunVerdict
 {
     /**
-     * @param list<string>                $caught      ids of the planted defects a finding matched
-     * @param array<string, FailureCause> $missed      id of each defect no finding matched => its cause
-     * @param list<Finding>               $falseAlarms unmatched findings on a defect-free change
-     * @param list<Finding>               $unmatched   unmatched findings on a change with defects: reported, not counted
+     * @param list<string>                $caught
+     * @param array<string, FailureCause> $missed
+     * @param list<Finding>               $falseAlarms
+     * @param list<Finding>               $unmatched
      */
     public function __construct(
         public bool $defectFree,

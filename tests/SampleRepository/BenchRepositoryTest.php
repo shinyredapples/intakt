@@ -113,7 +113,7 @@ final class BenchRepositoryTest extends TestCase
     }
 
     /**
-     * @return array<string, list<int>> file => added line numbers at the head
+     * @return array<string, list<int>>
      */
     private function addedLines(TemporaryRepository $repository, string $change): array
     {

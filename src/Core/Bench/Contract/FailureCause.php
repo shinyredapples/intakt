@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Bench\Domain;
+namespace Intakt\Core\Bench\Contract;
 
 enum FailureCause: string
 {

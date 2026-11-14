@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Bench\Domain;
 
 use Intakt\Core\Review\Contract\Severity;
+use JsonException;
 
 final readonly class Expectations
 {
@@ -19,7 +20,7 @@ final readonly class Expectations
     {
         try {
             $entries = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
-        } catch (\JsonException $e) {
+        } catch (JsonException $e) {
             throw InvalidExpectations::because($e->getMessage());
         }
 

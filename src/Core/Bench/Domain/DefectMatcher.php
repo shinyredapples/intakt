@@ -6,7 +6,7 @@ namespace Intakt\Core\Bench\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
 
-// Plain code on purpose: a model never decides whether a finding matches, and there is no tolerance for a nearby line.
+// Plain code because a model must never decide whether a finding matches, and a nearby line must not count.
 final readonly class DefectMatcher
 {
     public function matches(Finding $finding, PlantedDefect $defect): bool

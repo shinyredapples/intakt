@@ -9,7 +9,7 @@
 
 `expectations.json` is a list of planted defects: `id`, `file`, `lines` (`from` and `to`, inclusive, 1-based), `description` and `severity` (`P1`, `P2` or `P3`, what the defect deserves). Five changes plant one defect each (an acceptance item not met, an error path never handled, input that runs commands, an off-by-one boundary, docs that state what the code does not do); three plant none (`[]`), so false alarms are measured. The test checks that every planted line is a line the change adds or changes.
 
-Matching and counting are plain code in `src/Core/Bench/Domain/` and never ask a model:
+Matching and counting are plain code in `src/Core/Bench/` (`Domain/`, with the results in `Contract/`) and never ask a model:
 
 - `DefectMatcher`: a finding matches a defect when it names the same file and a line inside the range. A finding without a file or line never matches, and there is no tolerance for a nearby line.
 - `RunClassifier`: unmatched findings on a defect-free change are false alarms. Unmatched findings on a change with defects are listed in the verdict, not counted.

@@ -2,11 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Bench\Domain;
+namespace Intakt\Tests\Core\Bench\Contract;
 
-use Intakt\Core\Bench\Domain\BenchFigures;
-use Intakt\Core\Bench\Domain\FailureCause;
-use Intakt\Core\Bench\Domain\RunVerdict;
+use Intakt\Core\Bench\Contract\BenchFigures;
+use Intakt\Core\Bench\Contract\FailureCause;
+use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Tests\Core\Bench\Domain\DefectMatcherTest;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;

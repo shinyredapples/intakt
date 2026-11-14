@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Bench\Domain;
 
+use Intakt\Core\Bench\Contract\FailureCause;
+use Intakt\Core\Bench\Contract\RunVerdict;
 use Intakt\Core\Review\Contract\Finding;
 
 final readonly class RunClassifier

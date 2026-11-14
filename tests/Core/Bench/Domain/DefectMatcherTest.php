@@ -21,7 +21,7 @@ final class DefectMatcherTest extends TestCase
     #[DataProvider('linesInsideTheRange')]
     public function testAFindingOnTheSameFileAndALineInsideTheRangeMatchesTheDefect(int $line): void
     {
-        self::assertTrue(new DefectMatcher()->matches(self::finding('src/a.js', $line), self::defect()));
+        self::assertTrue(new DefectMatcher()->matches(self::finding('src/a.js', $line), $this->defect()));
     }
 
     /**
@@ -35,7 +35,7 @@ final class DefectMatcherTest extends TestCase
     #[DataProvider('linesOutsideTheRange')]
     public function testAFindingJustOutsideTheRangeDoesNotMatch(int $line): void
     {
-        self::assertFalse(new DefectMatcher()->matches(self::finding('src/a.js', $line), self::defect()));
+        self::assertFalse(new DefectMatcher()->matches(self::finding('src/a.js', $line), $this->defect()));
     }
 
     /**
@@ -48,17 +48,17 @@ final class DefectMatcherTest extends TestCase
 
     public function testAFindingOnAnotherFileWithTheSameLineDoesNotMatch(): void
     {
-        self::assertFalse(new DefectMatcher()->matches(self::finding('src/b.js', 5), self::defect()));
+        self::assertFalse(new DefectMatcher()->matches(self::finding('src/b.js', 5), $this->defect()));
     }
 
     public function testAFindingWithoutAFileNeverMatches(): void
     {
-        self::assertFalse(new DefectMatcher()->matches(self::finding(null, 5), self::defect()));
+        self::assertFalse(new DefectMatcher()->matches(self::finding(null, 5), $this->defect()));
     }
 
     public function testAFindingWithoutALineNeverMatches(): void
     {
-        self::assertFalse(new DefectMatcher()->matches(self::finding('src/a.js', null), self::defect()));
+        self::assertFalse(new DefectMatcher()->matches(self::finding('src/a.js', null), $this->defect()));
     }
 
     public static function finding(?string $file, ?int $line): Finding
@@ -66,7 +66,7 @@ final class DefectMatcherTest extends TestCase
         return new Finding('F1', Severity::P2, $file, $line, null, 'Something is wrong.', FixableBy::Builder, false, null, null);
     }
 
-    private static function defect(): PlantedDefect
+    private function defect(): PlantedDefect
     {
         return new PlantedDefect('d1', 'src/a.js', 4, 6, 'A defect.', Severity::P2);
     }
