@@ -50,9 +50,9 @@ final readonly class ProjectFiles
     /**
      * @throws JobImageNotBuilt
      */
-    public function archiveAdding(string $directory, string $tree, string $added): string
+    public function archiveAdding(string $directory, string $tree, string $added, string $file): void
     {
-        return $this->git($directory, ['archive', '--format=tar', '--add-file='.$added, $this->revisionOf($tree)]);
+        $this->git($directory, ['archive', '--format=tar', '--output='.$file, '--add-file='.$added, $this->revisionOf($tree)]);
     }
 
     private function revisionOf(string $tree): string
