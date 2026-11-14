@@ -109,13 +109,13 @@ final readonly class RoundLedger
         ));
     }
 
+    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
     /**
      * @param list<Finding> $findings
      * @param list<string>  $act
      *
      * @return list<JudgeDoneFinding>
      */
-    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
     private function recordedFindings(array $findings, array $act): array
     {
         $entries = [];
