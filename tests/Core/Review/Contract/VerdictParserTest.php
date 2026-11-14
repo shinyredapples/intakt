@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Kernel;
@@ -29,6 +30,7 @@ use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 
 #[CoversClass(VerdictParser::class)]
+#[CoversClass(VerdictUnreadable::class)]
 #[CoversClass(Verdict::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[CoversClass(StrictVerdictConverter::class)]
@@ -117,31 +119,31 @@ final class VerdictParserTest extends KernelTestCase
     }
 
     #[DataProviderExternal(BrokenFieldRules::class, 'cases')]
-    public function testABrokenFieldRuleYieldsChangesSayingWhy(string $output, string $why): void
+    public function testABrokenFieldRuleIsRefusedAsUnreadableSayingWhy(string $output, string $why): void
     {
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/'.preg_quote($why, '/').'/');
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
-        self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertStringContainsString($why, $verdict->findings[0]->text);
+        $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
     }
 
-    public function testAWholeFloatLineYieldsChanges(): void
+    public function testAWholeFloatLineIsRefusedAsUnreadable(): void
     {
         $output = str_replace('"line":12', '"line":12.0', VerdictDocument::fromTheDesign()->json());
 
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/"line" attribute/');
 
-        self::assertStringContainsString('"line" attribute', $verdict->findings[0]->text);
+        $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
     }
 
     #[DataProvider('outputsThatDoNotMap')]
-    public function testOutputThatDoesNotMapYieldsChanges(string $output): void
+    public function testOutputThatDoesNotMapIsRefusedAsUnreadable(string $output): void
     {
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering($output));
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/Syntax error$/');
 
-        self::assertSame(Decision::Changes, $verdict->verdict);
-        self::assertStringEndsWith('Syntax error', $verdict->findings[0]->text);
+        $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
     }
 
     /**
@@ -168,20 +170,20 @@ final class VerdictParserTest extends KernelTestCase
         self::assertNotContains(Verdict::INVALID_OUTPUT, array_map(static fn (Finding $finding): string => $finding->id, $verdict->findings));
     }
 
-    public function testAToolCallInsteadOfAVerdictYieldsChanges(): void
+    public function testAToolCallInsteadOfAVerdictIsRefusedAsUnreadable(): void
     {
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
+        $this->expectException(VerdictUnreadable::class);
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        $_ = new VerdictParser()->parse($this->reviewer()->answering(new ToolCallResult([new ToolCall('call-1', 'read_file')])));
     }
 
-    public function testAReplyInSeveralPartsYieldsChanges(): void
+    public function testAReplyInSeveralPartsIsRefusedAsUnreadable(): void
     {
         $answer = VerdictDocument::fromTheDesign()->with('verdict', 'approve')->json();
 
-        $verdict = new VerdictParser()->parse($this->reviewer()->answering(new MultiPartResult([new TextResult($answer), new TextResult($answer)])));
+        $this->expectException(VerdictUnreadable::class);
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        $_ = new VerdictParser()->parse($this->reviewer()->answering(new MultiPartResult([new TextResult($answer), new TextResult($answer)])));
     }
 
     public function testAFailedCallStaysAnError(): void
@@ -194,14 +196,12 @@ final class VerdictParserTest extends KernelTestCase
         $_ = new VerdictParser()->parse(new DeferredResult($converter, new InMemoryRawResult()));
     }
 
-    public function testTheInvalidOutputFindingBlocksTheBuilderAndCitesTheRule(): void
+    public function testTheRefusalSaysTheAnswerCouldNotBeReadAsAVerdict(): void
     {
-        $finding = new VerdictParser()->parse($this->reviewer()->answering('approve'))->findings[0];
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/^The reviewer\'s answer could not be read as a verdict: /');
 
-        self::assertSame(Severity::P1, $finding->severity);
-        self::assertSame(FixableBy::Builder, $finding->fixable_by);
-        self::assertSame([null, null, null, null], [$finding->file, $finding->line, $finding->symbol, $finding->evidence]);
-        self::assertSame('The verdict is a typed object that structured output fills and the Validator checks; anything else counts as changes.', $finding->requirement);
+        $_ = new VerdictParser()->parse($this->reviewer()->answering('approve'));
     }
 
     private function reviewer(): ScriptedReviewer
