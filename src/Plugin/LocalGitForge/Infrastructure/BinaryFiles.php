@@ -45,6 +45,22 @@ final readonly class BinaryFiles
         return str_contains($bytes, "\0");
     }
 
+    // A replacement character of the text itself is escaped too, so an escape always stands for exactly one set of bytes.
+    public function escaped(string $text): string
+    {
+        if (mb_check_encoding($text, 'UTF-8')) {
+            return $text;
+        }
+
+        return (string) preg_replace_callback(
+            self::CHARACTER_OR_BYTE,
+            static fn (array $match): string => '' !== ($match['character'] ?? '') && self::REPLACEMENT !== $match['character']
+                ? $match['character']
+                : sprintf('%s{%s}', self::REPLACEMENT, strtoupper(bin2hex($match[0]))),
+            $text,
+        );
+    }
+
     /**
      * @param Closure(string): string $blob
      */
@@ -83,22 +99,10 @@ final readonly class BinaryFiles
 
     private function sizeOf(?string $bytes): string
     {
-        return null === $bytes ? 'absent' : strlen($bytes).' bytes';
-    }
-
-    // A replacement character of the file itself is escaped too, so an escape always stands for exactly one set of bytes.
-    private function escaped(string $file): string
-    {
-        if (mb_check_encoding($file, 'UTF-8')) {
-            return $file;
+        if (null === $bytes) {
+            return 'absent';
         }
 
-        return (string) preg_replace_callback(
-            self::CHARACTER_OR_BYTE,
-            static fn (array $match): string => '' !== ($match['character'] ?? '') && self::REPLACEMENT !== $match['character']
-                ? $match['character']
-                : sprintf('%s{%s}', self::REPLACEMENT, strtoupper(bin2hex($match[0]))),
-            $file,
-        );
+        return 1 === strlen($bytes) ? '1 byte' : strlen($bytes).' bytes';
     }
 }

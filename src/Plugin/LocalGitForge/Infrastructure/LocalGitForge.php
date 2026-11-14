@@ -210,7 +210,10 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
 
     private function changedFiles(CommitRange $commits): ChangedFiles
     {
-        return $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...self::DIFF_OPTIONS, ...$this->range($commits)]));
+        $files = $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...self::DIFF_OPTIONS, ...$this->range($commits)]));
+
+        // Because -z gives each path's raw bytes, which may not be UTF-8, while every path reaches prompts and payloads that must be; escaped like the patch.
+        return new ChangedFiles(...array_map(fn (ChangedFile $file): ChangedFile => new ChangedFile($this->binaryFiles->escaped($file->path), $file->status), [...$files]));
     }
 
     /**

@@ -376,6 +376,39 @@ final class LocalGitForgeTest extends TestCase
         self::assertStringContainsString('absent at the base, 29 bytes at the head', $patch);
     }
 
+    public function testItKeepsTheModeLinesOfABinaryFileWhoseModeAloneChangedAndNamesItNotBinary(): void
+    {
+        $this->repository->commitFile('logo.png', self::PNG);
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->makeExecutable('logo.png');
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertSame("diff --git a/logo.png b/logo.png\nold mode 100644\nnew mode 100755\n", $patch);
+        self::assertStringNotContainsString('Binary file, not shown', $patch);
+        self::assertTrue(mb_check_encoding($patch, 'UTF-8'));
+    }
+
+    public function testItListsAChangedFileWhoseNameIsNotUtf8WithTheBytesOfItsNameEscaped(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile("caf\xe9 \u{fffd}.txt", "menu\n");
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame([["caf\u{fffd}{E9} \u{fffd}{EFBFBD}.txt", FileStatus::Added]], $this->pathsAndStatuses($change));
+    }
+
+    public function testItListsAChangedFileWhoseNameIsUtf8AsItIs(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile("caf\u{e9} \u{fffd}.txt", "menu\n");
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame([["caf\u{e9} \u{fffd}.txt", FileStatus::Added]], $this->pathsAndStatuses($change));
+    }
+
     public function testItKeepsTheLinesOfATextFileChangedBesideABinaryFile(): void
     {
         $this->repository->checkoutNewBranch('feature');
