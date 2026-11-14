@@ -126,9 +126,7 @@ abstract class JourneyTestCase extends TestCase
      */
     final protected function watcherStart(array $environment): WatcherStart
     {
-        $console = fn (array $arguments, array $variables, int $seconds): string => $this->console($arguments, [...$environment, ...$variables, self::QUEUE_VARIABLE => self::SHARED_QUEUE], $seconds);
-
-        return new WatcherStart($console, $this->containerRebuild($console));
+        return $this->watcherStartOn(fn (array $arguments, array $variables, int $seconds): string => $this->console($arguments, [...$environment, ...$variables, self::QUEUE_VARIABLE => self::SHARED_QUEUE], $seconds));
     }
 
     // Because the provider keys and the projects count only in a container built after they are set, as the container entrypoint does.
@@ -138,6 +136,14 @@ abstract class JourneyTestCase extends TestCase
     final protected function rebuildContainer(array $environment): void
     {
         $this->containerRebuild($this->console(...))->rebuild($environment, self::CONSOLE_SECONDS);
+    }
+
+    /**
+     * @param Closure(list<string>, array<string,string>, int): string $console
+     */
+    private function watcherStartOn(Closure $console): WatcherStart
+    {
+        return new WatcherStart($console, $this->containerRebuild($console));
     }
 
     /**
