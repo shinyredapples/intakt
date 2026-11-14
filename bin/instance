@@ -260,7 +260,8 @@ final class Instance
 
     private function logSummary(): string
     {
-        $lines = array_values(array_filter(array_map(trim(...), preg_split('/\R/', $this->readLog()) ?: []), static fn (string $line): bool => '' !== $line));
+        $lines = preg_split('/\R/', $this->readLog());
+        $lines = array_values(array_filter(array_map(trim(...), false === $lines ? [] : $lines), static fn (string $line): bool => '' !== $line));
 
         foreach ($lines as $line) {
             if (1 === preg_match('/error|exception/i', $line)) {

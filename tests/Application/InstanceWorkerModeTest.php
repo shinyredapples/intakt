@@ -76,7 +76,7 @@ final class InstanceWorkerModeTest extends InstanceTestCase
 
     public function testInWorkerModeFrankenphpRunsTheSameFewPhpThreadsWhateverTheHostSoItBootsUnderAnAddressSpaceLimit(): void
     {
-        // 1.9 GB: two threads boot well inside it, while FrankenPHP's default of two threads per CPU exhausts it on a host with many CPUs.
+        // 1.9 GB, because two threads boot well inside it while FrankenPHP's default of two threads per CPU exhausts it on a host with many CPUs.
         $limitKilobytes = 1_900_000;
         $command = <<<'PHP_WRAP'
             echo "Instance reached command mode.\n";
