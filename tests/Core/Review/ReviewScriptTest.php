@@ -488,9 +488,8 @@ final class ReviewScriptTest extends TestCase
         return $this->runTheScript($arguments, $environment);
     }
 
+    // Only the write bits change, so the files keep the modes git compares.
     /**
-     * Only the write bits change, so the files keep the modes git compares.
-     *
      * @param Closure(int): int $change
      */
     private function changeTheCheckoutsModes(Closure $change): void
