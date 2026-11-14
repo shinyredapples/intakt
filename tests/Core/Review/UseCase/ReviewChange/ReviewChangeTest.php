@@ -27,6 +27,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
@@ -38,6 +39,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\ReviewChange\UpperWait;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
@@ -66,6 +68,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
 #[CoversClass(UpperWait::class)]
+#[CoversClass(RoundEndReasons::class)]
+#[CoversClass(RoundEnds::class)]
 #[UsesClass(FailedJudgings::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(ChangeDecision::class)]
@@ -188,8 +192,9 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewChange(static function (): void {}, $this->shortUpperWait())->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame(RoundEnds::NoOutcomeInTime, $review->end);
         self::assertSame([], $review->actList);
-        self::assertStringStartsWith(ReviewChange::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', $review->reasons[0]);
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', $review->reasons[0]);
         self::assertSame('2026-10-30 12:00:05', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
     }
 
@@ -212,7 +217,7 @@ final class ReviewChangeTest extends KernelTestCase
 
         $review = $this->reviewChange($work, $this->shortUpperWait())->review($this->request());
 
-        self::assertSame([Decision::Approve, []], [$review->decision, $review->reasons]);
+        self::assertSame([Decision::Approve, [], RoundEnds::Judged], [$review->decision, $review->reasons, $review->end]);
     }
 
     public function testARoundWhoseJudgingFailedForGoodIsBlockedForTheFailedJudgingBeforeTheCeiling(): void
@@ -220,7 +225,8 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(fn (): string => $this->openRoundId()))->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([ReviewChange::JUDGING_FAILED], $review->reasons);
+        self::assertSame([RoundEndReasons::JUDGING_FAILED], $review->reasons);
+        self::assertSame(RoundEnds::JudgingFailed, $review->end);
         self::assertSame([], $review->actList);
         self::assertSame('2026-10-30 12:00:01', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
     }
@@ -230,7 +236,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), $this->shortUpperWait())->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertStringStartsWith(ReviewChange::NO_OUTCOME_IN_TIME, $review->reasons[0]);
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME, $review->reasons[0]);
     }
 
     public function testEachPollReportsTheProgressOfTheRound(): void
