@@ -26,6 +26,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RoundStart::class)]
 #[UsesClass(TokenFigures::class)]
 #[UsesClass(Cost::class)]
+#[UsesClass(RoundEnding::class)]
 final class ReviewTest extends TestCase
 {
     public function testTheActiveRoundIsTheLatestRoundWhileItIsUnjudged(): void
