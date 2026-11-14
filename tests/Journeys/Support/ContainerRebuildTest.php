@@ -8,13 +8,15 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Finder\Finder;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(ContainerRebuild::class)]
+#[UsesClass(Provider::class)]
+#[UsesClass(Kernel::class)]
 final class ContainerRebuildTest extends TestCase
 {
     private const string ROOT = __DIR__.'/../../..';
@@ -37,9 +39,8 @@ final class ContainerRebuildTest extends TestCase
     public function testTheSeedSeesTheKeyAfterARebuildInTheSecondAKeylessContainerWasCompiled(): void
     {
         $this->console(['cache:warmup'], $this->withoutKeys());
-        $this->stampTheContainerWithTheNextSecond();
 
-        $this->rebuild()->rebuild($this->withKey(), self::CONSOLE_SECONDS);
+        $this->rebuildStampingTheCacheWithEachConsolesStart()->rebuild($this->withKey(), self::CONSOLE_SECONDS);
         $output = $this->console(['intakt:sample:seed', $this->directory.'/sample', $this->configuration()], $this->withKey());
 
         self::assertStringContainsString('Wrote the sample project', $output);
@@ -77,17 +78,19 @@ final class ContainerRebuildTest extends TestCase
         self::assertFileExists(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()));
     }
 
-    // Because the framework's cache:clear takes a container compiled in the second it starts for one it built itself, as when the instance or a command before the rebuild compiled one.
-    private function stampTheContainerWithTheNextSecond(): void
+    // Stamped inside each console process with its own start, because the framework's cache:clear takes a container compiled in the second it starts for one it built itself, as when the instance compiled one just before the rebuild.
+    private function rebuildStampingTheCacheWithEachConsolesStart(): ContainerRebuild
     {
-        $clock = new NativeClock();
-        $now = $clock->now();
-        $clock->sleep(1 - (float) $now->format('0.u'));
-        $second = $now->getTimestamp() + 1;
+        $stamp = $this->directory.'/stamp.php';
+        new Filesystem()->dumpFile($stamp, sprintf(
+            '<?php foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator(%s, FilesystemIterator::SKIP_DOTS)) as $file) { touch($file->getPathname(), $_SERVER["REQUEST_TIME"]); }',
+            var_export($this->cacheDirectory(), true),
+        ));
 
-        foreach (new Finder()->files()->in($this->cacheDirectory()) as $file) {
-            touch($file->getPathname(), $second);
-        }
+        return new ContainerRebuild(
+            ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()),
+            fn (array $arguments, array $environment, int $seconds): string => $this->console($arguments, $environment, $seconds, ['-d', 'auto_prepend_file='.$stamp]),
+        );
     }
 
     private function rebuild(): ContainerRebuild
@@ -112,10 +115,11 @@ final class ContainerRebuildTest extends TestCase
     /**
      * @param list<string>               $arguments
      * @param array<string,string|false> $environment
+     * @param list<string>               $php
      */
-    private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS): string
+    private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS, array $php = []): string
     {
-        $process = new Process([PHP_BINARY, self::ROOT.'/bin/console', '--no-interaction', ...$arguments], self::ROOT, [...$this->instance(), ...$environment], null, $seconds);
+        $process = new Process([PHP_BINARY, ...$php, self::ROOT.'/bin/console', '--no-interaction', ...$arguments], self::ROOT, [...$this->instance(), ...$environment], null, $seconds);
         $process->run();
 
         self::assertTrue($process->isSuccessful(), 'bin/console '.implode(' ', $arguments).' failed: '.trim($process->getErrorOutput().$process->getOutput()));
