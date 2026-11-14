@@ -76,6 +76,26 @@ final class ReviewJobAnswerTest extends TestCase
         yield 'a message that is no text' => ['{"type":"item.completed","item":{"type":"agent_message","text":["last"]}}'."\n".$completed."\n"];
         yield 'an empty message' => ['{"type":"item.completed","item":{"type":"agent_message","text":""}}'."\n".$completed."\n"];
         yield 'a failed turn after the message' => [$message."\n".'{"type":"turn.failed","error":{"message":"gone"}}'."\n"];
+
+        $started = '{"type":"turn.started"}';
+        $earlier = $started."\n".'{"type":"item.completed","item":{"type":"agent_message","text":"earlier"}}'."\n".$completed."\n";
+
+        yield 'a later failed turn holding the last message' => [$earlier.$started."\n".$message."\n".'{"type":"turn.failed","error":{"message":"stream interrupted"}}'."\n"];
+        yield 'a later turn holding the last message that never ended' => [$earlier.$started."\n".$message."\n"];
+        yield 'a later completed turn after the unfinished turn holding the last message' => [$started."\n".$message."\n".$started."\n".$completed."\n"];
+    }
+
+    public function testCodexsAnswerOfACompletedTurnStandsWhenALaterTurnWithoutAMessageFails(): void
+    {
+        $answer = ReviewJobAnswer::read(Provider::Codex, implode("\n", [
+            '{"type":"turn.started"}',
+            '{"type":"item.completed","item":{"type":"agent_message","text":"answer"}}',
+            '{"type":"turn.completed","usage":{}}',
+            '{"type":"turn.started"}',
+            '{"type":"turn.failed","error":{"message":"gone"}}',
+        ]));
+
+        self::assertSame('answer', $answer->text);
     }
 
     #[DataProvider('unreadableCodexAnswers')]

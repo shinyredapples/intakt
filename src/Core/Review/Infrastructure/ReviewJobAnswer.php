@@ -42,18 +42,27 @@ final readonly class ReviewJobAnswer
         return is_string($result['result'] ?? null) ? $result['result'] : null;
     }
 
-    // Only a turn that completed answers, because a stream cut before turn.completed may end on a message the reviewer had not finished.
+    // The last message answers only once its own turn completed, because a turn that failed or was cut off may end on a message the reviewer had not finished, and a later turn's turn.completed says nothing about it.
     private static function codexMessage(string $output): ?string
     {
-        $events = self::codexEvents($output);
+        $answer = null;
+        $pending = null;
 
-        if (null === $events || [] === array_filter($events, static fn (array $event): bool => 'turn.completed' === ($event[self::TYPE] ?? null))) {
-            return null;
+        foreach (self::codexEvents($output) ?? [] as $event) {
+            $message = self::agentMessageOf($event);
+            if (null !== $message) {
+                [$answer, $pending] = [null, $message];
+                continue;
+            }
+
+            match ($event[self::TYPE] ?? null) {
+                'turn.completed' => [$answer, $pending] = [$pending ?? $answer, null],
+                'turn.started', 'turn.failed' => $pending = null,
+                default => null,
+            };
         }
 
-        $messages = array_filter(array_map(self::agentMessageOf(...), $events), is_string(...));
-
-        return array_last($messages);
+        return $answer;
     }
 
     /**
