@@ -38,4 +38,10 @@ final readonly class JudgeCallingVendor implements Vendor
 
         return $this->reviewers->judge($project, $request);
     }
+
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        return $this->reviewers->mapsAModelTo($project, $tier);
+    }
 }

@@ -53,7 +53,7 @@
         <tbody>
         {% for finding in reviewed.findings %}
             <tr>
-                <td class="mono" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.id }}">{{ finding.id }}</td>
+                <td class="mono" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">{{ finding.entryId }}</td>
                 <td>{{ finding.severity ?? 'not recorded' }}</td>
                 <td>{{ finding.text ?? 'not recorded' }}</td>
                 <td>{{ finding.call.value }}</td>

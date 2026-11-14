@@ -70,6 +70,33 @@ final class JudgedFindingsTest extends TestCase
         self::assertSame([], $judged->followUps);
     }
 
+    public function testAP1RejectedByTheJudgeStaysOnTheActList(): void
+    {
+        $finding = $this->finding('a', Severity::P1);
+
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Reject]), [$finding]);
+
+        self::assertEquals([$finding], $judged->actList);
+        self::assertSame([], $judged->followUps);
+    }
+
+    public function testAP2DeferredByTheJudgeStaysOnTheActListAndIsNoFollowUp(): void
+    {
+        $finding = $this->finding('a', Severity::P2);
+
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Defer]), [$finding]);
+
+        self::assertEquals([$finding], $judged->actList);
+        self::assertSame([], $judged->followUps);
+    }
+
+    public function testAP2WithoutAMarkStaysOnTheActList(): void
+    {
+        $finding = $this->finding('a', Severity::P2);
+
+        self::assertEquals([$finding], JudgedFindings::of($this->marks([]), [$finding])->actList);
+    }
+
     /**
      * @param array<string, Mark> $marks
      */
@@ -89,7 +116,7 @@ final class JudgedFindingsTest extends TestCase
      */
     private function findings(string ...$ids): array
     {
-        return array_map(fn (string $id): Finding => $this->finding($id, Severity::P2), array_values($ids));
+        return array_map(fn (string $id): Finding => $this->finding($id, Severity::P3), array_values($ids));
     }
 
     private function finding(string $id, Severity $severity): Finding

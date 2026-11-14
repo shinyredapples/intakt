@@ -42,7 +42,16 @@ final class ReviewOutputTest extends TestCase
     {
         $output = $this->whenTheReviewIsWritten();
 
-        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'file' => 'src/Feature.php', 'line' => 3, 'symbol' => null, 'text' => 'Missing check.', 'fixable_by' => 'builder']], $output['act_list']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'file' => 'src/Feature.php', 'line' => 3, 'symbol' => null, 'text' => 'Missing check.', 'fixable_by' => 'builder', 'merged' => []]], $output['act_list']);
+    }
+
+    public function testAnActEntryThatMergesFindingsCarriesTheIdsOfTheMergedFindings(): void
+    {
+        $output = $this->whenTheReviewIsWritten(['F2', 'F4']);
+
+        self::assertIsArray($output['act_list']);
+        self::assertIsArray($output['act_list'][0]);
+        self::assertSame(['id' => 'F1', 'merged' => ['F2', 'F4']], array_intersect_key($output['act_list'][0], ['id' => true, 'merged' => true]));
     }
 
     public function testTheRoundItsDecisionTheTokensTheCostAndTheReasonsKeepTheirSnakeCaseKeys(): void
@@ -56,11 +65,13 @@ final class ReviewOutputTest extends TestCase
     }
 
     /**
+     * @param list<string> $merged
+     *
      * @return array<mixed>
      */
-    private function whenTheReviewIsWritten(): array
+    private function whenTheReviewIsWritten(array $merged = []): array
     {
-        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, true, 'R1', new Evidence('bin/check', 'failed'));
+        $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, true, 'R1', new Evidence('bin/check', 'failed'))->withMerged($merged);
         $verdicts = [
             new PanelVerdict(Tier::Strong, new Verdict(Decision::Changes, [$finding], [], [])),
             new PanelVerdict(Tier::Standard, new Verdict(Decision::Approve, [], [], [])),

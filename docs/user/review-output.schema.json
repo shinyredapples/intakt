@@ -27,7 +27,7 @@
             "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["id", "severity", "file", "line", "symbol", "text", "fixable_by"],
+                "required": ["id", "severity", "file", "line", "symbol", "text", "fixable_by", "merged"],
                 "properties": {
                     "id": {"type": "string", "minLength": 1},
                     "severity": {"enum": ["P1", "P2", "P3"]},
@@ -35,7 +35,8 @@
                     "line": {"type": ["integer", "null"], "minimum": 1},
                     "symbol": {"type": ["string", "null"]},
                     "text": {"type": "string", "minLength": 1},
-                    "fixable_by": {"enum": ["builder", "owner"]}
+                    "fixable_by": {"enum": ["builder", "owner"]},
+                    "merged": {"type": "array", "items": {"type": "string", "minLength": 1}}
                 }
             }
         },

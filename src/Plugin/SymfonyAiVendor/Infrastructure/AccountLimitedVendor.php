@@ -45,6 +45,12 @@ final readonly class AccountLimitedVendor implements Vendor
         return $this->onTheNextAccount($project, Tier::Light, fn (): Judgement => $this->vendor->judge($project, $request));
     }
 
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        return $this->vendor->mapsAModelTo($project, $tier);
+    }
+
     /**
      * @template T of object
      *

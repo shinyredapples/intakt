@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\Vendor\Contract;
 
+use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -34,4 +35,10 @@ interface Vendor
      */
     #[NoDiscard('a judgement that is not read decides nothing')]
     public function judge(string $project, JudgeRequest $request): Judgement;
+
+    // Asked before a round starts, so a tier the project maps no model to refuses the round instead of failing a call later.
+    /**
+     * @throws ProjectNotConfigured
+     */
+    public function mapsAModelTo(string $project, Tier $tier): bool;
 }
