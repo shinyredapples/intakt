@@ -66,9 +66,14 @@ final readonly class PushScenario
         return $this->repository->path.'/.git';
     }
 
-    public function request(?string $base = null, ?string $head = null, string $project = 'widgets', ?string $remote = null): BranchPushRequest
+    public function request(?string $base = null, ?string $head = null): BranchPushRequest
     {
-        return new BranchPushRequest($project, $this->gitDirectory(), $remote ?? $this->remote, self::BRANCH, new AcceptedHandBack($base, $head ?? $this->head, 0), new ChangeText('Add the files', 'Evidence: tests pass.'));
+        return new BranchPushRequest('widgets', $this->gitDirectory(), $this->remote, self::BRANCH, new AcceptedHandBack($base, $head ?? $this->head, 0), new ChangeText('Add the files', 'Evidence: tests pass.'));
+    }
+
+    public function requestOfProject(string $project, string $remote): BranchPushRequest
+    {
+        return new BranchPushRequest($project, $this->gitDirectory(), $remote, self::BRANCH, new AcceptedHandBack(null, $this->head, 0), new ChangeText('Add the files', 'Evidence: tests pass.'));
     }
 
     // A second project's remote holding the same main, because two projects can share history and name their task branches alike.

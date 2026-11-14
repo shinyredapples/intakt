@@ -198,7 +198,7 @@ final class PushBranchTest extends TestCase
         $this->scenario->push()->push($this->scenario->request());
         $other = $this->scenario->otherRemote();
 
-        $pushed = $this->scenario->push()->push($this->scenario->request(null, null, 'gadgets', $other));
+        $pushed = $this->scenario->push()->push($this->scenario->requestOfProject('gadgets', $other));
 
         self::assertInstanceOf(PushedBranch::class, $pushed);
         self::assertSame($pushed->head, $this->scenario->remoteTip($other));

@@ -51,7 +51,7 @@ final readonly class PushBranch implements BranchPush
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
 
-        if (!$this->records->hasPushed($request->project, $request->branch, $head)) {
+        if (!$this->records->hasPushed($request, $head)) {
             $remoteTip = $this->remoteTip($request);
 
             // Not when the remote already holds this signed head: a crash after the push left only its record missing, and a main that conflicts since cannot take the push back.
@@ -91,15 +91,15 @@ final readonly class PushBranch implements BranchPush
             throw BranchNotPushed::because(sprintf('the remote branch %s moved since the hand-back was checked', $request->branch));
         }
 
-        if (!$this->records->isIntended($request->project, $request->branch, $head)) {
-            $this->records->intend($request->project, $request->branch, $head);
+        if (!$this->records->isIntended($request, $head)) {
+            $this->records->intend($request, $head);
         }
 
         if (!$alreadyThere) {
             $this->git->outputFromRemote($request->repository, ['push', '--quiet', '--', $request->remote, $head.':'.self::BRANCHES.$request->branch]);
         }
 
-        $this->records->push($request->project, $request->branch, $head);
+        $this->records->push($request, $head);
     }
 
     private function remoteTip(BranchPushRequest $request): ?string
@@ -111,7 +111,7 @@ final readonly class PushBranch implements BranchPush
 
     private function openedChange(BranchPushRequest $request, string $head, string $main): ChangeId
     {
-        $recorded = $this->records->openedChange($request->project, $request->branch, $head);
+        $recorded = $this->records->openedChange($request, $head);
 
         if (null !== $recorded) {
             return new ChangeId($recorded);
@@ -119,7 +119,7 @@ final readonly class PushBranch implements BranchPush
 
         // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one.
         $change = $this->changes->openOrUpdate(new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text));
-        $this->records->open($request->project, $request->branch, $head, $change->value);
+        $this->records->open($request, $head, $change->value);
 
         return $change;
     }

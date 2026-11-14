@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Git\UseCase\PushBranch;
 
 use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -18,19 +19,19 @@ final readonly class PushRecords
     ) {
     }
 
-    public function isIntended(string $project, string $branch, string $head): bool
+    public function isIntended(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->recorded(LedgerEventKind::PushIntended, $project, $branch, $head);
+        return null !== $this->recorded(LedgerEventKind::PushIntended, $request, $head);
     }
 
-    public function hasPushed(string $project, string $branch, string $head): bool
+    public function hasPushed(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->recorded(LedgerEventKind::BranchPushed, $project, $branch, $head);
+        return null !== $this->recorded(LedgerEventKind::BranchPushed, $request, $head);
     }
 
-    public function openedChange(string $project, string $branch, string $head): ?string
+    public function openedChange(BranchPushRequest $request, string $head): ?string
     {
-        $change = $this->recorded(LedgerEventKind::ChangeOpened, $project, $branch, $head)['change'] ?? null;
+        $change = $this->recorded(LedgerEventKind::ChangeOpened, $request, $head)['change'] ?? null;
 
         return is_string($change) ? $change : null;
     }
@@ -38,36 +39,46 @@ final readonly class PushRecords
     /**
      * @throws BranchNotPushed
      */
-    public function intend(string $project, string $branch, string $head): void
+    public function intend(BranchPushRequest $request, string $head): void
     {
-        $this->append(LedgerEventKind::PushIntended, ['project' => $project, 'branch' => $branch, 'head' => $head]);
+        $this->append(LedgerEventKind::PushIntended, $this->keyOf($request, $head));
     }
 
     /**
      * @throws BranchNotPushed
      */
-    public function push(string $project, string $branch, string $head): void
+    public function push(BranchPushRequest $request, string $head): void
     {
-        $this->append(LedgerEventKind::BranchPushed, ['project' => $project, 'branch' => $branch, 'head' => $head]);
+        $this->append(LedgerEventKind::BranchPushed, $this->keyOf($request, $head));
     }
 
     /**
      * @throws BranchNotPushed
      */
-    public function open(string $project, string $branch, string $head, string $change): void
+    public function open(BranchPushRequest $request, string $head, string $change): void
     {
-        $this->append(LedgerEventKind::ChangeOpened, ['project' => $project, 'branch' => $branch, 'head' => $head, 'change' => $change]);
+        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change]);
+    }
+
+    /**
+     * @return array{project: string, branch: string, head: string}
+     */
+    private function keyOf(BranchPushRequest $request, string $head): array
+    {
+        return ['project' => $request->project, 'branch' => $request->branch, 'head' => $head];
     }
 
     /**
      * @return array<mixed>|null
      */
-    private function recorded(LedgerEventKind $kind, string $project, string $branch, string $head): ?array
+    private function recorded(LedgerEventKind $kind, BranchPushRequest $request, string $head): ?array
     {
+        $key = $this->keyOf($request, $head);
+
         foreach ($this->ledger->readOfKind($kind) as $event) {
             $payload = $this->decoded($event->event->payload);
 
-            if (($payload['project'] ?? null) === $project && ($payload['branch'] ?? null) === $branch && ($payload['head'] ?? null) === $head) {
+            if (($payload['project'] ?? null) === $key['project'] && ($payload['branch'] ?? null) === $key['branch'] && ($payload['head'] ?? null) === $key['head']) {
                 return $payload;
             }
         }
