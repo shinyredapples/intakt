@@ -7,7 +7,9 @@ namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\FailingMain;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
+use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -22,6 +24,7 @@ final readonly class ShowBoardController
         private Ledger $ledger,
         private LedgerReviewPages $reviewPages,
         private LedgerFailingHeads $failingHeads,
+        private LedgerFailingMains $failingMains,
         private Redactor $redactor,
         private LivePageRendering $pages,
     ) {
@@ -37,9 +40,15 @@ final readonly class ShowBoardController
         return new Response($this->pages->render($request, 'dashboard/board.html.twig', [
             'board' => $board,
             'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
+            'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
             'working' => $board->whoIsWorking(),
             'columns' => BoardColumn::cases(),
         ]));
+    }
+
+    private function redactedMain(FailingMain $main): FailingMain
+    {
+        return new FailingMain($main->project, $this->redactor->redact($main->reason));
     }
 
     // Redacted because the cause quotes an exception, which can carry a credential, as the status report does.

@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
@@ -32,6 +33,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
 #[CoversClass(BootResults::class)]
@@ -262,6 +264,70 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertSame(BootState::Booted, $outcome->state);
         self::assertLoggedError('error', "Main's computed boot result could not be recorded in the ledger.");
+    }
+
+    public function testAMainThatFailsToBootRecordsOneAlertAndAskingAgainRecordsNoSecondOne(): void
+    {
+        $results = $this->results(new BootingBus(BootOutcome::failed('No status.')));
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $alerts = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed));
+        self::assertCount(1, $alerts);
+        self::assertSame(
+            ['project' => 'alpha', 'main' => str_repeat('a', 40), 'tool_fingerprint' => 'tools-1', 'reason' => 'No status.'],
+            json_decode($alerts[0]->event->payload, true),
+        );
+    }
+
+    public function testAMainThatBootsRecordsNoAlert(): void
+    {
+        $this->results(new BootingBus(BootOutcome::booted()))->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(0, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testACrashedMainBootRecordsNoAlert(): void
+    {
+        $this->results(new BootingBus(BootOutcome::crashed('composer could not run')))->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(0, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testAFailedMainThatAnotherWorkerStoredFirstRecordsNoAlertForThisWorker(): void
+    {
+        $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
+        $otherLedger = new DashboardLedger();
+        $otherWorker = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $other, $this->clock, new WatcherLedger($otherLedger), $this->redactor(), $this->logger());
+        $bus = new BootingBus(BootOutcome::failed('No status.'));
+        $bus->meanwhile = fn (): BootOutcome => $otherWorker->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->results($bus)->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(0, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+        self::assertCount(1, iterator_to_array($otherLedger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testACredentialInTheReasonOfAFailedMainIsNotInTheAlert(): void
+    {
+        $this->results(new BootingBus(BootOutcome::failed('clone failed: https://user:synthetic-private-token@localhost/alpha.git')))->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $alerts = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed));
+        self::assertCount(1, $alerts);
+        self::assertStringNotContainsString('synthetic-private-token', $alerts[0]->event->payload);
+    }
+
+    public function testAnAlertTheLedgerRefusesStillReturnsTheOutcomeAndIsLogged(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback(static fn (LedgerEvent $event): AppendResult => LedgerEventKind::MainBootFailed === $event->kind ? AppendResult::failed('The ledger is down.') : AppendResult::appended(Uuid::v7()));
+        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+
+        $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
     }
 
     private function recordedPayload(): string

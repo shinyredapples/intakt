@@ -178,6 +178,16 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::HeadForgotten, ['project' => $project, 'change' => $change, 'head' => $head]);
     }
 
+    public function failMainBoot(string $project, string $reason): void
+    {
+        $this->add(LedgerEventKind::MainBootFailed, ['project' => $project, 'main' => 'a', 'tool_fingerprint' => 'tools-1', 'reason' => $reason]);
+    }
+
+    public function bootMain(string $project): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => 'b', 'tool_fingerprint' => 'tools-1', 'state' => 'booted', 'reason' => '']);
+    }
+
     public function failHeadWithoutCause(string $project, string $change): void
     {
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);

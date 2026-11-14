@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Dashboard\Infrastructure;
+
+use Intakt\Core\Dashboard\Domain\FailingMain;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+
+// A project whose main does not boot is an infrastructure item of its own, not a pull request's, because the gate is off for every head of the project until main boots again.
+final readonly class LedgerFailingMains
+{
+    /**
+     * @return list<FailingMain>
+     */
+    public function in(RecordedEvents $events): array
+    {
+        /** @var array<string, FailingMain> $failing */
+        $failing = [];
+
+        foreach ($events as $recorded) {
+            $payload = LedgerPayload::of($recorded);
+            $project = $payload['project'] ?? null;
+
+            if (!is_string($project)) {
+                continue;
+            }
+
+            $reason = $payload['reason'] ?? null;
+
+            if (LedgerEventKind::MainBootFailed === $recorded->event->kind && is_string($reason)) {
+                $failing[$project] = new FailingMain($project, $reason);
+            }
+
+            if (LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null)) {
+                unset($failing[$project]);
+            }
+        }
+
+        return array_values($failing);
+    }
+}

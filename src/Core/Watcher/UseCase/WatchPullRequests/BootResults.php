@@ -40,15 +40,19 @@ final readonly class BootResults
 
     public function ofMain(BootKey $key, ChangeSource $source): BootOutcome
     {
-        $stored = $this->storedFor($key);
+        $known = $this->storedFor($key);
 
-        if ($stored instanceof BootRecord) {
-            return $stored->outcome();
+        if ($known instanceof BootRecord) {
+            return $known->outcome();
         }
 
         $outcome = $this->safe($this->boot(new BootHarness(new BootAt($source, $key->main))));
-        $this->remember($key, $outcome);
+        $stored = $this->remember($key, $outcome);
         $this->record($key, $outcome);
+
+        if ($stored && BootState::Failed === $outcome->state) {
+            $this->alert($key, $outcome);
+        }
 
         return $outcome;
     }
@@ -95,10 +99,10 @@ final readonly class BootResults
     }
 
     // A crash is the boot step's, not main's, so it is never kept: the next ask boots again instead of trusting a broken tool for good.
-    private function remember(BootKey $key, BootOutcome $outcome): void
+    private function remember(BootKey $key, BootOutcome $outcome): bool
     {
         if (BootState::Crashed === $outcome->state) {
-            return;
+            return false;
         }
 
         try {
@@ -106,8 +110,23 @@ final readonly class BootResults
             $this->entities->getConnection()->transactional(fn (Connection $inner): int|string => $inner->insert(BootRecord::TABLE, new BootRecord($key, $outcome, $this->clock->now())->row(), BootRecord::rowTypes()));
         } catch (UniqueConstraintViolationException) {
             // Ignored, because then another worker booted the same main meanwhile, and its row answers the next ask as well as this one would.
+            return false;
         } catch (Throwable $unstored) {
             $this->logger->error("Main's boot result could not be stored, so main boots again next time.", ['exception' => $unstored]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    // Only for the worker whose row was stored, so the alert comes once per main commit and tool fingerprint, however many workers boot it; a crash is no alert, because it is never kept and would repeat on every tick.
+    private function alert(BootKey $key, BootOutcome $outcome): void
+    {
+        try {
+            $this->ledger->mainBootFailed($key, $outcome);
+        } catch (Throwable $unrecorded) {
+            $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
         }
     }
 
