@@ -74,23 +74,18 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         self::assertSame("HTTP/1.1 200 OK\nempty projects page\n", $run['output']);
     }
 
-    public function testInWorkerModeFrankenphpRunsTheSameFewPhpThreadsWhateverTheHostSoItBootsUnderAnAddressSpaceLimit(): void
+    public function testInWorkerModeFrankenphpRunsThreePhpThreadsWhateverTheNumberOfCpus(): void
     {
-        // 1.9 GB, because two threads boot well inside it while FrankenPHP's default of two threads per CPU exhausts it on a host with many CPUs.
-        $limitKilobytes = 1_900_000;
+        // The count, not a boot under an address-space limit, because the memory a boot needs also depends on how FrankenPHP and its extensions are linked, so no one limit holds on every image.
         $command = <<<'PHP_WRAP'
-            echo "Instance reached command mode.\n";
             $states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? [];
             echo "PHP threads: ", count($states), "\n";
             PHP_WRAP;
-        $statusFile = $this->scratch.'/status';
-        $shell = 'ulimit -v '.$limitKilobytes.' && exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, self::ROOT.'/bin/instance', '--', PHP_BINARY, '-r', $command])).' 3>'.escapeshellarg($statusFile);
 
-        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$this->environmentWithFrankenphp()]);
-        $process->run();
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $command], $this->environmentWithFrankenphp());
 
-        self::assertSame('{"status":"ready","mode":"worker"}', trim((string) file_get_contents($statusFile)), $process->getOutput());
-        self::assertSame("Instance reached command mode.\nPHP threads: 3\n", $process->getOutput());
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame("PHP threads: 3\n", $run['output']);
     }
 
     public function testAFrankenphpThatRunsOutOfMemoryReportsTheLastLineOfItsLogAsTheReason(): void
