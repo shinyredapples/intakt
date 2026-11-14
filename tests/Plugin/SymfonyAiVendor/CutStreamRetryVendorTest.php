@@ -16,6 +16,7 @@ use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
@@ -54,6 +55,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
@@ -176,6 +178,26 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         self::assertInstanceOf(ProviderFailedTransiently::class, $failure);
         self::assertSame(['started', 'unsettled', 'started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
         self::assertSame(ServerException::class, $this->ledger->payloads()[3]['failure']);
+    }
+
+    public function testAnUnstreamedTryStoppedAtTheOutputLimitFailsTheReviewerWithoutAThirdCallWithMoreRoom(): void
+    {
+        $vendor = $this->vendor($this->cutThen(static fn (): never => throw new MaxOutputTokensException('Truncated at the output limit.')));
+
+        $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertInstanceOf(MaxOutputTokensException::class, $failure);
+        self::assertSame([true, false], $this->streamed);
+    }
+
+    public function testAnUnstreamedTryThatAsksForChangesWithoutAFindingFailsTheReviewerWithoutAThirdCall(): void
+    {
+        $vendor = $this->vendor($this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->with('findings', [])->json())));
+
+        $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertInstanceOf(ChangesWithoutFindings::class, $failure);
+        self::assertSame([true, false], $this->streamed);
     }
 
     public function testAProviderOutageAfterTheFirstAnswerDeltaOnTheOnlyAccountBlocksTheReviewerWithoutARetry(): void

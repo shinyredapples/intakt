@@ -103,7 +103,7 @@ final readonly class SymfonyAiVendor implements Vendor
         }
     }
 
-    // A second cut keeps the first cut's reason, so the reviewer ends as it did before the retry; any other failure of the retry follows its own rule, so a provider outage is handled as one.
+    // A second cut keeps the first cut's reason, so the reviewer ends as it did before the retry; a provider failure of the retry follows its own rule, so an outage is handled as one, and no other failure of it is retried, because retriedOnce() catches only the first try's.
     /**
      * @param Closure(): Verdict $unstreamed
      */
