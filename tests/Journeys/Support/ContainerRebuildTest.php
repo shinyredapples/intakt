@@ -89,7 +89,7 @@ final class ContainerRebuildTest extends TestCase
 
         return new ContainerRebuild(
             ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()),
-            fn (array $arguments, array $environment, int $seconds): string => $this->console($arguments, $environment, $seconds, ['-d', 'auto_prepend_file='.$stamp]),
+            fn (array $arguments, array $environment, int $seconds): string => $this->outputOf([PHP_BINARY, '-d', 'auto_prepend_file='.$stamp, ...$this->consoleCommand($arguments)], $environment, $seconds),
         );
     }
 
@@ -115,14 +115,32 @@ final class ContainerRebuildTest extends TestCase
     /**
      * @param list<string>               $arguments
      * @param array<string,string|false> $environment
-     * @param list<string>               $php
      */
-    private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS, array $php = []): string
+    private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS): string
     {
-        $process = new Process([PHP_BINARY, ...$php, self::ROOT.'/bin/console', '--no-interaction', ...$arguments], self::ROOT, [...$this->instance(), ...$environment], null, $seconds);
+        return $this->outputOf([PHP_BINARY, ...$this->consoleCommand($arguments)], $environment, $seconds);
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return list<string>
+     */
+    private function consoleCommand(array $arguments): array
+    {
+        return [self::ROOT.'/bin/console', '--no-interaction', ...$arguments];
+    }
+
+    /**
+     * @param list<string>               $command
+     * @param array<string,string|false> $environment
+     */
+    private function outputOf(array $command, array $environment, int $seconds): string
+    {
+        $process = new Process($command, self::ROOT, [...$this->instance(), ...$environment], null, $seconds);
         $process->run();
 
-        self::assertTrue($process->isSuccessful(), 'bin/console '.implode(' ', $arguments).' failed: '.trim($process->getErrorOutput().$process->getOutput()));
+        self::assertTrue($process->isSuccessful(), implode(' ', $command).' failed: '.trim($process->getErrorOutput().$process->getOutput()));
 
         return $process->getOutput();
     }
