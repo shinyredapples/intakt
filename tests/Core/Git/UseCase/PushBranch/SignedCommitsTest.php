@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\UnsignedCommitRefused;
 use Intakt\Core\Git\Domain\CommitObject;
 use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
 use Intakt\Core\Git\UseCase\PushBranch\SignedCommits;
 use Intakt\Core\Git\UseCase\PushBranch\SigningKey;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
@@ -20,6 +21,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(SignedCommits::class)]
 #[CoversClass(SigningKey::class)]
 #[UsesClass(BranchGit::class)]
+#[UsesClass(GuardedRun::class)]
 #[UsesClass(AcceptedHandBack::class)]
 #[UsesClass(CommitObject::class)]
 #[UsesClass(HardenedGit::class)]

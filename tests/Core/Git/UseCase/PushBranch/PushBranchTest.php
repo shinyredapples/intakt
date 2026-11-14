@@ -12,6 +12,7 @@ use Intakt\Core\Git\Contract\MainConflicts;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Domain\CommitObject;
 use Intakt\Core\Git\UseCase\PushBranch\BranchGit;
+use Intakt\Core\Git\UseCase\PushBranch\GuardedRun;
 use Intakt\Core\Git\UseCase\PushBranch\PushBranch;
 use Intakt\Core\Git\UseCase\PushBranch\PushRecords;
 use Intakt\Core\Git\UseCase\PushBranch\SignedCommits;
@@ -33,6 +34,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(PushBranch::class)]
 #[CoversClass(PushRecords::class)]
 #[CoversClass(BranchGit::class)]
+#[UsesClass(GuardedRun::class)]
 #[UsesClass(SignedCommits::class)]
 #[UsesClass(SigningKey::class)]
 #[UsesClass(CommitObject::class)]
@@ -598,6 +600,42 @@ final class PushBranchTest extends TestCase
         } catch (BranchNotPushed) {
             self::assertNull($this->scenario->remoteTip());
         }
+    }
+
+    public function testAPushKilledByASignalIsReportedAsNotPushedAndRecordsNoPush(): void
+    {
+        $programs = new ProgramOnPath();
+        $programs->killOn('git', 'push');
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A killed push must not count as pushed.');
+        } catch (BranchNotPushed $stopped) {
+            self::assertSame('The branch was not pushed: git push was killed by signal 15', $stopped->getMessage());
+            self::assertNull($stopped->getPrevious());
+            self::assertSame([LedgerEventKind::PushIntended], $this->scenario->ledger->kinds());
+        } finally {
+            $programs->remove();
+        }
+    }
+
+    public function testAPushThatWasKilledIsPushedByTheNextCall(): void
+    {
+        $programs = new ProgramOnPath();
+        $programs->killOn('git', 'push');
+
+        try {
+            (void) $this->scenario->push()->push($this->scenario->request());
+            self::fail('A killed push must not count as pushed.');
+        } catch (BranchNotPushed) {
+            $programs->remove();
+        }
+
+        $pushed = $this->scenario->push()->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame($pushed->head, $this->scenario->remoteTip());
+        self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened], $this->scenario->ledger->kinds());
     }
 
     public function testAMergeOfMainTheBuilderMadeIsPushedWithItsMainParentUntouched(): void

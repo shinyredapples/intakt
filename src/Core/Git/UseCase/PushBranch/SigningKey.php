@@ -16,11 +16,13 @@ final readonly class SigningKey
     public const string NAMESPACE = 'git';
     public const string PRINCIPAL = 'orchestrator';
     private const string ED25519 = 'ssh-ed25519';
+    private const string PROGRAM = 'ssh-keygen';
 
     public function __construct(
         #[Autowire(param: GitServices::SIGNING_KEY)]
         private string $file,
         private Filesystem $filesystem,
+        private float $timeoutSeconds = 60,
     ) {
     }
 
@@ -50,9 +52,10 @@ final readonly class SigningKey
         try {
             $this->filesystem->dumpFile($allowed, sprintf('%s namespaces="%s" %s %s'."\n", self::PRINCIPAL, self::NAMESPACE, $key[0], $key[1] ?? ''));
             $this->filesystem->dumpFile($signatureFile, $signature);
-            $check = new Process(['ssh-keygen', '-Y', 'verify', '-f', $allowed, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, null, $payload, 60);
+            $check = new Process([self::PROGRAM, '-Y', 'verify', '-f', $allowed, '-I', self::PRINCIPAL, '-n', self::NAMESPACE, '-s', $signatureFile], null, null, $payload, $this->timeoutSeconds);
 
-            return 0 === $check->run();
+            // A check that was stopped proves nothing about the signature, so it stops the push instead of answering false.
+            return GuardedRun::of($check, self::PROGRAM)->isSuccessful();
         } finally {
             $this->filesystem->remove([$allowed, $signatureFile]);
         }
@@ -75,8 +78,7 @@ final readonly class SigningKey
      */
     private function run(array $arguments, ?string $input, string $failure): string
     {
-        $process = new Process(['ssh-keygen', ...$arguments], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $input, 60);
-        $process->run();
+        $process = GuardedRun::of(new Process([self::PROGRAM, ...$arguments], null, ['SSH_ASKPASS' => false, 'SSH_ASKPASS_REQUIRE' => 'never'], $input, $this->timeoutSeconds), self::PROGRAM);
 
         // Not the error output, because it can name the key's path.
         return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because($failure);
