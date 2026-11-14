@@ -33,4 +33,13 @@ final readonly class ReviewServerAccess
     {
         return ['mcpServers' => [$this->name => ['type' => 'http', 'url' => $this->url, 'headers' => ['Authorization' => 'Bearer '.$this->bearer]]]];
     }
+
+    // The names the Claude Code CLI gives this server's tools, so the tools it is allowed and the reads it reports are matched by the same names.
+    /**
+     * @return non-empty-list<string>
+     */
+    public function mcpToolNames(): array
+    {
+        return array_map(fn (string $tool): string => sprintf('mcp__%s__%s', $this->name, $tool), $this->tools);
+    }
 }
