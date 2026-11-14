@@ -153,6 +153,32 @@ final class ChooseBuildModelTest extends TestCase
         new BuildAttempt('alpha', 'T60', 0);
     }
 
+    #[DataProvider('refusedAttempts')]
+    public function testAnEmptyOrNonUtf8ProjectOrTaskIsRefused(string $project, string $task, string $message): void
+    {
+        $this->expectExceptionObject(new InvalidArgumentException($message));
+
+        new BuildAttempt($project, $task, 1);
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function refusedAttempts(): iterable
+    {
+        yield 'an empty project' => ['', 'T60', 'A project must not be empty.'];
+        yield 'an empty task' => ['alpha', '', 'A task must not be empty.'];
+        yield 'a project that is not UTF-8' => ["alpha\xFF", 'T60', 'A project must be valid UTF-8.'];
+        yield 'a task that is not UTF-8' => ['alpha', "T\xC360", 'A task must be valid UTF-8.'];
+    }
+
+    public function testASingleCharacterProjectAndTaskAreAccepted(): void
+    {
+        $attempt = new BuildAttempt('a', 'é', 1);
+
+        self::assertSame(['a', 'é'], [$attempt->project, $attempt->task]);
+    }
+
     private function attemptNumber(int $number): BuildAttempt
     {
         return new BuildAttempt('alpha', 'T60', $number);

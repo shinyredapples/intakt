@@ -1,0 +1,15 @@
+{
+    "name": "intakt/fixture",
+    "version": "1.0.0",
+    "repositories": [
+        {"packagist.org": false}
+    ],
+    "require": {
+        "intakt/fresh-package": "1.0.0"
+    },
+    "config": {
+        "policy": {
+            "cooldown": {"period": "3 days", "block": true, "audit": "fail", "ignore": {"intakt/fresh-package": {"constraint": "1.0.0", "reason": "test exception"}}}
+        }
+    }
+}

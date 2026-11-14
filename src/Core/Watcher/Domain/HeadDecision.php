@@ -28,4 +28,10 @@ final readonly class HeadDecision
     {
         return HeadAdmission::Green === $this->admission;
     }
+
+    // Red CI and a failed boot alike, because only a new head or a new listing of the pull request can change either answer.
+    public function goesBack(): bool
+    {
+        return HeadAdmission::Red === $this->admission || HeadAdmission::FailedBoot === $this->admission;
+    }
 }

@@ -27,6 +27,14 @@ final class StartedRound
     #[ORM\Column(name: 'queued_recorded', options: ['default' => false])]
     private bool $queuedRecorded = false;
 
+    // Kept on the round, because only Review withdraws an approval already on the forge, and a head's next boot must not forget a withdrawal Review did not take.
+    #[ORM\Column(name: 'withdrawal_owed', options: ['default' => false])]
+    private bool $withdrawalOwed = false;
+
+    // Apart from the stale flag, because a move may have found the round stale before its head returned and failed to boot, and that approval is still on the forge.
+    #[ORM\Column(name: 'withdrawal_requested', options: ['default' => false])]
+    private bool $withdrawalRequested = false;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(length: 255)]
@@ -67,5 +75,15 @@ final class StartedRound
     public function owesQueuedLine(): bool
     {
         return !$this->queuedRecorded;
+    }
+
+    public function owesWithdrawal(): bool
+    {
+        return $this->withdrawalOwed;
+    }
+
+    public function withdrawalWasRequested(): bool
+    {
+        return $this->withdrawalRequested;
     }
 }

@@ -40,6 +40,7 @@ final readonly class WatcherStart
      */
     public function __construct(
         private Closure $console,
+        private ContainerRebuild $container,
         private HardenedGit $hardened = new HardenedGit(),
         private Filesystem $filesystem = new Filesystem(),
     ) {
@@ -94,8 +95,7 @@ final readonly class WatcherStart
     // Because the projects are read when the container is built, so the watcher sees the new watch section only in a container built after it.
     private function rebuildContainer(string $configuration): void
     {
-        ($this->console)(['cache:clear', '--no-warmup'], [self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
-        ($this->console)(['cache:warmup'], [self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
+        $this->container->rebuild([self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
     }
 
     private function tick(string $configuration, string $recording): void

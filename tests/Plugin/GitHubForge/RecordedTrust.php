@@ -9,7 +9,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 use Uri\Rfc3986\Uri;
 
-// Apart from RecordedInstallation, because the trust tests also need the App's own answer and a permission answer per account.
+// Apart from RecordedInstallation, because the trust tests also need the App's own answer and a permission answer per account and the author of each pull request.
 final class RecordedTrust
 {
     public const string WRITER = 'alice';
@@ -33,6 +33,25 @@ final class RecordedTrust
         self::READER => 'permission_bot_read.json',
         'impostor' => 'permission_other_account.json',
         'carol' => 'permission_unknown_level.json',
+    ];
+
+    public const string PULL_BY_WRITER = 'https://github.com/acme/widget/pull/1';
+    public const string PULL_BY_TRIAGE = 'https://github.com/acme/widget/pull/2';
+    public const string PULL_BY_FOREIGN_BOT = 'https://github.com/acme/widget/pull/3';
+    public const string PULL_BY_OWN_IDENTITY = 'https://github.com/acme/widget/pull/4';
+    public const string PULL_BY_MAINTAINER = 'https://github.com/acme/widget/pull/5';
+    public const string PULL_BY_STRANGER = 'https://github.com/acme/widget/pull/6';
+    public const string PULL_WITHOUT_AUTHOR = 'https://github.com/acme/widget/pull/7';
+    public const string PULL_UNKNOWN = 'https://github.com/acme/widget/pull/99';
+
+    private const array PULLS = [
+        1 => 'pull_by_writer.json',
+        2 => 'pull_by_triage.json',
+        3 => 'pull_by_foreign_bot.json',
+        4 => 'pull_by_own_identity.json',
+        5 => 'pull_by_maintainer.json',
+        6 => 'pull_by_stranger.json',
+        7 => 'pull_without_author.json',
     ];
 
     /** @var list<string> */
@@ -65,8 +84,16 @@ final class RecordedTrust
             '/app' === $path => $this->fixture('app.json'),
             str_starts_with($path, '/app/installations/') => $this->fixture('installation.json'),
             str_starts_with($path, '/installation/repositories') => $this->fixture('installation_repositories.json'),
+            str_starts_with($path, '/repos/acme/widget/pulls/') => $this->pull($path),
             default => $this->permission($path),
         };
+    }
+
+    private function pull(string $path): MockResponse
+    {
+        $fixture = self::PULLS[(int) substr($path, strlen('/repos/acme/widget/pulls/'))] ?? null;
+
+        return null === $fixture ? new MockResponse((string) file_get_contents(__DIR__.'/Fixtures/not_found.json'), ['http_code' => 404]) : $this->fixture($fixture);
     }
 
     private function token(): MockResponse

@@ -10,24 +10,31 @@ use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadDecision;
+use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use LogicException;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Throwable;
 
 // A head goes back only when it fails while main boots, because a head that boots, a boot step that crashed and a main that does not boot all say nothing against the head; nothing here throws, because the gate must never stop the review.
-final readonly class BootGate
+#[AsAlias(HeadGate::class)]
+final readonly class BootGate implements HeadGate
 {
     // Nothing computes a fingerprint of the boot tools yet, so one constant stands for them; changing the tools means changing it.
     public const string TOOL_FINGERPRINT = 'boot-tools-1';
+    // Written as the cause of the head_boot_skipped line, so a reader tells a head nobody booted from one that booted.
+    public const string UNTRUSTED_AUTHOR = 'boot_skipped_untrusted_author';
 
     public function __construct(
         #[Autowire(service: 'query.bus')]
         private MessageBusInterface $queries,
+        private AuthorTrust $authors,
         private BootResults $results,
+        private WatcherLedger $ledger,
         private LoggerInterface $logger,
     ) {
     }
@@ -45,6 +52,13 @@ final readonly class BootGate
 
     private function judged(WatchedProject $project, HeadDecision $green): HeadDecision
     {
+        // Booting runs the head's code on the host, so only a trusted author's head boots; any other is reviewed unbooted: docs/design/05-architecture/14-threat-model.md
+        if (!$this->authorTrusted($green)) {
+            $this->ledger->headBootSkipped($project->name, $green);
+
+            return $green;
+        }
+
         $main = $this->mainCommit($project);
 
         if (!$this->mainBoots($project, $main)) {
@@ -54,6 +68,18 @@ final readonly class BootGate
         $head = $this->results->ofHead(new BootAt($project->source, $green->change->head), $main);
 
         return BootState::Failed === $head->state ? $green->sentBackFor(new FailedBoot($head->reason)) : $green;
+    }
+
+    // A check that throws counts as untrusted, because a check that cannot answer must never let a head run.
+    private function authorTrusted(HeadDecision $green): bool
+    {
+        try {
+            return $this->authors->isAuthorTrusted($green->change->id);
+        } catch (Throwable $unanswered) {
+            $this->logger->warning('The pull request author counts as untrusted, because the trust check failed.', ['change' => $green->change->id->value, 'exception' => $unanswered]);
+
+            return false;
+        }
     }
 
     private function mainCommit(WatchedProject $project): CommitId

@@ -1,0 +1,21 @@
+{
+    "_readme": ["fixture"],
+    "content-hash": "00000000000000000000000000000000",
+    "packages": [
+        {
+            "name": "intakt/fresh-package",
+            "version": "1.0.0",
+            "type": "library",
+            "time": "2999-01-01T00:00:00+00:00"
+        }
+    ],
+    "packages-dev": [],
+    "aliases": [],
+    "minimum-stability": "stable",
+    "stability-flags": [],
+    "prefer-stable": false,
+    "prefer-lowest": false,
+    "platform": [],
+    "platform-dev": [],
+    "plugin-api-version": "2.6.0"
+}

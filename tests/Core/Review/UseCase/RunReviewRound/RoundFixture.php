@@ -40,6 +40,7 @@ use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindingsHandler;
+use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
@@ -236,6 +237,12 @@ final readonly class RoundFixture
         assert($queue instanceof InMemoryTransport);
 
         return array_values(array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()), static fn (object $message): bool => $message instanceof JudgeRound));
+    }
+
+    // An in-memory failure transport, because it cannot be listed and so shows no failed judging to a test that waits on a round.
+    public function noFailedJudgings(): FailedJudgings
+    {
+        return new FailedJudgings(new InMemoryTransport());
     }
 
     public function indexing(MemoryIndex $memory): IndexResolvedFindingsHandler

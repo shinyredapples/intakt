@@ -126,8 +126,8 @@ final readonly class RoundStreamCheck
 
     private function templateOf(Crawler $stream): Crawler
     {
-        // Read from the template's markup, because a parser may keep a template's content out of the tree.
-        return new Crawler('<div>'.$stream->filter('template')->html('').'</div>')->filter('body > div');
+        // Read from the template's markup, because a parser may keep a template's content out of the tree, and parsed inside a template, because only there a table row keeps its cells.
+        return new Crawler('<template>'.$stream->filter('template')->html('').'</template>')->filter('template');
     }
 
     private function progressAfter(int $finished, ?string $state, int $position): int
