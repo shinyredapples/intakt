@@ -6,8 +6,8 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Platform\Contract\ReportableFailure;
-use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
@@ -18,15 +18,12 @@ final readonly class BuildJobImageCommand
     {
     }
 
-    public function __invoke(
-        SymfonyStyle $io,
-        #[Argument('The project checkout; the files of its HEAD commit decide the image')]
-        string $directory,
-        #[Argument('The tag the image gets, for example intakt-job/demo:main')]
-        string $tag,
-    ): int {
+    public function __invoke(SymfonyStyle $io, #[MapInput] BuildJobImageInput $input): int
+    {
+        $tag = $input->tag;
+
         try {
-            $built = $this->images->build($directory, $tag);
+            $built = $this->images->build($input->directory, $tag, $input->kind);
         } catch (ReportableFailure|JobRefused $failure) {
             $io->error($failure->getMessage());
 
