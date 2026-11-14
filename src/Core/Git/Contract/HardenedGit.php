@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Contract;
 
+use Symfony\Component\Process\Exception\RuntimeException;
 use Symfony\Component\Process\Process;
 
 // config/gates/src/HardenedGitCall.php is the protected copy the gates use; tests/Gates/HardenedGitCallTest.php keeps this one equal to it, because a forge read must be as hard as a gate's.
@@ -39,6 +40,7 @@ final readonly class HardenedGit
      * @param list<string> $arguments
      *
      * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
      */
     public function call(array $arguments, string $directory): GitCall
     {
@@ -50,6 +52,7 @@ final readonly class HardenedGit
      * @param list<string> $arguments
      *
      * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
      */
     public function callWithPathspecMagic(array $arguments, string $directory): GitCall
     {
@@ -61,6 +64,7 @@ final readonly class HardenedGit
      * @return array<string, string|false>
      *
      * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
      */
     public function environment(string $directory): array
     {
@@ -74,6 +78,7 @@ final readonly class HardenedGit
      * @param list<string> $arguments
      *
      * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
      */
     private function callWith(array $options, array $arguments, string $directory): GitCall
     {
@@ -119,6 +124,7 @@ final readonly class HardenedGit
 
     /**
      * @throws RepositoryAttributesRefused
+     * @throws RuntimeException
      */
     private function emptyTree(string $directory): string
     {

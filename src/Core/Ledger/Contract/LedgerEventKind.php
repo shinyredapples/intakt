@@ -38,4 +38,8 @@ enum LedgerEventKind: string
     case HandBackSentBack = 'hand_back_sent_back';
     case HandBackHandedOver = 'hand_back_handed_over';
     case ModelChosen = 'model_chosen';
+    case PushIntended = 'push_intended';
+    case BranchPushed = 'branch_pushed';
+    case ChangeIntended = 'change_intended';
+    case ChangeOpened = 'change_opened';
 }
