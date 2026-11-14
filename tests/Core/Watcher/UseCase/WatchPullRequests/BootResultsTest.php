@@ -179,7 +179,7 @@ final class BootResultsTest extends KernelTestCase
     {
         $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
         $results = $this->results($bus);
-        $otherWorker = new BootResults($bus, new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration()), $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        $otherWorker = new BootResults($bus, new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration()), $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger(), self::createStub(ManagerRegistry::class));
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $this->clock->modify('+5 minutes');
