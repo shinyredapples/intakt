@@ -97,8 +97,8 @@ final class SymfonyMinorTest extends TestCase
     {
         $behind = [];
         foreach ($components as $name => $version) {
-            $allowedOnFirstRelease = in_array($name, self::WITHOUT_TAKEN_RELEASE, true) && self::FIRST_RELEASE === $version;
-            if (!$allowedOnFirstRelease && (!str_starts_with($version, 'v'.self::MINOR.'.') || Comparator::lessThan($this->normalized($version), $this->normalized(self::TAKEN_RELEASE)))) {
+            $floor = in_array($name, self::WITHOUT_TAKEN_RELEASE, true) ? self::FIRST_RELEASE : self::TAKEN_RELEASE;
+            if (!str_starts_with($version, 'v'.self::MINOR.'.') || Comparator::lessThan($this->normalized($version), $this->normalized($floor))) {
                 $behind[] = $name.' '.$version;
             }
         }
