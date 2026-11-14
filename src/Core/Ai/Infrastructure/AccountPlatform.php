@@ -87,7 +87,7 @@ final readonly class AccountPlatform implements PlatformInterface
         $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
         $coolDown = $this->coolDownAfter($cause);
 
-        if (null !== $coolDown && $this->failures->record($this->account, $cause)) {
+        if ($coolDown instanceof Closure && $this->failures->record($this->account, $cause)) {
             // Logged whole, because the log redacts a key the provider's text echoes.
             $this->logger->warning('Account {account} failed.', ['account' => $this->account->key(), 'exception' => $cause]);
             $coolDown();
