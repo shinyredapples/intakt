@@ -21,8 +21,7 @@ final class SymfonyMinorTest extends TestCase
 
     private const string FIRST_RELEASE = 'v8.2.0-BETA1';
 
-    // Symfony tagged 8.2.0-BETA2 only for the components that changed, so these have no BETA2 on Packagist
-    // (checked 2026-11-14) and may stay on BETA1, and only on BETA1, until 8.2.0 replaces it.
+    // Kept on BETA1 because Symfony tagged 8.2.0-BETA2 only for the components that changed: these have no BETA2 on Packagist (checked 2026-11-14).
     private const array WITHOUT_TAKEN_RELEASE = [
         'symfony/asset',
         'symfony/clock',
