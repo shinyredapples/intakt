@@ -11,6 +11,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
@@ -18,19 +19,21 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 // On the application's Doctrine transports, which the test environment otherwise replaces with in-memory ones, because the failure transport shares the queue table with the async one.
 #[Group('persistence')]
 #[CoversClass(FailedJudgings::class)]
+#[UsesClass(JudgeRound::class)]
+#[UsesClass(PublishVerdict::class)]
 final class FailedJudgingsTest extends KernelTestCase
 {
     private const string TRANSPORT_DSN = 'MESSENGER_TRANSPORT_DSN';
     private const string ROUND = '0192a000-0000-7000-8000-000000000001';
 
-    private string $configuredDsn;
+    private ?string $configuredDsn;
     private DoctrineTransport $failed;
     private DoctrineTransport $async;
 
     protected function setUp(): void
     {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
-        $this->configuredDsn = is_string($configured) ? $configured : '';
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? null;
+        $this->configuredDsn = is_string($configured) ? $configured : null;
         $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
 
         $container = self::getContainer();
@@ -45,7 +48,11 @@ final class FailedJudgingsTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+        if (null === $this->configuredDsn) {
+            unset($_ENV[self::TRANSPORT_DSN]);
+        } else {
+            $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+        }
 
         parent::tearDown();
     }
