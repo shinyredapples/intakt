@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\ComposerAuditGate;
+use Intakt\Gates\CooldownAuditExceptions;
 use PHPUnit\Framework\Attributes\CoversClass;
 
 #[CoversClass(ComposerAuditGate::class)]
+#[CoversClass(CooldownAuditExceptions::class)]
 final class ComposerAuditGateCooldownExceptionTest extends SandboxTestCase
 {
     // Because the fixtures serve their own packages, a proxy nobody listens on turns any request to Packagist into a failed test.
