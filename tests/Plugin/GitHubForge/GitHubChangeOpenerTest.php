@@ -124,6 +124,20 @@ final class GitHubChangeOpenerTest extends TestCase
         $this->assertWriteFailsWith('422', fn () => $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B'))));
     }
 
+    public function testAnUnreachableGitHubIsAFailedWriteThatKeepsNothingOfTheFailedRequest(): void
+    {
+        $github = new ScriptedGitHub();
+        $github->unreachable = true;
+
+        try {
+            $github->opener()->openOrUpdate(new ProposedChange('widgets', 'task', 'main', new ChangeText('T', 'B')));
+            self::fail('An unreachable GitHub must fail the write.');
+        } catch (ForgeWriteFailed $failed) {
+            self::assertStringContainsString('could not be reached', $failed->getMessage());
+            self::assertNull($failed->getPrevious());
+        }
+    }
+
     private function assertWriteFailsWith(string $reason, callable $write): void
     {
         try {

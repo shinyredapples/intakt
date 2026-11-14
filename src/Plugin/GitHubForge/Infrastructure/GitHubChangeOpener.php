@@ -110,7 +110,7 @@ final readonly class GitHubChangeOpener implements ChangeOpening
             $body = $response->getContent(false);
         } catch (ExceptionInterface $failure) {
             // Not chained, because the trace of a failed call holds the bearer token.
-            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a pull request call (%s).', $failure::class), $failure->getCode(), $failure);
+            throw new ForgeWriteFailed(sprintf('GitHub could not be reached for a pull request call (%s).', $failure::class), $failure->getCode());
         }
 
         if ($status < 200 || $status >= 300) {

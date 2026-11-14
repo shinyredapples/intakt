@@ -20,6 +20,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
 use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
@@ -36,6 +37,8 @@ final class ScriptedGitHub
 
     /** @var list<array<mixed>> */
     public array $openPulls = [];
+
+    public bool $unreachable = false;
 
     /** @var list<array<mixed>> */
     private array $comments = [];
@@ -92,6 +95,10 @@ final class ScriptedGitHub
      */
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
+        if ($this->unreachable) {
+            throw new TransportException('Connection refused for '.$url);
+        }
+
         return 'GET' === $method ? $this->read($url) : $this->write($method, $url, $options);
     }
 
