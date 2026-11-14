@@ -24,7 +24,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Throwable;
 
-// Main boots once per commit and tool fingerprint, because every head of the project is judged against the same main result; nothing here throws, because a boot only gates the review and must never stop it.
+// Main boots once per commit and tool fingerprint, because every head of the project is judged against the same main result (a crash only for its short back-off); nothing here throws, because a boot only gates the review and must never stop it.
 final readonly class BootResults
 {
     public function __construct(
@@ -40,14 +40,21 @@ final readonly class BootResults
 
     public function ofMain(BootKey $key, ChangeSource $source): BootOutcome
     {
+        $now = $this->clock->now();
         $stored = $this->storedFor($key);
 
-        if ($stored instanceof BootRecord) {
+        if ($stored instanceof BootRecord && !$stored->answersAt($now)) {
+            // Read again, because the entity manager keeps the expired crash although another worker may have stored a fresh result over it meanwhile.
+            $this->entities->detach($stored);
+            $stored = $this->storedFor($key);
+        }
+
+        if ($stored instanceof BootRecord && $stored->answersAt($now)) {
             return $stored->outcome();
         }
 
         $outcome = $this->safe($this->boot(new BootHarness(new BootAt($source, $key->main))));
-        $this->remember($key, $outcome);
+        $this->remember($key, $outcome, $stored);
         $this->record($key, $outcome);
 
         return $outcome;
@@ -94,21 +101,33 @@ final readonly class BootResults
         };
     }
 
-    // A crash is the boot step's, not main's, so it is never kept: the next ask boots again instead of trusting a broken tool for good.
-    private function remember(BootKey $key, BootOutcome $outcome): void
+    // A crash is kept only for its back-off, because it is the boot step's fault and not main's: an expired one is replaced by the new result, so a broken tool is never trusted for good.
+    private function remember(BootKey $key, BootOutcome $outcome, ?BootRecord $expired): void
     {
-        if (BootState::Crashed === $outcome->state) {
-            return;
+        $record = new BootRecord($key, $outcome, $this->clock->now());
+
+        if ($expired instanceof BootRecord) {
+            // Detached, because the entity manager would answer every later read with the expired crash.
+            $this->entities->detach($expired);
         }
 
         try {
             // In a savepoint, because PostgreSQL refuses every further statement of a caller's transaction in which one failed.
-            $this->entities->getConnection()->transactional(fn (Connection $inner): int|string => $inner->insert(BootRecord::TABLE, new BootRecord($key, $outcome, $this->clock->now())->row(), BootRecord::rowTypes()));
+            $this->entities->getConnection()->transactional(fn (Connection $inner): int|string => $this->replaceExpiredCrashAndInsert($inner, $record));
         } catch (UniqueConstraintViolationException) {
             // Ignored, because then another worker booted the same main meanwhile, and its row answers the next ask as well as this one would.
         } catch (Throwable $unstored) {
             $this->logger->error("Main's boot result could not be stored, so main boots again next time.", ['exception' => $unstored]);
         }
+    }
+
+    // Only a crashed row is deleted, because a worker that already replaced it with a booted or failed result must keep that result for good.
+    private function replaceExpiredCrashAndInsert(Connection $inner, BootRecord $record): int|string
+    {
+        $row = $record->row();
+        $inner->delete(BootRecord::TABLE, ['project' => $row['project'], 'main_commit' => $row['main_commit'], 'tool_fingerprint' => $row['tool_fingerprint'], 'state' => BootState::Crashed->value]);
+
+        return $inner->insert(BootRecord::TABLE, $row, BootRecord::rowTypes());
     }
 
     private function record(BootKey $key, BootOutcome $outcome): void
