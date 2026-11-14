@@ -127,6 +127,19 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertFalse($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
     }
 
+    public function testACallThatCannotBeSentForAnotherReasonIsLoggedWithoutCoolingTheAccountDown(): void
+    {
+        $logger = new BufferingLogger();
+        $failure = new PlatformRuntimeException('The CLI crashed.');
+
+        $this->accounts($this->answering(static fn (): never => throw $failure), $this->answering('second'), $logger)->invoke('big', 'Review.')->asText();
+
+        /** @var list<array{0: string, 1: string, 2: array<string, mixed>}> $logs */
+        $logs = $logger->cleanLogs();
+        self::assertContains(['warning', 'Account {account} could not send the call.', ['account' => 'anthropic.default', 'exception' => $failure]], $logs);
+        self::assertFalse($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
     // The reviewer's probe, because the judging's failure listener logs the exception it gets with its message and its chain.
     public function testARejectionThatEndsTheCallCarriesNoTextOfTheProvider(): void
     {

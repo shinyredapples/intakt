@@ -48,6 +48,11 @@ final readonly class AccountPlatform implements PlatformInterface
         } catch (Throwable $failure) {
             $this->failed($failure);
 
+            if (!$this->coolDownAfter($failure) instanceof Closure) {
+                // The failover gets no logger and chains no cause, so this is the only record of why the call was not sent.
+                $this->logger->warning('Account {account} could not send the call.', ['account' => $this->account->key(), 'exception' => $failure]);
+            }
+
             throw $failure;
         }
 
