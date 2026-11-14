@@ -75,6 +75,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
 
+    private const string ASKED_AGAIN = 'Asked again: any text above is from a try that gave no usable answer.';
+
     private ?string $secretBefore = null;
 
     /**
@@ -404,6 +406,21 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame(['read_file'], $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-activity li')->each(static fn (Crawler $call): string => $call->text()));
         self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
+    }
+
+    public function testAReviewerAskedAgainShowsWhereTheRetryStartsBetweenTheFirstTrysTextAndTheRetrysText(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $askedAgain = $this->stream('reviewer_asked_again', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'try' => 'try-2']);
+
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => '{"verdict":"appro'])
+            .$askedAgain.$askedAgain
+            .$this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => '{"verdict":"changes"}']));
+
+        $text = $updated->filter('#reviewer-round-1-correctness-text');
+        self::assertCount(1, $text->filter('.asked-again'));
+        self::assertSame('{"verdict":"appro'.self::ASKED_AGAIN.'{"verdict":"changes"}', $text->text(normalizeWhitespace: false));
     }
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
