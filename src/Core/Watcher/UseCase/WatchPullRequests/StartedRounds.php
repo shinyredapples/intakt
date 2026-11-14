@@ -120,14 +120,17 @@ final readonly class StartedRounds
         });
     }
 
-    // Marked stale and owed in one statement with the ledger's own write, so a withdrawal is never marked without being owed, and a round already stale is withdrawn only once.
+    // Marked, owed and recorded in one transaction with the ledger's own write, so a withdrawal is never marked without being owed; owed once per round, also when a move already found it stale, whose line is then not recorded again.
     /**
      * @param Closure(StartedRound): void $record
      */
     public function oweWithdrawalOnce(StartedRound $round, Closure $record): void
     {
         $this->entities->getConnection()->transactional(function () use ($round, $record): void {
-            if (1 === $this->update($round, ['stale' => true, 'withdrawalOwed' => true], ['stale' => false])) {
+            $marked = 1 === $this->update($round, ['stale' => true], ['stale' => false]);
+            $this->update($round, ['withdrawalRequested' => true, 'withdrawalOwed' => true], ['withdrawalRequested' => false]);
+
+            if ($marked) {
                 $record($round);
             }
         });

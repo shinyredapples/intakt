@@ -31,6 +31,10 @@ final class StartedRound
     #[ORM\Column(name: 'withdrawal_owed', options: ['default' => false])]
     private bool $withdrawalOwed = false;
 
+    // Apart from the stale flag, because a move may have found the round stale before its head returned and failed to boot, and that approval is still on the forge.
+    #[ORM\Column(name: 'withdrawal_requested', options: ['default' => false])]
+    private bool $withdrawalRequested = false;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(length: 255)]

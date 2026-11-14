@@ -1171,6 +1171,35 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertFalse($this->storedStale(self::GREEN));
     }
 
+    public function testAHeadThatReturnsAndFailsToBootWithdrawsTheApprovalsOfItsRoundAlreadyFoundStale(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+
+        self::assertContains('round-1', $this->commands->markedStale);
+        self::assertSame(1, $this->staleLinesOf('round-1'));
+    }
+
+    public function testAHeadThatFailsToBootAgainIsNotWithdrawnASecondTime(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['round-1'], $this->commands->markedStale);
+        self::assertSame(1, $this->staleLinesOf('round-1'));
+    }
+
     public function testAHeadWhoseBootCrashesStillStartsItsRound(): void
     {
         $this->queries->headBoot = BootOutcome::crashed('composer could not run');
@@ -1224,6 +1253,19 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
         $this->commands->markFailure = null;
+    }
+
+    private function staleLinesOf(string $round): int
+    {
+        $lines = 0;
+
+        foreach ($this->ledger->kinds() as $index => $kind) {
+            if (LedgerEventKind::VerdictsStale === $kind && $round === $this->ledger->payloads()[$index]['round']) {
+                ++$lines;
+            }
+        }
+
+        return $lines;
     }
 
     private function startRoundOnGreenHead(): void
