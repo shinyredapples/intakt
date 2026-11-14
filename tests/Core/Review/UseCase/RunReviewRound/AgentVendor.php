@@ -34,4 +34,10 @@ final readonly class AgentVendor implements Vendor
     {
         return Judgement::everyBlockingFindingActs($request->findings);
     }
+
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        return true;
+    }
 }

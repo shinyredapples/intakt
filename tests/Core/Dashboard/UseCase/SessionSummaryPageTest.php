@@ -158,6 +158,21 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('.log-summary b, .log-summary script'));
     }
 
+    public function testAFindingMergedIntoAnActEntryReachesThatEntryFromItsHighlightButton(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [$this->finding('F2', Severity::P2, 'Broken.')], [], [], false));
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(1, $crawler->filter('.ls-findings button[data-highlight-finding="F2"]'));
+        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 td[data-finding~="F2"]')->each(static fn (Crawler $cell): string => $cell->text()));
+    }
+
     public function testTheStylesheetKeepsTheSummaryInViewWhileTheLogScrollsAboveIt(): void
     {
         $sheet = (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
