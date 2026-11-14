@@ -31,8 +31,10 @@ final readonly class ChooseBuildModelCommand
             return Command::FAILURE;
         }
 
-        if ($input->attempt < 1) {
-            $io->error('The attempt number starts at 1.');
+        $refusal = BuildAttempt::refusalOf($input->project, $input->task, $input->attempt);
+
+        if (null !== $refusal) {
+            $io->error($refusal);
 
             return Command::FAILURE;
         }
