@@ -172,13 +172,13 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         foreach ($lines as [, $prefix, $run, $info]) {
             $line = FenceLine::of($prefix, $run, $info);
             $open = match (true) {
-                null === $open => $line,
+                !$open instanceof FenceLine => $line,
                 $line->closes($open) => null,
                 default => $open,
             };
         }
 
-        return null !== $open;
+        return $open instanceof FenceLine;
     }
 
     /**
