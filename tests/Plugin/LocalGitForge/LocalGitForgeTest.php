@@ -415,6 +415,21 @@ final class LocalGitForgeTest extends TestCase
         self::assertStringNotContainsString('payload', $patch);
     }
 
+    public function testItKeepsTheModeLinesOfAPngWhoseOnlyChangeIsItsMode(): void
+    {
+        $png = "\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+        $this->repository->commitFile('image.png', $png);
+        $this->repository->checkoutNewBranch('feature');
+        chmod($this->repository->path.'/image.png', 0o755);
+        $this->repository->commitFile('image.png', $png);
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString("old mode 100644\nnew mode 100755\n", $patch);
+        self::assertStringNotContainsString('Binary', $patch);
+        self::assertTrue(mb_check_encoding($patch, 'UTF-8'));
+    }
+
     public function testItNamesAFileAsBinaryByItsBytesWhereGitWouldShowItAsText(): void
     {
         $base = $this->repository->commitFile('NOTES.md', "notes\n");

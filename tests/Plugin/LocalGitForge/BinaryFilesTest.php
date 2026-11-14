@@ -35,7 +35,7 @@ final class BinaryFilesTest extends TestCase
             default => "old\n",
         });
 
-        self::assertSame(self::TEXT."diff --git a/b.bin b/b.bin\nindex ".self::BASE.'..'.self::HEAD." 100644\nBinary file, not shown: 1 bytes at the base, 2 bytes at the head\n", $named);
+        self::assertSame(self::TEXT."diff --git a/b.bin b/b.bin\nindex ".self::BASE.'..'.self::HEAD." 100644\nBinary file, not shown: 1 byte at the base, 2 bytes at the head\n", $named);
     }
 
     public function testAFileIsNamedAsBinaryWhenItsNulByteLiesOutsideTheLinesShown(): void
