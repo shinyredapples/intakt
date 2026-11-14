@@ -430,7 +430,7 @@ final class BootResultsTest extends KernelTestCase
         $ledger->method('append')->willReturn(AppendResult::failed('The ledger is down.'));
         $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
-        // Read into the entity manager, which then answers the ask after the table is gone.
+        // Read into the entity manager first, because only a row it already holds answers the ask after the table is gone.
         $this->entities->find(BootRecord::class, ['project' => 'alpha', 'main' => str_repeat('a', 40), 'toolFingerprint' => 'tools-1']);
         $this->entities->getConnection()->executeStatement('DROP TABLE watcher_boot_result');
 
