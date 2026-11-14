@@ -26,6 +26,17 @@ final class GitHubReaderTest extends TestCase
         self::assertCount(7, $issues);
     }
 
+    public function testAnIssueClosedAsADuplicateCountsAsDroppedNotDone(): void
+    {
+        $api = self::createStub(GitHubApi::class);
+        $api->method('pages')->willReturn('[[{"state": "closed", "closed_at": "2026-02-27T00:00:00Z", "state_reason": "duplicate", "milestone": null}]]');
+
+        $issues = new GitHubReader($api)->issues();
+
+        self::assertTrue($issues[0]->dropped);
+        self::assertFalse($issues[0]->isDone());
+    }
+
     public function testAMissingRecordedAnswerIsRefused(): void
     {
         $this->expectException(JourneyInputFailed::class);
@@ -57,6 +68,7 @@ final class GitHubReaderTest extends TestCase
         yield 'an unknown state' => ['[[{"state": "weird", "milestone": null}]]'];
         yield 'a closed issue without a moment' => ['[[{"state": "closed", "closed_at": null, "milestone": null}]]'];
         yield 'a moment that is not a date' => ['[[{"state": "closed", "closed_at": "never", "milestone": null}]]'];
+        yield 'a date that does not exist' => ['[[{"state": "closed", "closed_at": "2026-02-30T00:00:00Z", "milestone": null}]]'];
         yield 'a milestone without a number' => ['[[{"state": "open", "milestone": {"title": "x"}}]]'];
     }
 }
