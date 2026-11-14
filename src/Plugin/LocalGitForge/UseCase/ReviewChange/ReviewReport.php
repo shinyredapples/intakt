@@ -50,7 +50,8 @@ final readonly class ReviewReport
         $lines[] = sprintf('act list: %d findings', count($review->actList));
 
         foreach ($review->actList as $finding) {
-            $lines[] = sprintf('%s %s %s: %s', $finding->id, $finding->severity->value, $this->place($finding), $this->text->of($finding->text));
+            // The merged ids join the entry's id, so each finding the entry stands for stays traceable from the command's output.
+            $lines[] = sprintf('%s %s %s: %s', $this->text->of(implode('+', [$finding->id, ...$finding->merged])), $finding->severity->value, $this->place($finding), $this->text->of($finding->text));
         }
 
         $tokens = $review->tokens;

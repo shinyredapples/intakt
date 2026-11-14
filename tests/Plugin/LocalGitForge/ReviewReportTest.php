@@ -53,6 +53,16 @@ final class ReviewReportTest extends TestCase
         ], $lines);
     }
 
+    public function testAnActEntryThatMergesFindingsNamesTheIdsOfTheMergedFindings(): void
+    {
+        $merged = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null)->withMerged(['F2', 'F4']);
+        $review = $this->review(Decision::Changes);
+
+        $lines = $this->report()->asLines(new ChangeReview($review->roundId, $review->round, $review->decision, $review->verdicts, [$merged], $review->tokens, $review->cost, $review->reasons));
+
+        self::assertContains('F1+F2+F4 P1 src/Feature.php:3: Missing check.', $lines);
+    }
+
     public function testAFailedReviewerIsPrintedAsFailedInPlainWordsWithoutAClassName(): void
     {
         $failed = $this->review(Decision::Approve)->blockedFor('correctness reviewer failed, stopped at its output limit');
