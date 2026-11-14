@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReviewProgress;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Verdict;
@@ -40,10 +41,6 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 // Queues a round and waits for the workers to finish it, because reviewing and judging run in the workers and not in the caller.
 final readonly class ReviewChange implements ChangeReviews
 {
-    public const string JUDGING_FAILED = 'the judging failed';
-
-    public const string NO_OUTCOME_IN_TIME = 'no outcome in time';
-
     private const int POLL_SECONDS = 1;
 
     public function __construct(
@@ -58,6 +55,7 @@ final readonly class ReviewChange implements ChangeReviews
         private Vendor $vendor,
         private FailedJudgings $failedJudgings,
         private UpperWait $upperWait = new UpperWait(),
+        private RoundEndReasons $reasons = new RoundEndReasons(),
     ) {
     }
 
@@ -143,7 +141,7 @@ final readonly class ReviewChange implements ChangeReviews
 
         return match (true) {
             RoundState::Judged === $round->state() => $review,
-            $this->judgingFailed($round) => $review->blockedFor(self::JUDGING_FAILED),
+            $this->judgingFailed($round) => $review->blockedFor(RoundEnds::JudgingFailed, $this->reasons->judgingFailed()),
             default => $this->unfinished($review, $seconds),
         };
     }
@@ -166,7 +164,7 @@ final readonly class ReviewChange implements ChangeReviews
 
     private function unfinished(ChangeReview $review, int $seconds): ChangeReview
     {
-        return $review->blockedFor(self::NO_OUTCOME_IN_TIME.': the round did not end within '.$seconds.' seconds; if no worker runs, start one with "messenger:consume async", then review again');
+        return $review->blockedFor(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds));
     }
 
     // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
