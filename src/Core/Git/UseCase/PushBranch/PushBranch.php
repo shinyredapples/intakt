@@ -63,7 +63,7 @@ final readonly class PushBranch implements BranchPush
         return new PushedBranch($head, $this->openedChange($request, $head, $main));
     }
 
-    // Null once the remote branch is the signed head, else the conflicts that kept it from being pushed.
+    // Null only when the remote branch is the signed head, because the caller writes the pull request for nothing else.
     private function conflictsOrLanded(BranchPushRequest $request, string $head, string $main): ?MainConflicts
     {
         // Read on every call, also for a recorded push, because the ledger knows nothing of a later head or of another writer that moved the branch since.
