@@ -183,6 +183,19 @@ final class PublishVerdictTest extends KernelTestCase
         ], $this->github->writes);
     }
 
+    public function testTwoReviewersReportingOnePlaceArePublishedAsOneFindingToActOn(): void
+    {
+        $this->publishRoundJudgedOn([
+            'Look at part 1.' => $this->changes($this->placed('F1', Severity::P1, 'The guard is gone.')),
+            'Look at part 2.' => $this->changes($this->placed('F2', Severity::P2, 'The guard is missing.')),
+        ]);
+
+        $body = $this->github->writes[0][1]['body'];
+        self::assertIsString($body);
+        self::assertSame(1, substr_count($body, 'src/Thing.php:3:'));
+        self::assertStringContainsString('findings to act on: 1."', $body);
+    }
+
     public function testTheLoopsReaderReadsThePublishedCommentAsTheVerdictOfThatHead(): void
     {
         $this->publishRoundJudgedOn(['Look at part 1.' => $this->changes($this->placed('F1', Severity::P2, 'The new line drops the old guard.'))]);
