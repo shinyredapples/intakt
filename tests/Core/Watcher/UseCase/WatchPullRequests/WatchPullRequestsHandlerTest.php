@@ -71,6 +71,7 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherEventNotRecorded;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequestsHandler;
+use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\CommitRange;
 use Intakt\Plugin\Forge\Contract\HeadMove;
@@ -156,6 +157,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private BeforeChangeLockStore $locks;
     private RecordingLogger $logger;
     private WatchPullRequestsHandler $handler;
+    private bool $authorTrusted = true;
+    private bool $trustCheckDown = false;
 
     protected function setUp(): void
     {
@@ -1014,6 +1017,43 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(str_repeat(self::BASE, 40), $bootedBeforeTheStart[0]->main->hash);
     }
 
+    public function testAnUntrustedAuthorsGreenHeadIsNeverBootedAndItsRoundStillStarts(): void
+    {
+        $this->authorTrusted = false;
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([], $this->queries->bootedHeads);
+        self::assertCount(1, $this->commands->started);
+        self::assertSame([LedgerEventKind::HeadBootSkipped, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame('boot_skipped_untrusted_author', $this->ledger->payloads()[0]['cause']);
+    }
+
+    public function testATrustCheckThatFailsBootsNothingAndTheRoundStillStarts(): void
+    {
+        $this->trustCheckDown = true;
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([], $this->queries->bootedHeads);
+        self::assertCount(1, $this->commands->started);
+        self::assertSame([LedgerEventKind::HeadBootSkipped, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertTrue(array_any($this->logger->logged, static fn (array $line): bool => 'The pull request author counts as untrusted, because the trust check failed.' === $line[0]));
+    }
+
+    public function testATrustedAuthorsGreenHeadIsBootedAndRecordsNoSkippedBoot(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertCount(1, $this->queries->bootedHeads);
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+    }
+
     public function testAHeadWhoseCiIsNotGreenIsNotBooted(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::RED, '2026-11-02T09:00:00Z'));
@@ -1403,7 +1443,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
-        $gate = new BootGate($this->queries, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger);
+        $authors = self::createStub(AuthorTrust::class);
+        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
+        $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $ledger, $logger);
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 

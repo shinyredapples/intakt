@@ -67,6 +67,11 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::BootResultComputed, ['project' => $key->project, 'main' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'state' => $outcome->state->value, 'reason' => $outcome->reason]);
     }
 
+    public function headBootSkipped(string $project, HeadDecision $green): void
+    {
+        $this->append(LedgerEventKind::HeadBootSkipped, $this->headOf($project, $green) + ['cause' => BootGate::UNTRUSTED_AUTHOR]);
+    }
+
     /**
      * @return array{project: string, change: string, head: string, cause: string, failures: int, retry_at: string}
      */
