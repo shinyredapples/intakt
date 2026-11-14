@@ -20,7 +20,7 @@ final readonly class ReviewOutput
         'decision',
         'exitCode',
         'verdicts',
-        'actList' => ['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by'],
+        'actList' => ['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'merged'],
         'tokens',
         'cost',
         'reasons',

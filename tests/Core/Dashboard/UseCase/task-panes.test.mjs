@@ -130,6 +130,16 @@ test('a reported finding without a timeline entry keeps the live log', () => {
     assert.deepEqual(page.selected(), ['false', 'true']);
 });
 
+test('a finding id merged into an act entry brings the timeline back, where that entry is', () => {
+    const page = reviewPageOnAPhone();
+    page.entries[0].setAttribute('data-finding', 'F1 F2');
+    page.click({ target: page.tabs[1] });
+
+    page.click({ target: findingButton('F2') });
+
+    assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
+});
+
 test('a finding link without a timeline entry keeps the live log', () => {
     const page = reviewPageOnAPhone();
     page.click({ target: page.tabs[1] });

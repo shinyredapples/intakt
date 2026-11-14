@@ -79,6 +79,16 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertSame($judgement, $result);
     }
 
+    public function testWhetherTheProjectMapsAModelToATierIsTheWrappedVendorsAnswerForThatTier(): void
+    {
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('mapsAModelTo')->willReturnMap([['intakt', Tier::Strong, true], ['intakt', Tier::Light, false]]);
+
+        $limited = $this->vendor($vendor);
+
+        self::assertSame([true, false], [$limited->mapsAModelTo('intakt', Tier::Strong), $limited->mapsAModelTo('intakt', Tier::Light)]);
+    }
+
     public function testARateLimitWhileAnotherAccountOfTheVendorIsFreeMovesTheReviewThereAtOnce(): void
     {
         $limited = new ProviderRateLimited(300, new RuntimeException('429'));

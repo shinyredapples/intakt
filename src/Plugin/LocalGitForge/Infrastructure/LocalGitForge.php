@@ -140,7 +140,9 @@ final readonly class LocalGitForge implements Forge
 
     public function fileAt(CommitId $commit, string $path): FileContent
     {
-        return new FileContent($path, $commit, $this->read(['cat-file', 'blob', $this->blobAt($commit, $path)]));
+        $bytes = $this->blob($this->blobAt($commit, $path));
+
+        return $this->binaryFiles->isBinary($bytes) ? FileContent::binary($path, $commit, strlen($bytes)) : new FileContent($path, $commit, $bytes);
     }
 
     public function baseCommit(): CommitId

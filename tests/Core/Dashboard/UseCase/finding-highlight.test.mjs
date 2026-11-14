@@ -139,6 +139,22 @@ test('a finding id with no timeline entry yet highlights nothing and keeps the e
     assert.equal(page.rows.get('FF1').classes.has('selected'), true);
 });
 
+test('choosing a finding id merged into an act entry highlights that entry', () => {
+    const page = summaryOver('FF1 FF2');
+
+    page.choose('FF2');
+
+    assert.equal(page.rows.get('FF1 FF2').classes.has('selected'), true);
+});
+
+test('a finding id that only starts another entry\'s id highlights nothing', () => {
+    const page = summaryOver('FF12');
+
+    page.choose('FF1');
+
+    assert.equal(page.rows.get('FF12').classes.has('selected'), false);
+});
+
 test('a click outside a finding id highlights nothing', () => {
     const page = summaryOver('FF1');
 
