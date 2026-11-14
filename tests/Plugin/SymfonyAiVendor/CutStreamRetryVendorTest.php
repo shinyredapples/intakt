@@ -17,6 +17,7 @@ use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
@@ -197,6 +198,16 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
 
         self::assertInstanceOf(ChangesWithoutFindings::class, $failure);
+        self::assertSame([true, false], $this->streamed);
+    }
+
+    public function testAnUnstreamedTryThatAnswersNoVerdictFailsTheReviewerWithoutAThirdCall(): void
+    {
+        $vendor = $this->vendor($this->cutThen(static fn (): TextResult => new TextResult('no verdict here')));
+
+        $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertInstanceOf(VerdictUnreadable::class, $failure);
         self::assertSame([true, false], $this->streamed);
     }
 

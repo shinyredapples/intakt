@@ -75,7 +75,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
 
-    private const string ASKED_AGAIN = 'Asked again: the text above is from a try that gave no usable answer.';
+    private const string ASKED_AGAIN = 'Asked again: any text above is from a try that gave no usable answer.';
 
     private ?string $secretBefore = null;
 
