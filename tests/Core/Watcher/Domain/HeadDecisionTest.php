@@ -48,6 +48,18 @@ final class HeadDecisionTest extends TestCase
         self::assertTrue($green->startsRound());
     }
 
+    public function testAHeadSentBackForAFailedBootGoesBackLikeRedCi(): void
+    {
+        self::assertTrue($this->green()->sentBackFor(new FailedBoot('The server did not start.'))->goesBack());
+        self::assertTrue(new HeadDecision($this->green()->change, HeadAdmission::Red)->goesBack());
+    }
+
+    public function testAGreenOrPendingHeadDoesNotGoBack(): void
+    {
+        self::assertFalse($this->green()->goesBack());
+        self::assertFalse(new HeadDecision($this->green()->change, HeadAdmission::Pending)->goesBack());
+    }
+
     private function green(): HeadDecision
     {
         return new HeadDecision(new OpenChange(new ChangeId('7'), new CommitId(str_repeat('b', 40)), new DateTimeImmutable('2026-11-13T10:00:00+00:00')), HeadAdmission::Green);

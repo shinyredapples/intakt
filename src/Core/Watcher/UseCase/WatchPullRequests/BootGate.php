@@ -19,7 +19,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Throwable;
 
 // A head goes back only when it fails while main boots, because a head that boots, a boot step that crashed and a main that does not boot all say nothing against the head; nothing here throws, because the gate must never stop the review.
-final readonly class BootGate
+final readonly class BootGate implements HeadGate
 {
     // Nothing computes a fingerprint of the boot tools yet, so one constant stands for them; changing the tools means changing it.
     public const string TOOL_FINGERPRINT = 'boot-tools-1';
