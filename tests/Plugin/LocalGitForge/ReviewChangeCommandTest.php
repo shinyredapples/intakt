@@ -170,7 +170,7 @@ final class ReviewChangeCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         // Spaces joined, because the error block wraps the long message.
-        self::assertStringContainsString('Project "alpha" maps no model to the "light" tier', preg_replace('/\s+/', ' ', $tester->getDisplay()));
+        self::assertStringContainsString('Project "alpha" maps no model to the "light" tier', preg_replace('/\s+/', ' ', $tester->getDisplay()) ?? '');
     }
 
     public function testAReportableFailureFromTheRoundPrintsItsMessageAndTheFailureCode(): void

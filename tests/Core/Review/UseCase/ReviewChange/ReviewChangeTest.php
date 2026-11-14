@@ -72,9 +72,13 @@ final class ReviewChangeTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
+    // Answers that every tier is mapped, so only the tests of the check before a round set the mapping.
+    private Vendor $tiers;
+
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
+        $this->tiers = new VerdictPerRole([]);
     }
 
     public function testATwoReviewerRoundWhereBothApproveIsApproved(): void
@@ -272,8 +276,10 @@ final class ReviewChangeTest extends KernelTestCase
 
     public function testAProjectWithoutALightTierIsRefusedBeforeAnyReviewerStarts(): void
     {
+        $this->tiers = $this->mapping(Tier::Standard);
+
         try {
-            $this->reviewChange(static function (): void {}, vendor: $this->mapping(Tier::Standard))->review($this->request());
+            $this->reviewChange(static function (): void {})->review($this->request());
             self::fail('A round started for a project without a light tier.');
         } catch (RoundTierNotMapped $refused) {
             self::assertStringContainsString('Project "alpha" maps no model to the "light" tier', $refused->getMessage());
@@ -284,14 +290,17 @@ final class ReviewChangeTest extends KernelTestCase
 
     public function testAProjectWithoutTheReviewersTierIsRefusedNamingThatTier(): void
     {
+        $this->tiers = $this->mapping(Tier::Light);
         $this->expectExceptionObject(new RoundTierNotMapped('alpha', Tier::Standard));
 
-        $this->reviewChange(static function (): void {}, vendor: $this->mapping(Tier::Light))->start($this->request());
+        $this->reviewChange(static function (): void {})->start($this->request());
     }
 
     public function testAProjectMappingTheReviewersTierAndTheJudgesTierStartsTheRound(): void
     {
-        $this->reviewChange(static function (): void {}, vendor: $this->mapping(Tier::Standard, Tier::Light))->start($this->request());
+        $this->tiers = $this->mapping(Tier::Standard, Tier::Light);
+
+        $this->reviewChange(static function (): void {})->start($this->request());
 
         self::assertCount(1, $this->fixture->storedRounds());
     }
@@ -322,10 +331,10 @@ final class ReviewChangeTest extends KernelTestCase
             }
         };
 
-        return $this->reviewChange($work, vendor: $vendor)->review($this->request($round));
+        return $this->reviewChange($work)->review($this->request($round));
     }
 
-    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS, ?MessageBusInterface $bus = null, Vendor $vendor = new VerdictPerRole([])): ReviewChange
+    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS, ?MessageBusInterface $bus = null): ReviewChange
     {
         $serializer = $this->serializer();
         $findings = new StoredFindings($this->fixture->entities, $serializer, $this->fixture->machine('state_machine.review_round'));
@@ -339,7 +348,7 @@ final class ReviewChangeTest extends KernelTestCase
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
-            $vendor,
+            $this->tiers,
             $ceiling,
         );
     }
