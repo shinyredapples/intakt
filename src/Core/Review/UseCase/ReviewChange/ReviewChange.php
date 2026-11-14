@@ -40,10 +40,9 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 // Queues a round and waits for the workers to finish it, because reviewing and judging run in the workers and not in the caller.
 final readonly class ReviewChange implements ChangeReviews
 {
-    // Past the hour one reviewer may hold a round plus a judge call, so a slow but healthy round is not given up on.
-    public const int WAIT_CEILING_SECONDS = 7200;
-
     public const string JUDGING_FAILED = 'the judging failed';
+
+    public const string NO_OUTCOME_IN_TIME = 'no outcome in time';
 
     private const int POLL_SECONDS = 1;
 
@@ -58,15 +57,16 @@ final readonly class ReviewChange implements ChangeReviews
         private FailureInWords $failures,
         private Vendor $vendor,
         private FailedJudgings $failedJudgings,
-        private int $waitCeilingSeconds = self::WAIT_CEILING_SECONDS,
+        private UpperWait $upperWait = new UpperWait(),
     ) {
     }
 
     public function review(ChangeReviewRequest $request, ReviewProgress $progress = new IgnoredProgress()): ChangeReview
     {
-        $round = $this->awaitJudged($this->start($request), $progress);
+        $seconds = $this->upperWait->secondsFor($request->panel);
+        $round = $this->awaitJudged($this->start($request), $seconds, $progress);
 
-        return $this->conclude($request, $round);
+        return $this->conclude($request, $round, $seconds);
     }
 
     public function start(ChangeReviewRequest $request): string
@@ -110,10 +110,10 @@ final readonly class ReviewChange implements ChangeReviews
         }
     }
 
-    // The last state seen is returned at the ceiling, so what the reviewers did finish is still reported.
-    private function awaitJudged(string $roundId, ReviewProgress $progress): ReviewRound
+    // The last state seen is returned at the upper wait, so what the reviewers did finish is still reported.
+    private function awaitJudged(string $roundId, int $seconds, ReviewProgress $progress): ReviewRound
     {
-        $deadline = $this->clock->now()->modify('+'.$this->waitCeilingSeconds.' seconds');
+        $deadline = $this->clock->now()->modify('+'.$seconds.' seconds');
         $round = $this->rounds->stored($roundId);
         $progress->reached($round->progress());
 
@@ -137,14 +137,14 @@ final readonly class ReviewChange implements ChangeReviews
         return RoundState::Complete === $round->state() && $this->failedJudgings->hasFailed($round->id()->toRfc4122());
     }
 
-    private function conclude(ChangeReviewRequest $request, ReviewRound $round): ChangeReview
+    private function conclude(ChangeReviewRequest $request, ReviewRound $round, int $seconds): ChangeReview
     {
         $review = $this->readFrom($request, $round);
 
         return match (true) {
             RoundState::Judged === $round->state() => $review,
             $this->judgingFailed($round) => $review->blockedFor(self::JUDGING_FAILED),
-            default => $this->unfinished($review),
+            default => $this->unfinished($review, $seconds),
         };
     }
 
@@ -164,9 +164,9 @@ final readonly class ReviewChange implements ChangeReviews
         );
     }
 
-    private function unfinished(ChangeReview $review): ChangeReview
+    private function unfinished(ChangeReview $review, int $seconds): ChangeReview
     {
-        return $review->blockedFor('The round did not finish within '.$this->waitCeilingSeconds.' seconds: start workers with "messenger:consume async" and review again.');
+        return $review->blockedFor(self::NO_OUTCOME_IN_TIME.': the round did not end within '.$seconds.' seconds; if no worker runs, start one with "messenger:consume async", then review again');
     }
 
     // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
