@@ -110,7 +110,7 @@ final class ContainerRebuildTest extends TestCase
     }
 
     /**
-     * @param list<string>                $arguments
+     * @param list<string>               $arguments
      * @param array<string,string|false> $environment
      */
     private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS): string
