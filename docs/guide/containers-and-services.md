@@ -28,7 +28,7 @@ The image is the box's contents: the language, the tools, the package managers, 
 | your **Dockerfile** | `Dockerfile` |
 | an image **Intakt generates** | from what it reads in `composer.json`: the PHP version, the PHP extensions, Composer, and the AI companies' tools at fixed versions |
 
-Building an image this way is built (the `intakt:job:build-image` command), but no job runs in one yet. A job never gets another PHP than the one `composer.json` asks for: without a PHP version there, no image is built at all, and after every build Intakt asks the image's PHP for its version and extensions and refuses an image that does not match.
+Building an image this way is built (the `intakt:job:build-image` command), but no job runs in one yet. For a review, Intakt can also add the AI companies' tools to your own Dockerfile or devcontainer image (the `--kind=review` option), because a reviewer needs them and your image may not have them. A job never gets another PHP than the one `composer.json` asks for: without a PHP version there, no image is built at all, and after every build Intakt asks the image's PHP for its version and extensions and refuses an image that does not match.
 
 Planned, not built yet: a compose file and an image you supply as sources, images for other languages (`package.json`, ...), and building once per version of the project, cached, and rebuilt when the files they come from change.
 
