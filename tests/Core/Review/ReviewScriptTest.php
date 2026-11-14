@@ -8,12 +8,14 @@ use Closure;
 use FilesystemIterator;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClassConstant;
 use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 // The script runs inside the review job's container, so it is tested by running it with sh -c as the container does, with a scripted CLI in place of the vendor's.
@@ -500,6 +502,30 @@ final class ReviewScriptTest extends TestCase
         $this->assertRefused($run, 'usage: review.sh');
     }
 
+    #[TestWith(['git version 2.39.5'])]
+    #[TestWith(['git version 1.50.0'])]
+    #[TestWith(['not git'])]
+    public function testAGitOlderThanTwoFortyIsRefusedWithTheVersionItReports(string $version): void
+    {
+        $this->givenAGitReporting($version, knowsTheAttributeSource: false);
+
+        $run = $this->whenTheReviewRuns();
+
+        $this->assertRefused($run, 'the checkout checks need git 2.40 or later, found: '.$version);
+    }
+
+    #[TestWith(['git version 2.40.0'])]
+    #[TestWith(['git version 3.0.1'])]
+    public function testAGitOfTwoFortyOrLaterIsAllowed(string $version): void
+    {
+        $this->givenAGitReporting($version, knowsTheAttributeSource: true);
+
+        $run = $this->whenTheReviewRuns();
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertFileExists($this->folder.'/ran');
+    }
+
     /**
      * @param array<string, string> $files
      */
@@ -535,6 +561,15 @@ final class ReviewScriptTest extends TestCase
         $this->head = $this->commitFiles([]);
         new Filesystem()->remove($this->checkout);
         $this->git($this->folder, 'clone', '--quiet', $this->source, $this->checkout);
+    }
+
+    // Stands in for the image's git: it reports the given version and, as git before 2.40 does, may refuse --attr-source; the rest goes to the real git.
+    private function givenAGitReporting(string $version, bool $knowsTheAttributeSource): void
+    {
+        $git = new ExecutableFinder()->find('git') ?? throw new RuntimeException('git is not on the path.');
+        $refusal = $knowsTheAttributeSource ? '' : "for argument do case \"\$argument\" in --attr-source=*) echo \"unknown option: \$argument\" >&2; exit 129 ;; esac; done\n";
+        file_put_contents($this->bin.'/git', "#!/bin/sh\nif [ \"\$1\" = --version ]; then echo '".$version."'; exit 0; fi\n".$refusal.'exec '.$git." \"\$@\"\n");
+        chmod($this->bin.'/git', 0o755);
     }
 
     private function givenTheCli(string $name, string $script): void

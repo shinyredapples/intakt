@@ -1,7 +1,7 @@
 #!/bin/sh
 # The review job's command: one reviewer reads a read-only checkout of the exact head and reaches only its vendor through the job's proxy.
 # Usage: review.sh <checkout> <head> <prompt file> <provider> <model>
-# Refuses with exit 1, before the CLI runs, a checkout that is writable, carries a repository setting a clone does not write,
+# Refuses with exit 1, before the CLI runs, a git older than 2.40, a checkout that is writable, carries a repository setting a clone does not write,
 # is not at <head> or differs from it, and a job without the proxy; otherwise runs the provider's CLI (claude_code or codex) in the checkout.
 # Writes review.log (refusals and the CLI's errors) and answer (the CLI's standard output) into INTAKT_JOB_OUTPUT.
 set -u
@@ -57,6 +57,16 @@ require_the_proxy() {
 # and with an index read from the head, because the checkout's own index could hide a change behind its flags or file times.
 checkout_git() {
     GIT_INDEX_FILE="$index" git --git-dir="$checkout/.git" --work-tree="$checkout" --no-replace-objects --no-optional-locks -c core.untrackedCache=false "$@"
+}
+
+# status needs --attr-source (git 2.40), and an older git would refuse every review with a reason that does not name the cause.
+require_a_recent_git() {
+    version="$(git --version 2>> "$log")"
+    major="$(printf '%s\n' "$version" | sed -n 's/^git version \([0-9][0-9]*\)\.[0-9][0-9]*.*/\1/p')"
+    minor="$(printf '%s\n' "$version" | sed -n 's/^git version [0-9][0-9]*\.\([0-9][0-9]*\).*/\1/p')"
+    if [ -z "$major" ] || [ -z "$minor" ] || [ "$major" -lt 2 ] || { [ "$major" -eq 2 ] && [ "$minor" -lt 40 ]; }; then
+        refuse "the checkout checks need git 2.40 or later, found: $version"
+    fi
 }
 
 require_a_read_only_checkout() {
@@ -169,6 +179,7 @@ esac
 if [ ! -f "$prompt" ] || [ ! -r "$prompt" ]; then
     refuse 'the prompt cannot be read'
 fi
+require_a_recent_git
 require_a_read_only_checkout
 require_only_clone_settings
 require_the_head
