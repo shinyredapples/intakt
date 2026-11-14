@@ -32,4 +32,10 @@ final readonly class FailingJudge implements Vendor
     {
         throw $this->failure;
     }
+
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        return true;
+    }
 }

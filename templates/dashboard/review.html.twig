@@ -67,7 +67,7 @@
             <p class="muted">No finding is open.</p>
             {% else %}
             {% for finding in open %}
-            <a class="sb-finding" href="#round-{{ judged.round }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span><span class="mono">{{ finding.id }}</span> {{ finding.text ?? 'Text not recorded.' }}</span></a>
+            <a class="sb-finding" href="#round-{{ judged.round }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span><span class="mono">{{ finding.entryId }}</span> {{ finding.text ?? 'Text not recorded.' }}</span></a>
             {% endfor %}
             {% endif %}
         </div>

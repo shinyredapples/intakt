@@ -38,4 +38,10 @@ final readonly class JudgeRejectingFindings implements Vendor
     {
         return new Judgement(array_map(fn (Finding $finding): JudgedFinding => new JudgedFinding($finding->id, in_array($finding->id, $this->rejected, true) ? Mark::Reject : Mark::Act), $request->findings));
     }
+
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        return $this->reviewers->mapsAModelTo($project, $tier);
+    }
 }
