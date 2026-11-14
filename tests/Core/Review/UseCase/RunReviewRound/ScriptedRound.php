@@ -276,6 +276,7 @@ final class ScriptedRound
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $tiers,
+            $this->fixture->noFailedJudgings(),
         );
     }
 }

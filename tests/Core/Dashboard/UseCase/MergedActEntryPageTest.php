@@ -114,6 +114,7 @@ final class MergedActEntryPageTest extends WebTestCase
             new WorkerOnSleep($fixture->clock, $work),
             new FailureInWords(),
             $vendor,
+            $fixture->noFailedJudgings(),
         );
 
         return $reviewChange->review($this->request(), new IgnoredProgress());

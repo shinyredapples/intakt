@@ -71,6 +71,7 @@ final class FailedReviewerReportTest extends KernelTestCase
             new WorkerOnSleep($fixture->clock, $work),
             new FailureInWords(),
             $vendor,
+            $fixture->noFailedJudgings(),
         );
 
         $review = $reviewChange->review($this->request(), new IgnoredProgress());

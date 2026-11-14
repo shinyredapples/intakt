@@ -25,6 +25,7 @@ use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
@@ -42,6 +43,8 @@ final readonly class ReviewChange implements ChangeReviews
     // Past the hour one reviewer may hold a round plus a judge call, so a slow but healthy round is not given up on.
     public const int WAIT_CEILING_SECONDS = 7200;
 
+    public const string JUDGING_FAILED = 'the judging failed';
+
     private const int POLL_SECONDS = 1;
 
     public function __construct(
@@ -54,6 +57,7 @@ final readonly class ReviewChange implements ChangeReviews
         private ClockInterface $clock,
         private FailureInWords $failures,
         private Vendor $vendor,
+        private FailedJudgings $failedJudgings,
         private int $waitCeilingSeconds = self::WAIT_CEILING_SECONDS,
     ) {
     }
@@ -113,7 +117,7 @@ final readonly class ReviewChange implements ChangeReviews
         $round = $this->rounds->stored($roundId);
         $progress->reached($round->progress());
 
-        while (RoundState::Judged !== $round->state() && $this->clock->now() < $deadline) {
+        while (!$this->hasEnded($round) && $this->clock->now() < $deadline) {
             $this->clock->sleep(self::POLL_SECONDS);
             $round = $this->rounds->stored($roundId);
             $progress->reached($round->progress());
@@ -122,11 +126,26 @@ final readonly class ReviewChange implements ChangeReviews
         return $round;
     }
 
+    private function hasEnded(ReviewRound $round): bool
+    {
+        return RoundState::Judged === $round->state() || $this->judgingFailed($round);
+    }
+
+    // Only a complete round is judged, so the failure transport is not read while reviewers still work.
+    private function judgingFailed(ReviewRound $round): bool
+    {
+        return RoundState::Complete === $round->state() && $this->failedJudgings->hasFailed($round->id()->toRfc4122());
+    }
+
     private function conclude(ChangeReviewRequest $request, ReviewRound $round): ChangeReview
     {
         $review = $this->readFrom($request, $round);
 
-        return RoundState::Judged === $round->state() ? $review : $this->unfinished($review);
+        return match (true) {
+            RoundState::Judged === $round->state() => $review,
+            $this->judgingFailed($round) => $review->blockedFor(self::JUDGING_FAILED),
+            default => $this->unfinished($review),
+        };
     }
 
     private function readFrom(ChangeReviewRequest $request, ReviewRound $round): ChangeReview
