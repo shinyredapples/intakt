@@ -78,7 +78,7 @@ final readonly class BinaryFiles
 
     private function sizeOf(?string $bytes): string
     {
-        return null === $bytes ? 'absent' : sprintf('%d %s', strlen($bytes), 1 === strlen($bytes) ? 'byte' : 'bytes');
+        return null === $bytes ? 'absent' : strlen($bytes).' bytes';
     }
 
     // A replacement character of the file itself is escaped too, so an escape always stands for exactly one set of bytes.
