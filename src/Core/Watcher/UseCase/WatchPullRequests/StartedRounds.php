@@ -298,7 +298,7 @@ final readonly class StartedRounds
         return 1 === $marked;
     }
 
-    // One statement on the stored row that names the round's identity, for the same reasons as markStale(); returns the number of rows changed.
+    // One statement that names the round's identity, because the review's queries clear the entity manager and a returning head replaces the row under the same key.
     /**
      * @param array<string, bool> $set
      * @param array<string, bool> $where
