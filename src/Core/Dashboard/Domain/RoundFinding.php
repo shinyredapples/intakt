@@ -23,7 +23,15 @@ final readonly class RoundFinding
     // Joined with "+" as intakt:review prints an act entry, so the page and the console name a merged entry alike.
     public function entryId(): string
     {
-        return implode('+', [$this->id, ...$this->merged]);
+        return implode('+', $this->ids());
+    }
+
+    /**
+     * @return non-empty-list<string>
+     */
+    public function ids(): array
+    {
+        return [$this->id, ...$this->merged];
     }
 
     public function calledBy(JudgeCall $call): self

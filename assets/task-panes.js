@@ -30,7 +30,7 @@ function hasTimelineEntry(page, target) {
     }
 
     return [...page.querySelectorAll(TIMELINE_ENTRY)].some((cell) => finding
-        ? cell.getAttribute('data-finding') === finding
+        ? cell.getAttribute('data-finding').split(' ').includes(finding)
         : cell.getAttribute('id') === anchor);
 }
 
