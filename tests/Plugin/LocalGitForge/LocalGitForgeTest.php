@@ -557,6 +557,48 @@ final class LocalGitForgeTest extends TestCase
         $this->forge()->change(new ChangeId('feature~1'));
     }
 
+    public function testItReturnsAPngFileAtTheHeadAsBinaryWithItsSizeInsteadOfItsBytes(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('.evidence/shot.png', self::PNG);
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        $file = $this->forge()->fileAtHead($change, '.evidence/shot.png');
+
+        self::assertSame(29, $file->binaryBytes);
+        self::assertSame('Binary file, not shown: 29 bytes', $file->content);
+    }
+
+    public function testItReturnsAPngFileAtACommitAsBinaryWithItsSizeInsteadOfItsBytes(): void
+    {
+        $commit = new CommitId($this->repository->commitFile('logo.png', self::PNG));
+
+        $file = $this->forge()->fileAt($commit, 'logo.png');
+
+        self::assertSame(29, $file->binaryBytes);
+        self::assertTrue(mb_check_encoding($file->content, 'UTF-8'));
+        self::assertStringNotContainsString('PNG', $file->content);
+    }
+
+    public function testItReturnsAFileWhoseOnlyNulByteIsItsLastByteAsBinary(): void
+    {
+        $commit = new CommitId($this->repository->commitFile('data.txt', str_repeat("text\n", 50_000)."\0"));
+
+        $file = $this->forge()->fileAt($commit, 'data.txt');
+
+        self::assertSame(250_001, $file->binaryBytes);
+    }
+
+    public function testItReturnsATextFileAtACommitWithItsBytes(): void
+    {
+        $commit = new CommitId($this->repository->commitFile('notes.txt', "caf\xe9\n"));
+
+        $file = $this->forge()->fileAt($commit, 'notes.txt');
+
+        self::assertNull($file->binaryBytes);
+        self::assertSame("caf\xe9\n", $file->content);
+    }
+
     public function testItReportsADirectoryAsNotAFileAtTheHead(): void
     {
         $this->repository->checkoutNewBranch('feature');
