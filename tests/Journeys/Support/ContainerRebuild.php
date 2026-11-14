@@ -10,7 +10,7 @@ use LogicException;
 use ReflectionMethod;
 use Symfony\Component\Filesystem\Filesystem;
 
-// Not cache:clear, because it keeps a container compiled in the second it starts (so one built before the journey's settings survives) and moves away the service files the instance's running worker still loads.
+// Not cache:clear, because it keeps a container compiled in the second it starts (so one built before the journey's settings survives) and marks the service files the instance's running worker still loads as old, so the next compile removes them.
 final readonly class ContainerRebuild
 {
     /**
