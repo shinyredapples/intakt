@@ -41,4 +41,5 @@ enum LedgerEventKind: string
     case BranchPushed = 'branch_pushed';
     case ChangeIntended = 'change_intended';
     case ChangeOpened = 'change_opened';
+    case BuildStepEnded = 'build_step_ended';
 }
