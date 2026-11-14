@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use RuntimeException;
 
-// Thrown instead of a verdict, because an answer Intakt cannot read is no verdict: the vendor asks once more, and a second one fails the reviewer.
+// Thrown instead of a verdict, because an answer Intakt cannot read is no verdict: reading it as one would let a garbled answer count as a vote, so it fails the reviewer instead.
 final class VerdictUnreadable extends RuntimeException
 {
     public static function because(string $reason): self
