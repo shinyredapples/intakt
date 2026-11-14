@@ -18,7 +18,8 @@ use Symfony\Component\Uid\UuidV7;
 final class RoundReviewer implements HasPlace
 {
     // One hour, because a redelivery inside the hold must wait for the live worker while one after it may treat the worker as stopped; the transport's redeliver_timeout stays above it so a redelivery never arrives inside the hold.
-    public const string REVIEW_CEILING = 'PT1H';
+    public const int REVIEW_CEILING_SECONDS = 3600;
+    public const string REVIEW_CEILING = 'PT'.self::REVIEW_CEILING_SECONDS.'S';
 
     #[ORM\Column(length: 255)]
     private readonly string $roleName;
