@@ -139,9 +139,8 @@ final readonly class BootResults
         }
     }
 
+    // One conditional update, so of two workers that read the same pending alert only one changes the row and records it.
     /**
-     * One conditional update, so of two workers that read the same pending alert only one changes the row and records it.
-     *
      * @param array{alert_pending: bool} $from
      * @param array{alert_pending: bool} $to
      */
