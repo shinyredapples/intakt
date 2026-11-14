@@ -143,15 +143,21 @@ final class MergedActEntryPageTest extends WebTestCase
     }
 
     /**
-     * @return list<array{mixed, mixed, mixed, mixed}>
+     * @return list<list<mixed>>
      */
     private function jsonEntries(string $json): array
     {
         $output = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($output);
         self::assertIsArray($output['act_list']);
+        $entries = [];
 
-        return array_values(array_map(static fn (array $entry): array => [$entry['id'], $entry['merged'], $entry['severity'], $entry['text']], $output['act_list']));
+        foreach ($output['act_list'] as $entry) {
+            self::assertIsArray($entry);
+            $entries[] = [$entry['id'], $entry['merged'], $entry['severity'], $entry['text']];
+        }
+
+        return $entries;
     }
 
     /**

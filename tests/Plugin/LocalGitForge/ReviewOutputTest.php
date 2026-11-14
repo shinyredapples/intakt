@@ -50,6 +50,7 @@ final class ReviewOutputTest extends TestCase
         $output = $this->whenTheReviewIsWritten(['F2', 'F4']);
 
         self::assertIsArray($output['act_list']);
+        self::assertIsArray($output['act_list'][0]);
         self::assertSame(['id' => 'F1', 'merged' => ['F2', 'F4']], array_intersect_key($output['act_list'][0], ['id' => true, 'merged' => true]));
     }
 
