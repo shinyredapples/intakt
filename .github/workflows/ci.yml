@@ -101,6 +101,42 @@ jobs:
         with:
           path: ${{ runner.temp }}/composer-cache
           key: ${{ steps.composer-cache.outputs.cache-primary-key }}
+  # The journeys on the change itself, so one that breaks the first install or the live review page fails its own pull
+  # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
+  journeys:
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    # Every journey at 300 seconds plus the image build.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Allow unprivileged user namespaces
+        if: runner.environment == 'github-hosted' || vars.CI_DISPOSABLE_RUNNER == 'true'
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
+      - name: Build or restore the CI image
+        uses: $/.github/actions/ci-image
+      - name: Run the journeys
+        env:
+          DISPOSABLE_RUNNER: ${{ vars.CI_DISPOSABLE_RUNNER }}
+        run: |
+          set -eu
+          apparmor=
+          if [ "$RUNNER_ENVIRONMENT" = github-hosted ] || [ "$DISPOSABLE_RUNNER" = true ]; then apparmor='--security-opt apparmor=unconfined'; fi
+          docker run --rm --user 1000:1000 \
+            --security-opt seccomp=.github/ci/seccomp-userns.json \
+            --security-opt systempaths=unconfined \
+            $apparmor \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --tmpfs /tmp:rw,exec,size=1g \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check --journeys
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
   # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming
   # Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. Every push to
