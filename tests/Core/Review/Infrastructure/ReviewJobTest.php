@@ -199,7 +199,10 @@ final class ReviewJobTest extends TestCase
     {
         $ids = [];
         foreach ([['ab', 'c'], ['a', 'bc']] as [$project, $reviewer]) {
-            (void) $this->reviews($this->answered(self::CLAUDE_ANSWER), [$project => 'image'])->run($this->request(project: $project, reviewer: $reviewer));
+            (void) $this->reviews($this->answered(self::CLAUDE_ANSWER), [$project => 'image'])->run($this->request(
+                project: $project,
+                reviewer: $reviewer,
+            ));
             self::assertNotNull($this->ran);
             $ids[] = $this->ran->id->value;
         }
