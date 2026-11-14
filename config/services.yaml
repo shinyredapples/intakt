@@ -70,6 +70,9 @@ services:
         arguments:
             $maintainerAppSlug: '%env(GITHUB_MAINTAINER_APP_SLUG)%'
 
+    # GitHub's, because the watcher lists pull requests through GitHubWatchReads, so every head its boot gate sees is a GitHub pull request.
+    Intakt\Plugin\Forge\Contract\AuthorTrust: '@Intakt\Plugin\GitHubForge\Infrastructure\GitHubAuthorTrust'
+
     # Memory is written by the orchestrator only; the indexer is the AI bundle's, over the SQLite store in config/packages/ai.php.
     Intakt\Core\Memory\Contract\MemoryIndex: '@Intakt\Core\Memory\Infrastructure\StoreMemoryIndex'
     Symfony\AI\Store\Indexer\DocumentIndexer: '@ai.indexer.memory'

@@ -6,6 +6,9 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Ledger\Contract\AppendResult;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
 use Intakt\Core\Review\Contract\BootAt;
@@ -21,8 +24,10 @@ use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadGate;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchedProject;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatcherLedger;
+use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -71,9 +76,13 @@ final class BootGateTest extends KernelTestCase
     private BootOutcome $head;
     private CommitId|string $mainCommit;
     private bool $busDown = false;
+    private bool $authorTrusted = true;
+    private bool $trustCheckDown = false;
+    private Ledger $ledger;
 
     protected function setUp(): void
     {
+        $this->ledger = new DashboardLedger();
         $entities = self::getContainer()->get('doctrine.orm.entity_manager');
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
         EmptyDatabase::in(self::getContainer());
@@ -153,6 +162,69 @@ final class BootGateTest extends KernelTestCase
         self::assertStringNotContainsString('synthetic-private-token', $decision->failedBoot->reason);
     }
 
+    public function testAnUntrustedAuthorsHeadIsNotBootedAndKeepsItsGreenDecision(): void
+    {
+        $this->authorTrusted = false;
+        $green = $this->green();
+
+        self::assertSame($green, $this->gate()->admit($this->project(), $green));
+        self::assertSame([], $this->asked);
+    }
+
+    public function testAnUntrustedAuthorsHeadThatWouldFailToBootStillGoesToReview(): void
+    {
+        $this->authorTrusted = false;
+        $this->head = BootOutcome::failed('The server did not start.');
+
+        self::assertTrue($this->gate()->admit($this->project(), $this->green())->startsRound());
+    }
+
+    public function testAnUntrustedAuthorsSkippedBootIsRecordedWithItsCause(): void
+    {
+        $this->authorTrusted = false;
+
+        $this->gate()->admit($this->project(), $this->green());
+
+        $skipped = iterator_to_array($this->ledger->readOfKind(LedgerEventKind::HeadBootSkipped));
+        self::assertCount(1, $skipped);
+        self::assertSame(['project' => 'alpha', 'change' => '7', 'head' => str_repeat('b', 40), 'cause' => 'boot_skipped_untrusted_author'], json_decode($skipped[0]->event->payload, true));
+    }
+
+    public function testATrustedAuthorsHeadIsBootedAndRecordsNoSkippedBoot(): void
+    {
+        $this->gate()->admit($this->project(), $this->green());
+
+        self::assertContains(BootHarnessAtMain::class, array_map(get_class(...), $this->asked));
+        self::assertSame([], iterator_to_array($this->ledger->readOfKind(LedgerEventKind::HeadBootSkipped)));
+    }
+
+    public function testATrustCheckThatFailsBootsNothingAndTheReviewStillStarts(): void
+    {
+        $this->trustCheckDown = true;
+
+        self::assertTrue($this->gate()->admit($this->project(), $this->green())->startsRound());
+        self::assertSame([], $this->asked);
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::HeadBootSkipped)));
+        self::assertLoggedError('warning', 'The pull request author counts as untrusted, because the trust check failed.');
+    }
+
+    public function testASkippedBootTheLedgerRefusesBootsNothingAndTheReviewStillStarts(): void
+    {
+        $this->authorTrusted = false;
+        $refusing = self::createStub(Ledger::class);
+        $refusing->method('append')->willReturn(AppendResult::failed('The ledger is full.'));
+        $this->ledger = $refusing;
+
+        self::assertTrue($this->gate()->admit($this->project(), $this->green())->startsRound());
+        self::assertSame([], $this->asked);
+        self::assertLoggedError('error', 'The boot gate failed, so the review starts without it.');
+    }
+
+    public function testTheWatchersGateInTheContainerIsTheBootGate(): void
+    {
+        self::assertInstanceOf(BootGate::class, self::getContainer()->get(HeadGate::class));
+    }
+
     public function testAGateThatThrowsLogsAnErrorAndTheReviewStillStarts(): void
     {
         $this->busDown = true;
@@ -178,7 +250,15 @@ final class BootGateTest extends KernelTestCase
         $logger = new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.'));
         $results = new BootResults($bus, $this->entities, new MockClock('2026-11-13T10:00:00+00:00'), new WatcherLedger(new DashboardLedger()), $redactor, $logger);
 
-        return new BootGate($bus, $results, $logger);
+        return new BootGate($bus, $this->authors(), $results, new WatcherLedger($this->ledger), $logger);
+    }
+
+    private function authors(): AuthorTrust
+    {
+        $authors = self::createStub(AuthorTrust::class);
+        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
+
+        return $authors;
     }
 
     private function answer(object $query): CommitId|BootOutcome|string
