@@ -48,9 +48,17 @@ final readonly class StaleVerdicts
             return;
         }
 
-        $this->rounds->markStaleOnce($round, $this->ledger->verdictsStale(...));
-        // Sent on every refusal, also for a round already marked, because only Review withdraws an approval already on the forge and the head stays due until this succeeds.
-        $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
+        $this->rounds->oweWithdrawalOnce($round, $this->ledger->verdictsStale(...));
+        $this->withdrawOwed($project, $decision->change);
+    }
+
+    // Sent on every settling of the pull request until Review takes it, whatever the head's next boot says, because only Review withdraws an approval already on the forge; a refusal throws, so the head stays due.
+    public function withdrawOwed(WatchedProject $project, OpenChange $change): void
+    {
+        foreach ($this->rounds->owingWithdrawal($project->name, $change) as $round) {
+            $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
+            $this->rounds->withdrawn($round);
+        }
     }
 
     private function check(WatchedProject $project, OpenChange $open, StartedRound $round): void

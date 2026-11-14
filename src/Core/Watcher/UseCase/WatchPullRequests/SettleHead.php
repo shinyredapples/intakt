@@ -18,6 +18,8 @@ final readonly class SettleHead
 
     public function settle(WatchedProject $project, HeadDecision $decision): void
     {
+        // First, because a fresh round replaces the stale row of a head that boots again, so the withdrawal it still owes must be taken before.
+        $this->stale->withdrawOwed($project, $decision->change);
         $decision = $this->bootedIfGreen($project, $decision);
 
         if ($decision->startsRound()) {

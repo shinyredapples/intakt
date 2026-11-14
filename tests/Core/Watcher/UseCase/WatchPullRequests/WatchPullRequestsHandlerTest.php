@@ -1079,6 +1079,69 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
     }
 
+    public function testAWithdrawalReviewCannotTakeIsSentAgainWhenTheHeadBootsOnItsNextTry(): void
+    {
+        $this->failToWithdrawOnARefusedHead();
+        $this->queries->headBoot = BootOutcome::booted();
+
+        $this->clock->modify('+61 seconds');
+        $this->tick();
+
+        self::assertSame(['round-1', 'round-1'], $this->commands->markedStale);
+        self::assertCount(2, $this->commands->started);
+    }
+
+    public function testAWithdrawalReviewCannotTakeIsSentAgainWhenTheHeadsBootCrashesOnItsNextTry(): void
+    {
+        $this->failToWithdrawOnARefusedHead();
+        $this->queries->headBoot = BootOutcome::crashed('composer could not run');
+
+        $this->clock->modify('+61 seconds');
+        $this->tick();
+
+        self::assertSame(['round-1', 'round-1'], $this->commands->markedStale);
+    }
+
+    public function testAWithdrawalReviewCannotTakeIsSentAgainWhenTheHeadHasMovedOnItsNextTry(): void
+    {
+        $this->failToWithdrawOnARefusedHead();
+        $this->queries->headBoot = BootOutcome::booted();
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->clock->modify('+61 seconds');
+        $this->tick();
+
+        self::assertSame(['round-1', 'round-1'], $this->commands->markedStale);
+    }
+
+    public function testAHeadThatBootsAgainStartsNoFreshRoundWhileItsWithdrawalIsStillRefused(): void
+    {
+        $this->failToWithdrawOnARefusedHead();
+        $this->queries->headBoot = BootOutcome::booted();
+        $this->commands->markFailure = new RuntimeException('the review database is still down');
+
+        $this->clock->modify('+61 seconds');
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+        self::assertTrue($this->storedStale(self::GREEN));
+    }
+
+    public function testATakenWithdrawalIsNotSentAgain(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->queries->headBoot = BootOutcome::booted();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['round-1'], $this->commands->markedStale);
+    }
+
     public function testAMovedHeadThatFailsToBootLeavesTheEarlierHeadsRoundToTheStaleCheckWithoutWithdrawingIt(): void
     {
         $this->startRoundOnGreenHead();
@@ -1151,6 +1214,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
 
         $this->tick();
+    }
+
+    private function failToWithdrawOnARefusedHead(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->commands->markFailure = new RuntimeException('the review database is down');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->commands->markFailure = null;
     }
 
     private function startRoundOnGreenHead(): void
