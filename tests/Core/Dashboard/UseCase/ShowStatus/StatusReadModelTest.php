@@ -129,7 +129,8 @@ final class StatusReadModelTest extends TestCase
 
     public function testAQueueThatCannotCountItsMessagesReportsNoCount(): void
     {
-        $this->receivers = ['async' => new InMemoryTransport()];
+        // A bare receiver, because Symfony 8.2's in-memory transport counts its messages.
+        $this->receivers = ['async' => self::createStub(ReceiverInterface::class)];
 
         self::assertSame([['name' => 'async', 'messages' => null]], $this->read()['queues']);
     }
