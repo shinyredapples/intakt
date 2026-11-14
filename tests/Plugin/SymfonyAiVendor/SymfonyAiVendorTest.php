@@ -410,14 +410,14 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     public function testAnAnswerThatIsNotAVerdictIsRetriedOnceAndTheReadableRetryGivesTheVerdict(): void
     {
-        $calls = 0;
-        $answer = static function () use (&$calls): string {
-            return 1 === ++$calls ? 'not a verdict' : VerdictDocument::fromTheDesign()->json();
+        $answers = ['not a verdict', VerdictDocument::fromTheDesign()->json()];
+        $answer = static function () use (&$answers): string {
+            return (string) array_shift($answers);
         };
 
         $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
 
-        self::assertSame(2, $calls);
+        self::assertSame([], $answers);
         self::assertSame(Decision::Changes, $verdict->verdict);
         self::assertSame(['F1', 'F2'], $verdict->resolved);
     }
@@ -426,10 +426,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         /** @var list<mixed> $limits */
         $limits = [];
-        $answer = static function (Model $model, array|string|object $input, array $options) use (&$limits): string {
-            $limits[] = $options[PlatformOptions::MAX_OUTPUT_TOKENS] ?? null;
+        $answers = ['not a verdict', VerdictDocument::fromTheDesign()->json()];
+        $answer = static function (Model $model, array|string|object $input, array $options) use (&$limits, &$answers): string {
+            $limits[] = $options[PlatformOptions::MAX_OUTPUT_TOKENS];
 
-            return 1 === count($limits) ? 'not a verdict' : VerdictDocument::fromTheDesign()->json();
+            return (string) array_shift($answers);
         };
         $resolver = new ConfiguredTierResolver([
             'alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::OUTPUT_LIMIT]]],
