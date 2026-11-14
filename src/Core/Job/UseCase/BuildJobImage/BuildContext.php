@@ -31,12 +31,18 @@ final readonly class BuildContext
 
     private function write(JobImagePlan $plan, string $directory, string $file): void
     {
+        if (null === $plan->tree) {
+            new PharData($file)->addFromString($plan->dockerfile, (string) $plan->generated);
+
+            return;
+        }
+
         if (null === $plan->generated) {
             $this->files->archive($directory, $plan->tree, $file);
 
             return;
         }
 
-        new PharData($file)->addFromString($plan->dockerfile, $plan->generated);
+        $this->files->archiveAdding($directory, $plan, $file);
     }
 }

@@ -95,6 +95,16 @@ final class JobImageNotBuilt extends RuntimeException implements ReportableFailu
         return new self(sprintf('The image "%s" of %s is not an image reference.', $image, Devcontainer::PATH));
     }
 
+    public static function dockerfileMissing(string $path): self
+    {
+        return new self(sprintf('The Dockerfile %s is not a file at HEAD, so no review job image is built from it.', $path));
+    }
+
+    public static function notExtendable(string $reason): self
+    {
+        return new self(sprintf('The project\'s Dockerfile cannot get the review job\'s tools: %s.', $reason));
+    }
+
     public static function notATag(string $tag): self
     {
         return new self(sprintf('"%s" is not an image tag: a lowercase name with an optional :tag.', $tag));

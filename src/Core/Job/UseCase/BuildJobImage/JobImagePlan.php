@@ -6,7 +6,7 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Either a tree of the project at HEAD or a Dockerfile Intakt wrote, so a generated image builds without the project's files.
+// A tree of the project at HEAD, a Dockerfile Intakt wrote, or both, so a generated image builds without the project's files.
 #[Exclude]
 final readonly class JobImagePlan
 {
@@ -14,7 +14,7 @@ final readonly class JobImagePlan
 
     private function __construct(
         public JobImageSource $source,
-        public string $tree,
+        public ?string $tree,
         public string $dockerfile,
         public ?string $generated = null,
         public ?PhpProfile $php = null,
@@ -29,12 +29,23 @@ final readonly class JobImagePlan
 
     public static function generated(JobImageSource $source, string $dockerfile): self
     {
-        return new self($source, '', self::DOCKERFILE, $dockerfile);
+        return new self($source, null, self::DOCKERFILE, $dockerfile);
     }
 
     public function withPhp(?PhpProfile $php): self
     {
         return clone ($this, ['php' => $php]);
+    }
+
+    /**
+     * @throws JobImageNotBuilt
+     */
+    public function withReviewTools(string $projectDockerfile): self
+    {
+        return clone ($this, [
+            'dockerfile' => null === $this->tree ? $this->dockerfile : ReviewDockerfile::PATH,
+            'generated' => ReviewDockerfile::after($projectDockerfile),
+        ]);
     }
 
     public function summary(): string
