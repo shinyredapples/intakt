@@ -48,7 +48,7 @@ final readonly class ShowBoardController
 
     private function redactedMain(FailingMain $main): FailingMain
     {
-        return new FailingMain($main->project, $this->redactor->redact($main->reason));
+        return new FailingMain($main->project, $main->main, $main->toolFingerprint, $this->redactor->redact($main->reason));
     }
 
     // Redacted because the cause quotes an exception, which can carry a credential, as the status report does.

@@ -45,6 +45,24 @@ final class LedgerFailingMainsTest extends TestCase
         self::assertSame(['beta'], array_map(static fn (FailingMain $main): string => $main->project, $this->failing()));
     }
 
+    public function testABootedResultOfTheSameMainAndToolsDoesNotClearTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'No status.');
+
+        $this->ledger->bootMain('alpha', 'a');
+
+        self::assertSame(['alpha'], array_map(static fn (FailingMain $main): string => $main->project, $this->failing()));
+    }
+
+    public function testABootedResultOfTheSameMainWithOtherToolsClearsTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'No status.');
+
+        $this->ledger->bootMain('alpha', 'a', 'tools-2');
+
+        self::assertSame([], $this->failing());
+    }
+
     public function testALedgerWithoutAMainFailureListsNothing(): void
     {
         $this->ledger->bootMain('alpha');

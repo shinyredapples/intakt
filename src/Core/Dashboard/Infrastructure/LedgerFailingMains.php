@@ -43,11 +43,19 @@ final readonly class LedgerFailingMains
             return $failing;
         }
 
-        if (LedgerEventKind::MainBootFailed === $kind && is_string($reason)) {
-            $failing[$project] = new FailingMain($project, $reason);
+        $main = $payload['main'] ?? null;
+        $tools = $payload['tool_fingerprint'] ?? null;
+
+        if (!is_string($main) || !is_string($tools)) {
+            return $failing;
         }
 
-        if (LedgerEventKind::BootResultComputed === $kind && 'booted' === ($payload['state'] ?? null)) {
+        if (LedgerEventKind::MainBootFailed === $kind && is_string($reason)) {
+            $failing[$project] = new FailingMain($project, $main, $tools, $reason);
+        }
+
+        // Only another main commit or tool fingerprint clears it: a failed result stays stored for good, so a booted line of the same pair is a worker that lost the store or could not read the cache, not a recovery.
+        if (LedgerEventKind::BootResultComputed === $kind && 'booted' === ($payload['state'] ?? null) && !($failing[$project] ?? null)?->isOf($main, $tools)) {
             unset($failing[$project]);
         }
 

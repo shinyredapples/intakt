@@ -7,6 +7,9 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Dashboard\Domain\FailingMain;
+use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
+use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -46,6 +49,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(CommitId::class)]
 #[UsesClass(WatcherLedger::class)]
 #[UsesClass(HeldCredentialRedactor::class)]
+#[UsesClass(LedgerFailingMains::class)]
+#[UsesClass(FailingMain::class)]
+#[UsesClass(LedgerPayload::class)]
 final class BootResultsTest extends KernelTestCase
 {
     private EntityManagerInterface $entities;
@@ -328,6 +334,49 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertSame(BootState::Failed, $outcome->state);
         self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
+    }
+
+    public function testAnAlertTheLedgerRefusedIsRecordedOnceWhenTheLedgerRecovers(): void
+    {
+        $down = true;
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback(function (LedgerEvent $event) use (&$down): AppendResult {
+            return $down && LedgerEventKind::MainBootFailed === $event->kind ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event);
+        });
+        $bus = new BootingBus(BootOutcome::failed('No status.'));
+        $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $down = false;
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(1, $bus->booted);
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+        self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
+    }
+
+    public function testAnAlertAnotherWorkerAlreadyRecordedIsNotRecordedAgainByACacheHit(): void
+    {
+        $this->results(new BootingBus(BootOutcome::failed('No status.')))->ofMain($this->key('a', 'tools-1'), $this->source());
+        $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
+
+        new BootResults(new BootingBus(BootOutcome::booted()), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger())->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testABootedResultThatLostTheStoreToAFailedMainKeepsTheBannerOfTheFailure(): void
+    {
+        $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
+        $winner = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        $bus = new BootingBus(BootOutcome::booted());
+        $bus->meanwhile = fn (): BootOutcome => $winner->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->results($bus)->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $winner->ofMain($this->key('a', 'tools-1'), $this->source())->state);
+        self::assertSame(['alpha'], array_map(static fn (FailingMain $main): string => $main->project, new LedgerFailingMains()->in($this->ledger->readInOrder())));
     }
 
     private function recordedPayload(): string
