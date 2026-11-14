@@ -38,36 +38,44 @@ final readonly class LedgerFailingMains
     private function settled(array $failing, array $seen, RecordedEvent $recorded): array
     {
         $payload = LedgerPayload::of($recorded);
-        $project = $payload['project'] ?? null;
+        $pair = $this->pairOf($payload);
         $reason = $payload['reason'] ?? null;
-        $kind = $recorded->event->kind;
+        $failed = LedgerEventKind::MainBootFailed === $recorded->event->kind && is_string($reason);
+        $booted = LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null);
 
-        if (!is_string($project)) {
+        if (null === $pair || !$failed && !$booted) {
             return [$failing, $seen];
         }
 
-        $main = $payload['main'] ?? null;
-        $tools = $payload['tool_fingerprint'] ?? null;
+        [$project, $main, $tools] = $pair;
 
-        if (!is_string($main) || !is_string($tools)) {
-            return [$failing, $seen];
-        }
-
-        $booted = LedgerEventKind::BootResultComputed === $kind && 'booted' === ($payload['state'] ?? null);
-
-        if (LedgerEventKind::MainBootFailed === $kind && is_string($reason)) {
+        if ($failed) {
             $failing[$project] = new FailingMain($project, $main, $tools, $reason);
-        }
-
-        // Only a main commit or tool fingerprint the project has not booted or failed before clears it: main moves forward, so a booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
-        if ($booted && !isset($seen[$project][$main][$tools])) {
+        } elseif (!isset($seen[$project][$main][$tools])) {
+            // Only a main commit or tool fingerprint the project has not booted or failed before clears it: main moves forward, so a booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
             unset($failing[$project]);
         }
 
-        if ($booted || LedgerEventKind::MainBootFailed === $kind) {
-            $seen[$project][$main][$tools] = true;
-        }
+        $seen[$project][$main][$tools] = true;
 
         return [$failing, $seen];
+    }
+
+    /**
+     * @param array<array-key, mixed> $payload
+     *
+     * @return array{string, string, string}|null
+     */
+    private function pairOf(array $payload): ?array
+    {
+        $project = $payload['project'] ?? null;
+        $main = $payload['main'] ?? null;
+        $tools = $payload['tool_fingerprint'] ?? null;
+
+        if (!is_string($project) || !is_string($main) || !is_string($tools)) {
+            return null;
+        }
+
+        return [$project, $main, $tools];
     }
 }
