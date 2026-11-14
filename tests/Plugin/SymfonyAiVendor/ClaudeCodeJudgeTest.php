@@ -126,6 +126,13 @@ final class ClaudeCodeJudgeTest extends KernelTestCase
         self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
     }
 
+    public function testAStructuredOutputThatLeavesOutAFindingMakesEveryBlockingFindingAct(): void
+    {
+        $judgement = $this->vendor(RecordedClaudeCodeCli::replaying('judgement-structured-leaves-out-a-finding'))->judge('alpha', $this->request());
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+    }
+
     private function request(): JudgeRequest
     {
         return new JudgeRequest('Add the judge.', [$this->finding('F1', Severity::P2), $this->finding('F2', Severity::P3)], new UuidV7());

@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","model":"haiku","tools":["StructuredOutput"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I marked one finding."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"I marked one finding.","structured_output":{"marks":[{"id":"F1","mark":"act"}]},"usage":{"input_tokens":90,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}
