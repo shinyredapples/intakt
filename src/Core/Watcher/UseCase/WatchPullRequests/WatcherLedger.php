@@ -27,7 +27,7 @@ final readonly class WatcherLedger
     {
         $kind = match ($decision->admission) {
             HeadAdmission::Pending => LedgerEventKind::HeadPending,
-            HeadAdmission::Red => LedgerEventKind::HeadRed,
+            HeadAdmission::Red, HeadAdmission::FailedBoot => LedgerEventKind::HeadRed,
             HeadAdmission::Green => null,
         };
 
