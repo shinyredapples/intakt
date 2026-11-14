@@ -31,6 +31,7 @@ flowchart TD
     act --> out["intakt:review prints the decision and the act list"]
     judge -->|failed for good| failed[("failure transport: JudgeRound parked, round stays complete")]
     failed --> outFailed["intakt:review ends blocked: the judging failed"]
+    wait -->|upper wait passed| outLate["intakt:review ends blocked: no outcome in time"]
     judge --> publish["PublishVerdict: a reviewer-for-loop round publishes its status and comment on the head"]
 ```
 
@@ -48,7 +49,11 @@ Each call a reviewer makes goes out with the output limit of the reviewer's tier
 
 ## A judging that failed for good
 
-`ReviewChange::review()` waits on the stored round. When the `JudgeRound` message of a `complete` round fails after the `async` transport's retries, Messenger parks it in the failure transport and the round stays unjudged; on its next poll `review()` finds the message there through `Review/UseCase/JudgeRound/FailedJudgings` and ends at once as `blocked` with the reason `the judging failed` and an empty act list, so `intakt:review` exits with 11 instead of waiting for its ceiling (see the review command in [Forge contract](forge-contract.md)). Tests: `ReviewChangeTest` (a parked judging of the round ends the wait after one poll; one of another round leaves it to the ceiling) and `tests/Core/Review/UseCase/JudgeRound/FailedJudgingsTest.php` (group `persistence`, on the Doctrine transports: a parked judging of the round, of another round, another parked message, a judging still queued on `async`, a read that leaves the message in place, a transport that cannot be listed, a parked row that cannot be decoded, which neither breaks the read nor is deleted).
+`ReviewChange::review()` waits on the stored round. When the `JudgeRound` message of a `complete` round fails after the `async` transport's retries, Messenger parks it in the failure transport and the round stays unjudged; on its next poll `review()` finds the message there through `Review/UseCase/JudgeRound/FailedJudgings` and ends at once as `blocked` with the reason `the judging failed` and an empty act list, so `intakt:review` exits with 11 instead of waiting for its upper wait (see [No outcome in time](#no-outcome-in-time) and the review command in [Forge contract](forge-contract.md)). Tests: `ReviewChangeTest` (a parked judging of the round ends the wait after one poll; one of another round leaves it to the upper wait) and `tests/Core/Review/UseCase/JudgeRound/FailedJudgingsTest.php` (group `persistence`, on the Doctrine transports: a parked judging of the round, of another round, another parked message, a judging still queued on `async`, a read that leaves the message in place, a transport that cannot be listed, a parked row that cannot be decoded, which neither breaks the read nor is deleted).
+
+## No outcome in time
+
+`ReviewChange::review()` waits no longer than its upper wait, `UseCase/ReviewChange/UpperWait::secondsFor()` of the request's panel: `RoundReviewer::REVIEW_CEILING_SECONDS` (3600, the hold one reviewer may keep) for each reviewer, added up because one worker runs them one after another, plus `UpperWait::JUDGE_SECONDS` (the same 3600) for the judge's one call, so 10800 for a panel of two. The deadline is set from `ClockInterface::now()` before the first read of the round, and the last read happens at the deadline, so a round judged by then counts. A round that is neither judged nor failed in its judging by then, whatever held it up (no worker, a provider that keeps limiting the calls, a reviewer redelivered again and again), ends as `blocked` through `ChangeReview::blockedFor()` with the reason `no outcome in time` (`ReviewChange::NO_OUTCOME_IN_TIME`), followed by `: the round did not end within <seconds> seconds; if no worker runs, start one with "messenger:consume async", then review again`, and an empty act list, so the command always ends, with exit code 11. Tests: `ReviewChangeTest` (a round that never reports ends at the upper wait with the reason; one the workers finish at the last poll is judged) and `UpperWaitTest` (the sum for a panel).
 
 ## A round marked stale
 
