@@ -415,6 +415,40 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', ['F3'])->withFinding('repeat', true)->json());
     }
 
+    public function testIdsThatWereNotOpenAndLookLikeLedgerIdsAreAKeySafeReason(): void
+    {
+        $this->open = [$this->openFinding('F1')];
+
+        $refused = $this->refused('Add a cart.', [], '{"verdict":"approve","findings":[],"resolved":["F9","F123456789"],"follow_ups":[]}');
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict names ids that were not open: F9, F123456789.', $refused->keySafeInWords());
+    }
+
+    public function testAnIdThatWasNotOpenAndIsNotShapedLikeALedgerIdLeavesNoKeySafeReason(): void
+    {
+        $this->open = [$this->openFinding('F1')];
+
+        $refused = $this->refused('Add a cart.', [], '{"verdict":"approve","findings":[],"resolved":["F9","F1234567890"],"follow_ups":[]}');
+
+        self::assertNull($refused->keySafeInWords());
+    }
+
+    public function testIdsMarkedBothResolvedAndRepeatAreAKeySafeReason(): void
+    {
+        $this->open = [$this->openFinding('F3')];
+
+        $refused = $this->refused('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', ['F3'])->withFinding('repeat', true)->json());
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict marks ids both resolved and repeat: F3.', $refused->keySafeInWords());
+    }
+
+    public function testAMalformedToolCallIsAKeySafeReason(): void
+    {
+        $refused = $this->refused('Add a cart.', [new ToolCall('1', 'write_file', ['path' => 'a'])], self::APPROVE);
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: the reviewer made a malformed tool call.', $refused->keySafeInWords());
+    }
+
     public function testARepeatWithAnOpenIdIsAccepted(): void
     {
         $this->open = [$this->openFinding('F3')];
@@ -780,10 +814,18 @@ final class ReviewerVerdictTest extends WebTestCase
      */
     private function refusalOf(string $task, array $toolCalls, string|ResultInterface $answer): string
     {
+        return $this->refused($task, $toolCalls, $answer)->getMessage();
+    }
+
+    /**
+     * @param list<ToolCall> $toolCalls
+     */
+    private function refused(string $task, array $toolCalls, string|ResultInterface $answer): VerdictUnreadable
+    {
         try {
             $this->review($task, $toolCalls, $answer);
         } catch (VerdictUnreadable $refused) {
-            return $refused->getMessage();
+            return $refused;
         }
 
         self::fail('The answer was not refused as unreadable.');
