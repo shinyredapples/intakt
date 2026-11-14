@@ -29,6 +29,8 @@ flowchart TD
     judge --> updates
     updates --> live["Dashboard live updates"]
     act --> out["intakt:review prints the decision and the act list"]
+    judge -->|failed for good| failed[("failure transport: JudgeRound parked, round stays complete")]
+    failed --> outFailed["intakt:review ends blocked: the judging failed"]
     judge --> publish["PublishVerdict: a reviewer-for-loop round publishes its status and comment on the head"]
 ```
 
@@ -43,6 +45,10 @@ Each call a reviewer makes goes out with the output limit of the reviewer's tier
 ## Refused before it starts
 
 `ReviewChange::start()`, which `review()` calls too, so the console, the MCP tool and the dashboard button all pass through it, first collects the tiers the round needs: each panel reviewer's `ReviewerModel::$tier` and `Plugin/Vendor/Contract/Vendor::JUDGE_TIER` (the light tier `judge()` calls). For each, in that order, it asks `Vendor::mapsAModelTo(project, tier)`; the first tier answered false throws `Review/Contract/RoundTierNotMapped` (a `ReportableFailure`, declared on `ChangeReviews::start()` and `review()`) with the message `Project "<project>" maps no model to the "<tier>" tier, which this round needs: map a model to it in the project's tiers and review again.`, before `RunReviewRound` is dispatched, so no round is stored, no `review_started` is appended and no reviewer is queued. `intakt:review` prints the message and ends with `Command::FAILURE` (1). The answer covers only the mapping (see [Vendor](vendor.md)): a tier whose provider is disabled passes, and its call fails later as before. Tests: `ReviewChangeTest` (no light tier, no reviewer tier, both mapped) and `tests/Plugin/LocalGitForge/ReviewChangeCommandTest.php` (the message and exit code).
+
+## A judging that failed for good
+
+`ReviewChange::review()` waits on the stored round. When the `JudgeRound` message of a `complete` round fails after the `async` transport's retries, Messenger parks it in the failure transport and the round stays unjudged; on its next poll `review()` finds the message there through `Review/UseCase/JudgeRound/FailedJudgings` and ends at once as `blocked` with the reason `the judging failed` and an empty act list, so `intakt:review` exits with 11 instead of waiting for its ceiling (see the review command in [Forge contract](forge-contract.md)). Tests: `ReviewChangeTest` (a parked judging of the round ends the wait after one poll; one of another round leaves it to the ceiling) and `tests/Core/Review/UseCase/JudgeRound/FailedJudgingsTest.php` (group `persistence`, on the Doctrine transports: a parked judging of the round, of another round, another parked message, a judging still queued on `async`, a read that leaves the message in place, a transport that cannot be listed).
 
 ## A round marked stale
 
