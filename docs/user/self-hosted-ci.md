@@ -10,7 +10,7 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 ["self-hosted","linux","x64","intakt-ci"]
 ```
 
-These jobs then run on a runner with all of those labels: `check`, `changes`, `persistence` and `image` from `ci.yml`, `journeys` from `journeys.yml`, `image` from `release-image.yml` and `publish` from `ci-image.yml` (both push to `ghcr.io`, see [The published CI image](#the-published-ci-image)). The `alarm` job of `journeys.yml` always runs on GitHub's `ubuntu-24.04`, because it uses the `gh` command those runners have. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
+These jobs then run on a runner with all of those labels: `check`, `journeys`, `changes`, `persistence` and `image` from `ci.yml`, `journeys` from `journeys.yml`, `image` from `release-image.yml` and `publish` from `ci-image.yml` (both push to `ghcr.io`, see [The published CI image](#the-published-ci-image)). The `alarm` job of `journeys.yml` always runs on GitHub's `ubuntu-24.04`, because it uses the `gh` command those runners have. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
 ## A hosted runner service
 
@@ -18,7 +18,7 @@ A service that runs each job on a new VM and throws the VM away afterwards (for 
 
 These services share their IP addresses among their customers, and Docker Hub allows only a few anonymous downloads per address, so a job can fail to fetch an image. Create a read-only access token on a Docker Hub account and store it, with the account name, as the repository secrets `DOCKERHUB_TOKEN` and `DOCKERHUB_USERNAME`; the jobs then log in before they download. The `check` and `persistence` jobs restore Composer's packages from GitHub's Actions cache, which only a push to main fills, so on a fresh VM they do not download every package from GitHub again; the first main run after a `composer.lock` change downloads them and saves the cache. A same-repository pull request's job can read the token, so give it no more than read access to public repositories.
 
-`journeys.yml` runs the journeys on main every night and never on a pull request. To start a run yourself, use the "Run workflow" button of the `journeys` workflow on the Actions tab, or `gh workflow run journeys.yml`. When a journey fails, `alarm` files one urgent task, or updates the one already open.
+The `journeys` job of `ci.yml` runs the journeys on every pull request and every push to main; when a journey fails, that run fails and no task is filed. `journeys.yml` also runs them on main every night; it and its `alarm` stay for now and are removed once the `journeys` job of `ci.yml` has been green on main for a week. To start a run yourself, use the "Run workflow" button of the `journeys` workflow on the Actions tab, or `gh workflow run journeys.yml`. When a journey fails, `alarm` files one urgent task, or updates the one already open.
 When the run times out, `alarm` files or updates the timed-out task. A run you cancel files nothing.
 
 ## The runner must be ephemeral
@@ -58,7 +58,7 @@ The script that registers your ephemeral runner should do three things before ea
 | Unprivileged user namespaces allowed (on Ubuntu 23.10 and later, `kernel.apparmor_restrict_unprivileged_userns=0`; elsewhere a non-zero `user.max_user_namespaces`) | the gate tests in `check` run processes in a new user namespace inside the container (a pull request that leaves the gate code alone skips them, but every push to main runs them); `journeys` runs each journey in one too, where `unshare` allows it |
 | No AppArmor profile that blocks `mount` for the containers (on a host with AppArmor, Docker applies its `docker-default` profile, which does) | the gate tests mount a fresh `/proc`; `journeys` gets the same container settings; the workflows lift AppArmor only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, never on other runners of yours |
 
-The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: they set the sysctl and `apparmor=unconfined` only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, both thrown away after the job. Prepare the clean state so the host meets them.
+Both `journeys` jobs get the same seccomp profile as `check` (`.github/ci/seccomp-userns.json`). The workflows do not change any of this on a self-hosted runner: they set the sysctl and `apparmor=unconfined` only on GitHub's runners and with `CI_DISPOSABLE_RUNNER`, both thrown away after the job. Prepare the clean state so the host meets them.
 
 ## When it goes wrong
 
