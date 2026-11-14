@@ -175,7 +175,7 @@ final class ReviewServerContractTest extends KernelTestCase
     {
         self::assertSame(401, $this->initializeStatus(null));
 
-        // Symfony 8.2 answers from the firewall's fallback entry point, so only earlier releases log the refusal as an uncaught exception.
+        // Symfony 8.2 makes the access-token authenticator the firewall's entry point, which answers 401 itself, so only earlier releases log an uncaught exception.
         if (!SymfonyRelease::isAtLeast('8.2')) {
             self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "Full authentication is required to access this resource."', HttpException::class));
         }
