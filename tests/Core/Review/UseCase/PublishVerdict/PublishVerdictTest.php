@@ -191,6 +191,7 @@ final class PublishVerdictTest extends KernelTestCase
         ]);
 
         $body = $this->github->writes[0][1]['body'];
+        self::assertIsString($body);
         self::assertSame(1, substr_count($body, 'src/Thing.php:3:'));
         self::assertStringContainsString('findings to act on: 1."', $body);
     }
