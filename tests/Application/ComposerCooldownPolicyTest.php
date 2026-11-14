@@ -48,6 +48,22 @@ final class ComposerCooldownPolicyTest extends TestCase
         self::assertSame('1.1.0', $this->lockedVersionAfterAnUpdate());
     }
 
+    public function testTheRepositoryPolicyExceptsOnlyTheSymfonyComponentsAtTheOneTimeVersion(): void
+    {
+        $policy = $this->repositoryPolicy();
+        self::assertIsArray($policy);
+        self::assertIsArray($policy['cooldown'] ?? null);
+
+        $ignore = $policy['cooldown']['ignore'] ?? null;
+        self::assertIsArray($ignore);
+        self::assertSame(['symfony/*'], array_keys($ignore));
+        self::assertIsArray($ignore['symfony/*']);
+        self::assertSame('8.2.0-BETA2', $ignore['symfony/*']['constraint'] ?? null);
+        self::assertSame('3 days', $policy['cooldown']['period'] ?? null);
+        self::assertTrue($policy['cooldown']['block'] ?? null);
+        self::assertSame('fail', $policy['cooldown']['audit'] ?? null);
+    }
+
     private function projectRequiringAPackageReleasedAt(string $newerRelease): void
     {
         $project = [

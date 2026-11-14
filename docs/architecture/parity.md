@@ -40,7 +40,7 @@ Only behaviors the switch needs ([plan](../plan.md), M6 to M8). Each line: the r
 
 ## Reviews
 - [ ] An approval counts only for the exact head and pull request text. `test_round.py::test_an_approval_does_not_survive_a_rewritten_pr_md`, `test_review_binding_race.py` [T59]
-- [ ] A failed review never approves and never counts as changes. `test_agents.py::test_any_other_reviewer_failure_is_a_failed_review_never_changes_requested`, `test_agents.py::test_unparsable_verdict_is_not_approval` [T7, T39]
+- [x] A failed review never approves and never counts as changes. `test_agents.py::test_any_other_reviewer_failure_is_a_failed_review_never_changes_requested`, `test_agents.py::test_unparsable_verdict_is_not_approval` [T7, T39]; Intakt: `UnreadableAnswerTest::testTwoUnreadableAnswersEndAPanelOfOneBlockedWithTheReasonAndNoVerdict`, `UnreadableAnswerTest::testAReviewerFailedThatWayBesideAnApprovalBlocksAPanelOfTwoUnderTheAllPolicy`
 - [ ] Only the vendor's structured codes mark a reviewer account as unavailable. `test_reviewer_accounts.py::test_only_a_closed_set_of_codes_and_statuses_is_an_account_error` [T39]
 - [ ] Re-reviews are scoped from saved reviews; a saved approval never counts for a new head. `test_review_history.py::test_a_saved_approval_never_counts_as_a_verdict_of_this_round` [T59]
 - [ ] Feedback holds only open findings, merged across reviewers. `test_round.py::test_review_feedback_holds_only_the_open_findings_merged_across_reviewers` [T59]
