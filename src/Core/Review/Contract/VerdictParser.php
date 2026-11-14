@@ -61,9 +61,9 @@ final readonly class VerdictParser
     }
 
     /**
-     * @param array<string, mixed> $parameters
+     * @param array<mixed> $parameters
      *
-     * @return array<string, string>
+     * @return array<string>
      */
     private function numbersIn(array $parameters): array
     {

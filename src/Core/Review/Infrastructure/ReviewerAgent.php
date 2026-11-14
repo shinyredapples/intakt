@@ -35,7 +35,7 @@ final readonly class ReviewerAgent implements Reviewer
 
     private const array STREAMED = self::UNSTREAMED + ['stream' => true];
 
-    // A letter and a number, as FindingLedger numbers its findings.
+    // A capital letter and a short number, because FindingLedger numbers its findings that way and such an id is too short to hold a key.
     private const string LEDGER_ID = '/^[A-Z]\d{1,9}$/';
 
     /**
