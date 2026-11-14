@@ -6,8 +6,8 @@ namespace Intakt\Core\Git\UseCase\UpdateMirror;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
-use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\MirrorNotUpdated;
+use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Core\Git\Contract\ProjectMirror;
 use Intakt\Core\Git\Domain\Mirrors;

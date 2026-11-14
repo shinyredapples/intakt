@@ -67,6 +67,9 @@ final class BuildTaskTest extends TestCase
 
     private InMemoryLedger $ledger;
 
+    /** @var array<string, array{repository: string}>|null */
+    private ?array $watched = null;
+
     protected function setUp(): void
     {
         $this->folder = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -94,17 +97,17 @@ final class BuildTaskTest extends TestCase
 
     public function testTheCloneStepIsGivenTheBranchOfTheIssue(): void
     {
-        $clones = $this->createMock(BuildClones::class);
+        $clones = self::createMock(BuildClones::class);
         $clones->expects(self::once())->method('make')->with('alpha', 'intakt/issue-7', $this->folder.'/builds/alpha-7');
 
-        $this->use($this->issues(7), $this->createStub(ProjectMirror::class), $clones)->run('alpha', 7);
+        $this->use($this->issues(7), self::createStub(ProjectMirror::class), $clones)->run('alpha', 7);
     }
 
     public function testAnIssueTheForgeDoesNotListEndsAtTheTaskStepWithoutTouchingMirrorOrClone(): void
     {
-        $mirror = $this->createMock(ProjectMirror::class);
+        $mirror = self::createMock(ProjectMirror::class);
         $mirror->expects(self::never())->method('update');
-        $clones = $this->createMock(BuildClones::class);
+        $clones = self::createMock(BuildClones::class);
         $clones->expects(self::never())->method('make');
 
         $outcome = $this->use($this->issues(8), $mirror, $clones)->run('alpha', 7);
@@ -117,19 +120,19 @@ final class BuildTaskTest extends TestCase
 
     public function testAPullRequestWithTheNumberIsNoTask(): void
     {
-        $issues = $this->createStub(IssueReads::class);
+        $issues = self::createStub(IssueReads::class);
         $issues->method('listOpen')->willReturn(IssueListing::listed([$this->listed(7, true)], null));
 
-        $outcome = $this->use($issues, $this->createStub(ProjectMirror::class), $this->createStub(BuildClones::class))->run('alpha', 7);
+        $outcome = $this->use($issues, self::createStub(ProjectMirror::class), self::createStub(BuildClones::class))->run('alpha', 7);
 
         self::assertSame(TaskStep::Task, $outcome->failedAt);
     }
 
     public function testAMirrorThatFailsEndsAtTheMirrorStepAndNoCloneIsMade(): void
     {
-        $mirror = $this->createStub(ProjectMirror::class);
+        $mirror = self::createStub(ProjectMirror::class);
         $mirror->method('update')->willThrowException(MirrorNotUpdated::at('mirror', 'the remote is gone'));
-        $clones = $this->createMock(BuildClones::class);
+        $clones = self::createMock(BuildClones::class);
         $clones->expects(self::never())->method('make');
 
         $outcome = $this->use($this->issues(7), $mirror, $clones)->run('alpha', 7);
@@ -152,7 +155,8 @@ final class BuildTaskTest extends TestCase
 
     public function testAProjectWithoutARepositoryEndsAtTheMirrorStep(): void
     {
-        $outcome = $this->use($this->issues(7), $this->createStub(ProjectMirror::class), $this->createStub(BuildClones::class), [])->run('alpha', 7);
+        $this->watched = [];
+        $outcome = $this->use($this->issues(7), self::createStub(ProjectMirror::class), self::createStub(BuildClones::class))->run('alpha', 7);
 
         self::assertSame(TaskStep::Mirror, $outcome->failedAt);
         self::assertStringContainsString('has no watch section', (string) $outcome->reason);
@@ -160,10 +164,10 @@ final class BuildTaskTest extends TestCase
 
     public function testACloneThatFailsEndsAtTheCloneStepAfterTheMirrorWasUpdated(): void
     {
-        $clones = $this->createStub(BuildClones::class);
+        $clones = self::createStub(BuildClones::class);
         $clones->method('make')->willThrowException(BuildCloneNotMade::at('dir', 'the folder already exists'));
 
-        $outcome = $this->use($this->issues(7), $this->createStub(ProjectMirror::class), $clones)->run('alpha', 7);
+        $outcome = $this->use($this->issues(7), self::createStub(ProjectMirror::class), $clones)->run('alpha', 7);
 
         self::assertSame(TaskStep::Clone, $outcome->failedAt);
         self::assertSame([TaskStep::Task, TaskStep::Mirror], $outcome->completed);
@@ -187,7 +191,7 @@ final class BuildTaskTest extends TestCase
 
         $this->expectException(TaskStepNotRecorded::class);
 
-        $this->use($this->issues(7), $this->createStub(ProjectMirror::class), $this->createStub(BuildClones::class))->run('alpha', 7);
+        $this->use($this->issues(7), self::createStub(ProjectMirror::class), self::createStub(BuildClones::class))->run('alpha', 7);
     }
 
     private function realGit(): BuildTask
@@ -198,19 +202,16 @@ final class BuildTaskTest extends TestCase
         return $this->use($this->issues(7), $mirror, new MirrorBuildClones(new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors)));
     }
 
-    /**
-     * @param array<string, array{repository: string}>|null $projects
-     */
-    private function use(IssueReads $issues, ProjectMirror $mirror, BuildClones $clones, ?array $projects = null): BuildTask
+    private function use(IssueReads $issues, ProjectMirror $mirror, BuildClones $clones): BuildTask
     {
-        $repositories = new ProjectRepositories($projects ?? ['alpha' => ['repository' => $this->remote->path]]);
+        $repositories = new ProjectRepositories($this->watched ?? ['alpha' => ['repository' => $this->remote->path]]);
 
         return new BuildTask($issues, $repositories, $mirror, $clones, $this->ledger, $this->folder.'/builds');
     }
 
     private function issues(int $number): IssueReads
     {
-        $issues = $this->createStub(IssueReads::class);
+        $issues = self::createStub(IssueReads::class);
         $issues->method('listOpen')->willReturn(IssueListing::listed([$this->listed($number, false)], null));
 
         return $issues;

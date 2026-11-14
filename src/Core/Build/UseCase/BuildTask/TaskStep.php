@@ -6,7 +6,6 @@ namespace Intakt\Core\Build\UseCase\BuildTask;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 
-// In the order a run takes them; the build job and the checks after the clone are later parts.
 enum TaskStep: string
 {
     case Task = 'task';

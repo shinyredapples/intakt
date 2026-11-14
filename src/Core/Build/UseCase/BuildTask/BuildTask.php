@@ -40,31 +40,32 @@ final readonly class BuildTask
      */
     public function run(string $project, int $number): TaskOutcome
     {
+        $task = new TaskRef($project, $number);
         $completed = [];
 
         foreach (TaskStep::cases() as $step) {
-            $failure = $this->attempt($step, $project, $number);
+            $failure = $this->attempt($step, $task);
 
             if (null !== $failure) {
-                $this->record($step->failed(), $project, $number, ['reason' => $failure]);
+                $this->record($step->failed(), $task, ['reason' => $failure]);
 
                 return TaskOutcome::stoppedAt($completed, $step, $failure);
             }
 
-            $this->record($step->succeeded(), $project, $number, TaskStep::Clone === $step ? ['branch' => $this->branchOf($number)] : []);
+            $this->record($step->succeeded(), $task, TaskStep::Clone === $step ? ['branch' => $this->branchOf($number)] : []);
             $completed[] = $step;
         }
 
         return TaskOutcome::cloned($completed, $this->cloneDirectory($project, $number));
     }
 
-    private function attempt(TaskStep $step, string $project, int $number): ?string
+    private function attempt(TaskStep $step, TaskRef $task): ?string
     {
         try {
             match ($step) {
-                TaskStep::Task => $this->readTask($project, $number),
-                TaskStep::Mirror => $this->updateMirror($project),
-                TaskStep::Clone => $this->makeClone($project, $number),
+                TaskStep::Task => $this->readTask($task),
+                TaskStep::Mirror => $this->updateMirror($task->project),
+                TaskStep::Clone => $this->makeClone($task),
             };
         } catch (InvalidArgumentException|IOException|ReportableFailure|RepositoryAttributesRefused $failure) {
             return $failure->getMessage();
@@ -73,15 +74,15 @@ final readonly class BuildTask
         return null;
     }
 
-    private function readTask(string $project, int $number): void
+    private function readTask(TaskRef $task): void
     {
-        foreach ($this->issues->listOpen($project, null)->issues() as $issue) {
-            if ($this->isTask($issue, $number)) {
+        foreach ($this->issues->listOpen($task->project, null)->issues() as $issue) {
+            if ($this->isTask($issue, $task->number)) {
                 return;
             }
         }
 
-        throw TaskNotListed::of($project, $number);
+        throw TaskNotListed::of($task->project, $task->number);
     }
 
     // Because GitHub lists pull requests with issues, and a pull request is no task.
@@ -95,9 +96,9 @@ final readonly class BuildTask
         $this->mirror->update($project, $this->repositories->of($project));
     }
 
-    private function makeClone(string $project, int $number): void
+    private function makeClone(TaskRef $task): void
     {
-        $this->clones->make($project, $this->branchOf($number), $this->cloneDirectory($project, $number));
+        $this->clones->make($task->project, $this->branchOf($task->number), $this->cloneDirectory($task->project, $task->number));
     }
 
     private function branchOf(int $number): string
@@ -113,13 +114,13 @@ final readonly class BuildTask
     /**
      * @param array<string, string> $details
      */
-    private function record(LedgerEventKind $kind, string $project, int $number, array $details): void
+    private function record(LedgerEventKind $kind, TaskRef $task, array $details): void
     {
-        $payload = json_encode(['project' => $project, 'task' => $number, ...$details], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $payload = json_encode(['project' => $task->project, 'task' => $task->number, ...$details], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
         $result = $this->ledger->append(new LedgerEvent($kind, $payload));
 
         if (!$result->succeeded()) {
-            throw TaskStepNotRecorded::of($project, $number, (string) $result->failure);
+            throw TaskStepNotRecorded::of($task->project, $task->number, (string) $result->failure);
         }
     }
 }

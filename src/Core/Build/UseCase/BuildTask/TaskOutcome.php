@@ -38,6 +38,6 @@ final readonly class TaskOutcome
 
     public function passed(): bool
     {
-        return null === $this->failedAt;
+        return !$this->failedAt instanceof TaskStep;
     }
 }

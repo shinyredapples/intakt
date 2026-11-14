@@ -40,7 +40,7 @@ final class BuildTaskCommandTest extends TestCase
 {
     public function testTheCommandPrintsEveryStepOfAPassingRunAndExitsWithZero(): void
     {
-        $tester = $this->whenTheCommandRuns(new InMemoryLedger(), $this->createStub(BuildClones::class));
+        $tester = $this->whenTheCommandRuns(new InMemoryLedger(), self::createStub(BuildClones::class));
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame("task done\nmirror done\nclone done\nclone /builds/alpha-7\n", $tester->getDisplay());
@@ -48,7 +48,7 @@ final class BuildTaskCommandTest extends TestCase
 
     public function testTheCommandPrintsTheStepWhereARunStoppedAndExitsWithOne(): void
     {
-        $clones = $this->createStub(BuildClones::class);
+        $clones = self::createStub(BuildClones::class);
         $clones->method('make')->willThrowException(BuildCloneNotMade::at('dir', 'the folder already exists'));
 
         $tester = $this->whenTheCommandRuns(new InMemoryLedger(), $clones);
@@ -60,7 +60,7 @@ final class BuildTaskCommandTest extends TestCase
 
     public function testTheCommandExitsWithOneWhenTheLedgerDoesNotRecordAStep(): void
     {
-        $tester = $this->whenTheCommandRuns(new InMemoryLedger(0), $this->createStub(BuildClones::class));
+        $tester = $this->whenTheCommandRuns(new InMemoryLedger(0), self::createStub(BuildClones::class));
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('did not record', (string) preg_replace('/\s+/', ' ', $tester->getDisplay()));
@@ -68,7 +68,7 @@ final class BuildTaskCommandTest extends TestCase
 
     public function testTheCommandRefusesAnIssueNumberBelowOne(): void
     {
-        $tester = $this->whenTheCommandRuns(new InMemoryLedger(), $this->createStub(BuildClones::class), '0');
+        $tester = $this->whenTheCommandRuns(new InMemoryLedger(), self::createStub(BuildClones::class), '0');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('at least 1', $tester->getDisplay());
@@ -76,9 +76,9 @@ final class BuildTaskCommandTest extends TestCase
 
     private function whenTheCommandRuns(InMemoryLedger $ledger, BuildClones $clones, string $issue = '7'): CommandTester
     {
-        $issues = $this->createStub(IssueReads::class);
+        $issues = self::createStub(IssueReads::class);
         $issues->method('listOpen')->willReturn(IssueListing::listed([new ListedIssue(7, 'Title', 'Body', [], 'someone', new DateTimeImmutable('2026-01-01T00:00:00Z'), null, false)], null));
-        $task = new BuildTask($issues, new ProjectRepositories(['alpha' => ['repository' => 'remote']]), $this->createStub(ProjectMirror::class), $clones, $ledger, '/builds');
+        $task = new BuildTask($issues, new ProjectRepositories(['alpha' => ['repository' => 'remote']]), self::createStub(ProjectMirror::class), $clones, $ledger, '/builds');
 
         $application = new Application();
         $application->addCommand(new BuildTaskCommand($task));

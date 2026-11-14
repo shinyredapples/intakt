@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Git\Contract\BuildCloneNotMade;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
-use Intakt\Core\Git\Contract\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneCommand;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneInput;
