@@ -21,6 +21,7 @@ use Intakt\Tests\Core\Review\UseCase\JudgeRound\ScriptedJudgement;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\SymfonyRelease;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\HttpFoundation\Request;
@@ -173,7 +174,11 @@ final class ReviewServerContractTest extends KernelTestCase
     public function testARequestWithoutACredentialIsRefused(): void
     {
         self::assertSame(401, $this->initializeStatus(null));
-        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "Full authentication is required to access this resource."', HttpException::class));
+
+        // Symfony 8.2 answers from the firewall's fallback entry point, so only earlier releases log the refusal as an uncaught exception.
+        if (!SymfonyRelease::isAtLeast('8.2')) {
+            self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "Full authentication is required to access this resource."', HttpException::class));
+        }
     }
 
     public function testACredentialWhoseSignatureBelongsToAnotherRoundIsRefused(): void
