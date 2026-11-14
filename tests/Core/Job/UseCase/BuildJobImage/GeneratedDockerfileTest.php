@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Job\UseCase\BuildJobImage;
 use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobTools;
 use Intakt\Core\Job\UseCase\BuildJobImage\PhpProfile;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -17,6 +18,7 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(GeneratedDockerfile::class)]
 #[UsesClass(CliManifest::class)]
+#[UsesClass(JobTools::class)]
 #[UsesClass(PhpProfile::class)]
 #[UsesClass(JobImageNotBuilt::class)]
 final class GeneratedDockerfileTest extends TestCase

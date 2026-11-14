@@ -6,6 +6,7 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 
@@ -43,7 +44,30 @@ final readonly class ProjectFiles
      */
     public function archive(string $directory, string $tree, string $file): void
     {
-        $this->git($directory, ['archive', '--format=tar', '--output='.$file, '' === $tree ? 'HEAD' : 'HEAD:'.$tree]);
+        $this->git($directory, ['archive', '--format=tar', '--output='.$file, $this->revisionOf($tree)]);
+    }
+
+    // git writes the tar itself, so a long path, a mode or a symlink of the tree stays as it is; the added file lands at the top by its name.
+    /**
+     * @throws JobImageNotBuilt
+     */
+    public function archiveAdding(string $directory, JobImagePlan $plan, string $file): void
+    {
+        $filesystem = new Filesystem();
+        $folder = sys_get_temp_dir().'/intakt-added-'.bin2hex(random_bytes(8));
+        $added = $folder.'/'.$plan->dockerfile;
+
+        try {
+            $filesystem->dumpFile($added, (string) $plan->generated);
+            $this->git($directory, ['archive', '--format=tar', '--output='.$file, '--add-file='.$added, $this->revisionOf((string) $plan->tree)]);
+        } finally {
+            $filesystem->remove($folder);
+        }
+    }
+
+    private function revisionOf(string $tree): string
+    {
+        return '' === $tree ? 'HEAD' : 'HEAD:'.$tree;
     }
 
     /**

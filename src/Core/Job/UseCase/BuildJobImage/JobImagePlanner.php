@@ -16,12 +16,22 @@ final readonly class JobImagePlanner
     /**
      * @throws JobImageNotBuilt
      */
-    public function planFor(string $directory): JobImagePlan
+    public function planFor(string $directory, JobImageKind $kind = JobImageKind::Project): JobImagePlan
     {
         $php = $this->phpOf($directory);
         $plan = $this->fromDevcontainer($directory) ?? $this->fromDockerfile($directory) ?? $this->generatedFor($php);
 
-        return $plan->withPhp($php);
+        return JobImageKind::Review === $kind ? $this->forReview($plan->withPhp($php), $directory) : $plan->withPhp($php);
+    }
+
+    // A generated plan stays as it is, because the generated Dockerfile installs the job tools already.
+    private function forReview(JobImagePlan $plan, string $directory): JobImagePlan
+    {
+        if (JobImageSource::Generated === $plan->source) {
+            return $plan;
+        }
+
+        return $plan->withReviewTools($plan->generated ?? $this->projectDockerfileOf($plan, $directory));
     }
 
     // Read before any image source, so a composer.json without its PHP stops every source rather than letting an image bring some other PHP.
@@ -42,6 +52,13 @@ final readonly class JobImagePlanner
     private function fromDockerfile(string $directory): ?JobImagePlan
     {
         return $this->files->exists($directory, self::DOCKERFILE) ? JobImagePlan::fromTree(JobImageSource::Dockerfile, '', self::DOCKERFILE) : null;
+    }
+
+    private function projectDockerfileOf(JobImagePlan $plan, string $directory): string
+    {
+        $path = '' === $plan->tree ? $plan->dockerfile : $plan->tree.'/'.$plan->dockerfile;
+
+        return $this->files->read($directory, $path) ?? throw JobImageNotBuilt::dockerfileMissing($path);
     }
 
     private function generatedFor(?PhpProfile $php): JobImagePlan
