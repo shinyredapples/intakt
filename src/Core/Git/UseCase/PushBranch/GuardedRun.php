@@ -22,11 +22,13 @@ final readonly class GuardedRun
             $process->run();
         } catch (RuntimeException $stopped) {
             // Fixed words, and never the caught exception as the cause, because its message holds the whole command line, and with it a credential in the remote's address or the signing key's file.
-            throw BranchNotPushed::because(match (true) {
+            $reason = match (true) {
                 $stopped instanceof ProcessTimedOutException => sprintf('%s timed out after %s seconds', $program, $process->getTimeout()),
                 $stopped instanceof ProcessSignaledException => sprintf('%s was killed by signal %d', $program, $stopped->getSignal()),
                 default => sprintf('%s could not start', $program),
-            });
+            };
+
+            throw BranchNotPushed::because($reason);
         }
 
         return $process;
