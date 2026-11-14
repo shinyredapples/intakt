@@ -6,6 +6,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Plugin\Forge\Contract\BinaryFiles;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
 use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
@@ -64,6 +65,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(PushApprovalInput::class)]
 #[UsesClass(TaskIssue::class)]
 #[UsesClass(MirrorChange::class)]
+#[UsesClass(BinaryFiles::class)]
 #[UsesClass(MirrorWorkflows::class)]
 #[UsesClass(GitHubIssueComments::class)]
 #[UsesClass(SecretScan::class)]
@@ -241,10 +243,22 @@ final class PushApprovalCommandTest extends TestCase
         self::assertCount(2, $this->issue->posted());
     }
 
+    public function testARiskyChangeThatAddsAPngIsAskedForWithThePngNamedByItsSizeAndBlobIds(): void
+    {
+        $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $head = $this->repository->commitFile('assets/logo.png', "\x89PNG\r\n\x1a\n\0\0\0\rIHDR\xff\xd8");
+        $blob = $this->repository->objectAt($head.':assets/logo.png');
+
+        $tester = $this->execute();
+
+        self::assertStringEndsWith(sprintf("push: held, the owner was asked on issue #7 to approve %s\n", $head), $tester->getDisplay());
+        self::assertStringContainsString("diff --git a/assets/logo.png b/assets/logo.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".$blob."\nBinary file, not shown: absent at the base, 18 bytes at the head\n", $this->issue->posted()[0]);
+    }
+
     public function testAnApprovedChangeTheIssueCannotShowStaysHeldAndPostsNothing(): void
     {
         $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
-        $head = $this->repository->commitFile('payload.bin', "hidden\0content\n");
+        $head = $this->repository->commitFile('notes.txt', "caf\xe9\n");
         $this->issue->byPerson('approve '.$head);
 
         $tester = $this->execute();

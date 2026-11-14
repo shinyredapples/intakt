@@ -2,10 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Plugin\LocalGitForge\Infrastructure;
+namespace Intakt\Plugin\Forge\Contract;
 
 use Closure;
-use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 
 // A file is binary when one of its blobs holds a NUL byte anywhere, because its bytes would break every prompt and payload that must be UTF-8; a text file keeps its lines, stray bytes escaped, because naming it binary would hide its code.
 final readonly class BinaryFiles
@@ -31,13 +30,16 @@ final readonly class BinaryFiles
      */
     public function named(string $patch, Closure $blob): string
     {
-        $files = preg_split(self::FILE_START, $patch);
+        return $this->eachFile($patch, fn (string $file): string => $this->binaryNamed($file, $blob) ?? $this->textShown($file));
+    }
 
-        if (false === $files) {
-            throw new ForgeReadFailed('The diff could not be split into its files.');
-        }
-
-        return implode('', array_map(fn (string $file): string => $this->shown($file, $blob), $files));
+    // For a reader that refuses what is not UTF-8 text itself, because an escaped byte would show it a text file that differs from the one approved.
+    /**
+     * @param Closure(string): string $blob
+     */
+    public function withBinariesNamed(string $patch, Closure $blob): string
+    {
+        return $this->eachFile($patch, fn (string $file): string => $this->binaryNamed($file, $blob) ?? $file);
     }
 
     public function isBinary(string $bytes): bool
@@ -46,22 +48,48 @@ final readonly class BinaryFiles
     }
 
     /**
+     * @param Closure(string): string $shown
+     */
+    private function eachFile(string $patch, Closure $shown): string
+    {
+        $files = preg_split(self::FILE_START, $patch);
+
+        if (false === $files) {
+            throw new ForgeReadFailed('The diff could not be split into its files.');
+        }
+
+        return implode('', array_map($shown, $files));
+    }
+
+    /**
      * @param Closure(string): string $blob
      */
-    private function shown(string $file, Closure $blob): string
+    private function binaryNamed(string $file, Closure $blob): ?string
     {
-        if (1 !== preg_match(self::HEADER, $file, $header) || 1 === preg_match(self::SUBMODULE, $file)) {
-            return $this->withoutBlobs($file);
+        $header = $this->blobHeader($file);
+        if (null === $header) {
+            return null;
         }
 
         $base = $this->bytesOf($header[1], $blob);
         $head = $this->bytesOf($header[2], $blob);
 
-        if ($this->isBinary($base ?? '') || $this->isBinary($head ?? '')) {
-            return sprintf("%sBinary file, not shown: %s at the base, %s at the head\n", $header[0], $this->sizeOf($base), $this->sizeOf($head));
-        }
+        return $this->isBinary($base ?? '') || $this->isBinary($head ?? '')
+            ? sprintf("%sBinary file, not shown: %s at the base, %s at the head\n", $header[0], $this->sizeOf($base), $this->sizeOf($head))
+            : null;
+    }
 
-        return $this->escaped($file);
+    /**
+     * @return ?array{0: string, 1: string, 2: string}
+     */
+    private function blobHeader(string $file): ?array
+    {
+        return 1 === preg_match(self::HEADER, $file, $header) && 1 !== preg_match(self::SUBMODULE, $file) ? $header : null;
+    }
+
+    private function textShown(string $file): string
+    {
+        return null === $this->blobHeader($file) ? $this->withoutBlobs($file) : $this->escaped($file);
     }
 
     private function withoutBlobs(string $file): string

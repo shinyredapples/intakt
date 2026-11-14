@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Plugin\LocalGitForge;
+namespace Intakt\Tests\Plugin\Forge;
 
+use Intakt\Plugin\Forge\Contract\BinaryFiles;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
-use Intakt\Plugin\LocalGitForge\Infrastructure\BinaryFiles;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -99,5 +99,28 @@ final class BinaryFilesTest extends TestCase
         }
 
         self::assertStringContainsString('without the ids of its blobs', $outcome);
+    }
+
+    public function testWithBinariesNamedAFileWithANulByteInABlobIsNamedWithItsSizesAndKeepsBothBlobIds(): void
+    {
+        $file = "diff --git a/i.png b/i.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n--- /dev/null\n+++ b/i.png\n@@ -0,0 +1 @@\n+\x89PNG\0\xff\n";
+
+        $named = new BinaryFiles()->withBinariesNamed(self::TEXT.$file, static fn (string $id): string => self::HEAD === $id ? "\x89PNG\0\xff\n" : "old\n");
+
+        self::assertSame(self::TEXT."diff --git a/i.png b/i.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\nBinary file, not shown: absent at the base, 7 bytes at the head\n", $named);
+    }
+
+    public function testWithBinariesNamedATextFileKeepsItsBytesThatAreNotUtf8SoTheReaderStillRefusesThem(): void
+    {
+        $file = "diff --git a/a.php b/a.php\nindex ".self::BASE.'..'.self::HEAD." 100644\n@@ -1 +1,2 @@\n+// caf\xe9\n return true;\n";
+
+        self::assertSame($file, new BinaryFiles()->withBinariesNamed($file, static fn (string $id): string => "return true;\n"));
+    }
+
+    public function testWithBinariesNamedAFileWithoutTheIdsOfItsBlobsIsLeftToTheReader(): void
+    {
+        $file = "diff --git a/b.bin b/b.bin\n+\xff\n";
+
+        self::assertSame($file, new BinaryFiles()->withBinariesNamed($file, static fn (string $id): string => throw new ForgeReadFailed('No blob is read.')));
     }
 }

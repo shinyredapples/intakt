@@ -6,6 +6,8 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Plugin\Forge\Contract\BinaryFiles;
+use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Domain\CommitNotRead;
 use Intakt\Plugin\GitHubForge\Domain\HeldChange;
 use Symfony\Component\Filesystem\Path;
@@ -18,12 +20,14 @@ final readonly class MirrorChange
 
     public function __construct(
         private HardenedGit $hardened,
+        private BinaryFiles $binaryFiles = new BinaryFiles(),
     ) {
     }
 
     /**
      * @throws CommitNotRead
      * @throws RepositoryAttributesRefused
+     * @throws ForgeReadFailed
      */
     public function of(string $repository, string $head): HeldChange
     {
@@ -87,15 +91,31 @@ final readonly class MirrorChange
     /**
      * @throws CommitNotRead
      * @throws RepositoryAttributesRefused
+     * @throws ForgeReadFailed
      */
     private function diff(string $repository, string $base, string $commit): string
     {
-        // As text, because a binary file shown as "Binary files differ" would be approved unseen; full ids, because a short one could name another object later.
+        // As text, because git's guess from the first bytes would hide a file as "Binary files differ", while BinaryFiles names only a file whose blobs hold a NUL byte; full ids, because the approval pins a binary file's bytes by them and a short one could name another object later.
         $process = $this->run($repository, ['diff-tree', '-r', '-p', '--text', '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', '--full-index', '--ignore-submodules=none', $base, $commit]);
+
+        if (!$process->isSuccessful()) {
+            throw CommitNotRead::because(sprintf('git diff-tree failed: %s', trim($process->getErrorOutput())));
+        }
+
+        return $this->binaryFiles->withBinariesNamed($process->getOutput(), fn (string $id): string => $this->blob($repository, $id));
+    }
+
+    /**
+     * @throws CommitNotRead
+     * @throws RepositoryAttributesRefused
+     */
+    private function blob(string $repository, string $id): string
+    {
+        $process = $this->run($repository, ['cat-file', 'blob', $id]);
 
         return $process->isSuccessful()
             ? $process->getOutput()
-            : throw CommitNotRead::because(sprintf('git diff-tree failed: %s', trim($process->getErrorOutput())));
+            : throw CommitNotRead::because(sprintf('the blob %s could not be read: %s', $id, trim($process->getErrorOutput())));
     }
 
     /**
