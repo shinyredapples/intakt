@@ -36,6 +36,7 @@ use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
@@ -108,6 +109,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(VerdictParser::class)]
+#[UsesClass(VerdictUnreadable::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
@@ -170,11 +172,13 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     }
 
     #[DataProvider('unreadableAnswers')]
-    public function testAnAnswerWithoutExactlyOneVerdictBlockIsRecordedAsInvalidOutput(string $recording): void
+    public function testAnAnswerWithoutExactlyOneVerdictBlockIsRefusedAsUnreadable(string $recording): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying($recording))->review('alpha', Tier::Strong, $this->request())->verdict;
+        $vendor = $this->vendor(RecordedClaudeCodeCli::replaying($recording));
 
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        $this->expectException(VerdictUnreadable::class);
+
+        $vendor->review('alpha', Tier::Strong, $this->request());
     }
 
     /**
