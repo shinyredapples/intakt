@@ -9,6 +9,7 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
 use DoctrineMigrations\Version20261114120000;
 use Intakt\Core\Dashboard\Domain\FailingMain;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
@@ -189,7 +190,7 @@ final class BootResultsTest extends KernelTestCase
     public function testACacheMissThatAnotherWorkerStoredMeanwhileStillReturnsItsOutcome(): void
     {
         $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
-        $otherWorker = new BootResults(new BootingBus(BootOutcome::booted()), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        $otherWorker = new BootResults(new BootingBus(BootOutcome::booted()), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger(), self::createStub(ManagerRegistry::class));
         $bus = new BootingBus(BootOutcome::booted());
         $bus->meanwhile = fn (): BootOutcome => $otherWorker->ofMain($this->key('a', 'tools-1'), $this->source());
 
@@ -270,7 +271,7 @@ final class BootResultsTest extends KernelTestCase
     {
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturn(AppendResult::failed('The ledger is down.'));
-        $results = new BootResults(new BootingBus(BootOutcome::booted()), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results = new BootResults(new BootingBus(BootOutcome::booted()), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
 
         $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
 
@@ -311,7 +312,7 @@ final class BootResultsTest extends KernelTestCase
     {
         $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
         $otherLedger = new DashboardLedger();
-        $otherWorker = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $other, $this->clock, new WatcherLedger($otherLedger), $this->redactor(), $this->logger());
+        $otherWorker = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $other, $this->clock, new WatcherLedger($otherLedger), $this->redactor(), $this->logger(), self::createStub(ManagerRegistry::class));
         $bus = new BootingBus(BootOutcome::failed('No status.'));
         $bus->meanwhile = fn (): BootOutcome => $otherWorker->ofMain($this->key('a', 'tools-1'), $this->source());
 
@@ -334,7 +335,7 @@ final class BootResultsTest extends KernelTestCase
     {
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback(static fn (LedgerEvent $event): AppendResult => LedgerEventKind::MainBootFailed === $event->kind ? AppendResult::failed('The ledger is down.') : AppendResult::appended(Uuid::v7()));
-        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
 
         $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
 
@@ -350,7 +351,7 @@ final class BootResultsTest extends KernelTestCase
             return LedgerEventKind::MainBootFailed === $event->kind && $refusals-- > 0 ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event);
         });
         $bus = new BootingBus(BootOutcome::failed('No status.'));
-        $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
 
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
@@ -388,10 +389,8 @@ final class BootResultsTest extends KernelTestCase
 
             return LedgerEventKind::MainBootFailed === $event->kind && $failures-- > 0 ? AppendResult::failed('The answer was lost.') : $appended;
         });
-        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
-        // Cleared as a worker clears it after each message, because the ledger's entity manager still holds the line that was rolled back.
-        $this->entities->clear();
 
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
@@ -400,14 +399,39 @@ final class BootResultsTest extends KernelTestCase
         self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
     }
 
+    public function testARolledBackAlertLeavesAManagerThatRecordsTheRetryOnceAndNoAlertForALaterCrash(): void
+    {
+        $stored = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $stored);
+        $failures = 1;
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
+            $appended = $stored->append($event);
+
+            return LedgerEventKind::MainBootFailed === $event->kind && $failures-- > 0 ? AppendResult::failed('The answer was lost.') : $appended;
+        });
+        $bus = new BootingBus(BootOutcome::failed('No status.'));
+        $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        new BootResults(new BootingBus(BootOutcome::crashed('composer could not run')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry())->ofMain($this->key('b', 'tools-1'), $this->source());
+
+        self::assertCount(1, $bus->booted);
+        self::assertCount(1, iterator_to_array($stored->readOfKind(LedgerEventKind::MainBootFailed)));
+        self::assertTrue($this->entities->isOpen());
+        self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
+    }
+
     public function testAPendingAlertThatCannotBeClaimedStillReturnsTheOutcomeAndIsLogged(): void
     {
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturn(AppendResult::failed('The ledger is down.'));
-        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
-        // Asked a second time, because that ask reads the stored result into the entity manager, which then answers the ask after the table is gone.
-        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        // Read into the entity manager, which then answers the ask after the table is gone.
+        $this->entities->find(BootRecord::class, ['project' => 'alpha', 'main' => str_repeat('a', 40), 'toolFingerprint' => 'tools-1']);
         $this->entities->getConnection()->executeStatement('DROP TABLE watcher_boot_result');
 
         $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
@@ -415,7 +439,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertSame(BootState::Failed, $outcome->state);
         self::assertTrue($this->entities->isOpen());
         self::assertLoggedError('error', "Main's computed boot result could not be recorded in the ledger.");
-        self::assertLoggedErrors(3, "Main's boot failure could not be recorded in the ledger as an alert.");
+        self::assertLoggedErrors(2, "Main's boot failure could not be recorded in the ledger as an alert.");
     }
 
     public function testAFailedMainStoredBeforeTheAlertExistedGetsItsAlertOnceAfterTheMigration(): void
@@ -448,7 +472,7 @@ final class BootResultsTest extends KernelTestCase
         $this->results(new BootingBus(BootOutcome::failed('No status.')))->ofMain($this->key('a', 'tools-1'), $this->source());
         $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
 
-        new BootResults(new BootingBus(BootOutcome::booted()), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger())->ofMain($this->key('a', 'tools-1'), $this->source());
+        new BootResults(new BootingBus(BootOutcome::booted()), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger(), self::createStub(ManagerRegistry::class))->ofMain($this->key('a', 'tools-1'), $this->source());
 
         self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
     }
@@ -456,7 +480,7 @@ final class BootResultsTest extends KernelTestCase
     public function testABootedResultThatLostTheStoreToAFailedMainKeepsTheBannerOfTheFailure(): void
     {
         $other = new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration());
-        $winner = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        $winner = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $other, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger(), self::createStub(ManagerRegistry::class));
         $bus = new BootingBus(BootOutcome::booted());
         $bus->meanwhile = fn (): BootOutcome => $winner->ofMain($this->key('a', 'tools-1'), $this->source());
 
@@ -484,7 +508,7 @@ final class BootResultsTest extends KernelTestCase
         if (0 === $worker) {
             try {
                 $own = new EntityManager(DriverManager::getConnection($this->entities->getConnection()->getParams()), $this->entities->getConfiguration());
-                new BootResults(new BootingBus(BootOutcome::failed('No status.')), $own, $this->clock, new WatcherLedger($dying), $redactor, new NullLogger())->ofMain($this->key('a', 'tools-1'), $this->source());
+                new BootResults(new BootingBus(BootOutcome::failed('No status.')), $own, $this->clock, new WatcherLedger($dying), $redactor, new NullLogger(), self::createStub(ManagerRegistry::class))->ofMain($this->key('a', 'tools-1'), $this->source());
             } finally {
                 // Ended by another signal, because a worker that missed the append must neither pass as killed there nor run the rest of the tests.
                 posix_kill(posix_getpid(), SIGTERM);
@@ -524,7 +548,15 @@ final class BootResultsTest extends KernelTestCase
 
     private function results(BootingBus $bus): BootResults
     {
-        return new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        return new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger(), $this->registry());
+    }
+
+    private function registry(): ManagerRegistry
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+
+        return $registry;
     }
 
     private function redactor(): Redactor

@@ -7,6 +7,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
@@ -35,6 +36,7 @@ final readonly class BootResults
         private WatcherLedger $ledger,
         private Redactor $redactor,
         private LoggerInterface $logger,
+        private ManagerRegistry $registry,
     ) {
     }
 
@@ -45,6 +47,8 @@ final readonly class BootResults
         if ($known instanceof BootRecord) {
             if ($known->alertPending()) {
                 $this->alert($key, $known->outcome());
+                // Forgotten, because the claim changed the row behind the entity manager, which would keep answering with the pending alert.
+                $this->entities->detach($known);
             }
 
             return $known->outcome();
@@ -134,6 +138,8 @@ final readonly class BootResults
                 }
             });
         } catch (Throwable $unrecorded) {
+            // Reset as the ledger resets it after a failed flush, because a line the ledger flushed before the rollback stays managed though the database no longer holds it, and the next flush would close the manager.
+            $this->registry->resetManager();
             $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
         }
     }
