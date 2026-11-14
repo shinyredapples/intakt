@@ -46,12 +46,15 @@ export_owner_token() {
 }
 
 # The notes about providers without a key go to standard error, so discarding standard output leaves them in the start log; a mark on the data volume keeps a restart from printing them again.
-# A mark that cannot be written only prints the notes again at the next start, which is no reason to stop this one.
+# Notes that fail or a mark that cannot be written only print the notes again at the next start, which is no reason to stop this one; a failure leaves the mark unwritten for that retry.
 print_provider_notes_once() {
     local mark
     mark="$(dirname "$INTAKT_CONFIG")/provider-notes-shown"
     [[ -e $mark ]] && return 0
-    php bin/console intakt:ai:tiers >/dev/null
+    if ! php bin/console intakt:ai:tiers >/dev/null; then
+        echo "intakt: could not print the provider notes; the next start tries again" >&2
+        return 0
+    fi
     touch "$mark" 2>/dev/null || true
 }
 

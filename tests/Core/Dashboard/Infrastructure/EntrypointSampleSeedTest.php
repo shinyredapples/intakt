@@ -62,6 +62,28 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertNotContains('bin/console intakt:ai:tiers', $this->consoleCallsBeforeTheConsumers());
     }
 
+    public function testFailedProviderNotesDoNotStopTheStart(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'TIERS_STATUS' => '1']);
+
+        $this->waitForTheServer();
+
+        self::assertStringContainsString('could not print the provider notes', (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    public function testFailedProviderNotesArePrintedAgainAtTheNextStart(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'TIERS_STATUS' => '1']);
+        $this->waitForTheServer();
+        $this->entrypoint?->stop(15);
+        new Filesystem()->remove($this->callsFile());
+
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        self::assertContains('bin/console intakt:ai:tiers', $this->consoleCallsBeforeTheConsumers());
+    }
+
     public function testEveryOldContainerIsRemovedBeforeItsWarmup(): void
     {
         self::assertFalse($this->theDefaultDemo()['cacheDirectoryExists'], 'the image container or the one the seed left survived');
@@ -284,7 +306,7 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);

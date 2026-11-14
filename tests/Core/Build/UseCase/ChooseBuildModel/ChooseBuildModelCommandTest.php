@@ -24,6 +24,7 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
@@ -74,7 +75,31 @@ final class ChooseBuildModelCommandTest extends TestCase
         $tester = $this->execute($ledger, ['project' => 'alpha', 'task' => 'T60', 'attempt' => '0']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('An attempt number starts at 1.', $tester->getDisplay());
         self::assertSame(0, $ledger->count());
+    }
+
+    #[DataProvider('refusedAttempts')]
+    public function testItRefusesAnEmptyOrNonUtf8ProjectOrTaskWithAMessageWithoutRecording(string $project, string $task, string $message): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, ['project' => $project, 'task' => $task, 'attempt' => '1']);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString($message, $tester->getDisplay());
+        self::assertSame(0, $ledger->count());
+    }
+
+    /**
+     * @return iterable<string, array{string, string, string}>
+     */
+    public static function refusedAttempts(): iterable
+    {
+        yield 'an empty project' => ['', 'T60', 'A project must not be empty.'];
+        yield 'an empty task' => ['alpha', '', 'A task must not be empty.'];
+        yield 'a project that is not UTF-8' => ["alpha\xFF", 'T60', 'A project must be valid UTF-8.'];
+        yield 'a task that is not UTF-8' => ['alpha', "T\xC360", 'A task must be valid UTF-8.'];
     }
 
     public function testItFailsForAProjectThatIsNotConfigured(): void
