@@ -12,11 +12,12 @@
 
     <h3>Reviewers</h3>
     <p class="muted">{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
-    {% if reviewed.outcomes is not empty %}
+    {# Shown while the round runs with no reviewer started too, because a reviewer that finishes after the page loaded is streamed into it. #}
+    {% if reviewed.outcomes is not empty or unfinished %}
     <div class="table-scroll" tabindex="0" role="region" aria-label="Reviewers of round {{ reviewed.round }}">
     <table class="ledger reviewers">
         <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th class="num">Findings</th><th>Note</th><th>Stop</th></tr></thead>
-        <tbody>
+        <tbody id="round-{{ reviewed.round }}-reviewers">
         {% for outcome in reviewed.outcomes %}
             <tr>
                 <td>{{ outcome.role }}</td>

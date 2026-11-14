@@ -26,7 +26,7 @@ final class RoundStreamCheckTest extends TestCase
         <pre id="reviewer-round-1-correctness-text"></pre>
         <ul id="reviewer-round-1-correctness-activity"></ul>
         </section></div>
-        <table><tr><td id="round-round-1-reviewer-correctness-state">running</td><td id="round-round-1-reviewer-correctness-stop"></td></tr></table>
+        <table><tbody id="round-round-1-reviewers"><tr><td id="round-round-1-reviewer-correctness-state">running</td><td id="round-round-1-reviewer-correctness-stop"></td></tr></tbody></table>
         </body></html>
         HTML;
 
@@ -57,6 +57,18 @@ final class RoundStreamCheckTest extends TestCase
         $this->check([
             $this->placed('security').$this->update('append', 'reviewer-round-1-security-text', 'Looking'),
             $this->update('append', 'reviewer-round-1-security-activity', '<li>read_file</li>'),
+            $this->judged(),
+        ]);
+    }
+
+    public function testTheCellsOfATableRowPlacedAfterThePageLoadedMayBeTargeted(): void
+    {
+        $this->expectNotToPerformAssertions();
+
+        $this->check([
+            '<turbo-stream action="append" targets="#round-round-1-reviewers:not(:has(#round-round-1-reviewer-security-state))"><template><tr><td id="round-round-1-reviewer-security-state">verdict</td><td id="round-round-1-reviewer-security-stop"></td></tr></template></turbo-stream>'
+            .$this->update('replace', 'round-round-1-reviewer-security-state', '<td id="round-round-1-reviewer-security-state">verdict</td>')
+            .$this->update('replace', 'round-round-1-reviewer-security-stop', '<td id="round-round-1-reviewer-security-stop"></td>'),
             $this->judged(),
         ]);
     }

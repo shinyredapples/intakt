@@ -78,10 +78,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
     {
         $configuration = $this->directory.'/intakt.yaml';
         $environment = ['ANTHROPIC_API_KEY' => self::PLACEHOLDER_KEY, 'INTAKT_CONFIG' => $configuration];
-
-        // Because the provider keys count only in a container built after they are set, as the container entrypoint does.
-        $this->console(['cache:clear', '--no-warmup'], $environment);
-        $this->console(['cache:warmup'], $environment);
+        $this->rebuildContainer($environment);
 
         return $this->console(['intakt:sample:seed', $this->directory.'/sample', $configuration], $environment);
     }

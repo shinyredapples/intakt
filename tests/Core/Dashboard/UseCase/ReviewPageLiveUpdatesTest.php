@@ -295,6 +295,36 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $updated->filter('#round-round-1-now-none'));
     }
 
+    public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheReviewersTable(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame([['round-1-correctness', '', 'verdict', '', '', 'started after this page loaded', '']], $this->rowsOf($updated));
+    }
+
+    public function testAReviewerStoppedAfterThePageLoadedWithoutItGetsAStoppedRowInTheReviewersTable(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness']));
+
+        self::assertSame([['round-1-correctness', '', 'stopped', '', '', 'started after this page loaded', '']], $this->rowsOf($updated));
+    }
+
+    public function testAReviewerTheTableAlreadyListsKeepsItsOneRowWhenItFinishes(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertSame([['correctness', 'standard', 'verdict', '', '', '', '']], $this->rowsOf($updated));
+    }
+
     public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowInTheCurrentStateBlock(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -476,6 +506,14 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         return $twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $name), $context);
     }
 
+    /**
+     * @return list<list<string>>
+     */
+    private function rowsOf(Crawler $page): array
+    {
+        return $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text()));
+    }
+
     // Done by hand on the parsed page, because no browser runs Turbo in the tests.
     private function appended(Crawler $target, string $template): Crawler
     {
@@ -484,8 +522,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $document = $node->ownerDocument;
         self::assertNotNull($document);
 
-        // Every child node, text included, because a streamed text is a bare text node.
-        $wrapper = new Crawler('<div>'.$template.'</div>')->filter('body > div')->getNode(0);
+        // Every child node, text included, because a streamed text is a bare text node; parsed inside a template, because only there a table row keeps its cells.
+        $wrapper = new Crawler('<template>'.$template.'</template>')->filter('template')->getNode(0);
         self::assertNotNull($wrapper);
         foreach ($wrapper->childNodes as $child) {
             $node->appendChild($document->importNode($child, true));
