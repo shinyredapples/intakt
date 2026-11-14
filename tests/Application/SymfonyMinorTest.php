@@ -16,31 +16,58 @@ final class SymfonyMinorTest extends TestCase
 
     private const string MINOR = '8.2';
 
-    // Symfony tags only the components that changed since the last release, so an unchanged one stays on BETA1.
-    private const string FIRST_RELEASE = 'v8.2.0-BETA1';
-
-    // Owner decision of #1900 (D2): the lock takes this beta, so the framework must not stay below it.
+    // Owner decision of #1900 (D2): the lock takes this beta, so no component may stay below it.
     private const string TAKEN_RELEASE = 'v8.2.0-BETA2';
 
-    public function testEverySymfonyComponentInTheLockIsAnEightTwoRelease(): void
-    {
-        $behind = [];
-        foreach ($this->lockedComponents() as $name => $version) {
-            if (!$this->isMinorRelease($version) || Comparator::lessThan($this->normalized($version), $this->normalized(self::FIRST_RELEASE))) {
-                $behind[] = $name.' '.$version;
-            }
-        }
+    private const string FIRST_RELEASE = 'v8.2.0-BETA1';
 
+    // Symfony tagged 8.2.0-BETA2 only for the components that changed, so these have no BETA2 on Packagist
+    // (checked 2026-11-14) and may stay on BETA1, and only on BETA1, until 8.2.0 replaces it.
+    private const array WITHOUT_TAKEN_RELEASE = [
+        'symfony/asset',
+        'symfony/clock',
+        'symfony/css-selector',
+        'symfony/dom-crawler',
+        'symfony/dotenv',
+        'symfony/error-handler',
+        'symfony/event-dispatcher',
+        'symfony/filesystem',
+        'symfony/options-resolver',
+        'symfony/password-hasher',
+        'symfony/process',
+        'symfony/psr-http-message-bridge',
+        'symfony/security-csrf',
+        'symfony/stopwatch',
+        'symfony/string',
+        'symfony/uid',
+        'symfony/var-exporter',
+        'symfony/web-link',
+    ];
+
+    public function testEverySymfonyComponentInTheLockIsAtTheTakenBetaOrLater(): void
+    {
         self::assertNotSame([], $this->lockedComponents());
-        self::assertSame([], $behind);
+        self::assertSame([], $this->behind($this->lockedComponents()));
     }
 
-    public function testTheFrameworkIsLockedAtTheTakenBetaOrLater(): void
+    public function testAComponentWithATakenBetaTagIsBehindOnTheFirstBeta(): void
     {
-        $version = $this->lockedComponents()['symfony/framework-bundle'] ?? '';
+        self::assertSame(['symfony/framework-bundle v8.2.0-BETA1'], $this->behind(['symfony/framework-bundle' => 'v8.2.0-BETA1']));
+    }
 
-        self::assertTrue($this->isMinorRelease($version), $version);
-        self::assertTrue(Comparator::greaterThanOrEqualTo($this->normalized($version), $this->normalized(self::TAKEN_RELEASE)), $version);
+    public function testAComponentWithoutATakenBetaTagMayStayOnTheFirstBeta(): void
+    {
+        self::assertSame([], $this->behind(['symfony/asset' => 'v8.2.0-BETA1', 'symfony/process' => 'v8.2.0']));
+    }
+
+    public function testAComponentWithoutATakenBetaTagIsBehindOnAnEarlierMinor(): void
+    {
+        self::assertSame(['symfony/asset v8.1.9', 'symfony/clock v8.2.0-dev'], $this->behind(['symfony/asset' => 'v8.1.9', 'symfony/clock' => 'v8.2.0-dev']));
+    }
+
+    public function testEveryComponentAllowedToStayOnTheFirstBetaIsInTheLock(): void
+    {
+        self::assertSame([], array_values(array_diff(self::WITHOUT_TAKEN_RELEASE, array_keys($this->lockedComponents()))));
     }
 
     public function testEveryRangedSymfonyRequirementAsksForEightTwo(): void
@@ -63,6 +90,24 @@ final class SymfonyMinorTest extends TestCase
     }
 
     /**
+     * @param array<string, string> $components
+     *
+     * @return list<string>
+     */
+    private function behind(array $components): array
+    {
+        $behind = [];
+        foreach ($components as $name => $version) {
+            $allowedOnFirstRelease = in_array($name, self::WITHOUT_TAKEN_RELEASE, true) && self::FIRST_RELEASE === $version;
+            if (!$allowedOnFirstRelease && (!str_starts_with($version, 'v'.self::MINOR.'.') || Comparator::lessThan($this->normalized($version), $this->normalized(self::TAKEN_RELEASE)))) {
+                $behind[] = $name.' '.$version;
+            }
+        }
+
+        return $behind;
+    }
+
+    /**
      * @return array<string, string>
      */
     private function lockedComponents(): array
@@ -82,11 +127,6 @@ final class SymfonyMinorTest extends TestCase
         }
 
         return $components;
-    }
-
-    private function isMinorRelease(string $version): bool
-    {
-        return str_starts_with($version, 'v'.self::MINOR.'.');
     }
 
     private function normalized(string $version): string
