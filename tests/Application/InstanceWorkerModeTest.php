@@ -57,7 +57,9 @@ final class InstanceWorkerModeTest extends InstanceTestCase
 
     public function testInWorkerModeARequestNamingTheDashboardHostIsAnsweredByTheAppWithItsPage(): void
     {
-        $dashboardHost = 'localhost:'.new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env.test'))['DASHBOARD_PORT'];
+        $dashboardPort = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env.test'))['DASHBOARD_PORT'] ?? null;
+        self::assertIsString($dashboardPort);
+        $dashboardHost = 'localhost:'.$dashboardPort;
         $request = <<<'PHP_WRAP'
             $context = stream_context_create(["http" => ["header" => "Host: ".$argv[1], "ignore_errors" => true]]);
             $body = (string) file_get_contents(getenv("INTAKT_INSTANCE_URL")."/projects", false, $context);
