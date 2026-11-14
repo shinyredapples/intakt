@@ -36,6 +36,7 @@ use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
@@ -65,6 +66,7 @@ use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
@@ -107,6 +109,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Tier::class)]
 #[UsesClass(VerdictParser::class)]
+#[UsesClass(VerdictUnreadable::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
@@ -158,6 +161,34 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[1]['usages'];
         self::assertSame([120, 40], [$usages[0]['prompt'], $usages[0]['completion']]);
+    }
+
+    public function testProseAroundOneFencedJsonBlockYieldsTheTypedVerdict(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('fenced'))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+    }
+
+    #[DataProvider('unreadableAnswers')]
+    public function testAnAnswerWithoutExactlyOneVerdictBlockIsRefusedAsUnreadable(string $recording): void
+    {
+        $vendor = $this->vendor(RecordedClaudeCodeCli::replaying($recording));
+
+        $this->expectException(VerdictUnreadable::class);
+
+        $vendor->review('alpha', Tier::Strong, $this->request());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unreadableAnswers(): iterable
+    {
+        yield 'no block' => ['prose-only'];
+        yield 'two blocks' => ['two-blocks'];
+        yield 'a block that is not a verdict' => ['not-a-verdict'];
     }
 
     public function testTheCliGetsNoToolsNoProjectSettingsAndTheVerdictSchema(): void

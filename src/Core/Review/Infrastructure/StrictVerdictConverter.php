@@ -39,6 +39,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         private ResultConverterInterface $inner,
         private SerializerInterface $serializer,
         private ValidatorInterface $validator,
+        private AnswerForm $form = AnswerForm::Json,
     ) {
     }
 
@@ -137,10 +138,47 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     private function verdictFrom(string $content): Verdict
     {
         try {
-            return $this->deserialized($content);
+            return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
         } catch (ExceptionInterface $exception) {
             throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
         }
+    }
+
+    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block. The rule is deliberately simpler than Markdown and fails closed: anything but one plain top-level block leaves the text as it is, which then fails as invalid, because refusing a verdict costs a review while reading the wrong one of two costs the change.
+    private function fencedBlockOf(string $content): string
+    {
+        // Counted anywhere, whatever comes before it on the line, so a second block in any Markdown form, or a mention in the prose, makes the answer ambiguous.
+        if (1 !== preg_match_all('/(?:`{3,}|~{3,})[ \t]*json\b/i', $content)) {
+            return $content;
+        }
+
+        if (1 !== preg_match('/^```json[ \t]*\r?\n(.*?)\r?\n```[ \t]*(?=\r?\n|\z)/ms', $content, $block, PREG_OFFSET_CAPTURE)) {
+            return $content;
+        }
+
+        return $this->isNested(substr($content, 0, $block[0][1])) ? $content : $block[1][0];
+    }
+
+    // Refused because a block inside another fence is an example in the prose, not the answer; the odd count is the maintainer's rule, the open fence also catches a fence line with an info string, which never closes a block.
+    private function isNested(string $before): bool
+    {
+        return $this->aFenceIsLeftOpenIn($before) || 1 === (int) preg_match_all('/^.*(?:`{3}|~{3}).*$/m', $before) % 2;
+    }
+
+    private function aFenceIsLeftOpenIn(string $text): bool
+    {
+        preg_match_all('/^([ \t>*+\-\d.)]*)(`{3,}|~{3,})[ \t]*(.*?)[ \t]*\r?$/m', $text, $lines, PREG_SET_ORDER);
+        $open = null;
+        foreach ($lines as [, $prefix, $run, $info]) {
+            $line = FenceLine::of($prefix, $run, $info);
+            $open = match (true) {
+                !$open instanceof FenceLine => $line,
+                $line->closes($open) => null,
+                default => $open,
+            };
+        }
+
+        return $open instanceof FenceLine;
     }
 
     /**
