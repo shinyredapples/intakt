@@ -143,7 +143,7 @@ php bin/instance 3>&1 >/dev/null
 
 The exit code is 0 only when the status is `ready`. The server log goes to standard output.
 
-A failed boot's reason is the first line of the server log that mentions an error or exception. When no line does, it is the last line of the log that is not empty, so a server that the system stops, for example with a bare `Out of memory`, reads `the server exited: Out of memory`. A server that exits without writing anything reads `the server exited: the server log is empty`.
+A failed boot's reason says what went wrong (`the server exited:`, `HTTP <code>:` for an answer of 500 or more, or `no answer within 30 seconds:`) followed by the first line of the server log that mentions an error or exception. When no line does, it is the last line of the log that is not empty, so a server that the system stops, for example with a bare `Out of memory`, reads `the server exited: Out of memory`. A server that exits without writing anything reads `the server exited: the server log is empty`.
 
 When `frankenphp` is on your `PATH` (as in the container image), `bin/instance` serves the app with FrankenPHP in worker mode instead of PHP's built-in web server, and the line says so: `{"status":"ready","mode":"worker"}` or `{"status":"failed","mode":"worker","reason":"..."}`. A line without `mode` means the built-in server.
 
