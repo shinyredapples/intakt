@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\BootState;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\MainCommit;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\FileContent;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
@@ -20,6 +21,7 @@ use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Plugin\LocalGitForge\UseCase\BootHead\BootHarnessAtMainHandler;
 use Intakt\Plugin\LocalGitForge\UseCase\BootHead\BootHarnessHandler;
 use Intakt\Plugin\LocalGitForge\UseCase\BootHead\InstanceBoot;
+use Intakt\Plugin\LocalGitForge\UseCase\BootHead\MainCommitHandler;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -27,6 +29,8 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(BootHarnessHandler::class)]
 #[CoversClass(BootHarnessAtMainHandler::class)]
+#[CoversClass(MainCommitHandler::class)]
+#[UsesClass(MainCommit::class)]
 #[UsesClass(BootAt::class)]
 #[UsesClass(BootHarness::class)]
 #[UsesClass(BootHarnessAtMain::class)]
@@ -76,5 +80,12 @@ final class BootHeadHandlersTest extends TestCase
 
         self::assertSame(BootState::Failed, $outcome->state);
         self::assertSame('main harness', $outcome->reason);
+    }
+
+    public function testTheMainCommitIsTheCommitTheBaseBranchPointsAt(): void
+    {
+        $main = new MainCommitHandler()(new MainCommit($this->head->source));
+
+        self::assertTrue($this->main->equals($main));
     }
 }

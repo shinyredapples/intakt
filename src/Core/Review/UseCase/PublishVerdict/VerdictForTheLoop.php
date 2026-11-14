@@ -110,6 +110,6 @@ final readonly class VerdictForTheLoop
     {
         $act = $this->ledger->actIdsOf($round->id()->toRfc4122());
 
-        return array_values(array_filter($this->findings->reportedIn($round), static fn (Finding $finding): bool => in_array($finding->id, $act, true)));
+        return $this->findings->actListOf($round, $act);
     }
 }
