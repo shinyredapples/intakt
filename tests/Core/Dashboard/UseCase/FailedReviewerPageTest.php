@@ -100,6 +100,7 @@ final class FailedReviewerPageTest extends WebTestCase
             new StoredVerdicts($serializer),
             new WorkerOnSleep($fixture->clock, $work),
             new FailureInWords(),
+            $vendor,
         );
 
         return $reviewChange->review($this->request(), new IgnoredProgress());
