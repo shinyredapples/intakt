@@ -173,9 +173,18 @@ final class ScriptedRound
 
     public function answering(string $decision): PlatformInterface
     {
-        return MockPlatformFactory::createPlatform(static function () use ($decision): TextResult {
+        return $this->answeringAfterUnreadable(0, $decision);
+    }
+
+    // The first calls answer prose that is no verdict, so a case can show the retry and the failure that follows it.
+    public function answeringAfterUnreadable(int $unreadable, string $decision): PlatformInterface
+    {
+        $calls = 0;
+
+        return MockPlatformFactory::createPlatform(static function () use (&$calls, $unreadable, $decision): TextResult {
             $document = VerdictDocument::fromTheDesign();
-            $answer = new TextResult($document->with('verdict', $decision)->with('resolved', [])->with('findings', 'approve' === $decision ? [] : $document->decoded()['findings'])->json());
+            $text = ++$calls <= $unreadable ? 'I approve the first change, but not the second one.' : $document->with('verdict', $decision)->with('resolved', [])->with('findings', 'approve' === $decision ? [] : $document->decoded()['findings'])->json();
+            $answer = new TextResult($text);
             $answer->getMetadata()->add('token_usage', new TokenUsage(
                 promptTokens: 100,
                 completionTokens: 20,
