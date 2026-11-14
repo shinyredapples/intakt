@@ -29,7 +29,7 @@ final class ReviewJobConfigurationTest extends TestCase
         $images = new ReviewJobImages(ReviewJobConfiguration::imagesOf($this->processed(['image' => 'intakt-job/alpha:review'])));
 
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The project "beta" has no review job image');
+        $this->expectExceptionMessageIsOrContains('The project "beta" has no review job image');
 
         $images->imageFor('beta');
     }

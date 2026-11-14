@@ -30,7 +30,7 @@ final readonly class ReviewJobAnswer
         return null === $text || '' === $text ? throw ReviewJobFailure::unreadableAnswer($provider) : new self($text);
     }
 
-    // A result marked as an error (a rate limit, a refused login) is the CLI's own text, never the reviewer's answer.
+    // Refused when marked as an error, because such a result (a rate limit, a refused login) is the CLI's own text, never the reviewer's answer.
     private static function claudeCodeResult(string $output): ?string
     {
         $result = json_decode($output, true);

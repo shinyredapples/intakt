@@ -156,7 +156,7 @@ final class ReviewJobTest extends TestCase
         $runner->method('run')->willThrowException(new RuntimeException('no job may start'));
 
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('No review job runs a reviewer on the provider anthropic');
+        $this->expectExceptionMessageIsOrContains('No review job runs a reviewer on the provider anthropic');
 
         (void) $this->useCase($runner)->run($this->request(new ResolvedModel(Provider::Anthropic, 'claude-sonnet-5-5')));
     }
@@ -171,14 +171,16 @@ final class ReviewJobTest extends TestCase
         }
 
         self::assertNull($this->ran);
-        self::assertSame([], glob($this->folder.'/prompts/*') ?: []);
+        self::assertSame([], glob($this->folder.'/prompts/*'));
     }
 
     public function testACheckoutThatIsNoFolderIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
-        (void) $this->reviews($this->answered(self::CLAUDE_ANSWER))->run($this->request(checkout: $this->folder.'/missing'));
+        $request = new ReviewJobRequest('demo', $this->folder.'/missing', self::HEAD, 'correctness', new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'), 'PLANT-prompt');
+
+        (void) $this->reviews($this->answered(self::CLAUDE_ANSWER))->run($request);
     }
 
     public function testTheJobIdNamesTheProjectTheHeadAndTheReviewerSoASecondJobOfThemIsRefusedWhileOneRuns(): void
@@ -215,7 +217,7 @@ final class ReviewJobTest extends TestCase
         $output = new JobOutput([ReviewJob::LOG => "fatal: some git error\nrefused: the checkout is writable\n"]);
 
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The review job refused to run the reviewer: the checkout is writable.');
+        $this->expectExceptionMessageIsOrContains('The review job refused to run the reviewer: the checkout is writable.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 1), $output))->run($this->request());
     }
@@ -223,7 +225,7 @@ final class ReviewJobTest extends TestCase
     public function testAJobThatFailedWithoutAReasonNamesItsExitCode(): void
     {
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The review job refused to run the reviewer: it exited with 2.');
+        $this->expectExceptionMessageIsOrContains('The review job refused to run the reviewer: it exited with 2.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 2), new JobOutput([])))->run($this->request());
     }
@@ -240,7 +242,7 @@ final class ReviewJobTest extends TestCase
     public function testAJobTheEngineStoppedForMemoryFailsWhateverItsAnswerSays(): void
     {
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The review job ran out of memory.');
+        $this->expectExceptionMessageIsOrContains('The review job ran out of memory.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::MemoryKilled, 137), $this->answered(self::CLAUDE_ANSWER)->output))->run($this->request());
     }
@@ -248,7 +250,7 @@ final class ReviewJobTest extends TestCase
     public function testAJobTheEngineStoppedForTimeFailsWhateverItsAnswerSays(): void
     {
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The review job ran out of time.');
+        $this->expectExceptionMessageIsOrContains('The review job ran out of time.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::TimedOut, 137), $this->answered(self::CLAUDE_ANSWER)->output))->run($this->request());
     }
@@ -259,7 +261,7 @@ final class ReviewJobTest extends TestCase
         $runner->method('run')->willThrowException(JobOutputRefused::tooLarge('answer', 16));
 
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The review job left an output the runner refuses to read.');
+        $this->expectExceptionMessageIsOrContains('The review job left an output the runner refuses to read.');
 
         (void) $this->useCase($runner)->run($this->request());
     }
@@ -269,7 +271,7 @@ final class ReviewJobTest extends TestCase
         $output = new JobOutput([ReviewJob::LOG => "claude_code exited with 0\nclaude_code exited with 1\n", ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
 
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The reviewer\'s CLI claude_code exited with 1.');
+        $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code exited with 1.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
     }
@@ -288,7 +290,7 @@ final class ReviewJobTest extends TestCase
         $output = new JobOutput([ReviewJob::LOG => '', ReviewJob::ANSWER => self::CLAUDE_ANSWER]);
 
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The review job did not report how the reviewer\'s CLI claude_code exited.');
+        $this->expectExceptionMessageIsOrContains('The review job did not report how the reviewer\'s CLI claude_code exited.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
     }
@@ -298,16 +300,16 @@ final class ReviewJobTest extends TestCase
         $output = new JobOutput([ReviewJob::LOG => "claude_code exited with 0\n"]);
 
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The reviewer\'s CLI claude_code gave no answer the review job can read.');
+        $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code gave no answer the review job can read.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
     }
 
-    private function request(?ResolvedModel $model = null, string $project = 'demo', string $reviewer = 'correctness', ?string $checkout = null): ReviewJobRequest
+    private function request(?ResolvedModel $model = null, string $project = 'demo', string $reviewer = 'correctness'): ReviewJobRequest
     {
         return new ReviewJobRequest(
             $project,
-            $checkout ?? $this->folder.'/checkout',
+            $this->folder.'/checkout',
             self::HEAD,
             $reviewer,
             $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'),

@@ -55,7 +55,7 @@ final class ReviewJobAnswerTest extends TestCase
     public function testAClaudeCodeAnswerThatIsNoSuccessfulResultIsRefused(string $output): void
     {
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The reviewer\'s CLI claude_code gave no answer the review job can read.');
+        $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code gave no answer the review job can read.');
 
         ReviewJobAnswer::read(Provider::ClaudeCode, $output);
     }
@@ -82,7 +82,7 @@ final class ReviewJobAnswerTest extends TestCase
     public function testACodexAnswerThatIsNoCompletedTurnWithAMessageIsRefused(string $output): void
     {
         $this->expectException(ReviewJobFailure::class);
-        $this->expectExceptionMessage('The reviewer\'s CLI codex gave no answer the review job can read.');
+        $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI codex gave no answer the review job can read.');
 
         ReviewJobAnswer::read(Provider::Codex, $output);
     }

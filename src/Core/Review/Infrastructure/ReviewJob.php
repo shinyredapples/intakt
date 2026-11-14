@@ -24,7 +24,7 @@ use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 
-// Runs one reviewer's CLI in a job container on a read-only checkout of the head; not yet chosen by the review flow, which picks between this and the in-process reviewer later.
+// Not called by the review flow yet, because the choice between this and the in-process reviewer belongs to the runner's issue (part 2 of #1650).
 final readonly class ReviewJob
 {
     public const string CHECKOUT = '/input/checkout';
@@ -80,7 +80,7 @@ final readonly class ReviewJob
         }
     }
 
-    // The vendor's host only: the review image installs nothing, and the CLI talks to no other host.
+    // The vendor's host alone, because the review image installs nothing and the CLI talks to no other host.
     private function egressOf(Provider $provider): JobEgress
     {
         return match ($provider) {
