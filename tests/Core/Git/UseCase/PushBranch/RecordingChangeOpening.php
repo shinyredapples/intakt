@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
 use Closure;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
+use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
 use Override;
 
@@ -16,6 +17,7 @@ final class RecordingChangeOpening implements ChangeOpening
     public int $opened = 0;
     public int $calls = 0;
     public ?Closure $during = null;
+    public ?ChangeText $text = null;
 
     /** @var array<string, ChangeId> */
     private array $pulls = [];
@@ -24,6 +26,7 @@ final class RecordingChangeOpening implements ChangeOpening
     public function openOrUpdate(ProposedChange $change): ChangeId
     {
         ++$this->calls;
+        $this->text = $change->text;
 
         if ($this->during instanceof Closure) {
             ($this->during)();

@@ -9,11 +9,14 @@ use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Plugin\Forge\Contract\ChangeText;
 use JsonException;
 
 // One record per phase and per commit the push intends to produce, so a restart reads where the last attempt stopped and never repeats a phase it finished; keyed by project too, because two projects can share history and branch names.
 final readonly class PushRecords
 {
+    private const string TEXT_DIGEST = 'text_digest';
+
     public function __construct(
         private Ledger $ledger,
     ) {
@@ -21,19 +24,21 @@ final readonly class PushRecords
 
     public function isIntended(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->recorded(LedgerEventKind::PushIntended, $request, $head);
+        return null !== $this->latest(LedgerEventKind::PushIntended, $request, $head);
     }
 
     public function hasPushed(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->recorded(LedgerEventKind::BranchPushed, $request, $head);
+        return null !== $this->latest(LedgerEventKind::BranchPushed, $request, $head);
     }
 
+    // Only for the text the pull request was last given: a rework can correct the text alone and keep the commits, and a text that went back to an earlier wording has to reach the forge again.
     public function openedChange(BranchPushRequest $request, string $head): ?string
     {
-        $change = $this->recorded(LedgerEventKind::ChangeOpened, $request, $head)['change'] ?? null;
+        $latest = $this->latest(LedgerEventKind::ChangeOpened, $request, $head);
+        $change = $latest['change'] ?? null;
 
-        return is_string($change) ? $change : null;
+        return is_string($change) && ($latest[self::TEXT_DIGEST] ?? null) === $this->digestOf($request->text) ? $change : null;
     }
 
     /**
@@ -57,7 +62,13 @@ final readonly class PushRecords
      */
     public function open(BranchPushRequest $request, string $head, string $change): void
     {
-        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change]);
+        $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change, self::TEXT_DIGEST => $this->digestOf($request->text)]);
+    }
+
+    // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.
+    private function digestOf(ChangeText $text): string
+    {
+        return hash('sha256', strlen($text->title).':'.$text->title.$text->body);
     }
 
     /**
@@ -71,19 +82,20 @@ final readonly class PushRecords
     /**
      * @return array<mixed>|null
      */
-    private function recorded(LedgerEventKind $kind, BranchPushRequest $request, string $head): ?array
+    private function latest(LedgerEventKind $kind, BranchPushRequest $request, string $head): ?array
     {
         $key = $this->keyOf($request, $head);
+        $latest = null;
 
         foreach ($this->ledger->readOfKind($kind) as $event) {
             $payload = $this->decoded($event->event->payload);
 
             if (($payload['project'] ?? null) === $key['project'] && ($payload['branch'] ?? null) === $key['branch'] && ($payload['head'] ?? null) === $key['head']) {
-                return $payload;
+                $latest = $payload;
             }
         }
 
-        return null;
+        return $latest;
     }
 
     /**

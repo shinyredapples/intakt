@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\PushBranch;
 
+use Closure;
 use Intakt\Core\Git\Contract\BranchNotPushed;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -114,7 +115,7 @@ final class PushBranchTest extends TestCase
         $theirs = $this->scenario->pushOtherCommit();
 
         try {
-            $this->scenario->push()->push($this->scenario->request());
+            (void) $this->scenario->push()->push($this->scenario->request());
             self::fail('The push must refuse a remote branch that is not the checked base.');
         } catch (BranchNotPushed $refused) {
             self::assertStringContainsString('moved', $refused->getMessage());
@@ -128,7 +129,7 @@ final class PushBranchTest extends TestCase
     {
         $this->expectException(BranchNotPushed::class);
 
-        $this->scenario->push()->push($this->scenario->request($this->scenario->repository->objectAt('main')));
+        (void) $this->scenario->push()->push($this->scenario->request($this->scenario->repository->objectAt('main')));
     }
 
     public function testTheIntendedIdIsRecordedBeforeThePushAndIsTheOneThePushProduces(): void
@@ -146,7 +147,7 @@ final class PushBranchTest extends TestCase
         $this->scenario->ledger->accepts = 0;
 
         try {
-            $this->scenario->push()->push($this->scenario->request());
+            (void) $this->scenario->push()->push($this->scenario->request());
             self::fail('The push must stop when the ledger refuses the intent.');
         } catch (BranchNotPushed) {
             self::assertNull($this->scenario->remoteTip());
@@ -158,7 +159,7 @@ final class PushBranchTest extends TestCase
         $this->scenario->ledger->accepts = 1;
 
         try {
-            $this->scenario->push()->push($this->scenario->request());
+            (void) $this->scenario->push()->push($this->scenario->request());
             self::fail('The ledger refused the record of the push.');
         } catch (BranchNotPushed) {
         }
@@ -179,7 +180,7 @@ final class PushBranchTest extends TestCase
         $this->scenario->ledger->accepts = 1;
 
         try {
-            $this->scenario->push()->push($this->scenario->request());
+            (void) $this->scenario->push()->push($this->scenario->request());
             self::fail('The ledger refused the record of the push.');
         } catch (BranchNotPushed) {
         }
@@ -195,7 +196,7 @@ final class PushBranchTest extends TestCase
 
     public function testARecordOfAnotherProjectWithTheSameBranchAndHeadDoesNotStandInForThisProjectsPush(): void
     {
-        $this->scenario->push()->push($this->scenario->request());
+        (void) $this->scenario->push()->push($this->scenario->request());
         $other = $this->scenario->otherRemote();
 
         $pushed = $this->scenario->push()->push($this->scenario->requestOfProject('gadgets', $other));
@@ -210,7 +211,7 @@ final class PushBranchTest extends TestCase
         $this->scenario->changes->during = static fn () => throw BranchNotPushed::because('the process died');
 
         try {
-            $this->scenario->push()->push($this->scenario->request());
+            (void) $this->scenario->push()->push($this->scenario->request());
             self::fail('The opening was meant to fail.');
         } catch (BranchNotPushed) {
         }
@@ -230,7 +231,7 @@ final class PushBranchTest extends TestCase
         $this->scenario->ledger->accepts = 2;
 
         try {
-            $this->scenario->push()->push($this->scenario->request());
+            (void) $this->scenario->push()->push($this->scenario->request());
             self::fail('The ledger refused the record of the pull request.');
         } catch (BranchNotPushed) {
         }
@@ -254,13 +255,134 @@ final class PushBranchTest extends TestCase
         self::assertCount(3, $this->scenario->ledger->kinds());
     }
 
+    public function testATextCorrectedForTheSameCommitsReachesTheOpenPullRequest(): void
+    {
+        $push = $this->scenario->push();
+        $corrected = new ChangeText('Corrected title', 'E1: now referenced.');
+        $first = $push->push($this->scenario->request());
+
+        $second = $push->push($this->scenario->withText($this->scenario->request(), $corrected));
+
+        self::assertEquals($first, $second);
+        self::assertSame(2, $this->scenario->changes->calls);
+        self::assertSame(1, $this->scenario->changes->opened);
+        self::assertSame($corrected, $this->scenario->changes->text);
+        self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeOpened, LedgerEventKind::ChangeOpened], $this->scenario->ledger->kinds());
+    }
+
+    public function testAReworkThatHandsBackThePushedHeadWithACorrectedTextUpdatesThePullRequest(): void
+    {
+        $push = $this->scenario->push();
+        $corrected = new ChangeText('Corrected title', 'E1: now referenced.');
+        $opened = $push->push($this->scenario->request());
+        self::assertInstanceOf(PushedBranch::class, $opened);
+
+        $again = $push->push($this->scenario->withText($this->scenario->request($opened->head, $opened->head), $corrected));
+
+        self::assertEquals($opened, $again);
+        self::assertSame($opened->head, $this->scenario->remoteTip());
+        self::assertSame(2, $this->scenario->changes->calls);
+        self::assertSame($corrected, $this->scenario->changes->text);
+    }
+
+    public function testATextThatGoesBackToAnEarlierWordingReachesThePullRequestAgain(): void
+    {
+        $push = $this->scenario->push();
+        $first = $this->scenario->request();
+        (void) $push->push($first);
+        (void) $push->push($this->scenario->withText($first, new ChangeText('Corrected title', 'E1: now referenced.')));
+
+        (void) $push->push($first);
+
+        self::assertSame(3, $this->scenario->changes->calls);
+        self::assertSame(1, $this->scenario->changes->opened);
+        self::assertSame($first->text, $this->scenario->changes->text);
+    }
+
+    public function testATextWhoseTitleAndBodyOnlyMeetAtAnotherPlaceIsAnotherText(): void
+    {
+        $push = $this->scenario->push();
+        (void) $push->push($this->scenario->withText($this->scenario->request(), new ChangeText('Add the', ' files')));
+
+        (void) $push->push($this->scenario->withText($this->scenario->request(), new ChangeText('Add the ', 'files')));
+
+        self::assertSame(2, $this->scenario->changes->calls);
+    }
+
+    public function testACrashAfterATextCorrectionReachedTheForgeSendsItAgainAndOpensNoSecondPullRequest(): void
+    {
+        $push = $this->scenario->push();
+        $corrected = $this->scenario->withText($this->scenario->request(), new ChangeText('Corrected title', 'E1: now referenced.'));
+        (void) $push->push($this->scenario->request());
+        $this->scenario->ledger->accepts = 3;
+
+        try {
+            (void) $push->push($corrected);
+            self::fail('The ledger refused the record of the corrected text.');
+        } catch (BranchNotPushed) {
+        }
+
+        $this->scenario->ledger->accepts = PHP_INT_MAX;
+        $pushed = $push->push($corrected);
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame(3, $this->scenario->changes->calls);
+        self::assertSame(1, $this->scenario->changes->opened);
+        self::assertSame($corrected->text, $this->scenario->changes->text);
+        self::assertCount(4, $this->scenario->ledger->kinds());
+    }
+
+    public function testARecordOfAnOpenedPullRequestThatNamesNoTextDoesNotStandInForTheText(): void
+    {
+        $request = $this->scenario->request();
+        $head = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), $request->accepted, 'refs/heads/main');
+        $this->scenario->ledger->append(new LedgerEvent(LedgerEventKind::ChangeOpened, json_encode(['project' => $request->project, 'branch' => $request->branch, 'head' => $head, 'change' => 'https://github.com/acme/widgets/pull/9'], JSON_THROW_ON_ERROR)));
+
+        $pushed = $this->scenario->push()->push($request);
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame(1, $this->scenario->changes->calls);
+        self::assertSame('https://github.com/acme/widgets/pull/1', $pushed->change->value);
+    }
+
+    public function testTheLedgerKeepsADigestOfThePullRequestTextAndNeverTheText(): void
+    {
+        (void) $this->scenario->push()->push($this->scenario->request());
+
+        $record = $this->scenario->ledger->payloadOf(LedgerEventKind::ChangeOpened);
+
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $record['text_digest']);
+        self::assertStringNotContainsString('Add the files', implode(' ', $record));
+        self::assertStringNotContainsString('Evidence: tests pass.', implode(' ', $record));
+    }
+
+    public function testDiscardingTheOutcomeOfAPushIsReported(): void
+    {
+        $push = $this->scenario->push()->push(...);
+        $warnings = [];
+        set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        }, E_USER_WARNING);
+
+        try {
+            $this->discardTheOutcome($push, $this->scenario->request());
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertCount(1, $warnings);
+        self::assertStringContainsString('a merge-main outcome has to go back to the builder', $warnings[0]);
+    }
+
     public function testASecondPushOfTheSameBranchWhileOneRunsIsRefusedWithoutWaiting(): void
     {
         $push = $this->scenario->push();
         $inner = null;
         $this->scenario->changes->during = function () use ($push, &$inner): void {
             try {
-                $push->push($this->scenario->request());
+                (void) $push->push($this->scenario->request());
             } catch (BranchNotPushed $busy) {
                 $inner = $busy->getMessage();
             }
@@ -275,7 +397,7 @@ final class PushBranchTest extends TestCase
         $push = $this->scenario->push($this->scenario->signingKey($this->scenario->key.'.missing'));
 
         try {
-            $push->push($this->scenario->request());
+            (void) $push->push($this->scenario->request());
             self::fail('A missing key cannot sign.');
         } catch (BranchNotPushed) {
             self::assertNull($this->scenario->remoteTip());
@@ -293,5 +415,11 @@ final class PushBranchTest extends TestCase
 
         self::assertInstanceOf(PushedBranch::class, $pushed);
         self::assertSame($mainTip, $this->scenario->repository->objectAt($pushed->head.'^2'));
+    }
+
+    // Takes a plain Closure because static analysis refuses a discarded call it can see, and the engine still checks this one.
+    private function discardTheOutcome(Closure $push, BranchPushRequest $request): void
+    {
+        $push($request);
     }
 }

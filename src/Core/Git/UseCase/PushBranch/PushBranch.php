@@ -12,6 +12,7 @@ use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
+use NoDiscard;
 use Override;
 use Symfony\Component\Lock\LockFactory;
 
@@ -28,7 +29,9 @@ final readonly class PushBranch implements BranchPush
     ) {
     }
 
+    // Repeated from the interface, because PHP reports a discarded result only for the method that runs.
     #[Override]
+    #[NoDiscard('a merge-main outcome has to go back to the builder')]
     public function push(BranchPushRequest $request): PushedBranch|MainConflicts
     {
         // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
@@ -117,7 +120,7 @@ final readonly class PushBranch implements BranchPush
             return new ChangeId($recorded);
         }
 
-        // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one.
+        // The forge looks for an open pull request of the branch first, so a crash after the pull request was opened and before it was recorded opens no second one, and a corrected text of the same commits updates the open one.
         $change = $this->changes->openOrUpdate(new ProposedChange($request->project, $request->branch, substr($main, strlen(self::BRANCHES)), $request->text));
         $this->records->open($request, $head, $change->value);
 

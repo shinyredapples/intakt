@@ -76,6 +76,12 @@ final readonly class PushScenario
         return new BranchPushRequest($project, $this->gitDirectory(), $remote, self::BRANCH, new AcceptedHandBack(null, $this->head, 0), new ChangeText('Add the files', 'Evidence: tests pass.'));
     }
 
+    // The same commits with other words, because a rework can correct the pull request text alone.
+    public function withText(BranchPushRequest $request, ChangeText $text): BranchPushRequest
+    {
+        return new BranchPushRequest($request->project, $request->repository, $request->remote, $request->branch, $request->accepted, $text);
+    }
+
     // A second project's remote holding the same main, because two projects can share history and name their task branches alike.
     public function otherRemote(): string
     {
