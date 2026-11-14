@@ -325,11 +325,32 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertSame($this->verdictSchema(), $cli->options['json_schema']);
     }
 
-    public function testAnApprovalFromACliGivenTheReviewServerCounts(): void
+    public function testAnApprovalFromACliThatReadThroughTheReviewServerCounts(): void
     {
-        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('tool-use'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('review-server-read'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame(Decision::Approve, $verdict->verdict);
+    }
+
+    #[DataProvider('unreadRecordings')]
+    public function testAnApprovalFromACliGivenTheReviewServerWithoutAnAnsweredReadThroughItIsRefused(string $recording): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying($recording), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unreadRecordings(): iterable
+    {
+        yield 'only a refused built-in tool' => ['tool-use'];
+        yield 'a read the server answered with an error' => ['review-server-read-failed'];
+        yield 'a read without its result' => ['review-server-read-unanswered'];
+        yield 'a read through another server' => ['other-server-read'];
+        yield 'a read embedded in the answer text' => ['review-server-read-in-text'];
     }
 
     public function testAnApprovalFromACliStartedWithoutTheReviewServerForWantOfARoundIsStillRefused(): void

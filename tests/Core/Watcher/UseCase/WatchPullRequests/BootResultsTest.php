@@ -135,17 +135,102 @@ final class BootResultsTest extends KernelTestCase
         self::assertCount(2, $bus->booted);
     }
 
-    public function testACrashingBootIsReturnedAsACrashedOutcomeAndBootsAgainNextTime(): void
+    public function testACrashedMainBootInsideTheBackOffIsAnsweredWithoutBootingAgain(): void
     {
         $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
         $results = $this->results($bus);
-
         $first = $results->ofMain($this->key('a', 'tools-1'), $this->source());
-        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->clock->modify('+4 minutes 59 seconds');
+        $second = $results->ofMain($this->key('a', 'tools-1'), $this->source());
 
         self::assertSame(BootState::Crashed, $first->state);
-        self::assertSame('composer could not run', $first->reason);
+        self::assertSame('composer could not run', $second->reason);
+        self::assertCount(1, $bus->booted);
+    }
+
+    public function testACrashedMainBootIsBootedAgainOnceTheBackOffHasPassed(): void
+    {
+        $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->clock->modify('+5 minutes');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
         self::assertCount(2, $bus->booted);
+    }
+
+    public function testACrashAfterAnExpiredCrashStartsANewBackOff(): void
+    {
+        $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->clock->modify('+5 minutes');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->clock->modify('+4 minutes');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(2, $bus->booted);
+    }
+
+    public function testAFreshCrashThatAnotherWorkerStoredOverAnExpiredOneIsAnsweredWithoutBootingAgain(): void
+    {
+        $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
+        $results = $this->results($bus);
+        $otherWorker = new BootResults($bus, new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration()), $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->clock->modify('+5 minutes');
+        $otherWorker->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->clock->modify('+1 second');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(2, $bus->booted);
+    }
+
+    public function testABootedResultThatReplacesAnExpiredCrashIsKeptForGood(): void
+    {
+        $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->clock->modify('+5 minutes');
+        $bus->outcome = BootOutcome::booted();
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->clock->modify('+1 day');
+        $later = $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Booted, $later->state);
+        self::assertCount(2, $bus->booted);
+    }
+
+    public function testAFailedResultIsKeptLongAfterTheBackOffWindow(): void
+    {
+        $bus = new BootingBus(BootOutcome::failed('The server did not start.'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->clock->modify('+1 day');
+        $later = $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $later->state);
+        self::assertCount(1, $bus->booted);
+    }
+
+    public function testACrashInsideTheBackOffAppendsNoSecondLedgerEventAndOneAfterItAppendsOne(): void
+    {
+        $results = $this->results(new BootingBus(BootOutcome::crashed('composer could not run')));
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed)));
+
+        $this->clock->modify('+5 minutes');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(2, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed)));
     }
 
     public function testABootThatThrowsNeverReachesTheCallerAndIsACrashedOutcome(): void
@@ -157,7 +242,6 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertSame(BootState::Crashed, $outcome->state);
         self::assertSame('RuntimeException: The query bus is down.', $outcome->reason);
-        self::assertNull($this->entities->find(BootRecord::class, ['project' => 'alpha', 'main' => str_repeat('a', 40), 'toolFingerprint' => 'tools-1']));
     }
 
     public function testComputingABootResultAppendsOneBootResultEventAndACacheHitAppendsNone(): void

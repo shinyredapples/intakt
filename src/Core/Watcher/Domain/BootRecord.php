@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\Domain;
 
+use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Review\Contract\BootOutcome;
@@ -16,6 +17,9 @@ use Intakt\Plugin\Forge\Contract\CommitId;
 final readonly class BootRecord
 {
     public const string TABLE = 'watcher_boot_result';
+
+    // Short, because a crash is the boot step's fault and not main's: it holds off a repeated `composer install` for a few minutes and then main boots again.
+    public const string CRASH_BACK_OFF = 'PT5M';
 
     #[ORM\Id]
     #[ORM\Column(length: 255)]
@@ -94,6 +98,11 @@ final readonly class BootRecord
             BootState::Failed => BootOutcome::failed($this->reason),
             BootState::Crashed => BootOutcome::crashed($this->reason),
         };
+    }
+
+    public function answersAt(DateTimeImmutable $now): bool
+    {
+        return BootState::Crashed !== $this->state || $this->recordedAt->add(new DateInterval(self::CRASH_BACK_OFF)) > $now;
     }
 
     public function recordedAt(): DateTimeImmutable
