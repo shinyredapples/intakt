@@ -63,6 +63,26 @@ final class LedgerFailingMainsTest extends TestCase
         self::assertSame([], $this->failing());
     }
 
+    public function testALateBootedLineOfAnOlderFailedMainKeepsTheItemOfTheNewerFailingMain(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
+        $this->ledger->failMainBoot('alpha', 'B fails.', 'b');
+
+        $this->ledger->bootMain('alpha', 'a');
+
+        self::assertSame(['B fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
+    }
+
+    public function testALateBootedLineOfAnOlderBootedMainKeepsTheItemOfTheNewerFailingMain(): void
+    {
+        $this->ledger->bootMain('alpha', 'a');
+        $this->ledger->failMainBoot('alpha', 'B fails.', 'b');
+
+        $this->ledger->bootMain('alpha', 'a');
+
+        self::assertSame(['B fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
+    }
+
     public function testALedgerWithoutAMainFailureListsNothing(): void
     {
         $this->ledger->bootMain('alpha');
