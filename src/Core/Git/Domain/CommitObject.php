@@ -25,7 +25,7 @@ final readonly class CommitObject
         return new self(explode("\n", $headers), $message);
     }
 
-    // Moves each parent that was replaced to its replacement, so a rewritten commit sits on rewritten parents.
+    // Signing changes a commit's SHA, so each child must name its parent's new SHA or the signed history would fork from the unsigned one.
     /**
      * @param array<string, string> $replaced
      */

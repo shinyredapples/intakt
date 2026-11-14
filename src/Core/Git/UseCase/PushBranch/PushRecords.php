@@ -65,10 +65,10 @@ final readonly class PushRecords
         $this->append(LedgerEventKind::BranchPushed, $this->keyOf($request, $head));
     }
 
+    // Without a digest, because the intent only has to come after the last record: it says a write may have happened, not which text it carried.
     /**
      * @throws BranchNotPushed
      */
-    // Without a digest, because the intent only has to come after the last record: it says a write may have happened, not which text it carried.
     public function intendChange(BranchPushRequest $request, string $head): void
     {
         $this->append(LedgerEventKind::ChangeIntended, $this->keyOf($request, $head));
