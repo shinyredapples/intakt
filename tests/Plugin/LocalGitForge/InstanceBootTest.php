@@ -374,6 +374,16 @@ final class InstanceBootTest extends TestCase
         self::assertStringContainsString('There is no file "bin/instance"', $outcome->reason);
     }
 
+    public function testAMainWhoseHarnessIsBinaryIsACrashRatherThanABootOfItsName(): void
+    {
+        $harness = $this->repository->commitFile('bin/instance', "<?php\0");
+
+        $outcome = new InstanceBoot()->of($this->at($harness), new CommitId($harness));
+
+        self::assertSame(BootState::Crashed, $outcome->state);
+        self::assertSame('bin/instance is a binary file of 6 bytes, not a harness.', $outcome->reason);
+    }
+
     public function testAMissingRepositoryIsACrashRatherThanAnException(): void
     {
         $target = new BootAt(new ChangeSource($this->repository->path.'-missing', 'main'), $this->main);
