@@ -50,7 +50,7 @@ final readonly class ReviewReport
         $lines[] = sprintf('act list: %d findings', count($review->actList));
 
         foreach ($review->actList as $finding) {
-            // The merged ids join the entry's id, so each finding the entry stands for stays traceable from the command's output.
+            // The merged ids join the entry's id, so each finding the entry stands for stays traceable from the command's output; RoundFinding::entryId() joins them alike for the review page.
             $lines[] = sprintf('%s %s %s: %s', $this->text->of(implode('+', [$finding->id, ...$finding->merged])), $finding->severity->value, $this->place($finding), $this->text->of($finding->text));
         }
 
