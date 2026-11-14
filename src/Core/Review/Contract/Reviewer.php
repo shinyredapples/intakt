@@ -16,6 +16,7 @@ interface Reviewer
      *
      * @throws ConversationAlreadyStarted
      * @throws IncompleteStreamException
+     * @throws VerdictUnreadable
      */
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function review(ReviewRequest $request, PlatformInterface $platform, string $model): Verdict;

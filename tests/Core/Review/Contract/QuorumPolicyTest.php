@@ -6,8 +6,11 @@ namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -17,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(QuorumPolicy::class)]
 #[UsesClass(PanelVerdict::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(Finding::class)]
 final class QuorumPolicyTest extends TestCase
 {
     public function testAllIsMetByAPanelOfOneApproval(): void
@@ -58,11 +62,12 @@ final class QuorumPolicyTest extends TestCase
         self::assertFalse(QuorumPolicy::All->isMet($panel));
     }
 
-    public function testAnInvalidOutputVerdictIsNoApproval(): void
+    public function testARecordedInvalidOutputVerdictIsNoApproval(): void
     {
+        $invalid = new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [], []);
         $panel = [
             $this->vote(Tier::Strong, Decision::Approve),
-            new PanelVerdict(Tier::Standard, Verdict::invalidOutput('not JSON')),
+            new PanelVerdict(Tier::Standard, $invalid),
         ];
 
         self::assertFalse(QuorumPolicy::All->isMet($panel));

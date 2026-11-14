@@ -47,6 +47,7 @@ use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\IssuedReviewServerAccesses;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
@@ -117,6 +118,7 @@ use Throwable;
 #[UsesClass(SendFailures::class)]
 #[UsesClass(Account::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(VerdictUnreadable::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(UsageReservation::class)]
 #[UsesClass(ProjectModelCatalog::class)]
@@ -408,23 +410,21 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertFileDoesNotExist($this->root.'/arguments');
     }
 
-    public function testTextThatOnlyMentionsALimitIsAFailedReviewAndNoCooldown(): void
+    public function testTextThatOnlyMentionsALimitIsRefusedAsUnreadableAndCoolsNoAccountDown(): void
     {
         $this->replaying('limit-text');
 
-        $verdict = $this->review()->verdict;
+        $failure = $this->failureOfReview();
 
-        self::assertTrue($verdict->isFailedReview());
-        self::assertSame(Verdict::INVALID_OUTPUT, $verdict->findings[0]->id);
+        self::assertSame(VerdictUnreadable::class, $failure::class);
         self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
-        self::assertSame([LedgerEventKind::UsageRecorded, LedgerEventKind::UsageRecorded], $this->ledger->kinds());
     }
 
     public function testTextThatOnlyMentionsALimitStillRecordsItsUsageOnce(): void
     {
         $this->replaying('limit-text');
 
-        $this->review();
+        $this->failureOfReview();
 
         self::assertSame(['started', 'settled'], array_column($this->ledger->payloads(), 'phase'));
         /** @var list<array<string, int|string|null>> $usages */

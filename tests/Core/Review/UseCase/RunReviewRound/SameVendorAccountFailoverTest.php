@@ -204,7 +204,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $team = MockPlatformFactory::createPlatform(static function (): TextResult {
-            $answer = new TextResult(VerdictDocument::fromTheDesign()->json());
+            $answer = new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
             $answer->getMetadata()->add('token_usage', new TokenUsage(
                 promptTokens: 100,
                 completionTokens: 20,
