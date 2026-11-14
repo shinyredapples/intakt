@@ -48,7 +48,7 @@ final readonly class BuildContext
 
         try {
             $filesystem->dumpFile($folder.'/'.$plan->dockerfile, $plan->generated);
-            $this->files->archive($directory, $plan->tree, $file, $folder.'/'.$plan->dockerfile);
+            $filesystem->dumpFile($file, $this->files->archiveAdding($directory, $plan->tree, $folder.'/'.$plan->dockerfile));
         } finally {
             $filesystem->remove($folder);
         }
