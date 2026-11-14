@@ -26,12 +26,24 @@ final class ComposerAuditGate implements Gate
         }
 
         if ($result->succeeded()) {
-            return GateResult::passed($this->name());
+            return $this->passedNaming($this->cooldownExceptions($workspace));
         }
 
         $findings = $this->findings($result->output);
 
         return GateResult::withFindings($this->name(), [] === $findings ? ['composer audit failed: '.$result->firstErrorLine()] : $findings);
+    }
+
+    /**
+     * @param list<string> $exceptions
+     */
+    private function passedNaming(array $exceptions): GateResult
+    {
+        if ([] === $exceptions) {
+            return GateResult::passed($this->name());
+        }
+
+        return GateResult::passedBecause($this->name(), 'cooldown exceptions in force: '.implode(', ', $exceptions));
     }
 
     private function audit(Workspace $workspace): ?ProcessResult
@@ -68,6 +80,30 @@ final class ComposerAuditGate implements Gate
             static fn (string $setting): string => 'composer.json config.audit.'.$setting.' hides findings from the audit',
             array_keys($manifest->get('config')->get('audit')->entries()),
         );
+    }
+
+    /**
+     * @return list<string> each exception as "package pattern constraint"
+     */
+    private function cooldownExceptions(Workspace $workspace): array
+    {
+        $path = $workspace->root.'/composer.json';
+        $manifest = is_file($path) ? JsonNode::parse((string) file_get_contents($path)) : null;
+
+        if (!$manifest instanceof JsonNode) {
+            return [];
+        }
+
+        $exceptions = [];
+
+        foreach ($manifest->get('config')->get('policy')->get('cooldown')->get('ignore')->entries() as $key => $rule) {
+            $pattern = ctype_digit($key) ? $rule->text() : $key;
+            $constraint = $rule->get('constraint')->text();
+
+            $exceptions[] = '' === $constraint ? $pattern.' (every version)' : $pattern.' '.$constraint;
+        }
+
+        return $exceptions;
     }
 
     /**
