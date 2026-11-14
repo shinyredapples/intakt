@@ -74,6 +74,50 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         self::assertSame("HTTP/1.1 200 OK\nempty projects page\n", $run['output']);
     }
 
+    public function testInWorkerModeFrankenphpRunsTheSameFewPhpThreadsWhateverTheHostSoItBootsUnderAnAddressSpaceLimit(): void
+    {
+        // 1.9 GB: two threads boot well inside it, while FrankenPHP's default of two threads per CPU exhausts it on a host with many CPUs.
+        $limitKilobytes = 1_900_000;
+        $command = <<<'PHP_WRAP'
+            echo "Instance reached command mode.\n";
+            $states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? [];
+            echo "PHP threads: ", count($states), "\n";
+            PHP_WRAP;
+        $statusFile = $this->scratch.'/status';
+        $shell = 'ulimit -v '.$limitKilobytes.' && exec '.implode(' ', array_map(escapeshellarg(...), [PHP_BINARY, self::ROOT.'/bin/instance', '--', PHP_BINARY, '-r', $command])).' 3>'.escapeshellarg($statusFile);
+
+        $process = Process::fromShellCommandline($shell, null, [...$this->environment(), ...$this->environmentWithFrankenphp()]);
+        $process->run();
+
+        self::assertSame('{"status":"ready","mode":"worker"}', trim((string) file_get_contents($statusFile)), $process->getOutput());
+        self::assertSame("Instance reached command mode.\nPHP threads: 3\n", $process->getOutput());
+    }
+
+    public function testAFrankenphpThatRunsOutOfMemoryReportsTheLastLineOfItsLogAsTheReason(): void
+    {
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', "#!/bin/sh\necho '{\"level\":\"info\",\"msg\":\"using config from file\"}' >&2\necho 'Out of memory' >&2\necho >&2\nexit 1\n");
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
+
+        self::assertSame('the server exited: Out of memory', $this->decoded($run['status'])['reason']);
+        self::assertSame(1, $run['exit']);
+    }
+
+    public function testAFrankenphpThatExitsWithoutAWordReportsAnEmptyServerLog(): void
+    {
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', "#!/bin/sh\nexit 1\n");
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
+
+        self::assertSame('the server exited: the server log is empty', $this->decoded($run['status'])['reason']);
+    }
+
     public function testInWorkerModeABrokenKernelConfigReportsFailedWithTheErrorAndExitsNonZero(): void
     {
         $project = $this->copyOfTheProject();
