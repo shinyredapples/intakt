@@ -115,7 +115,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
 
     public function testAStreamCutBeforeItsAnswerCompletedIsTriedOnceMoreUnstreamedAndGivesThatAnswersVerdict(): void
     {
-        $answer = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->json()));
+        $answer = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json()));
 
         $verdict = $this->vendor($answer)->review('alpha', Tier::Strong, $this->request())->verdict;
 
