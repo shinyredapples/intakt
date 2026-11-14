@@ -218,6 +218,29 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('#live-log-pane'));
     }
 
+    public function testAReviewerStillMarkedRunningInARoundThatEndedHasNoStopForm(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertStringContainsString('running', $crawler->filter('#round-round-1-reviewers')->text());
+        self::assertCount(0, $crawler->filter('form.stop-reviewer'));
+    }
+
+    public function testARoundWhoseJudgingFailedHasNoLiveLog(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('#live-log-pane'));
+    }
+
     public function testARoundWhoseJudgingFailedShowsAsBlockedWithTheReasonTheJudgingFailed(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
