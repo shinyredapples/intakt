@@ -563,7 +563,7 @@ final class ReviewScriptTest extends TestCase
         $this->git($this->folder, 'clone', '--quiet', $this->source, $this->checkout);
     }
 
-    // Stands in for the image's git: it reports the given version and, as git before 2.40 does, may refuse --attr-source; the rest goes to the real git.
+    // Because the image's git may be older than this machine's, which would refuse --attr-source as git before 2.40 does.
     private function givenAGitReporting(string $version, bool $knowsTheAttributeSource): void
     {
         $git = new ExecutableFinder()->find('git') ?? throw new RuntimeException('git is not on the path.');
