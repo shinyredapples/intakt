@@ -274,7 +274,7 @@ final class FindingLedgerTest extends TestCase
      */
     public static function failedReviews(): iterable
     {
-        yield 'invalid output' => [Verdict::invalidOutput('the reviewer made a malformed tool call.')];
+        yield 'a recorded invalid output' => [new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [], [])];
         yield 'incomplete stream' => [Verdict::incompleteStream('the stream ended.')];
         yield 'unread approval' => [Verdict::unreadApproval()];
         yield 'no tools' => [Verdict::noTools()];
