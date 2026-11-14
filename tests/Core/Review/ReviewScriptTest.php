@@ -82,7 +82,7 @@ final class ReviewScriptTest extends TestCase
     {
         $this->givenTheCli('codex', 'printf "%s\n" "$@" > "$RECORD/arguments"; pwd > "$RECORD/directory"; cat > "$RECORD/input"');
 
-        $run = $this->whenTheReviewRuns(provider: 'codex', model: 'gpt-5.5');
+        $run = $this->whenTheReviewRunsWith('codex', 'gpt-5.5');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
         $arguments = $this->recordedLines('arguments');
@@ -125,14 +125,14 @@ final class ReviewScriptTest extends TestCase
 
     public function testACheckoutAtAnotherCommitThanTheHeadIsRefused(): void
     {
-        $run = $this->whenTheReviewRuns(head: str_repeat('a', 40));
+        $run = $this->whenTheReviewRunsAt(str_repeat('a', 40));
 
         $this->assertRefused($run, 'the checkout is not at '.str_repeat('a', 40));
     }
 
     public function testAHeadThatIsNoCommitIdIsRefused(): void
     {
-        $run = $this->whenTheReviewRuns(head: 'HEAD');
+        $run = $this->whenTheReviewRunsAt('HEAD');
 
         $this->assertRefused($run, 'the head is not a commit id');
     }
@@ -258,7 +258,7 @@ final class ReviewScriptTest extends TestCase
 
     public function testGitVariablesTheImageExportsDoNotReachGit(): void
     {
-        $run = $this->whenTheReviewRuns(environment: [
+        $run = $this->whenTheReviewRuns([
             'GIT_CONFIG_COUNT' => '1',
             'GIT_CONFIG_KEY_0' => 'core.fsmonitor',
             'GIT_CONFIG_VALUE_0' => 'touch '.$this->folder.'/monitored; false',
@@ -275,7 +275,7 @@ final class ReviewScriptTest extends TestCase
     {
         $this->givenTheCli('claude', 'env > "$RECORD/environment"');
 
-        $this->whenTheReviewRuns(environment: [
+        $this->whenTheReviewRuns([
             'GIT_DIR' => $this->source.'/.git',
             'GIT_WORK_TREE' => $this->source,
             'NODE_OPTIONS' => '--require /work/planted.js',
@@ -284,7 +284,7 @@ final class ReviewScriptTest extends TestCase
             'ALL_PROXY' => 'socks5://localhost:1080',
         ]);
 
-        $names = array_map(static fn (string $line): string => strstr($line, '=', true) ?: $line, $this->recordedLines('environment'));
+        $names = array_map(static fn (string $line): string => explode('=', $line, 2)[0], $this->recordedLines('environment'));
         self::assertSame(['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'], array_values(array_filter($names, static fn (string $name): bool => str_starts_with($name, 'GIT_'))));
         self::assertNotContains('NODE_OPTIONS', $names);
         self::assertSame([], array_values(array_intersect(['NO_PROXY', 'no_proxy', 'ALL_PROXY', 'all_proxy'], $names)));
@@ -293,35 +293,35 @@ final class ReviewScriptTest extends TestCase
 
     public function testAJobWithoutTheProxyIsRefused(): void
     {
-        $run = $this->whenTheReviewRuns(environment: ['HTTPS_PROXY' => false]);
+        $run = $this->whenTheReviewRuns(['HTTPS_PROXY' => false]);
 
         $this->assertRefused($run, 'the job has no egress proxy');
     }
 
     public function testAJobWhoseProxiesDifferIsRefused(): void
     {
-        $run = $this->whenTheReviewRuns(environment: ['https_proxy' => 'http://localhost:3128']);
+        $run = $this->whenTheReviewRuns(['https_proxy' => 'http://localhost:3128']);
 
         $this->assertRefused($run, 'the job has no egress proxy');
     }
 
     public function testAJobWithoutAnAllowlistIsRefused(): void
     {
-        $run = $this->whenTheReviewRuns(environment: ['INTAKT_JOB_EGRESS' => '']);
+        $run = $this->whenTheReviewRuns(['INTAKT_JOB_EGRESS' => '']);
 
         $this->assertRefused($run, 'the job has no egress allowlist');
     }
 
     public function testAJobInItsReducedModeIsRefused(): void
     {
-        $run = $this->whenTheReviewRuns(environment: ['INTAKT_REDUCED_MODE' => 'egress']);
+        $run = $this->whenTheReviewRuns(['INTAKT_REDUCED_MODE' => 'egress']);
 
         $this->assertRefused($run, 'the start check failed: egress');
     }
 
     public function testAProviderWithoutAReviewerCliIsRefused(): void
     {
-        $run = $this->whenTheReviewRuns(provider: 'anthropic');
+        $run = $this->whenTheReviewRunsWith('anthropic', 'claude-opus-5-5');
 
         $this->assertRefused($run, 'no reviewer CLI for the provider anthropic');
     }
@@ -356,15 +356,30 @@ final class ReviewScriptTest extends TestCase
     /**
      * @param array<string, string|false> $environment
      */
-    private function whenTheReviewRuns(
-        string $provider = 'claude_code',
-        string $model = 'claude-opus-5-5',
-        ?string $head = null,
-        array $environment = [],
-    ): Process {
+    private function whenTheReviewRuns(array $environment = []): Process
+    {
+        return $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5'], $environment);
+    }
+
+    private function whenTheReviewRunsWith(string $provider, string $model): Process
+    {
+        return $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, $provider, $model], []);
+    }
+
+    private function whenTheReviewRunsAt(string $head): Process
+    {
+        return $this->runOnAReadOnlyCheckout([$this->checkout, $head, $this->prompt, 'claude_code', 'claude-opus-5-5'], []);
+    }
+
+    /**
+     * @param list<string>                $arguments
+     * @param array<string, string|false> $environment
+     */
+    private function runOnAReadOnlyCheckout(array $arguments, array $environment): Process
+    {
         new Filesystem()->chmod([$this->checkout, $this->checkout.'/.git'], 0o555);
 
-        return $this->runTheScript([$this->checkout, $head ?? $this->head, $this->prompt, $provider, $model], $environment);
+        return $this->runTheScript($arguments, $environment);
     }
 
     private function whenTheReviewRunsOnAWritableCheckout(): Process
@@ -394,7 +409,7 @@ final class ReviewScriptTest extends TestCase
      */
     private function jobEnvironment(): array
     {
-        // As the container sets them, and without the host's git and proxy variables.
+        // As the container sets them, and without the host's git and proxy variables, because those would point git or the proxy check elsewhere.
         $environment = [
             'HOME' => $this->work,
             'TMPDIR' => $this->work,
