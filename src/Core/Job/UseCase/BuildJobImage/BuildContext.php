@@ -43,14 +43,6 @@ final readonly class BuildContext
             return;
         }
 
-        $filesystem = new Filesystem();
-        $folder = sys_get_temp_dir().'/intakt-added-'.bin2hex(random_bytes(8));
-
-        try {
-            $filesystem->dumpFile($folder.'/'.$plan->dockerfile, $plan->generated);
-            $this->files->archiveAdding($directory, $plan->tree, $folder.'/'.$plan->dockerfile, $file);
-        } finally {
-            $filesystem->remove($folder);
-        }
+        $this->files->archiveAdding($directory, $plan, $file);
     }
 }
