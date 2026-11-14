@@ -112,6 +112,21 @@ final class AccountFailoverPlatformTest extends TestCase
         self::assertContains(['warning', 'Account {account} failed.', ['account' => 'anthropic.default', 'exception' => $failure]], $logs);
     }
 
+    public function testAnAnswerThatFailsToConvertForAnotherReasonIsNoFailedAccount(): void
+    {
+        $logger = new BufferingLogger();
+        $answer = $this->accounts(new FailingWhenRead(new PlatformRuntimeException('Cannot deserialize the content.')), $this->answering('second'), $logger)->invoke('big', 'Review.');
+
+        try {
+            $answer->asText();
+            self::fail('The answer could not be read, yet it was.');
+        } catch (PlatformRuntimeException) {
+        }
+
+        self::assertSame([], $logger->cleanLogs());
+        self::assertFalse($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
+    }
+
     // The reviewer's probe, because the judging's failure listener logs the exception it gets with its message and its chain.
     public function testARejectionThatEndsTheCallCarriesNoTextOfTheProvider(): void
     {

@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
+use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierRequest;
+use Intakt\Core\Ai\Infrastructure\AccountCooldownWindows;
+use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
+use Intakt\Core\Ai\Infrastructure\AccountPlatform;
+use Intakt\Core\Ai\Infrastructure\AccountStreamFailures;
 use Intakt\Core\Ai\Infrastructure\ClaudeCodePlatformFactory;
+use Intakt\Core\Ai\Infrastructure\SendFailures;
+use Intakt\Core\Ai\Infrastructure\TypedRejectionConverter;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfinedClaudeCodeClient;
 use Intakt\Core\Ai\Infrastructure\FinishedProcessResult;
@@ -76,8 +83,10 @@ use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -89,6 +98,13 @@ use Symfony\Component\Uid\UuidV7;
 #[CoversClass(FinishedProcessResult::class)]
 #[CoversClass(ClaudeCodePlatformFactory::class)]
 #[CoversClass(SymfonyAiVendor::class)]
+#[CoversClass(AccountPlatform::class)]
+#[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(AccountCooldownWindows::class)]
+#[UsesClass(AccountStreamFailures::class)]
+#[UsesClass(SendFailures::class)]
+#[UsesClass(TypedRejectionConverter::class)]
+#[UsesClass(Account::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReviewServerAccess::class)]
 #[UsesClass(IssuedReviewServerAccesses::class)]
@@ -189,6 +205,23 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         yield 'no block' => ['prose-only'];
         yield 'two blocks' => ['two-blocks'];
         yield 'a block that is not a verdict' => ['not-a-verdict'];
+    }
+
+    #[DataProvider('unreadableAnswers')]
+    public function testAnAnswerIntaktCouldNotReadLeavesTheAccountUsable(string $recording): void
+    {
+        $logger = new BufferingLogger();
+        $cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT]]);
+        $accounts = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying($recording))], $cooldowns, new MockClock(self::NOW), $logger);
+
+        try {
+            $this->vendorOn($accounts)->review('alpha', Tier::Strong, $this->request());
+            self::fail('An answer without exactly one verdict block gave a verdict.');
+        } catch (VerdictUnreadable) {
+        }
+
+        self::assertFalse($cooldowns->isCoolingDown(new Account(Provider::ClaudeCode, Account::DEFAULT)));
+        self::assertNotContains('Account {account} failed.', array_column($logger->cleanLogs(), 1));
     }
 
     public function testTheCliGetsNoToolsNoProjectSettingsAndTheVerdictSchema(): void
@@ -453,8 +486,12 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
     private function vendor(ModelClientInterface $cli, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
     {
+        return $this->vendorOn($this->claudeCodePlatform($cli), $ledger, $servers);
+    }
+
+    private function vendorOn(PlatformInterface $platform, InMemoryLedger $ledger = new InMemoryLedger(), ?ReviewServerAccesses $servers = null): SymfonyAiVendor
+    {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'sonnet']]]], []);
-        $platform = $this->claudeCodePlatform($cli);
         $platforms = new ServiceLocator([Provider::ClaudeCode->value => static fn (): PlatformInterface => $platform]);
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 

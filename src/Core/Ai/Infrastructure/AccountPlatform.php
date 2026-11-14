@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Closure;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
@@ -84,22 +85,26 @@ final readonly class AccountPlatform implements PlatformInterface
     {
         // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
         $cause = $failure instanceof IncompleteStreamException ? $failure->getPrevious() ?? $failure : $failure;
+        $coolDown = $this->coolDownAfter($cause);
 
-        if ($this->failures->record($this->account, $cause)) {
-            $this->coolDownAfter($cause);
+        if (null !== $coolDown && $this->failures->record($this->account, $cause)) {
+            // Logged whole, because the log redacts a key the provider's text echoes.
+            $this->logger->warning('Account {account} failed.', ['account' => $this->account->key(), 'exception' => $cause]);
+            $coolDown();
         }
     }
 
-    // Matched by the exception type only, because the provider's text can change (plan T5); logged whole, because the log redacts a key the text echoes.
-    private function coolDownAfter(Throwable $failure): void
+    // Matched by the exception type only, because the provider's text can change (plan T5); null for anything else, such as an answer Intakt could not read, because the account answered and stays usable (issue #1831).
+    /**
+     * @return (Closure(): void)|null
+     */
+    private function coolDownAfter(Throwable $failure): ?Closure
     {
-        $this->logger->warning('Account {account} failed.', ['account' => $this->account->key(), 'exception' => $failure]);
-
-        match (true) {
-            $failure instanceof RateLimitExceededException => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),
+        return match (true) {
+            $failure instanceof RateLimitExceededException => fn () => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),
             // A revoked or wrong key will not work on the next call either, so the account is out like a limited one and the call goes elsewhere; remembered as a rejection so no call waits for it.
-            $failure instanceof AuthenticationException => $this->cooldowns->coolDownRejected($this->account),
-            $failure instanceof RetryableExceptionInterface => $this->cooldowns->coolDown($this->account, null),
+            $failure instanceof AuthenticationException => fn () => $this->cooldowns->coolDownRejected($this->account),
+            $failure instanceof RetryableExceptionInterface => fn () => $this->cooldowns->coolDown($this->account, null),
             default => null,
         };
     }
