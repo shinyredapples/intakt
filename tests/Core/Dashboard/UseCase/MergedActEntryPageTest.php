@@ -54,6 +54,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ShowReviewController::class)]
 #[CoversClass(ReviewReport::class)]
 #[CoversClass(RoundLedger::class)]
+#[CoversClass(StoredFindings::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundFinding::class)]
 #[UsesClass(OnePerPlace::class)]
@@ -73,7 +74,7 @@ final class MergedActEntryPageTest extends WebTestCase
 
     public function testTwoReviewersReportingOnePlaceShowOneEntryWithBothIdsInTheConsoleTheJsonAndOnThePage(): void
     {
-        $review = $this->reviewed();
+        $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P1)]);
         $report = new ReviewReport($this->serializer());
 
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
@@ -84,13 +85,31 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertSame([['F1+F2', 'P1', 'Text of A.', 'act']], $this->pageRows($page));
     }
 
-    private function reviewed(): ChangeReview
+    // The page's entry comes from the judge's ledger record and the act list from the stored round, each merged on its own, so three reports of one place must still give one entry alike.
+    public function testThreeReviewersReportingOnePlaceShowTheEntryTheStoredActListHolds(): void
+    {
+        $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P2), $this->findingAt('C', Severity::P1)]);
+        $act = $this->fixture->findingStore()->actListOf($this->fixture->round($review->roundId), $this->actIdsOf($review));
+
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame([['F1+F2+F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [implode('+', [$entry->id, ...$entry->merged]), $entry->severity->value, $entry->text], $act));
+        self::assertSame([['F1+F2+F3', 'P1', 'Text of A.', 'act']], $this->pageRows($page));
+    }
+
+    /**
+     * @param non-empty-list<Finding> $findings
+     */
+    private function reviewed(array $findings): ChangeReview
     {
         $fixture = $this->fixture;
-        $vendor = new VerdictPerRole([
-            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', Severity::P2)], [], []),
-            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', Severity::P1)], [], []),
-        ]);
+        $verdicts = [];
+        foreach ($findings as $index => $finding) {
+            $verdicts['Look at part '.($index + 1).'.'] = new Verdict(Decision::Changes, [$finding], [], []);
+        }
+
+        $vendor = new VerdictPerRole($verdicts);
         $delivered = 0;
         $work = static function () use ($fixture, $vendor, &$delivered): void {
             foreach (array_slice($fixture->bus->messages, $delivered) as $message) {
@@ -117,7 +136,15 @@ final class MergedActEntryPageTest extends WebTestCase
             $fixture->noFailedJudgings(),
         );
 
-        return $reviewChange->review($this->request(), new IgnoredProgress());
+        return $reviewChange->review($this->request(count($findings)), new IgnoredProgress());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function actIdsOf(ChangeReview $review): array
+    {
+        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->actIdsOf($review->roundId);
     }
 
     private function findingAt(string $id, Severity $severity): Finding
@@ -133,11 +160,11 @@ final class MergedActEntryPageTest extends WebTestCase
         return $serializer;
     }
 
-    private function request(): ChangeReviewRequest
+    private function request(int $reviewers): ChangeReviewRequest
     {
         $members = array_map(
             static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
-            [1, 2],
+            range(1, $reviewers),
         );
         $panel = new Panel($members, QuorumPolicy::All);
 
