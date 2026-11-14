@@ -60,6 +60,11 @@ final class JobImageNotBuilt extends RuntimeException implements ReportableFailu
         return new self(sprintf('No supported PHP minor (%s) meets require.php %s.', implode(', ', $minors), $rule));
     }
 
+    public static function unusableCliManifest(string $manifest, string $reason): self
+    {
+        return new self(sprintf('The CLI manifest %s cannot be used: %s.', $manifest, $reason));
+    }
+
     public static function composeUnsupported(): self
     {
         return new self(sprintf('%s uses dockerComposeFile, which Intakt does not build a job image from yet.', Devcontainer::PATH));
@@ -88,6 +93,16 @@ final class JobImageNotBuilt extends RuntimeException implements ReportableFailu
     public static function notAnImage(string $image): self
     {
         return new self(sprintf('The image "%s" of %s is not an image reference.', $image, Devcontainer::PATH));
+    }
+
+    public static function dockerfileMissing(string $path): self
+    {
+        return new self(sprintf('The Dockerfile %s is not a file at HEAD, so no review job image is built from it.', $path));
+    }
+
+    public static function notExtendable(string $reason): self
+    {
+        return new self(sprintf('The project\'s Dockerfile cannot get the review job\'s tools: %s.', $reason));
     }
 
     public static function notATag(string $tag): self

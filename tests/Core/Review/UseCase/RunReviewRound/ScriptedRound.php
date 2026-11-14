@@ -56,6 +56,8 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\TextResult;
+use Symfony\AI\Platform\Result\ToolCall;
+use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
@@ -105,7 +107,8 @@ final class ScriptedRound
         };
         $request = new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
 
-        return $this->reviewChange($work)->review($request);
+        // Asked of the scripted judge's vendor, because the real stack here maps only the reviewers' tier and the judge is scripted.
+        return $this->reviewChange($work, new ScriptedVendor())->review($request);
     }
 
     // Each recoverable failure queues its message again at once, as Messenger's retry does once the delay has passed; the cooldowns run on real time, so an account a provider limited stays out for the whole run.
@@ -184,6 +187,22 @@ final class ScriptedRound
         }, eventDispatcher: ScriptedReviewer::in($this->container)->dispatcher);
     }
 
+    // Each call asks for one more tool round, so a run that stays on this platform is a long conversation without any waiting.
+    public function askingForTools(): PlatformInterface
+    {
+        return MockPlatformFactory::createPlatform(static function (): ToolCallResult {
+            $asked = new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'composer.json'])]);
+            $asked->getMetadata()->add('token_usage', new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+                model: 'big',
+            ));
+
+            return $asked;
+        }, eventDispatcher: ScriptedReviewer::in($this->container)->dispatcher);
+    }
+
     /**
      * @return array<string, list<string>>
      */
@@ -242,7 +261,7 @@ final class ScriptedRound
     /**
      * @param Closure(): void $work
      */
-    private function reviewChange(Closure $work): ReviewChange
+    private function reviewChange(Closure $work, Vendor $tiers): ReviewChange
     {
         $serializer = StoredSerializerFactory::create();
         $commands = new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$this->fixture->startHandlerOn($this->fixture->bus)]]))]);
@@ -256,6 +275,7 @@ final class ScriptedRound
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
+            $tiers,
         );
     }
 }

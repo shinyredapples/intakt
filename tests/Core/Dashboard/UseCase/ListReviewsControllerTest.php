@@ -148,7 +148,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews?project[]=alpha');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "Invalid query parameter "project"."', NotFoundHttpException::class));
+        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "Invalid query parameter "project"."', NotFoundHttpException::class));
     }
 
     public function testTheReviewListSaysSoWhenTheLedgerHasNoReviews(): void
@@ -170,6 +170,16 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSame('Pull request 7: handed over to the maintainer agent', $crawler->filter('.failing-heads .card .title')->text());
         self::assertSame('RuntimeException: commit <b> not fetched', $crawler->filter('.failing-heads .card .blocker.broken')->text());
         self::assertSame(['4 failures in a row', 'Next try 2026-10-28 12:08:00 UTC'], $crawler->filter('.failing-heads .card .meta > span')->each(static fn ($fact): string => $fact->text()));
+    }
+
+    // Needed because the board's banners link to this anchor.
+    public function testTheFailedHeadsSectionIsTheTargetOfItsOwnAnchor(): void
+    {
+        $this->ledger->failHead('alpha', '7', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertCount(1, $crawler->filter('section#failing-heads.failing-heads'));
     }
 
     public function testAHeadThatIsNotHandedOverSaysItIsBackingOff(): void

@@ -16,4 +16,13 @@ enum BoardColumn: string
     case InReview = 'In review';
     case Merging = 'Merging';
     case Done = 'Done';
+
+    // Work not started and work finished ask nothing of the reader now, so they give their width to the flow (docs/design/mocks/DESIGN.md, Rules).
+    public function startsCollapsed(): bool
+    {
+        return match ($this) {
+            self::Backlog, self::Done => true,
+            default => false,
+        };
+    }
 }

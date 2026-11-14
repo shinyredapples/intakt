@@ -43,6 +43,15 @@ jobs:
         run: .github/ci/docker-hub-login.sh
       - name: Build or restore the CI image
         uses: $/.github/actions/ci-image
+      # Composer's cache, keyed by the runner OS and composer.lock, so a hosted runner's fresh VM does not download every
+      # dist from GitHub. Only a push to main saves it (the step after the gates); a pull request restores only.
+      - name: Restore Composer's cache
+        id: composer-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
       # The gate tests run processes in a new user namespace and mount a fresh /proc there. The seccomp profile is
       # Docker's default plus unshare (only together with a new user namespace) and mount. systempaths=unconfined is
       # needed because the kernel refuses a new /proc in a user namespace while Docker's masks cover parts of the old
@@ -67,19 +76,31 @@ jobs:
           apparmor=
           if [ "$RUNNER_ENVIRONMENT" = github-hosted ] || [ "$DISPOSABLE_RUNNER" = true ]; then apparmor='--security-opt apparmor=unconfined'; fi
           # The home directory (the working copy, vendor/) and /tmp are tmpfs: the copy and the tests' files never touch the
-          # runner's disk. Composer's cache (COMPOSER_CACHE_DIR) is the runner's intakt-composer-cache volume, mounted read-only
-          # (COMPOSER_CACHE_READ_ONLY) so main's own jobs never write to it by accident; a pull request runs its own ci.yml and
-          # could drop :ro, so only the runner's clean state per job keeps a planted archive from a later job. Empty unless
-          # that clean state provides it filled for the default branch's lock, so Composer downloads what it lacks, as before.
+          # runner's disk. Composer's cache (COMPOSER_CACHE_DIR) is the directory restored from GitHub's Actions cache. Only a
+          # push to main mounts it writable and saves it afterwards: no locked package carries a checksum, so an archive a
+          # pull request planted would be installed unchecked by a later main run. A pull request gets it read-only
+          # (COMPOSER_CACHE_READ_ONLY) and never saves; GitHub also keeps a pull request's saves out of main's scope.
+          cache="$RUNNER_TEMP/composer-cache"
+          mkdir -p "$cache"
+          cache_mode=:ro read_only=1
+          if [ "$EVENT" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then cache_mode= read_only=0; fi
+          chmod -R a+rX "$cache"
+          if [ "$read_only" = 0 ]; then chmod -R a+w "$cache"; fi
           docker run --rm --user 1000:1000 \
             --security-opt seccomp=.github/ci/seccomp-userns.json \
             --security-opt systempaths=unconfined \
             $apparmor \
             --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
             --tmpfs /tmp:rw,exec,size=1g \
-            --volume intakt-composer-cache:/composer-cache:ro --env COMPOSER_CACHE_DIR=/composer-cache --env COMPOSER_CACHE_READ_ONLY=1 \
+            --volume "$cache:/composer-cache$cache_mode" --env COMPOSER_CACHE_DIR=/composer-cache --env "COMPOSER_CACHE_READ_ONLY=$read_only" \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
+      - name: Save Composer's cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.composer-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: ${{ steps.composer-cache.outputs.cache-primary-key }}
   # Whether a pull request touches what the engine runs below test: the ledger, its mapping and migrations, Doctrine's
   # configuration, the dependencies, the CI definition (.github/workflows/ and .github/ci/), added lines naming
   # Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. Every push to
@@ -201,6 +222,15 @@ jobs:
         id: image
         if: env.ENGINES == 'true'
         uses: $/.github/actions/ci-image
+      # The check job's Composer cache (same key), restored only: the engines mount it read-only and this job never saves,
+      # so only a push to main's check job writes the entry, and a pull request cannot plant an archive in it.
+      - name: Restore Composer's cache
+        if: env.ENGINES == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
       # The test environment appends _test to the database name of the URL, so each service creates intakt_test and the URL names intakt.
       # The three engines run at once (.github/ci/persistence-engines.sh); the step fails when any fails.
       - name: Run the persistence group on each database image
@@ -212,32 +242,66 @@ jobs:
           MYSQL_NETWORK: ${{ job.services.mysql.network }}
           MARIADB_NETWORK: ${{ job.services.mariadb.network }}
           POSTGRESQL_NETWORK: ${{ job.services.postgresql.network }}
+          COMPOSER_CACHE: ${{ runner.temp }}/composer-cache
         run: >-
           .github/ci/persistence-engines.sh
           "mysql|$MYSQL_IMAGE|$MYSQL_NETWORK|mysql://root@mysql:3306/intakt"
           "mariadb|$MARIADB_IMAGE|$MARIADB_NETWORK|mysql://root@mariadb:3306/intakt"
           "postgresql|$POSTGRESQL_IMAGE|$POSTGRESQL_NETWORK|postgresql://postgres@postgresql:5432/intakt"
-  # The app image, built once here and never pushed, then docker/smoke-test.sh and docker/verify-first-start.sh on it;
-  # every check is in the scripts. One job, because each job on an ephemeral runner is a full machine reset and a build.
+  # The app image, built once here and never pushed, then docker/smoke-test.sh, docker/verify-first-start.sh and, when
+  # needed, docker/verify-upgrade.sh on it; every check is in the scripts. One job, because each job on an ephemeral runner
+  # is a full machine reset and a build. The full history is fetched for the upgrade check's base commit.
   image:
     if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - name: Log in to Docker Hub
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: .github/ci/docker-hub-login.sh
+      # Decided in a step, not by a paths filter, so the job reports on every pull request. The base is the pull request's
+      # merge base, or on main the commit before the push; every push to main runs the check. A failing git fails the step.
+      - name: Decide on the app image and the upgrade check
+        id: upgrade
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = push ]; then
+            base=$(git rev-parse HEAD~1)
+            needed=yes
+            image=yes
+          else
+            base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")
+            needed=$(.github/ci/upgrade-needed.sh "$base" "$HEAD_SHA")
+            image=$(.github/ci/image-needed.sh "$base" "$HEAD_SHA")
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "upgrade check needed: $needed (base $base)"
       - name: Build the app image
         id: build
+        if: steps.upgrade.outputs.image == 'yes'
         run: docker build --tag intakt:ci .
       - name: Smoke-test the app image
+        if: steps.upgrade.outputs.image == 'yes'
         run: docker/smoke-test.sh intakt:ci
       # Runs after a failed smoke test too, so a run reports both checks of the image, as two workflows did before.
       - name: Start the image on an empty volume and show the seeded panel
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: bash docker/verify-first-start.sh intakt:ci
+      # Runs after a failed smoke test too, for the same reason.
+      - name: Start this image on a copy of the base's data, then the base on the original
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.upgrade.outputs.needed == 'yes' }}
+        env:
+          BASE: ${{ steps.upgrade.outputs.base }}
+        run: bash docker/verify-upgrade.sh intakt:ci "$BASE"

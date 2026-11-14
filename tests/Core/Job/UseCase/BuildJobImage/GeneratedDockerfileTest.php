@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job\UseCase\BuildJobImage;
 
+use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobTools;
 use Intakt\Core\Job\UseCase\BuildJobImage\PhpProfile;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -15,6 +17,8 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(GeneratedDockerfile::class)]
+#[UsesClass(CliManifest::class)]
+#[UsesClass(JobTools::class)]
 #[UsesClass(PhpProfile::class)]
 #[UsesClass(JobImageNotBuilt::class)]
 final class GeneratedDockerfileTest extends TestCase
@@ -69,13 +73,23 @@ final class GeneratedDockerfileTest extends TestCase
         GeneratedDockerfile::for(PhpProfile::fromComposerJson('{"require": {"php": "^7.4"}}'));
     }
 
-    public function testComposerAndTheCliToolsArePinned(): void
+    public function testComposerIsPinned(): void
     {
         $dockerfile = GeneratedDockerfile::for(PhpProfile::fromComposerJson('{"require": {"php": "^8.5"}}'));
 
         self::assertStringContainsString('COPY --from=composer:2.11.1@sha256:', $dockerfile);
-        self::assertStringContainsString('@anthropic-ai/claude-code@2.1.322', $dockerfile);
-        self::assertStringContainsString('@openai/codex@0.167.1', $dockerfile);
+    }
+
+    public function testTheCliToolsAreInstalledAtTheVersionsOfTheCliManifest(): void
+    {
+        /** @var array{dependencies: array<string, string>} $manifest */
+        $manifest = json_decode(new Filesystem()->readFile(CliManifest::PATH), true, flags: JSON_THROW_ON_ERROR);
+
+        $dockerfile = GeneratedDockerfile::for(PhpProfile::fromComposerJson('{"require": {"php": "^8.5"}}'));
+
+        foreach ($manifest['dependencies'] as $package => $version) {
+            self::assertStringContainsString(sprintf(' %s@%s ', $package, $version), $dockerfile);
+        }
     }
 
     public function testWithoutExtensionsThereIsNoExtensionStep(): void

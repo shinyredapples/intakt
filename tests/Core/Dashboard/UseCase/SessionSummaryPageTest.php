@@ -81,6 +81,25 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         ], $this->linesOf($crawler->filter('.log-summary .ls-findings li')));
     }
 
+    public function testEachFindingIdIsAButtonNamingTheFindingToHighlight(): void
+    {
+        $this->givenTheRunningRoundRecorded($this->summary());
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        $buttons = $crawler->filter('.log-summary .ls-findings li .mono button[type="button"]');
+        self::assertSame(['F1', 'F2', 'F4'], $buttons->each(static fn (Crawler $button): string => (string) $button->attr('data-highlight-finding')));
+    }
+
+    public function testTheTimelineEntryOfAJudgedFindingNamesItsFindingForTheHighlight(): void
+    {
+        $this->givenTheRunningRoundRecorded($this->summary());
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['F1', 'F2'], $crawler->filter('#round-round-1 table.findings td[data-finding]')->each(static fn (Crawler $cell): string => (string) $cell->attr('data-finding')));
+    }
+
     public function testAFindingTheRoundCheckedAndReportedAgainIsListedOnceAsOpen(): void
     {
         $this->givenTheRunningRoundRecorded($this->summary(reported: [$this->finding('F2', Severity::P3, 'Name the cache window again.')]));
@@ -92,7 +111,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithNothingRecordedYetSaysSoInEachPart(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], []));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
@@ -101,7 +120,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testASummaryWithoutToolCallsShowsNoToolList(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], []));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
@@ -130,13 +149,28 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
     public function testAFindingTextAndAFileNameWithMarkupAreEscaped(): void
     {
-        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), ['<b>x</b>.php'], [$this->finding('F1', Severity::P2, '<script>alert(1)</script>')], [], []));
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), ['<b>x</b>.php'], [$this->finding('F1', Severity::P2, '<script>alert(1)</script>')], [], [], false));
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertSame('<b>x</b>.php', $crawler->filter('.ls-files .mono')->text());
         self::assertStringContainsString('<script>alert(1)</script>', $crawler->filter('.ls-findings li')->text());
         self::assertCount(0, $crawler->filter('.log-summary b, .log-summary script'));
+    }
+
+    public function testAFindingMergedIntoAnActEntryReachesThatEntryFromItsHighlightButton(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [$this->finding('F2', Severity::P2, 'Broken.')], [], [], false));
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(1, $crawler->filter('.ls-findings button[data-highlight-finding="F2"]'));
+        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 td[data-finding~="F2"]')->each(static fn (Crawler $cell): string => $cell->text()));
     }
 
     public function testTheStylesheetKeepsTheSummaryInViewWhileTheLogScrollsAboveIt(): void
@@ -175,6 +209,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
             [$checked, $open],
             $reported ?? [$this->finding('F4', Severity::P2, 'Order the queue by hold time.')],
             [$checked],
+            false,
         );
     }
 

@@ -9,9 +9,13 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
+use Intakt\Core\Review\UseCase\PublishVerdict\ChangePublications;
 use Intakt\Core\Review\UseCase\PublishVerdict\LoopReviewComment;
+use Intakt\Core\Review\UseCase\PublishVerdict\PublicationBusy;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdictHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\QueuePublicationOfJudgedRound;
@@ -23,8 +27,10 @@ use Intakt\Core\ReviewerForLoop\Contract\LoopVerdict;
 use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
 use Intakt\Core\ReviewerForLoop\Domain\LoopReviewReader;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
+use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\ForgeWriteFailed;
+use Intakt\Plugin\Forge\Contract\ForgeWrites;
 use Intakt\Plugin\Forge\Contract\HeadStatus;
 use Intakt\Plugin\Forge\Contract\PublishedVerdict;
 use Intakt\Plugin\Forge\Contract\ReviewToken;
@@ -39,14 +45,19 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 
 // A real round on SQLite, judged by the application's workflow, published through the GitHub forge over a scripted GitHub, so the test sees the very requests the loop would read.
 #[Group('persistence')]
 #[CoversClass(PublishVerdictHandler::class)]
 #[CoversClass(PublishVerdict::class)]
+#[CoversClass(ChangePublications::class)]
+#[CoversClass(PublicationBusy::class)]
 #[CoversClass(QueuePublicationOfJudgedRound::class)]
 #[CoversClass(QueuePublicationOfUnjudgedRound::class)]
 #[CoversClass(VerdictForTheLoop::class)]
@@ -58,6 +69,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(PostedComments::class)]
 #[UsesClass(VerdictLocks::class)]
 #[UsesClass(ReviewToken::class)]
+#[UsesClass(MarkVerdictsStaleHandler::class)]
+#[UsesClass(MarkVerdictsStale::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -65,14 +78,17 @@ final class PublishVerdictTest extends KernelTestCase
     private const string STATUS = 'POST '.self::API.'/statuses/'.SampleIdentity::HEAD;
     private const string COMMENT = 'POST '.self::API.'/issues/7/comments';
     private const string HEADING = '**Review by Intakt** (head aaaaaaaaaaaa)';
+    private const array WITHDRAWN = ['state' => 'failure', 'context' => 'intakt/review', 'description' => 'Intakt withdrew its review: this head does not boot.'];
 
     private RoundFixture $fixture;
     private ScriptedGitHub $github;
+    private LockFactory $locks;
 
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
         $this->github = new ScriptedGitHub();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     public function testAnApprovedHeadGetsTheCommentThenASuccessStatus(): void
@@ -175,6 +191,128 @@ final class PublishVerdictTest extends KernelTestCase
 
         self::assertSame(LoopVerdict::Changes, $reviews->reviews[0]->verdict);
         self::assertSame(['src/Thing.php', 3, Severity::P2], [$reviews->reviews[0]->findings[0]->file, $reviews->reviews[0]->findings[0]->line, $reviews->reviews[0]->findings[0]->severity]);
+    }
+
+    public function testAnApprovedRoundWhoseHeadLaterFailedToBootIsPublishedAsAFailureWithoutAComment(): void
+    {
+        $handler = $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $roundId = $this->judgedRound(self::PULL, []);
+        $this->markStale($roundId);
+
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $handler($publication);
+        }
+
+        self::assertSame([[self::STATUS, self::WITHDRAWN]], array_unique($this->github->writes, SORT_REGULAR));
+    }
+
+    public function testAnApprovalAlreadyOnTheForgeIsWithdrawnOnceItsHeadFailsToBoot(): void
+    {
+        $roundId = $this->publishRoundJudgedOn([]);
+        $alreadyHandled = count($this->publicationsOf($roundId));
+
+        $this->markStale($roundId);
+        foreach (array_slice($this->publicationsOf($roundId), $alreadyHandled) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+
+        self::assertSame([self::STATUS, self::WITHDRAWN], array_last($this->github->writes));
+    }
+
+    public function testAStaleMarkThatLandsWhileTheApprovalIsOnTheWayIsWithdrawnByThatSamePublication(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $published = [];
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturnCallback(function (string $project, ChangeId $change, PublishedVerdict $verdict) use ($roundId, &$published): void {
+            // Marked here, because only a mark that commits after the verdict was decided and before its status is written forces the race.
+            if ([] === $published) {
+                $this->markStale($roundId);
+            }
+
+            $published[] = [$verdict->status, $verdict->description];
+        });
+
+        new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $this->verdicts(), $forge, new ChangePublications($this->locks), $this->fixture->log)(new PublishVerdict($roundId));
+
+        self::assertSame([HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.'], array_last($published));
+    }
+
+    public function testAReturningHeadThatFailsToBootHasItsApprovalWithdrawnThoughARoundOfAnotherHeadWasJudgedMeanwhile(): void
+    {
+        $first = $this->publishedApprovalAt(SampleIdentity::HEAD);
+        $this->publishedApprovalAt(SampleIdentity::NEW_HEAD);
+
+        $this->publishStaleMarkOf($first);
+
+        self::assertSame(self::WITHDRAWN, array_last($this->statusesOn(SampleIdentity::HEAD)));
+    }
+
+    public function testAWithdrawalWritesNothingOnceALaterRoundOfTheSameHeadWasJudged(): void
+    {
+        $first = $this->publishedApprovalAt(SampleIdentity::HEAD);
+        $this->publishedApprovalAt(SampleIdentity::HEAD);
+        $writes = $this->github->writes;
+
+        $this->publishStaleMarkOf($first);
+
+        self::assertSame($writes, $this->github->writes);
+    }
+
+    public function testAnApprovalStillOnTheWayWhenALaterRoundOfItsHeadIsJudgedAndWithdrawnLeavesTheWithdrawalAsTheLastStatus(): void
+    {
+        $first = $this->judgedApprovalAt(SampleIdentity::HEAD);
+        $raced = false;
+        $busy = [];
+        $published = [];
+        $forge = self::createStub(ForgeWrites::class);
+        $forge->method('publishVerdict')->willReturnCallback(function (string $project, ChangeId $change, PublishedVerdict $verdict) use (&$raced, &$busy, &$published, &$forge): void {
+            // Judged, marked and delivered here, because only a replacement withdrawn while the first approval is on the way forces the race.
+            if (!$raced) {
+                $raced = true;
+                $replacement = $this->judgedApprovalAt(SampleIdentity::HEAD);
+                $this->markStale($replacement);
+                $busy = $this->deliverEach($this->publicationsOf($replacement), $forge);
+            }
+
+            $published[] = [$verdict->status, $verdict->description];
+        });
+
+        $this->deliverEach($this->publicationsOf($first), $forge);
+        $this->deliverEach($busy, $forge);
+
+        self::assertSame([HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.'], array_last($published));
+        self::assertNotSame([], $busy);
+    }
+
+    public function testAPublicationOfAChangeWhoseLockIsHeldIsRefusedForMessengerToBringBack(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $held = new ChangePublications($this->locks)->lockOf('alpha', self::PULL);
+        $held->acquire();
+
+        try {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+            self::fail('A busy change must refuse the publication.');
+        } catch (PublicationBusy $busy) {
+            self::assertTrue($busy->forceRetry());
+        } finally {
+            $held->release();
+        }
+
+        self::assertSame([], $this->github->writes);
+    }
+
+    public function testAPublicationOfAnotherChangeIsNotHeldUpByAChangeBeingPublished(): void
+    {
+        $roundId = $this->judgedRound(self::PULL, []);
+        $other = new ChangePublications($this->locks)->lockOf('alpha', 'https://github.com/acme/widgets/pull/8');
+        $other->acquire();
+
+        $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+        $other->release();
+
+        self::assertSame(['success'], array_column(array_column($this->github->writes, 1), 'state'));
     }
 
     public function testAHeadNoReviewerCouldReviewGetsAnErrorStatusAndNoComment(): void
@@ -324,6 +462,84 @@ final class PublishVerdictTest extends KernelTestCase
         return $roundId;
     }
 
+    // The application's command bus, so the publication the mark queues lands on the application's queue.
+    private function markStale(string $roundId): void
+    {
+        $commands = self::getContainer()->get('command.bus');
+        self::assertInstanceOf(MessageBusInterface::class, $commands);
+
+        new MarkVerdictsStaleHandler($this->fixture->transactions(), $commands)(new MarkVerdictsStale($roundId));
+    }
+
+    private function publishedApprovalAt(string $head): string
+    {
+        $roundId = $this->judgedApprovalAt($head);
+        foreach ($this->publicationsOf($roundId) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+
+        return $roundId;
+    }
+
+    // Only the messages of this round, so an earlier round of the change is not delivered or judged again.
+    private function judgedApprovalAt(string $head): string
+    {
+        $vendor = new VerdictPerRole([]);
+        $sent = count($this->fixture->bus->messages);
+        $judged = count($this->fixture->judgings());
+        $roundId = $this->fixture->startAtHead(self::PULL, $head);
+        foreach (array_slice($this->fixture->bus->messages, $sent) as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
+        foreach (array_slice($this->fixture->judgings(), $judged) as $judging) {
+            $this->fixture->judge($vendor)($judging);
+        }
+
+        return $roundId;
+    }
+
+    // A refused delivery is kept, as Messenger keeps a message whose handler threw a recoverable failure, so the test brings it back when the race allows.
+    /**
+     * @param list<PublishVerdict> $publications
+     *
+     * @return list<PublishVerdict>
+     */
+    private function deliverEach(array $publications, ForgeWrites $forge): array
+    {
+        $handler = new PublishVerdictHandler($this->fixture->transactions(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']), $this->verdicts(), $forge, new ChangePublications($this->locks), $this->fixture->log);
+        $refused = [];
+
+        foreach ($publications as $publication) {
+            try {
+                $handler($publication);
+            } catch (PublicationBusy) {
+                $refused[] = $publication;
+            }
+        }
+
+        return $refused;
+    }
+
+    private function publishStaleMarkOf(string $roundId): void
+    {
+        $alreadyHandled = count($this->publicationsOf($roundId));
+        $this->markStale($roundId);
+
+        foreach (array_slice($this->publicationsOf($roundId), $alreadyHandled) as $publication) {
+            $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))($publication);
+        }
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function statusesOn(string $head): array
+    {
+        $statuses = array_filter($this->github->writes, static fn (array $write): bool => 'POST '.self::API.'/statuses/'.$head === $write[0]);
+
+        return array_column($statuses, 1);
+    }
+
     private function marker(string $roundId): string
     {
         return '<!-- intakt-verdict: '.$roundId.' -->';
@@ -390,7 +606,7 @@ final class PublishVerdictTest extends KernelTestCase
 
     private function handler(ConfiguredProjectModes $modes): PublishVerdictHandler
     {
-        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $this->verdicts(), $this->github->forge(), $this->fixture->log);
+        return new PublishVerdictHandler($this->fixture->transactions(), $modes, $this->verdicts(), $this->github->forge(), new ChangePublications($this->locks), $this->fixture->log);
     }
 
     private function verdicts(): VerdictForTheLoop

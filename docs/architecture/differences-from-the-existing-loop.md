@@ -11,13 +11,13 @@ Intakt is to replace the existing loop for the owner's own use ([plan](../plan.m
 ## No job image without the project's PHP
 
 - **The loop:** a project without its PHP record gets no probes rather than the system's PHP (its `test_entry_harness.py`).
-- **Intakt:** there is no system PHP to fall back to: a project's job image comes from its devcontainer, its Dockerfile or `composer.json`, and when `composer.json` names no PHP version no image is built at all. Every built image is asked for its PHP version and extensions, and one that does not match `composer.json` is refused. Built in `Core/Job` ([Job images](job-images.md)); no build runs in such an image yet.
+- **Intakt:** there is no system PHP to fall back to: a project's job image comes from its devcontainer, its Dockerfile or `composer.json`, and when `composer.json` names no PHP version no image is built at all. Every built image is asked for its PHP version and extensions, and one that does not match `composer.json` is refused. Built in `Core/Job` ([Job images](job-images.md)); `intakt:build:run` runs a [build job](build-job.md) in the image its caller names, and the build lane that runs builds in the checked image is not built yet.
 - **Why:** the PHP a job runs is a property of the project's image, so it is checked once when the image is built instead of in each step that runs PHP.
 
 ## An egress allowlist per job through its own proxy
 
 - **The loop:** egress is denied by default (its `test_review_gpt_egress.py`).
-- **Intakt:** a check or probe job has no network at all; any other job names the exact hosts it may reach, sits on an internal network of its own, and its only way out is a proxy of its own that lets through TLS tunnels to those hosts and nothing else; each refused request is recorded in the ledger (`job_egress_refused`). Built in `Core/Job` ([Egress](job-containers.md#egress)). The parity item for this behavior stays open until it has run on a host with a Docker daemon.
+- **Intakt:** a probe job has no network at all; the PHP gate's check job may reach the package registry hosts the gate names ([Check job](check-job.md)) and nothing else; any other job names the exact hosts it may reach, sits on an internal network of its own, and its only way out is a proxy of its own that lets through TLS tunnels to those hosts and nothing else; each refused request is recorded in the ledger (`job_egress_refused`). Built in `Core/Job` ([Egress](job-containers.md#egress)). The parity item for this behavior stays open until it has run on a host with a Docker daemon.
 - **Why:** the allowlist is a property of the job, not of the machine or a user account, so two jobs never share one.
 
 ## A start check and a reduced mode instead of failing halfway

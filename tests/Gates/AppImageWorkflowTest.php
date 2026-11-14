@@ -11,7 +11,7 @@ use Symfony\Component\Finder\Finder;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * @phpstan-type Step array{id?: string, name?: string, if?: string, uses?: string, run?: string}
+ * @phpstan-type Step array{id?: string, name?: string, if?: string, uses?: string, run?: string, env?: array<string, string>}
  * @phpstan-type Job array{if?: string, steps?: list<Step>}
  * @phpstan-type WorkflowFile array{on?: string|array<mixed>, jobs?: array<string, Job>}
  */
@@ -21,6 +21,7 @@ final class AppImageWorkflowTest extends TestCase
     private const string WORKFLOWS = __DIR__.'/../../.github/workflows';
     private const string FORK_GUARD = "github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'";
     private const string BUILD = 'docker build --tag intakt:ci .';
+    private const string DECIDE = 'upgrade';
 
     public function testAPullRequestOrABranchPushBuildsTheAppImageOnce(): void
     {
@@ -57,21 +58,42 @@ final class AppImageWorkflowTest extends TestCase
     {
         self::assertSame(['ci.yml image'], $this->jobsRunning('docker/smoke-test.sh'));
         self::assertSame(['ci.yml image'], $this->jobsRunning('docker/verify-first-start.sh'));
+        self::assertSame(['ci.yml image'], $this->jobsRunning('docker/verify-upgrade.sh'));
     }
 
-    public function testTheImageJobChecksTheImageItBuiltWithBothScripts(): void
+    public function testTheImageJobChecksTheImageItBuiltWithEveryScript(): void
     {
+        $checks = array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => self::DECIDE !== ($step['id'] ?? null));
+
         self::assertSame(
-            ['.github/ci/docker-hub-login.sh', self::BUILD, 'docker/smoke-test.sh intakt:ci', 'bash docker/verify-first-start.sh intakt:ci'],
-            array_column($this->imageJob()['steps'] ?? [], 'run'),
+            ['.github/ci/docker-hub-login.sh', self::BUILD, 'docker/smoke-test.sh intakt:ci', 'bash docker/verify-first-start.sh intakt:ci', 'bash docker/verify-upgrade.sh intakt:ci "$BASE"'],
+            array_column($checks, 'run'),
         );
+    }
+
+    public function testTheUpgradeCheckRunsOnlyWhenNeededAndNotWithoutABuiltImage(): void
+    {
+        $upgrade = $this->stepRunning('verify-upgrade.sh');
+
+        self::assertSame("\${{ !cancelled() && steps.build.outcome == 'success' && steps.upgrade.outputs.needed == 'yes' }}", $upgrade['if'] ?? null);
+        self::assertSame('${{ steps.upgrade.outputs.base }}', $upgrade['env']['BASE'] ?? null);
+    }
+
+    public function testEveryPushToMainNeedsTheUpgradeCheckAndAPullRequestAsksTheFilterAboutItsMergeBase(): void
+    {
+        $decide = array_first(array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => self::DECIDE === ($step['id'] ?? null)));
+        $run = $decide['run'] ?? '';
+
+        self::assertStringContainsString("base=\$(git rev-parse HEAD~1)\n  needed=yes\n", $run);
+        self::assertStringContainsString('base=$(git merge-base "origin/$BASE_REF" "$HEAD_SHA")', $run);
+        self::assertStringContainsString('needed=$(.github/ci/upgrade-needed.sh "$base" "$HEAD_SHA")', $run);
     }
 
     public function testTheFirstStartCheckRunsAfterAFailedSmokeTestButNotWithoutABuiltImage(): void
     {
         $steps = $this->imageJob()['steps'] ?? [];
         $build = array_first(array_filter($steps, static fn (array $step): bool => ($step['run'] ?? '') === self::BUILD));
-        $firstStart = array_first(array_filter($steps, static fn (array $step): bool => str_contains($step['run'] ?? '', 'verify-first-start.sh')));
+        $firstStart = $this->stepRunning('verify-first-start.sh');
 
         self::assertSame('build', $build['id'] ?? null);
         self::assertSame("\${{ !cancelled() && steps.build.outcome == 'success' }}", $firstStart['if'] ?? null);
@@ -80,6 +102,32 @@ final class AppImageWorkflowTest extends TestCase
     public function testTheImageJobIsForkGuarded(): void
     {
         self::assertSame(self::FORK_GUARD, $this->imageJob()['if'] ?? null);
+    }
+
+    public function testAPushNeedsTheAppImageAndAPullRequestAsksTheImageFilter(): void
+    {
+        $decide = $this->stepRunning('image-needed.sh');
+
+        self::assertSame(self::DECIDE, $decide['id'] ?? null);
+        self::assertStringContainsString("needed=yes\n  image=yes\nelse\n", $decide['run'] ?? '');
+        self::assertStringContainsString("image=\$(.github/ci/image-needed.sh \"\$base\" \"\$HEAD_SHA\")\n", $decide['run'] ?? '');
+    }
+
+    public function testTheBuildAndTheSmokeTestRunOnlyWhenTheImageIsNeeded(): void
+    {
+        self::assertSame("steps.upgrade.outputs.image == 'yes'", $this->stepRunning(self::BUILD)['if'] ?? null);
+        self::assertSame("steps.upgrade.outputs.image == 'yes'", $this->stepRunning('smoke-test.sh')['if'] ?? null);
+    }
+
+    /**
+     * @return Step
+     */
+    private function stepRunning(string $script): array
+    {
+        $step = array_first(array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => str_contains($step['run'] ?? '', $script)));
+        self::assertIsArray($step);
+
+        return $step;
     }
 
     /**

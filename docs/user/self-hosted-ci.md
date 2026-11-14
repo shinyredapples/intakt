@@ -16,7 +16,7 @@ These jobs then run on a runner with all of those labels: `check`, `changes`, `p
 
 A service that runs each job on a new VM and throws the VM away afterwards (for example Ubicloud) is set up the same way: install its GitHub App on the repository and put its runner label in `CI_RUNS_ON`, for example `["ubicloud-standard-4"]`. Such services register their runners as self-hosted, so also set the repository variable `CI_DISPOSABLE_RUNNER` to `true`: the jobs then allow user namespaces and lift AppArmor on that VM, as they do on GitHub's runners. Never set it for a machine you keep.
 
-These services share their IP addresses among their customers, and Docker Hub allows only a few anonymous downloads per address, so a job can fail to fetch an image. Create a read-only access token on a Docker Hub account and store it, with the account name, as the repository secrets `DOCKERHUB_TOKEN` and `DOCKERHUB_USERNAME`; the jobs then log in before they download. A same-repository pull request's job can read the token, so give it no more than read access to public repositories.
+These services share their IP addresses among their customers, and Docker Hub allows only a few anonymous downloads per address, so a job can fail to fetch an image. Create a read-only access token on a Docker Hub account and store it, with the account name, as the repository secrets `DOCKERHUB_TOKEN` and `DOCKERHUB_USERNAME`; the jobs then log in before they download. The `check` and `persistence` jobs restore Composer's packages from GitHub's Actions cache, which only a push to main fills, so on a fresh VM they do not download every package from GitHub again; the first main run after a `composer.lock` change downloads them and saves the cache. A same-repository pull request's job can read the token, so give it no more than read access to public repositories.
 
 `journeys.yml` runs the journeys on main every night and never on a pull request. To start a run yourself, use the "Run workflow" button of the `journeys` workflow on the Actions tab, or `gh workflow run journeys.yml`. When a journey fails, `alarm` files one urgent task, or updates the one already open.
 When the run times out, `alarm` files or updates the timed-out task. A run you cancel files nothing.
@@ -50,7 +50,7 @@ The script that registers your ephemeral runner should do three things before ea
 
 | Need | Why |
 |---|---|
-| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | the `check`, `persistence` and `journeys` jobs build or reuse the CI image and run the code in it; the `image` job builds the application image from the repository's `Dockerfile` on the host once, runs `docker/smoke-test.sh` against it, then `docker/verify-first-start.sh`, which creates a Docker volume and runs the same image on it; the `persistence` job starts a service container for each database engine |
+| Docker Engine (the `docker` command and a running daemon), with the runner's user allowed to use it (for example in the `docker` group) | the `check`, `persistence` and `journeys` jobs build or reuse the CI image and run the code in it; the `image` job builds the application image from the repository's `Dockerfile` on the host once, runs `docker/smoke-test.sh` against it, then `docker/verify-first-start.sh`, which creates a Docker volume and runs the same image on it, and when the change needs it `docker/verify-upgrade.sh`, which builds the base commit's image as well and starts both on copies of one volume; the `persistence` job starts a service container for each database engine |
 | `bash`, `git`, `grep`, `sh`, `sha256sum`, `cut`, `mktemp` and `rm` | the `changes` job reads the diff on the host in a temporary folder; `build-image.sh` hashes the Dockerfile, `composer.json` and the check ini (the image loads that ini by itself) |
 | Docker's `buildx` plugin, and network access to Docker Hub from the host | `docker/smoke-test.sh` (the `image` job) runs `docker buildx imagetools inspect` on the `Dockerfile`'s base image tag to print its digest, which asks the registry |
 | `bash`, `curl`, `grep`, `awk`, `od`, `tr`, `dirname`, `env`, `timeout` and `sleep` | `docker/smoke-test.sh` (the `image` job) checks the started container over HTTP with `curl`, reads the `FROM` tag, the base image digest and the published port with `awk`, makes the run's random secrets with `od` and `tr`, and limits each wait |
@@ -62,6 +62,7 @@ The `journeys` job gets the same seccomp profile as `check` (`.github/ci/seccomp
 
 ## When it goes wrong
 
+- **The `image` job built nothing:** the pull request changes only `docs/`, `tests/` or `upstream/`, so the job skips the image and still reports.
 - **Jobs stay queued:** no online runner has every label in `CI_RUNS_ON`. Check the list against the runner's labels, and that an ephemeral runner is registered again after each job.
 - **`check` fails with errors about namespaces or mounting `/proc`:** user namespaces are restricted or an AppArmor profile blocks mount on the host (see the table).
 - **`permission denied` on the Docker socket:** the runner's user cannot use Docker.

@@ -267,7 +267,7 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     public function testAFailedReviewInARoundAddsNoFindingToTheChange(): void
     {
-        $this->round(self::CHANGE, [self::FIRST => Verdict::invalidOutput('the reviewer made a malformed tool call.')]);
+        $this->round(self::CHANGE, [self::FIRST => new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [], [])]);
 
         self::assertSame([], $this->fixture->storedFindings(self::CHANGE));
     }

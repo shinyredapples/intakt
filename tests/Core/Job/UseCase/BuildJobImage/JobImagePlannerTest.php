@@ -6,14 +6,18 @@ namespace Intakt\Tests\Core\Job\UseCase\BuildJobImage;
 
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Job\UseCase\BuildJobImage\CliManifest;
 use Intakt\Core\Job\UseCase\BuildJobImage\Devcontainer;
 use Intakt\Core\Job\UseCase\BuildJobImage\GeneratedDockerfile;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobImageKind;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageNotBuilt;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlanner;
 use Intakt\Core\Job\UseCase\BuildJobImage\JobImageSource;
+use Intakt\Core\Job\UseCase\BuildJobImage\JobTools;
 use Intakt\Core\Job\UseCase\BuildJobImage\PhpProfile;
 use Intakt\Core\Job\UseCase\BuildJobImage\ProjectFiles;
+use Intakt\Core\Job\UseCase\BuildJobImage\ReviewDockerfile;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -22,13 +26,16 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(JobImagePlanner::class)]
 #[CoversClass(ProjectFiles::class)]
+#[UsesClass(CliManifest::class)]
 #[UsesClass(Devcontainer::class)]
 #[UsesClass(GeneratedDockerfile::class)]
 #[UsesClass(GitCall::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(JobImageNotBuilt::class)]
 #[UsesClass(JobImagePlan::class)]
+#[UsesClass(JobTools::class)]
 #[UsesClass(PhpProfile::class)]
+#[UsesClass(ReviewDockerfile::class)]
 final class JobImagePlannerTest extends TestCase
 {
     private const string COMPOSER_JSON = '{"require": {"php": "^8.5", "ext-intl": "*"}}';
@@ -171,8 +178,99 @@ final class JobImagePlannerTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/^\s*VOLUME\b/im', (string) file_get_contents($root.'/Dockerfile'));
     }
 
+    public function testAReviewImageOfTheRootDockerfileBuildsTheProjectWithTheJobToolsAdded(): void
+    {
+        $this->repository->commitFile('composer.json', self::COMPOSER_JSON);
+        $this->repository->commitFile('Dockerfile', "FROM php:8.5-cli\nUSER app\n");
+
+        $plan = $this->reviewPlanFor();
+
+        self::assertSame(JobImageSource::Dockerfile, $plan->source);
+        self::assertSame('', $plan->tree);
+        self::assertSame(ReviewDockerfile::PATH, $plan->dockerfile);
+        self::assertSame(ReviewDockerfile::after("FROM php:8.5-cli\nUSER app\n"), $plan->generated);
+        self::assertSame(['intl'], $plan->php?->extensions);
+    }
+
+    public function testAReviewImageOfADevcontainerBuildReadsItsDockerfileInsideItsContext(): void
+    {
+        $this->repository->commitFile('.devcontainer/devcontainer.json', '{"build": {"context": "..", "dockerfile": "php.Dockerfile"}}');
+        $this->repository->commitFile('.devcontainer/php.Dockerfile', "FROM php:8.4-cli\n");
+
+        $plan = $this->reviewPlanFor();
+
+        self::assertSame('', $plan->tree);
+        self::assertSame(ReviewDockerfile::PATH, $plan->dockerfile);
+        self::assertStringStartsWith("FROM php:8.4-cli\n\n# Added by Intakt for a review job.\n", (string) $plan->generated);
+    }
+
+    public function testAReviewImageOfADevcontainerBuildInASubfolderKeepsItsTree(): void
+    {
+        $this->repository->commitFile('.devcontainer/devcontainer.json', '{"build": {"dockerfile": "Dockerfile"}}');
+        $this->repository->commitFile('.devcontainer/Dockerfile', "FROM php:8.3-cli\n");
+
+        $plan = $this->reviewPlanFor();
+
+        self::assertSame('.devcontainer', $plan->tree);
+        self::assertSame(ReviewDockerfile::PATH, $plan->dockerfile);
+        self::assertStringStartsWith("FROM php:8.3-cli\n", (string) $plan->generated);
+    }
+
+    public function testAReviewImageOfADevcontainerImageAddsTheJobToolsToItsFromLine(): void
+    {
+        $this->repository->commitFile('.devcontainer/devcontainer.json', '{"image": "mcr.microsoft.com/devcontainers/php:8.5"}');
+
+        $plan = $this->reviewPlanFor();
+
+        self::assertSame(JobImageSource::Devcontainer, $plan->source);
+        self::assertNull($plan->tree);
+        self::assertSame('Dockerfile', $plan->dockerfile);
+        self::assertSame(ReviewDockerfile::after("FROM mcr.microsoft.com/devcontainers/php:8.5\n"), $plan->generated);
+    }
+
+    public function testAReviewImageOfAGeneratedImageIsTheGeneratedImage(): void
+    {
+        $this->repository->commitFile('composer.json', self::COMPOSER_JSON);
+
+        self::assertEquals($this->planFor(), $this->reviewPlanFor());
+    }
+
+    public function testAReviewImageOfADevcontainerBuildWithoutItsDockerfileIsRefused(): void
+    {
+        $this->repository->commitFile('.devcontainer/devcontainer.json', '{"build": {"dockerfile": "Dockerfile"}}');
+
+        $this->expectExceptionObject(JobImageNotBuilt::dockerfileMissing('.devcontainer/Dockerfile'));
+
+        $this->reviewPlanFor();
+    }
+
+    public function testAReviewImageOfASymlinkedDockerfileIsRefused(): void
+    {
+        $this->repository->commitFile('.devcontainer/real.Dockerfile', "FROM php:8.5-cli\n");
+        symlink('real.Dockerfile', $this->repository->path.'/.devcontainer/Dockerfile');
+        $this->repository->commitFile('.devcontainer/devcontainer.json', '{"build": {"dockerfile": "Dockerfile"}}');
+
+        $this->expectExceptionObject(JobImageNotBuilt::dockerfileMissing('.devcontainer/Dockerfile'));
+
+        $this->reviewPlanFor();
+    }
+
+    public function testAReviewImageOfADockerfileThatCannotBeExtendedIsRefused(): void
+    {
+        $this->repository->commitFile('Dockerfile', "# escape=`\nFROM php:8.5-cli\n");
+
+        $this->expectExceptionObject(JobImageNotBuilt::notExtendable('it sets the escape character to "`"'));
+
+        $this->reviewPlanFor();
+    }
+
     private function planFor(): JobImagePlan
     {
         return new JobImagePlanner(new ProjectFiles())->planFor($this->repository->path);
+    }
+
+    private function reviewPlanFor(): JobImagePlan
+    {
+        return new JobImagePlanner(new ProjectFiles())->planFor($this->repository->path, JobImageKind::Review);
     }
 }

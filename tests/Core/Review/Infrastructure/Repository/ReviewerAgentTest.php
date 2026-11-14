@@ -198,7 +198,7 @@ final class ReviewerAgentTest extends WebTestCase
         self::assertStringEndsWith("\n[more entries not shown]", $answers[0]);
     }
 
-    public function testABinaryFileAnswersTheModelWithAnErrorThatCanBeSentAsJson(): void
+    public function testABinaryFileIsNamedAsBinaryWithItsSizeInAnAnswerThatCanBeSentAsJson(): void
     {
         $this->fixture->write('logo.png', "\x89PNG\r\n\x1a\n\xff\xfe\x00 total");
 
@@ -207,8 +207,26 @@ final class ReviewerAgentTest extends WebTestCase
             new ToolCall('2', 'search_files', ['text' => 'total']),
         );
 
-        self::assertSame('An error occurred while executing tool "read_file".', $answers[0]);
+        self::assertSame('Binary file, not shown: 17 bytes', $answers[0]);
         self::assertSame('src/Cart.php:2:// total the cart', $answers[1]);
+    }
+
+    public function testAFileWhoseNulByteLiesPastTheReadLimitIsNamedAsBinary(): void
+    {
+        $this->fixture->write('large.bin', str_repeat('a', 150_000)."\0");
+
+        $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 'large.bin']));
+
+        self::assertSame('Binary file, not shown: 150001 bytes', $answers[0]);
+    }
+
+    public function testAFileWithoutANulByteThatIsNotUtf8AnswersTheModelWithAnError(): void
+    {
+        $this->fixture->write('latin1.txt', "caf\xe9\n");
+
+        $answers = $this->runScript(new ToolCall('1', 'read_file', ['path' => 'latin1.txt']));
+
+        self::assertSame('An error occurred while executing tool "read_file".', $answers[0]);
     }
 
     public function testAFileCutAtTheLimitEndsOnAWholeCharacter(): void

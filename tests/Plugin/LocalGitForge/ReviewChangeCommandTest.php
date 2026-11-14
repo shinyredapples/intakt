@@ -23,6 +23,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\RoundNotNext;
+use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -71,6 +72,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(RoundTokens::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(TokenFigures::class)]
+#[UsesClass(RoundTierNotMapped::class)]
 final class ReviewChangeCommandTest extends TestCase
 {
     // Built once, because each git call costs a process: the cases that leave the checkout as it is share it.
@@ -157,6 +159,18 @@ final class ReviewChangeCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('Round 3 was asked for', $tester->getDisplay());
+    }
+
+    public function testAProjectWithoutALightTierIsRefusedWithTheProjectAndTheTierAndTheFailureCode(): void
+    {
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willThrowException(new RoundTierNotMapped('alpha', Tier::Light));
+
+        $tester = $this->whenTheCommandRuns($reviews);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        // Spaces joined, because the error block wraps the long message.
+        self::assertStringContainsString('Project "alpha" maps no model to the "light" tier', preg_replace('/\s+/', ' ', $tester->getDisplay()) ?? '');
     }
 
     public function testAReportableFailureFromTheRoundPrintsItsMessageAndTheFailureCode(): void

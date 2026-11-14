@@ -116,7 +116,7 @@ final class ReadRoundToolsTest extends KernelTestCase
         self::assertSame([], $act->act);
     }
 
-    public function testTheActListHoldsOnlyTheFindingsTheJudgeMarkedAct(): void
+    public function testTheActListKeepsAP2TheJudgeDeferred(): void
     {
         $round = $this->reviewedRound();
         $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer)]);
@@ -125,7 +125,7 @@ final class ReadRoundToolsTest extends KernelTestCase
         $act = $this->actList()($round->id()->toRfc4122());
 
         self::assertTrue($act->judged);
-        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $act->act));
+        self::assertSame(['F1', 'F2'], array_map(static fn (Finding $finding): string => $finding->id, $act->act));
     }
 
     public function testTheFindingsResourceListsEveryFindingTheRoundReported(): void
@@ -161,6 +161,7 @@ final class ReadRoundToolsTest extends KernelTestCase
             'requirement' => null,
             'evidence' => null,
             'regression' => false,
+            'merged' => [],
         ], $findings[0]);
     }
 

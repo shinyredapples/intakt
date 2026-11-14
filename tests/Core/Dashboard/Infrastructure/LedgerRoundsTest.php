@@ -163,6 +163,31 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(ReviewerProgress::Running, $review?->rounds[0]->outcomes[0]->progress);
     }
 
+    public function testAStartedReviewerCarriesTheMomentItStarted(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}', new DateTimeImmutable('2026-10-28T12:05:00+00:00')),
+        );
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:05:00+00:00'), $review?->rounds[0]->outcomes[0]->since);
+    }
+
+    public function testAReviewerStartedAgainCarriesTheMomentOfItsLatestStart(): void
+    {
+        $reviewer = '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, $reviewer, new DateTimeImmutable('2026-10-28T12:05:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStopped, $reviewer, new DateTimeImmutable('2026-10-28T12:10:00+00:00')),
+            $this->event(LedgerEventKind::ReviewerStarted, $reviewer, new DateTimeImmutable('2026-10-28T12:20:00+00:00')),
+        );
+
+        self::assertEquals(new DateTimeImmutable('2026-10-28T12:20:00+00:00'), $review?->rounds[0]->outcomes[0]->since);
+    }
+
     #[DataProvider('modes')]
     public function testAVerdictCarriesItsRecordedModeAndReadsAsOrdinaryWithoutOne(string $field, ProjectMode $expected): void
     {
@@ -290,6 +315,29 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.')->calledBy(JudgeCall::Act), new RoundFinding('F2', 'P3', 'Later.')->calledBy(JudgeCall::FollowUp)], $review?->rounds[0]->findings);
+    }
+
+    public function testAnActEntryThatMergesFindingsIsOneRowNamingTheMergedIds(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1', 'F2'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', ['F2']), new JudgeDoneFinding('F2', Severity::P1, 'Also broken.')])),
+        );
+
+        self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.', ['F2'])->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);
+        self::assertSame('F1+F2', $review?->rounds[0]->findings[0]->entryId());
+    }
+
+    public function testAJudgeRowWrittenBeforeMergedIdsWereRecordedKeepsEveryFindingAsItsOwnRow(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1","F2"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1","text":"Broken."},{"id":"F2","severity":"P2","text":"Also broken."}]}'),
+        );
+
+        self::assertSame(['F1', 'F2'], array_map(static fn (RoundFinding $finding): string => $finding->entryId(), $review?->rounds[0]->findings ?? []));
     }
 
     public function testAnEventOfAnotherKindWithReviewerFieldsAddsNoReviewer(): void

@@ -20,6 +20,7 @@ use Intakt\Plugin\Forge\Contract\FileNotFoundAtHead;
 use Intakt\Plugin\Forge\Contract\FileStatus;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
+use Intakt\Plugin\LocalGitForge\Infrastructure\BinaryFiles;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -29,6 +30,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 
 #[CoversClass(LocalGitForge::class)]
+#[UsesClass(BinaryFiles::class)]
 #[UsesClass(Change::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangeNotFound::class)]
@@ -48,6 +50,9 @@ use RuntimeException;
 #[UsesClass(RepositoryAttributesRefused::class)]
 final class LocalGitForgeTest extends TestCase
 {
+    // The start of a real PNG, because it holds both a NUL byte and bytes that are not UTF-8.
+    private const string PNG = "\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x02\0\0\0";
+
     private TemporaryRepository $repository;
 
     /** @var array<array-key, mixed> */
@@ -323,18 +328,117 @@ final class LocalGitForgeTest extends TestCase
         }
     }
 
-    public function testItShowsABinaryFileAsTextSoThatNothingHidesAChangeAsBinaryFilesDiffer(): void
+    public function testItNamesAnAddedPngFileAsBinaryWithItsSizeInsteadOfItsBytes(): void
     {
-        $base = $this->repository->commitFile('NOTES.md', "notes\n");
         $this->repository->checkoutNewBranch('feature');
-        $head = $this->repository->commitFile('blob.bin', "\0secret\n");
+        $this->repository->commitFile('.evidence/shot.png', self::PNG);
 
-        self::assertStringContainsString('Binary files', $this->repository->diff($base, $head), 'git must treat the file as binary without --text, or this test proves nothing');
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString("diff --git a/.evidence/shot.png b/.evidence/shot.png\n", $patch);
+        self::assertStringContainsString("Binary file, not shown: absent at the base, 29 bytes at the head\n", $patch);
+        self::assertStringNotContainsString('IHDR', $patch);
+        self::assertTrue(mb_check_encoding($patch, 'UTF-8'));
+    }
+
+    public function testItNamesAModifiedBinaryFileWithItsSizeAtTheBaseAndAtTheHead(): void
+    {
+        $this->repository->commitFile('logo.png', self::PNG);
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('logo.png', self::PNG."\xff\xfe");
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString("Binary file, not shown: 29 bytes at the base, 31 bytes at the head\n", $patch);
+    }
+
+    public function testItNamesADeletedBinaryFileWithItsSizeAtTheBase(): void
+    {
+        $this->repository->commitFile('logo.png', self::PNG);
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->removeFile('logo.png');
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString("deleted file mode 100644\n", $patch);
+        self::assertStringContainsString("Binary file, not shown: 29 bytes at the base, absent at the head\n", $patch);
+    }
+
+    public function testItNamesABinaryFileWhoseNameIsNotAsciiByItsQuotedName(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile("bild-\u{e4}.png", self::PNG);
+        $this->repository->configure('core.quotePath', 'false');
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString('diff --git "a/bild-\303\244.png" "b/bild-\303\244.png"', $patch);
+        self::assertStringContainsString('absent at the base, 29 bytes at the head', $patch);
+    }
+
+    public function testItKeepsTheLinesOfATextFileChangedBesideABinaryFile(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('a.png', self::PNG);
+        $this->repository->commitFile('b.txt', "plain\n");
 
         $change = $this->forge()->change(new ChangeId('feature'));
 
-        self::assertStringContainsString("+\0secret", $change->diff->patch);
-        self::assertStringNotContainsString('Binary files', $change->diff->patch);
+        self::assertStringContainsString("+plain\n", $change->diff->patch);
+        self::assertSame(1, $change->diff->addedLines());
+        self::assertCount(2, $change->diff->files);
+    }
+
+    public function testItShowsTheCodeOfAFileWithAByteThatIsNotUtf8WithThatByteEscaped(): void
+    {
+        $this->repository->commitFile('src/Auth.php', "<?php\nfunction allowed(): bool { return false; }\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('src/Auth.php', "<?php\n// caf\xe9\nfunction allowed(): bool { return true; }\n");
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString("+// caf\u{fffd}{E9}\n+function allowed(): bool { return true; }\n", $patch);
+        self::assertStringNotContainsString('Binary', $patch);
+        self::assertTrue(mb_check_encoding($patch, 'UTF-8'));
+    }
+
+    public function testItNamesABinaryFileAsBinaryWhenItsNulByteLiesOutsideTheLinesShown(): void
+    {
+        $start = "\x89PNG\0\n".str_repeat("padding\n", 30);
+        $this->repository->commitFile('image.png', $start."old payload\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('image.png', $start."new payload\n");
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString('Binary file, not shown: 258 bytes at the base, 258 bytes at the head', $patch);
+        self::assertStringNotContainsString('payload', $patch);
+    }
+
+    public function testItNamesAFileAsBinaryByItsBytesWhereGitWouldShowItAsText(): void
+    {
+        $base = $this->repository->commitFile('NOTES.md', "notes\n");
+        $this->repository->checkoutNewBranch('feature');
+        $head = $this->repository->commitFile('late.txt', str_repeat("text\n", 2000)."\0secret\n");
+
+        self::assertStringNotContainsString('Binary files', $this->repository->diff($base, $head), 'git must see text where the NUL byte comes late, or this test proves nothing');
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString('Binary file, not shown: absent at the base, 10008 bytes at the head', $patch);
+        self::assertStringNotContainsString('secret', $patch);
+    }
+
+    public function testItShowsAUtf8TextFileThatGitWouldHideAsBinaryAsText(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('notes.txt', "caf\u{e9}\n");
+        $this->repository->commitFile('.gitattributes', "*.txt -diff\n");
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertStringContainsString("+caf\u{e9}\n", $patch);
+        self::assertStringNotContainsString('Binary', $patch);
     }
 
     public function testItReturnsAFileWhoseNameHasSpacesTabsAndColons(): void
@@ -451,6 +555,48 @@ final class LocalGitForgeTest extends TestCase
         $this->expectException(ChangeNotFound::class);
 
         $this->forge()->change(new ChangeId('feature~1'));
+    }
+
+    public function testItReturnsAPngFileAtTheHeadAsBinaryWithItsSizeInsteadOfItsBytes(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('.evidence/shot.png', self::PNG);
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        $file = $this->forge()->fileAtHead($change, '.evidence/shot.png');
+
+        self::assertSame(29, $file->binaryBytes);
+        self::assertSame('Binary file, not shown: 29 bytes', $file->content);
+    }
+
+    public function testItReturnsAPngFileAtACommitAsBinaryWithItsSizeInsteadOfItsBytes(): void
+    {
+        $commit = new CommitId($this->repository->commitFile('logo.png', self::PNG));
+
+        $file = $this->forge()->fileAt($commit, 'logo.png');
+
+        self::assertSame(29, $file->binaryBytes);
+        self::assertTrue(mb_check_encoding($file->content, 'UTF-8'));
+        self::assertStringNotContainsString('PNG', $file->content);
+    }
+
+    public function testItReturnsAFileWhoseOnlyNulByteIsItsLastByteAsBinary(): void
+    {
+        $commit = new CommitId($this->repository->commitFile('data.txt', str_repeat("text\n", 50_000)."\0"));
+
+        $file = $this->forge()->fileAt($commit, 'data.txt');
+
+        self::assertSame(250_001, $file->binaryBytes);
+    }
+
+    public function testItReturnsATextFileAtACommitWithItsBytes(): void
+    {
+        $commit = new CommitId($this->repository->commitFile('notes.txt', "caf\xe9\n"));
+
+        $file = $this->forge()->fileAt($commit, 'notes.txt');
+
+        self::assertNull($file->binaryBytes);
+        self::assertSame("caf\xe9\n", $file->content);
     }
 
     public function testItReportsADirectoryAsNotAFileAtTheHead(): void

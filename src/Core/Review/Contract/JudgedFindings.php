@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Matched by id because the judge's answer is data, and prose of a finding is never read; a finding with no mark or marked reject is on neither list.
+// Matched by id because the judge's answer is data, and prose of a finding is never read; a P1 or P2 is always on the act list whatever its mark, and a P3 with no mark or marked reject is on neither list.
 #[Exclude]
 final readonly class JudgedFindings
 {
@@ -33,8 +33,10 @@ final readonly class JudgedFindings
             $marks[$judged->id] = $judged->mark;
         }
 
-        $marked = static fn (Mark $mark): array => array_values(array_filter($findings, static fn (Finding $finding): bool => ($marks[$finding->id] ?? null) === $mark));
+        $blocking = static fn (Finding $finding): bool => Severity::P3 !== $finding->severity;
+        $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
+        $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $marked(Mark::Act), array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $marked(Mark::Defer)));
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred));
     }
 }

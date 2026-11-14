@@ -261,14 +261,16 @@ final class Instance
     private function logSummary(): string
     {
         $lines = preg_split('/\R/', $this->readLog());
+        $lines = array_values(array_filter(array_map(trim(...), false === $lines ? [] : $lines), static fn (string $line): bool => '' !== $line));
 
-        foreach (false === $lines ? [] : $lines as $line) {
+        foreach ($lines as $line) {
             if (1 === preg_match('/error|exception/i', $line)) {
-                return mb_substr(trim($line), 0, 500);
+                return mb_substr($line, 0, 500);
             }
         }
 
-        return 'no error in the server log';
+        // A process the system stops, as PHP's own "Out of memory" exit does, names no error, so its last words are the reason.
+        return null === array_last($lines) ? 'the server log is empty' : mb_substr(array_last($lines), 0, 500);
     }
 
     private function readLog(): string
@@ -467,7 +469,7 @@ final class WorkerServer implements Server
         return $socket;
     }
 
-    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from.
+    // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; num_threads is fixed because FrankenPHP's default of two threads per CPU makes the memory a boot needs grow with the host, and on a host with many CPUs under an address-space limit PHP then exits with a bare "Out of memory" before it serves; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from; the site names no host because a Caddy site address also matches the Host header and Caddy answers a request no site matches with an empty 200, so bind alone keeps it on loopback.
     private function caddyfile(): string
     {
         $public = $this->root.'/public';
@@ -476,11 +478,12 @@ final class WorkerServer implements Server
             {
             	admin 127.0.0.1:{$this->adminPort}
             	frankenphp {
+            		num_threads 2
             		php_ini log_errors 1
             	}
             }
 
-            http://127.0.0.1:{$this->port} {
+            http://:{$this->port} {
             	bind 127.0.0.1
             	root "{$public}"
             	php_server {

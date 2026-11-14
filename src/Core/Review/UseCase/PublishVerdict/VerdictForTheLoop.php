@@ -33,6 +33,11 @@ final readonly class VerdictForTheLoop
 
     public function of(ReviewRound $round): PublishedVerdict
     {
+        // Before any vote is read, because the head was refused after the round started (it no longer boots), so an approval queued earlier must never reach the forge as a success.
+        if ($round->hasStaleVerdicts()) {
+            return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.', null, $this->tokenOf($round));
+        }
+
         // Not reviewed, because only a judging that failed for good publishes a round before its judge transition, so the round has no act list.
         if (RoundState::Judged !== $round->state()) {
             return $this->unreviewed($round);
@@ -105,6 +110,6 @@ final readonly class VerdictForTheLoop
     {
         $act = $this->ledger->actIdsOf($round->id()->toRfc4122());
 
-        return array_values(array_filter($this->findings->reportedIn($round), static fn (Finding $finding): bool => in_array($finding->id, $act, true)));
+        return $this->findings->actListOf($round, $act);
     }
 }

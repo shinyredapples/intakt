@@ -154,13 +154,26 @@ final class LedgerRounds
     // A marked id keeps its row without its text, because the judge's call is recorded even where the finding's text is not (rounds judged before it was, or an unreadable entry).
     private function judgedFindings(JudgeDone $judge, array $findings): array
     {
-        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text), $findings);
+        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, $finding->merged), $findings);
 
         return array_map(static fn (RoundFinding $finding): RoundFinding => match (true) {
             in_array($finding->id, $judge->act, true) => $finding->calledBy(JudgeCall::Act),
             in_array($finding->id, $judge->followUps, true) => $finding->calledBy(JudgeCall::FollowUp),
             default => $finding,
-        }, [...$recorded, ...$this->markedOnly($judge, $recorded)]);
+        }, [...$this->entriesOf($recorded), ...$this->markedOnly($judge, $recorded)]);
+    }
+
+    /**
+     * @param list<RoundFinding> $recorded
+     *
+     * @return list<RoundFinding>
+     */
+    // A finding an act entry stands for gets no row of its own, because the act list names each place once.
+    private function entriesOf(array $recorded): array
+    {
+        $merged = array_merge([], ...array_map(static fn (RoundFinding $finding): array => $finding->merged, $recorded));
+
+        return array_values(array_filter($recorded, static fn (RoundFinding $finding): bool => !in_array($finding->id, $merged, true)));
     }
 
     /**
@@ -180,15 +193,15 @@ final class LedgerRounds
         $row = $this->payloads->reviewerRowOf($recorded);
 
         if (null !== $row) {
-            $outcome = $this->outcomes[$row->round][$row->reviewer] ?? new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value);
-            $this->outcomes[$row->round][$row->reviewer] = $this->moved($outcome, $row);
+            $outcome = $this->outcomes[$row->round][$row->reviewer] ?? new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt);
+            $this->outcomes[$row->round][$row->reviewer] = $this->moved($outcome, $row, $recorded->recordedAt);
         }
     }
 
-    private function moved(ReviewerOutcome $outcome, ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerBlocked|ReviewerStopped|CatchUpOwed $row): ReviewerOutcome
+    private function moved(ReviewerOutcome $outcome, ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerBlocked|ReviewerStopped|CatchUpOwed $row, DateTimeImmutable $at): ReviewerOutcome
     {
         return match (true) {
-            $row instanceof ReviewerStarted => $outcome->restarted(),
+            $row instanceof ReviewerStarted => $outcome->restarted($at),
             $row instanceof VerdictReceived => $outcome->answered($row->decision->value, $row->findings, $row->mode),
             $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),

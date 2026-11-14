@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
+use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -12,9 +13,12 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\IgnoredProgress;
+use Intakt\Core\Review\Contract\Panel;
+use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundNotNext;
+use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
@@ -25,6 +29,7 @@ use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Plugin\Vendor\Contract\Vendor;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
@@ -48,6 +53,7 @@ final readonly class ReviewChange implements ChangeReviews
         private StoredVerdicts $verdicts,
         private ClockInterface $clock,
         private FailureInWords $failures,
+        private Vendor $vendor,
         private int $waitCeilingSeconds = self::WAIT_CEILING_SECONDS,
     ) {
     }
@@ -61,12 +67,33 @@ final readonly class ReviewChange implements ChangeReviews
 
     public function start(ChangeReviewRequest $request): string
     {
+        $this->refuseUnmappedTiers($request);
         $target = new ReviewTarget(new ReviewSubject($request->project, $request->checkoutRoot, $request->task, $request->diff), $request->identity);
         $handled = $this->dispatched(new RunReviewRound($target, $request->panel, $request->round))->last(HandledStamp::class);
         $roundId = $handled?->getResult();
         assert(is_string($roundId));
 
         return $roundId;
+    }
+
+    // Asked before the round opens, so a tier without a model refuses the round instead of failing the judge after every reviewer answered.
+    private function refuseUnmappedTiers(ChangeReviewRequest $request): void
+    {
+        foreach ($this->tiersNeeded($request->panel) as $tier) {
+            if (!$this->vendor->mapsAModelTo($request->project, $tier)) {
+                throw new RoundTierNotMapped($request->project, $tier);
+            }
+        }
+    }
+
+    /**
+     * @return list<Tier>
+     */
+    private function tiersNeeded(Panel $panel): array
+    {
+        $reviewerTiers = array_map(static fn (PanelReviewer $reviewer): Tier => $reviewer->model->tier, $panel->reviewers);
+
+        return [...$reviewerTiers, Vendor::JUDGE_TIER];
     }
 
     // Unwrapped, because a round another caller opened first is the caller's to report in its own words, not a failed handler.
@@ -138,7 +165,7 @@ final readonly class ReviewChange implements ChangeReviews
     {
         $act = $this->ledger->actIdsOf($round->id()->toRfc4122());
 
-        return array_values(array_filter($this->findings->reportedIn($round), static fn (Finding $finding): bool => in_array($finding->id, $act, true)));
+        return $this->findings->actListOf($round, $act);
     }
 
     /**

@@ -24,6 +24,7 @@ use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
+use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
@@ -98,12 +99,33 @@ final readonly class RoundLedger
     // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
     public function judgeDone(ReviewRound $round, JudgedFindings $judged): void
     {
+        $act = array_map(static fn (Finding $finding): string => $finding->id, $judged->actList);
+
         $this->append(LedgerEventKind::JudgeDone, new JudgeDone(
             $round->id()->toRfc4122(),
-            array_map(static fn (Finding $finding): string => $finding->id, $judged->actList),
+            $act,
             array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
-            array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text), $judged->findings),
+            $this->recordedFindings($judged->findings, $act),
         ));
+    }
+
+    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
+    /**
+     * @param list<Finding> $findings
+     * @param list<string>  $act
+     *
+     * @return list<JudgeDoneFinding>
+     */
+    private function recordedFindings(array $findings, array $act): array
+    {
+        $entries = [];
+        foreach (new OnePerPlace()->actList($findings, $act) as $entry) {
+            $entries[$entry->id] = $entry;
+        }
+
+        $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
+
+        return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged), $shown);
     }
 
     /**

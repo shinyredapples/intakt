@@ -1,6 +1,6 @@
 # Builder prompt
 
-Plan task T49, part 1 (#1574; design: [threat model](../design/05-architecture/14-threat-model.md#builder)). `Core/Build/Domain/BuilderPrompt::textFor(BuildBrief): string` builds the one prompt a build job gives its builder. Running the builder with it, the model choice, the turn limit, the hand-back and the session usage are later parts of T49; nothing calls the prompt in production yet.
+Plan task T49, part 1 (#1574; design: [threat model](../design/05-architecture/14-threat-model.md#builder)). `Core/Build/Domain/BuilderPrompt::textFor(BuildBrief): string` builds the one prompt a build job gives its builder. The [build job](build-job.md) runs the builder with it on the tier's model (`intakt:build:run`); the build job bounds the session by a turn limit and an allowance; reading the session usage is a later part of T49.
 
 - **Brief:** `Core/Build/Contract/BuildBrief` holds the `task` text, the maintainer's `decisions` (a list of texts) and a `Rework` or null for a first build. A `Contract/Rework` holds the `actList` (a list of `Review/Contract/Finding`), the `ciExcerpt` (a string or null) and the `publishedText` of the pull request.
 - **Order:** the fixed instructions, then the task, the decisions when there are any, and then for a first build the request to write the pull request text to `PR.md`; for a rework the request to fix what the act list and the CI log name and to edit the published text, the act list when it is not empty, the CI excerpt when there is one, and the published text. Parts are separated by a blank line.

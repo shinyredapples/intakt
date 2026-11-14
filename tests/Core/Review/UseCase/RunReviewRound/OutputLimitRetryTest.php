@@ -98,7 +98,7 @@ final class OutputLimitRetryTest extends KernelTestCase
     {
         $calls = 0;
         $answer = static function () use (&$calls, $stops): string {
-            return ++$calls <= $stops ? throw new MaxOutputTokensException('Truncated at the output limit.') : VerdictDocument::fromTheDesign()->json();
+            return ++$calls <= $stops ? throw new MaxOutputTokensException('Truncated at the output limit.') : VerdictDocument::fromTheDesign()->with('resolved', [])->json();
         };
 
         return $this->vendor($answer);

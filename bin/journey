@@ -1,0 +1,64 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Intakt\Tests\JourneyPage\GhCliApi;
+use Intakt\Tests\JourneyPage\GitHubReader;
+use Intakt\Tests\JourneyPage\JourneyInputFailed;
+use Intakt\Tests\JourneyPage\JourneyPage;
+use Intakt\Tests\JourneyPage\RecordedApi;
+use Intakt\Tests\JourneyPage\UsageReader;
+use Symfony\Component\Clock\NativeClock;
+
+const USAGE = "usage: bin/journey [--recorded=<folder with the recorded API answers>]\n";
+
+$autoload = __DIR__.'/../vendor/autoload.php';
+
+if (!is_file($autoload)) {
+    fwrite(STDERR, "run composer install first\n");
+    exit(2);
+}
+
+require $autoload;
+
+$recorded = null;
+
+foreach (array_slice($argv, 1) as $argument) {
+    if (!str_starts_with($argument, '--recorded=') || null !== $recorded) {
+        fwrite(STDERR, USAGE);
+        exit(2);
+    }
+
+    $recorded = substr($argument, 11);
+}
+
+$root = dirname(__DIR__);
+$pageFile = $root.'/docs/journey.md';
+$page = is_file($pageFile) ? file_get_contents($pageFile) : false;
+
+if (false === $page) {
+    fwrite(STDERR, "cannot read docs/journey.md\n");
+    exit(1);
+}
+
+$api = null === $recorded ? new GhCliApi((string) getenv('GITHUB_REPOSITORY')) : new RecordedApi($recorded);
+
+try {
+    $regenerated = new JourneyPage(new GitHubReader($api), new UsageReader(), new NativeClock())->regenerated($page, $root.'/docs/journey/usage.jsonl');
+} catch (JourneyInputFailed $failure) {
+    fwrite(STDERR, $failure->getMessage()."\n");
+    exit(1);
+}
+
+if ($regenerated === $page) {
+    fwrite(STDOUT, "docs/journey.md is current\n");
+    exit(0);
+}
+
+if (false === @file_put_contents($pageFile, $regenerated)) {
+    fwrite(STDERR, "cannot write docs/journey.md\n");
+    exit(1);
+}
+
+fwrite(STDOUT, "docs/journey.md regenerated\n");

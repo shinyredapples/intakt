@@ -67,7 +67,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .card.is-hover { background: var(--tint-2); }
 .card.needs.is-hover { background: var(--amber-tint); }
 .card .top { display: flex; align-items: center; gap: var(--s8); margin-bottom: var(--s4); color: var(--muted); font-size: var(--t13); }
-.card .top .pname { margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A change named like a branch is as long as a title; it gives way to the project name, which keeps up to 60%. */
+.card .top .num { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .top .pname { flex: none; margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .card .title {
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere;
   margin-bottom: var(--s8); font: 600 var(--t15)/1.3 var(--f-head);
@@ -77,6 +79,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .blocker.broken { color: var(--red); }
 .meta { display: flex; flex-wrap: wrap; gap: var(--s4) var(--s12); margin: 0; color: var(--muted); font-size: var(--t13); }
 .meta span { display: inline-flex; align-items: center; gap: var(--s4); white-space: nowrap; }
+/* A fact wider than its card wraps inside it; flex-wrap still moves a fact that fits to the next line whole. */
+.card .meta span { white-space: normal; }
 
 /* List rows */
 .list { border-top: 1px solid var(--hairline); }
@@ -189,6 +193,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   color: var(--ink); font: 500 var(--t13)/1 var(--f-head); cursor: pointer;
 }
 .fchip[aria-pressed="true"] { border-color: transparent; background: var(--selected); }
+.ledger.findings tr.selected td { background: var(--selected); }
 
 /* Toasts */
 .toast {
@@ -206,8 +211,9 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 
 /* Glossary terms */
 .term { position: relative; text-decoration: underline dotted var(--muted); text-underline-offset: 3px; cursor: help; }
-.term-tip {
-  position: absolute; top: calc(100% + var(--s4)); left: 0; z-index: 140; display: none; width: max-content; max-width: 300px;
+/* Under .term so it outranks .meta span, which would show the tip on a card and keep it on one line. */
+.term .term-tip {
+  position: absolute; top: calc(100% + var(--s4)); left: 0; z-index: 140; display: none; width: max-content; max-width: 300px; white-space: normal;
   padding: var(--s8) var(--s12); border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--ink);
   font: 400 var(--t13)/1.4 var(--f-body); pointer-events: none;
 }
@@ -232,10 +238,29 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .content.wide { max-width: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .board { display: flex; align-items: flex-start; gap: var(--s16); overflow-x: auto; padding-bottom: var(--s16); }
-.board .col { flex: 1 1 0; min-width: 184px; }
+.board .col { flex: 1 1 0; min-width: 176px; }
+.board .col.col-needs { flex-grow: 1.25; min-width: 224px; }
 .col-head { display: flex; align-items: center; gap: var(--s8); height: 32px; margin-bottom: var(--s8); font-family: var(--f-head); }
 .col-head h3 { margin: 0; font-size: var(--t15); font-weight: 600; }
 .col-cards { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--s8); }
+/* Its own attribute, not hidden, which the project filter owns: a filter change then never undoes Show more (assets/column-more.js). */
+.col-cards > [data-past-limit] { display: none; }
+.more-btn { width: 100%; }
+.more-btn[hidden] { display: none; }
+.col-fold { display: none; }
+.col-hide { margin-left: auto; height: 28px; }
+.col-hide:focus-visible { outline-offset: -2px; }
+/* Only from 761 px, because Backlog and Done are not collapsed on phones (DESIGN.md, Phone). */
+@media (min-width: 761px) {
+  .board .col.collapsed { flex: 0 0 108px; min-width: 108px; }
+  .col.collapsed .col-head, .col.collapsed .col-cards { display: none; }
+  .col.collapsed .col-fold {
+    display: flex; align-items: center; justify-content: space-between; gap: calc(var(--s4) + 2px); width: 108px; height: 32px; padding: 0 calc(var(--s4) + 2px) 0 calc(var(--s8) + 2px);
+    border: 0; border-radius: var(--r-chip); background: var(--tint); color: var(--ink); cursor: pointer; font: 600 var(--t15)/1 var(--f-head);
+  }
+  .col.collapsed .col-fold:hover { background: var(--tint-2); }
+  .col.collapsed .col-fold .count { background: var(--raised); }
+}
 
 /* Connection state; the page stays at full contrast while it shows (DESIGN.md: never fade the page). */
 .conn { display: flex; align-items: center; gap: var(--s12); margin-bottom: var(--s16); padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
@@ -248,6 +273,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 
 @media (max-width: 760px) {
   .btn, .btn.sm, .linkbtn, .toast button { min-height: 44px; }
+  .col-hide { display: none; }
   .icon-btn { width: 44px; height: 44px; }
   .fchip { flex: none; height: 44px; }
   .seg { display: flex; }
@@ -275,6 +301,8 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
   .conn { flex-wrap: wrap; }
   .topbar .offline-marker { display: none; }
   .subtabs a, .row .t a, .ledger td a { display: inline-flex; align-items: center; min-height: 44px; }
+  /* A term on a meta line is focusable and stands alone, not in a sentence, so it is a control and takes the 44 px floor. */
+  .meta .term { min-height: 44px; }
   .toast { right: var(--s16); bottom: calc(var(--bar) + var(--s16) + env(safe-area-inset-bottom)); left: var(--s16); justify-content: space-between; transform: none; animation-name: toast-in-phone; }
 }
 @keyframes toast-in-phone { from { opacity: 0; transform: translateY(8px); } }
@@ -317,6 +345,11 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 [data-theme="dark"] .theme-toggle .moon { display: none; }
 .content { width: 100%; max-width: 1280px; padding: var(--s32); }
 .topbar .brand-m, .search-trigger .ph-short, .rail .nav.more, .menu { display: none; }
+/* The mock pads the content 40 px high from 1700 wide, which has no spacing step, so --s32 stays. */
+@media (min-width: 1700px) {
+  .content { padding: var(--s32) var(--s48); }
+  .topbar { padding: 0 var(--s48); }
+}
 
 @media (max-width: 760px) {
   .shell, [data-rail="collapsed"] .shell { grid-template-columns: minmax(0, 1fr); }
@@ -395,7 +428,11 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
 .page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }
 .page-head .actions { margin-left: auto; }
+.now-stop-idle ~ .stop-round { display: none; }
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }
+/* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
+.page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.page-head .meta span { white-space: normal; overflow-wrap: anywhere; }
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */
 .section { margin-top: var(--s32); }
@@ -415,10 +452,12 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .round-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8) var(--s12); margin-bottom: var(--s8); }
 .round-head h2 { margin: 0; }
 .round h3 { margin: var(--s24) 0 var(--s8); }
+/* A round's tables sit in a scroll box, so a cell keeps its words whole and the table scrolls, instead of a phone splitting "correctness" across three lines. */
+.round .ledger td { overflow-wrap: break-word; }
 .live-reviewers { display: grid; gap: var(--s12); margin-top: var(--s16); }
 .live { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .live h3 { margin: 0 0 var(--s8); font-size: var(--t15); }
-.live-calls { margin: 0 0 var(--s8); padding-left: var(--s16); color: var(--muted); font-family: var(--f-mono); font-size: var(--t13); }
+.live-calls { margin: 0 0 var(--s8); padding-left: var(--s16); color: var(--muted); font-family: var(--f-mono); font-size: var(--t13); overflow-wrap: anywhere; }
 .live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .comp-nav { display: flex; flex-wrap: wrap; gap: var(--s8); margin-bottom: var(--s24); }
 .comp-nav a { padding: var(--s4) var(--s12); border-radius: var(--r-chip); background: var(--tint); color: var(--ink); font-size: var(--t13); text-decoration: none; }
@@ -455,7 +494,8 @@ details.ev > summary { display: flex; flex-wrap: wrap; align-items: baseline; ga
 details.ev > summary h2 { margin: 0; font-size: var(--t15); }
 details.ev > summary time { margin-left: auto; color: var(--muted); font-size: var(--t13); }
 
-/* The live log of the running round beside the timeline, as in the task mock; the phone's Timeline and Live log switch is its own task. */
+/* The live log of the running round beside the timeline, as in the task mock; on a phone the Timeline and Live log switch shows one of them. */
+.ttabs { display: none; }
 .task-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 440px); gap: var(--s32) var(--s48); align-items: start; }
 .task-grid > :only-child { grid-column: 1 / -1; }
 .log { position: sticky; top: calc(var(--top) + var(--s24)); margin-top: var(--s32); padding: var(--s16); border: 1px solid var(--hairline); border-radius: var(--r-card); background: var(--raised); max-height: calc(100vh - var(--top) - var(--s48)); display: flex; flex-direction: column; gap: var(--s12); overflow: hidden; }
@@ -478,4 +518,58 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
   .task-grid { grid-template-columns: minmax(0, 1fr); }
   .log { position: static; max-height: none; }
   .log-summary { max-height: none; }
+}
+/* DESIGN.md, Breakpoints: the roomy page grows to 1720 px, the timeline to 960 px, and the log scrolls within 520 px above the summary. */
+@media (min-width: 1500px) {
+  .content.roomy { max-width: 1720px; }
+  .task-grid { grid-template-columns: minmax(0, 960px) minmax(440px, 1fr); gap: var(--s48); }
+  .log-main { max-height: 520px; }
+}
+/* The summary leaves the bottom of the panel for a 360 px column beside the log, so both show at once. */
+@media (min-width: 2200px) {
+  .content.roomy { max-width: 2000px; }
+  .task-grid { grid-template-columns: minmax(0, 900px) minmax(0, 1fr); }
+  .log { display: grid; grid-template-columns: minmax(0, 1fr) 360px; grid-template-rows: auto 1fr; }
+  .log > h2 { grid-column: 1 / -1; }
+  .log-main { max-height: 640px; }
+  .log-summary { padding-top: 0; padding-left: var(--s12); border-top: 0; border-left: 1px solid var(--hairline); }
+  .ls-grid { grid-template-columns: 1fr; }
+}
+/* DESIGN.md, Phone patterns: Stop beside Continue, the last action across the row, then the sticky switch; Continue waits for T59, so Stop keeps its half. */
+@media (max-width: 760px) {
+  .page-head .task-actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s8); width: 100%; margin-left: 0; }
+  .task-actions > .start-review { grid-column: 1 / -1; }
+  .task-actions .btn { width: 100%; }
+  .ttabs { display: flex; position: sticky; top: var(--top); z-index: 10; margin: 0 calc(-1 * var(--s16)) var(--s16); padding: var(--s8) var(--s16); background: var(--page); }
+  .ttabs .seg { width: 100%; margin: 0; }
+  .task-grid { gap: 0; }
+  .task-grid[data-pane="timeline"] .log-pane, .task-grid[data-pane="log"] .tl-pane { display: none; }
+  .ttabs ~ .task-grid .timeline-title { display: none; }
+  .log { margin-top: 0; }
+}
+
+/* Who is working */
+.working { margin: var(--s24) 0 var(--s32); }
+.working summary { display: flex; align-items: center; gap: var(--s12); min-height: 44px; padding: 0 var(--s16); border-radius: var(--r-card); background: var(--tint); cursor: pointer; list-style: none; }
+.working summary::-webkit-details-marker { display: none; }
+.working summary:hover { background: var(--tint-2); }
+.w-title { font: 600 var(--t15)/1.3 var(--f-head); }
+.w-dots { display: inline-flex; gap: var(--s4); }
+.w-sum { color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.working .chev { transition: transform .15s; color: var(--muted); }
+.working[open] .chev { transform: rotate(180deg); }
+.working[open] summary { margin-bottom: var(--s8); }
+.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s8); }
+.lane { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); display: grid; gap: var(--s4); min-width: 0; align-content: start; }
+.lane .who { display: flex; align-items: center; gap: var(--s8); font: 500 var(--t13)/1.3 var(--f-head); color: var(--muted); }
+.lane .who .elapsed { margin-left: auto; font-family: var(--f-body); }
+.lane .what { font-size: var(--t15); overflow-wrap: anywhere; }
+@media (min-width: 1700px) {
+  .lanes { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .working { margin: var(--s16) 0 var(--s24); }
+  .working summary { min-height: 48px; }
+  .w-dots { display: none; }
+  .lanes { grid-template-columns: minmax(0, 1fr); }
 }

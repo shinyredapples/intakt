@@ -16,6 +16,7 @@ enum LedgerEventKind: string
     case JudgeDone = 'judge_done';
     case UsageRecorded = 'usage_recorded';
     case AccountCooledDown = 'account_cooled_down';
+    case AccountErrorReported = 'account_error_reported';
     case HeadPending = 'head_pending';
     case HeadRed = 'head_red';
     case RoundQueued = 'round_queued';
@@ -30,6 +31,11 @@ enum LedgerEventKind: string
     case JobEgressRefused = 'job_egress_refused';
     case JobNetworkRemoved = 'job_network_removed';
     case JobStartCheckFailed = 'job_start_check_failed';
+    case BootResultComputed = 'boot_result_computed';
+    case HandBackAccepted = 'hand_back_accepted';
+    case HandBackSentBack = 'hand_back_sent_back';
+    case HandBackHandedOver = 'hand_back_handed_over';
+    case ModelChosen = 'model_chosen';
     case PushIntended = 'push_intended';
     case BranchPushed = 'branch_pushed';
     case ChangeOpened = 'change_opened';

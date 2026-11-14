@@ -8,8 +8,14 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\JudgedFinding;
+use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
@@ -18,12 +24,14 @@ use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\VerdictReceived;
+use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(ReviewStarted::class)]
@@ -35,6 +43,9 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewerStopped::class)]
 #[CoversClass(JudgeDone::class)]
 #[CoversClass(JudgeDoneFinding::class)]
+#[CoversClass(RoundLedger::class)]
+#[UsesClass(OnePerPlace::class)]
+#[UsesClass(JudgedFindings::class)]
 final class RoundLedgerPayloadsTest extends KernelTestCase
 {
     private const string ROUND = '0195f0a2-7c1e-7000-8000-000000000001';
@@ -106,7 +117,25 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug."},{"id":"f2","severity":"P3","text":"A nit."}]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[]},{"id":"f2","severity":"P3","text":"A nit.","merged":[]}]}', $this->written($done));
+    }
+
+    public function testADoneJudgeRecordsTwoActFindingsAtOnePlaceAsTheActEntryThatNamesTheMergedId(): void
+    {
+        $round = new RoundFixture(self::getContainer())->start(1);
+        $ledger = new InMemoryLedger();
+        $findings = [$this->findingAt('F1', Severity::P2, 7), $this->findingAt('F2', Severity::P1, 7), $this->findingAt('F3', Severity::P3, 8)];
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act), new JudgedFinding('F3', Mark::Defer)]);
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer())->judgeDone($round, JudgedFindings::of($judgement, $findings));
+
+        $payload = $ledger->payloads()[0];
+        self::assertSame(['F1', 'F2'], $payload['act']);
+        self::assertSame([
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2']],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => []],
+            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => []],
+        ], $payload['findings']);
     }
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
@@ -130,9 +159,19 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private function written(object $payload): string
     {
+        return $this->serializer()->serialize($payload, 'json');
+    }
+
+    private function serializer(): SerializerInterface
+    {
         $serializer = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $serializer);
 
-        return $serializer->serialize($payload, 'json');
+        return $serializer;
+    }
+
+    private function findingAt(string $id, Severity $severity, int $line): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 }

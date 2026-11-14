@@ -14,20 +14,49 @@
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
     </div>
 </div>
+{% for head in failing %}
+    {% set headline = 'Pull request ' ~ head.change ~ ' of ' ~ head.project ~ ' failed' %}
+    {% set state = head.handedOver ? 'Handed over to the maintainer agent after ' ~ head.fault.failures ~ ' failures' : head.fault.failures ~ (head.fault.failures == 1 ? ' failure' : ' failures') ~ ' in a row, next try at ' ~ head.fault.retryAt|date('H:i', 'UTC') ~ ' UTC' %}
+    {% embed 'dashboard/components/banner.html.twig' with {icon: 'broken', broken: true, project: head.project, short: headline, title: headline ~ '.', text: state ~ ': ' ~ head.fault.cause} only %}
+        {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
+    {% endembed %}
+{% endfor %}
+<details class="working" id="working">
+    <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working ? working.working ~ ' working' : 'Nobody is working yet' }}</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+    <div class="lanes">
+    {% for lane in working.lanes %}
+        <div class="lane" data-project="{{ lane.project }}">
+            <div class="who"><span class="dot ok"></span>{{ lane.role }}, {{ lane.tier }}<span class="elapsed">since <time datetime="{{ lane.since|date('c', 'UTC') }}">{{ lane.since|date('H:i', 'UTC') }} UTC</time></span></div>
+            <div class="what">{{ lane.change }}</div>
+            <p class="meta"><span>{{ lane.project }}</span>{% if lane.round is not null %}<span>Round {{ lane.round }}</span>{% endif %}</p>
+        </div>
+    {% endfor %}
+    </div>
+</details>
 <section aria-labelledby="board-h">
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
-    {# The counts are totals over every project, so the project filter hides cards and never changes a count. #}
+    {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. #}
+    {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
     <div class="board">
     {% for column in columns %}
         {% set cards = board.cardsIn(column) %}
-        <section class="col" id="col-{{ column.value|lower|replace({' ': '-'}) }}" aria-label="{{ column.value }}">
-            <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: board.countOf(column), needs: column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') and cards is not empty}, with_context = false) }}</div>
-            <div class="col-cards">
+        {% set needs = column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') %}
+        {% set folds = column.startsCollapsed %}
+        {% set slug = column.value|lower|replace({' ': '-'}) %}
+        {% set count = board.countOf(column) %}
+        {% set crowded = cards|length > limit %}
+        {# Backlog and Done stay open on phones because DESIGN.md asks for it. #}
+        <section class="col{{ needs ? ' col-needs' }}{{ folds ? ' collapsed' }}" id="col-{{ slug }}" aria-label="{{ column.value }}"{% if crowded %} data-page-limit="{{ limit }}"{% endif %}>
+            {# The name is built from hidden words around the visible ones rather than an aria-label, so it contains what a speech user sees and says (WCAG 2.5.3). #}
+            {% if folds %}<button type="button" class="col-fold" aria-expanded="false" aria-controls="cards-{{ slug }}"><span><span class="sr-only">Show </span>{{ column.value }}</span>{{ include('dashboard/components/count.html.twig', {n: count}, with_context = false) }}<span class="sr-only"> {{ count == 1 ? 'task' : 'tasks' }}</span></button>{% endif %}
+            <div class="col-head"><h3>{{ column.value }}</h3>{{ include('dashboard/components/count.html.twig', {n: count, needs: needs and cards is not empty}, with_context = false) }}{% if folds %}<button type="button" class="btn quiet sm col-hide" aria-label="Hide {{ column.value }}">Hide</button>{% endif %}</div>
+            <div class="col-cards" id="cards-{{ slug }}">
             {% for review in cards %}
-                {{ include('dashboard/_board_card.html.twig', {review: review}, with_context = false) }}
+                {{ include('dashboard/_board_card.html.twig', {review: review, past_limit: loop.index > limit}, with_context = false) }}
             {% else %}
-                {{ include('dashboard/components/column_empty.html.twig', {}, with_context = false) }}
+                {{ include('dashboard/components/column_empty.html.twig', needs ? {text: 'Nothing needs you'} : {}, with_context = false) }}
             {% endfor %}
+            {% if crowded %}<button type="button" class="btn secondary sm more-btn">Show {{ cards|length - limit }} more</button>{% endif %}
             </div>
         </section>
     {% endfor %}

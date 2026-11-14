@@ -26,7 +26,7 @@ final readonly class HeadsWithoutRound
 
     public function settled(string $project, HeadDecision $decision): void
     {
-        if (HeadAdmission::Red === $decision->admission) {
+        if ($decision->goesBack()) {
             $this->pending->forget($project, $decision->change);
 
             return;

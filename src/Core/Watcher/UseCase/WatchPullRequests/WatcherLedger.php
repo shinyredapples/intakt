@@ -8,6 +8,9 @@ use DateTimeImmutable;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\BootOutcome;
+use Intakt\Core\Watcher\Domain\BootKey;
+use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\HeadFailure;
@@ -25,12 +28,12 @@ final readonly class WatcherLedger
     {
         $kind = match ($decision->admission) {
             HeadAdmission::Pending => LedgerEventKind::HeadPending,
-            HeadAdmission::Red => LedgerEventKind::HeadRed,
+            HeadAdmission::Red, HeadAdmission::FailedBoot => LedgerEventKind::HeadRed,
             HeadAdmission::Green => null,
         };
 
         if (null !== $kind) {
-            $this->append($kind, $this->headOf($project, $decision) + ['read_again_at' => $decision->readAgainAt?->format(DATE_ATOM)]);
+            $this->append($kind, $this->headOf($project, $decision) + ['read_again_at' => $decision->readAgainAt?->format(DATE_ATOM)] + $this->bootFailureOf($decision));
         }
     }
 
@@ -59,6 +62,11 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::HeadFailed, $this->failureOf($failure, $failures, $retryAt));
     }
 
+    public function bootResultComputed(BootKey $key, BootOutcome $outcome): void
+    {
+        $this->append(LedgerEventKind::BootResultComputed, ['project' => $key->project, 'main' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'state' => $outcome->state->value, 'reason' => $outcome->reason]);
+    }
+
     /**
      * @return array{project: string, change: string, head: string, cause: string, failures: int, retry_at: string}
      */
@@ -73,6 +81,14 @@ final readonly class WatcherLedger
     private function headOf(string $project, HeadDecision $decision): array
     {
         return ['project' => $project, 'change' => $decision->change->id->value, 'head' => $decision->change->head->hash];
+    }
+
+    /**
+     * @return array{cause?: string, reason?: string}
+     */
+    private function bootFailureOf(HeadDecision $decision): array
+    {
+        return $decision->failedBoot instanceof FailedBoot ? ['cause' => FailedBoot::CAUSE, 'reason' => $decision->failedBoot->reason] : [];
     }
 
     /**

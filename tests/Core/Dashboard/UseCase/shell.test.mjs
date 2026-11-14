@@ -455,3 +455,32 @@ test('the project filter keeps filtering through a dropped connection and a push
     assert.equal(page.projectFilter.value, 'alpha');
     assert.deepEqual(page.shownRows(), ['alpha']);
 });
+
+test('choosing a project tells the page after it has hidden the other rows', () => {
+    const page = new Browser('light').open();
+    const seen = page.listenForShownProjects();
+
+    page.chooseProject('beta');
+
+    assert.deepEqual(seen, [['beta', 'beta']]);
+});
+
+test('a window that narrows to a phone tells the page it shows every row again', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('beta');
+    const seen = page.listenForShownProjects();
+
+    page.resize(true);
+
+    assert.deepEqual(seen, [['beta', 'alpha', 'beta']]);
+});
+
+test('a visit tells the page once the new rows are filtered', () => {
+    const page = new Browser('light').open();
+    page.chooseProject('alpha');
+    const seen = page.listenForShownProjects();
+
+    page.visit();
+
+    assert.deepEqual(seen, [['alpha']]);
+});
