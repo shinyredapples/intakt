@@ -28,6 +28,7 @@ use Intakt\Core\Review\Infrastructure\ReviewJobImages;
 use Intakt\Tests\Core\Job\FakeDockerEngine;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
@@ -35,6 +36,23 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 
 // The review job through the container runner, its engine client and its egress proxy, with only the Docker daemon scripted, because the build sandbox has none.
 #[CoversClass(ReviewJob::class)]
+#[UsesClass(ReviewJobAnswer::class)]
+#[UsesClass(ReviewJobImages::class)]
+#[UsesClass(ReviewJobRequest::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(JobSpec::class)]
+#[UsesClass(ContainerJobRunner::class)]
+#[UsesClass(DockerEngine::class)]
+#[UsesClass(EgressLog::class)]
+#[UsesClass(EgressProxy::class)]
+#[UsesClass(EgressProxyDefinition::class)]
+#[UsesClass(JobContainerDefinition::class)]
+#[UsesClass(JobContainers::class)]
+#[UsesClass(JobLedger::class)]
+#[UsesClass(JobLocks::class)]
+#[UsesClass(JobOutputDirectories::class)]
+#[UsesClass(OrphanedJobs::class)]
+#[UsesClass(StartCheckReport::class)]
 final class ReviewJobInContainerTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../docker/job/review.sh';
