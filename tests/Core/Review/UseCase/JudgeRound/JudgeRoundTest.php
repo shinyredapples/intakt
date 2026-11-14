@@ -96,11 +96,21 @@ final class JudgeRoundTest extends KernelTestCase
     public function testJudgingARoundRecordsJudgeDoneWithTheActIdsAndTheFollowUpIds(): void
     {
         $round = $this->completedRound();
-        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer), new JudgedFinding('F3', Mark::Reject)]);
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act), new JudgedFinding('F3', Mark::Defer)]);
 
         $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
 
-        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => ['F2']]], $this->judgeCalls());
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => ['F3']]], $this->judgeCalls());
+    }
+
+    public function testAJudgeThatRejectsAP1AndDefersAP2LeavesBothOnTheActList(): void
+    {
+        $round = $this->completedRound();
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Reject), new JudgedFinding('F2', Mark::Defer), new JudgedFinding('F3', Mark::Reject)]);
+
+        $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
+
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
     public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
@@ -302,7 +312,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement($second, $otherWorker))($this->judgingOf($round));
 
-        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1'], 'follow_ups' => []]], $this->judgeCalls());
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
     /**
