@@ -21,6 +21,8 @@ final class RoundReviewer implements HasPlace
     public const int REVIEW_CEILING_SECONDS = 3600;
     public const string REVIEW_CEILING = 'PT'.self::REVIEW_CEILING_SECONDS.'S';
 
+    private const int FAILURE_LENGTH = 255;
+
     #[ORM\Column(length: 255)]
     private readonly string $roleName;
 
@@ -47,7 +49,7 @@ final class RoundReviewer implements HasPlace
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $verdict = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    #[ORM\Column(length: self::FAILURE_LENGTH, nullable: true)]
     private ?string $failure = null;
 
     // The provider that reviewed in this reviewer's place; set means a catch-up review is owed, because another vendor reviewed; a move to another account of the same vendor never sets it.
@@ -85,9 +87,10 @@ final class RoundReviewer implements HasPlace
         $this->substitute = $substitute;
     }
 
+    // Cut, because a reason can list as many ids as the reviewer named and a longer value fails the write on MySQL and PostgreSQL, leaving the reviewer running.
     public function recordFailure(string $failure): void
     {
-        $this->failure = $failure;
+        $this->failure = mb_strcut($failure, 0, self::FAILURE_LENGTH, 'UTF-8');
     }
 
     public function id(): UuidV7
