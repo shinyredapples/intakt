@@ -23,12 +23,13 @@ final readonly class ChangeReview
         public Cost $cost,
         // Why the round is blocked, in plain words, because a blocked round has no findings to show.
         public array $reasons = [],
+        public RoundEnds $end = RoundEnds::Judged,
     ) {
     }
 
     // Blocked whatever the verdicts say, because they do not stand for the change: a reviewer still out could change the quorum, or the checkout changed under the reviewers.
-    public function blockedFor(string $reason): self
+    public function blockedFor(RoundEnds $end, string $reason): self
     {
-        return clone ($this, ['decision' => Decision::Blocked, 'actList' => [], 'reasons' => [$reason, ...$this->reasons]]);
+        return clone ($this, ['decision' => Decision::Blocked, 'actList' => [], 'reasons' => [$reason, ...$this->reasons], 'end' => $end]);
     }
 }
