@@ -109,7 +109,7 @@ final class BinaryFileReadReviewTest extends KernelTestCase
         self::assertStringNotContainsString('IHDR', $request);
     }
 
-    // The tools read the temporary repository's checkout, which holds the PNG the change adds.
+    // On the temporary repository's checkout, because the fixture's own checkout holds no binary file to read.
     private function reviewerReadingThePng(): AgentVendor
     {
         $this->responses = [
