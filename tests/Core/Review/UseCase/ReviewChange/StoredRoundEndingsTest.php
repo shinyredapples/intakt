@@ -27,18 +27,16 @@ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 #[UsesClass(JudgeRound::class)]
 final class StoredRoundEndingsTest extends TestCase
 {
-    private const string START = '2026-10-28T12:00:00+00:00';
-
     public function testARoundWithinItsUpperWaitHasNotEnded(): void
     {
         $endings = $this->endingsAt('2026-10-28T12:00:09+00:00', []);
 
-        self::assertNull($endings->ofUnjudged('round-1', 2, new DateTimeImmutable(self::START)));
+        self::assertNull($endings->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00')));
     }
 
     public function testARoundPastItsUpperWaitEndedWithNoOutcomeInTime(): void
     {
-        $ending = $this->endingsAt('2026-10-28T12:00:10+00:00', [])->ofUnjudged('round-1', 2, new DateTimeImmutable(self::START));
+        $ending = $this->endingsAt('2026-10-28T12:00:10+00:00', [])->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
         self::assertInstanceOf(RoundEnding::class, $ending);
         self::assertSame(RoundEnds::NoOutcomeInTime, $ending->end);
@@ -47,7 +45,7 @@ final class StoredRoundEndingsTest extends TestCase
 
     public function testARoundWhoseJudgingIsParkedAsFailedEndedWithJudgingFailedEvenWithinItsWait(): void
     {
-        $ending = $this->endingsAt(self::START, [new Envelope(new JudgeRound('round-1'))])->ofUnjudged('round-1', 2, new DateTimeImmutable(self::START));
+        $ending = $this->endingsAt('2026-10-28T12:00:00+00:00', [new Envelope(new JudgeRound('round-1'))])->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
 
         self::assertInstanceOf(RoundEnding::class, $ending);
         self::assertSame(RoundEnds::JudgingFailed, $ending->end);
@@ -56,9 +54,9 @@ final class StoredRoundEndingsTest extends TestCase
 
     public function testAParkedJudgingOfAnotherRoundDoesNotEndThisOne(): void
     {
-        $endings = $this->endingsAt(self::START, [new Envelope(new JudgeRound('round-2'))]);
+        $endings = $this->endingsAt('2026-10-28T12:00:00+00:00', [new Envelope(new JudgeRound('round-2'))]);
 
-        self::assertNull($endings->ofUnjudged('round-1', 2, new DateTimeImmutable(self::START)));
+        self::assertNull($endings->ofUnjudged('round-1', 2, new DateTimeImmutable('2026-10-28T12:00:00+00:00')));
     }
 
     /**

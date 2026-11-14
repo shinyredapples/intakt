@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
-// A round that ended without a judge's call, with the plain words the command and the tool print for it.
+// Carries the reason with the end, because every door must print the same words for it and none may spell them again.
 final readonly class RoundEnding
 {
     public function __construct(

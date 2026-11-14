@@ -32,13 +32,13 @@ final readonly class ReviewedRound
     public Cost $cost;
     public ?Decision $outcome;
     public ?DateTimeImmutable $judgedAt;
-    public ?RoundEnding $ending;
 
     public function __construct(
         RoundStart $start,
         RoundPlace $place,
         public DateTimeImmutable $startedAt,
         public ?QuorumPolicy $quorum,
+        public ?RoundEnding $ending = null,
     ) {
         $this->round = $start->round;
         $this->project = $start->project;
@@ -54,7 +54,6 @@ final readonly class ReviewedRound
         $this->cost = Cost::none();
         $this->outcome = null;
         $this->judgedAt = null;
-        $this->ending = null;
     }
 
     public function isJudged(): bool

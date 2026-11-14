@@ -8,9 +8,9 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Tests\Support\Log\LogRecords;
 use Intakt\Tests\Support\WebTestCase;
 use Psr\Log\LogLevel;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
-use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 abstract class DashboardPageTestCase extends WebTestCase
 {
