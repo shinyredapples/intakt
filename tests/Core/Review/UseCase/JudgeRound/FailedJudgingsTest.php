@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
-use Doctrine\DBAL\Connection;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict;
@@ -103,7 +102,6 @@ final class FailedJudgingsTest extends KernelTestCase
     {
         $this->failed->send(new Envelope(new JudgeRound(self::ROUND)));
         $connection = self::getContainer()->get('doctrine.dbal.default_connection');
-        assert($connection instanceof Connection);
         $connection->executeStatement("INSERT INTO messenger_messages (body, headers, queue_name, created_at, available_at) VALUES ('garbage', '{\"type\":\"Gone\\\\Klass\"}', 'failed', '2026-01-01 00:00:00', '2026-01-01 00:00:00')");
 
         self::assertTrue(new FailedJudgings($this->failed)->hasFailed(self::ROUND));
