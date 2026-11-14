@@ -81,4 +81,9 @@ final class StartedRound
     {
         return $this->withdrawalOwed;
     }
+
+    public function withdrawalWasRequested(): bool
+    {
+        return $this->withdrawalRequested;
+    }
 }

@@ -48,7 +48,10 @@ final readonly class StaleVerdicts
             return;
         }
 
-        $this->rounds->oweWithdrawalOnce($round, $this->ledger->verdictsStale(...));
+        if (!$round->withdrawalWasRequested()) {
+            $this->rounds->oweWithdrawalOnce($round, $this->ledger->verdictsStale(...));
+        }
+
         $this->withdrawOwed($project, $decision->change);
     }
 
