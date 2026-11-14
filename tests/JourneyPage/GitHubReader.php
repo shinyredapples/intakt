@@ -106,7 +106,7 @@ final readonly class GitHubReader
             throw $this->malformed(JourneyResource::Issues);
         }
 
-        return new Issue($number, $closed, 'not_planned' === $reason);
+        return new Issue($number, $closed, in_array($reason, ['not_planned', 'duplicate'], true));
     }
 
     /**
@@ -122,7 +122,14 @@ final readonly class GitHubReader
 
         $moment = is_string($text) ? DateTimeImmutable::createFromFormat(self::MOMENT, $text, new DateTimeZone('UTC')) : false;
 
-        return false === $moment ? throw new JourneyInputFailed('the GitHub answer holds a date that is not a UTC moment: '.json_encode($text)) : $moment->setTimezone(new DateTimeZone('UTC'));
+        return false === $moment || !$this->parsedCleanly() ? throw new JourneyInputFailed('the GitHub answer holds a date that is not a UTC moment: '.json_encode($text)) : $moment->setTimezone(new DateTimeZone('UTC'));
+    }
+
+    private function parsedCleanly(): bool
+    {
+        $errors = DateTimeImmutable::getLastErrors();
+
+        return false === $errors || (0 === $errors['warning_count'] && 0 === $errors['error_count']);
     }
 
     private function malformed(JourneyResource $resource): JourneyInputFailed
