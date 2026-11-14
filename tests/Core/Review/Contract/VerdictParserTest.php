@@ -196,12 +196,47 @@ final class VerdictParserTest extends KernelTestCase
         $_ = new VerdictParser()->parse(new DeferredResult($converter, new InMemoryRawResult()));
     }
 
+    public function testABrokenConstraintGivesItsPathAndIntaktsMessageAsAKeySafeReason(): void
+    {
+        $output = VerdictDocument::fromTheDesign()->withFinding('line', 0)->json();
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: findings[0].line: This value should be greater than or equal to 1.', $this->refusalOf($output)->keySafeInWords());
+    }
+
+    public function testABlankValueGivesItsPathAsAKeySafeReason(): void
+    {
+        $output = VerdictDocument::fromTheDesign()->withFinding('evidence', ['probe' => '', 'output' => '...'])->json();
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: findings[0].evidence.probe: This value should not be blank.', $this->refusalOf($output)->keySafeInWords());
+    }
+
+    public function testAnAnswerThatDoesNotMapHasNoKeySafeReason(): void
+    {
+        self::assertNull($this->refusalOf('{"verdict": "approve", "findings": [],}')->keySafeInWords());
+    }
+
+    public function testAnUnknownFieldNamedByTheModelHasNoKeySafeReason(): void
+    {
+        self::assertNull($this->refusalOf(VerdictDocument::fromTheDesign()->with('summary', '...')->json())->keySafeInWords());
+    }
+
     public function testTheRefusalSaysTheAnswerCouldNotBeReadAsAVerdict(): void
     {
         $this->expectException(VerdictUnreadable::class);
         $this->expectExceptionMessageMatches('/^The reviewer\'s answer could not be read as a verdict: /');
 
         $_ = new VerdictParser()->parse($this->reviewer()->answering('approve'));
+    }
+
+    private function refusalOf(string $output): VerdictUnreadable
+    {
+        try {
+            $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
+        } catch (VerdictUnreadable $unreadable) {
+            return $unreadable;
+        }
+
+        self::fail('The answer was read as a verdict.');
     }
 
     private function reviewer(): ScriptedReviewer
