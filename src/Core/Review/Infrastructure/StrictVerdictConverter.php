@@ -162,22 +162,23 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     // Refused because a block inside another fence is an example in the prose, not the answer; the odd count is the maintainer's rule, the open fence also catches a fence line with an info string, which never closes a block.
     private function isNested(string $before): bool
     {
-        return null !== $this->fenceLeftOpenIn($before) || 1 === (int) preg_match_all('/^.*(?:`{3}|~{3}).*$/m', $before) % 2;
+        return $this->aFenceIsLeftOpenIn($before) || 1 === (int) preg_match_all('/^.*(?:`{3}|~{3}).*$/m', $before) % 2;
     }
 
-    private function fenceLeftOpenIn(string $text): ?string
+    private function aFenceIsLeftOpenIn(string $text): bool
     {
-        preg_match_all('/^[ \t>*+\-\d.)]*(`{3,}|~{3,})[ \t]*(.*?)[ \t]*\r?$/m', $text, $fences, PREG_SET_ORDER);
+        preg_match_all('/^([ \t>*+\-\d.)]*)(`{3,}|~{3,})[ \t]*(.*?)[ \t]*\r?$/m', $text, $lines, PREG_SET_ORDER);
         $open = null;
-        foreach ($fences as [, $run, $info]) {
+        foreach ($lines as [, $prefix, $run, $info]) {
+            $line = FenceLine::of($prefix, $run, $info);
             $open = match (true) {
-                null === $open => $run,
-                '' === $info && $run[0] === $open[0] && strlen($run) >= strlen($open) => null,
+                null === $open => $line,
+                $line->closes($open) => null,
                 default => $open,
             };
         }
 
-        return $open;
+        return null !== $open;
     }
 
     /**

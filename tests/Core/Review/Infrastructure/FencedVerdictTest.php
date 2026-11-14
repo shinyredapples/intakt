@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\AnswerForm;
+use Intakt\Core\Review\Infrastructure\FenceLine;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictSubscriber;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -30,6 +31,7 @@ use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
+#[CoversClass(FenceLine::class)]
 #[CoversClass(StrictVerdictConverter::class)]
 #[CoversClass(StrictVerdictSubscriber::class)]
 #[UsesClass(AnswerForm::class)]
@@ -167,6 +169,38 @@ final class FencedVerdictTest extends TestCase
         $this->answered($model, "Example:\n```text\n```python\n```\n```json\n".self::VERDICT."\n```\n");
     }
 
+    #[DataProvider('subscriptionModelsWithPrefixedFenceLines')]
+    public function testABlockAfterAPrefixedFenceLineInsideATextFenceIsInvalid(Model $model, string $prefix): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Example:\n```text\n{$prefix}```\n```json\n".self::VERDICT."\n```\n");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testABlockAfterABareFenceLineFollowingAQuotedOpeningIsInvalid(Model $model): void
+    {
+        $this->expectException(RuntimeException::class);
+
+        $this->answered($model, "Example:\n> ```text\n```\n```json\n".self::VERDICT."\n```\n");
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testAQuotedBlockClosedByAQuotedFenceBesideThePlainOneIsRead(Model $model): void
+    {
+        $verdict = $this->answered($model, "Quoted:\n> ```text\n> example\n> ```\n\nVerdict:\n```json\n".self::VERDICT."\n```\n");
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+    }
+
+    #[DataProvider('subscriptionModels')]
+    public function testATextBlockClosedByAFenceIndentedThreeSpacesBesideThePlainOneIsRead(Model $model): void
+    {
+        $verdict = $this->answered($model, "Example:\n```text\nexample\n   ```\nVerdict:\n```json\n".self::VERDICT."\n```\n");
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+    }
+
     #[DataProvider('subscriptionModels')]
     public function testAnInlineJsonFenceMentionBesideAPlainBlockIsInvalid(Model $model): void
     {
@@ -240,6 +274,19 @@ final class FencedVerdictTest extends TestCase
         foreach (['one space' => ' ', 'three spaces' => '   '] as $name => $indent) {
             foreach (self::subscriptionModels() as $provider => [$model]) {
                 yield sprintf('%s, %s', $provider, $name) => [$model, $indent];
+            }
+        }
+    }
+
+    /**
+     * @return iterable<string, array{Model, string}>
+     */
+    public static function subscriptionModelsWithPrefixedFenceLines(): iterable
+    {
+        // Inside an open block such a line is content in Markdown, so it must not count as the block's close.
+        foreach (['quoted' => '> ', 'four spaces' => '    ', 'list item' => '- ', 'tab' => "\t"] as $name => $prefix) {
+            foreach (self::subscriptionModels() as $provider => [$model]) {
+                yield sprintf('%s, %s', $provider, $name) => [$model, $prefix];
             }
         }
     }
