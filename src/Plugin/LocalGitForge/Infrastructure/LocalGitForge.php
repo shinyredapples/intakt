@@ -143,6 +143,11 @@ final readonly class LocalGitForge implements Forge
         return new FileContent($path, $commit, $this->read(['cat-file', 'blob', $this->blobAt($commit, $path)]));
     }
 
+    public function baseCommit(): CommitId
+    {
+        return $this->commitFrom($this->read(['show-ref', '--verify', '--hash', 'refs/heads/'.$this->repository->baseBranch]));
+    }
+
     private function addWorktree(CommitId $head, string $prefix): string
     {
         $directory = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(8));

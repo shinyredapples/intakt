@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\FindingLedger;
+use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Domain\TrackedFinding;
@@ -67,6 +68,17 @@ final readonly class StoredFindings
     {
         // None, because a round completed before migration Version20261101120000 kept no reported findings and was never queued for judging.
         return $this->findingsIn($round->reportedFindingsJson());
+    }
+
+    // One entry per place, because two reviewers reporting one file and line send the builder one fix; the act ids are the judge's.
+    /**
+     * @param list<string> $actIds
+     *
+     * @return list<Finding>
+     */
+    public function actListOf(ReviewRound $round, array $actIds): array
+    {
+        return new OnePerPlace()->actList($this->reportedIn($round), $actIds);
     }
 
     /**
