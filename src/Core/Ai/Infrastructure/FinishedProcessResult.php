@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\ReviewServerAccess;
+use Intakt\Core\Ai\Contract\ReviewServerReads;
 use Override;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RuntimeException;
@@ -14,9 +16,11 @@ use Symfony\Component\Process\Process;
 use Throwable;
 
 // The bridge answers a stream cut off before its final result with an empty answer, or with a generic error when the CLI was killed or timed out (upstream/ai-claude-code-platform-cut-off-stream); naming it keeps a cut-off stream apart from a failed one.
-final readonly class FinishedProcessResult implements RawResultInterface
+final readonly class FinishedProcessResult implements RawResultInterface, ReviewServerReads
 {
     private const string TOOL_CALLS = 'tool_calls';
+
+    private const string TYPE = 'type';
 
     private const string STRUCTURED_OUTPUT = 'structured_output';
 
@@ -51,6 +55,20 @@ final readonly class FinishedProcessResult implements RawResultInterface
         unset($data[self::TOOL_CALLS]);
 
         return $this->withStructuredOutput($data);
+    }
+
+    // Only a call of one of its tools on that server whose result the CLI reports without an error counts, because a failed or refused call, one left without a result or one to another server showed the reviewer nothing of the change.
+    #[Override]
+    public function readThrough(ReviewServerAccess $access): bool
+    {
+        $toolNames = $access->mcpToolNames();
+        $calls = array_filter($this->contentBlocks('assistant', 'tool_use'), static fn (array $use): bool => in_array($use['name'] ?? null, $toolNames, true));
+        $ids = array_column($calls, 'id');
+
+        return array_any(
+            $this->contentBlocks('user', 'tool_result'),
+            static fn (array $result): bool => in_array($result['tool_use_id'] ?? null, $ids, true) && false === ($result['is_error'] ?? false),
+        );
     }
 
     #[Override]
@@ -88,19 +106,45 @@ final readonly class FinishedProcessResult implements RawResultInterface
 
     private function endedWithResult(): bool
     {
-        $process = $this->inner->getObject();
-
-        return $process instanceof Process && array_any(
-            explode(PHP_EOL, $process->getOutput()),
-            $this->isResultEvent(...),
-        );
+        return array_any($this->events(), static fn (array $event): bool => 'result' === ($event[self::TYPE] ?? null));
     }
 
-    private function isResultEvent(string $line): bool
+    /**
+     * @return list<array<mixed>>
+     */
+    private function contentBlocks(string $eventType, string $blockType): array
     {
-        $event = json_decode($line, true);
+        $content = array_merge(...array_map(fn (array $event): array => $this->contentOf($event, $eventType), $this->events()));
 
-        return is_array($event) && 'result' === ($event['type'] ?? null);
+        return array_values(array_filter($content, static fn (mixed $block): bool => is_array($block) && $blockType === ($block[self::TYPE] ?? null)));
+    }
+
+    /**
+     * @param array<mixed> $event
+     *
+     * @return list<mixed>
+     */
+    private function contentOf(array $event, string $eventType): array
+    {
+        $message = $eventType === ($event[self::TYPE] ?? null) ? $event['message'] ?? null : null;
+        $content = is_array($message) ? $message['content'] ?? null : null;
+
+        return is_array($content) ? array_values($content) : [];
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function events(): array
+    {
+        $process = $this->inner->getObject();
+        if (!$process instanceof Process) {
+            return [];
+        }
+
+        $events = array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput()));
+
+        return array_values(array_filter($events, is_array(...)));
     }
 
     private function cutOff(string $how, ?Throwable $failure): IncompleteStreamException
