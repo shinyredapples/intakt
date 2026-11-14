@@ -22,12 +22,19 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Core\Review\UseCase\ReviewChange\StoredRoundEndings;
+use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -40,6 +47,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ReviewerOutcome::class)]
 #[CoversClass(RoundFinding::class)]
 #[CoversClass(TokenFigures::class)]
+#[UsesClass(StoredRoundEndings::class)]
+#[UsesClass(RoundEnding::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(RoundLedgerReading::class)]
@@ -175,6 +184,60 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertStringContainsString('The judge has not judged this round yet.', $crawler->filter('#round-round-1')->text());
         self::assertSelectorTextContains('#round-round-1 .chip.state-running', 'In progress');
+    }
+
+    public function testARoundStillWithinItsWaitStaysInProgressAndKeepsItsLiveTopic(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(1, $crawler->filter('#round-round-1-now-phase'));
+        self::assertCount(0, $crawler->filter('.round-ending'));
+    }
+
+    public function testARoundThatNeverReportedShowsAsBlockedWithNoOutcomeInTime(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSelectorTextContains('#round-round-1 .chip.state-blocked', 'Blocked');
+        self::assertStringContainsString('Blocked: '.RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 10800 seconds', $crawler->filter('#round-round-1-ending')->text());
+    }
+
+    public function testARoundThatEndedWithoutAnOutcomeIsNoLongerTheActiveRound(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('#round-round-1-now-phase'));
+        self::assertCount(0, $crawler->filter('#live-log-pane'));
+    }
+
+    public function testARoundWhoseJudgingFailedShowsAsBlockedWithTheReasonTheJudgingFailed(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSelectorTextContains('#round-round-1 .chip.state-blocked', 'Blocked');
+        self::assertSame('Blocked: the judging failed', $crawler->filter('#round-round-1-ending')->text());
+    }
+
+    public function testAJudgedRoundPastTheUpperWaitStaysJudged(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(2, $crawler->filter('section.round .chip.state-judged'));
+        self::assertCount(0, $crawler->filter('.chip.state-blocked'));
     }
 
     public function testAJudgedRoundCarriesTheJudgedChip(): void

@@ -13,6 +13,8 @@ use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEnds;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -72,6 +74,30 @@ final class ReviewTest extends TestCase
     public function testAReviewWithNoJudgedRoundHasNoOpenFindings(): void
     {
         self::assertSame([], new Review([$this->round('round-1', 1)])->openFindings());
+    }
+
+    public function testARoundThatEndedWithoutAJudgeCallIsNotTheActiveRound(): void
+    {
+        $ended = $this->round('round-1', 1)->endedAs(new RoundEnding(RoundEnds::NoOutcomeInTime, 'no outcome in time'));
+
+        self::assertNull(new Review([$ended])->activeRound());
+    }
+
+    public function testARoundEndedAsBlockedKeepsItsEndAndReason(): void
+    {
+        $ended = $this->round('round-1', 1)->endedAs(new RoundEnding(RoundEnds::JudgingFailed, 'the judging failed'));
+
+        self::assertTrue($ended->hasEnded());
+        self::assertSame('the judging failed', $ended->ending?->reason);
+        self::assertFalse($ended->isJudged());
+    }
+
+    public function testARoundWithoutAnEndIsStillTheActiveRound(): void
+    {
+        $round = $this->round('round-1', 1);
+
+        self::assertFalse($round->hasEnded());
+        self::assertSame($round, new Review([$round])->activeRound());
     }
 
     private function judged(string $id, int $number): ReviewedRound

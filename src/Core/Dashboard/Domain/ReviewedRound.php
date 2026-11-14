@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
 final readonly class ReviewedRound
@@ -31,6 +32,7 @@ final readonly class ReviewedRound
     public Cost $cost;
     public ?Decision $outcome;
     public ?DateTimeImmutable $judgedAt;
+    public ?RoundEnding $ending;
 
     public function __construct(
         RoundStart $start,
@@ -52,11 +54,18 @@ final readonly class ReviewedRound
         $this->cost = Cost::none();
         $this->outcome = null;
         $this->judgedAt = null;
+        $this->ending = null;
     }
 
     public function isJudged(): bool
     {
         return $this->state->isJudged();
+    }
+
+    // Ended without the judge's call, as blocked, so the page and the tool name the same end.
+    public function hasEnded(): bool
+    {
+        return $this->ending instanceof RoundEnding;
     }
 
     public function failedReviewers(): int
@@ -107,6 +116,11 @@ final readonly class ReviewedRound
     public function withCost(Cost $cost): self
     {
         return clone ($this, ['cost' => $cost]);
+    }
+
+    public function endedAs(RoundEnding $ending): self
+    {
+        return clone ($this, ['ending' => $ending]);
     }
 
     public function decidedAs(Decision $outcome): self
