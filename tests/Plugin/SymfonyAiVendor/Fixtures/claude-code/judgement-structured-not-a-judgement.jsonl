@@ -1,0 +1,3 @@
+{"type":"system","subtype":"init","model":"haiku","tools":["StructuredOutput"]}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"{\"marks\":[{\"id\":\"F1\",\"mark\":\"act\"},{\"id\":\"F2\",\"mark\":\"reject\"}]}"}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"marks\":[{\"id\":\"F1\",\"mark\":\"act\"},{\"id\":\"F2\",\"mark\":\"reject\"}]}","structured_output":{"verdict":"approve"},"usage":{"input_tokens":90,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}

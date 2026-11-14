@@ -1,0 +1,110 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Git\UseCase\PushBranch;
+
+use Intakt\Core\Git\Contract\BranchNotPushed;
+use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Symfony\Component\Process\Exception\RuntimeException;
+use Symfony\Component\Process\Process;
+
+// Git calls on the bare repository, never through NetworkGit, because its retries are for reads and a retried push could happen twice.
+final readonly class BranchGit
+{
+    private const array NETWORK = ['GIT_ALLOW_PROTOCOL' => 'file:https', 'GIT_TERMINAL_PROMPT' => '0'];
+
+    public function __construct(
+        private HardenedGit $hardened,
+        private float $timeoutSeconds = 600,
+    ) {
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws BranchNotPushed
+     */
+    public function output(string $repository, array $arguments, ?string $input = null): string
+    {
+        $process = $this->process($repository, $arguments, []);
+        $process->setInput($input);
+
+        return $this->finished($process, $arguments)->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed', $arguments[0] ?? ''));
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws BranchNotPushed
+     */
+    public function lines(string $repository, array $arguments): string
+    {
+        return trim($this->output($repository, $arguments));
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws BranchNotPushed
+     */
+    public function outputFromRemote(string $repository, array $arguments): string
+    {
+        $process = $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments);
+
+        // Not the error output, because git may repeat the remote's address, and a credential can be part of it.
+        return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed with exit code %d', $arguments[0] ?? '', $process->getExitCode() ?? -1));
+    }
+
+    // Null when the two merge cleanly, else the paths that conflict, because the caller needs both; the merge writes objects only, never a ref or a work tree.
+    /**
+     * @return list<string>|null
+     *
+     * @throws BranchNotPushed
+     */
+    public function mergeTree(string $repository, string $main, string $head): ?array
+    {
+        // Ended by NUL (-z), because git otherwise prints a path that holds a byte outside ASCII, a quote or a line break as a quoted string, and the builder needs the file's name.
+        $arguments = ['merge-tree', '--write-tree', '--name-only', '--no-messages', '-z', $main, $head];
+        $process = $this->finished($this->process($repository, $arguments, []), $arguments);
+
+        return match ($process->getExitCode()) {
+            0 => null,
+            1 => array_values(array_filter(array_slice(explode("\0", $process->getOutput()), 1), static fn (string $path): bool => '' !== $path)),
+            default => throw BranchNotPushed::because('git merge-tree could not test the merge with main'),
+        };
+    }
+
+    /**
+     * @param list<string>          $arguments
+     * @param array<string, string> $environment
+     *
+     * @throws BranchNotPushed
+     */
+    private function process(string $repository, array $arguments, array $environment): Process
+    {
+        try {
+            $call = $this->hardened->call(['--git-dir='.$repository, ...$arguments], $repository);
+        } catch (RepositoryAttributesRefused $refused) {
+            throw BranchNotPushed::because($refused->getMessage());
+        } catch (RuntimeException) {
+            // Because HardenedGit first asks git for the repository's object format, and that call can be killed or hit its limit like any other; its exception is not chained, as in GuardedRun.
+            throw BranchNotPushed::because(sprintf('git %s could not be prepared, because the look at its repository was stopped', $arguments[0] ?? ''));
+        }
+
+        // Because a work tree beside --git-dir would make git treat the bare repository as a checkout.
+        return new Process($call->command, $call->directory, [...$call->environment, 'GIT_WORK_TREE' => false, ...$environment], null, $this->timeoutSeconds);
+    }
+
+    // Every call goes through this one step, so none leaves the push as a Process exception.
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws BranchNotPushed
+     */
+    private function finished(Process $process, array $arguments): Process
+    {
+        return GuardedRun::of($process, 'git '.($arguments[0] ?? ''));
+    }
+}
