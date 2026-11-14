@@ -276,16 +276,12 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $access = $platform->options[ReviewServerAccess::OPTION] ?? null;
 
-        return $access instanceof ReviewServerAccess && $this->readInThisCall($platform->answering->provider, $access, ...$platform->rounds()) ? $verdict : Verdict::unreadApproval();
+        return $access instanceof ReviewServerAccess && $this->readInThisCall($access, ...$platform->rounds()) ? $verdict : Verdict::unreadApproval();
     }
 
-    // A codex call must show a read in its own events, because being given the server does not make the CLI use it; claude_code's output is not read for its tool calls, so a call given the server still counts for it (#1278).
-    private function readInThisCall(Provider $answeredBy, ReviewServerAccess $access, DeferredResult ...$rounds): bool
+    // The call must show a read in its own events, because being given the server does not make the CLI use it.
+    private function readInThisCall(ReviewServerAccess $access, DeferredResult ...$rounds): bool
     {
-        if (Provider::ClaudeCode === $answeredBy) {
-            return true;
-        }
-
         return array_any($rounds, static fn (DeferredResult $round): bool => ($raw = $round->getRawResult()) instanceof ReviewServerReads && $raw->readThrough($access));
     }
 
