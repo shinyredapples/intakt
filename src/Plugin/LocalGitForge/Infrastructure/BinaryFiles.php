@@ -7,8 +7,7 @@ namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 use Closure;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 
-// A file is binary when one of its blobs holds a NUL byte anywhere, not only in the lines shown, because a binary file's bytes would break every prompt, tool answer and ledger payload that must be UTF-8.
-// A text file keeps every line, its stray bytes escaped, because naming it binary would hide its code from the reviewer.
+// A file is binary when one of its blobs holds a NUL byte anywhere, because its bytes would break every prompt and payload that must be UTF-8; a text file keeps its lines, stray bytes escaped, because naming it binary would hide its code.
 final readonly class BinaryFiles
 {
     // A line of a file's content always starts with its marker, so only git's own header starts a line with "diff --git ".
@@ -19,10 +18,10 @@ final readonly class BinaryFiles
 
     private const string ABSENT = '/\A0+\z/';
 
-    // A submodule's ids name commits of its own repository, which this repository does not hold.
+    // Its blobs are not read, because a submodule's ids name commits of its own repository, which this repository does not hold.
     private const string SUBMODULE = '/^(?:index [0-9a-f]+\.\.[0-9a-f]+ |(?:new file|deleted file|old|new) mode )160000$/m';
 
-    // A whole UTF-8 character, or else one byte that starts none; ASCII is left out, because it is always kept.
+    // ASCII is left out of this match of a UTF-8 character or a stray byte, because it is always kept.
     private const string CHARACTER_OR_BYTE = '/(?<character>[\xC2-\xDF][\x80-\xBF]|\xE0[\xA0-\xBF][\x80-\xBF]|[\xE1-\xEC\xEE\xEF][\x80-\xBF]{2}|\xED[\x80-\x9F][\x80-\xBF]|\xF0[\x90-\xBF][\x80-\xBF]{2}|[\xF1-\xF3][\x80-\xBF]{3}|\xF4[\x80-\x8F][\x80-\xBF]{2})|[\x80-\xFF]/';
 
     private const string REPLACEMENT = "\u{FFFD}";
