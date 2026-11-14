@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Git\UseCase\MakeBuildClone;
+namespace Intakt\Core\Git\Contract;
 
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use RuntimeException;

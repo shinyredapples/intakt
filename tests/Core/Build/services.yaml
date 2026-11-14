@@ -1,0 +1,8 @@
+parameters:
+    # Empty unless a run names the open issues, so the container builds without one.
+    env(BUILD_ISSUES): ''
+
+services:
+    Intakt\Tests\Core\Build\ScriptedIssueReads:
+        autowire: true
+    Intakt\Plugin\GitHubForge\Contract\IssueReads: '@Intakt\Tests\Core\Build\ScriptedIssueReads'

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\UseCase\MakeBuildClone;
 
+use Intakt\Core\Git\Contract\BuildCloneNotMade;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;

@@ -41,4 +41,10 @@ enum LedgerEventKind: string
     case BranchPushed = 'branch_pushed';
     case ChangeIntended = 'change_intended';
     case ChangeOpened = 'change_opened';
+    case TaskRead = 'task_read';
+    case TaskNotRead = 'task_not_read';
+    case MirrorUpdated = 'mirror_updated';
+    case MirrorNotUpdated = 'mirror_not_updated';
+    case CloneMade = 'clone_made';
+    case CloneNotMade = 'clone_not_made';
 }

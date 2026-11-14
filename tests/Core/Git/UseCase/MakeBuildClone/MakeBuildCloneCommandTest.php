@@ -10,7 +10,7 @@ use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
-use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
+use Intakt\Core\Git\Contract\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneCommand;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneInput;

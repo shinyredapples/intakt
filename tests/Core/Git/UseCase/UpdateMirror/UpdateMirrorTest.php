@@ -9,7 +9,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Core\Git\Domain\Mirrors;
-use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
+use Intakt\Core\Git\Contract\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;

@@ -9,6 +9,7 @@ Code and conventions:
 - [Retried network git calls](network-git.md)
 - [Bare mirror](mirror.md)
 - [Build clone](build-clone.md)
+- [Build task](build-task.md): `intakt:build:task` reads one issue and runs the mirror and the clone, recording each step in the ledger and stopping at the first that fails
 - [Branch push](branch-push.md)
 - [Hand-back checks](hand-back.md): the bundle a build returns, refused when it touches main, is not a fast-forward, holds a merge or a secret, stripped of attribution and redacted of mounted credentials; the pull request text scanned too, and a failure sent back once, then handed over
 - [Check job](check-job.md): the pre-push check of an accepted bundle in a fresh clone through the gate plugin, the lost-content rule, and the verdict read from the job's output directory only

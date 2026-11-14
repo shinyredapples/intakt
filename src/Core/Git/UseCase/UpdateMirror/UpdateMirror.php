@@ -7,16 +7,19 @@ namespace Intakt\Core\Git\UseCase\UpdateMirror;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\MirrorNotUpdated;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Contract\ProjectMirror;
 use Intakt\Core\Git\Domain\Mirrors;
 use InvalidArgumentException;
+use Override;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Process\Process;
 
-final readonly class UpdateMirror
+final readonly class UpdateMirror implements ProjectMirror
 {
     // Because a mirror holds every ref of the remote, forced, as "clone --mirror" sets it up.
     private const string MIRROR_REFSPEC = '+refs/*:refs/*';
@@ -40,6 +43,7 @@ final readonly class UpdateMirror
      * @throws NetworkGitFailed
      * @throws MirrorNotUpdated
      */
+    #[Override]
     public function update(string $project, string $remote): string
     {
         $path = $this->mirrors->pathOf($project);

@@ -8,4 +8,5 @@ namespace Intakt\Core\Build\Contract;
 final readonly class BuildServices
 {
     public const string ROUTING = 'intakt.build.routing';
+    public const string CLONES_DIRECTORY = 'intakt.build.clones_directory';
 }

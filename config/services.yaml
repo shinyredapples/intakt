@@ -18,6 +18,8 @@ parameters:
     !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RESERVE_PERCENT: 20
     # One bare mirror per project lives here, rebuilt from the remote if lost.
     !php/const Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY: '%kernel.project_dir%/var/mirrors'
+    # One build clone per task lives here, named by project and issue number.
+    !php/const Intakt\Core\Build\Contract\BuildServices::CLONES_DIRECTORY: '%kernel.project_dir%/var/builds'
     # The orchestrator's own private key, under var/data because that is where the image keeps its volume; it is never mounted into a job.
     !php/const Intakt\Core\Git\Contract\GitServices::SIGNING_KEY: '%kernel.project_dir%/var/data/keys/signing_key'
 
@@ -130,6 +132,8 @@ when@test:
         - { resource: '../tests/Plugin/GitHubForge/services.yaml', ignore_errors: not_found }
         # Recorded pull requests and CI runs, so a tick runs on an install in the test environment while no forge lists them (plan task T18).
         - { resource: '../tests/Core/Watcher/services.yaml', ignore_errors: not_found }
+        # The open issues of a project named by a variable, so intakt:build:task runs on an install in the test environment while no forge answers.
+        - { resource: '../tests/Core/Build/services.yaml', ignore_errors: not_found }
         # The start guard under a public test name, so its test proves the alias this file wires and the ceilings config/packages/ai.php binds.
         - { resource: '../tests/Core/Budget/services.yaml', ignore_errors: not_found }
         # A vendor that never calls a model and a hub that records, so a journey runs a review round on an instance and reads what the dashboard published.
