@@ -63,14 +63,15 @@ require_a_read_only_checkout() {
     if [ ! -d "$checkout/.git" ] || [ -L "$checkout/.git" ]; then
         refuse 'the checkout has no .git folder of its own'
     fi
-    if [ -w "$checkout" ] || [ -w "$checkout/.git" ]; then
-        refuse 'the checkout is writable'
-    fi
+    # Every file and folder, because a writable file stays writable inside a read-only folder; an entry that cannot be checked refuses too.
+    find "$checkout" -exec sh -c 'for path do [ ! -w "$path" ] || exit 1; done' intakt-review {} + 2>> "$log" \
+        || refuse 'the checkout is writable'
 }
 
-# Only what git clone or git init writes on Linux, because any other setting (an fsmonitor, hooks, filters, an include) could run a command or hide a change.
+# Only what git clone or git init writes on Linux, because any other setting (an fsmonitor, hooks, filters, an include,
+# attributes such as ident that let a changed file compare equal) could run a command or hide a change.
 require_only_clone_settings() {
-    for file in commondir config.worktree objects/info/alternates; do
+    for file in commondir config.worktree objects/info/alternates info/attributes; do
         if [ -e "$checkout/.git/$file" ] || [ -L "$checkout/.git/$file" ]; then
             refuse "the checkout has .git/$file"
         fi
@@ -106,7 +107,9 @@ require_the_head() {
 require_no_change() {
     rm -f -- "$index"
     checkout_git read-tree HEAD 2>> "$log" || refuse 'the head cannot be read'
-    changes="$(checkout_git status --porcelain --untracked-files=no --ignore-submodules=none 2>> "$log")" || refuse 'the checkout status cannot be read'
+    # Attributes from the empty tree, not the head's .gitattributes, so no ident, eol or encoding rule can make changed content compare equal.
+    empty_tree="$(checkout_git hash-object -t tree --stdin < /dev/null 2>> "$log")" || refuse 'the head cannot be read'
+    changes="$(checkout_git --attr-source="$empty_tree" status --porcelain --untracked-files=no --ignore-submodules=none 2>> "$log")" || refuse 'the checkout status cannot be read'
     if [ -n "$changes" ]; then
         refuse 'the checkout differs from the head'
     fi
