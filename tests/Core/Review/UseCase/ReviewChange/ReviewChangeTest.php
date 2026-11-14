@@ -31,6 +31,7 @@ use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
@@ -57,6 +58,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ChangeReview::class)]
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(StoredVerdicts::class)]
+#[UsesClass(OnePerPlace::class)]
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(FailureInWords::class)]
 #[UsesClass(Cost::class)]
@@ -121,6 +123,29 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => $verdict]));
 
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
+    }
+
+    public function testTwoReviewersReportingOnePlaceGiveOneActEntryThatNamesBothFindings(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 7)));
+
+        self::assertCount(1, $review->actList);
+        self::assertSame(['F2'], $review->actList[0]->merged);
+    }
+
+    public function testTwoFindingsAtOnePlaceWithDifferentJudgeCallsStaySeparate(): void
+    {
+        $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole($this->bothReportLines(7, 7)), ['F2']));
+
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
+        self::assertSame([], $review->actList[0]->merged);
+    }
+
+    public function testFindingsAtDifferentLinesOfOneFileStaySeparate(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 8)));
+
+        self::assertSame(['F1', 'F2'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
     }
 
     public function testARoundNoWorkerFinishesIsBlockedAtTheCeilingWithTheReason(): void
@@ -319,6 +344,22 @@ final class ReviewChangeTest extends KernelTestCase
     {
         $appended = $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($payload, JSON_THROW_ON_ERROR)));
         self::assertTrue($appended->succeeded());
+    }
+
+    /**
+     * @return array<string, Verdict>
+     */
+    private function bothReportLines(int $first, int $second): array
+    {
+        return [
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', $first)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', $second)], [], []),
+        ];
+    }
+
+    private function findingAt(string $id, int $line): Finding
+    {
+        return new Finding($id, Severity::P1, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     private function finding(string $id, Severity $severity): Finding

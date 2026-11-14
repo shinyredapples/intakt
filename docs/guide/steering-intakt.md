@@ -72,9 +72,9 @@ When something needs you, the dashboard's "Waiting on you" column says exactly w
 |---|---|
 | merge a protected change | on the pull request: an approving review, or a comment `approve <sha>` naming that exact version |
 | a plan, when plan approval is on | approve the plan comment on the issue |
-| a CI change that could reach more than a throwaway machine | the approval named in the request, before it is pushed |
+| a CI change that could reach more than a throwaway machine | on the task's issue, where Intakt shows the whole change: a comment `approve <sha>` naming that exact version, before it is pushed (Intakt does not push builds yet, so this check waits for that step) |
 
-An approval always names one exact version. If the change itself is pushed again, Intakt asks again; a clean update from main that leaves the change identical keeps your approval.
+An approval always names one exact version. If the change itself is pushed again, Intakt asks again. For a merge, a clean update from main that leaves the change identical keeps your approval; for a CI change before its push, every new commit (an update from main too) needs a new approval.
 
 ## Pausing and priorities across projects
 
