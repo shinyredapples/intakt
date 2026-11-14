@@ -39,6 +39,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Core\Review\UseCase\ReviewChange\UpperWait;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Intakt\Plugin\Vendor\Contract\Vendor;
@@ -64,6 +65,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
+#[CoversClass(UpperWait::class)]
 #[UsesClass(FailedJudgings::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(ChangeDecision::class)]
@@ -181,13 +183,36 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(['F1', 'F2'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
     }
 
-    public function testARoundNoWorkerFinishesIsBlockedAtTheCeilingWithTheReason(): void
+    public function testARoundThatNeverReportsEndsAtTheUpperWaitAsBlockedWithNoOutcomeInTime(): void
     {
-        $review = $this->reviewChange(static function (): void {}, 5)->review($this->request());
+        $review = $this->reviewChange(static function (): void {}, $this->shortUpperWait())->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertSame([], $review->actList);
-        self::assertStringContainsString('did not finish within 5 seconds', $review->reasons[0]);
+        self::assertStringStartsWith(ReviewChange::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', $review->reasons[0]);
+        self::assertSame('2026-10-30 12:00:05', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
+    }
+
+    public function testARoundTheWorkersFinishAtTheLastPollBeforeTheUpperWaitIsJudged(): void
+    {
+        $vendor = new VerdictPerRole([]);
+        $work = function () use ($vendor): void {
+            if ('12:00:04' !== $this->fixture->clock->now()->format('H:i:s')) {
+                return;
+            }
+
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, $vendor);
+            }
+
+            foreach ($this->fixture->judgings() as $judging) {
+                $this->fixture->judge($vendor)($judging);
+            }
+        };
+
+        $review = $this->reviewChange($work, $this->shortUpperWait())->review($this->request());
+
+        self::assertSame([Decision::Approve, []], [$review->decision, $review->reasons]);
     }
 
     public function testARoundWhoseJudgingFailedForGoodIsBlockedForTheFailedJudgingBeforeTheCeiling(): void
@@ -202,17 +227,17 @@ final class ReviewChangeTest extends KernelTestCase
 
     public function testAFailedJudgingOfAnotherRoundLeavesTheWaitToTheCeiling(): void
     {
-        $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), 5)->review($this->request());
+        $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), $this->shortUpperWait())->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertStringContainsString('did not finish within 5 seconds', $review->reasons[0]);
+        self::assertStringStartsWith(ReviewChange::NO_OUTCOME_IN_TIME, $review->reasons[0]);
     }
 
     public function testEachPollReportsTheProgressOfTheRound(): void
     {
         $progress = new RecordingProgress();
 
-        $this->reviewChange(static function (): void {}, 3)->review($this->request(), $progress);
+        $this->reviewChange(static function (): void {}, new UpperWait(1, 1))->review($this->request(), $progress);
 
         // The first read of the round reports too, because the caller should see the start before any wait.
         self::assertCount(4, $progress->reported);
@@ -379,7 +404,13 @@ final class ReviewChangeTest extends KernelTestCase
         };
     }
 
-    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS, ?MessageBusInterface $bus = null): ReviewChange
+    // Two seconds a reviewer and one for the judge, so the two-reviewer panel's upper wait is 5 seconds.
+    private function shortUpperWait(): UpperWait
+    {
+        return new UpperWait(2, 1);
+    }
+
+    private function reviewChange(Closure $work, UpperWait $upperWait = new UpperWait(), ?MessageBusInterface $bus = null): ReviewChange
     {
         $serializer = $this->serializer();
         $findings = new StoredFindings($this->fixture->entities, $serializer, $this->fixture->machine('state_machine.review_round'));
@@ -395,7 +426,7 @@ final class ReviewChangeTest extends KernelTestCase
             new FailureInWords(),
             $this->tiers,
             new FailedJudgings($this->failureTransport()),
-            $ceiling,
+            $upperWait,
         );
     }
 
