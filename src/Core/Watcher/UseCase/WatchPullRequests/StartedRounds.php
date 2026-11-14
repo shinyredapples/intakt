@@ -35,7 +35,7 @@ final readonly class StartedRounds
         $queued = null;
 
         try {
-            $stored = $this->storedRound($project, $change);
+            $stored = $this->roundAt($project, $change);
             $queued = $this->startUnlessStarted($stored, $start);
             $this->ensureStillInTransaction($connection, $queued);
             $this->record($project, $change, $queued);
@@ -99,6 +99,14 @@ final readonly class StartedRounds
         return $rounds;
     }
 
+    // Read once per start, so the row this read returns decides both whether the round starts and whether the head stays due; a stale row is returned too, because a start replaces it with a fresh round.
+    public function roundAt(string $project, OpenChange $change): ?StartedRound
+    {
+        $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+
+        return $loaded instanceof StartedRound ? $this->readAgain($loaded) : null;
+    }
+
     // Marked and recorded in one transaction with the ledger's own write, so a failed append leaves the round unmarked for a later tick and a second worker that marks the same round finds it taken.
     /**
      * @param Closure(StartedRound): void $record
@@ -110,6 +118,46 @@ final readonly class StartedRounds
                 $record($round);
             }
         });
+    }
+
+    // Marked, owed and recorded in one transaction with the ledger's own write, so a withdrawal is never marked without being owed; owed once per round, also when a move already found it stale, whose line is then not recorded again.
+    /**
+     * @param Closure(StartedRound): void $record
+     */
+    public function oweWithdrawalOnce(StartedRound $round, Closure $record): void
+    {
+        $this->entities->getConnection()->transactional(function () use ($round, $record): void {
+            $marked = 1 === $this->update($round, ['stale' => true], ['stale' => false]);
+            $this->update($round, ['withdrawalRequested' => true, 'withdrawalOwed' => true], ['withdrawalRequested' => false]);
+
+            if ($marked) {
+                $record($round);
+            }
+        });
+    }
+
+    // Every head of the pull request, because the head may have moved since Review refused the withdrawal.
+    /**
+     * @return list<StartedRound>
+     */
+    public function owingWithdrawal(string $project, OpenChange $change): array
+    {
+        $rounds = [];
+
+        foreach ($this->entities->getRepository(StartedRound::class)->findBy(['project' => $project, 'change' => $change->id->value, 'withdrawalOwed' => true]) as $loaded) {
+            $round = $this->readAgain($loaded);
+
+            if (true === $round?->owesWithdrawal()) {
+                $rounds[] = $round;
+            }
+        }
+
+        return $rounds;
+    }
+
+    public function withdrawn(StartedRound $round): void
+    {
+        $this->update($round, ['withdrawalOwed' => false], []);
     }
 
     /**
@@ -170,14 +218,6 @@ final readonly class StartedRounds
     private function awaitsReplacement(StartedRound $round): bool
     {
         return $round->isStale() && $round->owesQueuedLine();
-    }
-
-    // Read once per start, so the row this read returns decides both whether the round starts and whether the head stays due.
-    private function storedRound(string $project, OpenChange $change): ?StartedRound
-    {
-        $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
-
-        return $loaded instanceof StartedRound ? $this->readAgain($loaded) : null;
     }
 
     private function isReplaceable(StartedRound $round): bool
@@ -259,5 +299,33 @@ final readonly class StartedRounds
             ->execute();
 
         return 1 === $marked;
+    }
+
+    // One statement that names the round's identity, because the review's queries clear the entity manager and a returning head replaces the row under the same key.
+    /**
+     * @param array<string, bool> $set
+     * @param array<string, bool> $where
+     */
+    private function update(StartedRound $round, array $set, array $where): int
+    {
+        $update = $this->entities->createQueryBuilder()
+            ->update(StartedRound::class, 'r')
+            ->where('r.project = :project AND r.change = :change AND r.head = :head AND r.roundId = :round')
+            ->setParameter('project', $round->project())
+            ->setParameter('change', $round->change())
+            ->setParameter('head', $round->head())
+            ->setParameter('round', $round->roundId());
+
+        foreach ($set as $field => $value) {
+            $update->set('r.'.$field, ':set_'.$field)->setParameter('set_'.$field, $value);
+        }
+
+        foreach ($where as $field => $value) {
+            $update->andWhere('r.'.$field.' = :was_'.$field)->setParameter('was_'.$field, $value);
+        }
+
+        $changed = $update->getQuery()->execute();
+
+        return is_int($changed) ? $changed : 0;
     }
 }
