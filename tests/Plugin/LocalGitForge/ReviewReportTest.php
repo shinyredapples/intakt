@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -65,7 +66,7 @@ final class ReviewReportTest extends TestCase
 
     public function testAFailedReviewerIsPrintedAsFailedInPlainWordsWithoutAClassName(): void
     {
-        $failed = $this->review(Decision::Approve)->blockedFor('correctness reviewer failed, stopped at its output limit');
+        $failed = $this->review(Decision::Approve)->blockedFor(RoundEnds::NoOutcomeInTime, 'correctness reviewer failed, stopped at its output limit');
 
         $lines = $this->report()->asLines($failed);
 

@@ -22,11 +22,12 @@ final readonly class StartedReview
         public string $decision,
         public array $act,
         public array $reasons,
+        public string $end,
     ) {
     }
 
     public static function of(ChangeReview $review): self
     {
-        return new self($review->roundId, $review->round, $review->decision->value, $review->actList, $review->reasons);
+        return new self($review->roundId, $review->round, $review->decision->value, $review->actList, $review->reasons, $review->end->value);
     }
 }

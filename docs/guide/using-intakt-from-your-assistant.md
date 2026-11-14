@@ -24,6 +24,13 @@ flowchart LR
 | read the act list | what the builder must fix, after the judge step (built) | no, read only |
 | list projects | the projects this install runs (built) | no, read only |
 
+When a review ends, its answer says how it ended, in one of three ways:
+- **judged:** the reviewers and the judge finished, and the decision (approve, changes or blocked) is their result.
+- **judging failed:** the reviewers reported, but the judge could not finish. The decision is blocked, with the reason that the judging failed.
+- **no outcome in time:** the round did not end within its time limit, for example because no review worker was running. The decision is blocked, with the reason "no outcome in time". Start the worker (`messenger:consume async`) and review again.
+
+The terminal command below blocks for the same two reasons.
+
 Your assistant can also read one thing that is not a tool: the **round findings** (`round_findings`, built), every finding the reviewers of a round reported. It only reads and changes nothing.
 
 How it stays safe:
