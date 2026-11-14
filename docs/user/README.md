@@ -164,7 +164,7 @@ It skips parsing the output, so a cut-off or empty output files or updates the s
 That task is titled `fix(journeys): the journeys run timed out on main` and says the run timed out instead of listing journeys.
 Without `--timed-out`, the command behaves as described above.
 
-Intakt's CI runs the journeys on main every night and whenever someone starts the `journeys` workflow by hand ("Run workflow", or `gh workflow run journeys.yml`), never on a pull request. A red run files one urgent task, or updates the one already open while the journeys stay red ([Running Intakt's CI on your own runner](self-hosted-ci.md)).
+Intakt's CI runs the journeys on every pull request and every push to main (the `journeys` job of the `CI` workflow), on main every night, and whenever someone starts the `journeys` workflow by hand ("Run workflow", or `gh workflow run journeys.yml`). A red nightly or hand-started run files one urgent task, or updates the one already open while the journeys stay red ([Running Intakt's CI on your own runner](self-hosted-ci.md)).
 
 ## Regenerating the journey page
 
