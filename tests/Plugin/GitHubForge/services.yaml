@@ -3,3 +3,7 @@ services:
     intakt.test.secret_scan:
         alias: Intakt\Plugin\GitHubForge\Infrastructure\SecretScan
         public: true
+    # Public for the same reason, because no watcher asks about a pull request's author yet.
+    intakt.test.author_trust:
+        alias: Intakt\Plugin\GitHubForge\Infrastructure\GitHubAuthorTrust
+        public: true

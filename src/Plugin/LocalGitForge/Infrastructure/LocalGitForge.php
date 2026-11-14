@@ -7,6 +7,7 @@ namespace Intakt\Plugin\LocalGitForge\Infrastructure;
 use Closure;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Plugin\Forge\Contract\AuthorTrust;
 use Intakt\Plugin\Forge\Contract\Change;
 use Intakt\Plugin\Forge\Contract\ChangedFile;
 use Intakt\Plugin\Forge\Contract\ChangedFiles;
@@ -27,7 +28,7 @@ use NoDiscard;
 use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 
-final readonly class LocalGitForge implements Forge
+final readonly class LocalGitForge implements Forge, AuthorTrust
 {
     // Named apart from the snapshots withSnapshotOf() removes itself, so the removal after the judge never races a command that removes its own.
     public const string KEPT_SNAPSHOT_PREFIX = 'intakt-kept-review-';
@@ -79,6 +80,13 @@ final readonly class LocalGitForge implements Forge
     public function hasHeadMoved(Change $change): bool
     {
         return !$this->headOf($change->id)->equals($change->commits->head);
+    }
+
+    // Trusted without a check, because a local branch is the owner's own and no other author can open one.
+    #[NoDiscard]
+    public function isAuthorTrusted(ChangeId $change): bool
+    {
+        return true;
     }
 
     /**
