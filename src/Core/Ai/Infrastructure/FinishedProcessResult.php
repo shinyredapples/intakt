@@ -67,9 +67,9 @@ final readonly class FinishedProcessResult implements RawResultInterface
 
     // The bridge reads only the result's text, while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict.
     /**
-     * @param array<string|int, mixed> $data
+     * @param array<string, mixed> $data
      *
-     * @return array<string|int, mixed>
+     * @return array<string, mixed>
      */
     private function withStructuredOutput(array $data): array
     {

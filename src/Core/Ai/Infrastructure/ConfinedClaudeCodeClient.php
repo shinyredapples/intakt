@@ -56,7 +56,7 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
     {
         $format = $options[PlatformSubscriber::RESPONSE_FORMAT] ?? null;
 
-        // The CLI holds its answer to a schema given with --json-schema and returns it as the result's structured output, which FinishedProcessResult reads.
+        // Through the CLI's own option rather than as an instruction, because only the option holds the model to an answer that matches the schema.
         $schema = null === $format ? [] : ['json_schema' => $this->schemaOf($format)];
 
         $access = $options[ReviewServerAccess::OPTION] ?? null;
