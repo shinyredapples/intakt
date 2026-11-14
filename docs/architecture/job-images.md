@@ -33,9 +33,9 @@ A project without `composer.json` gets its devcontainer or Dockerfile image unch
 2. Composer from `composer:2.11.1`, by the release image's digest, and `install-php-extensions` from `mlocati/php-extension-installer:2.13.2`.
 3. `ca-certificates`, `curl`, `git`, `unzip`, `nodejs` and `npm` from Debian: `curl` for the [start check](job-containers.md#start-check), `git` for the checkout.
 4. `npm install --global <package>@<version> ...` for each dependency of the [CLI manifest](#the-cli-versions), in its order: Claude Code (`@anthropic-ai/claude-code`) and Codex (`@openai/codex`).
+5. For each extension: skipped when `php -m` lists it already (spelled as Composer spells it), otherwise `install-php-extensions <name>`; still missing afterwards, the step prints `missing PHP extension: <name>` and fails the build.
 
 Steps 3 and 4 are the job tools (`JobTools::steps()`), which [the review job image](#the-review-job-image) adds to a project's own Dockerfile too.
-5. For each extension: skipped when `php -m` lists it already (spelled as Composer spells it), otherwise `install-php-extensions <name>`; still missing afterwards, the step prints `missing PHP extension: <name>` and fails the build.
 
 ## The review job image
 

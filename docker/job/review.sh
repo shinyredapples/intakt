@@ -71,9 +71,10 @@ if [ ! -e "$checkout/.git" ]; then
     refuse 1 "$checkout holds no repository"
 fi
 
-# Pinned to the checkout's own repository and files, so a core.worktree setting cannot point the checks at another folder.
+# Pinned to the checkout's own repository and files, so a core.worktree setting cannot point the checks at another folder,
+# and blind to replace refs, so a refs/replace/<head> cannot make git compare the checkout with another commit's tree.
 checkout_git() {
-    git --no-optional-locks --git-dir="$checkout/.git" --work-tree="$checkout" "$@"
+    git --no-optional-locks --no-replace-objects --git-dir="$checkout/.git" --work-tree="$checkout" "$@"
 }
 
 # The repository's settings can run commands while git reads the checkout (a clean filter, fsmonitor) or point it elsewhere (core.worktree, an include),
@@ -97,11 +98,18 @@ if [ "$at" != "$head" ]; then
 fi
 
 # Without optional locks and without fsmonitor, so reading the status writes nothing and runs no command of the repository's settings.
-if ! changes="$(checkout_git -c core.fsmonitor=false status --porcelain --untracked-files=all 2>> "$log")"; then
+if ! changes="$(checkout_git -c core.fsmonitor=false status --porcelain --untracked-files=no 2>> "$log")"; then
     refuse 1 "the status of the checkout cannot be read"
 fi
 if [ -n "$changes" ]; then
     refuse 1 "the checkout differs from $head"
+fi
+# git status would skip a file the repository's own info/exclude names, so untracked files are listed with only the head's .gitignore files.
+if ! untracked="$(checkout_git -c core.fsmonitor=false ls-files --others --exclude-per-directory=.gitignore 2>> "$log")"; then
+    refuse 1 "the untracked files of the checkout cannot be listed"
+fi
+if [ -n "$untracked" ]; then
+    refuse 1 "the checkout holds files that are not in $head"
 fi
 # git status takes a file marked skip-worktree or assume-unchanged as unchanged without reading it, so no file may carry either mark.
 if ! entries="$(checkout_git -c core.fsmonitor=false ls-files -v 2>> "$log")"; then
