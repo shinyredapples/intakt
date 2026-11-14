@@ -31,12 +31,26 @@ final readonly class BuildContext
 
     private function write(JobImagePlan $plan, string $directory, string $file): void
     {
-        if (null !== $plan->tree) {
-            $this->files->archive($directory, $plan->tree, $file);
+        if (null === $plan->tree) {
+            new PharData($file)->addFromString($plan->dockerfile, (string) $plan->generated);
+
+            return;
         }
 
-        if (null !== $plan->generated) {
-            new PharData($file)->addFromString($plan->dockerfile, $plan->generated);
+        if (null === $plan->generated) {
+            $this->files->archive($directory, $plan->tree, $file);
+
+            return;
+        }
+
+        $filesystem = new Filesystem();
+        $folder = sys_get_temp_dir().'/intakt-added-'.bin2hex(random_bytes(8));
+
+        try {
+            $filesystem->dumpFile($folder.'/'.$plan->dockerfile, $plan->generated);
+            $this->files->archive($directory, $plan->tree, $file, $folder.'/'.$plan->dockerfile);
+        } finally {
+            $filesystem->remove($folder);
         }
     }
 }

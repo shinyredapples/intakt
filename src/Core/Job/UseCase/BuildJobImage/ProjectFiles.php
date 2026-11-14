@@ -41,9 +41,12 @@ final readonly class ProjectFiles
     /**
      * @throws JobImageNotBuilt
      */
-    public function archive(string $directory, string $tree, string $file): void
+    public function archive(string $directory, string $tree, string $file, ?string $added = null): void
     {
-        $this->git($directory, ['archive', '--format=tar', '--output='.$file, '' === $tree ? 'HEAD' : 'HEAD:'.$tree]);
+        // git writes the tar itself, so a long path, a mode or a symlink of the tree stays as it is; the added file lands at the top by its name.
+        $addFile = null === $added ? [] : ['--add-file='.$added];
+
+        $this->git($directory, ['archive', '--format=tar', ...$addFile, '--output='.$file, '' === $tree ? 'HEAD' : 'HEAD:'.$tree]);
     }
 
     /**

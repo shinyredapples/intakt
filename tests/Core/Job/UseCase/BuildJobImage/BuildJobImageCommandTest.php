@@ -50,6 +50,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(BuildJobImageCommand::class)]
 #[CoversClass(BuildJobImage::class)]
@@ -187,6 +188,27 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertSame("FROM php:8.5.12-cli\n", $this->fileInTheSentContext('Dockerfile'));
         self::assertStringContainsString('dockerfile='.rawurlencode(ReviewDockerfile::PATH), $this->url);
         self::assertStringContainsString('Image intakt-job/demo:main ('.self::IMAGE.') built: PHP 8.5.12 with every required extension.', $this->display($tester));
+    }
+
+    public function testAReviewImageKeepsALongPathAModeAndASymlinkOfTheTree(): void
+    {
+        $long = str_repeat('a', 100).'/'.str_repeat('b', 100).'/'.str_repeat('c', 100).'/file.txt';
+        $this->repository->commitFile('Dockerfile', "FROM php:8.5.12-cli\n");
+        new Filesystem()->dumpFile($this->repository->path.'/bin/run', "#!/bin/sh\n");
+        chmod($this->repository->path.'/bin/run', 0o755);
+        symlink('bin/run', $this->repository->path.'/link');
+        $this->repository->commitFile($long, 'long');
+
+        $tester = $this->whenTheCommandRuns(self::BUILT, options: ['--kind' => 'review']);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
+        $listing = new Process(['tar', '-tvf', $this->context]);
+        $listing->mustRun();
+        $output = $listing->getOutput();
+        self::assertStringContainsString($long, $output);
+        self::assertMatchesRegularExpression('/^-rwx\S+ .* bin\/run$/m', $output);
+        self::assertMatchesRegularExpression('/^l.* link -> bin\/run$/m', $output);
+        self::assertStringContainsString(ReviewDockerfile::PATH, $output);
     }
 
     public function testAReviewImageWithAnUnusableTagIsRefusedBeforeAnyPlan(): void
