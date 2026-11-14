@@ -41,6 +41,12 @@ final class RecordedRoundUpdates implements RoundUpdates
     }
 
     #[Override]
+    public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void
+    {
+        $this->seen[] = sprintf('asked again %s', $reviewer);
+    }
+
+    #[Override]
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {
         $this->seen[] = sprintf('stopped %s', $reviewer);

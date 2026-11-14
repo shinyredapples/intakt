@@ -77,12 +77,16 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Platform\Bridge\ClaudeCode\ClaudeCode;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\InvalidArgumentException;
 use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\StreamResult;
+use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
+use Symfony\AI\Platform\StructuredOutput\ResponseFormatFactory;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -205,6 +209,38 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         yield 'no block' => ['prose-only'];
         yield 'two blocks' => ['two-blocks'];
         yield 'a block that is not a verdict' => ['not-a-verdict'];
+        yield 'a structured output that is not a verdict, beside a result that is' => ['structured-not-a-verdict'];
+    }
+
+    public function testAnAnswerHeldToTheSchemaIsReadFromTheStructuredOutputRatherThanTheResultText(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('structured'))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+        self::assertSame('F3', $verdict->findings[0]->id);
+    }
+
+    public function testAnEmptyStructuredOutputLeavesTheResultTextToBeRead(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('structured-null'))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+    }
+
+    public function testAResponseFormatWithoutASchemaIsRefusedBeforeTheCliStarts(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        try {
+            new ConfinedClaudeCodeClient($cli)->request(new ClaudeCode('sonnet'), 'Review.', [PlatformSubscriber::RESPONSE_FORMAT => ['type' => 'json_schema', 'json_schema' => ['name' => 'Verdict']]]);
+            self::fail('A response format without a schema started the CLI.');
+        } catch (InvalidArgumentException $refused) {
+            self::assertStringContainsString('no JSON schema', $refused->getMessage());
+        }
+
+        self::assertSame([], $cli->options);
     }
 
     #[DataProvider('unreadableAnswers')]
@@ -230,11 +266,18 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $this->vendor($cli)->review('alpha', Tier::Strong, $this->request());
 
-        self::assertSame(['tools', 'setting_sources', 'strict_mcp_config', 'no_session_persistence', 'append_system_prompt'], array_keys($cli->options));
+        self::assertSame(['tools', 'setting_sources', 'strict_mcp_config', 'no_session_persistence', 'append_system_prompt', 'json_schema'], array_keys($cli->options));
         self::assertSame([[], '', true, true], [$cli->options['tools'], $cli->options['setting_sources'], $cli->options['strict_mcp_config'], $cli->options['no_session_persistence']]);
-        $instruction = $cli->options['append_system_prompt'];
-        self::assertIsString($instruction);
-        self::assertStringContainsString('"json_schema"', $instruction);
+        self::assertSame($this->verdictSchema(), $cli->options['json_schema']);
+    }
+
+    public function testTheVerdictSchemaIsNoLongerAppendedToTheSystemPrompt(): void
+    {
+        $cli = RecordedClaudeCodeCli::replaying('complete');
+
+        $this->vendor($cli)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertStringNotContainsString('JSON schema', $this->stringOption($cli, 'append_system_prompt'));
     }
 
     public function testTheScriptedCliIsStartedWithOnlyTheReviewServerItsReadOnlyToolsAndEveryBuiltInDenied(): void
@@ -253,6 +296,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
             '--tools', '', '--setting-sources', '', '--strict-mcp-config', '--no-session-persistence',
             '--allowedTools', 'mcp__intakt-review__read_file', '--allowedTools', 'mcp__intakt-review__list_directory', '--allowedTools', 'mcp__intakt-review__search_files',
             '--disallowed-tools', 'Bash', '--disallowed-tools', 'Read', '--disallowed-tools', 'Edit', '--disallowed-tools', 'MultiEdit', '--disallowed-tools', 'Write', '--disallowed-tools', 'NotebookEdit', '--disallowed-tools', 'Glob', '--disallowed-tools', 'Grep', '--disallowed-tools', 'LS', '--disallowed-tools', 'WebFetch', '--disallowed-tools', 'WebSearch', '--disallowed-tools', 'Task', '--disallowed-tools', 'TodoWrite',
+            '--json-schema', $this->verdictSchema(),
             '--mcp-config', $run['file'], '--model', 'sonnet', '-p', array_last($arguments),
         ], $arguments);
     }
@@ -278,7 +322,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         $this->vendor($cli, servers: $this->servers())->review('alpha', Tier::Strong, $this->request());
 
         self::assertStringNotContainsString('no tool is available', $this->stringOption($cli, 'append_system_prompt'));
-        self::assertStringContainsString('"json_schema"', $this->stringOption($cli, 'append_system_prompt'));
+        self::assertSame($this->verdictSchema(), $cli->options['json_schema']);
     }
 
     public function testAnApprovalFromACliGivenTheReviewServerCounts(): void
@@ -468,6 +512,11 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertIsString($option);
 
         return $option;
+    }
+
+    private function verdictSchema(): string
+    {
+        return json_encode(new ResponseFormatFactory()->create(Verdict::class)['json_schema']['schema'], JSON_THROW_ON_ERROR);
     }
 
     private function servers(): ReviewServerAccesses
