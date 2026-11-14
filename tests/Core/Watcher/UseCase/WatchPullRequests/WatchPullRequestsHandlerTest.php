@@ -1200,6 +1200,45 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(1, $this->staleLinesOf('round-1'));
     }
 
+    public function testAReturningHeadThatFailsToBootIsWithdrawnAlthoughTheHeadBetweenCannotBeRead(): void
+    {
+        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+
+        self::assertSame(['round-1'], $this->commands->markedStale);
+    }
+
+    public function testAReturningHeadThatFailsToBootStaysDueWhileTheHeadBetweenCannotBeRead(): void
+    {
+        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+
+        self::assertSame(LedgerEventKind::HeadFailed, array_last($this->ledger->kinds()));
+        self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testAReturningHeadThatFailedToBootIsWithdrawnWhenItsNextBootCrashes(): void
+    {
+        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+        $this->queries->fetched = true;
+        $this->queries->headBoot = BootOutcome::crashed('composer could not run');
+
+        $this->clock->modify('+61 seconds');
+        $this->tick();
+
+        self::assertSame(['round-1'], $this->commands->markedStale);
+    }
+
+    public function testAReturningHeadThatFailedToBootIsWithdrawnWhenItsNextBootPasses(): void
+    {
+        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+        $this->queries->fetched = true;
+        $this->queries->headBoot = BootOutcome::booted();
+
+        $this->clock->modify('+61 seconds');
+        $this->tick();
+
+        self::assertSame(['round-1'], $this->commands->markedStale);
+    }
+
     public function testAHeadWhoseBootCrashesStillStartsItsRound(): void
     {
         $this->queries->headBoot = BootOutcome::crashed('composer could not run');
@@ -1240,6 +1279,20 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
         $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
         $this->tick();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+    }
+
+    // A, then B, then A failing to boot while B's commit cannot be read, so the stale check of B's open round throws in the tick that refuses A.
+    private function returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->queries->fetched = false;
         $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
 
         $this->tick();

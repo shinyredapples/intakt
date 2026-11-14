@@ -39,7 +39,7 @@ final readonly class StaleVerdicts
         }
     }
 
-    // Only the round on the refused head itself, because no identity tells Review that a head stopped booting; the rounds of earlier heads booted, so the moved-head check above judges them.
+    // Only the round on the refused head itself, because no identity tells Review that a head stopped booting; the rounds of earlier heads booted, so the moved-head check judges them. It reads no repository, because it runs before that check and must owe the withdrawal even when an earlier head cannot be read.
     public function noteRefusedHead(WatchedProject $project, HeadDecision $decision): void
     {
         $round = $decision->failedBoot instanceof FailedBoot ? $this->rounds->roundAt($project->name, $decision->change) : null;
