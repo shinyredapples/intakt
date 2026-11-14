@@ -16,7 +16,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 // It waits for the round and reports progress, because the snapshot the reviewers read is removed as soon as this call returns.
 #[McpTool(
     name: 'start_review',
-    description: 'Start a review round of a branch of a local repository with the project\'s panel, wait for it and answer with the decision and the act list. Send a progressToken to get progress notifications.',
+    description: 'Start a review round of a branch of a local repository with the project\'s panel, wait for it and answer with the decision, the act list and how the round ended (judged, judging_failed or no_outcome_in_time). Send a progressToken to get progress notifications.',
     annotations: new ToolAnnotations(readOnlyHint: false, destructiveHint: true),
 )]
 #[IsGrantedTool(ToolAccess::Write->value)]
