@@ -128,6 +128,26 @@ final class ReadRoundToolsTest extends KernelTestCase
         self::assertSame(['F1', 'F2'], array_map(static fn (Finding $finding): string => $finding->id, $act->act));
     }
 
+    public function testTwoFindingsAtOnePlaceGiveOneActEntryThatNamesTheSecondAsMerged(): void
+    {
+        $round = $this->fixture->start(2);
+        $vendor = new VerdictPerRole([
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A')], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B')], [], []),
+        ]);
+        foreach ($this->fixture->bus->messages as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)]);
+        $this->fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($round->id()->toRfc4122()));
+
+        $act = $this->actList()($round->id()->toRfc4122());
+
+        self::assertCount(1, $act->act);
+        self::assertSame('F1', $act->act[0]->id);
+        self::assertSame(['F2'], $act->act[0]->merged);
+    }
+
     public function testTheFindingsResourceListsEveryFindingTheRoundReported(): void
     {
         $round = $this->reviewedRound();
@@ -229,6 +249,11 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function serializer(): SerializerInterface
     {
         return self::getContainer()->get(SerializerInterface::class);
+    }
+
+    private function findingAt(string $id): Finding
+    {
+        return new Finding($id, Severity::P1, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 
     private function finding(string $id, Severity $severity): Finding
