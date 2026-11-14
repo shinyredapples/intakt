@@ -119,6 +119,22 @@ final class BinaryFilesTest extends TestCase
         self::assertSame("diff --git a/photo.JPG b/photo.JPG\nindex ".self::BASE.'..'.self::HEAD." 100644\nBinary file, not shown: 4 bytes at the base, 5 bytes at the head\n", $named);
     }
 
+    public function testWithImagesNamedAPngWhosePathGitQuotesIsNamedWithItsSizes(): void
+    {
+        $header = "diff --git \"a/caf\\303\\251.png\" \"b/caf\\303\\251.png\"\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n";
+
+        $named = new BinaryFiles()->withImagesNamed($header."--- /dev/null\n+++ \"b/caf\\303\\251.png\"\n@@ -0,0 +1,3 @@\n+\x89PNG\r\n+\x1a\n+\0\n", static fn (string $id): string => "\x89PNG\r\n\x1a\n\0");
+
+        self::assertSame($header."Binary file, not shown: absent at the base, 9 bytes at the head\n", $named);
+    }
+
+    public function testWithImagesNamedAQuotedPathThatEndsInAQuoteAfterItsImageNameKeepsItsBytes(): void
+    {
+        $file = "diff --git \"a/i.png\\\"\" \"b/i.png\\\"\"\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n--- /dev/null\n+++ \"b/i.png\\\"\"\n@@ -0,0 +1,3 @@\n+\x89PNG\r\n+\x1a\n+\0\n";
+
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => "\x89PNG\r\n\x1a\n\0"));
+    }
+
     public function testWithImagesNamedAnExecutableScriptWithANulByteKeepsItsBytesSoTheReaderStillRefusesIt(): void
     {
         $script = "echo payload-ran\n# \0\n";

@@ -70,6 +70,18 @@ final class MirrorChangeTest extends TestCase
         self::assertTrue(mb_check_encoding($diff, 'UTF-8'));
     }
 
+    public function testAPngWhosePathGitQuotesIsNamedWithItsSizesSoTheDiffIsUtf8(): void
+    {
+        $this->repository->commitFile("assets/caf\u{e9}.png", "\x89PNG\r\n\x1a\n\0");
+        $this->repository->checkout('main');
+
+        $diff = $this->read('head')->diff;
+
+        self::assertStringContainsString("diff --git \"a/assets/caf\\303\\251.png\" \"b/assets/caf\\303\\251.png\"\nnew file mode 100644\n", $diff);
+        self::assertStringContainsString("Binary file, not shown: absent at the base, 9 bytes at the head\n", $diff);
+        self::assertTrue(mb_check_encoding($diff, 'UTF-8'));
+    }
+
     public function testAScriptWithANulByteKeepsItsBytesSoThePushRequestStillRefusesIt(): void
     {
         $this->repository->commitFile('tools/run.sh', "echo payload-ran\n# \0\n");

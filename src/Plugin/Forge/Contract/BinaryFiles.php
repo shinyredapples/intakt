@@ -30,7 +30,8 @@ final readonly class BinaryFiles
     // A plain file only, because an executable file or a link is run or followed by its mode alone.
     private const string NOT_RUNNABLE_MODE = '100644';
 
-    private const string EXTENSION = '/\A[^\n]*\.([A-Za-z]+)\n/';
+    // A closing quote may follow, because git quotes a path with a byte outside printable ASCII, a quote or a backslash; an escape never holds a letter after a dot, and a path that ends in a quote of its own ends in an escaped one, so neither is read as an image name.
+    private const string EXTENSION = '/\A[^\n]*\.([A-Za-z]+)"?\n/';
 
     // The bytes each image starts with, by the extension of its name, so that neither a script named like an image nor an image named like a script is named.
     private const array IMAGE_SIGNATURES = [
