@@ -338,15 +338,14 @@ final class BootResultsTest extends KernelTestCase
 
     public function testAnAlertTheLedgerRefusedIsRecordedOnceWhenTheLedgerRecovers(): void
     {
-        $down = true;
+        $refusals = 1;
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('append')->willReturnCallback(function (LedgerEvent $event) use (&$down): AppendResult {
-            return $down && LedgerEventKind::MainBootFailed === $event->kind ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event);
+        $ledger->method('append')->willReturnCallback(function (LedgerEvent $event) use (&$refusals): AppendResult {
+            return LedgerEventKind::MainBootFailed === $event->kind && $refusals-- > 0 ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event);
         });
         $bus = new BootingBus(BootOutcome::failed('No status.'));
         $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
-        $down = false;
 
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
         $results->ofMain($this->key('a', 'tools-1'), $this->source());
