@@ -98,6 +98,17 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
+    // Both findings are act, and the first stands for the second, as RoundLedger records two findings at one place.
+    public function judgeOneEntryOf(string $round, string $entry, string $merged): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => [$entry, $merged],
+            'follow_ups' => [],
+            'findings' => [['id' => $entry, 'severity' => 'P1', 'text' => 'Text of '.$entry.'.', 'merged' => [$merged]], ['id' => $merged, 'severity' => 'P2', 'text' => 'Text of '.$merged.'.', 'merged' => []]],
+        ]);
+    }
+
     /**
      * @param list<string> $act
      * @param list<string> $followUps
