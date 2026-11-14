@@ -29,7 +29,7 @@ final class FreshInstallProjectsPageTest extends WebTestCase
 
     private function migrate(): void
     {
-        $application = new Application(self::$kernel);
+        $application = new Application(self::bootKernel());
         $application->setAutoExit(false);
         $console = new ApplicationTester($application);
 
