@@ -268,6 +268,18 @@ final class PushApprovalCommandTest extends TestCase
         self::assertSame([], $this->issue->posted());
     }
 
+    public function testARiskyChangeThatAddsAScriptWithANulByteStaysHeldAndPostsNothing(): void
+    {
+        $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));
+        $this->repository->commitFile('tools/run.sh', "echo payload-ran\n# \0\n");
+
+        $tester = $this->execute();
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringStartsWith('push: held, the change cannot be shown in full and goes back to be split: the diff holds a NUL byte', $tester->getDisplay());
+        self::assertSame([], $this->issue->posted());
+    }
+
     public function testAnotherAccountsApprovalLeavesTheHeadHeld(): void
     {
         $head = $this->repository->commitFile('.github/workflows/deploy.yml', $this->fixture('risky.yml'));

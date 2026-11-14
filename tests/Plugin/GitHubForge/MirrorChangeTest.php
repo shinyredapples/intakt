@@ -70,6 +70,14 @@ final class MirrorChangeTest extends TestCase
         self::assertTrue(mb_check_encoding($diff, 'UTF-8'));
     }
 
+    public function testAScriptWithANulByteKeepsItsBytesSoThePushRequestStillRefusesIt(): void
+    {
+        $this->repository->commitFile('tools/run.sh', "echo payload-ran\n# \0\n");
+        $this->repository->checkout('main');
+
+        self::assertStringContainsString("+++ b/tools/run.sh\n@@ -0,0 +1,2 @@\n+echo payload-ran\n+# \0\n", $this->read('head')->diff);
+    }
+
     public function testATextFileWithBytesThatAreNotUtf8KeepsThemSoThePushRequestStillRefusesIt(): void
     {
         $this->repository->commitFile('bin/check', "caf\xe9\n");

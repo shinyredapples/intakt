@@ -95,14 +95,14 @@ final readonly class MirrorChange
      */
     private function diff(string $repository, string $base, string $commit): string
     {
-        // As text, because git's guess from the first bytes would hide a file as "Binary files differ", while BinaryFiles names only a file whose blobs hold a NUL byte; full ids, because the approval pins a binary file's bytes by them and a short one could name another object later.
+        // As text, because git's guess from the first bytes would hide a file as "Binary files differ", while BinaryFiles names only a plain image whose blobs hold a NUL byte; full ids, because the approval pins an image's bytes by them and a short one could name another object later.
         $process = $this->run($repository, ['diff-tree', '-r', '-p', '--text', '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', '--full-index', '--ignore-submodules=none', $base, $commit]);
 
         if (!$process->isSuccessful()) {
             throw CommitNotRead::because(sprintf('git diff-tree failed: %s', trim($process->getErrorOutput())));
         }
 
-        return $this->binaryFiles->withBinariesNamed($process->getOutput(), fn (string $id): string => $this->blob($repository, $id));
+        return $this->binaryFiles->withImagesNamed($process->getOutput(), fn (string $id): string => $this->blob($repository, $id));
     }
 
     /**

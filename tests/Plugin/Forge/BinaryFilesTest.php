@@ -101,26 +101,71 @@ final class BinaryFilesTest extends TestCase
         self::assertStringContainsString('without the ids of its blobs', $outcome);
     }
 
-    public function testWithBinariesNamedAFileWithANulByteInABlobIsNamedWithItsSizesAndKeepsBothBlobIds(): void
+    public function testWithImagesNamedAnAddedPngIsNamedWithItsSizesAndKeepsBothBlobIds(): void
     {
-        $file = "diff --git a/i.png b/i.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n--- /dev/null\n+++ b/i.png\n@@ -0,0 +1 @@\n+\x89PNG\0\xff\n";
+        $file = "diff --git a/i.png b/i.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n--- /dev/null\n+++ b/i.png\n@@ -0,0 +1 @@\n+\x89PNG\r\n+\x1a\n+\0\n";
 
-        $named = new BinaryFiles()->withBinariesNamed(self::TEXT.$file, static fn (string $id): string => self::HEAD === $id ? "\x89PNG\0\xff\n" : "old\n");
+        $named = new BinaryFiles()->withImagesNamed(self::TEXT.$file, static fn (string $id): string => self::HEAD === $id ? "\x89PNG\r\n\x1a\n\0" : "old\n");
 
-        self::assertSame(self::TEXT."diff --git a/i.png b/i.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\nBinary file, not shown: absent at the base, 7 bytes at the head\n", $named);
+        self::assertSame(self::TEXT."diff --git a/i.png b/i.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\nBinary file, not shown: absent at the base, 9 bytes at the head\n", $named);
     }
 
-    public function testWithBinariesNamedATextFileKeepsItsBytesThatAreNotUtf8SoTheReaderStillRefusesThem(): void
+    public function testWithImagesNamedAChangedJpegIsNamedWithTheSizesOfBothBlobs(): void
+    {
+        $file = "diff --git a/photo.JPG b/photo.JPG\nindex ".self::BASE.'..'.self::HEAD." 100644\n--- a/photo.JPG\n+++ b/photo.JPG\n@@ -1 +1 @@\n-\xff\xd8\xff\0\n+\xff\xd8\xff\0\0\n";
+
+        $named = new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => self::BASE === $id ? "\xff\xd8\xff\0" : "\xff\xd8\xff\0\0");
+
+        self::assertSame("diff --git a/photo.JPG b/photo.JPG\nindex ".self::BASE.'..'.self::HEAD." 100644\nBinary file, not shown: 4 bytes at the base, 5 bytes at the head\n", $named);
+    }
+
+    public function testWithImagesNamedAnExecutableScriptWithANulByteKeepsItsBytesSoTheReaderStillRefusesIt(): void
+    {
+        $script = "echo payload-ran\n# \0\n";
+        $file = "diff --git a/tools/run.sh b/tools/run.sh\nnew file mode 100755\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n--- /dev/null\n+++ b/tools/run.sh\n@@ -0,0 +1,2 @@\n+echo payload-ran\n+# \0\n";
+
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => $script));
+    }
+
+    public function testWithImagesNamedAPlainFileWithANulByteAndNoImageNameKeepsItsBytes(): void
+    {
+        $file = "diff --git a/tools/run.sh b/tools/run.sh\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n--- /dev/null\n+++ b/tools/run.sh\n@@ -0,0 +1 @@\n+\x89PNG\r\n+\x1a\n+\0\n";
+
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => "\x89PNG\r\n\x1a\n\0"));
+    }
+
+    public function testWithImagesNamedAFileNamedLikeAnImageWhoseBytesAreNoImageKeepsItsBytes(): void
+    {
+        $file = "diff --git a/i.png b/i.png\nnew file mode 100644\nindex 0000000000000000000000000000000000000000..".self::HEAD."\n--- /dev/null\n+++ b/i.png\n@@ -0,0 +1,2 @@\n+echo payload-ran\n+# \0\n";
+
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => "echo payload-ran\n# \0\n"));
+    }
+
+    public function testWithImagesNamedAnImageWhoseOldBlobIsNoImageKeepsItsBytes(): void
+    {
+        $file = "diff --git a/i.png b/i.png\nindex ".self::BASE.'..'.self::HEAD." 100644\n--- a/i.png\n+++ b/i.png\n@@ -1 +1,3 @@\n-echo payload-ran\0\n+\x89PNG\r\n+\x1a\n+\0\n";
+
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => self::BASE === $id ? "echo payload-ran\0\n" : "\x89PNG\r\n\x1a\n\0"));
+    }
+
+    public function testWithImagesNamedAnImageMadeExecutableKeepsItsBytes(): void
+    {
+        $file = "diff --git a/i.png b/i.png\nold mode 100644\nnew mode 100755\nindex ".self::BASE.'..'.self::HEAD."\n--- a/i.png\n+++ b/i.png\n@@ -1 +1 @@\n-\x89PNG\r\n+\x1a\n+\0\n";
+
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => "\x89PNG\r\n\x1a\n\0"));
+    }
+
+    public function testWithImagesNamedATextFileKeepsItsBytesThatAreNotUtf8SoTheReaderStillRefusesThem(): void
     {
         $file = "diff --git a/a.php b/a.php\nindex ".self::BASE.'..'.self::HEAD." 100644\n@@ -1 +1,2 @@\n+// caf\xe9\n return true;\n";
 
-        self::assertSame($file, new BinaryFiles()->withBinariesNamed($file, static fn (string $id): string => "return true;\n"));
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => "return true;\n"));
     }
 
-    public function testWithBinariesNamedAFileWithoutTheIdsOfItsBlobsIsLeftToTheReader(): void
+    public function testWithImagesNamedAFileWithoutTheIdsOfItsBlobsIsLeftToTheReader(): void
     {
-        $file = "diff --git a/b.bin b/b.bin\n+\xff\n";
+        $file = "diff --git a/b.png b/b.png\n+\xff\n";
 
-        self::assertSame($file, new BinaryFiles()->withBinariesNamed($file, static fn (string $id): string => throw new ForgeReadFailed('No blob is read.')));
+        self::assertSame($file, new BinaryFiles()->withImagesNamed($file, static fn (string $id): string => throw new ForgeReadFailed('No blob is read.')));
     }
 }

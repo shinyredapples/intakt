@@ -25,6 +25,21 @@ final readonly class BinaryFiles
 
     private const string REPLACEMENT = "\u{FFFD}";
 
+    private const string MODE = '/^(?:index [0-9a-f]+\.\.[0-9a-f]+ |(?:new file|deleted file|old|new) mode )([0-7]+)$/m';
+
+    // A plain file only, because an executable file or a link is run or followed by its mode alone.
+    private const string NOT_RUNNABLE_MODE = '100644';
+
+    private const string EXTENSION = '/\A[^\n]*\.([A-Za-z]+)\n/';
+
+    // The bytes each image starts with, by the extension of its name, so that neither a script named like an image nor an image named like a script is named.
+    private const array IMAGE_SIGNATURES = [
+        'png' => "\x89PNG\r\n\x1a\n",
+        'jpg' => "\xFF\xD8\xFF",
+        'jpeg' => "\xFF\xD8\xFF",
+        'gif' => 'GIF8',
+    ];
+
     /**
      * @param Closure(string): string $blob
      */
@@ -33,13 +48,13 @@ final readonly class BinaryFiles
         return $this->eachFile($patch, fn (string $file): string => $this->binaryNamed($file, $blob) ?? $this->textShown($file));
     }
 
-    // For a reader that refuses what is not UTF-8 text itself, because an escaped byte would show it a text file that differs from the one approved.
+    // For a reader that refuses what is not UTF-8 text itself and approves what may run: only a plain image is named, because any other file with a NUL byte can still be a script an interpreter runs, so it stays for the reader to refuse; an escaped byte would show it a text file that differs from the one approved.
     /**
      * @param Closure(string): string $blob
      */
-    public function withBinariesNamed(string $patch, Closure $blob): string
+    public function withImagesNamed(string $patch, Closure $blob): string
     {
-        return $this->eachFile($patch, fn (string $file): string => $this->binaryNamed($file, $blob) ?? $file);
+        return $this->eachFile($patch, fn (string $file): string => $this->imageNamed($file, $blob) ?? $file);
     }
 
     public function isBinary(string $bytes): bool
@@ -67,14 +82,42 @@ final readonly class BinaryFiles
     private function binaryNamed(string $file, Closure $blob): ?string
     {
         $header = $this->blobHeader($file);
-        if (null === $header) {
-            return null;
-        }
 
+        return null === $header ? null : $this->namedWhen($header, $blob, static fn (string $bytes): bool => true);
+    }
+
+    /**
+     * @param Closure(string): string $blob
+     */
+    private function imageNamed(string $file, Closure $blob): ?string
+    {
+        $header = $this->blobHeader($file);
+        $signature = 1 === preg_match(self::EXTENSION, $file, $extension) ? self::IMAGE_SIGNATURES[strtolower($extension[1])] ?? null : null;
+
+        return null === $header || null === $signature || !$this->isPlainFile($header[0])
+            ? null
+            : $this->namedWhen($header, $blob, static fn (string $bytes): bool => str_starts_with($bytes, $signature));
+    }
+
+    private function isPlainFile(string $header): bool
+    {
+        preg_match_all(self::MODE, $header, $modes);
+
+        return [] !== $modes[1] && array_all($modes[1], static fn (string $mode): bool => self::NOT_RUNNABLE_MODE === $mode);
+    }
+
+    /**
+     * @param array{0: string, 1: string, 2: string} $header
+     * @param Closure(string): string                $blob
+     * @param Closure(string): bool                  $eachBlob
+     */
+    private function namedWhen(array $header, Closure $blob, Closure $eachBlob): ?string
+    {
         $base = $this->bytesOf($header[1], $blob);
         $head = $this->bytesOf($header[2], $blob);
+        $present = array_filter([$base, $head], static fn (?string $bytes): bool => null !== $bytes);
 
-        return $this->isBinary($base ?? '') || $this->isBinary($head ?? '')
+        return array_any($present, $this->isBinary(...)) && array_all($present, $eachBlob)
             ? sprintf("%sBinary file, not shown: %s at the base, %s at the head\n", $header[0], $this->sizeOf($base), $this->sizeOf($head))
             : null;
     }
