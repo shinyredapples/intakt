@@ -54,6 +54,7 @@ Builds:
 
 Reviews:
 - [Review flow](review-flow.md)
+- [Review job](review-job.md): the review job's script, `docker/job/review.sh`, which refuses a checkout that is writable, carries settings a clone does not write, or is not exactly the head, and a job without its proxy, before it runs one reviewer's CLI
 - [Boot step](boot-step.md): a commit booted once with `bin/instance` (main's for a head), its outcome booted, failed or crashed, never an exception
 - [Review rounds](review-rounds.md)
 - [Review verdicts](review-verdicts.md)
