@@ -6,6 +6,7 @@ namespace Intakt\Plugin\Vendor\Contract;
 
 use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -23,6 +24,7 @@ interface Vendor
      * @throws VendorAccountOut
      * @throws NoProviderLeft
      * @throws ProviderRejectedTheKey
+     * @throws ChangesWithoutFindings
      */
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview;

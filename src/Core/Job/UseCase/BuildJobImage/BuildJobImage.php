@@ -27,13 +27,13 @@ final readonly class BuildJobImage
      * @throws JobOutputRefused
      * @throws JobEventNotRecorded
      */
-    public function build(string $directory, string $tag): BuiltJobImage
+    public function build(string $directory, string $tag, JobImageKind $kind = JobImageKind::Project): BuiltJobImage
     {
         if (!ImageReference::isTag($tag)) {
             throw JobImageNotBuilt::notATag($tag);
         }
 
-        $plan = $this->planner->planFor($directory);
+        $plan = $this->planner->planFor($directory, $kind);
         $build = $this->engine->build($this->context->of($plan, $directory), $tag, $plan->dockerfile);
 
         if (null !== $build->error || null === $build->image) {

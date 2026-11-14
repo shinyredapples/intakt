@@ -420,16 +420,19 @@ final class CodexReviewerTest extends KernelTestCase
         self::assertFalse($this->cooldowns->isCoolingDown(new Account(Provider::Codex, 'team')));
     }
 
-    public function testTextThatOnlyMentionsALimitStillRecordsItsUsageOnce(): void
+    public function testTextThatOnlyMentionsALimitRecordsTheUsageOfItsCallAndOfTheRetryOnceEach(): void
     {
         $this->replaying('limit-text');
 
         $this->failureOfReview();
 
-        self::assertSame(['started', 'settled'], array_column($this->ledger->payloads(), 'phase'));
-        /** @var list<array<string, int|string|null>> $usages */
-        $usages = $this->ledger->payloads()[1]['usages'];
-        self::assertSame([['codex.team', 2400]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt']], $usages));
+        $payloads = $this->ledger->payloads();
+        self::assertSame(['started', 'settled', 'started', 'settled'], array_column($payloads, 'phase'));
+        foreach ([$payloads[1], $payloads[3]] as $settled) {
+            /** @var list<array<string, int|string|null>> $usages */
+            $usages = $settled['usages'];
+            self::assertSame([['codex.team', 2400]], array_map(static fn (array $usage): array => [$usage['account'], $usage['prompt']], $usages));
+        }
     }
 
     public function testAFailedTurnIsAFailureOfTheReviewAndNoAccountOutcome(): void

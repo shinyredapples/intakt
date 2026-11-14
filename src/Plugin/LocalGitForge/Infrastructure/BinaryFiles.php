@@ -40,6 +40,11 @@ final readonly class BinaryFiles
         return implode('', array_map(fn (string $file): string => $this->shown($file, $blob), $files));
     }
 
+    public function isBinary(string $bytes): bool
+    {
+        return str_contains($bytes, "\0");
+    }
+
     /**
      * @param Closure(string): string $blob
      */
@@ -52,7 +57,7 @@ final readonly class BinaryFiles
         $base = $this->bytesOf($header[1], $blob);
         $head = $this->bytesOf($header[2], $blob);
 
-        if (str_contains($base ?? '', "\0") || str_contains($head ?? '', "\0")) {
+        if ($this->isBinary($base ?? '') || $this->isBinary($head ?? '')) {
             return sprintf("%sBinary file, not shown: %s at the base, %s at the head\n", $header[0], $this->sizeOf($base), $this->sizeOf($head));
         }
 

@@ -21,12 +21,7 @@ final readonly class GeneratedDockerfile
             sprintf('FROM php:%s-cli', self::baseVersionFor($php)),
             sprintf('COPY --from=%s /usr/bin/composer /usr/local/bin/composer', self::COMPOSER),
             sprintf('COPY --from=%s /usr/bin/install-php-extensions /usr/local/bin/install-php-extensions', self::EXTENSION_INSTALLER),
-            // curl because the job's start check tries each allowlisted host with it, git because builders and reviewers work in a checkout.
-            'RUN apt-get update \\',
-            '    && apt-get install -y --no-install-recommends ca-certificates curl git unzip nodejs npm \\',
-            '    && rm -rf /var/lib/apt/lists/*',
-            sprintf('RUN npm install --global %s \\', implode(' ', CliManifest::installArgumentsFrom(CliManifest::PATH))),
-            '    && npm cache clean --force',
+            ...JobTools::steps(),
             ...self::extensionStep($php->extensions),
             '',
         ]);
