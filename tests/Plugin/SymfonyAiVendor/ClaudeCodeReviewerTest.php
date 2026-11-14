@@ -221,6 +221,14 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         self::assertSame('F3', $verdict->findings[0]->id);
     }
 
+    public function testAnEmptyStructuredOutputLeavesTheResultTextToBeRead(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('structured-null'))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Changes, $verdict->verdict);
+        self::assertSame(['F1', 'F2'], $verdict->resolved);
+    }
+
     public function testAResponseFormatWithoutASchemaIsRefusedBeforeTheCliStarts(): void
     {
         $cli = RecordedClaudeCodeCli::replaying('complete');
