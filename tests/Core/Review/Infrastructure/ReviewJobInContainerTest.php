@@ -6,8 +6,8 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
-use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Job\Contract\JobRunner;
+use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Job\Infrastructure\ContainerJobRunner;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
 use Intakt\Core\Job\Infrastructure\EgressLog;
@@ -75,9 +75,11 @@ final class ReviewJobInContainerTest extends TestCase
         $answer = $this->reviewInContainer();
 
         self::assertSame('{"verdict":"approve"}', $answer->text);
+        $mounts = $this->hostConfig()['Mounts'];
+        self::assertIsArray($mounts);
         self::assertContains(
             ['Type' => 'bind', 'Source' => $this->folder.'/checkout', 'Target' => ReviewJob::CHECKOUT, 'ReadOnly' => true],
-            $this->hostConfig()['Mounts'],
+            $mounts,
         );
         self::assertTrue($this->hostConfig()['ReadonlyRootfs']);
     }
@@ -91,8 +93,10 @@ final class ReviewJobInContainerTest extends TestCase
         self::assertSame('intakt-job-'.$this->ran->id->value, $this->hostConfig()['NetworkMode']);
         $proxy = $this->engine->proxyDefinitionOf($this->ran->id->value);
         self::assertIsArray($proxy['Env']);
-        self::assertStringContainsString("\nacl intakt_allowed dstdomain -n api.anthropic.com\n", $proxy['Env'][0]);
-        self::assertStringContainsString("\nhttp_access deny all\n", $proxy['Env'][0]);
+        $squid = $proxy['Env'][0];
+        self::assertIsString($squid);
+        self::assertStringContainsString("\nacl intakt_allowed dstdomain -n api.anthropic.com\n", $squid);
+        self::assertStringContainsString("\nhttp_access deny all\n", $squid);
     }
 
     public function testATunnelToAnotherHostIsRefusedByTheProxyAndRecorded(): void
