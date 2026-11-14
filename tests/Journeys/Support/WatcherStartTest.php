@@ -20,6 +20,7 @@ use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
 #[CoversClass(WatcherStart::class)]
+#[UsesClass(ContainerRebuild::class)]
 #[UsesClass(SampleRepository::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
@@ -117,7 +118,7 @@ final class WatcherStartTest extends TestCase
     {
         $this->start($this->ledgerWith($this->queued(self::ROUND, $this->head)));
 
-        self::assertSame(['cache:clear', 'cache:warmup', 'intakt:ledger:events', 'messenger:consume', 'intakt:ledger:events'], array_map(static fn (array $call): string => $call['arguments'][0], $this->calls));
+        self::assertSame(['cache:warmup', 'intakt:ledger:events', 'messenger:consume', 'intakt:ledger:events'], array_map(static fn (array $call): string => $call['arguments'][0], $this->calls));
         self::assertSame([$this->configuration()], array_unique(array_map(static fn (array $call): string => $call['environment']['INTAKT_CONFIG'] ?? '', $this->calls)));
     }
 
@@ -177,7 +178,9 @@ final class WatcherStartTest extends TestCase
     {
         $this->ledgers = [$before, $ledger];
 
-        return new WatcherStart($this->console(...))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
+        $console = $this->console(...);
+
+        return new WatcherStart($console, new ContainerRebuild([$this->directory.'/cache'], $console))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use Closure;
 use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
@@ -125,7 +126,29 @@ abstract class JourneyTestCase extends TestCase
      */
     final protected function watcherStart(array $environment): WatcherStart
     {
-        return new WatcherStart(fn (array $arguments, array $variables, int $seconds): string => $this->console($arguments, [...$environment, ...$variables, self::QUEUE_VARIABLE => self::SHARED_QUEUE], $seconds));
+        $console = fn (array $arguments, array $variables, int $seconds): string => $this->console($arguments, [...$environment, ...$variables, self::QUEUE_VARIABLE => self::SHARED_QUEUE], $seconds);
+
+        return new WatcherStart($console, $this->containerRebuild($console));
+    }
+
+    // Because the provider keys and the projects count only in a container built after they are set, as the container entrypoint does.
+    /**
+     * @param array<string,string> $environment
+     */
+    final protected function rebuildContainer(array $environment): void
+    {
+        $this->containerRebuild($this->console(...))->rebuild($environment, self::CONSOLE_SECONDS);
+    }
+
+    /**
+     * @param Closure(list<string>, array<string,string>, int): string $console
+     */
+    private function containerRebuild(Closure $console): ContainerRebuild
+    {
+        // Asked of the kernel, because it alone decides where the instance's container is compiled, from the APP_CACHE_DIR bin/instance gives the journey too.
+        $kernel = new Kernel(self::ENVIRONMENT, false);
+
+        return new ContainerRebuild([$kernel->getCacheDir(), $kernel->getBuildDir()], $console);
     }
 
     #[After]

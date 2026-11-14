@@ -54,10 +54,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function seedTheSampleProject(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-journey-'.bin2hex(random_bytes(6));
-
-        // Because the provider keys count only in a container built after they are set, as the container entrypoint does.
-        $this->console(['cache:clear', '--no-warmup'], $this->environment());
-        $this->console(['cache:warmup'], $this->environment());
+        $this->rebuildContainer($this->environment());
         $output = $this->console(['intakt:sample:seed', $this->directory.'/sample', $this->configuration()], $this->environment());
 
         self::assertStringContainsString('Built the sample repository', $output);
