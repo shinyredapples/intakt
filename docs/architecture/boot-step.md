@@ -1,6 +1,6 @@
 # Boot step
 
-The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md). `BootGate` ([below](#the-gate-decision)) decides from it whether a head goes back, but nothing calls the gate before a review yet, so no head is sent back yet; acting on the decision in the watcher comes later.
+The boot step boots one commit of a project once with `bin/instance` ([Instance and probes](instance-and-probes.md)) and reports the outcome (plan task T58, part 1). It is the harness side of the boot gate in [Reviews](../design/05-architecture/07-reviews.md). `BootGate` ([below](#the-gate-decision)) decides from it whether a head goes back, and the watcher asks it for every head whose CI is green before that head's round starts ([In the watcher](#in-the-watcher)).
 
 ## Contract
 
@@ -35,11 +35,24 @@ Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootResultsTest.php` (`pers
 | booted | booted or crashed | the green decision unchanged: the round may start |
 | failed or crashed | not booted | the green decision unchanged: the gate is off for the head |
 
-A project without `bin/instance` has the gate off: main's boot crashes because main has no harness (before any `composer install`), and a crash is not stored, so each ask reads main's tree for `bin/instance` again. Any `Throwable` from the gate (also a `MainCommit` answer that is not a commit) is logged as the error `The boot gate failed, so the review starts without it.` and the green decision is returned, so a crashing gate never stops the review. `WatcherLedger` writes a `FailedBoot` decision as `head_red`, as it does a red head.
-
-Nothing calls `BootGate` yet: the watcher's tick does not boot heads, so no head is sent back and no stale mark is sent; that wiring is a later part of plan task T58.
+A project without `bin/instance` has the gate off: main's boot crashes because main has no harness (before any `composer install`), and a crash is not stored, so each ask reads main's tree for `bin/instance` again. Any `Throwable` from the gate (also a `MainCommit` answer that is not a commit) is logged as the error `The boot gate failed, so the review starts without it.` and the green decision is returned, so a crashing gate never stops the review.
 
 Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/BootGateTest.php` (`persistence` group), `tests/Core/Watcher/Domain/HeadDecisionTest.php` and the main commit case of `tests/Plugin/LocalGitForge/BootHeadHandlersTest.php`.
+
+## In the watcher
+
+`SettleHead` (plan task T58, part 2) passes every head whose CI is green through `BootGate::admit()` before anything else, so a head boots before its round starts and no reviewer runs on a head that fails while main boots. A pending or red head is not booted. A head that already has a round is booted again whenever the listing names it again, because a head that stopped booting must lose that round's approvals. The boot runs inside the tick, while the head's lock is held.
+
+A `FailedBoot` decision goes back like red CI (`HeadDecision::goesBack()` is true for both):
+
+1. `HeadsWithoutRound` records it, and `WatcherLedger` writes it as `head_red` with `read_again_at` `null`, `cause` `boot_failed` (`FailedBoot::CAUSE`) and the redacted `reason`, so a reader tells it from red CI.
+2. `StaleVerdicts::noteMovedHead()` checks the rounds of the change's earlier heads with Review, as for any head that moved; those heads booted, so they are not withdrawn.
+3. `StaleVerdicts::noteRefusedHead()` takes the round already started on the refused head itself (`StartedRounds::roundAt()`, also one already marked): `StartedRounds::markStaleOnce()` sets its `stale` flag and writes `verdicts_stale` once, and then Review's `MarkVerdictsStale(roundId)` is sent on the command bus on every refusal, which withdraws an approval already published on the forge ([Review flow](review-flow.md#a-round-marked-stale)). So an approved head that does not boot keeps no approval, neither in Review nor as a status on the forge.
+4. `HeadsWithoutRound::settled()` removes the pending head, so it is read again only when the listing names the pull request again.
+
+Any failure in steps 1 to 3 (for example a `MarkVerdictsStale` that throws) leaves the head due and backs it off alone through `HeadBackOff`, so its next try boots it again and sends the mark again. A head whose round was withdrawn this way and that later boots gets a fresh round, as a head that returns to a stale round does. Main's boot result and `boot_result_computed` come from `BootResults` as above.
+
+Tests: `tests/Core/Watcher/UseCase/WatchPullRequests/WatchPullRequestsHandlerTest.php` (`persistence` group: a green head booted with main's harness before its round starts, a pending or red head not booted, a head that fails to boot recorded `head_red` with its reason and forgotten, not read again until its pull request changes, a failed boot withdrawing the round already started on that head, a withdrawal that fails sent again on the next try, a moved head that fails to boot leaving the earlier head's round to the stale check, a fresh round once the head boots again, a crashed head boot, a main that does not boot, and a gate that throws all still starting the round).
 
 ## How a commit boots
 
