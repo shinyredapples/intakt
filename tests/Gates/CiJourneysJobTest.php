@@ -34,10 +34,10 @@ final class CiJourneysJobTest extends TestCase
 
     public function testTheJourneysJobRunsWhereTheCheckJobRuns(): void
     {
-        $workflow = $this->workflow();
+        $runsOn = $this->job()['runs-on'] ?? null;
 
-        self::assertSame('${{ fromJSON(vars.CI_RUNS_ON || \'"ubuntu-24.04"\') }}', $this->job()['runs-on'] ?? null);
-        self::assertSame($workflow['jobs']['check']['runs-on'] ?? null, $this->job()['runs-on'] ?? null);
+        self::assertSame('${{ fromJSON(vars.CI_RUNS_ON || \'"ubuntu-24.04"\') }}', $runsOn);
+        self::assertSame($this->workflow()['jobs']['check']['runs-on'] ?? null, $runsOn);
     }
 
     public function testTheJourneysJobHasTheNightlyJobsTimeout(): void
