@@ -46,9 +46,8 @@ final readonly class ProjectFiles
         $this->git($directory, ['archive', '--format=tar', '--output='.$file, $this->revisionOf($tree)]);
     }
 
+    // git writes the tar itself, so a long path, a mode or a symlink of the tree stays as it is; the added file lands at the top by its name.
     /**
-     * git writes the tar itself, so a long path, a mode or a symlink of the tree stays as it is; the added file lands at the top by its name.
-     *
      * @throws JobImageNotBuilt
      */
     public function archiveAdding(string $directory, string $tree, string $added): string
