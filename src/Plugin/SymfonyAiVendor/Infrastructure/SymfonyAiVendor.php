@@ -139,7 +139,7 @@ final readonly class SymfonyAiVendor implements Vendor
     private function inNewConversation(ReviewRequest $request): ReviewRequest
     {
         $stopped = $request->conversation;
-        $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId);
+        $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId, askedAgain: true);
 
         return new ReviewRequest($request->checkout, $request->brief, $conversation);
     }

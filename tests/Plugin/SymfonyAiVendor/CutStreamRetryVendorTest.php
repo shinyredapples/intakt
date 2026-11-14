@@ -70,6 +70,7 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
+use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
 use Throwable;
 
@@ -90,7 +91,13 @@ final class CutStreamRetryVendorTest extends KernelTestCase
 {
     private const string NOW = '2026-11-13 12:00:00.000 UTC';
 
+    private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
+
+    private const string REVIEWER = '01a19a97-48cf-70f1-bdae-965425786c47';
+
     private InMemoryLedger $ledger;
+
+    private RecordedRoundUpdates $updates;
 
     /**
      * @var list<bool>
@@ -100,6 +107,27 @@ final class CutStreamRetryVendorTest extends KernelTestCase
     protected function setUp(): void
     {
         $this->ledger = new InMemoryLedger();
+        $this->updates = new RecordedRoundUpdates();
+    }
+
+    public function testTheLiveTextOfAReviewerAskedAgainAfterACutStreamShowsWhereTheRetryStarts(): void
+    {
+        $answer = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json()));
+        $inARound = new ReviewerConversation('You review for correctness.', new UuidV7(), Uuid::fromString(self::ROUND), Uuid::fromString(self::REVIEWER));
+
+        $this->vendor($answer)->review('alpha', Tier::Strong, $this->request($inARound));
+
+        self::assertSame(['text '.self::REVIEWER.' {"verdict":"approve",', 'asked again '.self::REVIEWER], $this->updates->seen);
+    }
+
+    public function testTheFirstTryOfAReviewerIsNotMarkedAsAskedAgain(): void
+    {
+        $answer = static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
+        $inARound = new ReviewerConversation('You review for correctness.', new UuidV7(), Uuid::fromString(self::ROUND), Uuid::fromString(self::REVIEWER));
+
+        $this->vendor($answer)->review('alpha', Tier::Strong, $this->request($inARound));
+
+        self::assertSame([], $this->updates->seen);
     }
 
     public function testAStreamCutOffMidAnswerLeavesItsUsageUnsettledOnceBeforeItsRetry(): void
@@ -203,11 +231,11 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         return null;
     }
 
-    private function request(): ReviewRequest
+    private function request(?ReviewerConversation $conversation = null): ReviewRequest
     {
         $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
 
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), $conversation ?? new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     /**
@@ -219,7 +247,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         $mock = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $platform = $accounts instanceof Closure ? $accounts($mock) : $mock;
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), $cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress($this->updates, new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW));

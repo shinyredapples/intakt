@@ -406,6 +406,21 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
     }
 
+    public function testAReviewerAskedAgainShowsWhereTheRetryStartsBetweenTheFirstTrysTextAndTheRetrysText(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $askedAgain = $this->stream('reviewer_asked_again', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'try' => 'try-2']);
+
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => '{"verdict":"appro'])
+            .$askedAgain.$askedAgain
+            .$this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => '{"verdict":"changes"}']));
+
+        $text = $updated->filter('#reviewer-round-1-correctness-text');
+        self::assertCount(1, $text->filter('.asked-again'));
+        self::assertSame('{"verdict":"appro'.'Asked again: the text above is from a try that gave no usable answer.'.'{"verdict":"changes"}', $text->text(normalizeWhitespace: false));
+    }
+
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
         $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
