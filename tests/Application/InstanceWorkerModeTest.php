@@ -6,6 +6,7 @@ namespace Intakt\Tests\Application;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
+use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
@@ -21,7 +22,7 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         $caller = $this->scratch.'/caller';
         mkdir($caller.'/tools', recursive: true);
         symlink($frankenphp, $caller.'/tools/frankenphp');
-        // The socket table, because a Caddy site address only matches the Host header; the polling, because FrankenPHP counts a request only after the answer is sent.
+        // The socket table, because the site address names no host and only bind keeps the listener on loopback; the polling, because FrankenPHP counts a request only after the answer is sent.
         $command = <<<'PHP_WRAP'
         $port = (int) parse_url((string) getenv("INTAKT_INSTANCE_URL"), PHP_URL_PORT);
         $addresses = [];
@@ -52,6 +53,64 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         self::assertMatchesRegularExpression('/^listeners: 0100007F$/m', $run['output']);
         self::assertSame([], $this->entriesOf($this->scratch.'/tmp'));
         self::assertSame([], $this->processesNaming($this->scratch.'/tmp'));
+    }
+
+    public function testInWorkerModeARequestNamingTheDashboardHostIsAnsweredByTheAppWithItsPage(): void
+    {
+        $dashboardPort = new Dotenv()->parse((string) file_get_contents(self::ROOT.'/.env.test'))['DASHBOARD_PORT'] ?? null;
+        self::assertIsString($dashboardPort);
+        $dashboardHost = 'localhost:'.$dashboardPort;
+        $request = <<<'PHP_WRAP'
+            $context = stream_context_create(["http" => ["header" => "Host: ".$argv[1], "ignore_errors" => true]]);
+            $body = (string) file_get_contents(getenv("INTAKT_INSTANCE_URL")."/projects", false, $context);
+            echo array_first(http_get_last_response_headers() ?? []), "\n", str_contains($body, "No project has started a review yet.") ? "empty projects page\n" : "no projects page\n";
+            PHP_WRAP;
+        // Migrated first, because the page reads the ledger and bin/instance starts on an empty database.
+        $command = ['sh', '-c', '"$0" bin/console --no-interaction --quiet doctrine:migrations:migrate && "$0" -r "$1" "$2"', PHP_BINARY, $request, $dashboardHost];
+
+        $run = $this->runInstance(self::ROOT, $command, $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame("HTTP/1.1 200 OK\nempty projects page\n", $run['output']);
+    }
+
+    public function testInWorkerModeFrankenphpRunsThreePhpThreadsWhateverTheNumberOfCpus(): void
+    {
+        // The count, not a boot under an address-space limit, because the memory a boot needs also depends on how FrankenPHP and its extensions are linked, so no one limit holds on every image.
+        $command = <<<'PHP_WRAP'
+            $states = json_decode((string) file_get_contents(getenv("INTAKT_INSTANCE_ADMIN_URL")."/frankenphp/threads"), true)["ThreadDebugStates"] ?? [];
+            echo "PHP threads: ", count($states), "\n";
+            PHP_WRAP;
+
+        $run = $this->runInstance(self::ROOT, [PHP_BINARY, '-r', $command], $this->environmentWithFrankenphp());
+
+        self::assertSame('{"status":"ready","mode":"worker"}', $run['status']);
+        self::assertSame("PHP threads: 3\n", $run['output']);
+    }
+
+    public function testAFrankenphpThatRunsOutOfMemoryReportsTheLastLineOfItsLogAsTheReason(): void
+    {
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', "#!/bin/sh\necho '{\"level\":\"info\",\"msg\":\"using config from file\"}' >&2\necho 'Out of memory' >&2\necho >&2\nexit 1\n");
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
+
+        self::assertSame('the server exited: Out of memory', $this->decoded($run['status'])['reason']);
+        self::assertSame(1, $run['exit']);
+    }
+
+    public function testAFrankenphpThatExitsWithoutAWordReportsAnEmptyServerLog(): void
+    {
+        $stubs = $this->scratch.'/stubs';
+        mkdir($stubs);
+        file_put_contents($stubs.'/frankenphp', "#!/bin/sh\nexit 1\n");
+        chmod($stubs.'/frankenphp', 0o755);
+
+        $run = $this->runInstance(self::ROOT, environment: ['PATH' => $stubs.':'.$this->pathWithoutFrankenphp()]);
+
+        self::assertSame('the server exited: the server log is empty', $this->decoded($run['status'])['reason']);
     }
 
     public function testInWorkerModeABrokenKernelConfigReportsFailedWithTheErrorAndExitsNonZero(): void
@@ -108,7 +167,7 @@ final class InstanceWorkerModeTest extends InstanceTestCase
         mkdir($stubs);
         file_put_contents($stubs.'/frankenphp', '#!'.PHP_BINARY."\n".<<<'PHP'
             <?php
-            preg_match('~http://127\.0\.0\.1:(\d+)~', (string) file_get_contents($argv[array_search('--config', $argv, true) + 1]), $match);
+            preg_match('~http://:(\d+)~',(string) file_get_contents($argv[array_search('--config', $argv, true) + 1]), $match);
             $listener = stream_socket_server('tcp://127.0.0.1:'.$match[1]);
             $connection = stream_socket_accept($listener, 3);
             if (false !== $connection) {
