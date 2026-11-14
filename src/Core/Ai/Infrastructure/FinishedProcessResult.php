@@ -18,6 +18,10 @@ final readonly class FinishedProcessResult implements RawResultInterface
 {
     private const string TOOL_CALLS = 'tool_calls';
 
+    private const string STRUCTURED_OUTPUT = 'structured_output';
+
+    private const string RESULT = 'result';
+
     public function __construct(
         private RawResultInterface $inner,
     ) {
@@ -46,7 +50,7 @@ final readonly class FinishedProcessResult implements RawResultInterface
         // The CLI has already run the tools it used, so the bridge's copy of them is not the agent's to run again (upstream/ai-claude-code-platform-cli-tool-calls).
         unset($data[self::TOOL_CALLS]);
 
-        return $data;
+        return $this->withStructuredOutput($data);
     }
 
     #[Override]
@@ -59,6 +63,21 @@ final readonly class FinishedProcessResult implements RawResultInterface
     public function getObject(): object
     {
         return $this->inner->getObject();
+    }
+
+    // The bridge reads only the result's text, while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict.
+    /**
+     * @param array<string|int, mixed> $data
+     *
+     * @return array<string|int, mixed>
+     */
+    private function withStructuredOutput(array $data): array
+    {
+        if (!array_key_exists(self::STRUCTURED_OUTPUT, $data)) {
+            return $data;
+        }
+
+        return [...$data, self::RESULT => json_encode($data[self::STRUCTURED_OUTPUT], JSON_THROW_ON_ERROR)];
     }
 
     // A CLI that wrote its final result and then failed reported why, so that stays a failure.

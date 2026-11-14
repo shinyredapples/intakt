@@ -6,6 +6,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ReviewServerAccess;
 use Override;
+use Symfony\AI\Platform\Exception\InvalidArgumentException;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelClientInterface;
 use Symfony\AI\Platform\Result\RawResultInterface;
@@ -55,13 +56,13 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
     {
         $format = $options[PlatformSubscriber::RESPONSE_FORMAT] ?? null;
 
-        // The CLI has no response format option, so the schema travels as an instruction.
-        $schema = null === $format ? '' : ' Answer with one JSON object that matches this JSON schema and nothing else: '.json_encode($format, JSON_THROW_ON_ERROR);
+        // The CLI holds its answer to a schema given with --json-schema and returns it as the result's structured output, which FinishedProcessResult reads.
+        $schema = null === $format ? [] : ['json_schema' => $this->schemaOf($format)];
 
         $access = $options[ReviewServerAccess::OPTION] ?? null;
 
         if (!$access instanceof ReviewServerAccess) {
-            return [...self::CONFINEMENT, 'append_system_prompt' => self::NO_TOOLS.$schema];
+            return [...self::CONFINEMENT, 'append_system_prompt' => self::NO_TOOLS, ...$schema];
         }
 
         // Passed on whole, because the CLI's folder, where its configuration file is written, belongs to the client inside.
@@ -70,7 +71,16 @@ final readonly class ConfinedClaudeCodeClient implements ModelClientInterface
             ReviewServerAccess::OPTION => $access,
             'allowed_tools' => array_map(static fn (string $tool): string => sprintf('mcp__%s__%s', $access->name, $tool), $access->tools),
             'disallowed_tools' => self::BUILT_IN_TOOLS,
-            'append_system_prompt' => sprintf(self::WITH_TOOLS, $access->name).$schema,
+            'append_system_prompt' => sprintf(self::WITH_TOOLS, $access->name),
+            ...$schema,
         ];
+    }
+
+    // Refused, because a CLI started without the schema would answer free text that no longer matches what the caller asked for.
+    private function schemaOf(mixed $format): string
+    {
+        $schema = is_array($format) && is_array($format['json_schema'] ?? null) ? $format['json_schema']['schema'] ?? null : null;
+
+        return is_array($schema) ? json_encode($schema, JSON_THROW_ON_ERROR) : throw new InvalidArgumentException('The response format holds no JSON schema for the Claude Code CLI.');
     }
 }
