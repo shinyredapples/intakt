@@ -468,6 +468,7 @@ final class WorkerServer implements Server
     }
 
     // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from.
+    // The site names no host, because a Caddy site address also matches the Host header and Caddy answers an unmatched request with an empty 200, so a request naming the dashboard's host would never reach the app; bind keeps it on loopback.
     private function caddyfile(): string
     {
         $public = $this->root.'/public';
@@ -480,7 +481,7 @@ final class WorkerServer implements Server
             	}
             }
 
-            http://127.0.0.1:{$this->port} {
+            http://:{$this->port} {
             	bind 127.0.0.1
             	root "{$public}"
             	php_server {
