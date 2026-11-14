@@ -1,0 +1,9 @@
+[
+  {
+    "id": "docs-state-missing-discount",
+    "file": "README.md",
+    "lines": { "from": 5, "to": 5 },
+    "description": "The README promises 20 percent off from 500, but src/discount.js has no such rule.",
+    "severity": "P2"
+  }
+]

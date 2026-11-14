@@ -1,0 +1,9 @@
+[
+  {
+    "id": "price-list-error-path",
+    "file": "src/prices.js",
+    "lines": { "from": 5, "to": 5 },
+    "description": "A missing or invalid file throws; the empty-list fallback the task asks for is never handled.",
+    "severity": "P2"
+  }
+]

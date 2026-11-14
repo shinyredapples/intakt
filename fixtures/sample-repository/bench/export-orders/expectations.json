@@ -1,0 +1,9 @@
+[
+  {
+    "id": "export-name-runs-commands",
+    "file": "src/export.js",
+    "lines": { "from": 4, "to": 4 },
+    "description": "The name goes into a shell command line, so a name like `x; rm -rf .` runs commands.",
+    "severity": "P1"
+  }
+]
