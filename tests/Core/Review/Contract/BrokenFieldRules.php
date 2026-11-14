@@ -74,8 +74,8 @@ final readonly class BrokenFieldRules
         $design = VerdictDocument::fromTheDesign();
 
         yield 'type: the verdict is a list' => ['[]', '"$verdict"'];
-        yield 'type: findings is an object' => [$design->with('findings', ['id' => 'F3'])->json(), '($findings)'];
-        yield 'type: findings is an empty object' => [$design->with('findings', new stdClass())->json(), '($findings)'];
+        yield 'type: findings is an object' => [$design->with('findings', ['id' => 'F3'])->json(), '"findings" attribute'];
+        yield 'type: findings is an empty object' => [$design->with('findings', new stdClass())->json(), '"findings" attribute'];
         yield 'type: resolved is an empty object' => [$design->with('resolved', new stdClass())->json(), '"resolved" attribute'];
         yield 'type: follow_ups is an empty object' => [$design->with('follow_ups', new stdClass())->json(), '"follow_ups" attribute'];
         yield 'type: a finding is a string' => [$design->with('findings', ['F3'])->json(), '"$id"'];

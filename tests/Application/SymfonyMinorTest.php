@@ -19,7 +19,7 @@ final class SymfonyMinorTest extends TestCase
     // Symfony tags only the components that changed since the last release, so an unchanged one stays on BETA1.
     private const string FIRST_RELEASE = 'v8.2.0-BETA1';
 
-    // The beta the owner took for the framework itself; the components it is built from follow it.
+    // Owner decision of #1900 (D2): the lock takes this beta, so the framework must not stay below it.
     private const string TAKEN_RELEASE = 'v8.2.0-BETA2';
 
     public function testEverySymfonyComponentInTheLockIsAnEightTwoRelease(): void
@@ -50,7 +50,7 @@ final class SymfonyMinorTest extends TestCase
         foreach (['require', 'require-dev'] as $section) {
             self::assertIsArray($manifest[$section]);
             foreach ($manifest[$section] as $name => $constraint) {
-                if (\is_string($name) && str_starts_with($name, 'symfony/') && \is_string($constraint) && str_starts_with($constraint, '^8.') && '^'.self::MINOR !== $constraint) {
+                if (is_string($name) && str_starts_with($name, 'symfony/') && is_string($constraint) && str_starts_with($constraint, '^8.') && '^'.self::MINOR !== $constraint) {
                     $wrong[] = $name.' '.$constraint;
                 }
             }
