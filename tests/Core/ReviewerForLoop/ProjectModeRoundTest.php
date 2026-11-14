@@ -198,6 +198,7 @@ final class ProjectModeRoundTest extends KernelTestCase
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
             $vendor,
+            $this->fixture->noFailedJudgings(),
         );
     }
 
