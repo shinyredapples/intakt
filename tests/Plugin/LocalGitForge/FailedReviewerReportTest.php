@@ -70,6 +70,7 @@ final class FailedReviewerReportTest extends KernelTestCase
             new StoredVerdicts($serializer),
             new WorkerOnSleep($fixture->clock, $work),
             new FailureInWords(),
+            $vendor,
         );
 
         $review = $reviewChange->review($this->request(), new IgnoredProgress());
