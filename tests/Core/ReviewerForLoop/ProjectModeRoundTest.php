@@ -197,6 +197,7 @@ final class ProjectModeRoundTest extends KernelTestCase
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
+            $vendor,
         );
     }
 

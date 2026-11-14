@@ -29,6 +29,7 @@ use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\OnePerPlace;
@@ -57,6 +58,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(ChangeReview::class)]
 #[CoversClass(RoundNotNext::class)]
+#[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(ChangeDecision::class)]
@@ -268,6 +270,40 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(2, $second->round);
     }
 
+    public function testAProjectWithoutALightTierIsRefusedBeforeAnyReviewerStarts(): void
+    {
+        try {
+            $this->reviewChange(static function (): void {}, vendor: $this->mapping(Tier::Standard))->review($this->request());
+            self::fail('A round started for a project without a light tier.');
+        } catch (RoundTierNotMapped $refused) {
+            self::assertStringContainsString('Project "alpha" maps no model to the "light" tier', $refused->getMessage());
+        }
+
+        self::assertSame([[], []], [$this->fixture->storedRounds(), $this->fixture->bus->messages]);
+    }
+
+    public function testAProjectWithoutTheReviewersTierIsRefusedNamingThatTier(): void
+    {
+        $this->expectExceptionObject(new RoundTierNotMapped('alpha', Tier::Standard));
+
+        $this->reviewChange(static function (): void {}, vendor: $this->mapping(Tier::Light))->start($this->request());
+    }
+
+    public function testAProjectMappingTheReviewersTierAndTheJudgesTierStartsTheRound(): void
+    {
+        $this->reviewChange(static function (): void {}, vendor: $this->mapping(Tier::Standard, Tier::Light))->start($this->request());
+
+        self::assertCount(1, $this->fixture->storedRounds());
+    }
+
+    private function mapping(Tier ...$mapped): Vendor
+    {
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('mapsAModelTo')->willReturnCallback(static fn (string $project, Tier $tier): bool => in_array($tier, $mapped, true));
+
+        return $vendor;
+    }
+
     private function reviewWith(Vendor $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
     {
         $delivered = 0;
@@ -286,10 +322,10 @@ final class ReviewChangeTest extends KernelTestCase
             }
         };
 
-        return $this->reviewChange($work)->review($this->request($round));
+        return $this->reviewChange($work, vendor: $vendor)->review($this->request($round));
     }
 
-    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS, ?MessageBusInterface $bus = null): ReviewChange
+    private function reviewChange(Closure $work, int $ceiling = ReviewChange::WAIT_CEILING_SECONDS, ?MessageBusInterface $bus = null, Vendor $vendor = new VerdictPerRole([])): ReviewChange
     {
         $serializer = $this->serializer();
         $findings = new StoredFindings($this->fixture->entities, $serializer, $this->fixture->machine('state_machine.review_round'));
@@ -303,6 +339,7 @@ final class ReviewChangeTest extends KernelTestCase
             new StoredVerdicts($serializer),
             new WorkerOnSleep($this->fixture->clock, $work),
             new FailureInWords(),
+            $vendor,
             $ceiling,
         );
     }

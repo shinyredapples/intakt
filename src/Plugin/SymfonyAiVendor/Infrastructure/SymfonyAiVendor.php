@@ -227,9 +227,9 @@ final readonly class SymfonyAiVendor implements Vendor
     #[Override]
     public function judge(string $project, JudgeRequest $request): Judgement
     {
-        $answering = $this->answering($project, Tier::Light);
+        $answering = $this->answering($project, self::JUDGE_TIER);
 
-        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(Tier::Light, $answering), $request->round), $request));
+        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(self::JUDGE_TIER, $answering), $request->round), $request));
     }
 
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement
