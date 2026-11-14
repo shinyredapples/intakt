@@ -40,9 +40,16 @@ final readonly class BootResults
 
     public function ofMain(BootKey $key, ChangeSource $source): BootOutcome
     {
+        $now = $this->clock->now();
         $stored = $this->storedFor($key);
 
-        if ($stored instanceof BootRecord && $stored->answersAt($this->clock->now())) {
+        if ($stored instanceof BootRecord && !$stored->answersAt($now)) {
+            // Read again, because the entity manager keeps the expired crash although another worker may have stored a fresh result over it meanwhile.
+            $this->entities->detach($stored);
+            $stored = $this->storedFor($key);
+        }
+
+        if ($stored instanceof BootRecord && $stored->answersAt($now)) {
             return $stored->outcome();
         }
 

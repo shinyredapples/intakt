@@ -160,6 +160,22 @@ final class BootResultsTest extends KernelTestCase
         self::assertCount(2, $bus->booted);
     }
 
+    public function testAFreshCrashThatAnotherWorkerStoredOverAnExpiredOneIsAnsweredWithoutBootingAgain(): void
+    {
+        $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
+        $results = $this->results($bus);
+        $otherWorker = new BootResults($bus, new EntityManager($this->entities->getConnection(), $this->entities->getConfiguration()), $this->clock, new WatcherLedger($this->ledger), $this->redactor(), $this->logger());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->clock->modify('+5 minutes');
+        $otherWorker->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $this->clock->modify('+1 second');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(2, $bus->booted);
+    }
+
     public function testABootedResultThatReplacesAnExpiredCrashIsKeptForGood(): void
     {
         $bus = new BootingBus(BootOutcome::crashed('composer could not run'));
