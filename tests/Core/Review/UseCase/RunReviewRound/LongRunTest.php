@@ -46,7 +46,7 @@ final class LongRunTest extends KernelTestCase
         $this->run = new ScriptedRound(new RoundFixture(self::getContainer()), self::getContainer());
     }
 
-    public function testAReviewerStillAskingForToolsAtTheRoundLimitFailsAndBlocksTheRoundWithThatReason(): void
+    public function testAReviewerStillAskingForToolsAtTheRoundLimitOnItsRetryTooFailsAndBlocksTheRoundWithThatReason(): void
     {
         $review = $this->stillAskingForTools();
 
@@ -55,12 +55,12 @@ final class LongRunTest extends KernelTestCase
         self::assertSame([], $review->verdicts);
     }
 
-    public function testTheCallOfARunThatHitTheRoundLimitIsSettledOnce(): void
+    public function testTheCallOfARunThatHitTheRoundLimitAndTheCallOfItsRetryAreEachSettledOnce(): void
     {
         $this->stillAskingForTools();
 
-        self::assertSame([['started', 'settled']], array_values($this->run->usagePhasesByCall()));
-        self::assertSame([ReviewerRuns::MAX_ROUNDS + 1], $this->usageRowsOfEndingEvents());
+        self::assertSame([['started', 'settled'], ['started', 'settled']], array_values($this->run->usagePhasesByCall()));
+        self::assertSame([ReviewerRuns::MAX_ROUNDS + 1, ReviewerRuns::MAX_ROUNDS + 1], $this->usageRowsOfEndingEvents());
     }
 
     public function testAProviderLimitAfterManyToolRoundsOnTheTierAndItsSubstituteEndsTheRoundBlockedWithTheReasonOfTheReviewer(): void

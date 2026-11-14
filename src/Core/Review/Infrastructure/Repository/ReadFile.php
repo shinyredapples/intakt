@@ -15,6 +15,7 @@ final readonly class ReadFile
 {
     // Because a tool answer is part of the prompt: a whole generated file would crowd out the review.
     private const int MAX_BYTES = 100_000;
+    private const int CHUNK_BYTES = 1_048_576;
 
     public function __construct(private Checkout $checkout)
     {
@@ -38,15 +39,55 @@ final readonly class ReadFile
             throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
         }
 
+        // Named by its size, because the answer reaches the provider as JSON, which carries only valid UTF-8, and a binary file holds nothing to review.
+        if ($this->holdsANulByte($real, $path)) {
+            return sprintf('Binary file, not shown: %d bytes', $this->sizeOf($real, $path));
+        }
+
         $truncated = strlen($content) > self::MAX_BYTES;
         // Cut on a character boundary, since half a character is not valid UTF-8.
         $text = $truncated ? mb_strcut($content, 0, self::MAX_BYTES, 'UTF-8') : $content;
 
-        // Because the answer reaches the provider as JSON, which carries only valid UTF-8, and a binary file holds nothing to review.
+        // Because the answer reaches the provider as JSON, which carries only valid UTF-8.
         if (!mb_check_encoding($text, 'UTF-8')) {
             throw new RuntimeException(sprintf('"%s" is not a UTF-8 text file.', $path));
         }
 
         return $truncated ? $text."\n[truncated]" : $text;
+    }
+
+    // The whole file, not only the part an answer shows, because the diff names a file binary by a NUL byte anywhere and a read must name it the same.
+    private function holdsANulByte(string $real, string $path): bool
+    {
+        $stream = fopen($real, 'rb');
+
+        if (false === $stream) {
+            throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
+        }
+
+        try {
+            while (!feof($stream)) {
+                $chunk = fread($stream, self::CHUNK_BYTES);
+
+                if (false === $chunk) {
+                    throw new RuntimeException(sprintf('"%s" cannot be read.', $path));
+                }
+
+                if (str_contains($chunk, "\0")) {
+                    return true;
+                }
+            }
+
+            return false;
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    private function sizeOf(string $real, string $path): int
+    {
+        $size = filesize($real);
+
+        return false === $size ? throw new RuntimeException(sprintf('"%s" cannot be read.', $path)) : $size;
     }
 }

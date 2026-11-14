@@ -98,7 +98,7 @@ final readonly class ReviewerPrompt
         return new FencedToolbox($toolbox, $this->cut, $this->fence);
     }
 
-    // The instructions ask for a verdict, so an answer that is not one becomes the invalid-output verdict here.
+    // The instructions ask for a verdict, so an answer that is not one is refused here as unreadable.
     public function verdictIn(ExecutionInterface $execution): Verdict
     {
         return $this->parser->parseWith(static function () use ($execution): Verdict {
