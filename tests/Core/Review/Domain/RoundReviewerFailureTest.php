@@ -48,16 +48,16 @@ final class RoundReviewerFailureTest extends TestCase
 
         $reviewer->recordFailure(str_repeat('a', 256));
 
-        self::assertSame(str_repeat('a', 255), $reviewer->failure());
+        self::assertSame(str_repeat('a', 252).'...', $reviewer->failure());
     }
 
     public function testACutFailureEndsAtACharacterBoundary(): void
     {
         $reviewer = $this->reviewer();
 
-        $reviewer->recordFailure(str_repeat('a', 254).'é');
+        $reviewer->recordFailure(str_repeat('a', 251).'é'.'bcd');
 
-        self::assertSame(str_repeat('a', 254), $reviewer->failure());
+        self::assertSame(str_repeat('a', 251).'...', $reviewer->failure());
     }
 
     private function reviewer(): RoundReviewer
