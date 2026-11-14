@@ -326,6 +326,27 @@ final class ReviewScriptTest extends TestCase
         $this->assertRefused($run, 'no reviewer CLI for the provider anthropic');
     }
 
+    public function testAPromptThatCannotBeReadIsRefused(): void
+    {
+        unlink($this->prompt);
+
+        $run = $this->whenTheReviewRuns();
+
+        $this->assertRefused($run, 'the prompt cannot be read');
+    }
+
+    public function testRelativePathsNameTheSameFilesAfterTheCliEntersTheCheckout(): void
+    {
+        $this->givenTheCli('claude', 'cat > "$RECORD/input"; echo answered');
+        new Filesystem()->chmod([$this->checkout, $this->checkout.'/.git'], 0o555);
+
+        $run = $this->runTheScript(['checkout', $this->head, 'prompt.md', 'claude_code', 'claude-opus-5-5'], [], $this->folder);
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertSame("Review the head.\n", $this->recorded('input'));
+        self::assertSame("answered\n", $this->outputFile('answer'));
+    }
+
     public function testAMissingArgumentIsRefused(): void
     {
         $run = $this->runTheScript([$this->checkout, $this->head, $this->prompt, 'claude_code'], []);
@@ -391,11 +412,11 @@ final class ReviewScriptTest extends TestCase
      * @param list<string>                $arguments
      * @param array<string, string|false> $environment
      */
-    private function runTheScript(array $arguments, array $environment): Process
+    private function runTheScript(array $arguments, array $environment, ?string $directory = null): Process
     {
         $run = new Process(
             ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-review', ...$arguments],
-            null,
+            $directory,
             [...$this->jobEnvironment(), ...$environment],
             timeout: 20,
         );

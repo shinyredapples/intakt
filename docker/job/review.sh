@@ -126,7 +126,7 @@ run_claude_code() {
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
     export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC
     claude -p --model "$model" --output-format json --tools Read,Grep,Glob --allowedTools Read,Grep,Glob \
-        --setting-sources '' --strict-mcp-config --no-session-persistence < "$prompt" > "$output/answer" 2>> "$log"
+        --setting-sources '' --strict-mcp-config --no-session-persistence
 }
 
 # Codex enables its shell and other tools by default, so each is switched off by name, as for the in-process Codex reviewer.
@@ -134,8 +134,7 @@ run_codex() {
     codex exec --json --sandbox read-only --ephemeral --ignore-user-config --ignore-rules \
         --disable shell_tool --disable unified_exec --disable apps --disable plugins --disable browser_use \
         --disable in_app_browser --disable computer_use --disable multi_agent --disable image_generation \
-        --disable view_image --disable hooks --model "$model" --config 'web_search="disabled"' - \
-        < "$prompt" > "$output/answer" 2>> "$log"
+        --disable view_image --disable hooks --model "$model" --config 'web_search="disabled"' -
 }
 
 harden_environment
@@ -144,17 +143,23 @@ case "$provider" in
     claude_code | codex) ;;
     *) refuse "no reviewer CLI for the provider $provider" ;;
 esac
+if [ ! -f "$prompt" ] || [ ! -r "$prompt" ]; then
+    refuse 'the prompt cannot be read'
+fi
 require_a_read_only_checkout
 require_only_clone_settings
 require_the_head
 require_no_change
 
-cd "$checkout" || refuse 'the checkout cannot be entered'
-if [ "$provider" = claude_code ]; then
-    run_claude_code
-else
-    run_codex
-fi
+# The redirections are opened before the subshell enters the checkout, so a relative path names the same file as above.
+(
+    cd "$checkout" || exit 1
+    if [ "$provider" = claude_code ]; then
+        run_claude_code
+    else
+        run_codex
+    fi
+) < "$prompt" > "$output/answer" 2>> "$log"
 printf '%s exited with %d\n' "$provider" "$?" >> "$log"
 
 # Not the CLI's status, which the log holds, so the CLI can never end the job with the code of a refused checkout.
