@@ -8,6 +8,7 @@ use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubChangeOpener;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
@@ -16,8 +17,10 @@ use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens;
 use Intakt\Plugin\GitHubForge\Infrastructure\PostedComments;
 use Intakt\Plugin\GitHubForge\Infrastructure\SecretScan;
 use Intakt\Plugin\GitHubForge\Infrastructure\VerdictLocks;
+use Intakt\Plugin\GitHubForge\Infrastructure\WatchedRepositories;
 use Psr\Log\NullLogger;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Symfony\Component\Lock\LockFactory;
@@ -31,6 +34,11 @@ final class ScriptedGitHub
 
     /** @var list<array{string, array<mixed>}> */
     public array $writes = [];
+
+    /** @var list<array<mixed>> */
+    public array $openPulls = [];
+
+    public bool $unreachable = false;
 
     /** @var list<array<mixed>> */
     private array $comments = [];
@@ -51,6 +59,23 @@ final class ScriptedGitHub
 
     public function forge(): GitHubForge
     {
+        [$calls, $checked] = $this->stack();
+
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
+    }
+
+    public function opener(): GitHubChangeOpener
+    {
+        [$calls, $checked] = $this->stack();
+
+        return new GitHubChangeOpener($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new WatchedRepositories(['widgets' => ['github' => 'acme/widgets']]));
+    }
+
+    /**
+     * @return array{GitHubCalls, CheckedInstallationTokens}
+     */
+    private function stack(): array
+    {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
         $identity = new RecordedInstallation('installation-secret')->client();
         $jwt = new AppJwt(self::APP_ID, AppKey::generate()->private, $clock);
@@ -62,7 +87,7 @@ final class ScriptedGitHub
         $calls = new GitHubCalls($http, $readings, $tokens);
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
+        return [$calls, $checked];
     }
 
     /**
@@ -70,10 +95,27 @@ final class ScriptedGitHub
      */
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
-        if ('GET' === $method) {
-            return new MockResponse(json_encode(str_contains($url, 'page=1') ? $this->comments : [], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        if ($this->unreachable) {
+            throw new TransportException('Connection refused for '.$url);
         }
 
+        return 'GET' === $method ? $this->read($url) : $this->write($method, $url, $options);
+    }
+
+    private function read(string $url): ResponseInterface
+    {
+        if (str_ends_with((string) parse_url($url, PHP_URL_PATH), '/pulls')) {
+            return new MockResponse(json_encode($this->openPulls, JSON_THROW_ON_ERROR), ['http_code' => 200]);
+        }
+
+        return new MockResponse(json_encode(str_contains($url, 'page=1') ? $this->comments : [], JSON_THROW_ON_ERROR), ['http_code' => 200]);
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function write(string $method, string $url, array $options): ResponseInterface
+    {
         $body = $options['body'] ?? '';
         $payload = (array) json_decode(is_string($body) ? $body : '', true, flags: JSON_THROW_ON_ERROR);
         $this->writes[] = [$method.' '.$url, $payload];
@@ -91,6 +133,15 @@ final class ScriptedGitHub
             $this->comments[] = [...$payload, 'performed_via_github_app' => ['id' => (int) self::APP_ID]];
         }
 
-        return new MockResponse('{}', ['http_code' => 201]);
+        return $this->created($method, $url);
+    }
+
+    private function created(string $method, string $url): ResponseInterface
+    {
+        return match (true) {
+            str_ends_with($url, '/pulls') => new MockResponse(json_encode(['number' => 42], JSON_THROW_ON_ERROR), ['http_code' => 201]),
+            'PATCH' === $method => new MockResponse(json_encode(['number' => (int) basename($url)], JSON_THROW_ON_ERROR), ['http_code' => 200]),
+            default => new MockResponse('{}', ['http_code' => 201]),
+        };
     }
 }
