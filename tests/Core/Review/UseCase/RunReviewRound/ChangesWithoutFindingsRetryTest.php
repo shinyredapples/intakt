@@ -32,6 +32,7 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Plugin\SymfonyAiVendor\ConversationsSeen;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -40,7 +41,10 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
+use Symfony\AI\Platform\Exception\MaxOutputTokensException;
+use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\PlatformInterface;
+use Symfony\AI\Platform\PlatformOptions;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
@@ -63,9 +67,16 @@ use Symfony\Component\Semaphore\Store\LockStore;
 #[UsesClass(VendorAccountLimit::class)]
 final class ChangesWithoutFindingsRetryTest extends KernelTestCase
 {
+    private const int MAX_OUTPUT = 8000;
+
     private RoundFixture $fixture;
 
+    private ConversationsSeen $conversations;
+
     private int $calls = 0;
+
+    /** @var list<mixed> */
+    private array $limits = [];
 
     protected function setUp(): void
     {
@@ -80,6 +91,28 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
 
         self::assertSame([ReviewerState::Verdict], $this->states());
         self::assertSame([LedgerEventKind::VerdictReceived], $this->endings());
+        self::assertSame(2, $this->calls);
+    }
+
+    public function testTheRetryOfAChangesVerdictWithoutFindingsRunsInANewConversationWithTheTiersUnchangedOutputLimit(): void
+    {
+        $this->fixture->start(1);
+
+        $this->deliverAll($this->answering([$this->emptyChanges(), $this->changesWithAFinding()]));
+
+        self::assertCount(2, $this->conversations->ids);
+        self::assertNotSame($this->conversations->ids[0], $this->conversations->ids[1]);
+        self::assertSame([self::MAX_OUTPUT, self::MAX_OUTPUT], $this->limits);
+    }
+
+    public function testARetryStoppedByTheOutputLimitAfterAChangesVerdictWithoutFindingsFailsTheReviewerWithoutAThirdCall(): void
+    {
+        $this->fixture->start(1);
+
+        $this->deliverAll($this->answering([$this->emptyChanges(), new MaxOutputTokensException('Truncated at the output limit.'), $this->changesWithAFinding()]));
+
+        self::assertSame([ReviewerState::Failed], $this->states());
+        self::assertSame([MaxOutputTokensException::class], $this->failures());
         self::assertSame(2, $this->calls);
     }
 
@@ -132,22 +165,27 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
     }
 
     /**
-     * @param list<string> $answers
+     * @param list<string|MaxOutputTokensException> $answers
      */
     private function answering(array $answers): SymfonyAiVendor
     {
-        return $this->vendor(fn (): string => $answers[$this->calls++]);
+        return $this->vendor(function (Model $model, array|string|object $input, array $options) use ($answers): string {
+            $this->limits[] = $options[PlatformOptions::MAX_OUTPUT_TOKENS] ?? null;
+            $answer = $answers[$this->calls++];
+
+            return $answer instanceof MaxOutputTokensException ? throw $answer : $answer;
+        });
     }
 
     private function vendor(Closure $answer): SymfonyAiVendor
     {
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => 8000]]]], []);
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::MAX_OUTPUT]]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $tiers = new TierPlatform($resolver, new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        $this->conversations = new ConversationsSeen(new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create()))))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 2);
 
-        return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock);
+        return new SymfonyAiVendor($tiers, $resolver, $this->conversations, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock);
     }
 
     /**
