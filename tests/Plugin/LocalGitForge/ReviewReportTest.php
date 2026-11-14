@@ -66,7 +66,7 @@ final class ReviewReportTest extends TestCase
 
     public function testAFailedReviewerIsPrintedAsFailedInPlainWordsWithoutAClassName(): void
     {
-        $failed = $this->review(Decision::Approve)->blockedFor(RoundEnds::JudgingFailed, 'correctness reviewer failed, stopped at its output limit');
+        $failed = $this->review(Decision::Approve)->blockedFor(RoundEnds::NoOutcomeInTime, 'correctness reviewer failed, stopped at its output limit');
 
         $lines = $this->report()->asLines($failed);
 
