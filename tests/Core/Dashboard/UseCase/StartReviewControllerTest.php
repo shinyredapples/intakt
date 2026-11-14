@@ -102,7 +102,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => 'two']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "The form names no round number, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The form names no round number, so nothing was started."', BadRequestHttpException::class));
     }
 
     public function testAMissingTokenDispatchesNothing(): void
@@ -113,7 +113,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
     }
 
     public function testAWrongTokenDispatchesNothing(): void
@@ -124,7 +124,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
     }
 
     public function testARoundThatIsNotNextRedirectsBackWithAnErrorLineAndNoTrace(): void
@@ -150,7 +150,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round that can be started again."', NotFoundHttpException::class));
+        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round that can be started again."', NotFoundHttpException::class));
     }
 
     public function testAGetToTheStartRouteIsRefused(): void
@@ -160,7 +160,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/round-1/start');
 
         self::assertResponseStatusCodeSame(405);
-        self::assertLoggedError('error', sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/reviews/round-1/start": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class));
+        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/reviews/round-1/start": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class));
     }
 
     public function testThePageThatHoldsTheButtonStillRendersFromTheLedgerAlone(): void

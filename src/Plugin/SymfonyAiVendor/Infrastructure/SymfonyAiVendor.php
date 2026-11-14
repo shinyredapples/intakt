@@ -26,6 +26,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -181,6 +182,11 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         try {
             $verdict = $this->reviewer->review($request, $platform, $platform->answering->model);
+        } catch (VerdictUnreadable $unreadable) {
+            // Settled, because the call ended with an answer and its usage is known.
+            $this->usage->settle($reservation, ...$platform->rounds());
+
+            throw $unreadable;
         } catch (Throwable $failure) {
             // Left unsettled, never settled as well, so the call's usage is counted once, also for a cut stream.
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());

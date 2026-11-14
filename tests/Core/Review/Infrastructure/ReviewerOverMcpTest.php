@@ -14,6 +14,7 @@ use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
@@ -63,6 +64,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(ReviewServerLost::class)]
 #[UsesClass(Verdict::class)]
+#[UsesClass(VerdictUnreadable::class)]
 #[UsesClass(ReviewerToolboxFactory::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(ReviewerRuns::class)]
@@ -118,20 +120,21 @@ final class ReviewerOverMcpTest extends KernelTestCase
         self::assertStringContainsString('final readonly class RoundFixture', $result);
     }
 
-    public function testAMalformedToolCallOverMcpStillEndsTheReviewAsInvalidOutput(): void
+    public function testAMalformedToolCallOverMcpStillRefusesTheAnswerAsUnreadable(): void
     {
-        $verdict = $this->review($this->mcpToolboxes()->create(...), 'no_such_tool');
+        $this->expectException(VerdictUnreadable::class);
+        $this->expectExceptionMessageMatches('/malformed tool call/');
 
-        self::assertStringContainsString('malformed tool call', $verdict->findings[0]->text);
+        $this->review($this->mcpToolboxes()->create(...), 'no_such_tool');
     }
 
     public function testAToolCallOverMcpWithoutItsRequiredArgumentIsAMalformedCallAsInProcess(): void
     {
-        $inProcess = $this->review(new ReviewerToolboxFactory()->create(...), 'read_file', []);
-        $overMcp = $this->review($this->mcpToolboxes()->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file', []);
+        $inProcess = $this->refusalOf(new ReviewerToolboxFactory()->create(...), 'read_file');
+        $overMcp = $this->refusalOf($this->mcpToolboxes()->create(...), ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file');
 
-        self::assertStringContainsString('malformed tool call', $inProcess->findings[0]->text);
-        self::assertEquals($inProcess, $overMcp);
+        self::assertStringContainsString('malformed tool call', $inProcess);
+        self::assertSame($inProcess, $overMcp);
     }
 
     public function testEveryMcpRequestCarriesTheCredentialOfTheRoundUnderReview(): void
@@ -275,6 +278,20 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), $toolboxes, new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
 
         return $reviewer->review($this->request(), $platform, 'reviewer-model');
+    }
+
+    /**
+     * @param Closure(ReviewRequest): ToolboxInterface $toolboxes
+     */
+    private function refusalOf(Closure $toolboxes, string $tool): string
+    {
+        try {
+            $this->review($toolboxes, $tool, []);
+        } catch (VerdictUnreadable $refused) {
+            return $refused->getMessage();
+        }
+
+        self::fail('The answer after a call without its argument was not refused.');
     }
 
     private function request(): ReviewRequest

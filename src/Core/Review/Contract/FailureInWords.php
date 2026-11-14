@@ -15,6 +15,7 @@ final readonly class FailureInWords
         MaxOutputTokensException::class => 'stopped at its output limit',
         ProviderRejectedTheKey::class => 'the provider rejected the key',
         ProviderFailedTransiently::class => 'the provider kept failing',
+        VerdictUnreadable::class => 'the reviewer\'s answer could not be read as a verdict',
         ChangesWithoutFindings::class => 'asked for changes without naming a finding',
     ];
 
