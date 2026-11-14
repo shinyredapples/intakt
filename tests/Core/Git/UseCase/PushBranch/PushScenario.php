@@ -113,7 +113,19 @@ final readonly class PushScenario
     {
         $listed = $this->run(['ls-remote', $remote ?? $this->remote, 'refs/heads/'.self::BRANCH], $this->folder);
 
-        return '' === $listed ? null : explode("\t", $listed)[0];
+        foreach (explode("\n", $listed) as $line) {
+            if (str_ends_with($line, "\trefs/heads/".self::BRANCH)) {
+                return explode("\t", $line)[0];
+            }
+        }
+
+        return null;
+    }
+
+    // A ref whose name ends in the task branch's own, because git's ls-remote pattern matches the tail of every ref name.
+    public function pushDecoyRef(string $commit): void
+    {
+        $this->run(['push', '--quiet', $this->remote, $commit.':refs/heads/a/refs/heads/'.self::BRANCH], $this->repository->path);
     }
 
     // Git's own verdict on each pushed commit against this one key, because an outside reader sees nothing else.

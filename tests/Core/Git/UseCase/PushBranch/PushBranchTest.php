@@ -370,6 +370,29 @@ final class PushBranchTest extends TestCase
         self::assertSame('Second build', $this->scenario->changes->text?->title);
     }
 
+    public function testANewBranchIsPushedAlthoughAnotherRefEndsInItsName(): void
+    {
+        $this->scenario->pushDecoyRef('main');
+
+        $pushed = $this->scenario->push()->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame($pushed->head, $this->scenario->remoteTip());
+    }
+
+    public function testARetryOfAHeadTheBranchMovedPastIsRefusedAlthoughAnotherRefEndingInItsNameHoldsThatHead(): void
+    {
+        $push = $this->scenario->push();
+        $first = $push->push($this->scenario->request());
+        self::assertInstanceOf(PushedBranch::class, $first);
+        $this->pushASecondBuildOnTopOf($push, $first->head);
+        $this->scenario->pushDecoyRef($first->head);
+
+        $this->assertARetryOfTheFirstHeadIsRefused($push, new ChangeText('Late title', 'Late text.'));
+
+        self::assertSame('Second build', $this->scenario->changes->text?->title);
+    }
+
     public function testARetryOfARecordedHeadIsRefusedOnceAnotherWriterMovedTheBranch(): void
     {
         $push = $this->scenario->push();

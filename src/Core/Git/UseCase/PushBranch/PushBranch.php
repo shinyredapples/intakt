@@ -123,9 +123,19 @@ final readonly class PushBranch implements BranchPush
 
     private function remoteTip(BranchPushRequest $request): ?string
     {
-        $listed = trim($this->git->outputFromRemote($request->repository, ['ls-remote', '--', $request->remote, self::BRANCHES.$request->branch]));
+        $ref = self::BRANCHES.$request->branch;
+        $listed = $this->git->outputFromRemote($request->repository, ['ls-remote', '--', $request->remote, $ref]);
 
-        return '' === $listed ? null : explode("\t", $listed)[0];
+        // Git matches the pattern against the tail of every ref, so "refs/heads/a/refs/heads/task" is listed too and may come first: only the exact ref is the branch.
+        foreach (explode("\n", $listed) as $line) {
+            $fields = explode("\t", $line, 2);
+
+            if ($ref === ($fields[1] ?? null)) {
+                return $fields[0];
+            }
+        }
+
+        return null;
     }
 
     private function openedChange(BranchPushRequest $request, string $head, string $main): ChangeId
