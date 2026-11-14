@@ -6,6 +6,7 @@ namespace Intakt\Tests\Journeys\Support;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
+use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\NativeClock;
@@ -44,20 +45,36 @@ final class ContainerRebuildTest extends TestCase
         self::assertStringContainsString('Wrote the sample project', $output);
     }
 
-    public function testEveryDirectoryIsGoneWhenTheWarmupStarts(): void
+    public function testTheRunningWorkersServiceFilesStillLoadAfterARebuild(): void
     {
-        $directories = [$this->directory.'/cache/test', $this->directory.'/build/test'];
-        new Filesystem()->dumpFile($directories[0].'/container.php', '');
-        new Filesystem()->dumpFile($directories[1].'/container.php', '');
-        $left = null;
+        $this->console(['cache:warmup'], $this->withoutKeys());
+        $services = $this->serviceFiles();
 
-        new ContainerRebuild($directories, static function () use ($directories, &$left): string {
-            $left = array_values(array_filter($directories, is_dir(...)));
+        $this->rebuild()->rebuild($this->withKey(), self::CONSOLE_SECONDS);
+
+        self::assertSame([], array_values(array_filter($services, static fn (string $file): bool => !is_file($file))));
+    }
+
+    public function testTheLoaderIsGoneWhenTheWarmupStarts(): void
+    {
+        $loader = $this->directory.'/cache/test/container.php';
+        new Filesystem()->dumpFile($loader, '');
+        $present = null;
+
+        new ContainerRebuild($loader, static function () use ($loader, &$present): string {
+            $present = is_file($loader);
 
             return '';
         })->rebuild($this->withKey(), self::CONSOLE_SECONDS);
 
-        self::assertSame([], $left);
+        self::assertFalse($present);
+    }
+
+    public function testTheLoaderIsTheFileTheKernelCompilesItsContainerInto(): void
+    {
+        $this->console(['cache:warmup'], $this->withoutKeys());
+
+        self::assertFileExists(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()));
     }
 
     // Because the framework's cache:clear takes a container compiled in the second it starts for one it built itself, as when the instance or a command before the rebuild compiled one.
@@ -75,7 +92,21 @@ final class ContainerRebuildTest extends TestCase
 
     private function rebuild(): ContainerRebuild
     {
-        return new ContainerRebuild([$this->cacheDirectory()], $this->console(...));
+        return new ContainerRebuild(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()), $this->console(...));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function serviceFiles(): array
+    {
+        $files = [];
+
+        foreach (new Finder()->files()->in($this->cacheDirectory())->path('/^Container[^\/]+\//') as $file) {
+            $files[] = $file->getPathname();
+        }
+
+        return $files;
     }
 
     /**

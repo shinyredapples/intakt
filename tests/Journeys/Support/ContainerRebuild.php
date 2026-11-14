@@ -5,28 +5,39 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Closure;
+use Intakt\Kernel;
+use LogicException;
+use ReflectionMethod;
 use Symfony\Component\Filesystem\Filesystem;
 
-// Removed by hand and warmed up in a new process, as docker/entrypoint.sh does, because the framework's cache:clear keeps a container compiled in the second it starts, so one the instance or an earlier command built without the journey's settings would survive.
+// Not cache:clear, because it keeps a container compiled in the second it starts (so one built before the journey's settings survives) and moves away the service files the instance's running worker still loads.
 final readonly class ContainerRebuild
 {
     /**
-     * @param list<string>                                           $directories
      * @param Closure(list<string>, array<string,string>, int): string $console
      */
     public function __construct(
-        private array $directories,
+        private string $loader,
         private Closure $console,
         private Filesystem $filesystem = new Filesystem(),
     ) {
     }
 
+    // Named by the kernel itself, because only it knows the class it compiles; protected there, so read through reflection.
+    public static function loaderOf(Kernel $kernel, string $buildDirectory): string
+    {
+        $class = new ReflectionMethod($kernel, 'getContainerClass')->invoke($kernel);
+
+        return is_string($class) ? $buildDirectory.'/'.$class.'.php' : throw new LogicException('The kernel names no container class.');
+    }
+
+    // Without the loader the kernel of the next process compiles again, from the settings it is given, into a new directory beside the one the worker uses.
     /**
      * @param array<string,string> $environment
      */
     public function rebuild(array $environment, int $seconds): void
     {
-        $this->filesystem->remove($this->directories);
+        $this->filesystem->remove($this->loader);
         ($this->console)(['cache:warmup'], $environment, $seconds);
     }
 }

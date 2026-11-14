@@ -180,7 +180,7 @@ final class WatcherStartTest extends TestCase
 
         $console = $this->console(...);
 
-        return new WatcherStart($console, new ContainerRebuild([$this->directory.'/cache'], $console))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
+        return new WatcherStart($console, new ContainerRebuild($this->directory.'/cache/container.php', $console))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
     }
 
     /**

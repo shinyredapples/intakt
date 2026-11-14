@@ -148,7 +148,7 @@ abstract class JourneyTestCase extends TestCase
         // Asked of the kernel, because it alone decides where the instance's container is compiled, from the APP_CACHE_DIR bin/instance gives the journey too.
         $kernel = new Kernel(self::ENVIRONMENT, false);
 
-        return new ContainerRebuild([$kernel->getCacheDir(), $kernel->getBuildDir()], $console);
+        return new ContainerRebuild(ContainerRebuild::loaderOf($kernel, $kernel->getBuildDir()), $console);
     }
 
     #[After]
