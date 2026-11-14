@@ -69,7 +69,7 @@ The same command with `--format=json` on a fresh database, exit 10:
 
 ```json
 {
-    "round_id": "01a1d764-8056-7c71-966f-1f5e1133f53f",
+    "round_id": "01a1d78e-d89b-7f6e-91b0-82ab3c04b53c",
     "round": 1,
     "decision": "changes",
     "exit_code": 10,
@@ -112,3 +112,5 @@ The same command with `--format=json` on a fresh database, exit 10:
 ```
 
 The judge rejected both findings: the P1 `F1` stays on the act list in both outputs, the rejected P3 `F2` is on neither.
+
+Both runs were repeated on the head that merges main (after `cache:clear` with `INTAKT_CONFIG` set), with the same text and JSON output and the same two calls; the round id above is from that run.
