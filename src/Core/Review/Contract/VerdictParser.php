@@ -17,6 +17,9 @@ use Symfony\Component\Validator\ConstraintViolationListInterface;
 
 final readonly class VerdictParser
 {
+    /**
+     * @throws VerdictUnreadable
+     */
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function parse(DeferredResult $result): Verdict
     {
@@ -25,6 +28,8 @@ final readonly class VerdictParser
 
     /**
      * @param Closure(): Verdict $read
+     *
+     * @throws VerdictUnreadable
      */
     #[NoDiscard('a verdict that is not read approves nothing')]
     public function parseWith(Closure $read): Verdict
@@ -32,9 +37,9 @@ final readonly class VerdictParser
         try {
             return $read();
         } catch (ValidationException $exception) {
-            return Verdict::invalidOutput($this->firstViolation($exception));
+            throw VerdictUnreadable::because($this->firstViolation($exception));
         } catch (RuntimeException $exception) {
-            return Verdict::invalidOutput($this->mappingFailure($exception));
+            throw VerdictUnreadable::because($this->mappingFailure($exception));
         }
     }
 
