@@ -208,6 +208,23 @@ final class ProjectTiersTest extends KernelTestCase
         self::assertSame([ProjectMode::ReviewerForLoop, ProjectMode::Live], [$modes->of('beta'), $modes->of('gamma')]);
     }
 
+    public function testAProjectReviewJobImageIsTheImageTheContainerReadsForItsProject(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        review_job: { image: 'intakt-job/beta:review' }\n        tiers:\n            strong: { provider: openai, model: other }\n    gamma:\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        self::assertSame(['beta' => 'intakt-job/beta:review'], $this->bootedContainer()->getParameter(ReviewServices::JOB_IMAGES));
+    }
+
+    public function testAReviewJobSectionWithoutItsImageStopsTheBoot(): void
+    {
+        file_put_contents($this->file, "projects:\n    beta:\n        review_job: {}\n        tiers:\n            strong: { provider: openai, model: other }\n");
+
+        $this->expectException(LoaderLoadException::class);
+        $this->expectExceptionMessageMatches('/"image" under "intakt\.projects\.beta" must be configured/');
+
+        $this->bootedContainer();
+    }
+
     public function testAProjectsValueThatIsNoMapStopsTheBoot(): void
     {
         file_put_contents($this->file, "projects: broken\n");

@@ -29,6 +29,7 @@ use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\Infrastructure\PanelConfiguration;
 use Intakt\Core\Review\Infrastructure\PlatformChosenPerReview;
 use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
+use Intakt\Core\Review\Infrastructure\ReviewJobConfiguration;
 use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\WatcherServices;
@@ -92,6 +93,7 @@ return static function (ContainerConfigurator $container): void {
     $contentProjects = $contents['projects'] ?? [];
     // Each module's tree refuses keys it does not know, so a project's review section goes to the review tree only and its mode to the mode tree only; a projects value that is no map stays as written for the projects tree to refuse.
     $reviews = [];
+    $reviewJobs = [];
     $modes = [];
     $watches = [];
     $builds = [];
@@ -107,6 +109,12 @@ return static function (ContainerConfigurator $container): void {
             if (is_array($project) && array_key_exists('review', $project)) {
                 $reviews[$name] = $project['review'];
                 unset($project['review']);
+                $contentProjects[$name] = $project;
+            }
+
+            if (is_array($project) && array_key_exists('review_job', $project)) {
+                $reviewJobs[$name] = $project['review_job'];
+                unset($project['review_job']);
                 $contentProjects[$name] = $project;
             }
 
@@ -143,6 +151,8 @@ return static function (ContainerConfigurator $container): void {
     $projects = $configuration['projects'];
     $tierProviders = array_map(static fn (array $project): array => array_map(static fn (array $tier): string => $tier['provider'], $project['tiers']), $projects);
     $panels = new Processor()->processConfiguration(new PanelConfiguration($tierProviders), [['projects' => $reviews]])['projects'];
+    /** @var array<string, array{image: string}> $projectReviewJobs */
+    $projectReviewJobs = new Processor()->processConfiguration(new ReviewJobConfiguration(), [['projects' => $reviewJobs]])['projects'];
     /** @var array<string, array{mode: string}> $projectModes */
     $projectModes = new Processor()->processConfiguration(new ProjectModeConfiguration(), [['projects' => $modes]])['projects'];
     /** @var array<string, array{repository: string, base: string, task: string, github?: string}> $projectWatches */
@@ -302,6 +312,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::PROJECTS, $projects);
     $container->parameters()->set(Provider::Codex->parameter(), $configuration[Provider::Codex->configKey()] ?? null);
     $container->parameters()->set(ReviewServices::PANELS, $panels);
+    $container->parameters()->set(ReviewServices::JOB_IMAGES, ReviewJobConfiguration::imagesOf($projectReviewJobs));
     $container->parameters()->set(BuildServices::ROUTING, array_map(static fn (array $project): array => $project['build'], $projectBuilds));
     $container->parameters()->set(WatcherServices::PROJECTS, $projectWatches);
     $container->parameters()->set(GitServices::PROTECTED_PATHS, array_map(static fn (array $project): array => $project['protected_paths'], $projectProtectedPaths));
