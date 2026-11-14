@@ -3,7 +3,7 @@ services:
     Intakt\Tests\Journeys\Support\JourneyVendor: ~
     Intakt\Plugin\Vendor\Contract\Vendor: '@Intakt\Tests\Journeys\Support\JourneyVendor'
 
-    # In the share directory, because a journey's cache:clear would remove a recording kept in the cache directory.
+    # In the share directory, because clearing the cache would remove a recording kept in the cache directory.
     Intakt\Tests\Journeys\Support\RecordingHub:
         decorates: mercure.hub.default
         arguments: ['@.inner', '%kernel.share_dir%']
