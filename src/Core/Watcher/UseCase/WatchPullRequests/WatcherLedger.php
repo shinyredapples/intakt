@@ -10,6 +10,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Watcher\Domain\BootKey;
+use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\HeadFailure;
@@ -32,7 +33,7 @@ final readonly class WatcherLedger
         };
 
         if (null !== $kind) {
-            $this->append($kind, $this->headOf($project, $decision) + ['read_again_at' => $decision->readAgainAt?->format(DATE_ATOM)]);
+            $this->append($kind, $this->headOf($project, $decision) + ['read_again_at' => $decision->readAgainAt?->format(DATE_ATOM)] + $this->bootFailureOf($decision));
         }
     }
 
@@ -80,6 +81,14 @@ final readonly class WatcherLedger
     private function headOf(string $project, HeadDecision $decision): array
     {
         return ['project' => $project, 'change' => $decision->change->id->value, 'head' => $decision->change->head->hash];
+    }
+
+    /**
+     * @return array{cause?: string, reason?: string}
+     */
+    private function bootFailureOf(HeadDecision $decision): array
+    {
+        return $decision->failedBoot instanceof FailedBoot ? ['cause' => FailedBoot::CAUSE, 'reason' => $decision->failedBoot->reason] : [];
     }
 
     /**

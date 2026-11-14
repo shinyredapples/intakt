@@ -35,7 +35,7 @@ final readonly class StartedRounds
         $queued = null;
 
         try {
-            $stored = $this->storedRound($project, $change);
+            $stored = $this->roundAt($project, $change);
             $queued = $this->startUnlessStarted($stored, $start);
             $this->ensureStillInTransaction($connection, $queued);
             $this->record($project, $change, $queued);
@@ -97,6 +97,14 @@ final readonly class StartedRounds
         }
 
         return $rounds;
+    }
+
+    // Read once per start, so the row this read returns decides both whether the round starts and whether the head stays due; a stale row is returned too, because a refused head withdraws its round again on every refusal.
+    public function roundAt(string $project, OpenChange $change): ?StartedRound
+    {
+        $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
+
+        return $loaded instanceof StartedRound ? $this->readAgain($loaded) : null;
     }
 
     // Marked and recorded in one transaction with the ledger's own write, so a failed append leaves the round unmarked for a later tick and a second worker that marks the same round finds it taken.
@@ -170,14 +178,6 @@ final readonly class StartedRounds
     private function awaitsReplacement(StartedRound $round): bool
     {
         return $round->isStale() && $round->owesQueuedLine();
-    }
-
-    // Read once per start, so the row this read returns decides both whether the round starts and whether the head stays due.
-    private function storedRound(string $project, OpenChange $change): ?StartedRound
-    {
-        $loaded = $this->entities->find(StartedRound::class, ['project' => $project, 'change' => $change->id->value, 'head' => $change->head->hash]);
-
-        return $loaded instanceof StartedRound ? $this->readAgain($loaded) : null;
     }
 
     private function isReplaceable(StartedRound $round): bool

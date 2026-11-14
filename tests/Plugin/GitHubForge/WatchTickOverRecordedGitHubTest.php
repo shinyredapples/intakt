@@ -34,6 +34,8 @@ use Intakt\Core\Watcher\UseCase\WatchPullRequests\HeadsWithoutRound;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\LookAtHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\PendingHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\RoundStarts;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHead;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\SettleHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\StaleVerdicts;
@@ -60,6 +62,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Watcher\UseCase\FindChangedPullRequests\RecordingLogger;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\RecordingCommandBus;
 use Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests\StandingQueryBus;
+use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -135,7 +138,10 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $decisions = new HeadDecisions(new AdmitHeads($reads, new AdmissionDecision(), $clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($commands, $rounds, $ledger);
         $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat('f', 40)), new CommitId(self::GREEN)), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
-        $settle = new SettleHeads(new SettleHead(new StaleVerdicts(new StandingQueryBus($recorded, $this->entities), $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
+        $queries = new StandingQueryBus($recorded, $this->entities);
+        // Main's boot line goes to a ledger of its own, because the test counts only the lines of the two heads.
+        $gate = new BootGate($queries, new BootResults($queries, $this->entities, $clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger);
+        $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($queries, $commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.', 'github' => 'acme/widgets']]);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));

@@ -21,7 +21,13 @@ use Intakt\Core\Budget\Infrastructure\DoctrineHolds;
 use Intakt\Core\Budget\Infrastructure\DoctrineInstallWideFailures;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Review\Contract\BootAt;
+use Intakt\Core\Review\Contract\BootHarness;
+use Intakt\Core\Review\Contract\BootHarnessAtMain;
+use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\MainCommit;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -33,6 +39,9 @@ use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Contract\StartReviewAtHead;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Watcher\Domain\AdmissionDecision;
+use Intakt\Core\Watcher\Domain\BootKey;
+use Intakt\Core\Watcher\Domain\BootRecord;
+use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\HeadFailure;
 use Intakt\Core\Watcher\Domain\PendingHead;
@@ -40,6 +49,8 @@ use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Core\Watcher\UseCase\AdmitHeads\AdmitHeads;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\FindChangedPullRequests;
 use Intakt\Core\Watcher\UseCase\FindChangedPullRequests\SeenListings;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootGate;
+use Intakt\Core\Watcher\UseCase\WatchPullRequests\BootResults;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\ChangedHeads;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\DiscardedRounds;
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\FailedHeads;
@@ -114,6 +125,17 @@ use Symfony\Component\Lock\LockFactory;
 #[UsesClass(AdmitHeads::class)]
 #[UsesClass(AdmissionDecision::class)]
 #[UsesClass(HeadDecision::class)]
+#[UsesClass(BootGate::class)]
+#[UsesClass(BootResults::class)]
+#[UsesClass(BootKey::class)]
+#[UsesClass(BootRecord::class)]
+#[UsesClass(FailedBoot::class)]
+#[UsesClass(BootAt::class)]
+#[UsesClass(BootHarness::class)]
+#[UsesClass(BootHarnessAtMain::class)]
+#[UsesClass(BootOutcome::class)]
+#[UsesClass(MainCommit::class)]
+#[UsesClass(MarkVerdictsStale::class)]
 final class WatchPullRequestsHandlerTest extends KernelTestCase
 {
     private const string PENDING = 'a';
@@ -977,6 +999,149 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertCount(2, $this->commands->started);
     }
 
+    public function testAGreenHeadIsBootedWithMainsHarnessBeforeItsRoundStarts(): void
+    {
+        $bootedBeforeTheStart = [];
+        $this->commands->whileStarting = function () use (&$bootedBeforeTheStart): void {
+            $bootedBeforeTheStart = $this->queries->bootedHeads;
+        };
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertCount(1, $bootedBeforeTheStart);
+        self::assertSame(str_repeat(self::GREEN, 40), $bootedBeforeTheStart[0]->head->commit->hash);
+        self::assertSame(str_repeat(self::BASE, 40), $bootedBeforeTheStart[0]->main->hash);
+    }
+
+    public function testAHeadWhoseCiIsNotGreenIsNotBooted(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::RED, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([], $this->queries->bootedHeads);
+    }
+
+    public function testAGreenHeadThatFailsToBootWhileMainBootsGoesBackLikeRedCiWithItsReason(): void
+    {
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertSame([], $this->commands->started);
+        self::assertSame([LedgerEventKind::HeadRed], $this->ledger->kinds());
+        self::assertSame('boot_failed', $this->ledger->payloads()[0]['cause']);
+        self::assertSame('The server did not start.', $this->ledger->payloads()[0]['reason']);
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testAHeadThatFailsToBootIsNotReadAgainUntilItsPullRequestChanges(): void
+    {
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->tick();
+        $this->clock->modify('+1 hour');
+
+        $this->tick();
+
+        self::assertCount(1, $this->queries->bootedHeads);
+    }
+
+    public function testAFailedBootWithdrawsTheApprovalsOfTheRoundAlreadyStartedOnThatHead(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertSame(['round-1'], $this->commands->markedStale);
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
+        self::assertTrue($this->storedStale(self::GREEN));
+    }
+
+    public function testAWithdrawalReviewCannotTakeLeavesTheHeadDueAndIsSentAgainOnItsNextTry(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->commands->markFailure = new RuntimeException('the review database is down');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->commands->markFailure = null;
+
+        $this->clock->modify('+61 seconds');
+        $this->tick();
+
+        self::assertSame(['round-1', 'round-1'], $this->commands->markedStale);
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale, LedgerEventKind::HeadFailed, LedgerEventKind::HeadRed], $this->ledger->kinds());
+        self::assertSame(0, $this->entities->getRepository(PendingHead::class)->count([]));
+    }
+
+    public function testAMovedHeadThatFailsToBootLeavesTheEarlierHeadsRoundToTheStaleCheckWithoutWithdrawingIt(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
+        $this->listing->opens('alpha', RecordedForge::change('7', self::NEXT_GREEN, '2026-11-02T10:05:00Z'));
+
+        $this->tick();
+
+        self::assertSame([], $this->commands->markedStale);
+        self::assertSame([LedgerEventKind::RoundQueued, LedgerEventKind::HeadRed, LedgerEventKind::VerdictsStale], $this->ledger->kinds());
+        self::assertCount(1, $this->commands->started);
+    }
+
+    public function testAHeadWhoseApprovalsWereWithdrawnStartsAFreshRoundOnceItBootsAgain(): void
+    {
+        $this->startRoundOnGreenHead();
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:05:00Z'));
+        $this->tick();
+        $this->queries->headBoot = BootOutcome::booted();
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T10:10:00Z'));
+
+        $this->tick();
+
+        self::assertCount(2, $this->commands->started);
+        self::assertFalse($this->storedStale(self::GREEN));
+    }
+
+    public function testAHeadWhoseBootCrashesStillStartsItsRound(): void
+    {
+        $this->queries->headBoot = BootOutcome::crashed('composer could not run');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+    }
+
+    public function testAHeadThatFailsToBootStillStartsItsRoundWhenMainDoesNotBootEither(): void
+    {
+        $this->queries->mainBoot = BootOutcome::failed('main is broken');
+        $this->queries->headBoot = BootOutcome::failed('The server did not start.');
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+    }
+
+    public function testAGateThatCrashesNeverStopsTheReview(): void
+    {
+        $this->queries->gateDown = true;
+        $this->listing->opens('alpha', RecordedForge::change('7', self::GREEN, '2026-11-02T09:00:00Z'));
+
+        $this->tick();
+
+        self::assertCount(1, $this->commands->started);
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertTrue(array_any($this->logger->logged, static fn (array $line): bool => 'The boot gate failed, so the review starts without it.' === $line[0]));
+    }
+
     private function moveFromGreenToNextGreenAndBack(): void
     {
         $this->startRoundOnGreenHead();
@@ -1069,7 +1234,9 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
-        $settle = new SettleHeads(new SettleHead(new StaleVerdicts($this->queries, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
+        // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
+        $gate = new BootGate($this->queries, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger), $logger);
+        $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));

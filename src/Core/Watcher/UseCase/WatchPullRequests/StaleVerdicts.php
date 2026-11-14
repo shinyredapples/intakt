@@ -6,9 +6,12 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Review\Contract\HeadIdentity;
 use Intakt\Core\Review\Contract\IdentityAtHead;
+use Intakt\Core\Review\Contract\MarkVerdictsStale;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
+use Intakt\Core\Watcher\Domain\FailedBoot;
+use Intakt\Core\Watcher\Domain\HeadDecision;
 use Intakt\Core\Watcher\Domain\StartedRound;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Intakt\Plugin\Forge\Contract\OpenChange;
@@ -23,6 +26,7 @@ final readonly class StaleVerdicts
     public function __construct(
         #[Autowire(service: 'query.bus')]
         private MessageBusInterface $queries,
+        private MessageBusInterface $commands,
         private StartedRounds $rounds,
         private WatcherLedger $ledger,
     ) {
@@ -33,6 +37,20 @@ final readonly class StaleVerdicts
         foreach ($this->rounds->openRoundsBefore($project->name, $open) as $round) {
             $this->check($project, $open, $round);
         }
+    }
+
+    // Only the round on the refused head itself, because no identity tells Review that a head stopped booting; the rounds of earlier heads booted, so the moved-head check above judges them.
+    public function noteRefusedHead(WatchedProject $project, HeadDecision $decision): void
+    {
+        $round = $decision->failedBoot instanceof FailedBoot ? $this->rounds->roundAt($project->name, $decision->change) : null;
+
+        if (!$round instanceof StartedRound) {
+            return;
+        }
+
+        $this->rounds->markStaleOnce($round, $this->ledger->verdictsStale(...));
+        // Sent on every refusal, also for a round already marked, because only Review withdraws an approval already on the forge and the head stays due until this succeeds.
+        $this->commands->dispatch(new MarkVerdictsStale($round->roundId()));
     }
 
     private function check(WatchedProject $project, OpenChange $open, StartedRound $round): void

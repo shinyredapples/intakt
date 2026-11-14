@@ -9,6 +9,7 @@ use Intakt\Core\Watcher\Domain\HeadDecision;
 final readonly class SettleHead
 {
     public function __construct(
+        private BootGate $gate,
         private StaleVerdicts $stale,
         private HeadsWithoutRound $withoutRound,
         private RoundStarts $starts,
@@ -17,6 +18,8 @@ final readonly class SettleHead
 
     public function settle(WatchedProject $project, HeadDecision $decision): void
     {
+        $decision = $this->bootedIfGreen($project, $decision);
+
         if ($decision->startsRound()) {
             $this->stale->noteMovedHead($project, $decision->change);
             $this->starts->startFor($project, $decision);
@@ -27,7 +30,14 @@ final readonly class SettleHead
         // Recorded before the stale check, because that check reads the new head from the repository and a commit not fetched yet must not keep a pending head from waiting its interval.
         $this->withoutRound->record($project->name, $decision);
         $this->stale->noteMovedHead($project, $decision->change);
+        $this->stale->noteRefusedHead($project, $decision);
         // Settled only after the stale check, because an unchanged listing never names the head again, so a failed check must leave it queued.
         $this->withoutRound->settled($project->name, $decision);
+    }
+
+    // Booted also when the head already has a round, because a head that stopped booting must lose the approvals that round gave it.
+    private function bootedIfGreen(WatchedProject $project, HeadDecision $decision): HeadDecision
+    {
+        return $decision->startsRound() ? $this->gate->admit($project, $decision) : $decision;
     }
 }
