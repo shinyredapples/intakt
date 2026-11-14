@@ -55,6 +55,18 @@ final class SignedCommitsTest extends TestCase
         $this->assertRefusedBecause('its signature does not verify', fn () => $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $signedByOther, self::MAIN));
     }
 
+    public function testASigningKeyWhoseSignaturesDifferOnEachRunIsRefusedBeforeItSigns(): void
+    {
+        $ecdsa = PushScenario::generateKey($this->scenario->key.'-ecdsa', 'ecdsa');
+
+        try {
+            $this->scenario->signedCommits($ecdsa)->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $this->scenario->head, 0), self::MAIN);
+            self::fail('An ECDSA key must not sign.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('ed25519', $refused->getMessage());
+        }
+    }
+
     public function testTheCheckAcceptsCommitsTheOrchestratorSigned(): void
     {
         $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack(null, $this->scenario->head, 0), self::MAIN);

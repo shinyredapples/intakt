@@ -29,11 +29,13 @@ final class RecordingChangeOpening implements ChangeOpening
             ($this->during)();
         }
 
-        if (!isset($this->pulls[$change->branch])) {
+        $key = json_encode([$change->project, $change->branch], JSON_THROW_ON_ERROR);
+
+        if (!isset($this->pulls[$key])) {
             ++$this->opened;
-            $this->pulls[$change->branch] = new ChangeId('https://github.com/acme/widgets/pull/'.$this->opened);
+            $this->pulls[$key] = new ChangeId(sprintf('https://github.com/acme/%s/pull/%d', $change->project, $this->opened));
         }
 
-        return $this->pulls[$change->branch];
+        return $this->pulls[$key];
     }
 }

@@ -174,6 +174,37 @@ final class PushBranchTest extends TestCase
         self::assertSame(1, $this->scenario->changes->opened);
     }
 
+    public function testACrashBetweenThePushAndItsRecordStillOpensThePullRequestWhenMainConflictsSince(): void
+    {
+        $this->scenario->ledger->accepts = 1;
+
+        try {
+            $this->scenario->push()->push($this->scenario->request());
+            self::fail('The ledger refused the record of the push.');
+        } catch (BranchNotPushed) {
+        }
+
+        $this->scenario->repository->commitFile('b.txt', "main's own b\n");
+        $this->scenario->ledger->accepts = PHP_INT_MAX;
+        $pushed = $this->scenario->push()->push($this->scenario->request());
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame($pushed->head, $this->scenario->remoteTip());
+        self::assertSame(1, $this->scenario->changes->opened);
+    }
+
+    public function testARecordOfAnotherProjectWithTheSameBranchAndHeadDoesNotStandInForThisProjectsPush(): void
+    {
+        $this->scenario->push()->push($this->scenario->request());
+        $other = $this->scenario->otherRemote();
+
+        $pushed = $this->scenario->push()->push($this->scenario->request(null, null, 'gadgets', $other));
+
+        self::assertInstanceOf(PushedBranch::class, $pushed);
+        self::assertSame($pushed->head, $this->scenario->remoteTip($other));
+        self::assertSame('https://github.com/acme/gadgets/pull/2', $pushed->change->value);
+    }
+
     public function testACrashAfterThePushNeitherPushesAgainNorOpensASecondPullRequest(): void
     {
         $this->scenario->changes->during = static fn () => throw BranchNotPushed::because('the process died');

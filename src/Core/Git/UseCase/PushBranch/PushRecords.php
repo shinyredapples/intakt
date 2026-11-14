@@ -10,7 +10,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use JsonException;
 
-// One record per phase and per commit the push intends to produce, so a restart reads where the last attempt stopped and never repeats a phase it finished.
+// One record per phase and per commit the push intends to produce, so a restart reads where the last attempt stopped and never repeats a phase it finished; keyed by project too, because two projects can share history and branch names.
 final readonly class PushRecords
 {
     public function __construct(
@@ -18,19 +18,19 @@ final readonly class PushRecords
     ) {
     }
 
-    public function isIntended(string $branch, string $head): bool
+    public function isIntended(string $project, string $branch, string $head): bool
     {
-        return null !== $this->recorded(LedgerEventKind::PushIntended, $branch, $head);
+        return null !== $this->recorded(LedgerEventKind::PushIntended, $project, $branch, $head);
     }
 
-    public function hasPushed(string $branch, string $head): bool
+    public function hasPushed(string $project, string $branch, string $head): bool
     {
-        return null !== $this->recorded(LedgerEventKind::BranchPushed, $branch, $head);
+        return null !== $this->recorded(LedgerEventKind::BranchPushed, $project, $branch, $head);
     }
 
-    public function openedChange(string $branch, string $head): ?string
+    public function openedChange(string $project, string $branch, string $head): ?string
     {
-        $change = $this->recorded(LedgerEventKind::ChangeOpened, $branch, $head)['change'] ?? null;
+        $change = $this->recorded(LedgerEventKind::ChangeOpened, $project, $branch, $head)['change'] ?? null;
 
         return is_string($change) ? $change : null;
     }
@@ -38,36 +38,36 @@ final readonly class PushRecords
     /**
      * @throws BranchNotPushed
      */
-    public function intend(string $branch, string $head): void
+    public function intend(string $project, string $branch, string $head): void
     {
-        $this->append(LedgerEventKind::PushIntended, ['branch' => $branch, 'head' => $head]);
+        $this->append(LedgerEventKind::PushIntended, ['project' => $project, 'branch' => $branch, 'head' => $head]);
     }
 
     /**
      * @throws BranchNotPushed
      */
-    public function push(string $branch, string $head): void
+    public function push(string $project, string $branch, string $head): void
     {
-        $this->append(LedgerEventKind::BranchPushed, ['branch' => $branch, 'head' => $head]);
+        $this->append(LedgerEventKind::BranchPushed, ['project' => $project, 'branch' => $branch, 'head' => $head]);
     }
 
     /**
      * @throws BranchNotPushed
      */
-    public function open(string $branch, string $head, string $change): void
+    public function open(string $project, string $branch, string $head, string $change): void
     {
-        $this->append(LedgerEventKind::ChangeOpened, ['branch' => $branch, 'head' => $head, 'change' => $change]);
+        $this->append(LedgerEventKind::ChangeOpened, ['project' => $project, 'branch' => $branch, 'head' => $head, 'change' => $change]);
     }
 
     /**
      * @return array<mixed>|null
      */
-    private function recorded(LedgerEventKind $kind, string $branch, string $head): ?array
+    private function recorded(LedgerEventKind $kind, string $project, string $branch, string $head): ?array
     {
         foreach ($this->ledger->readOfKind($kind) as $event) {
             $payload = $this->decoded($event->event->payload);
 
-            if (($payload['branch'] ?? null) === $branch && ($payload['head'] ?? null) === $head) {
+            if (($payload['project'] ?? null) === $project && ($payload['branch'] ?? null) === $branch && ($payload['head'] ?? null) === $head) {
                 return $payload;
             }
         }

@@ -53,9 +53,9 @@ final readonly class PushScenario
         $this->run(['push', '--quiet', $this->remote, 'main'], $this->repository->path);
     }
 
-    public static function generateKey(string $file): string
+    public static function generateKey(string $file, string $type = 'ed25519'): string
     {
-        $process = new Process(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', 'test', '-f', $file]);
+        $process = new Process(['ssh-keygen', '-q', '-t', $type, '-N', '', '-C', 'test', '-f', $file]);
         $process->mustRun();
 
         return $file;
@@ -66,9 +66,19 @@ final readonly class PushScenario
         return $this->repository->path.'/.git';
     }
 
-    public function request(?string $base = null, ?string $head = null): BranchPushRequest
+    public function request(?string $base = null, ?string $head = null, string $project = 'widgets', ?string $remote = null): BranchPushRequest
     {
-        return new BranchPushRequest('widgets', $this->gitDirectory(), $this->remote, self::BRANCH, new AcceptedHandBack($base, $head ?? $this->head, 0), new ChangeText('Add the files', 'Evidence: tests pass.'));
+        return new BranchPushRequest($project, $this->gitDirectory(), $remote ?? $this->remote, self::BRANCH, new AcceptedHandBack($base, $head ?? $this->head, 0), new ChangeText('Add the files', 'Evidence: tests pass.'));
+    }
+
+    // A second project's remote holding the same main, because two projects can share history and name their task branches alike.
+    public function otherRemote(): string
+    {
+        $remote = $this->folder.'/other.git';
+        $this->run(['init', '--quiet', '--bare', '--initial-branch=main', $remote], $this->folder);
+        $this->run(['push', '--quiet', $remote, 'main'], $this->repository->path);
+
+        return $remote;
     }
 
     public function push(?SigningKey $key = null): PushBranch
@@ -88,9 +98,9 @@ final readonly class PushScenario
         return new SignedCommits(new BranchGit(new HardenedGit()), $this->signingKey($key ?? $this->key));
     }
 
-    public function remoteTip(): ?string
+    public function remoteTip(?string $remote = null): ?string
     {
-        $listed = $this->run(['ls-remote', $this->remote, 'refs/heads/'.self::BRANCH], $this->folder);
+        $listed = $this->run(['ls-remote', $remote ?? $this->remote, 'refs/heads/'.self::BRANCH], $this->folder);
 
         return '' === $listed ? null : explode("\t", $listed)[0];
     }

@@ -15,6 +15,7 @@ final readonly class SigningKey
 {
     public const string NAMESPACE = 'git';
     public const string PRINCIPAL = 'orchestrator';
+    private const string ED25519 = 'ssh-ed25519';
 
     public function __construct(
         #[Autowire(param: GitServices::SIGNING_KEY)]
@@ -28,6 +29,11 @@ final readonly class SigningKey
      */
     public function sign(string $payload): string
     {
+        // Only ed25519, because a retry after a crash must produce the same commit ids, and an ECDSA signature takes a fresh random nonce each time.
+        if (self::ED25519 !== $this->publicKey()[0]) {
+            throw BranchNotPushed::because('the signing key is not an ed25519 key, so a retry would sign the same commits differently');
+        }
+
         return $this->run(['-Y', 'sign', '-f', $this->file, '-n', self::NAMESPACE], $payload, 'the signing key cannot sign');
     }
 
@@ -37,7 +43,7 @@ final readonly class SigningKey
      */
     public function signed(string $payload, string $signature): bool
     {
-        $key = explode(' ', trim($this->run(['-y', '-f', $this->file], null, 'the signing key cannot be read')));
+        $key = $this->publicKey();
         $allowed = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-signers-');
         $signatureFile = $this->filesystem->tempnam(sys_get_temp_dir(), 'intakt-signature-');
 
@@ -50,6 +56,16 @@ final readonly class SigningKey
         } finally {
             $this->filesystem->remove([$allowed, $signatureFile]);
         }
+    }
+
+    /**
+     * @return non-empty-list<string>
+     *
+     * @throws BranchNotPushed
+     */
+    private function publicKey(): array
+    {
+        return explode(' ', trim($this->run(['-y', '-f', $this->file], null, 'the signing key cannot be read')));
     }
 
     /**
