@@ -254,7 +254,7 @@ final readonly class SymfonyAiVendor implements Vendor
         return $judgement;
     }
 
-    // Read from the mapping that throws TierNotMapped on a call, so the answer and the call never disagree; a disabled provider still counts, because a substitute may answer for it.
+    // Read from the mapping that throws TierNotMapped on a call, so the answer and the call never disagree; it covers only the mapping, not whether a provider is available, so a tier whose provider is disabled still counts even when no substitute answers for it.
     #[Override]
     public function mapsAModelTo(string $project, Tier $tier): bool
     {
