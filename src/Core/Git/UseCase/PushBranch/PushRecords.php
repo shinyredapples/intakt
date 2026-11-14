@@ -26,12 +26,12 @@ final readonly class PushRecords
 
     public function isIntended(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->last($this->ledger->readOfKind(LedgerEventKind::PushIntended), $request, $head);
+        return $this->last($this->ledger->readOfKind(LedgerEventKind::PushIntended), $request, $head) instanceof LedgerEvent;
     }
 
     public function hasPushed(BranchPushRequest $request, string $head): bool
     {
-        return null !== $this->last($this->ledger->readOfKind(LedgerEventKind::BranchPushed), $request, $head);
+        return $this->last($this->ledger->readOfKind(LedgerEventKind::BranchPushed), $request, $head) instanceof LedgerEvent;
     }
 
     // Only when the last word on the pull request is a record of the text at hand: an intent after it is a write whose outcome the ledger never learned, so the forge may hold another text; a rework can also correct the text alone, and a text that went back to an earlier wording has to reach the forge again.

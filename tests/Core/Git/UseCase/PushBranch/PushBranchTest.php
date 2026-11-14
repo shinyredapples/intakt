@@ -294,7 +294,7 @@ final class PushBranchTest extends TestCase
         $push = $this->scenario->push();
         $pushed = $push->push($this->scenario->request());
         self::assertInstanceOf(PushedBranch::class, $pushed);
-        (void) $this->scenario->ledger->append(new LedgerEvent(LedgerEventKind::ChangeIntended, json_encode(['project' => 'gadgets', 'branch' => PushScenario::BRANCH, 'head' => $pushed->head], JSON_THROW_ON_ERROR)));
+        $this->scenario->ledger->append(new LedgerEvent(LedgerEventKind::ChangeIntended, json_encode(['project' => 'gadgets', 'branch' => PushScenario::BRANCH, 'head' => $pushed->head], JSON_THROW_ON_ERROR)));
 
         (void) $push->push($this->scenario->request());
 
