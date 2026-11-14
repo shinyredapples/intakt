@@ -23,6 +23,8 @@ final class Version20261114120000 extends AbstractMigration
         $this->alter($current, $current->edit()->addColumn(
             Column::editor()->setUnquotedName('alert_pending')->setTypeName(Types::BOOLEAN)->setDefaultValue(false)->create(),
         )->create());
+        // A result that failed before this column existed has raised no alert yet, so its alert is still to be recorded.
+        $this->addSql('UPDATE watcher_boot_result SET alert_pending = ? WHERE state = ?', [true, 'failed'], [Types::BOOLEAN, Types::STRING]);
     }
 
     public function down(Schema $schema): void

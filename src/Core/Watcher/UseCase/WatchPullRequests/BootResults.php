@@ -124,35 +124,24 @@ final readonly class BootResults
         return true;
     }
 
-    // Only for the worker that claims the stored row's pending alert, so the alert comes once per main commit and tool fingerprint, however many workers boot or read it; a refused alert is handed back to the row, so a later ask records it once the ledger works again. A crash is no alert, because it is never kept and would repeat on every tick.
+    // Claimed and recorded in one transaction, because the ledger writes through the same connection: a refused alert, or a worker that stops before the commit, leaves the row pending, so a later ask records it. A crash is no alert, because it is never kept and would repeat on every tick.
     private function alert(BootKey $key, BootOutcome $outcome): void
     {
-        if (!$this->changedAlertPending($key, ['alert_pending' => true], ['alert_pending' => false])) {
-            return;
-        }
-
         try {
-            $this->ledger->mainBootFailed($key, $outcome);
+            $this->entities->getConnection()->transactional(function (Connection $claiming) use ($key, $outcome): void {
+                if ($this->claimedAlert($claiming, $key)) {
+                    $this->ledger->mainBootFailed($key, $outcome);
+                }
+            });
         } catch (Throwable $unrecorded) {
             $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
-            $this->changedAlertPending($key, ['alert_pending' => false], ['alert_pending' => true]);
         }
     }
 
-    // One conditional update, so of two workers that read the same pending alert only one changes the row and records it.
-    /**
-     * @param array{alert_pending: bool} $from
-     * @param array{alert_pending: bool} $to
-     */
-    private function changedAlertPending(BootKey $key, array $from, array $to): bool
+    // One conditional update, so of two workers that read the same pending alert only the one that changes the row records it.
+    private function claimedAlert(Connection $claiming, BootKey $key): bool
     {
-        try {
-            return 1 === $this->entities->getConnection()->update(BootRecord::TABLE, $to, BootRecord::keyRow($key) + $from, ['alert_pending' => 'boolean']);
-        } catch (Throwable $unmarked) {
-            $this->logger->error("The pending alert of main's boot failure could not be updated.", ['exception' => $unmarked]);
-
-            return false;
-        }
+        return 1 === $claiming->update(BootRecord::TABLE, ['alert_pending' => false], BootRecord::keyRow($key) + ['alert_pending' => true], ['alert_pending' => 'boolean']);
     }
 
     private function record(BootKey $key, BootOutcome $outcome): void

@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
+use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Schema\Schema;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use DoctrineMigrations\Version20261114120000;
 use Intakt\Core\Dashboard\Domain\FailingMain;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
@@ -33,7 +36,9 @@ use Intakt\Tests\Support\Log\LogRecords;
 use Intakt\Tests\Support\Log\RecordingLogger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\Uuid;
@@ -41,6 +46,7 @@ use Symfony\Component\Uid\Uuid;
 #[Group('persistence')]
 #[CoversClass(BootResults::class)]
 #[CoversClass(BootRecord::class)]
+#[CoversClass(Version20261114120000::class)]
 #[UsesClass(BootKey::class)]
 #[UsesClass(BootAt::class)]
 #[UsesClass(BootHarness::class)]
@@ -355,6 +361,88 @@ final class BootResultsTest extends KernelTestCase
         self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
     }
 
+    #[RequiresPhpExtension('pcntl')]
+    #[RequiresPhpExtension('posix')]
+    public function testAnAlertWhoseWorkerIsKilledBeforeItIsAppendedIsRecordedOnceByARestartedWorker(): void
+    {
+        $ended = $this->signalThatEndedAWorkerKilledAtTheAlert();
+        $bus = new BootingBus(BootOutcome::failed('No status.'));
+        $restarted = $this->results($bus);
+
+        $restarted->ofMain($this->key('a', 'tools-1'), $this->source());
+        $restarted->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(SIGKILL, $ended, 'The worker reached the append of the alert and was killed there.');
+        self::assertCount(0, $bus->booted, 'The killed worker stored the failed result, so the restarted one reads it.');
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testAnAlertTheLedgerStoredInATransactionThatFailsIsRolledBackAndRecordedOnceByALaterAsk(): void
+    {
+        $stored = self::getContainer()->get(Ledger::class);
+        self::assertInstanceOf(Ledger::class, $stored);
+        $failures = 1;
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
+            $appended = $stored->append($event);
+
+            return LedgerEventKind::MainBootFailed === $event->kind && $failures-- > 0 ? AppendResult::failed('The answer was lost.') : $appended;
+        });
+        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        // Cleared as a worker clears it after each message, because the ledger's entity manager still holds the line that was rolled back.
+        $this->entities->clear();
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(1, iterator_to_array($stored->readOfKind(LedgerEventKind::MainBootFailed)));
+        self::assertLoggedError('error', "Main's boot failure could not be recorded in the ledger as an alert.");
+    }
+
+    public function testAPendingAlertThatCannotBeClaimedStillReturnsTheOutcomeAndIsLogged(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('append')->willReturn(AppendResult::failed('The ledger is down.'));
+        $results = new BootResults(new BootingBus(BootOutcome::failed('No status.')), $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        // Asked a second time, because that ask reads the stored result into the entity manager, which then answers the ask after the table is gone.
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->entities->getConnection()->executeStatement('DROP TABLE watcher_boot_result');
+
+        $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertTrue($this->entities->isOpen());
+        self::assertLoggedError('error', "Main's computed boot result could not be recorded in the ledger.");
+        self::assertLoggedErrors(3, "Main's boot failure could not be recorded in the ledger as an alert.");
+    }
+
+    public function testAFailedMainStoredBeforeTheAlertExistedGetsItsAlertOnceAfterTheMigration(): void
+    {
+        $this->storedBeforeTheAlertExisted(BootOutcome::failed('No status.'));
+        $bus = new BootingBus(BootOutcome::booted());
+        $results = $this->results($bus);
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(0, $bus->booted);
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testABootedMainStoredBeforeTheAlertExistedGetsNoAlertAfterTheMigration(): void
+    {
+        $this->storedBeforeTheAlertExisted(BootOutcome::booted());
+        $bus = new BootingBus(BootOutcome::failed('No status.'));
+
+        $outcome = $this->results($bus)->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertCount(0, $bus->booted);
+        self::assertCount(0, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
     public function testAnAlertAnotherWorkerAlreadyRecordedIsNotRecordedAgainByACacheHit(): void
     {
         $this->results(new BootingBus(BootOutcome::failed('No status.')))->ofMain($this->key('a', 'tools-1'), $this->source());
@@ -376,6 +464,52 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertSame(BootState::Failed, $winner->ofMain($this->key('a', 'tools-1'), $this->source())->state);
         self::assertSame(['alpha'], array_map(static fn (FailingMain $main): string => $main->project, new LedgerFailingMains()->in($this->ledger->readInOrder())));
+    }
+
+    // A forked process on a connection of its own, because only a process that dies runs no further line of the worker and loses its open transaction as a killed worker does.
+    private function signalThatEndedAWorkerKilledAtTheAlert(): int
+    {
+        $dying = self::createStub(Ledger::class);
+        $dying->method('append')->willReturnCallback(static function (LedgerEvent $event): AppendResult {
+            if (LedgerEventKind::MainBootFailed === $event->kind) {
+                posix_kill(posix_getpid(), SIGKILL);
+            }
+
+            return AppendResult::appended(Uuid::v7());
+        });
+        $redactor = $this->redactor();
+        $worker = pcntl_fork();
+        self::assertNotSame(-1, $worker);
+
+        if (0 === $worker) {
+            try {
+                $own = new EntityManager(DriverManager::getConnection($this->entities->getConnection()->getParams()), $this->entities->getConfiguration());
+                new BootResults(new BootingBus(BootOutcome::failed('No status.')), $own, $this->clock, new WatcherLedger($dying), $redactor, new NullLogger())->ofMain($this->key('a', 'tools-1'), $this->source());
+            } finally {
+                // Ended by another signal, because a worker that missed the append must neither pass as killed there nor run the rest of the tests.
+                posix_kill(posix_getpid(), SIGTERM);
+            }
+        }
+
+        pcntl_waitpid($worker, $status);
+
+        return pcntl_wifsignaled($status) ? (int) pcntl_wtermsig($status) : 0;
+    }
+
+    // The test schema comes from the mapping, so the column is dropped and the row stored as it was before the migration, which then runs.
+    private function storedBeforeTheAlertExisted(BootOutcome $outcome): void
+    {
+        $connection = $this->entities->getConnection();
+        $connection->executeStatement('ALTER TABLE watcher_boot_result DROP COLUMN alert_pending');
+        $row = new BootRecord($this->key('a', 'tools-1'), $outcome, $this->clock->now())->row();
+        unset($row['alert_pending']);
+        $connection->insert(BootRecord::TABLE, $row, BootRecord::rowTypes());
+        $migration = new Version20261114120000($connection, new NullLogger());
+        $migration->up(new Schema());
+
+        foreach ($migration->getSql() as $query) {
+            $connection->executeStatement($query->getStatement(), $query->getParameters(), $query->getTypes());
+        }
     }
 
     private function recordedPayload(): string
