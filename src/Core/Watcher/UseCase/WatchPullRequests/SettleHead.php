@@ -31,7 +31,7 @@ final readonly class SettleHead
 
         // Recorded before the stale check, because that check reads the new head from the repository and a commit not fetched yet must not keep a pending head from waiting its interval.
         $this->withoutRound->record($project->name, $decision);
-        // Withdrawn before the stale check, because that check throws for an earlier head that cannot be read and the head's next boot may pass or crash, so a withdrawal not owed by then would never be sent.
+        // Withdrawn before the stale check, because that check throws when the repository cannot be read and the head's next boot may pass or crash, so a withdrawal not owed by then would never be sent.
         $this->stale->noteRefusedHead($project, $decision);
         $this->stale->noteMovedHead($project, $decision->change);
         // Settled only after the stale check, because an unchanged listing never names the head again, so a failed check must leave it queued.

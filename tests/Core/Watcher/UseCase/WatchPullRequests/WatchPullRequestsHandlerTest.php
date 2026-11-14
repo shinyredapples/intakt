@@ -1200,16 +1200,16 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame(1, $this->staleLinesOf('round-1'));
     }
 
-    public function testAReturningHeadThatFailsToBootIsWithdrawnAlthoughTheHeadBetweenCannotBeRead(): void
+    public function testAReturningHeadThatFailsToBootIsWithdrawnAlthoughTheStaleCheckOfTheHeadBetweenFails(): void
     {
-        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+        $this->returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails();
 
         self::assertSame(['round-1'], $this->commands->markedStale);
     }
 
-    public function testAReturningHeadThatFailsToBootStaysDueWhileTheHeadBetweenCannotBeRead(): void
+    public function testAReturningHeadThatFailsToBootStaysDueWhileTheStaleCheckOfTheHeadBetweenFails(): void
     {
-        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+        $this->returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails();
 
         self::assertSame(LedgerEventKind::HeadFailed, array_last($this->ledger->kinds()));
         self::assertSame(1, $this->entities->getRepository(PendingHead::class)->count([]));
@@ -1217,7 +1217,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
     public function testAReturningHeadThatFailedToBootIsWithdrawnWhenItsNextBootCrashes(): void
     {
-        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+        $this->returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails();
         $this->queries->fetched = true;
         $this->queries->headBoot = BootOutcome::crashed('composer could not run');
 
@@ -1229,7 +1229,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
     public function testAReturningHeadThatFailedToBootIsWithdrawnWhenItsNextBootPasses(): void
     {
-        $this->returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead();
+        $this->returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails();
         $this->queries->fetched = true;
         $this->queries->headBoot = BootOutcome::booted();
 
@@ -1284,8 +1284,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->tick();
     }
 
-    // A, then B, then A failing to boot while B's commit cannot be read, so the stale check of B's open round throws in the tick that refuses A.
-    private function returnToAHeadThatFailsToBootWhileTheHeadBetweenCannotBeRead(): void
+    // A, then B, then A failing to boot while the repository cannot be read, so the stale check of B's open round throws in the tick that refuses A.
+    private function returnToAHeadThatFailsToBootWhileTheStaleCheckOfTheHeadBetweenFails(): void
     {
         $this->startRoundOnGreenHead();
         $this->queries->move = new HeadMove(HeadMoveKind::Commits, ['src/Feature.php']);
