@@ -75,6 +75,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
 
+    private const string ASKED_AGAIN = 'Asked again: the text above is from a try that gave no usable answer.';
+
     private ?string $secretBefore = null;
 
     /**
@@ -418,7 +420,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $text = $updated->filter('#reviewer-round-1-correctness-text');
         self::assertCount(1, $text->filter('.asked-again'));
-        self::assertSame('{"verdict":"appro'.'Asked again: the text above is from a try that gave no usable answer.'.'{"verdict":"changes"}', $text->text(normalizeWhitespace: false));
+        self::assertSame('{"verdict":"appro'.self::ASKED_AGAIN.'{"verdict":"changes"}', $text->text(normalizeWhitespace: false));
     }
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void

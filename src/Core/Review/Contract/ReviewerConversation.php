@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Symfony\Component\Uid\AbstractUid;
 use Symfony\Component\Uid\TimeBasedUidInterface;
 use Symfony\Component\Uid\Uuid;
 
 // One reviewer role in one round, so two reviewers of a round never share what the model was told.
+#[Exclude]
 final readonly class ReviewerConversation
 {
     public function __construct(
