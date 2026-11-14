@@ -113,18 +113,22 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
      */
     private function contentBlocks(string $eventType, string $blockType): array
     {
-        $blocks = [];
-        foreach ($this->events() as $event) {
-            $message = $eventType === ($event[self::TYPE] ?? null) ? $event['message'] ?? null : null;
-            $content = is_array($message) ? $message['content'] ?? null : null;
-            foreach (is_array($content) ? $content : [] as $block) {
-                if (is_array($block) && $blockType === ($block[self::TYPE] ?? null)) {
-                    $blocks[] = $block;
-                }
-            }
-        }
+        $content = array_merge(...array_map(fn (array $event): array => $this->contentOf($event, $eventType), $this->events()));
 
-        return $blocks;
+        return array_values(array_filter($content, static fn (mixed $block): bool => is_array($block) && $blockType === ($block[self::TYPE] ?? null)));
+    }
+
+    /**
+     * @param array<mixed> $event
+     *
+     * @return list<mixed>
+     */
+    private function contentOf(array $event, string $eventType): array
+    {
+        $message = $eventType === ($event[self::TYPE] ?? null) ? $event['message'] ?? null : null;
+        $content = is_array($message) ? $message['content'] ?? null : null;
+
+        return is_array($content) ? array_values($content) : [];
     }
 
     /**
