@@ -26,12 +26,24 @@ final class ComposerAuditGate implements Gate
         }
 
         if ($result->succeeded()) {
-            return GateResult::passed($this->name());
+            return $this->passedNaming(new CooldownAuditExceptions()->in($workspace->root));
         }
 
         $findings = $this->findings($result->output);
 
         return GateResult::withFindings($this->name(), [] === $findings ? ['composer audit failed: '.$result->firstErrorLine()] : $findings);
+    }
+
+    /**
+     * @param list<string> $exceptions
+     */
+    private function passedNaming(array $exceptions): GateResult
+    {
+        if ([] === $exceptions) {
+            return GateResult::passed($this->name());
+        }
+
+        return GateResult::passedBecause($this->name(), 'cooldown exceptions in force: '.implode(', ', $exceptions));
     }
 
     private function audit(Workspace $workspace): ?ProcessResult
