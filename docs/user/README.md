@@ -143,6 +143,8 @@ php bin/instance 3>&1 >/dev/null
 
 The exit code is 0 only when the status is `ready`. The server log goes to standard output.
 
+A failed boot's reason is the first line of the server log that mentions an error or exception. When no line does, it is the last line of the log that is not empty, so a server that the system stops, for example with a bare `Out of memory`, reads `the server exited: Out of memory`. A server that exits without writing anything reads `the server exited: the server log is empty`.
+
 When `frankenphp` is on your `PATH` (as in the container image), `bin/instance` serves the app with FrankenPHP in worker mode instead of PHP's built-in web server, and the line says so: `{"status":"ready","mode":"worker"}` or `{"status":"failed","mode":"worker","reason":"..."}`. A line without `mode` means the built-in server.
 
 Descriptor 3 can be a pipe, a file or a memfd (an anonymous in-memory file, as a supervising program may pass). A memfd named exactly `opcache_lock` is not accepted, because PHP's OPcache uses that name for its own lock; any other name works. When descriptor 3 is not open, or is not accepted, no line is written and the exit code is 1.
