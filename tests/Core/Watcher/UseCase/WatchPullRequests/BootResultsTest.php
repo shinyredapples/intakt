@@ -491,7 +491,9 @@ final class BootResultsTest extends KernelTestCase
             }
         }
 
+        $status = 0;
         pcntl_waitpid($worker, $status);
+        self::assertIsInt($status);
 
         return pcntl_wifsignaled($status) ? (int) pcntl_wtermsig($status) : 0;
     }
@@ -508,7 +510,7 @@ final class BootResultsTest extends KernelTestCase
         $migration->up(new Schema());
 
         foreach ($migration->getSql() as $query) {
-            $connection->executeStatement($query->getStatement(), $query->getParameters(), $query->getTypes());
+            $connection->executeStatement($query->getStatement(), array_values($query->getParameters()), array_values(array_filter($query->getTypes(), is_string(...))));
         }
     }
 
