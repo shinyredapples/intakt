@@ -336,6 +336,13 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(1, $page->filter('#step-first-review .step-nav a.btn.primary'));
     }
 
+    public function testTheColumnSitsInTheContentAreaWithoutItsWidthCap(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(1, $page->filter('main.content.wide > .setup'));
+    }
+
     public function testTheProgressCountsTheStepsThatAreDone(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
