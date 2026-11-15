@@ -782,6 +782,17 @@ Two things to know when you set up Hugging Face yourself, for example as `openai
 
 Project memory still needs an OpenAI key: a Hugging Face token alone gives no embeddings.
 
+### Recording a review for the demo
+
+A recording keeps one real review of a change in one file: its ledger events and the live updates the review page received, with the date the review started, the models it called and the Intakt version that wrote the file. Playing a recording back is not built yet.
+
+1. Before the review, set `INTAKT_LIVE_CAPTURE` to a file, for example `INTAKT_LIVE_CAPTURE=/app/var/data/live-updates.jsonl` in `.env.local` for the compose demo, and run `docker compose up -d` so the container is made again with it. From then on every live update is also appended to that file, one line each. If the file cannot be written, the warning "A live dashboard update was not captured." is logged and the review goes on.
+2. Run the review, for example both rounds of the sample change.
+3. Write the recording: `php bin/console intakt:demo:record sample sample-change sample-review.json` (in the compose demo, prefix `docker compose exec intakt`). It takes every round of that change in that project from the ledger and the captured updates of those rounds, and prints how many of each it wrote.
+4. Set `INTAKT_LIVE_CAPTURE` empty again, since the file keeps growing while it is set.
+
+The command writes nothing and exits 1 when the ledger has no round of that change in that project, when `INTAKT_LIVE_CAPTURE` is empty, when the capture file cannot be read, holds a line that is no captured update (the message names the line) or holds no update of those rounds, or when the recording file cannot be written.
+
 ## Keeping a copy of a project's repository
 
 `php bin/console intakt:mirror:update <project> <remote>` keeps one bare copy (a mirror) of a project's repository in `var/mirrors/<project>.git`. The first run copies the whole repository from `<remote>` (a path, a `file://` or an `https://` address; a relative path counts from the mirrors folder `var/mirrors`, not from where you run the command); later runs fetch what is new and drop branches the remote deleted. The mirror's `HEAD` follows the remote's, also when the remote's `HEAD` is a detached commit, even one on no branch or tag, and a SHA-256 repository gets a SHA-256 mirror. If the branch the remote's `HEAD` names is deleted during a run, so the mirror's `HEAD` would point at nothing, the run says so and exits with 1, and the next run sets `HEAD` again. A first copy is built in a hidden folder beside it and only takes the mirror's place once it is complete, so a copy that fails half-way never counts as a mirror; a folder at the mirror's place that is not a bare repository is replaced. The project name must start with a letter or digit and may hold letters, digits, `.`, `_` and `-`. If git cannot reach the remote, hangs past 10 minutes or is stopped, Intakt waits 10 seconds and tries again, waits 30 more seconds and tries a last time, logging each wait; then it prints git's message (or, for a call that hung or was stopped, the reason in Intakt's own words, never the command with a password that may be in the address) and exits with 1. The mirror keeps neither the remote's address nor a password that may be in it (you name the remote on every run). Delete the mirror and the next run copies it again.
