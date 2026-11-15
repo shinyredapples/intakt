@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys;
 
+use Intakt\Core\Dashboard\Contract\DashboardTopics;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Tests\Journeys\Support\JourneyTestCase;
 use Intakt\Tests\Journeys\Support\RoundStreamCheck;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -20,6 +22,8 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string ENDED_TEXT = 'Judged.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
+    private const string HEADLINE_TARGET = 'target="board-headline"';
+    private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
 
     private string $directory = '';
 
@@ -43,7 +47,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $running = $this->step('open the running round', fn (): Crawler => $this->openTheRunningRound($round));
         $updates = $this->step('step the round until the judge has ruled', fn (): array => $this->stepTheRound($round));
         $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
+        $this->step('read the board headline pushed once a reviewer started', $this->readThePushedHeadline(...));
         $this->step('open the judged round', fn () => $this->openTheJudgedRound($round));
+        $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
     }
 
     private function createTheDatabase(): void
@@ -68,6 +74,34 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertNotSame('', $round);
 
         return $round;
+    }
+
+    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running.
+    private function readThePushedHeadline(): void
+    {
+        $lines = $this->pushedHeadlines();
+
+        self::assertNotSame([], $lines);
+        self::assertMatchesRegularExpression(self::REVIEWING, $lines[0]);
+    }
+
+    // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
+    private function readTheBoardHeadline(): void
+    {
+        $line = $this->visit('/')->filter('#board-headline')->text();
+
+        self::assertSame('Nothing is running. Nothing needs you.', $line);
+        self::assertSame($line, array_last($this->pushedHeadlines()));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function pushedHeadlines(): array
+    {
+        $headlines = array_filter($this->publishedUpdates(), static fn (Update $update): bool => in_array(DashboardTopics::SHELL, $update->getTopics(), true) && str_contains($update->getData(), self::HEADLINE_TARGET));
+
+        return array_values(array_map(static fn (Update $update): string => new Crawler($update->getData())->filter('template')->text(), $headlines));
     }
 
     private function openTheRunningRound(string $round): Crawler

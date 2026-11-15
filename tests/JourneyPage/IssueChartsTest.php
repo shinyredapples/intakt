@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Issue::class)]
 #[UsesClass(DailyChart::class)]
 #[UsesClass(ChartSeries::class)]
+#[UsesClass(FigureSource::class)]
 final class IssueChartsTest extends TestCase
 {
     public function testIssuesAreCountedOnTheDayTheyWereCreatedAndTheDayTheyWereClosed(): void

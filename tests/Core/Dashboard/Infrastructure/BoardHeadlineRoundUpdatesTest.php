@@ -83,7 +83,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
 
         self::assertSame([DashboardTopics::SHELL], array_map(static fn (LiveEvent $event): string => $event->topic, $this->live->events));
-        self::assertSame('The Code reviewers are reviewing change feat/a of alpha. Nothing needs you.', $this->headlineIn(0));
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.', $this->headlineIn(0));
     }
 
     public function testThePublishedHeadlineUpdatesTheBoardHeadlineTarget(): void
@@ -185,7 +185,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         new BoardHeadlineRoundUpdates($this->round, $this->headline($this->ledger, $live))->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
 
         self::assertCount(2, $this->live->events);
-        self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. Nothing needs you.', $this->headlineIn(1));
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. The Code reviewers are reviewing 2 changes. Nothing needs you.', $this->headlineIn(1));
     }
 
     private function updates(): BoardHeadlineRoundUpdates

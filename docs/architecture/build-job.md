@@ -20,7 +20,7 @@ Plan task T49, the job itself (#1709; design: [overview](../design/05-architectu
    - `NoResult` when the runner refuses the output (`JobOutputRefused`: a link, too many files, more than 16 MiB in all, the bundle included), or when the job exited with `OUTPUT_NOT_CLEARED`, whatever its output says;
    - `NoCommits` without `handback.bundle`, `NoPullRequestText` without `pull-request.md`, otherwise `Built`.
 
-Both the bundle and the text are untrusted: the [hand-back check](hand-back.md) reads the bundle before anything trusts it, and the checks of the text are plan tasks T50 and T51.
+Both the bundle and the text are untrusted: the [hand-back check](hand-back.md) reads the bundle before anything trusts it ([`intakt:build:task`](build-task.md) runs it right after the job), and the checks of the text are plan tasks T50 and T51.
 
 ## In the container
 

@@ -8,10 +8,10 @@ use BackedEnum;
 use DateTimeImmutable;
 use DateTimeZone;
 
-// Only the five named fields are accepted, so that no limit, reset time or quota can pass through.
+// Only the six named fields are accepted, so that no limit, reset time or quota can pass through.
 final readonly class UsageReader
 {
-    private const array FIELDS = ['day', 'vendor', 'account', 'lane', 'tokens'];
+    private const array FIELDS = ['day', 'vendor', 'account', 'lane', 'tokens', 'reserved'];
 
     public function usageIn(string $file): Usage
     {
@@ -29,7 +29,7 @@ final readonly class UsageReader
     private function rowOf(int $index, string $line): TokenUsage
     {
         $row = $this->fieldsOf($index, $line);
-        $tokens = is_int($row['tokens']) && $row['tokens'] >= 0 ? $row['tokens'] : throw $this->rejected($index, 'tokens must be a whole number of zero or more');
+        [$tokens, $reserved] = array_map(fn (string $field): int => is_int($row[$field]) && $row[$field] >= 0 ? $row[$field] : throw $this->rejected($index, $field.' must be a whole number of zero or more'), ['tokens', 'reserved']);
         [$day, $vendor, $account, $lane] = $this->textsOf($index, $row);
 
         return new TokenUsage(
@@ -38,6 +38,7 @@ final readonly class UsageReader
             UsageAccount::tryFrom($account) ?? throw $this->unknown($index, 'account', UsageAccount::cases()),
             UsageLane::tryFrom($lane) ?? throw $this->unknown($index, 'lane', UsageLane::cases()),
             $tokens,
+            $reserved,
         );
     }
 
