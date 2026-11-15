@@ -446,6 +446,10 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
 .page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .page-head .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* The mock's phone head: a closer gap under the headline, so the board's first lane stays in view. */
+@media (max-width: 760px) {
+  .page-head { margin-bottom: var(--s16); }
+}
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */
 .section { margin-top: var(--s32); }

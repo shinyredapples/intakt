@@ -33,6 +33,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
     public function testAFreshInstallIsSetUpAndShowsItsEmptyDashboard(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
+        $this->step('read the board headline of the fresh install', $this->readTheBoardHeadline(...));
         $this->step('open the projects page of the fresh install', $this->openProjectsOfAFreshInstall(...));
         $this->step('seed the sample project', $this->seedTheSampleProject(...));
         $this->step('seed it again and keep what exists', $this->seedAgain(...));
@@ -42,6 +43,11 @@ final class FirstInstallJourneyTest extends JourneyTestCase
     private function createTheDatabase(): void
     {
         self::assertStringContainsString('[OK]', $this->console(['doctrine:migrations:migrate']));
+    }
+
+    private function readTheBoardHeadline(): void
+    {
+        self::assertSame('Nothing is running yet. Start the first review.', $this->visit('/')->filter('#board-headline')->text());
     }
 
     private function openProjectsOfAFreshInstall(): void

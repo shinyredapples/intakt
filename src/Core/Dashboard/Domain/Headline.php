@@ -29,11 +29,38 @@ final readonly class Headline
     // Ends with "needs you:" while something waits, so the page can link the words that follow to it.
     public function text(): string
     {
+        $waiting = $this->waiting();
+
+        return '' === $waiting ? $this->opening() : $this->opening().' '.$waiting;
+    }
+
+    // The sentence before the waiting count, apart so the page can mark the count with the needs-you style.
+    public function opening(): string
+    {
         if (0 === $this->cards) {
             return 'Nothing is running yet. Start the first review.';
         }
 
-        return $this->running().' '.$this->waiting();
+        return $this->running();
+    }
+
+    public function waitingCount(): int
+    {
+        return count($this->waiting);
+    }
+
+    // The words after the waiting count, or the whole clause while nothing waits; a fresh install has none.
+    public function waitingWords(): string
+    {
+        if (0 === $this->cards) {
+            return '';
+        }
+
+        return match ($this->waitingCount()) {
+            0 => 'Nothing needs you.',
+            1 => 'needs you:',
+            default => 'need you:',
+        };
     }
 
     // The first card of Waiting on you, because the Waiting on you page (#911) does not exist yet.
@@ -102,13 +129,9 @@ final readonly class Headline
 
     private function waiting(): string
     {
-        $count = count($this->waiting);
+        $count = $this->waitingCount();
 
-        if (0 === $count) {
-            return 'Nothing needs you.';
-        }
-
-        return $count.(1 === $count ? ' needs' : ' need').' you:';
+        return 0 === $count ? $this->waitingWords() : $count.' '.$this->waitingWords();
     }
 
     private function short(string $name): string

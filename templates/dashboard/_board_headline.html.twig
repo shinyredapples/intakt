@@ -1,2 +1,2 @@
-{#- One home for the line's words and link, because the board's head and its pushed update must say the same. -#}
-{{ headline.text }}{% if headline.firstWaiting %} <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: headline.firstWaiting.latest.round}) }}">see what</a>.{% endif %}
+{#- One home for the line's words and link, because the board's head and its pushed update must say the same. The waiting count is the amber count of Waiting on you (DESIGN.md, Amber audit). -#}
+{{ headline.opening }}{% if headline.firstWaiting %} {{ include('dashboard/components/count.html.twig', {n: headline.waitingCount, needs: true}, with_context = false) }} {{ headline.waitingWords }} <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: headline.firstWaiting.latest.round}) }}">see what</a>.{% elseif headline.waitingWords %} {{ headline.waitingWords }}{% endif %}

@@ -95,6 +95,35 @@ final class HeadlineTest extends TestCase
         self::assertSame($first, $headline->firstWaiting());
     }
 
+    public function testTheOpeningIsTheSentenceBeforeTheWaitingCount(): void
+    {
+        $headline = $this->headline([$this->running('sample', '3')], [$this->running('shop', '9'), $this->running('docs', '2')]);
+
+        self::assertSame('The Code reviewers are reviewing change 3 of sample.', $headline->opening());
+        self::assertSame([2, 'need you:'], [$headline->waitingCount(), $headline->waitingWords()]);
+    }
+
+    public function testOneWaitingItemIsFollowedByNeedsYou(): void
+    {
+        $headline = $this->headline([], [$this->running('sample', '7')]);
+
+        self::assertSame([1, 'needs you:'], [$headline->waitingCount(), $headline->waitingWords()]);
+    }
+
+    public function testWithNothingWaitingTheWaitingWordsAreTheWholeClause(): void
+    {
+        $headline = $this->headline([$this->running('sample', '3')], []);
+
+        self::assertSame([0, 'Nothing needs you.'], [$headline->waitingCount(), $headline->waitingWords()]);
+    }
+
+    public function testAFreshInstallOpensWithTheWholeLineAndHasNoWaitingWords(): void
+    {
+        $headline = new Headline(new WhoIsWorking([]), [], 0);
+
+        self::assertSame(['Nothing is running yet. Start the first review.', ''], [$headline->opening(), $headline->waitingWords()]);
+    }
+
     public function testNothingWaitingOffersNoItem(): void
     {
         self::assertNull($this->headline([$this->running('sample', '3')], [])->firstWaiting());
