@@ -51,7 +51,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Parked** | waiting for something outside (CI, you), with the bench given back | [engine room](the-engine-room.md#holds-hand-overs-and-caps) |
 | **Plugin** | a swappable connection to a forge, an AI company or a notifier | [writing a plugin](writing-a-plugin.md) |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label | [steering](steering-intakt.md) |
-| **Probe** | a small test a reviewer writes and runs against the change | [containers](containers-and-services.md#can-reviewers-use-them) |
+| **Probe** | a small test a reviewer writes and runs against the change (planned, not built yet) | [containers](containers-and-services.md#can-reviewers-use-them) |
 | **Project memory** | the notebook of what was learned, kept per project | [project memory](project-memory.md) |
 | **Protected files** | the project's rules: the checks, the CI setup, the agents' instructions | [safety](why-the-ai-cant-wreck-your-project.md) |
 | **Pull request (PR)** | a finished change waiting to be merged | |
