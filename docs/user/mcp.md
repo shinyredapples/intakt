@@ -27,8 +27,9 @@ Then give the client the token as a bearer header: `claude mcp add --transport h
 
 ## What it can do
 
-- `list_projects` is marked read-only and not destructive, so a client may call it without asking you. It returns `{"projects": ["alpha", "beta"]}`, or an empty list when no project is configured.
+- `list_projects` is marked read-only and not destructive, so a client may call it without asking you. It returns `{"projects": [{"name": "alpha", "mark": "live"}, {"name": "beta", "mark": "replay"}]}`, or an empty list when no project is configured.
 - The three round tools each take a `roundId`, the UUID of the review round; the tool listing describes it so.
+- Every round tool also returns `mark`: `replay` when the review belongs to a recording played back (such as the demo project), otherwise `live`. A replay is not a verdict on a real change. `list_projects` gives the same mark for each project.
 - `review_status` takes a `roundId` and returns the round (`round`: its id, change and number), its state (`collecting`, `complete` or `judged`) and, for each reviewer, its role and tier (under `reviewer`), state (`queued`, `running`, `verdict`, `failed` or `blocked`) and the failure, if any.
 - `review_verdicts` takes a `roundId` and returns the verdicts the reviewers have given so far: for each, its tier, decision (`approve`, `changes` or `blocked`) and findings. It does not say whether they still stand for the branch's current head.
 - `review_act_list` takes a `roundId` and returns the findings for the builder to fix: every P1 and P2 finding and the P3 findings the judge marked act. Until the judge has answered it returns `"judged": false` and an empty list.

@@ -11,7 +11,7 @@ use stdClass;
 final readonly class BrokenFieldRules
 {
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{0: string, 1: string, 2?: string}>
      */
     public static function cases(): iterable
     {
@@ -67,15 +67,16 @@ final readonly class BrokenFieldRules
     }
 
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{0: string, 1: string, 2?: string}>
      */
     private static function types(): iterable
     {
         $design = VerdictDocument::fromTheDesign();
 
         yield 'type: the verdict is a list' => ['[]', '"$verdict"'];
-        yield 'type: findings is an object' => [$design->with('findings', ['id' => 'F3'])->json(), '($findings)'];
-        yield 'type: findings is an empty object' => [$design->with('findings', new stdClass())->json(), '($findings)'];
+        // Two wordings, because Symfony 8.1 refuses a findings object at the constructor's parameter and 8.2 at the serializer's attribute.
+        yield 'type: findings is an object' => [$design->with('findings', ['id' => 'F3'])->json(), '($findings)', '"findings" attribute'];
+        yield 'type: findings is an empty object' => [$design->with('findings', new stdClass())->json(), '($findings)', '"findings" attribute'];
         yield 'type: resolved is an empty object' => [$design->with('resolved', new stdClass())->json(), '"resolved" attribute'];
         yield 'type: follow_ups is an empty object' => [$design->with('follow_ups', new stdClass())->json(), '"follow_ups" attribute'];
         yield 'type: a finding is a string' => [$design->with('findings', ['F3'])->json(), '"$id"'];

@@ -7,7 +7,7 @@ namespace Intakt\Core\Ai\UseCase\ListProjects;
 final readonly class ProjectList
 {
     /**
-     * @param list<string> $projects
+     * @param list<ListedProject> $projects
      */
     public function __construct(
         public array $projects,
