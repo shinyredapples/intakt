@@ -151,7 +151,14 @@ final readonly class SymfonyAiVendor implements Vendor
     private function askedToNameFindings(ReviewRequest $request): ReviewRequest
     {
         $refused = $request->conversation;
-        $conversation = new ReviewerConversation($refused->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $refused->round, $refused->reviewerId, askedAgain: true, askedToNameFindings: true);
+        $conversation = new ReviewerConversation(
+            $refused->rolePrompt,
+            new UuidV7(UuidV7::generate($this->clock->now())),
+            $refused->round,
+            $refused->reviewerId,
+            askedAgain: true,
+            askedToNameFindings: true,
+        );
 
         return new ReviewRequest($request->checkout, $request->brief, $conversation);
     }
