@@ -22,14 +22,14 @@ final readonly class Headline
     public function __construct(
         private WhoIsWorking $working,
         private array $waiting,
-        private bool $fresh,
+        private int $cards,
     ) {
     }
 
     // Ends with "needs you:" while something waits, so the page can link the words that follow to it.
     public function text(): string
     {
-        if ($this->fresh) {
+        if (0 === $this->cards) {
             return 'Nothing is running yet. Start the first review.';
         }
 

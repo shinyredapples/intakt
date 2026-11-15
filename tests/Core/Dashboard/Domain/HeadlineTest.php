@@ -33,7 +33,7 @@ final class HeadlineTest extends TestCase
 {
     public function testAFreshInstallSaysNothingIsRunningYetAndAsksForTheFirstReview(): void
     {
-        $headline = new Headline(new WhoIsWorking([]), [], true);
+        $headline = new Headline(new WhoIsWorking([]), [], 0);
 
         self::assertSame('Nothing is running yet. Start the first review.', $headline->text());
     }
@@ -102,7 +102,7 @@ final class HeadlineTest extends TestCase
 
     public function testABoardWithReviewsButNoneRunningSaysNothingIsRunning(): void
     {
-        $headline = $this->headline([], []);
+        $headline = new Headline(new WhoIsWorking([]), [], 1);
 
         self::assertSame('Nothing is running. Nothing needs you.', $headline->text());
     }
@@ -143,7 +143,7 @@ final class HeadlineTest extends TestCase
      */
     private function headline(array $running, array $waiting): Headline
     {
-        return new Headline(new WhoIsWorking($running), $waiting, false);
+        return new Headline(new WhoIsWorking($running), $waiting, count($running) + count($waiting));
     }
 
     private function running(string $project, string $change, string ...$roles): Review
