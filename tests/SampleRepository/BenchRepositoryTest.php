@@ -126,17 +126,39 @@ final class BenchRepositoryTest extends TestCase
     private function addedLines(TemporaryRepository $repository, string $change): array
     {
         $added = [];
-        $file = null;
-        $next = 0;
-        foreach (explode("\n", $repository->diff('main', 'bench/'.$change)) as $line) {
-            if (str_starts_with($line, '+++ ')) {
-                $file = str_starts_with($line, '+++ b/') ? substr($line, 6) : null;
-            } elseif (str_starts_with($line, '--- ')) {
-                continue;
-            } elseif (1 === preg_match('/^@@ -\S+ \+(\d+)(?:,\d+)? @@/', $line, $hunk)) {
-                $next = (int) $hunk[1];
-            } elseif (null !== $file && str_starts_with($line, '+')) {
-                $added[$file][] = $next++;
+        foreach (explode("\ndiff --git ", "\n".$repository->diff('main', 'bench/'.$change)) as $fileDiff) {
+            if (1 === preg_match('/^\+\+\+ b\/(.+)$/m', $fileDiff, $name)) {
+                $added[$name[1]] = $this->addedInFile($fileDiff);
+            }
+        }
+
+        return $added;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function addedInFile(string $fileDiff): array
+    {
+        $added = [];
+        foreach (array_slice(explode("\n@@ ", $fileDiff), 1) as $hunk) {
+            $added = [...$added, ...$this->addedInHunk($hunk)];
+        }
+
+        return $added;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function addedInHunk(string $hunk): array
+    {
+        preg_match('/^-\S+ \+(\d+)/', $hunk, $start);
+        $next = (int) ($start[1] ?? 0);
+        $added = [];
+        foreach (array_slice(explode("\n", $hunk), 1) as $line) {
+            if (str_starts_with($line, '+')) {
+                $added[] = $next++;
             } elseif (str_starts_with($line, ' ')) {
                 ++$next;
             }
