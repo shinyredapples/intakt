@@ -20,7 +20,6 @@ final readonly class ReviewRowsOfChange
     ) {
     }
 
-    // Null when the ledger holds no round of the change in the project.
     public function of(string $project, string $change): ?ReviewRows
     {
         $rows = iterator_to_array($this->ledger->readInOrder(), false);
