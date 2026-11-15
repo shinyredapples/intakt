@@ -145,6 +145,22 @@ final class LeftUndoneGateTest extends SandboxTestCase
         self::assertTrue($run->passed('left-undone'), $run->output());
     }
 
+    public function testAnUnchangedMarkerCommentBetweenJoinedHunksIsNotReported(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('src/Order.php', $this->classWithBodyLine("    public const int LIMIT = 1;\n    // TODO: handle the refund\n    public const int FLOOR = 1;"));
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+        $sandbox->git('config', 'diff.interHunkContext', '5');
+        $sandbox->write('src/Order.php', $this->classWithBodyLine("    public const int LIMIT = 2;\n    // TODO: handle the refund\n    public const int FLOOR = 2;"));
+        $sandbox->commitAll('feat: change the limits');
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+    }
+
     public function testAMarkerCommentInARenamedFileIsNotReported(): void
     {
         $sandbox = $this->emptySandbox();

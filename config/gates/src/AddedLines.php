@@ -7,7 +7,7 @@ namespace Intakt\Gates;
 final readonly class AddedLines
 {
     private const string FILE_HEADER = '/^diff --git /m';
-    private const string HUNK_HEADER = '/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/m';
+    private const string HUNK_HEADER = '/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/';
 
     /**
      * @param list<string> $paths
@@ -33,15 +33,17 @@ final readonly class AddedLines
      */
     private function numbersIn(string $section): array
     {
-        preg_match_all(self::HUNK_HEADER, $section, $hunks, PREG_SET_ORDER);
         $numbers = [];
+        $next = null;
 
-        foreach ($hunks as $hunk) {
-            $count = '' === ($hunk[2] ?? '') ? 1 : (int) $hunk[2];
-
-            // Because a hunk that only removes lines adds none, and range() would count down.
-            if (0 < $count) {
-                array_push($numbers, ...range((int) $hunk[1], (int) $hunk[1] + $count - 1));
+        // Because git's diff.interHunkContext can join nearby hunks with unchanged lines, only the lines the patch marks with a plus are added.
+        foreach (explode("\n", $section) as $line) {
+            if (1 === preg_match(self::HUNK_HEADER, $line, $hunk)) {
+                $next = (int) $hunk[1];
+            } elseif (null !== $next && str_starts_with($line, '+')) {
+                $numbers[] = $next++;
+            } elseif (null !== $next && str_starts_with($line, ' ')) {
+                ++$next;
             }
         }
 
