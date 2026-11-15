@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Domain\ChangeRound;
+use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
@@ -59,6 +60,7 @@ final readonly class ReviewRounds
         $opened = $this->findings->openRound($subject->project, $command->round->change);
         $this->refuseAnotherNumber($command, $opened);
         $round = new ReviewRound($this->newId(), $command->target, $opened);
+        $this->markAsReplayWhenItsProjectIs($round);
 
         foreach ($command->panel->reviewers as $member) {
             $round->addReviewer($this->newId(), $member);
@@ -187,6 +189,13 @@ final readonly class ReviewRounds
 
         if (null !== $expected && $expected !== $opened->number) {
             throw RoundNotNext::for($expected, $opened->number);
+        }
+    }
+
+    private function markAsReplayWhenItsProjectIs(ReviewRound $round): void
+    {
+        if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
+            $round->markAsReplay();
         }
     }
 
