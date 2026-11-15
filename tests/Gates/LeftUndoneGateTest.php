@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\AddedLines;
+use Intakt\Gates\LeftUndoneCode;
 use Intakt\Gates\LeftUndoneComments;
 use Intakt\Gates\LeftUndoneGate;
+use Intakt\Gates\LeftUndoneTokens;
 use Intakt\Gates\Scope;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,6 +18,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(LeftUndoneGate::class)]
 #[CoversClass(AddedLines::class)]
 #[CoversClass(LeftUndoneComments::class)]
+#[CoversClass(LeftUndoneCode::class)]
+#[CoversClass(LeftUndoneTokens::class)]
 #[UsesClass(Workspace::class)]
 #[UsesClass(Scope::class)]
 final class LeftUndoneGateTest extends SandboxTestCase
@@ -288,6 +292,130 @@ final class LeftUndoneGateTest extends SandboxTestCase
 
         self::assertTrue($run->passed('left-undone'), $run->output());
         self::assertStringContainsString('skipped, no git history', $run->noteOf('left-undone'));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function skipsWithoutAReason(): iterable
+    {
+        yield 'a bare static skip' => ['        self::markTestSkipped();', 'markTestSkipped call'];
+        yield 'a bare incomplete' => ['        $this->markTestIncomplete();', 'markTestIncomplete call'];
+        yield 'a skip with an empty message' => ["        \$this->markTestSkipped('');", 'markTestSkipped call'];
+        yield 'a skip with a variable message' => ['        $this->markTestSkipped($why);', 'markTestSkipped call'];
+        yield 'a skip attribute' => ['    #[Skip]', 'Skip attribute'];
+        yield 'a qualified skip attribute' => ['    #[\\PHPUnit\\Framework\\Attributes\\Skip]', '\\PHPUnit\\Framework\\Attributes\\Skip attribute'];
+        yield 'a skip attribute after another' => ['    #[Test, SkipAlways]', 'SkipAlways attribute'];
+        yield 'an incomplete attribute' => ['    #[IncompleteTest()]', 'IncompleteTest attribute'];
+    }
+
+    #[DataProvider('skipsWithoutAReason')]
+    public function testAnAddedSkipWithoutAReasonFailsNamingTheFileTheLineAndHowToComply(string $line, string $kind): void
+    {
+        $sandbox = $this->changeWithFile('tests/OrderTest.php', "<?php\n\nfinal class OrderTest\n{\n".$line."\n}\n");
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->failed('left-undone'), $run->output());
+        self::assertStringContainsString('tests/OrderTest.php:5: '.$kind.' without a reason; pass a message naming the missing tool or outside condition', $run->findingsOf('left-undone'));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function linesWithoutAnUndoneTestOrThrow(): iterable
+    {
+        yield 'a skip naming a missing tool' => ["        \$this->markTestSkipped('python3 is not on the PATH');"];
+        yield 'a skip attribute with a reason' => ["    #[Skip('needs the docker socket')]"];
+        yield 'a skip inside a string' => ["        \$code = '\$this->markTestSkipped();';"];
+        yield 'a skip inside a heredoc' => ["        \$code = <<<TEXT\n        self::markTestIncomplete();\n        TEXT;"];
+        yield 'a method merely named like a skip' => ['        $this->markTestSkippedBecause();'];
+        yield 'an unrelated attribute' => ['    #[RequiresPhp(">=8.5")]'];
+        yield 'a throw that is not about missing work' => ["        throw new LogicException('Order is empty');"];
+    }
+
+    #[DataProvider('linesWithoutAnUndoneTestOrThrow')]
+    public function testALineWithoutAnUndoneTestOrThrowPasses(string $line): void
+    {
+        $sandbox = $this->changeWithFile('tests/OrderTest.php', "<?php\n\nfinal class OrderTest\n{\n".$line."\n}\n");
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function notImplementedThrows(): iterable
+    {
+        yield 'a logic exception' => ["        throw new LogicException('Not implemented');"];
+        yield 'not yet implemented' => ['        throw new RuntimeException("Not yet implemented");'];
+        yield 'a fully qualified class' => ["        throw new \\BadMethodCallException('Method is not implemented');"];
+        yield 'a throw with a comment that names no issue' => ["        throw new LogicException('Not implemented'); // finish later"];
+    }
+
+    #[DataProvider('notImplementedThrows')]
+    public function testAnAddedNotImplementedThrowFailsNamingTheFileTheLineAndHowToComply(string $line): void
+    {
+        $sandbox = $this->changeWithFile('src/Order.php', $this->classWithBodyLine($line));
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->failed('left-undone'), $run->output());
+        self::assertStringContainsString('src/Order.php:5: not-implemented throw left in the change; implement it, or open an issue and add // TODO(#<issue>): <reason> on the same line', $run->findingsOf('left-undone'));
+    }
+
+    public function testANotImplementedThrowWithAReasonedExceptionOnTheSameLinePasses(): void
+    {
+        $sandbox = $this->changeWithFile('src/Order.php', $this->classWithBodyLine("        throw new LogicException('Not implemented'); // TODO(#123): the forge sends no total yet"));
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+    }
+
+    public function testANotImplementedThrowInATestFileIsNotReported(): void
+    {
+        $sandbox = $this->changeWithFile('tests/OrderTest.php', $this->classWithBodyLine("        throw new LogicException('Not implemented');"));
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+    }
+
+    public function testASkipInASourceFileIsNotReported(): void
+    {
+        $sandbox = $this->changeWithFile('src/Order.php', $this->classWithBodyLine('        $this->markTestSkipped();'));
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+    }
+
+    public function testANotImplementedThrowUnderTheFixturesFolderIsNotScanned(): void
+    {
+        $sandbox = $this->changeWithFile('tests/Fixtures/Order.php', $this->classWithBodyLine("        throw new LogicException('Not implemented');"));
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+    }
+
+    public function testASkipAndAThrowThatExistedBeforeTheChangeAreNotReported(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->write('tests/OrderTest.php', $this->classWithBodyLine('        $this->markTestSkipped();'));
+        $sandbox->write('src/Order.php', $this->classWithBodyLine("        throw new LogicException('Not implemented');"));
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+        $sandbox->write('README.md', "# Shop\n");
+        $sandbox->commitAll('docs: add a readme');
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
     }
 
     private function classWithBodyLine(string $line): string
