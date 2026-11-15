@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Closure;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -12,6 +13,9 @@ use Symfony\Component\HttpKernel\KernelInterface;
 final class WorkerBrowser extends KernelBrowser
 {
     private readonly bool $resetsKernel;
+
+    // Handed to the next request only, because a kept kernel would otherwise run it in every later request too.
+    private ?Closure $step = null;
 
     /**
      * @param array<string, string> $server
@@ -24,8 +28,22 @@ final class WorkerBrowser extends KernelBrowser
         $this->resetsKernel = filter_var($_SERVER['FRANKENPHP_RESET_KERNEL'] ?? false, FILTER_VALIDATE_BOOL);
     }
 
+    /**
+     * @param array<string, string> $server
+     */
+    public function requestRunning(Closure $step, string $uri, array $server): void
+    {
+        $this->step = $step;
+        $this->request('POST', $uri, server: $server);
+    }
+
     protected function doRequest(object $request): Response
     {
+        if (null !== $this->step) {
+            $request->attributes->set(RunRequestStep::ATTRIBUTE, $this->step);
+            $this->step = null;
+        }
+
         $response = parent::doRequest($request);
         if ($this->resetsKernel) {
             $this->kernel = clone $this->kernel;
