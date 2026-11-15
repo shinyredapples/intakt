@@ -18,6 +18,18 @@ final readonly class DailyChart
         public ChartForm $form,
         public array $days,
         public array $series,
+        public FigureSource $source,
     ) {
+    }
+
+    // The drawing, its alt text and its table carry the same marker, so a reader of any one of them knows the kind.
+    public function caption(): string
+    {
+        return $this->labeled($this->title);
+    }
+
+    public function labeled(string $name): string
+    {
+        return $name.' ('.$this->source->kind->value.')';
     }
 }
