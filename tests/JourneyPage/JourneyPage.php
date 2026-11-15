@@ -20,8 +20,13 @@ final readonly class JourneyPage
         $issues = $this->github->issues();
         $pullRequests = $this->github->pullRequests();
         $usage = $this->usage->usageIn($usageFile);
-        $usageDigest = hash_file('sha256', $usageFile) ?: throw new JourneyInputFailed('cannot read '.$usageFile);
-        $merges = new CountedMerges()->perDay($page, $usageDigest, $usage, $pullRequests);
+        $usageDigest = hash_file('sha256', $usageFile);
+
+        if (false === $usageDigest) {
+            throw new JourneyInputFailed('cannot read '.$usageFile);
+        }
+
+        $merges = new CountedMerges()->keptOn($page, $usageDigest) ?? new CountedMerges()->countedFor($usage, $pullRequests);
         $charts = [...new TokenCharts()->charts($usage, $merges), ...new IssueCharts()->charts($issues)];
         $glance = new GlanceTable($this->clock->now())->region($issues, $pullRequests, $usage->total());
         $milestones = new MilestoneTable()->region($this->github->milestones(), $issues);
@@ -36,7 +41,7 @@ final readonly class JourneyPage
         );
     }
 
-    // The counted merges stay in the region of the chart that uses them, inside the markers.
+    // The counts go inside the markers of the chart that uses them, because only marked regions may change.
     private function region(DailyChart $chart, string $countedMerges): PageRegion
     {
         $region = new ChartRegion()->region($chart);

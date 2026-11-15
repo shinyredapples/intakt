@@ -37,22 +37,19 @@ final readonly class LineSvg
             return '';
         }
 
-        $path = '';
-        $dots = '';
-
-        foreach ($drawn as $day => $value) {
-            $joinedBefore = isset($drawn[$day - 1]);
-            $x = $this->canvas->number($plot->x($day));
-            $y = $this->canvas->number($plot->y($value));
-
-            if ($joinedBefore || isset($drawn[$day + 1])) {
-                $path .= ($joinedBefore ? 'L' : 'M').$x.','.$y;
-            } elseif (array_key_last($drawn) !== $day) {
-                $dots .= '<circle cx="'.$x.'" cy="'.$y.'" r="3" fill="'.$color.'"/>';
-            }
-        }
+        $alone = array_filter(array_keys($drawn), static fn (int $day): bool => !isset($drawn[$day - 1]) && !isset($drawn[$day + 1]));
+        $path = implode('', array_map(fn (int $day): string => (isset($drawn[$day - 1]) ? 'L' : 'M').implode(',', $this->point($plot, $day, $drawn[$day])), array_diff(array_keys($drawn), $alone)));
+        $dots = implode('', array_map(fn (int $day): string => vsprintf('<circle cx="%s" cy="%s" r="3" fill="'.$color.'"/>', $this->point($plot, $day, $drawn[$day])), array_diff($alone, [array_key_last($drawn)])));
 
         return ('' === $path ? '' : '<path d="'.$path.'" fill="none" stroke="'.$color.'" stroke-width="2" stroke-linejoin="round"/>').$dots.$this->end($series, $color, $plot);
+    }
+
+    /**
+     * @return array{string, string}
+     */
+    private function point(ChartPlot $plot, int $day, int $value): array
+    {
+        return [$this->canvas->number($plot->x($day)), $this->canvas->number($plot->y($value))];
     }
 
     private function end(ChartSeries $series, string $color, ChartPlot $plot): string
