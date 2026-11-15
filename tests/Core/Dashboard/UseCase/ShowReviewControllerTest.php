@@ -81,11 +81,11 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'changes', '2', '', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.', '']],
+            [['correctness', 'standard', 'verdict', 'changes', '2 counted', '', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.', '']],
             $this->rowsOf($crawler->filter('#round-round-1 table.reviewers tbody tr')),
         );
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'approve', '0', '', ''], ['security', 'standard', 'verdict', 'approve', '0', 'answered by the substitute openai, a catch-up review is owed', '']],
+            [['correctness', 'standard', 'verdict', 'approve', '0 counted', '', ''], ['security', 'standard', 'verdict', 'approve', '0 counted', 'answered by the substitute openai, a catch-up review is owed', '']],
             $this->rowsOf($crawler->filter('#round-round-2 table.reviewers tbody tr')),
         );
     }
@@ -297,9 +297,9 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['1500', '0', '0', '0', '500', '2000', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
-        self::assertSame([['700', '0', '0', '0', '100', '800', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
-        self::assertSelectorTextContains('p.summary', '2 rounds, 2800 tokens in all. Cost: unknown, no price for model-a.');
+        self::assertSame([['1500 measured', '0 measured', '0 measured', '0 measured', '500 measured', '2000 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
+        self::assertSame([['700 measured', '0 measured', '0 measured', '0 measured', '100 measured', '800 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
+        self::assertSame('2 rounds counted, 2800 tokens measured in all. Cost: unknown, no price for model-a.', $this->wordsOf($crawler->filter('p.summary')));
     }
 
     public function testEachRoundShowsItsCostAtTheConfiguredPriceAndTheReviewTheSumOfThem(): void
@@ -347,7 +347,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['39504', '38000', '1500', '0', '700', '40204', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['39504 measured', '38000 measured', '1500 measured', '0 measured', '700 measured', '40204 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testTokensOfACallStartedForAnotherRoundAreNotCounted(): void
@@ -357,7 +357,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['0', '0', '0', '0', '0', '0', '0.0000 USD']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0.0000 USD']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testARoundStartedWithoutAChangeNameIsAReviewOfItsOwn(): void
@@ -426,8 +426,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
-        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
+        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings counted', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings counted', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
         self::assertSelectorNotExists('#round-round-1 details[open]');
     }
 
@@ -581,7 +581,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
      */
     private function partsOf(Crawler $summary): array
     {
-        return $summary->children()->each(static fn (Crawler $part): string => trim(preg_replace('/\s+/', ' ', $part->text()) ?? ''));
+        return $summary->children()->each(static fn (Crawler $part): string => self::wordsOf($part));
     }
 
     private function givenARoundJudgedAndASecondRunning(): void
@@ -636,6 +636,18 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
      */
     private function rowsOf(Crawler $rows): array
     {
-        return $rows->each(static fn (Crawler $row): array => $row->filter('td')->each(static fn (Crawler $cell): string => $cell->text()));
+        return $rows->each(static fn (Crawler $row): array => $row->filter('td')->each(static fn (Crawler $cell): string => self::wordsOf($cell)));
+    }
+
+    // A kind label's tooltip words are inside the label, so they are left out to read the figures as a person sees them.
+    private static function wordsOf(Crawler $node): string
+    {
+        $text = $node->text();
+
+        foreach ($node->filter('.figure-kind-tip') as $tip) {
+            $text = str_replace((string) $tip->textContent, '', $text);
+        }
+
+        return trim((string) preg_replace('/\s+/', ' ', $text));
     }
 }

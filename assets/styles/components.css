@@ -219,6 +219,18 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 }
 .term:hover .term-tip, .term:focus .term-tip { display: block; }
 
+/* Figure kinds */
+.figure-kind {
+  position: relative; display: inline-block; padding: 0 var(--s4); border: 1px solid var(--hairline); border-radius: var(--r-chip);
+  color: var(--muted); font: 500 var(--t13)/1.4 var(--f-body); cursor: help;
+}
+.figure-kind .figure-kind-tip {
+  position: absolute; top: calc(100% + var(--s4)); right: 0; z-index: 140; display: none; width: max-content; max-width: 300px; white-space: normal;
+  padding: var(--s8) var(--s12); border: 1px solid var(--hairline); border-radius: var(--r-btn); background: var(--raised); color: var(--ink);
+  font: 400 var(--t13)/1.4 var(--f-body); text-align: left; pointer-events: none;
+}
+.figure-kind:hover .figure-kind-tip, .figure-kind:focus .figure-kind-tip { display: block; }
+
 /* Loading, error and empty states */
 .skel { display: inline-block; height: 12px; border-radius: var(--r-chip); background: var(--hairline); vertical-align: middle; }
 .skel-card { display: grid; gap: var(--s8); }
