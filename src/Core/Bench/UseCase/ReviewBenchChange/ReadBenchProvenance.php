@@ -36,11 +36,11 @@ final readonly class ReadBenchProvenance
         return null === $root['reference'] ? $root['pretty_version'] : $root['pretty_version'].'@'.$root['reference'];
     }
 
-    // Over the base and every change, each file's path and content in path order, so a changed line, file or name changes the hash and the order of reading never does.
+    // Over the base and every change, each file's path and content in path order, so a changed line, file or name changes the hash and the order of reading never does; hidden files too, because the checkout copies them into the reviewed repository.
     private function benchRepositoryHash(): string
     {
         $entries = [];
-        foreach (new Finder()->files()->in([$this->fixtures.'/base', $this->fixtures.'/bench'])->sortByName() as $file) {
+        foreach (new Finder()->files()->ignoreDotFiles(false)->in([$this->fixtures.'/base', $this->fixtures.'/bench'])->sortByName() as $file) {
             $entries[] = hash(self::HASH, substr($file->getPathname(), strlen($this->fixtures))."\0".$this->filesystem->readFile($file->getPathname()));
         }
 

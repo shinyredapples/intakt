@@ -57,6 +57,28 @@ final class ReadBenchProvenanceTest extends TestCase
         self::assertNotSame($before, $this->read()->benchRepositoryHash);
     }
 
+    public function testAChangedHiddenFileOfTheBenchChangesTheBenchRepositoryHash(): void
+    {
+        $files = new Filesystem();
+        $files->dumpFile($this->fixtures.'/bench/change/tree/.gitignore', "one\n");
+        $before = $this->read()->benchRepositoryHash;
+
+        $files->dumpFile($this->fixtures.'/bench/change/tree/.gitignore', "two\n");
+
+        self::assertNotSame($before, $this->read()->benchRepositoryHash);
+    }
+
+    public function testAChangedHiddenFileOfTheBaseChangesTheBenchRepositoryHash(): void
+    {
+        $files = new Filesystem();
+        $files->dumpFile($this->fixtures.'/base/.editorconfig', "one\n");
+        $before = $this->read()->benchRepositoryHash;
+
+        $files->dumpFile($this->fixtures.'/base/.editorconfig', "two\n");
+
+        self::assertNotSame($before, $this->read()->benchRepositoryHash);
+    }
+
     public function testTheSameContentUnderTheBaseAndUnderTheBenchHashesDifferentlyFromMovingIt(): void
     {
         $before = $this->read()->benchRepositoryHash;
