@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -36,6 +37,11 @@ final readonly class VerdictForTheLoop
         // Before any vote is read, because the head was refused after the round started (it no longer boots), so an approval queued earlier must never reach the forge as a success.
         if ($round->hasStaleVerdicts()) {
             return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Failure, 'Intakt withdrew its review: this head does not boot.', null, $this->tokenOf($round));
+        }
+
+        // Before any vote is read, because a replay plays a recorded review back, so its votes were never given on this head and must never reach the forge as a verdict.
+        if (ReplayMark::Replay === $round->replayMark()) {
+            return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt does not count a replay as a review of this head.', null, $this->tokenOf($round));
         }
 
         // Not reviewed, because only a judging that failed for good publishes a round before its judge transition, so the round has no act list.

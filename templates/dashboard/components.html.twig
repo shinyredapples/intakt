@@ -31,6 +31,8 @@
     <div class="row-st">{{ include(c ~ 'reason_badge.html.twig', {reason: 'budget'}) }}{{ include(c ~ 'reason_badge.html.twig', {reason: 'overlap'}) }}{{ include(c ~ 'reason_badge.html.twig', {reason: 'dependency', label: 'Needs #612'}) }}{{ include(c ~ 'reason_badge.html.twig', {reason: 'ci', on_page: true}) }}</div></div>
     <div class="cgrp"><h4>Counts and dots</h4><div class="row-st">{{ include(c ~ 'count.html.twig', {n: 3}) }}{{ include(c ~ 'count.html.twig', {n: 4, needs: true}) }}<span class="dot ok"></span><span class="dot needs"></span><span class="dot broken"></span><span class="dot idle"></span></div></div>
     <div class="cgrp"><h4>Meta line</h4>{{ include(c ~ 'meta.html.twig', {facts: [{icon: 'clock', text: '42 min', elapsed: true}, {text: 'Slot 1, Model L'}, {text: 'Round 2'}, {text: '9b3e5aa', mono: true}, {text: 'Size M'}, {text: '$3.18'}]}) }}</div>
+    {% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
+    <div class="cgrp"><h4>Figure kind with its source</h4><p>1300 tokens {{ include(c ~ 'figure_kind.html.twig', {kind: kinds.Measured, at: 'sample-tokens-' ~ theme}) }}, 2 rounds {{ include(c ~ 'figure_kind.html.twig', {kind: kinds.Counted, at: 'sample-rounds-' ~ theme}) }}, 0.0459 USD {{ include(c ~ 'figure_kind.html.twig', {kind: kinds.Estimated, at: 'sample-cost-' ~ theme}) }}.</p></div>
     <div class="cgrp"><h4>Term with its standard explanation</h4><p>Approve this {{ include(c ~ 'term.html.twig', {term: 'version', words: 'version'}) }}, a {{ include(c ~ 'term.html.twig', {term: 'protected', words: 'protected file'}) }}, the {{ include(c ~ 'term.html.twig', {term: 'share', words: 'weekly share'}) }}.</p></div>
 </div>{% endfor %}</div></section>
 

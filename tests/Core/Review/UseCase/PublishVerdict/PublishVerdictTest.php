@@ -9,9 +9,13 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\MarkVerdictsStale;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\ReplayProject;
+use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\MarkVerdictsStale\MarkVerdictsStaleHandler;
 use Intakt\Core\Review\UseCase\PublishVerdict\ChangePublications;
 use Intakt\Core\Review\UseCase\PublishVerdict\LoopReviewComment;
@@ -71,6 +75,10 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 #[UsesClass(ReviewToken::class)]
 #[UsesClass(MarkVerdictsStaleHandler::class)]
 #[UsesClass(MarkVerdictsStale::class)]
+#[UsesClass(FlagProjectAsReplayHandler::class)]
+#[UsesClass(FlagProjectAsReplay::class)]
+#[UsesClass(ReplayProject::class)]
+#[UsesClass(ReplayMark::class)]
 final class PublishVerdictTest extends KernelTestCase
 {
     private const string PULL = 'https://github.com/acme/widgets/pull/7';
@@ -404,6 +412,15 @@ final class PublishVerdictTest extends KernelTestCase
             ])]],
             [self::STATUS, ['state' => 'failure', 'context' => 'intakt/review', 'description' => 'Intakt asks for changes on this head.']],
         ], $this->github->writes);
+    }
+
+    public function testAnApprovedRoundOfAReplayProjectGetsAnErrorStatusAndNoComment(): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay('alpha'));
+
+        $this->publishRoundJudgedOn([]);
+
+        self::assertSame([[self::STATUS, ['state' => 'error', 'context' => 'intakt/review', 'description' => 'Intakt does not count a replay as a review of this head.']]], $this->github->writes);
     }
 
     public function testALiveProjectsJudgedRoundPublishesNothing(): void
