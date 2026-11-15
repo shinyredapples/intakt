@@ -35,6 +35,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LogLevel;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -410,7 +411,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/round-unknown');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round."', NotFoundHttpException::class));
     }
 
     public function testAFindingTextWithMarkupIsEscaped(): void

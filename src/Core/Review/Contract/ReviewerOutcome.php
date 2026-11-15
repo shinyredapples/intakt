@@ -9,6 +9,9 @@ use Intakt\Core\Ai\Contract\Tier;
 // What one reviewer of a round did, read back from the round and the ledger, because a bench scores each reviewer on its own.
 final readonly class ReviewerOutcome
 {
+    /**
+     * @param list<string> $models
+     */
     public function __construct(
         public string $role,
         public Tier $tier,
@@ -18,6 +21,8 @@ final readonly class ReviewerOutcome
         public ?string $failure,
         public RoundTokens $tokens,
         public ?int $milliseconds,
+        // The models the reviewer's calls ran on, from the ledger, because the tier alone does not say which model answered; empty when no call named one.
+        public array $models = [],
     ) {
     }
 }

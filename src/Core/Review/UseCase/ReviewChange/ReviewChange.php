@@ -219,6 +219,7 @@ final readonly class ReviewChange implements ChangeReviews
             null === $failure ? null : $this->failures->of($failure),
             $this->ledger->tokensOfReviewer($roundId, $reviewerId),
             $this->ledger->millisecondsOfReviewer($reviewerId),
+            $this->ledger->modelsOfReviewer($roundId, $reviewerId),
         );
     }
 
