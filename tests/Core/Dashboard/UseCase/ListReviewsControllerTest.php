@@ -149,7 +149,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews?project[]=alpha');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "Invalid query parameter "project"."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "Invalid query parameter "project"."', NotFoundHttpException::class));
     }
 
     public function testTheReviewListSaysSoWhenTheLedgerHasNoReviews(): void

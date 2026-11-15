@@ -173,7 +173,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/tasks/alpha/7');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The ledger holds no build step of this task."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger holds no build step of this task."', NotFoundHttpException::class));
     }
 
     /**

@@ -121,7 +121,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop');
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -132,7 +132,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was stopped."', BadRequestHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -155,7 +155,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -167,7 +167,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/round-1-security/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -178,7 +178,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/reviewers/conversation-9/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer with this id in an unjudged round."', NotFoundHttpException::class));
         $this->assertNothingRequested();
     }
 
@@ -189,7 +189,7 @@ final class StopReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/round-1/reviewers/round-1-security/stop');
 
         self::assertResponseStatusCodeSame(405);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/reviews/round-1/reviewers/round-1-security/stop": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/reviews/round-1/reviewers/round-1-security/stop": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class));
     }
 
     private function runningReviewer(): void

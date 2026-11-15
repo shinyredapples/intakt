@@ -389,7 +389,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/round-unknown');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger holds no review with this round."', NotFoundHttpException::class));
     }
 
     public function testAFindingTextWithMarkupIsEscaped(): void

@@ -489,7 +489,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
     }
 
     public function testAStartAfterTheSampleRepositoryWasUnsetIsRefused(): void
@@ -503,7 +503,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
     }
 
     public function testAProjectNameWithMarkupIsEscaped(): void

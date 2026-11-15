@@ -258,7 +258,7 @@ final class SearchControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/search?q[]=alpha');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "Invalid query parameter "q"."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "Invalid query parameter "q"."', NotFoundHttpException::class));
     }
 
     /**
