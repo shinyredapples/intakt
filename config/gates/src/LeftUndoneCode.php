@@ -90,9 +90,9 @@ final readonly class LeftUndoneCode
     private function unreasonedSkip(LeftUndoneTokens $tokens, int $nameIndex, string $kind): array
     {
         $line = $tokens->line($nameIndex);
-        $last = $tokens->argumentsEnd($nameIndex);
+        $reasoned = array_any($tokens->stringsInArguments($nameIndex), static fn (array $string): bool => $string[1] === $line && 1 === preg_match(self::REASON, $string[0]));
 
-        return $tokens->hasStringBetween($nameIndex, $last, self::REASON, $line) ? [] : [[$line, $tokens->line($last), $kind.self::SKIP_HOW_TO_COMPLY]];
+        return $reasoned ? [] : [[$line, $tokens->line($tokens->argumentsEnd($nameIndex)), $kind.self::SKIP_HOW_TO_COMPLY]];
     }
 
     /**
@@ -108,11 +108,10 @@ final readonly class LeftUndoneCode
             return [];
         }
 
-        $last = $tokens->argumentsEnd($index + 2);
         $notImplemented = 1 === preg_match(self::NOT_IMPLEMENTED_CLASS, $tokens->text($index + 2))
-            || $tokens->hasStringBetween($index + 2, $last, self::NOT_IMPLEMENTED);
+            || array_any($tokens->stringsInArguments($index + 2), static fn (array $string): bool => 1 === preg_match(self::NOT_IMPLEMENTED, $string[0]));
         $line = $tokens->line($index);
 
-        return $notImplemented && !$tokens->hasCommentOn($line, self::REASONED_THROW) ? [[$line, $tokens->line($last), self::THROW_HOW_TO_COMPLY]] : [];
+        return $notImplemented && !$tokens->hasCommentOn($line, self::REASONED_THROW) ? [[$line, $tokens->line($tokens->argumentsEnd($index + 2)), self::THROW_HOW_TO_COMPLY]] : [];
     }
 }

@@ -113,13 +113,15 @@ final readonly class LeftUndoneTokens
         return $names;
     }
 
-    public function hasStringBetween(int $after, int $last, string $pattern, ?int $onLine = null): bool
+    /**
+     * @return list<array{string, int}>
+     */
+    public function stringsInArguments(int $nameIndex): array
     {
-        $entries = array_slice($this->code, $after + 1, $last - $after);
+        $arguments = array_slice($this->code, $nameIndex + 1, $this->argumentsEnd($nameIndex) - $nameIndex);
+        $strings = array_filter($arguments, static fn (array $entry): bool => $entry[0]->is(self::STRINGS));
 
-        return array_any($entries, static fn (array $entry): bool => (null === $onLine || $entry[1] === $onLine)
-            && $entry[0]->is(self::STRINGS)
-            && 1 === preg_match($pattern, $entry[0]->text));
+        return array_values(array_map(static fn (array $entry): array => [$entry[0]->text, $entry[1]], $strings));
     }
 
     public function hasCommentOn(int $line, string $pattern): bool
