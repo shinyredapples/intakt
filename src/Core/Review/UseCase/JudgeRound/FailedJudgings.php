@@ -18,7 +18,7 @@ final readonly class FailedJudgings
     ) {
     }
 
-    // A transport that cannot be listed (the in-memory one of the test environment) shows no failure, because reading it with get() would hand its messages out.
+    // A transport that cannot be listed shows no failure, because reading it with get() would hand its messages out.
     public function hasFailed(string $roundId): bool
     {
         if (!$this->failed instanceof ListableReceiverInterface) {

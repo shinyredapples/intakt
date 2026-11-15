@@ -239,7 +239,7 @@ final readonly class RoundFixture
         return array_values(array_filter(array_map(static fn (Envelope $sent): object => $sent->getMessage(), $queue->getSent()), static fn (object $message): bool => $message instanceof JudgeRound));
     }
 
-    // An in-memory failure transport, because it cannot be listed and so shows no failed judging to a test that waits on a round.
+    // An empty in-memory failure transport, so a test that waits on a round sees no failed judging.
     public function noFailedJudgings(): FailedJudgings
     {
         return new FailedJudgings(new InMemoryTransport());

@@ -8,15 +8,19 @@ use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
+use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\ReadRound\ReadableRounds;
 use Intakt\Core\Review\UseCase\ReadRound\ReviewerIdentity;
 use Intakt\Core\Review\UseCase\ReadRound\ReviewerStatus;
@@ -57,6 +61,10 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(StoredVerdicts::class)]
 #[UsesClass(PanelVerdict::class)]
 #[UsesClass(ReviewRound::class)]
+#[UsesClass(FlagProjectAsReplayHandler::class)]
+#[UsesClass(FlagProjectAsReplay::class)]
+#[UsesClass(ReplayProject::class)]
+#[UsesClass(ReplayMark::class)]
 final class ReadRoundToolsTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -209,6 +217,44 @@ final class ReadRoundToolsTest extends KernelTestCase
         $this->expectException(ResourceNotFoundException::class);
 
         $this->findingsResource()('not-a-round', 'intakt://rounds/not-a-round/findings');
+    }
+
+    public function testTheStatusOfARoundInAReplayProjectCarriesTheReplayMark(): void
+    {
+        $this->flag('alpha');
+        $round = $this->fixture->start(2);
+
+        self::assertSame(ReplayMark::Replay, $this->statusTool()($round->id()->toRfc4122())->mark);
+    }
+
+    public function testTheStatusOfALiveRoundCarriesTheLiveMark(): void
+    {
+        $round = $this->fixture->start(2);
+
+        self::assertSame(ReplayMark::Live, $this->statusTool()($round->id()->toRfc4122())->mark);
+    }
+
+    public function testTheVerdictsOfAReplayRoundCarryTheReplayMark(): void
+    {
+        $this->flag('alpha');
+        $round = $this->reviewedRound();
+
+        $verdicts = (new RoundVerdictsTool($this->readable(), new StoredVerdicts($this->serializer())))($round->id()->toRfc4122());
+
+        self::assertSame(ReplayMark::Replay, $verdicts->mark);
+    }
+
+    public function testTheActListOfAReplayRoundCarriesTheReplayMark(): void
+    {
+        $this->flag('alpha');
+        $round = $this->reviewedRound();
+
+        self::assertSame(ReplayMark::Replay, $this->actList()($round->id()->toRfc4122())->mark);
+    }
+
+    private function flag(string $project): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay($project));
     }
 
     private function reviewedRound(): ReviewRound
