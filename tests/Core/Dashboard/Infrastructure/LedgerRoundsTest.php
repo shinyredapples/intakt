@@ -33,15 +33,15 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
-use Intakt\Core\Review\Contract\RoundEnding;
-use Intakt\Core\Review\Contract\RoundEndings;
-use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
@@ -594,7 +594,7 @@ final class LedgerRoundsTest extends TestCase
 
         $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
 
-        self::assertSame($ending,$review?->rounds[0]->ending);
+        self::assertSame($ending, $review?->rounds[0]->ending);
     }
 
     public function testAJudgedRoundGetsNoEndingEvenWhenTheReviewModuleNamesOne(): void
