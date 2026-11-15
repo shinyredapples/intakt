@@ -72,15 +72,12 @@ final class FirstRunStylesTest extends TestCase
         return $wide && 1 === preg_match('/max-width:\s*none;/', $this->rule('.content.wide', $this->desktopRules()));
     }
 
-    /**
-     * The top, side and bottom padding of a rule in px, counting its spacing steps only: the tab bar's height and the safe-area inset in a phone's bottom padding clear the bar and are no gap.
-     *
-     * @return array{int, int, int}
-     */
+    // Top, side and bottom in px, counting spacing steps only, because the tab bar's height and the safe-area inset in a phone's bottom padding clear the bar and are no gap.
+    /** @return array{int, int, int} */
     private function padding(string $selector, string $css): array
     {
-        self::assertSame(1, preg_match('/padding:\s*([^;]+);/', $this->rule($selector, $css), $found), $selector);
-        preg_match_all('/(?:[^\s()]+|\((?:[^()]|\([^()]*\))*\))+/', $found[1], $values);
+        $padding = 1 === preg_match('/padding:\s*([^;]+);/', $this->rule($selector, $css), $found) ? $found[1] : self::fail($selector);
+        preg_match_all('/(?:[^\s()]+|\((?:[^()]|\([^()]*\))*\))+/', $padding, $values);
         $steps = array_map($this->spacing(...), $values[0]);
 
         return [$steps[0], $steps[1] ?? $steps[0], $steps[2] ?? $steps[0]];
