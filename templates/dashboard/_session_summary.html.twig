@@ -9,7 +9,7 @@
             <h3>Cost</h3>
             <dl class="ls-dl ls-cost">
                 <dt>This round</dt>{{ part.round_cost(round, summary) }}
-                <dt>Review so far</dt><dd>{{ review_cost.reading }}</dd>
+                <dt>Review so far</dt><dd>{{ include('dashboard/components/cost.html.twig', {cost: review_cost, at: 'round-' ~ round ~ '-review-cost'}, with_context = false) }}</dd>
             </dl>
         </div>
     </div>

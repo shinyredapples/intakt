@@ -14,7 +14,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
+use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 
 // On the application's Doctrine transports, which the test environment otherwise replaces with in-memory ones, because the failure transport shares the queue table with the async one.
 #[Group('persistence')]
@@ -98,11 +98,10 @@ final class FailedJudgingsTest extends KernelTestCase
 
     public function testAFailureTransportThatCannotBeListedShowsNoFailedJudging(): void
     {
-        $inMemory = new InMemoryTransport();
-        $inMemory->send(new Envelope(new JudgeRound(self::ROUND)));
+        $unlisted = $this->createMock(ReceiverInterface::class);
+        $unlisted->expects($this->never())->method('get');
 
-        self::assertFalse(new FailedJudgings($inMemory)->hasFailed(self::ROUND));
-        self::assertCount(1, $inMemory->get());
+        self::assertFalse(new FailedJudgings($unlisted)->hasFailed(self::ROUND));
     }
 
     public function testAParkedMessageThatCannotBeDecodedNeitherBreaksTheReadNorIsDeleted(): void

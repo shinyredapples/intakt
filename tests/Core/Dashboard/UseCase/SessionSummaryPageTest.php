@@ -56,7 +56,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame([['This round', '0.6100 USD'], ['Review so far', 'unknown, no price for model-a']], $this->pairsOf($crawler->filter('.log-summary .ls-cost')));
+        self::assertSame([['This round', '0.6100 USD estimated, price date unknown'], ['Review so far', 'unknown, no price for model-a']], $this->pairsOf($crawler->filter('.log-summary .ls-cost')));
     }
 
     public function testTheSummaryListsEachFileReadOnceInMonospace(): void
@@ -223,7 +223,15 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
      */
     private function pairsOf(Crawler $list): array
     {
-        return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), $term->nextAll()->first()->text()]);
+        return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), self::wordsOf($term->nextAll()->first())]);
+    }
+
+    // A label's tooltip words are inside it, so they are left out to read the figure as a person sees it.
+    private static function wordsOf(Crawler $node): string
+    {
+        $tips = $node->filter('.figure-kind-tip')->each(static fn (Crawler $tip): string => $tip->text());
+
+        return str_replace($tips, '', $node->text());
     }
 
     /**

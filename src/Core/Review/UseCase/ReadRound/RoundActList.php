@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ReadRound;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // Excluded because the tool builds it per call, not the container.
@@ -18,6 +19,7 @@ final readonly class RoundActList
         public string $roundId,
         public bool $judged,
         public array $act,
+        public ReplayMark $mark,
     ) {
     }
 }

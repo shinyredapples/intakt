@@ -31,9 +31,9 @@ final class VerdictSchemaTest extends TestCase
     }
 
     #[DataProviderExternal(BrokenFieldRules::class, 'cases')]
-    public function testTheSchemaFileRefusesWhatTheClassesRefuse(string $output, string $why): void
+    public function testTheSchemaFileRefusesWhatTheClassesRefuse(string $output, string $why, string ...$otherWordings): void
     {
-        self::assertNotSame([], $this->schemaErrors($output), 'The classes refuse this output ('.$why.') but the schema file accepts it.');
+        self::assertNotSame([], $this->schemaErrors($output), 'The classes refuse this output ('.implode(' or ', [$why, ...$otherWordings]).') but the schema file accepts it.');
     }
 
     /**

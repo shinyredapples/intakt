@@ -65,9 +65,9 @@ final readonly class KernelHttpClient implements ClientInterface
     }
 
     /**
-     * @param array<string, list<string|null>> $headers
+     * @param array<list<string|null>> $headers
      *
-     * @return array<string, list<string>>
+     * @return array<list<string>>
      */
     private function headersOf(array $headers): array
     {

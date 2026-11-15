@@ -61,4 +61,10 @@ final readonly class Cost
 
         return 'unknown, no price for '.implode(', ', array_map($visible ?? static fn (string $model): string => $model, $this->unpriced));
     }
+
+    // One wording for the console and the dashboard, because an estimate is only as current as its price list and an owner should read the same day on both.
+    public function priceDateReading(): string
+    {
+        return null === $this->priceDate ? 'price date unknown' : 'prices of '.$this->priceDate;
+    }
 }

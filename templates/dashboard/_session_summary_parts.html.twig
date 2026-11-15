@@ -16,7 +16,7 @@
 {% endmacro %}
 
 {# Only this round's cost is a part: the review-wide cell is outside the streams, because a round's updates know nothing of the other rounds. #}
-{% macro round_cost(round, summary) %}<dd id="round-{{ round }}-summary-cost">{{ summary.cost.reading }}</dd>{% endmacro %}
+{% macro round_cost(round, summary) %}<dd id="round-{{ round }}-summary-cost">{{ include('dashboard/components/cost.html.twig', {cost: summary.cost, at: 'round-' ~ round ~ '-summary-cost'}, with_context = false) }}</dd>{% endmacro %}
 
 {% macro files(round, summary) %}
     <div id="round-{{ round }}-summary-files">
