@@ -17,13 +17,13 @@ Only the lines between `<!-- journey:begin NAME -->` and `<!-- journey:end NAME 
 - `milestones`: one row per milestone ordered by due date (none last): title, goal (its description), due date, the day of the last issue closed as done (`open` while an issue is open, `none` when no issue is open and none was closed as done), and done / open counts. Dates are `MM-DD`, with the year for any other than 2026. In a title or goal, `|` is escaped and `<` is written `&lt;`, so text from the forge can neither open a comment nor write a journey marker into the page.
 - One region per chart (`ChartRegion`): the image `![<title> (<kind>)](journey/<name>.svg)`, then a line `<Kind>: <source>.` from the chart's `FigureSource` (its `FigureKind` and where its series come from, never `FigureKind::source()`, which names Intakt's ledger), then a `<details markdown="1">` block with the same numbers as a table (one row per day, `none` for a day without a value) whose series columns read `<series> (<kind>)`, so the chart never depends on color or sight alone.
 
-| Region and file | Chart | Days | Series |
-|---|---|---|---|
-| `tokens-by-lane` | stacked bars (`StackedBarSvg`) | each day from the first to the last day in the usage file | tokens of each vendor and lane that has usage (`Claude, building`, `Claude, reviewing`, `GPT, building`, `GPT, reviewing`, in that order) |
-| `tokens-by-account` | stacked bars | the same | tokens of each account that has usage, in `UsageAccount` order |
-| `tokens-per-merge` | line (`LineSvg`) | the same | the day's tokens divided by the pull requests merged that day (UTC) as counted for this usage file, none on a day without a merge |
-| `issues-per-day` | grouped bars (`GroupedBarSvg`) | each day from the first issue created to the last issue created or closed | issues created and issues closed (done or dropped) that day |
-| `open-issues` | line | the same | issues created minus issues closed up to the end of the day |
+| Region and file | Chart | Days | Series | Kind |
+|---|---|---|---|---|
+| `tokens-by-lane` | stacked bars (`StackedBarSvg`) | each day from the first to the last day in the usage file | tokens of each vendor and lane that has usage (`Claude, building`, `Claude, reviewing`, `GPT, building`, `GPT, reviewing`, in that order) | measured |
+| `tokens-by-account` | stacked bars | the same | tokens of each account that has usage, in `UsageAccount` order | measured |
+| `tokens-per-merge` | line (`LineSvg`) | the same | the day's tokens divided by the pull requests merged that day (UTC) as counted for this usage file, none on a day without a merge | measured (tokens over counted merges) |
+| `issues-per-day` | grouped bars (`GroupedBarSvg`) | each day from the first issue created to the last issue created or closed | issues created and issues closed (done or dropped) that day | counted |
+| `open-issues` | line | the same | issues created minus issues closed up to the end of the day | counted |
 
 The merges per usage day are counted once for each version of the usage file (`CountedMerges`): the `tokens-per-merge` region ends with the line `<!-- merges counted for usage sha256:<SHA-256 of usage.jsonl>: <YYYY-MM-DD>=<merges> ... -->`, inside its markers, and while the SHA-256 of `usage.jsonl` matches that line, a rerun takes the counts from it instead of counting the merges again. A changed usage file, or a line that does not read as counts, counts them again from the API and writes the line anew. A count reads as one only as a whole number from 1 to 999,999,999 without a leading zero, so a line edited to a count of zero does not read as counts either. So with an unchanged `usage.jsonl` the token charts and their tables stay byte for byte the same, even after another merge on one of its days; the issue charts end on the last event, not on today, so a rerun on a later day draws the same charts.
 

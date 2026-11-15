@@ -112,7 +112,7 @@ timeline
         10-26 : Design written, core decisions (PHP 8.5, Symfony, MIT, Symfony AI beta) : First pull requests merged : CI on GitHub-hosted runners
         10-27 : 31 plan tasks filed with acceptance criteria, milestones M1 to M5 : The build loop starts on Intakt
     section Review core
-        10-29 : First day over 50 merges
+        10-29 : First day over 50 counted merges
         10-30 : CI on disposable self-hosted runners
         10-31 : Switch plan adds M6 Shadow, M7 Builder half, M8 Switch : A pool of AI subscriptions, each job picks one with room
         11-02 : CI image deadlock stalls the critical path, stalls get causes and routes : Third build slot
@@ -124,7 +124,7 @@ timeline
         11-09 : No observe-only stage, Intakt reviews real pull requests : First hand trial, every verdict failed validation, fixed first
         11-10 : CI moves to Ubicloud runners
         11-11 : v0.1.0, release train twice a day, test instance follows each tag
-        11-12 : M2 Panel and rounds done : v0.2.0 and v0.3.0 : 73 merges in one day : Second review worker, CI run becomes the build's check
+        11-12 : M2 Panel and rounds done : v0.2.0 and v0.3.0 : 73 counted merges in one day : Second review worker, CI run becomes the build's check
         11-13 : Build slots 4 and 5, third review worker, CPU weights : Older work gains priority with age : Backlog cut, 70 issues closed as not planned, 84 parked : First clean-machine run of the judged path finds four defects : Trials of the claude_code and Codex reviewers : Cooldown exception for Symfony 8.2.0-BETA2 (the upgrade followed in #1960)
         11-14 : Three fixes sent upstream already in the beta : Review bench repository : Review figures labeled measured, counted or estimated
     section Deadline
