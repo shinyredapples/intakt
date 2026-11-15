@@ -18,9 +18,9 @@ behind it are on [Highlights](https://shinyredapples.github.io/intakt/).
 | Busiest day | 73 counted merges (2026-11-12) |
 | First release | v0.1.0, 2026-11-11; v0.3.0 on 2026-11-12 |
 | First-pass approvals | 53% counted of builds approved without a send-back since a builder self-check started on 11-08 (100 of 190), against 38% counted from 11-03 to 11-08 (165 merges) |
-| Tokens per merged pull request | 1.48M measured (908M measured tokens over 614 counted merges) |
+| Tokens per merged pull request | 1.45M measured (888M measured tokens over 614 counted merges; not included: 20.58M estimated tokens reserved for killed steps) |
 
-Counted: from the pull requests and issues the GitHub API lists, and for first-pass approvals from the build loop's records. Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
+Counted: from the pull requests and issues the GitHub API lists, and for first-pass approvals from the build loop's records. Measured: the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`. Estimated: the reservations of steps that were killed before they reported usage, from the `reserved` field of `docs/journey/usage.jsonl` and never added to the measured tokens.
 <!-- journey:end glance -->
 
 
@@ -52,14 +52,15 @@ Merged pull requests per day, counted from the GitHub API:
 
 ## Token usage
 
-Tokens per day the loop spent on Intakt across every account: 908M measured from 10-27 to 11-13, 785M measured on Claude and 124M measured
-on GPT. Building took 69% measured, reviewing 31% measured (Claude 17.5%, GPT 13.6%). Tokens are counted the same way for both vendors: input
-and output in full, cached input at a tenth.
+Tokens per day the loop spent on Intakt across every account: 888M measured from 10-27 to 11-13, 764M measured on Claude and 123M measured
+on GPT. Building took 68% measured, reviewing 32% measured (Claude 17.7%, GPT 13.9%). Tokens are counted the same way for both vendors: input
+and output in full, cached input at a tenth. Beside them, 21M estimated tokens were reserved for Claude steps that were
+killed before they reported usage; the charts leave them out.
 
 <!-- journey:begin tokens-by-lane -->
 ![Tokens per day by lane (measured)](journey/tokens-by-lane.svg)
 
-Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
+Measured: the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`.
 <!-- journey:end tokens-by-lane -->
 
 By account. Until 10-31 the loop ran on Claude account 1 alone; from 10-31 each job picks the account with the most
@@ -69,7 +70,7 @@ subscriptions are spent (32M measured tokens so far: 30M measured on 11-06 to 11
 <!-- journey:begin tokens-by-account -->
 ![Tokens per day by account (measured)](journey/tokens-by-account.svg)
 
-Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
+Measured: the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`.
 <!-- journey:end tokens-by-account -->
 
 Tokens per merged pull request, per day:
@@ -77,7 +78,7 @@ Tokens per merged pull request, per day:
 <!-- journey:begin tokens-per-merge -->
 ![Tokens per merged pull request (measured)](journey/tokens-per-merge.svg)
 
-Measured: the day's tokens from the providers' usage answers, summed per day in `docs/journey/usage.jsonl`, divided by the pull requests merged that day, counted from the GitHub API.
+Measured: the day's tokens from the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`, divided by the pull requests merged that day, counted from the GitHub API.
 <!-- journey:end tokens-per-merge -->
 
 
@@ -135,7 +136,7 @@ timeline
 ## Milestones
 
 <!-- journey:begin milestones -->
-| Milestone | Goal | Due | Last issue closed | Done / open |
+| Milestone | Goal | Due | Last issue closed | Done / open (counted) |
 |---|---|---|---|---|
 | M0 Unblock | fixes the build loop needed first | 10-27 | 11-05 | 7 / 0 |
 | M1 Review core | one reviewer returns a schema-valid verdict, recorded in the ledger | 11-02 | 11-06 | 58 / 0 |
@@ -146,6 +147,8 @@ timeline
 | M6 Shadow | Intakt reviews the loop's own pull requests | 11-24 | open | 171 / 2 |
 | M7 Builder half | Intakt builds, not only reviews | 12-14 | open | 29 / 154 |
 | M8 Switch | Intakt replaces the loop | 2027-01-07 | open | 2 / 8 |
+
+Counted: from the issues the GitHub API lists, by each issue's milestone.
 <!-- journey:end milestones -->
 
 M3 and M4 finished eleven days early. M5 grew from 8 planned tasks to 292 counted issues: on 2026-11-03 every quality and
@@ -287,12 +290,13 @@ team, history, settings, setup) follow after the hackathon.
 [#1740](https://github.com/shinyredapples/intakt/issues/1740): `bin/journey` writes the regions between `journey:begin` and `journey:end` markers: the At a glance table, the milestone table and the charts with a table of their numbers, from the GitHub API (milestones, issues and pull requests, read when the page is built) and token use from `docs/journey/usage.jsonl`. It draws the charts and the timeline above as SVG files in `docs/journey/`. The numbers written by hand in the text are a snapshot of 2026-11-13, and so are the charts until the command first runs with access to the API. `docs/journey/usage.jsonl`
 holds tokens per day, vendor, account and lane, nothing about limits; Claude and GPT are counted the same way (input and
 output in full, cached input at a tenth). A step that was killed (out of memory, a host restart) reports no usage and
-counts at its reservation: 21M of the tokens, about 2%, are such reservations, not measured usage. The token figures still include them, because `usage.jsonl` does not keep
-them apart. The milestone stories and lessons are written by hand and link to the issue or
-pull request behind a claim where there is one.
+counts at its reservation: 21M tokens, about 2% beside the measured ones, are such reservations. The file keeps them in
+a `reserved` field apart from the measured `tokens`, the charts and the measured figures leave them out, and the At a
+glance table shows their total beside the measured one. The milestone stories and lessons are written by hand and link
+to the issue or pull request behind a claim where there is one.
 
 Each figure is followed by its kind, as in Intakt's review report: `measured` for tokens the providers' usage answers
-reported, `counted` for merges, issues and rounds counted from the GitHub API or the build loop's records. The page shows
-no cost, so nothing on it is `estimated`. Each chart names its kind in its title and says under the drawing where its
-series come from; a figure that divides measured tokens by counted merges shows both parts beside it, each with its own
-kind.
+reported, `counted` for merges, issues and rounds counted from the GitHub API or the build loop's records, `estimated`
+for the tokens reserved for killed steps. The page shows no cost. Each table and chart names its kind in its column or
+title and says under it where its figures come from; a figure that divides measured tokens by counted merges shows both
+parts beside it, each with its own kind, and no total adds measured and estimated tokens.
