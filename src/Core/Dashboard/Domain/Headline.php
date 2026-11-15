@@ -26,14 +26,6 @@ final readonly class Headline
     ) {
     }
 
-    // Ends with "needs you:" while something waits, so the page can link the words that follow to it.
-    public function text(): string
-    {
-        $waiting = $this->waiting();
-
-        return '' === $waiting ? $this->opening() : $this->opening().' '.$waiting;
-    }
-
     // The sentence before the waiting count, apart so the page can mark the count with the needs-you style.
     public function opening(): string
     {
@@ -137,13 +129,6 @@ final readonly class Headline
         }
 
         return implode(', ', $named).' and '.$rest.' more '.(1 === $rest ? 'change' : 'changes');
-    }
-
-    private function waiting(): string
-    {
-        $count = $this->waitingCount();
-
-        return 0 === $count ? $this->waitingWords() : $count.' '.$this->waitingWords();
     }
 
     private function short(string $name): string
