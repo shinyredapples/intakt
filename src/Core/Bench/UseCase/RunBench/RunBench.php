@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Bench\UseCase\RunBench;
 
 use Intakt\Core\Bench\Contract\BenchReview;
+use Intakt\Core\Bench\Contract\RepeatedChange;
 use Intakt\Core\Bench\UseCase\ReviewBenchChange\BenchChangeCheckout;
 use Intakt\Core\Bench\UseCase\ReviewBenchChange\ReviewBenchChange;
 use Intakt\Core\Platform\Contract\ReportableFailure;
@@ -23,13 +24,23 @@ final readonly class RunBench
     }
 
     /**
-     * @return list<BenchReview>
+     * @param positive-int $repeat
+     *
+     * @return list<RepeatedChange>
      *
      * @throws ReportableFailure
      */
-    public function reviewEveryChange(string $project): array
+    public function reviewEveryChange(string $project, int $repeat): array
     {
-        return array_map(fn (string $change): BenchReview => $this->reviewed($change, $project), $this->checkout->names());
+        return array_map(fn (string $change): RepeatedChange => $this->repeated($change, $project, $repeat), $this->checkout->names());
+    }
+
+    /**
+     * @param positive-int $repeat
+     */
+    private function repeated(string $change, string $project, int $repeat): RepeatedChange
+    {
+        return new RepeatedChange($change, array_map(fn (): BenchReview => $this->reviewed($change, $project), range(1, $repeat)));
     }
 
     // A checkout of its own per change, removed also when the review fails, because a change must start from the base commit.

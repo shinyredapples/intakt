@@ -24,4 +24,9 @@ final readonly class BenchReview
         public array $actList,
     ) {
     }
+
+    public function hasHarnessFailure(): bool
+    {
+        return array_any($this->reviewers, static fn (BenchReviewerResult $reviewer): bool => $reviewer->verdict->isHarnessFailure());
+    }
 }
