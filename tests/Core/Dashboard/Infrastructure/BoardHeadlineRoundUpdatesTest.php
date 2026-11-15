@@ -77,7 +77,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
         $this->ledger->startReviewer(self::ROUND, 'security');
 
-        $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
+        $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
 
         self::assertSame([DashboardTopics::SHELL], array_map(static fn (LiveEvent $event): string => $event->topic, $this->live->events));
         self::assertSame('The Code reviewers are reviewing change feat/a of alpha. Nothing needs you.', $this->headlineIn(0));
