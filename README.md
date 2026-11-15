@@ -7,11 +7,10 @@
   </picture>
 </p>
 
-The aim: give it a spec, and AI agents plan, build, review and merge the work on your repository. PHP 8.5, Symfony AI. The review loop works today; the rest is planned, and [Status](#status) says which is which.
+Intakt reviews a change on your repository: a panel of AI reviewers and a judge review it and give one verdict with an act list, on a dashboard and over MCP. PHP 8.5, Symfony AI. [Status](#status) says what works today and what is planned.
 
-- **What it will do:** turn a spec into small tasks, have AI agents build each one, and merge what passes review (planned; the review step works today).
-- **Why it is different:** a panel of reviewers on models of different makers returns structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
-- **Why you will be able to trust it:** it will spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
+- **Why it is different:** the reviewers run on models of different makers and return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
+- **What you get:** one verdict (approve, changes or blocked) and the judge's act list of what to fix now, live on the dashboard, from the console, or from your own agent through the MCP server.
 
 ![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
 
@@ -19,7 +18,7 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 
 ## Five-minute start
 
-The demo reviews a sample pull request with two reviewers (its [timed run](#timed-run) is still waiting for the owner, so no timings are recorded yet):
+The demo reviews a sample change with two reviewers; the [timed run](#timed-run) says how long the start and a review take:
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
@@ -31,7 +30,7 @@ The demo needs one provider key or one Hugging Face token, and its calls are bil
 
 The panel's reviewers should run on models of different makers. Two makers through one Hugging Face token satisfy that; two separate providers (for example Anthropic and Hugging Face) are the stronger setup, because one token is one outage, one rate limit and one bill.
 
-Then start the review with the command the log prints at the end of the first start (it begins with `docker compose exec intakt`, so run it as printed from the repository folder), and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The command exits with 0 (approve), 10 (changes) or 11 (blocked); [Reading a verdict](docs/user/README.md#reading-a-verdict) explains what it prints. To let your own agent start reviews, copy the line the first start prints after the review command (it holds the MCP address and a token made for you) and run it:
+The first start ends by printing the review command (it begins with `docker compose exec intakt`). Leave `docker compose up` running, open a second terminal in the repository folder and run the command there as printed; the server log in the first terminal keeps scrolling after it, which is expected. Open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The command exits with 0 (approve), 10 (changes) or 11 (blocked); [Reading a verdict](docs/user/README.md#reading-a-verdict) explains what it prints. To let your own agent start reviews, copy the line the first start prints after the review command (it holds the MCP address and a token made for you) and run it:
 
 ```
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the printed token>"
@@ -41,19 +40,15 @@ Then ask the agent to start a review with the values of the printed review comma
 
 ### Timed run
 
-Tested platforms: the whole path ran on x86-64 Linux (a four-core host, 202 s to a running install on 2026-11-13). On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings; no arm64 run is recorded here yet. Docker Desktop on Apple Silicon runs the arm64 image.
+Tested platforms: the whole path ran on x86-64 Linux, in two sets of runs: the three runs of 2026-11-15 in the table below, and, apart from them, an earlier run on 2026-11-13 on a four-core host, which took 202 s to a running install. On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings; no arm64 run is recorded here yet. Docker Desktop on Apple Silicon runs the arm64 image.
 
-`(owner provides)`: the run needs Docker and a live provider key, which the build sandbox has neither of, so no timing or verdict is recorded yet. The owner times these steps on a clean clone (note `.env.local`, not `.env`: `compose.yaml` reads `.env.local`) and fills in the table:
+The times below are measured: three runs of this path on 2026-11-15, each from a clean clone with only `HF_TOKEN` and the two secrets in `.env.local` (note `.env.local`, not `.env`: `compose.yaml` reads `.env.local`). Cloning and filling in `.env.local` come first and are not timed, because they depend on your network and your typing.
 
-| Step | Command | Time |
+| Step | Command | Time (measured) |
 | --- | --- | --- |
-| 1. Clone | `git clone https://github.com/shinyredapples/intakt.git && cd intakt` | |
-| 2. Configure | `cp .env.dist .env.local`, then set one provider key (or `HF_TOKEN`) and the two secrets | |
-| 3. Start | `docker compose up`, until the log prints the review command | |
-| 4. First verdict | the printed `docker compose exec intakt php bin/console intakt:review sample-change ...` | |
-| Total | | |
-
-Also record the date, the Intakt commit, the host (CPU, Docker version), the first verdict (decision, finding count with severities) and, with two keys set after `docker compose down -v`, that the seeded panel uses two providers, and, with only `HF_TOKEN`, that both reviewers return a verdict on models of two makers.
+| Start, cold | `docker compose up` on a machine without the image, until the log prints the review command | about 175 s |
+| Start, warm | `docker compose up` again, with the image already built | 5 to 6 s |
+| Review | the printed `docker compose exec intakt php bin/console intakt:review sample-change ...`, in a second terminal | 8 to 25 s per review |
 
 What works without Docker or a provider key:
 
@@ -70,7 +65,7 @@ What the journeys cover and how to run one: [Checking the whole product](docs/gu
 
 Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
-- Point Intakt at a pull request. A configurable panel of reviewers, each a provider, a model tier and a prompt through Symfony AI's Platform, returns structured JSON verdicts.
+- Point Intakt at a change, a branch of a local repository. A configurable panel of reviewers, each a provider, a model tier and a prompt through Symfony AI's Platform, returns structured JSON verdicts.
 - Findings keep their ids across rounds, so reviewers cannot move the goalposts. A judge step tells the builder what to act on.
 - Agents start reviews and read findings through an MCP server.
 - A small live dashboard shows each round as it streams.
@@ -81,7 +76,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 **Works today:** the review loop and its foundation. A reviewer panel of any size, at least one reviewer (`config/intakt.yaml`) reviews a branch of a local repository (`intakt:review`, the dashboard button or the MCP tool `start_review`), a judge sorts the findings into the act list, and the dashboard shows each round live; the demo runs it on a sample repository with `docker compose up`. Under it, a Symfony 8.2 (8.2.0-BETA2) app on PHP 8.5.12 or later with SQLite, Symfony AI 1.0.0-BETA1 (Platform, Agent, Store, AI Bundle) and the MCP Bundle installed, the module layout with plugin contracts, the Anthropic, OpenAI and OpenAI-compatible providers with keys from the environment or Symfony secrets (a provider without its key is switched off with a message), and `bin/check`, which runs every quality gate CI runs: coding standards, PHPStan at max (with the service ids and parameter types of the compiled container), Rector, module boundaries, PHPUnit 13, `composer audit`, gitleaks on files and history, commit subjects, long dashes, the `docs/highlights.md` table lint, a row there for every `upstream/` reproduction and the service container lint.
 
-**Planned:** reviewing a pull request on GitHub and posting the result there, rounds started by the loop itself, the catch-up review after a substitute, and everything outside the review loop (tasks, building, merging), in the order of [the plan](docs/plan.md).
+**Planned:** reviewing a pull request on GitHub and posting the result there, rounds started by the loop itself, the catch-up review after a substitute, and everything outside the review loop, in the order of [the plan](docs/plan.md). The aim is that you give Intakt a spec, and AI agents turn it into small tasks, build each one and merge what passes review, spending only the budget you give them, asking you only when a person is needed, and acting as Intakt's own forge identity, never as you.
 
 ## How it is built
 
