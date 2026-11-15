@@ -45,10 +45,10 @@ final readonly class UsageLedger
      * @throws UsageNotRecorded
      */
     #[NoDiscard('a reservation must be settled or left unsettled')]
-    public function reserve(string $project, AnsweringTier $tier, ?Uuid $round = null): UsageReservation
+    public function reserve(string $project, AnsweringTier $tier, ?Uuid $round = null, ?Uuid $reviewer = null): UsageReservation
     {
         $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        $this->record(new UsageStarted($reservation->call, 'started', $project, $tier->tier, $round?->toString(), $tier->answering->model));
+        $this->record(new UsageStarted($reservation->call, 'started', $project, $tier->tier, $round?->toString(), $tier->answering->model, $reviewer?->toString()));
 
         return $reservation;
     }
