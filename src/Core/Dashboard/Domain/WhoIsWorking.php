@@ -34,7 +34,7 @@ final readonly class WhoIsWorking
     /**
      * @return list<Lane>
      */
-    // A judged round has nothing running, so a reviewer still marked running there is a stray row.
+    // A judged or ended round has nothing running, so a reviewer still marked running there is a stray row.
     private function lanesOf(Review $review): array
     {
         $round = $review->activeRound();

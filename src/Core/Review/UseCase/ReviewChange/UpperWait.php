@@ -21,6 +21,11 @@ final readonly class UpperWait
 
     public function secondsFor(Panel $panel): int
     {
-        return count($panel->reviewers) * $this->reviewerSeconds + $this->judgeSeconds;
+        return $this->secondsForReviewers(count($panel->reviewers));
+    }
+
+    public function secondsForReviewers(int $reviewers): int
+    {
+        return $reviewers * $this->reviewerSeconds + $this->judgeSeconds;
     }
 }
