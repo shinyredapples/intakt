@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReplayMark;
+use Intakt\Core\Review\Contract\ReviewerOutcome;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundNotNext;
@@ -160,6 +161,8 @@ final readonly class ReviewChange implements ChangeReviews
             $this->ledger->tokensOf($roundId),
             $this->ledger->costOf($roundId),
             $this->reasonsOf($round),
+            RoundEnds::Judged,
+            $this->outcomesOf($roundId, $round),
         );
     }
 
@@ -194,6 +197,29 @@ final readonly class ReviewChange implements ChangeReviews
         $act = $this->ledger->actIdsOf($round->id()->toRfc4122());
 
         return $this->findings->actListOf($round, $act);
+    }
+
+    /**
+     * @return list<ReviewerOutcome>
+     */
+    private function outcomesOf(string $roundId, ReviewRound $round): array
+    {
+        return array_map(fn (RoundReviewer $reviewer): ReviewerOutcome => $this->outcomeOf($roundId, $reviewer), $round->reviewers());
+    }
+
+    private function outcomeOf(string $roundId, RoundReviewer $reviewer): ReviewerOutcome
+    {
+        $reviewerId = $reviewer->id()->toRfc4122();
+        $failure = $reviewer->failure();
+
+        return new ReviewerOutcome(
+            $reviewer->roleName(),
+            $reviewer->tier(),
+            $this->verdicts->ofReviewer($reviewer),
+            null === $failure ? null : $this->failures->of($failure),
+            $this->ledger->tokensOfReviewer($roundId, $reviewerId),
+            $this->ledger->millisecondsOfReviewer($reviewerId),
+        );
     }
 
     /**

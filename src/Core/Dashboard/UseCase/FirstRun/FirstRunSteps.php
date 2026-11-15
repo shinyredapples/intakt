@@ -11,14 +11,18 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Dashboard\Domain\AgentStep;
+use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
 use Intakt\Core\Dashboard\Domain\PanelOfProject;
 use Intakt\Core\Dashboard\Domain\ProjectStep;
 use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\Domain\TierLine;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Mcp\Contract\McpRoutes;
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -36,6 +40,8 @@ final readonly class FirstRunSteps
         private TierResolver $tiers,
         private EnabledAccounts $accounts,
         private Panels $panels,
+        private LedgerReviewPages $reviews,
+        private SampleChangeSource $sample,
         private UrlGeneratorInterface $urls,
         #[Autowire(param: AiServices::DISABLED_PROVIDERS)]
         private array $disabledProviders,
@@ -56,6 +62,7 @@ final readonly class FirstRunSteps
         return new FirstRun(
             $this->providers(array_first($projects)),
             new ProjectStep(array_map($this->panelOf(...), $projects)),
+            new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource),
             $this->agent(),
         );
     }

@@ -7,9 +7,11 @@ namespace Intakt\Core\Dashboard\UseCase\StartReview;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\RequestedRound;
+use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
@@ -23,7 +25,23 @@ final readonly class ReviewStarts
     public function __construct(
         private LedgerReviewPages $reviews,
         private MessageBusInterface $commands,
+        private SampleChangeSource $sample,
     ) {
+    }
+
+    // Null when this install has no sample change, so the caller answers that nothing could be started; the number is always 1, so a second press is refused as not next.
+    /**
+     * @return array{string, string}|null
+     */
+    public function startSampleChange(): ?array
+    {
+        $source = $this->sample->source();
+
+        if (!$source instanceof ChangeSource) {
+            return null;
+        }
+
+        return $this->started(new StartReview(SampleChange::PROJECT, SampleChange::TASK, new RequestedRound(SampleChange::CHANGE, 1, $source)));
     }
 
     /**

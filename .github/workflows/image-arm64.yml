@@ -1,0 +1,31 @@
+name: image-arm64
+# Builds the app image on arm64 and starts it, so the demo is known to work on the machines of jurors on Apple Silicon.
+# Never on a pull request: it adds no time or cost to one. The runner label comes from CI_ARM_RUNS_ON (a JSON label), GitHub's arm64 runner when unset.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  image:
+    runs-on: ${{ fromJSON(vars.CI_ARM_RUNS_ON || '"ubuntu-24.04-arm"') }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the app image
+        id: build
+        run: |
+          start=$SECONDS
+          docker build --tag intakt:ci .
+          echo "arm64 build took $((SECONDS - start)) seconds"
+      - name: Smoke-test the app image
+        run: docker/smoke-test.sh intakt:ci
+      - name: Check the first start
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          start=$SECONDS
+          bash docker/verify-first-start.sh intakt:ci
+          echo "arm64 first start took $((SECONDS - start)) seconds"

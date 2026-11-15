@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
@@ -47,8 +49,27 @@ final readonly class UsageLedger
     #[NoDiscard('a reservation must be settled or left unsettled')]
     public function reserve(string $project, AnsweringTier $tier, ?Uuid $round = null): UsageReservation
     {
+        return $this->started(fn (string $call): UsageStarted => new UsageStarted($call, 'started', $project, $tier->tier, $round?->toString(), $tier->answering->model));
+    }
+
+    /**
+     * @throws UsageNotRecorded
+     */
+    #[NoDiscard('a reservation must be settled or left unsettled')]
+    public function reserveForReviewer(string $project, AnsweringTier $tier, ReviewerConversation $conversation): UsageReservation
+    {
+        return $this->started(fn (string $call): UsageStarted => new UsageStarted($call, 'started', $project, $tier->tier, $conversation->round?->toString(), $tier->answering->model, $conversation->reviewerId?->toString()));
+    }
+
+    /**
+     * @param Closure(string): UsageStarted $row
+     *
+     * @throws UsageNotRecorded
+     */
+    private function started(Closure $row): UsageReservation
+    {
         $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        $this->record(new UsageStarted($reservation->call, 'started', $project, $tier->tier, $round?->toString(), $tier->answering->model));
+        $this->record($row($reservation->call));
 
         return $reservation;
     }

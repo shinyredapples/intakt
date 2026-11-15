@@ -1,0 +1,2 @@
+{#- One home for the line's words and link, because the board's head and its pushed update must say the same. -#}
+{{ headline.text }}{% if headline.firstWaiting %} <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: headline.firstWaiting.latest.round}) }}">see what</a>.{% endif %}
