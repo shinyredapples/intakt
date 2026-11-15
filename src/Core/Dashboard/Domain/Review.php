@@ -46,12 +46,12 @@ final readonly class Review
         return null === $latest ? null : $latest + 1;
     }
 
-    // Null once the judge has called the latest round, because nothing is then in progress.
+    // Null once the judge has called the latest round or it ended without a call, because nothing is then in progress.
     public function activeRound(): ?ReviewedRound
     {
         $latest = $this->latest();
 
-        return $latest->isJudged() ? null : $latest;
+        return $latest->isJudged() || $latest->hasEnded() ? null : $latest;
     }
 
     // Null before the first judge's call, because only a judged round has findings to carry forward.

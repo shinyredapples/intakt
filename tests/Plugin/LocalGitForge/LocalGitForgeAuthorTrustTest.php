@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Plugin\Forge\Contract\BinaryFiles;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\LocalGitForge\Contract\LocalRepository;
-use Intakt\Plugin\LocalGitForge\Infrastructure\BinaryFiles;
 use Intakt\Plugin\LocalGitForge\Infrastructure\LocalGitForge;
 use Intakt\Plugin\LocalGitForge\Infrastructure\NameStatusParser;
 use PHPUnit\Framework\Attributes\CoversClass;

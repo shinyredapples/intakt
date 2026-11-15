@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundEndings;
 
 final readonly class LedgerReviewPages
 {
@@ -20,6 +21,7 @@ final readonly class LedgerReviewPages
         private RoundCosts $costs,
         private ChangeDecision $decision,
         private FailureInWords $failures,
+        private RoundEndings $endings,
     ) {
     }
 
@@ -41,7 +43,7 @@ final readonly class LedgerReviewPages
 
     private function rounds(RecordedEvents $events): LedgerRounds
     {
-        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures);
+        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures, $this->endings);
 
         foreach ($events as $recorded) {
             $rounds->add($recorded);

@@ -14,6 +14,8 @@ use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -28,6 +30,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(RoundEnding::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(TokenFigures::class)]
 final class WhoIsWorkingTest extends TestCase
@@ -73,6 +76,23 @@ final class WhoIsWorkingTest extends TestCase
         $judged = $this->round('feat/a', 1, [$this->running('r1-a')])->judgedWith([], $this->since());
 
         self::assertSame(0, new WhoIsWorking([new Review([$judged])])->working());
+    }
+
+    #[DataProvider('endings')]
+    public function testAReviewerStillMarkedRunningInARoundThatEndedIsNoLane(RoundEnds $end): void
+    {
+        $ended = $this->round('feat/a', 1, [$this->running('r1-a')])->endedAs(new RoundEnding($end, 'ended'));
+
+        self::assertSame(0, new WhoIsWorking([new Review([$ended])])->working());
+    }
+
+    /**
+     * @return iterable<string, array{RoundEnds}>
+     */
+    public static function endings(): iterable
+    {
+        yield 'no outcome in time' => [RoundEnds::NoOutcomeInTime];
+        yield 'judging failed' => [RoundEnds::JudgingFailed];
     }
 
     public function testOnlyTheLatestRoundOfAReviewCounts(): void
