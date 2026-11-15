@@ -7,8 +7,7 @@ namespace Intakt\Tests\JourneyPage;
 use DateTimeImmutable;
 use Intakt\Core\Platform\Contract\FigureKind;
 
-// Only the measured tokens are drawn, because a reservation is an estimate and a total over both would mix kinds.
-// The days come from the usage file alone and the merges from the counts kept for it, so the token charts change only when the usage file does.
+// Only measured tokens are drawn, since adding estimated reservations would mix kinds; days and merges come from the usage file and its kept counts, so the charts change only with it.
 final readonly class TokenCharts
 {
     public const string PER_MERGE = 'tokens-per-merge';

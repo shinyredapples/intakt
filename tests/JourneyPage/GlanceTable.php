@@ -24,8 +24,9 @@ final readonly class GlanceTable
      * @param list<Issue>       $issues
      * @param list<PullRequest> $pullRequests
      */
-    public function region(array $issues, array $pullRequests, int $tokens, int $reserved): PageRegion
+    public function region(array $issues, array $pullRequests, Usage $usage): PageRegion
     {
+        [$tokens, $reserved] = [$usage->total(), $usage->reserved()];
         $merges = array_values(array_filter(array_map(static fn (PullRequest $pullRequest): ?DateTimeImmutable => $pullRequest->merged, $pullRequests)));
         $perDay = array_count_values(array_map(static fn (DateTimeImmutable $merged): string => $merged->format('Y-m-d'), $merges));
         ksort($perDay);
@@ -68,8 +69,7 @@ final readonly class GlanceTable
         return $this->counted($done + $dropped).' ('.$done.' done, '.$dropped.' dropped)';
     }
 
-    // The parts stand beside the ratio with their own markers, because a ratio of measured tokens to counted merges alone would hide that it mixes kinds.
-    // The reserved tokens stand apart for the same reason: added to the measured ones, they would make a total of two kinds.
+    // The parts, and the estimated reserved tokens apart from them, stand beside the ratio with their own markers, because a ratio or a total alone would hide that it mixes kinds.
     private function perMerge(int $tokens, int $merges, int $reserved): string
     {
         $measured = fn (int $amount): string => $this->figures->marked($this->tokens($amount), FigureKind::Measured);

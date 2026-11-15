@@ -197,7 +197,8 @@ final class JourneyPageTest extends TestCase
 
     private function regeneratedTokens(int $total, int $merges, int $reserved = 0): string
     {
-        $table = new GlanceTable(new MockClock('2026-11-13')->now())->region([], array_fill(0, $merges, new PullRequest(new DateTimeImmutable('2026-10-26'))), $total, $reserved);
+        $usage = new Usage([new TokenUsage(new DateTimeImmutable('2026-10-26'), UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, $total, $reserved)]);
+        $table = new GlanceTable(new MockClock('2026-11-13')->now())->region([], array_fill(0, $merges, new PullRequest(new DateTimeImmutable('2026-10-26'))), $usage);
 
         return $table->text;
     }
