@@ -3,6 +3,8 @@
         {icon: 'clock', text: 'Started ' ~ reviewed.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
     ]}, with_context = false) }}
 
+    {% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
+    {% set kind_label = 'dashboard/components/figure_kind.html.twig' %}
     {% set unfinished = reviewed.state.name != 'Judged' %}
     <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
     {% set running = unfinished and not reviewed.hasEnded %}
@@ -25,7 +27,7 @@
                 <td>{{ outcome.tier }}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</td>
                 <td>{{ outcome.decision ?? '' }}</td>
-                <td class="num">{{ outcome.findings ?? '' }}</td>
+                <td class="num">{% if outcome.findings is not null %}{{ outcome.findings }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-reviewer-' ~ outcome.id}, with_context = false) }}{% endif %}</td>
                 <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if running and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">
@@ -72,12 +74,9 @@
         <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost</th></tr></thead>
         <tbody>
             <tr>
-                <td class="num">{{ reviewed.tokens.prompt }}</td>
-                <td class="num">{{ reviewed.tokens.cacheRead }}</td>
-                <td class="num">{{ reviewed.tokens.cacheWrite }}</td>
-                <td class="num">{{ reviewed.tokens.cached }}</td>
-                <td class="num">{{ reviewed.tokens.completion }}</td>
-                <td class="num">{{ reviewed.tokens.total }}</td>
+                {% for tokens in [reviewed.tokens.prompt, reviewed.tokens.cacheRead, reviewed.tokens.cacheWrite, reviewed.tokens.cached, reviewed.tokens.completion, reviewed.tokens.total] %}
+                <td class="num">{{ tokens }} {{ include(kind_label, {kind: kinds.Measured, at: 'round-' ~ reviewed.round ~ '-tokens-' ~ loop.index}, with_context = false) }}</td>
+                {% endfor %}
                 <td>{{ reviewed.cost.reading }}</td>
             </tr>
         </tbody>

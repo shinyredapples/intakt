@@ -113,6 +113,15 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/display:\s*flex/', $rules['.banner.compact > .banner-toggle'] ?? '');
     }
 
+    public function testAFigureKindTooltipIsPlacedAgainstTheViewportSoAScrollingTableCannotClipIt(): void
+    {
+        $rule = $this->rulesOf($this->componentSheet())['.figure-kind .figure-kind-tip'] ?? '';
+
+        self::assertMatchesRegularExpression('/position:\s*fixed/', $rule);
+        self::assertMatchesRegularExpression('/position-area:\s*bottom span-left/', $rule);
+        self::assertMatchesRegularExpression('/position-try-fallbacks:\s*flip-block/', $rule);
+    }
+
     public function testOnPhonesAStepperButtonIs48By46(): void
     {
         $rules = $this->rulesOf($this->phoneBlock());
