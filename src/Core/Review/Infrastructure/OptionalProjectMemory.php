@@ -16,6 +16,7 @@ use Throwable;
 // Memory only helps a review, so a project without an embeddings account or a set-up store reviews without it instead of failing every reviewer.
 final readonly class OptionalProjectMemory implements ProjectMemory
 {
+    /** @var ArrayObject<int, string> */
     private ArrayObject $reported;
 
     public function __construct(
@@ -39,8 +40,7 @@ final readonly class OptionalProjectMemory implements ProjectMemory
         return RelevantMemory::within([], $query->maxBytes);
     }
 
-    // The notice lives in an object held by a readonly property because it must outlive the per-message reset: a reset would bring back one line per review.
-    // The same condition holds for every call until the operator adds an account, so one line per start is enough and carries no trace because nothing is broken.
+    // One info line per start without a trace, because nothing is broken and a per-message reset would bring back one line per review.
     private function reportMissingModelOnce(string $project, ProjectMemoryNeedsEmbeddingModel $missing): void
     {
         if ($this->reported->count() > 0) {
