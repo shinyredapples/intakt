@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\ShowStatus;
 
+use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\SharedHold;
@@ -18,6 +20,7 @@ use Intakt\Core\Dashboard\Domain\ReviewerProgress;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
@@ -42,6 +45,7 @@ use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
@@ -53,6 +57,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 #[CoversClass(ProjectStatuses::class)]
 #[CoversClass(LedgerWaitingHeads::class)]
 #[CoversClass(MessageQueues::class)]
+#[CoversClass(LedgerBuildSteps::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(LedgerFailingHeads::class)]
@@ -110,6 +115,9 @@ final class StatusReadModelTest extends TestCase
         $this->ledger->recordRedHead('alpha', '9', 'c');
         $this->ledger->failHead('alpha', '10', 2);
         $this->ledger->handOverHead('alpha', '11', 'a');
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed');
+        $this->ledger->endBuildStep('alpha', '13', 'clone');
 
         $json = $this->readModel()->json();
 
@@ -158,6 +166,103 @@ final class StatusReadModelTest extends TestCase
         $steps = array_column($this->projectOf($this->read(), 'alpha')['lanes']['review'], 'steps');
 
         self::assertSame([[['role' => 'correctness', 'tier' => 'standard', 'progress' => 'verdict'], ['role' => 'security', 'tier' => 'standard', 'progress' => 'running']]], $steps);
+    }
+
+    public function testATaskThatStoppedAtTheMirrorShowsTheMirrorStepAndItsFailure(): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed: remote not found');
+
+        $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
+
+        self::assertSame([['task' => '12', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 'git fetch failed: remote not found', 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+    }
+
+    public function testATaskThatStoppedAtTheCloneShowsTheCloneStepAndItsFailure(): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->endBuildStep('alpha', '12', 'mirror');
+        $this->ledger->endBuildStep('alpha', '12', 'clone', 'the folder exists already');
+
+        $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
+
+        self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'failed', 'failure' => 'the folder exists already', 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+    }
+
+    public function testATaskWhoseStepsAllPassedShowsItsCloneStepPassed(): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->endBuildStep('alpha', '12', 'mirror');
+        $this->ledger->endBuildStep('alpha', '12', 'clone');
+
+        $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
+
+        self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+    }
+
+    public function testATaskThatIsStillRunningShowsTheLastStepItPassed(): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+
+        self::assertSame([['task', 'passed']], array_map(static fn (array $task): array => [$task['step'], $task['outcome']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
+    }
+
+    public function testATaskBuiltAgainShowsWhereItsLatestRunIs(): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed');
+        $this->ledger->endBuildStep('alpha', '12', 'task', 'project "alpha" has no open issue 12');
+
+        self::assertSame([['task', 'failed']], array_map(static fn (array $task): array => [$task['step'], $task['outcome']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
+    }
+
+    public function testTheTasksOfABuildLaneAreListedNewestFirstUnderTheirProject(): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->endBuildStep('alpha', '13', 'task');
+        $this->ledger->endBuildStep('beta', '14', 'task');
+        $this->ledger->endBuildStep('alpha', '12', 'mirror');
+
+        $status = $this->read();
+
+        self::assertSame(['12', '13'], array_column($this->projectOf($status, 'alpha')['lanes']['build'], 'task'));
+        self::assertSame(['14'], array_column($this->projectOf($status, 'beta')['lanes']['build'], 'task'));
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>}>
+     */
+    public static function malformedBuildSteps(): iterable
+    {
+        yield 'an unknown step' => [['project' => 'alpha', 'task' => '12', 'step' => 'push', 'outcome' => 'passed', 'failure' => null]];
+        yield 'an unknown outcome' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'skipped', 'failure' => null]];
+        yield 'a failed step without its failure' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => null]];
+        yield 'a passed step with a failure' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'passed', 'failure' => 'git fetch failed']];
+        yield 'a task that is no string' => [['project' => 'alpha', 'task' => 12, 'step' => 'mirror', 'outcome' => 'passed', 'failure' => null]];
+        yield 'a step that is no string' => [['project' => 'alpha', 'task' => '12', 'step' => ['mirror'], 'outcome' => 'passed', 'failure' => null]];
+        yield 'no project' => [['task' => '12', 'step' => 'mirror', 'outcome' => 'passed', 'failure' => null]];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    #[DataProvider('malformedBuildSteps')]
+    public function testABuildStepTheBuildDoesNotWriteIsLeftOut(array $payload): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->recordBuildStep($payload);
+
+        self::assertSame([['task', 'passed']], array_map(static fn (array $task): array => [$task['step'], $task['outcome']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
+    }
+
+    public function testABuildStepFailureIsRedactedBeforeItIsReported(): void
+    {
+        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed for token-abc');
+
+        $json = $this->readModel(redacting: 'token-abc')->json();
+
+        self::assertStringNotContainsString('token-abc', $json);
+        self::assertStringContainsString('git fetch failed for [redacted]', $json);
     }
 
     public function testAJudgedRoundIsALastOutcomeAndLeavesTheLane(): void
@@ -292,7 +397,7 @@ final class StatusReadModelTest extends TestCase
     {
         $project = $this->projectOf($this->read(), 'beta');
 
-        self::assertSame(['name' => 'beta', 'lanes' => ['review' => []], 'guard_decisions' => [], 'waiting_for_owner' => [], 'needs_you' => [], 'last_outcomes' => []], $project);
+        self::assertSame(['name' => 'beta', 'lanes' => ['review' => [], 'build' => []], 'guard_decisions' => [], 'waiting_for_owner' => [], 'needs_you' => [], 'last_outcomes' => []], $project);
     }
 
     public function testProjectsAreListedByNameAndEachOnce(): void
@@ -313,6 +418,14 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([...array_column(Decision::cases(), 'value'), null], $this->schemaAt(...$project, ...['last_outcomes', 'items', 'properties', 'decision', 'enum']));
     }
 
+    public function testTheSchemaNamesEveryBuildStepAndStepOutcomeTheCodeHas(): void
+    {
+        $build = ['properties', 'projects', 'items', 'properties', 'lanes', 'properties', 'build', 'items', 'properties'];
+
+        self::assertSame(array_column(BuildStep::cases(), 'value'), $this->schemaAt(...$build, ...['step', 'enum']));
+        self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), $this->schemaAt(...$build, ...['outcome', 'enum']));
+    }
+
     private function schemaAt(string ...$path): mixed
     {
         $node = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
@@ -326,20 +439,20 @@ final class StatusReadModelTest extends TestCase
     }
 
     /**
-     * @return array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>}
+     * @return array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>}
      */
     private function read(): array
     {
-        /** @var array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status */
+        /** @var array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status */
         $status = json_decode($this->readModel()->json(), true, flags: JSON_THROW_ON_ERROR);
 
         return $status;
     }
 
     /**
-     * @param array{projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status
+     * @param array{projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status
      *
-     * @return array{name: string, lanes: array{review: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}
+     * @return array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}
      */
     private function projectOf(array $status, string $name): array
     {
@@ -374,7 +487,7 @@ final class StatusReadModelTest extends TestCase
         $costs->method('costOf')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
-        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), $redactor, ['alpha' => [], 'beta' => []]);
+        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, ['alpha' => [], 'beta' => []]);
 
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
     }

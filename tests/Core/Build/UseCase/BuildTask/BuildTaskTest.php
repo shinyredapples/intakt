@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
-use Intakt\Core\Build\UseCase\BuildTask\BuildStep;
+use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;

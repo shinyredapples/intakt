@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
+use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
@@ -31,6 +32,7 @@ final readonly class ProjectStatuses
         private LedgerReviewPages $reviewPages,
         private LedgerFailingHeads $failingHeads,
         private LedgerWaitingHeads $waitingHeads,
+        private LedgerBuildSteps $buildSteps,
         private Redactor $redactor,
         #[Autowire(param: WatcherServices::PROJECTS)]
         private array $watched,
@@ -48,6 +50,7 @@ final readonly class ProjectStatuses
         $failing = $this->failingHeads->in($events);
         $sections = [
             'review_lane' => $this->reviewLane($board),
+            'build_lane' => $this->buildLane($this->buildSteps->in($events)),
             'guard_decisions' => $this->guardDecisions($this->waitingHeads->in($events), $failing),
             'waiting_for_owner' => $this->waitingForOwner($board),
             'needs_you' => $this->needsYou($failing),
@@ -56,7 +59,7 @@ final readonly class ProjectStatuses
 
         return array_map(static fn (string $name): array => [
             'name' => $name,
-            'lanes' => ['review' => $sections['review_lane'][$name] ?? []],
+            'lanes' => ['review' => $sections['review_lane'][$name] ?? [], 'build' => $sections['build_lane'][$name] ?? []],
             'guard_decisions' => $sections['guard_decisions'][$name] ?? [],
             'waiting_for_owner' => $sections['waiting_for_owner'][$name] ?? [],
             'needs_you' => $sections['needs_you'][$name] ?? [],
@@ -81,6 +84,22 @@ final readonly class ProjectStatuses
                 'reviewers' => $round->reviewers,
                 'steps' => array_map(static fn (ReviewerOutcome $outcome): array => ['role' => $outcome->role, 'tier' => $outcome->tier, 'progress' => $outcome->progress->value], $round->outcomes),
             ];
+        }
+
+        return $lane;
+    }
+
+    /**
+     * @param list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}> $steps
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function buildLane(array $steps): array
+    {
+        $lane = [];
+
+        foreach ($steps as $step) {
+            $lane[$step['project']][] = ['task' => $step['task'], 'step' => $step['step'], 'outcome' => $step['outcome'], 'failure' => null === $step['failure'] ? null : $this->redactor->redact($step['failure']), 'ended_at' => $step['ended_at']];
         }
 
         return $lane;
