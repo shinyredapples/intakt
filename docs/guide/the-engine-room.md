@@ -49,6 +49,8 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them. A paid runner service that hands out a fresh machine for every job works too; the same page says which two settings it needs. One job always stays on GitHub's machines: the one that files the urgent task when the nightly journeys fail, because it needs GitHub's own command-line tool.
 
+`CI_RUNS_ON` also leaves alone the job that builds and starts the demo on an ARM machine after every merge: it stays on GitHub's ARM machine unless the separate variable `CI_ARM_RUNS_ON` names another one.
+
 If CI never starts (GitHub occasionally misses an update), Intakt notices after a few minutes, nudges GitHub once, and alerts the maintainer agent if that didn't help. A wait for CI never blocks a bench: the work is parked and the bench takes the next job.
 
 ## Locks: one at a time
