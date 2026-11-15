@@ -19,12 +19,12 @@ final readonly class StackedBarSvg
     {
         $totals = array_map(fn (int $day): int => array_sum($this->valuesOn($chart, $day)), array_keys($chart->days));
         $scale = new YScale([] === $totals ? 0 : max($totals), self::BASELINE, self::BASELINE - ChartCanvas::TOP);
-        $slot = (ChartCanvas::RIGHT - ChartCanvas::LEFT) / max(1, count($chart->days));
+        $plot = new ChartPlot($scale, (ChartCanvas::RIGHT - ChartCanvas::LEFT) / max(1, count($chart->days)));
 
         return $this->canvas->opened($chart->title, self::HEIGHT)
             .$this->canvas->grid($scale, ChartCanvas::RIGHT)
-            .implode('', array_map(fn (int $day): string => $this->stack($this->valuesOn($chart, $day), $scale, ChartCanvas::LEFT + ($day + (1 - self::BAR) / 2) * $slot, self::BAR * $slot), array_keys($chart->days)))
-            .$this->canvas->dayLabels($chart, static fn (int $day): float => ChartCanvas::LEFT + ($day + 0.5) * $slot, self::BASELINE + 16)
+            .implode('', array_map(fn (int $day): string => $this->stack($this->valuesOn($chart, $day), $plot, $day), array_keys($chart->days)))
+            .$this->canvas->dayLabels($chart, static fn (int $day): float => $plot->x($day) + $plot->step / 2, self::BASELINE + 16)
             .$this->canvas->legend($chart, self::LEGEND)
             .'</svg>';
     }
@@ -40,9 +40,10 @@ final readonly class StackedBarSvg
     /**
      * @param list<int> $values
      */
-    private function stack(array $values, YScale $scale, float $x, float $width): string
+    private function stack(array $values, ChartPlot $plot, int $day): string
     {
-        $topmost = array_key_last(array_filter($values));
+        $x = $plot->x($day) + (1 - self::BAR) / 2 * $plot->step;
+        $topmost = array_key_last(array_filter($values, static fn (int $value): bool => $value > 0));
         $below = 0;
         $marks = '';
 
@@ -51,11 +52,9 @@ final readonly class StackedBarSvg
                 continue;
             }
 
-            $top = $scale->y($below + $value);
-            $bottom = 0 === $below ? self::BASELINE : max($top + 1, $scale->y($below) - ChartCanvas::GAP);
-            $marks .= $series === $topmost
-                ? $this->canvas->roundedBar($x, $width, $top, $bottom, ChartPalette::color($series))
-                : '<rect x="'.$this->canvas->number($x).'" y="'.$this->canvas->number($top).'" width="'.$this->canvas->number($width).'" height="'.$this->canvas->number($bottom - $top).'" fill="'.ChartPalette::color($series).'"/>';
+            $top = $plot->y($below + $value);
+            $bar = new ChartBar($x, self::BAR * $plot->step, $top, 0 === $below ? self::BASELINE : max($top + 1, $plot->y($below) - ChartCanvas::GAP));
+            $marks .= $series === $topmost ? $this->canvas->roundedBar($bar, ChartPalette::color($series)) : $this->canvas->squareBar($bar, ChartPalette::color($series));
             $below += $value;
         }
 

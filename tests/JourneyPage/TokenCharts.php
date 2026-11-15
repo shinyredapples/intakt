@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\JourneyPage;
 
-use Closure;
 use DateTimeImmutable;
 
 // The days come from the usage file alone, so the token charts change only when the usage file does.
@@ -37,7 +36,7 @@ final readonly class TokenCharts
 
         foreach (UsageVendor::cases() as $vendor) {
             foreach (UsageLane::cases() as $lane) {
-                $series[] = $this->series($vendor->label().', '.$lane->label(), $usage, $days, static fn (TokenUsage $row): bool => $row->vendor === $vendor && $row->lane === $lane);
+                $series[] = $this->series($vendor->label().', '.$lane->label(), array_filter($usage->rows, static fn (TokenUsage $row): bool => $row->vendor === $vendor && $row->lane === $lane), $days);
             }
         }
 
@@ -51,7 +50,7 @@ final readonly class TokenCharts
      */
     private function byAccount(Usage $usage, array $days): array
     {
-        $series = array_map(fn (UsageAccount $account): ?ChartSeries => $this->series($account->label(), $usage, $days, static fn (TokenUsage $row): bool => $row->account === $account), UsageAccount::cases());
+        $series = array_map(fn (UsageAccount $account): ?ChartSeries => $this->series($account->label(), array_filter($usage->rows, static fn (TokenUsage $row): bool => $row->account === $account), $days), UsageAccount::cases());
 
         return array_values(array_filter($series));
     }
@@ -70,13 +69,11 @@ final readonly class TokenCharts
     }
 
     /**
-     * @param list<DateTimeImmutable>   $days
-     * @param Closure(TokenUsage): bool $belongs
+     * @param array<int, TokenUsage>  $rows
+     * @param list<DateTimeImmutable> $days
      */
-    private function series(string $label, Usage $usage, array $days, Closure $belongs): ?ChartSeries
+    private function series(string $label, array $rows, array $days): ?ChartSeries
     {
-        $rows = array_values(array_filter($usage->rows, $belongs));
-
         if ([] === $rows) {
             return null;
         }
@@ -87,7 +84,7 @@ final readonly class TokenCharts
     }
 
     /**
-     * @param list<TokenUsage> $rows
+     * @param array<int, TokenUsage> $rows
      *
      * @return array<string, int>
      */

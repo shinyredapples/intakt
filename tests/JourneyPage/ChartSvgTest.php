@@ -13,6 +13,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(GroupedBarSvg::class)]
 #[CoversClass(LineSvg::class)]
 #[CoversClass(ChartCanvas::class)]
+#[CoversClass(ChartPlot::class)]
+#[CoversClass(ChartBar::class)]
 #[UsesClass(YScale::class)]
 #[UsesClass(ChartPalette::class)]
 #[UsesClass(DailyChart::class)]

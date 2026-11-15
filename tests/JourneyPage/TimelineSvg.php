@@ -19,7 +19,7 @@ final readonly class TimelineSvg
     public function svg(Timeline $timeline): string
     {
         $y = 32.0;
-        $marks = '' === $timeline->title ? '' : $this->text(ChartCanvas::LEFT, $y, $timeline->title, 'font-size="16" font-weight="600" fill="'.ChartPalette::INK.'"');
+        $marks = '' === $timeline->title ? '' : $this->text($this->at(ChartCanvas::LEFT, $y).' font-size="16" font-weight="600" fill="'.ChartPalette::INK.'"', $timeline->title);
         $y += 32;
 
         foreach ($timeline->sections as $section) {
@@ -35,16 +35,17 @@ final readonly class TimelineSvg
      */
     private function section(TimelineSection $section, float $y): array
     {
-        $marks = $this->text(ChartCanvas::LEFT, $y, $section->name, 'font-size="13" font-weight="600" fill="'.ChartPalette::MUTED.'"')
-            .'<line x1="'.$this->canvas->number(ChartCanvas::LEFT).'" x2="'.$this->canvas->number(ChartCanvas::RIGHT).'" y1="'.$this->canvas->number($y + 8).'" y2="'.$this->canvas->number($y + 8).'" stroke="'.ChartPalette::GRID.'" stroke-width="1"/>';
+        $rule = $this->canvas->number($y + 8);
+        $marks = $this->text($this->at(ChartCanvas::LEFT, $y).' font-size="13" font-weight="600" fill="'.ChartPalette::MUTED.'"', $section->name)
+            .'<line x1="'.$this->canvas->number(ChartCanvas::LEFT).'" x2="'.$this->canvas->number(ChartCanvas::RIGHT).'" y1="'.$rule.'" y2="'.$rule.'" stroke="'.ChartPalette::GRID.'" stroke-width="1"/>';
         $y += 30;
 
         foreach ($section->periods as $period) {
             $marks .= '<circle cx="'.$this->canvas->number(self::DOT).'" cy="'.$this->canvas->number($y - 4).'" r="4" fill="'.ChartPalette::color(0).'"/>'
-                .$this->text(self::WHEN, $y, $period->when, 'font-size="12" font-weight="600" fill="'.ChartPalette::INK.'"');
+                .$this->text($this->at(self::WHEN, $y).' font-size="12" font-weight="600" fill="'.ChartPalette::INK.'"', $period->when);
 
             foreach ($period->events as $event) {
-                $marks .= $this->text(self::EVENT, $y, $event, 'font-size="12" fill="'.ChartPalette::INK.'"');
+                $marks .= $this->text($this->at(self::EVENT, $y).' font-size="12" fill="'.ChartPalette::INK.'"', $event);
                 $y += self::LINE;
             }
 
@@ -54,8 +55,13 @@ final readonly class TimelineSvg
         return [$marks, $y + 12];
     }
 
-    private function text(float $x, float $y, string $text, string $style): string
+    private function at(float $x, float $y): string
     {
-        return '<text x="'.$this->canvas->number($x).'" y="'.$this->canvas->number($y).'" '.$style.'>'.$this->canvas->text($text).'</text>';
+        return 'x="'.$this->canvas->number($x).'" y="'.$this->canvas->number($y).'"';
+    }
+
+    private function text(string $attributes, string $text): string
+    {
+        return '<text '.$attributes.'>'.$this->canvas->text($text).'</text>';
     }
 }

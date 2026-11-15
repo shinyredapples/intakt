@@ -23,6 +23,6 @@ final readonly class DayRange
 
         $period = new DatePeriod(min($moments)->setTime(0, 0), new DateInterval('P1D'), max($moments)->setTime(0, 0), DatePeriod::INCLUDE_END_DATE);
 
-        return array_values(array_filter(iterator_to_array($period, false), static fn (mixed $day): bool => $day instanceof DateTimeImmutable));
+        return iterator_to_array($period, false);
     }
 }

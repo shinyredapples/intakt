@@ -28,6 +28,24 @@ final readonly class UsageReader
 
     private function rowOf(int $index, string $line): TokenUsage
     {
+        $row = $this->fieldsOf($index, $line);
+        $tokens = is_int($row['tokens']) && $row['tokens'] >= 0 ? $row['tokens'] : throw $this->rejected($index, 'tokens must be a whole number of zero or more');
+        [$day, $vendor, $account, $lane] = $this->textsOf($index, $row);
+
+        return new TokenUsage(
+            $this->day($index, $day),
+            UsageVendor::tryFrom($vendor) ?? throw $this->unknown($index, 'vendor', UsageVendor::cases()),
+            UsageAccount::tryFrom($account) ?? throw $this->unknown($index, 'account', UsageAccount::cases()),
+            UsageLane::tryFrom($lane) ?? throw $this->unknown($index, 'lane', UsageLane::cases()),
+            $tokens,
+        );
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function fieldsOf(int $index, string $line): array
+    {
         $row = json_validate($line) ? json_decode($line, true) : null;
 
         $fields = is_array($row) ? array_keys($row) : [];
@@ -35,27 +53,19 @@ final readonly class UsageReader
         $expected = self::FIELDS;
         sort($expected);
 
-        if (!is_array($row) || $expected !== $fields) {
-            throw $this->rejected($index, 'it must hold exactly '.implode(', ', self::FIELDS));
-        }
+        return is_array($row) && $expected === $fields ? $row : throw $this->rejected($index, 'it must hold exactly '.implode(', ', self::FIELDS));
+    }
 
-        $tokens = $row['tokens'];
+    /**
+     * @param array<mixed> $row
+     *
+     * @return list<string>
+     */
+    private function textsOf(int $index, array $row): array
+    {
+        $texts = array_map(static fn (string $field): string => is_string($row[$field]) && '' !== $row[$field] ? $row[$field] : '', ['day', 'vendor', 'account', 'lane']);
 
-        if (!is_int($tokens) || $tokens < 0) {
-            throw $this->rejected($index, 'tokens must be a whole number of zero or more');
-        }
-
-        if (!array_all(['day', 'vendor', 'account', 'lane'], static fn (string $field): bool => is_string($row[$field]) && '' !== $row[$field])) {
-            throw $this->rejected($index, 'day, vendor, account and lane must be text');
-        }
-
-        return new TokenUsage(
-            $this->day($index, $row['day']),
-            UsageVendor::tryFrom($row['vendor']) ?? throw $this->unknown($index, 'vendor', UsageVendor::cases()),
-            UsageAccount::tryFrom($row['account']) ?? throw $this->unknown($index, 'account', UsageAccount::cases()),
-            UsageLane::tryFrom($row['lane']) ?? throw $this->unknown($index, 'lane', UsageLane::cases()),
-            $tokens,
-        );
+        return in_array('', $texts, true) ? throw $this->rejected($index, 'day, vendor, account and lane must be text') : $texts;
     }
 
     private function day(int $index, string $text): DateTimeImmutable

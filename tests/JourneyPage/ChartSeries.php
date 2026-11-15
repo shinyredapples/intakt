@@ -7,7 +7,7 @@ namespace Intakt\Tests\JourneyPage;
 final readonly class ChartSeries
 {
     /**
-     * @param list<?int> $values one per day of the chart, null where the day has no value
+     * @param list<?int> $values
      */
     public function __construct(public string $label, public array $values)
     {

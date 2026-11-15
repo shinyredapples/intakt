@@ -37,6 +37,8 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(ChartForm::class)]
 #[UsesClass(ChartRegion::class)]
 #[UsesClass(ChartCanvas::class)]
+#[UsesClass(ChartPlot::class)]
+#[UsesClass(ChartBar::class)]
 #[UsesClass(ChartPalette::class)]
 #[UsesClass(YScale::class)]
 #[UsesClass(StackedBarSvg::class)]

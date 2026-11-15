@@ -6,7 +6,7 @@ namespace Intakt\Tests\JourneyPage;
 
 use Closure;
 
-// The look (surface, grid, fonts, rounded bar ends) matches the charts first drawn by hand for the page.
+// The surface, grid, fonts and rounded bar ends are those of the charts first drawn by hand, so the regenerated page keeps their look.
 final readonly class ChartCanvas
 {
     public const float LEFT = 56;
@@ -62,14 +62,22 @@ final readonly class ChartCanvas
         return $entries;
     }
 
-    public function roundedBar(float $x, float $width, float $top, float $bottom, string $color): string
+    public function roundedBar(ChartBar $bar, string $color): string
     {
-        $radius = min(self::RADIUS, $width / 2, ($bottom - $top) / 2);
+        $radius = min(self::RADIUS, $bar->width / 2, ($bar->bottom - $bar->top) / 2);
+        $n = $this->number(...);
+        $right = $bar->x + $bar->width;
+
+        return '<path d="M'.$n($bar->x).','.$n($bar->bottom).' V'.$n($bar->top + $radius).' Q'.$n($bar->x).','.$n($bar->top).' '.$n($bar->x + $radius).','.$n($bar->top)
+            .' H'.$n($right - $radius).' Q'.$n($right).','.$n($bar->top).' '.$n($right).','.$n($bar->top + $radius)
+            .' V'.$n($bar->bottom).' Z" fill="'.$color.'"/>';
+    }
+
+    public function squareBar(ChartBar $bar, string $color): string
+    {
         $n = $this->number(...);
 
-        return '<path d="M'.$n($x).','.$n($bottom).' V'.$n($top + $radius).' Q'.$n($x).','.$n($top).' '.$n($x + $radius).','.$n($top)
-            .' H'.$n($x + $width - $radius).' Q'.$n($x + $width).','.$n($top).' '.$n($x + $width).','.$n($top + $radius)
-            .' V'.$n($bottom).' Z" fill="'.$color.'"/>';
+        return '<rect x="'.$n($bar->x).'" y="'.$n($bar->top).'" width="'.$n($bar->width).'" height="'.$n($bar->bottom - $bar->top).'" fill="'.$color.'"/>';
     }
 
     public function short(int $value): string

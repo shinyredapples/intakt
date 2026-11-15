@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -24,9 +25,9 @@ final class TokenChartsTest extends TestCase
     public function testTheLaneChartHasOneSeriesPerVendorAndLaneThatHasUsageInTheirFixedOrder(): void
     {
         $lanes = $this->charts([
-            $this->row('2026-10-27', UsageAccount::GptSubscription, UsageLane::Review, 3),
-            $this->row('2026-10-27', UsageAccount::Claude1, UsageLane::Build, 5),
-            $this->row('2026-10-28', UsageAccount::Claude2, UsageLane::Build, 2),
+            $this->row(UsageAccount::GptSubscription, UsageLane::Review, 3),
+            $this->row(UsageAccount::Claude2, UsageLane::Build, 5),
+            $this->on('2026-10-28', 2),
         ])[0];
 
         self::assertEquals([new ChartSeries('Claude, building', [5, 2]), new ChartSeries('GPT, reviewing', [3, 0])], $lanes->series);
@@ -34,14 +35,14 @@ final class TokenChartsTest extends TestCase
 
     public function testTheAccountChartNamesEachAccountByVendorAndNumber(): void
     {
-        $accounts = $this->charts(array_map(fn (UsageAccount $account): TokenUsage => $this->row('2026-10-27', $account, UsageLane::Build, 1), array_reverse(UsageAccount::cases())))[1];
+        $accounts = $this->charts(array_map(fn (UsageAccount $account): TokenUsage => $this->row($account, UsageLane::Build, 1), array_reverse(UsageAccount::cases())))[1];
 
         self::assertSame(['Claude account 1', 'Claude account 2', 'Claude API key', 'GPT subscription'], array_map(static fn (ChartSeries $series): string => $series->label, $accounts->series));
     }
 
     public function testEveryDayFromTheFirstToTheLastUsageDayIsADayOfTheChart(): void
     {
-        $lanes = $this->charts([$this->row('2026-10-30', UsageAccount::Claude1, UsageLane::Build, 1), $this->row('2026-10-28', UsageAccount::Claude1, UsageLane::Build, 4)])[0];
+        $lanes = $this->charts([$this->on('2026-10-30', 1), $this->on('2026-10-28', 4)])[0];
 
         self::assertSame(['10-28', '10-29', '10-30'], array_map(static fn (DateTimeImmutable $day): string => $day->format('m-d'), $lanes->days));
         self::assertSame([4, 0, 1], $lanes->series[0]->values);
@@ -50,7 +51,7 @@ final class TokenChartsTest extends TestCase
     public function testTokensPerMergeDividesADaysTokensByItsMergesAndLeavesADayWithoutAMergeEmpty(): void
     {
         $perMerge = $this->charts(
-            [$this->row('2026-10-27', UsageAccount::Claude1, UsageLane::Build, 7), $this->row('2026-10-28', UsageAccount::Claude1, UsageLane::Build, 4)],
+            [$this->on('2026-10-27', 7), $this->on('2026-10-28', 4)],
             [new PullRequest(new DateTimeImmutable('2026-10-27T09:00:00Z')), new PullRequest(new DateTimeImmutable('2026-10-27T23:59:59Z')), new PullRequest(null)],
         )[2];
 
@@ -59,7 +60,7 @@ final class TokenChartsTest extends TestCase
 
     public function testMergesOutsideTheUsageDaysDoNotChangeTheTokenCharts(): void
     {
-        $rows = [$this->row('2026-10-27', UsageAccount::Claude1, UsageLane::Build, 7)];
+        $rows = [$this->on('2026-10-27', 7)];
         $merged = new PullRequest(new DateTimeImmutable('2026-10-27T09:00:00Z'));
 
         self::assertEquals($this->charts($rows, [$merged]), $this->charts($rows, [$merged, new PullRequest(new DateTimeImmutable('2026-10-28T00:00:00Z'))]));
@@ -84,10 +85,18 @@ final class TokenChartsTest extends TestCase
         return new TokenCharts()->charts(new Usage($rows), $pullRequests);
     }
 
-    private function row(string $day, UsageAccount $account, UsageLane $lane, int $tokens): TokenUsage
+    private function row(UsageAccount $account, UsageLane $lane, int $tokens): TokenUsage
     {
         $vendor = UsageAccount::GptSubscription === $account ? UsageVendor::Gpt : UsageVendor::Claude;
 
-        return new TokenUsage(new DateTimeImmutable($day.'T00:00:00Z'), $vendor, $account, $lane, $tokens);
+        return new TokenUsage(new DateTimeImmutable('2026-10-27T00:00:00Z'), $vendor, $account, $lane, $tokens);
+    }
+
+    private function on(string $day, int $tokens): TokenUsage
+    {
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $day, new DateTimeZone('UTC'));
+        self::assertInstanceOf(DateTimeImmutable::class, $date);
+
+        return new TokenUsage($date, UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, $tokens);
     }
 }

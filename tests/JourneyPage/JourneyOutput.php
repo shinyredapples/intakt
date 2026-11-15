@@ -7,7 +7,7 @@ namespace Intakt\Tests\JourneyPage;
 final readonly class JourneyOutput
 {
     /**
-     * @param array<string, string> $drawings each SVG by its name in docs/journey/
+     * @param array<string, string> $drawings
      */
     public function __construct(public string $page, public array $drawings)
     {

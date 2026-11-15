@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
-// Color-vision deficiency is simulated with the full-severity matrices of Machado, Oliveira and Fernandes (2009) and measured in OKLab.
+// The full-severity matrices of Machado, Oliveira and Fernandes (2009) simulate color-blind vision, because a palette judged by eye proves nothing.
 #[CoversClass(ChartPalette::class)]
 #[UsesClass(JourneyInputFailed::class)]
 final class ChartPaletteTest extends TestCase
