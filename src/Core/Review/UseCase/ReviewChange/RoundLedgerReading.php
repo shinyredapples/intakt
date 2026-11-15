@@ -85,6 +85,17 @@ final readonly class RoundLedgerReading implements RoundCosts
         return RoundTokens::of(count($calls), $this->figuresOf($this->usagesOf($calls, $recorded)));
     }
 
+    // Each model once, in the order the reviewer's calls started, because a substitute provider may answer some of its calls; a call started before the model was kept names none.
+    /**
+     * @return list<string>
+     */
+    public function modelsOfReviewer(string $roundId, string $reviewerId): array
+    {
+        $models = array_filter($this->callsStartedFor($roundId, $this->usageRows(), $reviewerId), static fn (?string $model): bool => null !== $model);
+
+        return array_values(array_unique($models));
+    }
+
     // From the reviewer's first start to its last end in the ledger, in milliseconds, because the ledger's clock is the one the workers share; null while it has no end.
     public function millisecondsOfReviewer(string $reviewerId): ?int
     {

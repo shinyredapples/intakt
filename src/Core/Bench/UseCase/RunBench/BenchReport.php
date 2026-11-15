@@ -11,6 +11,7 @@ use Intakt\Core\Bench\Contract\BenchReviewerResult;
 use Intakt\Core\Bench\Contract\FailureCause;
 use Intakt\Core\Bench\Contract\RepeatedChange;
 use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Core\Review\Contract\Finding;
 
 // The causes come before any figure, because a figure read without its failed runs' causes misleads.
 final readonly class BenchReport
@@ -27,7 +28,7 @@ final readonly class BenchReport
             ...$this->failureCauses($changes),
             'figures:',
             ...array_merge(...array_map($this->changeFigures(...), $changes)),
-            'totals per reviewer and tier over every run:',
+            'totals per reviewer and model over every run:',
             ...$this->totals($changes),
         ];
     }
@@ -43,7 +44,7 @@ final readonly class BenchReport
         foreach ($changes as $change) {
             foreach ($change->runs as $index => $run) {
                 foreach ($run->reviewers as $reviewer) {
-                    array_push($lines, ...$this->causesOf(sprintf('  %s run %d: %s (%s)', $change->change, $index + 1, $reviewer->role, $reviewer->tier->value), $reviewer));
+                    array_push($lines, ...$this->causesOf(sprintf('  %s run %d: %s', $change->change, $index + 1, $reviewer->name()), $reviewer));
                 }
             }
         }
@@ -62,11 +63,27 @@ final readonly class BenchReport
             return [$prefix.' harness failure, left out of the figures: '.$verdict->harnessFailure];
         }
 
-        return array_map(
-            static fn (string $id, FailureCause $cause): string => $prefix.' missed '.$id.', cause '.$cause->value,
-            array_keys($verdict->missed),
-            $verdict->missed,
-        );
+        return [
+            ...array_map(
+                static fn (string $id, FailureCause $cause): string => $prefix.' missed '.$id.', cause '.$cause->value,
+                array_keys($verdict->missed),
+                $verdict->missed,
+            ),
+            // The reviewer's, because the classifier counts a false alarm only on a change that plants no defect, so no expectation of the bench can be wrong about it.
+            ...array_map(
+                fn (Finding $finding): string => $prefix.' false alarm '.$finding->id.' '.$this->placeOf($finding).', cause '.FailureCause::Reviewer->value,
+                $verdict->falseAlarms,
+            ),
+        ];
+    }
+
+    private function placeOf(Finding $finding): string
+    {
+        return match (true) {
+            null === $finding->file => 'without a place',
+            null === $finding->line => 'at '.$finding->file,
+            default => 'at '.$finding->file.':'.$finding->line,
+        };
     }
 
     /**
@@ -88,9 +105,8 @@ final readonly class BenchReport
     {
         $verdict = $reviewer->verdict;
         $line = sprintf(
-            '  %s (%s), measured: %d caught, %d missed, %d false alarms, %d prompt tokens, %d completion tokens, %d calls, %s',
-            $reviewer->role,
-            $reviewer->tier->value,
+            '  %s, measured: %d caught, %d missed, %d false alarms, %d prompt tokens, %d completion tokens, %d calls, %s',
+            $reviewer->name(),
             count($verdict->caught),
             count($verdict->missed),
             count($verdict->falseAlarms),
@@ -121,17 +137,14 @@ final readonly class BenchReport
     {
         $byReviewer = [];
         foreach ($this->everyReviewerResult($changes) as $reviewer) {
-            $byReviewer[$reviewer->role][$reviewer->tier->value][] = $reviewer;
+            $byReviewer[$reviewer->name()][] = $reviewer;
         }
 
-        $lines = [];
-        foreach ($byReviewer as $role => $tiers) {
-            foreach ($tiers as $tier => $results) {
-                $lines[] = $this->totalLine(sprintf('  %s (%s)', $role, $tier), $results);
-            }
-        }
-
-        return $lines;
+        return array_map(
+            fn (string $name, array $results): string => $this->totalLine('  '.$name, $results),
+            array_keys($byReviewer),
+            $byReviewer,
+        );
     }
 
     /**

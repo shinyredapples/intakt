@@ -155,7 +155,7 @@ final class RunBenchCommandTest extends TestCase
     {
         $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->reviews())->getDisplay();
 
-        self::assertStringContainsString("free-shipping run 1 of 2: decision changes, measured 1 act list findings\n  role-1 (standard), measured: 1 caught, 0 missed, 0 false alarms, 500 prompt tokens, 40 completion tokens, 1 calls, 3000 ms\n", $display);
+        self::assertStringContainsString("free-shipping run 1 of 2: decision changes, measured 1 act list findings\n  role-1 (standard, model big), measured: 1 caught, 0 missed, 0 false alarms, 500 prompt tokens, 40 completion tokens, 1 calls, 3000 ms\n", $display);
         $figures = explode("\n", substr($display, (int) strpos($display, "figures:\n")));
         $unlabeled = array_filter($figures, static fn (string $line): bool => 1 === preg_match('/\d/', $line) && !str_contains($line, 'measured') && !str_starts_with($line, 'result file: '));
         self::assertSame([], array_values($unlabeled));
@@ -192,10 +192,20 @@ final class RunBenchCommandTest extends TestCase
         $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->everySecondReviewFails())->getDisplay();
 
         $firstFigure = (int) strpos($display, 'measured');
-        foreach (["  coupon-code run 1: role-1 (standard) missed coupon-save10-missing, cause reviewer\n", "  free-shipping run 2: role-1 (standard) harness failure, left out of the figures: stopped at its output limit\n"] as $cause) {
+        foreach (["  coupon-code run 1: role-1 (standard, model big) missed coupon-save10-missing, cause reviewer\n", "  free-shipping run 2: role-1 (standard, model big) harness failure, left out of the figures: stopped at its output limit\n"] as $cause) {
             self::assertStringContainsString($cause, $display);
             self::assertLessThan($firstFigure, strpos($display, $cause));
         }
+    }
+
+    public function testAFalseAlarmOnAChangeWithoutDefectsIsGivenItsCauseBeforeTheFirstFigure(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha'], $this->reviews())->getDisplay();
+
+        $cause = sprintf("  round-total run 1: role-1 (standard, model big) false alarm F1 at src/shipping.js:%d, cause reviewer\n", $this->plantedLine());
+        self::assertStringContainsString($cause, $display);
+        self::assertLessThan(strpos($display, 'measured'), strpos($display, $cause));
+        self::assertStringNotContainsString("failure causes:\n  none\n", $display);
     }
 
     public function testRunsWithTheSameOutcomeAreReportedAsAgreeing(): void
@@ -219,11 +229,33 @@ final class RunBenchCommandTest extends TestCase
         self::assertStringContainsString("free-shipping: runs not comparable, measured over 1 compared of 2 runs\n", $display);
     }
 
-    public function testTheReportTotalsEachReviewerAndTierOverEveryRun(): void
+    public function testTheReportTotalsEachReviewerAndModelOverEveryRun(): void
     {
         $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->reviews())->getDisplay();
 
-        self::assertStringContainsString("  role-1 (standard), measured over 16 rounds: 2 of 10 planted defects found, 6 false alarms, 0 harness failures left out, 8640 tokens (8000 prompt, 640 completion, 16 calls)\n", $display);
+        self::assertStringContainsString("totals per reviewer and model over every run:\n  role-1 (standard, model big), measured over 16 rounds: 2 of 10 planted defects found, 6 false alarms, 0 harness failures left out, 8640 tokens (8000 prompt, 640 completion, 16 calls)\n", $display);
+    }
+
+    public function testRunsOfOneReviewerAnsweredByAnotherModelAreTotaledApart(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->everySecondReviewFindsNothing(['small']))->getDisplay();
+
+        self::assertStringContainsString("  role-1 (standard, model big), measured over 8 rounds: 1 of 5 planted defects found, 3 false alarms, 0 harness failures left out, 4320 tokens (4000 prompt, 320 completion, 8 calls)\n", $display);
+        self::assertStringContainsString("  role-1 (standard, model small), measured over 8 rounds: 0 of 5 planted defects found, 0 false alarms, 0 harness failures left out, 4320 tokens (4000 prompt, 320 completion, 8 calls)\n", $display);
+    }
+
+    public function testAReviewerWhoseCallsNamedNoModelIsLabeledSo(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha'], $this->everySecondReviewFindsNothing([]))->getDisplay();
+
+        self::assertStringContainsString("  role-1 (standard, model not recorded), measured over 4 rounds:", $display);
+    }
+
+    public function testAReviewerAnsweredByTwoModelsNamesBoth(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha'], $this->everySecondReviewFindsNothing(['big', 'small']))->getDisplay();
+
+        self::assertStringContainsString("  role-1 (standard, models big and small), measured over 4 rounds:", $display);
     }
 
     public function testAFailedReviewEndsTheRunWithoutAFileAndRemovesItsCheckout(): void
@@ -310,14 +342,17 @@ final class RunBenchCommandTest extends TestCase
 
     private function everySecondReviewFails(): ChangeReviews
     {
-        $failed = new ReviewerOutcome('role-1', Tier::Standard, null, 'stopped at its output limit', new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500);
+        $failed = new ReviewerOutcome('role-1', Tier::Standard, null, 'stopped at its output limit', new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, ['big']);
 
         return $this->everySecondReview(new ChangeReview('round', 1, Decision::Blocked, [], [], new RoundTokens(1, 100, 0, 0, 0, 0, 100), Cost::none(), [], reviewers: [$failed]));
     }
 
-    private function everySecondReviewFindsNothing(): ChangeReviews
+    /**
+     * @param list<string> $models
+     */
+    private function everySecondReviewFindsNothing(array $models = ['big']): ChangeReviews
     {
-        $nothing = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Approve, [], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000);
+        $nothing = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Approve, [], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, $models);
 
         return $this->everySecondReview(new ChangeReview('round', 1, Decision::Approve, [], [], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$nothing]));
     }
@@ -339,7 +374,7 @@ final class RunBenchCommandTest extends TestCase
     private function reviews(): ChangeReviews
     {
         $finding = new Finding('F1', Severity::P1, 'src/shipping.js', $this->plantedLine(), null, 'Off by one.', FixableBy::Builder, false, null, null);
-        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000);
+        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, ['big']);
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$reviewer]));
 

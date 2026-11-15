@@ -132,6 +132,13 @@ final class RunBenchTest extends KernelTestCase
         self::assertSame('changes', $freeShipping['decision']);
     }
 
+    public function testTheResultFileNamesTheModelEachReviewerOfAScriptedRunRanOn(): void
+    {
+        $changes = $this->scriptedRun()['changes'];
+
+        self::assertSame([['big'], ['big']], array_column($this->runOf($changes, 'free-shipping')['reviewers'], 'models'));
+    }
+
     public function testTheSameFindingOnADefectFreeChangeIsAFalseAlarmInTheResultFile(): void
     {
         $changes = $this->scriptedRun()['changes'];

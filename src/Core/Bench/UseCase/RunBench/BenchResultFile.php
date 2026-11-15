@@ -18,7 +18,7 @@ use Symfony\Component\Filesystem\Filesystem;
 
 /**
  * @phpstan-type WrittenFinding array{id: string, severity: string, file: ?string, line: ?int, text: string}
- * @phpstan-type WrittenReviewer array{role: string, tier: string, caught: list<string>, missed: list<array{id: string, cause: string}>, false_alarms: list<WrittenFinding>, unmatched: list<WrittenFinding>, harness_failure: ?string, tokens: array{calls: int, prompt: int, completion: int, total: int}, milliseconds: ?int}
+ * @phpstan-type WrittenReviewer array{role: string, tier: string, models: list<string>, caught: list<string>, missed: list<array{id: string, cause: string}>, false_alarms: list<WrittenFinding>, unmatched: list<WrittenFinding>, harness_failure: ?string, tokens: array{calls: int, prompt: int, completion: int, total: int}, milliseconds: ?int}
  * @phpstan-type WrittenRun array{decision: string, reviewers: list<WrittenReviewer>, act_list: list<WrittenFinding>}
  * @phpstan-type WrittenChange array{change: string, agreed: ?bool, runs: list<WrittenRun>}
  * @phpstan-type ResultDocument array{intakt_version: string, ran_at: string, project: string, prompts: array{reviewer: string, judge: string}, bench_repository: string, changes: list<WrittenChange>}
@@ -105,6 +105,7 @@ final readonly class BenchResultFile
         return [
             'role' => $reviewer->role,
             'tier' => $reviewer->tier->value,
+            'models' => $reviewer->models,
             'caught' => $verdict->caught,
             // A list of pairs, because an empty map would be written as a JSON list.
             'missed' => array_map(static fn (string $id, FailureCause $cause): array => ['id' => $id, 'cause' => $cause->value], array_keys($verdict->missed), $verdict->missed),
