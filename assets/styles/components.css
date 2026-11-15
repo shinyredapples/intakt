@@ -439,7 +439,9 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 }
 
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
-.page-head .lead { margin-top: var(--s4); color: var(--muted); font-size: var(--t15); }
+.page-head .lead { margin-top: calc(var(--s4) + 2px); color: var(--muted); font-size: var(--t15); }
+/* The board headline counts its running changes below 761 px, so it stays within two lines on a phone (#2055, D4). */
+.headline-short { display: none; }
 .page-head .actions { margin-left: auto; }
 .now-stop-idle ~ .stop-round { display: none; }
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }
@@ -449,6 +451,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* The mock's phone head: a closer gap under the headline, so the board's first lane stays in view. */
 @media (max-width: 760px) {
   .page-head { margin-bottom: var(--s16); }
+  .headline-long { display: none; }
+  .headline-short { display: inline; }
 }
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */

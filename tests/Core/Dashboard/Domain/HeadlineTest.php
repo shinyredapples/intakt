@@ -103,6 +103,25 @@ final class HeadlineTest extends TestCase
         self::assertSame([2, 'need you:'], [$headline->waitingCount(), $headline->waitingWords()]);
     }
 
+    public function testTheShortOpeningCountsTheRunningChangesInsteadOfNamingThem(): void
+    {
+        $headline = $this->headline([$this->running('a-project-with-a-very-long-name-for-tests', '3'), $this->running('shop', '5'), $this->running('docs', '2')], []);
+
+        self::assertSame('The Code reviewers are reviewing 3 changes.', $headline->shortOpening());
+    }
+
+    public function testTheShortOpeningOfOneRunningChangeSaysChange(): void
+    {
+        $headline = $this->headline([$this->running('a-project-with-a-very-long-name-for-tests', '3')], []);
+
+        self::assertSame('The Code reviewers are reviewing 1 change.', $headline->shortOpening());
+    }
+
+    public function testWithNothingRunningTheShortOpeningIsTheOpening(): void
+    {
+        self::assertSame(['Nothing is running.', 'Nothing is running yet. Start the first review.'], [new Headline(new WhoIsWorking([]), [], 1)->shortOpening(), new Headline(new WhoIsWorking([]), [], 0)->shortOpening()]);
+    }
+
     public function testOneWaitingItemIsFollowedByNeedsYou(): void
     {
         $headline = $this->headline([], [$this->running('sample', '7')]);

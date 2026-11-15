@@ -50,7 +50,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
     private const string FIRST_REVIEW = 'Nothing is running yet. Start the first review.';
 
-    private const string REVIEWING = 'The Code reviewers are reviewing change feat/a of alpha. Nothing needs you.';
+    private const string REVIEWING = 'The Code reviewers are reviewing change feat/a of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.';
 
     private ?string $secretBefore = null;
 

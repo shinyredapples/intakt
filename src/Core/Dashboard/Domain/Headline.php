@@ -44,6 +44,18 @@ final readonly class Headline
         return $this->running();
     }
 
+    // Counts the running changes instead of naming them, because named changes can take three lines on a phone and the line must stay within two (#2055, D4).
+    public function shortOpening(): string
+    {
+        $running = count($this->runningChanges());
+
+        if (0 === $running) {
+            return $this->opening();
+        }
+
+        return 'The '.self::REVIEWERS.' are reviewing '.$running.' '.(1 === $running ? 'change' : 'changes').'.';
+    }
+
     public function waitingCount(): int
     {
         return count($this->waiting);

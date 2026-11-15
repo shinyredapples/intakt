@@ -51,8 +51,24 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
         $line = $this->rendered(new Headline(new WhoIsWorking([$running]), [], 1));
 
-        self::assertSame('The Code reviewers are reviewing change 3 of sample. Nothing needs you.', $line->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change. Nothing needs you.', $line->text());
         self::assertCount(0, $line->filter('.count, a'));
+    }
+
+    public function testARunningChangeIsNamedOnWideScreensAndCountedOnPhones(): void
+    {
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3'), $this->review('round-5', '5')]), [], 2));
+
+        self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of sample.', $line->filter('.headline-long')->text());
+        self::assertSame('The Code reviewers are reviewing 2 changes.', $line->filter('.headline-short')->text());
+    }
+
+    public function testWithNothingRunningTheHeadlineHasOneOpening(): void
+    {
+        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 1));
+
+        self::assertSame('Nothing is running. Nothing needs you.', $line->text());
+        self::assertCount(0, $line->filter('.headline-long, .headline-short'));
     }
 
     public function testAFreshInstallsHeadlineIsItsOpeningAlone(): void

@@ -23,7 +23,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private const string ENDED_TEXT = 'Judged.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string HEADLINE_TARGET = 'target="board-headline"';
-    private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. Nothing needs you\.$/';
+    private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
 
     private string $directory = '';
 
