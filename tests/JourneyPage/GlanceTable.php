@@ -5,14 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
+use Intakt\Core\Platform\Contract\FigureKind;
+use Intakt\Core\Platform\Contract\Figures;
 
 // Rows are limited to what the API and the usage file can give, because a first commit or a first release has no source there.
 final readonly class GlanceTable
 {
     private const int MILLION = 1_000_000;
 
+    private Figures $figures;
+
     public function __construct(private DateTimeImmutable $today)
     {
+        $this->figures = new Figures();
     }
 
     /**
@@ -27,13 +32,25 @@ final readonly class GlanceTable
 
         $rows = [
             ['First merged pull request', [] === $merges ? 'none yet' : min($merges)->format('Y-m-d')],
-            ['Pull requests merged', count($merges).' (to '.$this->today->format('Y-m-d').')'],
+            ['Pull requests merged', $this->counted(count($merges)).' (to '.$this->today->format('Y-m-d').')'],
             ['Issues closed', $this->closed($issues)],
-            ['Busiest day', [] === $perDay ? 'none yet' : max($perDay).' merges ('.array_search(max($perDay), $perDay, true).')'],
-            ['Tokens per merged pull request', [] === $merges ? 'none yet' : $this->tokens(intdiv($tokens, count($merges))).' ('.$this->tokens($tokens).' tokens over '.count($merges).' merges)'],
+            ['Busiest day', [] === $perDay ? 'none yet' : $this->counted(max($perDay)).' merges ('.array_search(max($perDay), $perDay, true).')'],
+            ['Tokens per merged pull request', [] === $merges ? 'none yet' : $this->perMerge($tokens, count($merges))],
         ];
+        $sources = [new FigureSource(FigureKind::Counted, 'from the pull requests and issues the GitHub API lists'), new FigureSource(FigureKind::Measured, TokenCharts::USAGE)];
 
-        return new PageRegion('glance', implode("\n", ['| | |', '|---|---|', ...array_map(static fn (array $row): string => '| '.$row[0].' | '.$row[1].' |', $rows)]));
+        return new PageRegion('glance', implode("\n", [
+            '| | |',
+            '|---|---|',
+            ...array_map(static fn (array $row): string => '| '.$row[0].' | '.$row[1].' |', $rows),
+            '',
+            implode(' ', array_map(static fn (FigureSource $source): string => $source->line(), $sources)),
+        ]));
+    }
+
+    private function counted(int $count): string
+    {
+        return $this->figures->marked((string) $count, FigureKind::Counted);
     }
 
     /**
@@ -44,7 +61,15 @@ final readonly class GlanceTable
         $dropped = count(array_filter($issues, static fn (Issue $issue): bool => $issue->dropped && !$issue->isOpen()));
         $done = count(array_filter($issues, static fn (Issue $issue): bool => $issue->isDone()));
 
-        return ($done + $dropped).' ('.$done.' done, '.$dropped.' dropped)';
+        return $this->counted($done + $dropped).' ('.$done.' done, '.$dropped.' dropped)';
+    }
+
+    // Measured tokens over counted merges: the parts stand beside the ratio with their own markers, never as one figure of mixed kinds.
+    private function perMerge(int $tokens, int $merges): string
+    {
+        $measured = fn (int $amount): string => $this->figures->marked($this->tokens($amount), FigureKind::Measured);
+
+        return $measured(intdiv($tokens, $merges)).' ('.$measured($tokens).' tokens over '.$this->counted($merges).' merges)';
     }
 
     private function tokens(int $tokens): string

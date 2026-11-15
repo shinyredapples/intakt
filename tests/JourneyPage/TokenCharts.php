@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
+use Intakt\Core\Platform\Contract\FigureKind;
 
 // The days come from the usage file alone and the merges from the counts kept for it, so the token charts change only when the usage file does.
 final readonly class TokenCharts
 {
     public const string PER_MERGE = 'tokens-per-merge';
+    public const string USAGE = "the providers' usage answers, summed per day in `docs/journey/usage.jsonl`";
 
     /**
      * @param array<string, int> $mergesPerDay
@@ -20,10 +22,13 @@ final readonly class TokenCharts
     {
         $days = new DayRange()->days(array_map(static fn (TokenUsage $row): DateTimeImmutable => $row->day, $usage->rows));
 
+        $measured = new FigureSource(FigureKind::Measured, self::USAGE);
+        $perMerge = new FigureSource(FigureKind::Measured, "the day's tokens from ".self::USAGE.', divided by the pull requests merged that day, counted from the GitHub API');
+
         return [
-            new DailyChart('tokens-by-lane', 'Tokens per day by lane', ChartForm::StackedBars, $days, $this->byLane($usage, $days)),
-            new DailyChart('tokens-by-account', 'Tokens per day by account', ChartForm::StackedBars, $days, $this->byAccount($usage, $days)),
-            new DailyChart(self::PER_MERGE, 'Tokens per merged pull request', ChartForm::Line, $days, [$this->perMerge($usage, $mergesPerDay, $days)]),
+            new DailyChart('tokens-by-lane', 'Tokens per day by lane', ChartForm::StackedBars, $days, $this->byLane($usage, $days), $measured),
+            new DailyChart('tokens-by-account', 'Tokens per day by account', ChartForm::StackedBars, $days, $this->byAccount($usage, $days), $measured),
+            new DailyChart(self::PER_MERGE, 'Tokens per merged pull request', ChartForm::Line, $days, [$this->perMerge($usage, $mergesPerDay, $days)], $perMerge),
         ];
     }
 

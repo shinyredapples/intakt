@@ -48,7 +48,7 @@ final class JourneyCommandTest extends TestCase
         $page = $this->page();
         self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
         self::assertStringContainsString('docs/journey.md regenerated', $run->getOutput());
-        self::assertMatchesRegularExpression('/\| Pull requests merged \| 3 \(to \d{4}-\d{2}-\d{2}\) \|/', $page);
+        self::assertMatchesRegularExpression('/\| Pull requests merged \| 3 counted \(to \d{4}-\d{2}-\d{2}\) \|/', $page);
         self::assertStringContainsString('| M0 Unblock | fixes the build loop needed first | 10-27 | 11-05 | 2 / 0 |', $page);
     }
 

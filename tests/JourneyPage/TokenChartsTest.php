@@ -19,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(UsageVendor::class)]
 #[UsesClass(DailyChart::class)]
 #[UsesClass(ChartSeries::class)]
+#[UsesClass(FigureSource::class)]
 final class TokenChartsTest extends TestCase
 {
     public function testTheLaneChartHasOneSeriesPerVendorAndLaneThatHasUsageInTheirFixedOrder(): void

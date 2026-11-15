@@ -35,6 +35,7 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(DayRange::class)]
 #[UsesClass(DailyChart::class)]
 #[UsesClass(ChartSeries::class)]
+#[UsesClass(FigureSource::class)]
 #[UsesClass(ChartForm::class)]
 #[UsesClass(ChartRegion::class)]
 #[UsesClass(ChartCanvas::class)]
@@ -63,10 +64,12 @@ final class JourneyPageTest extends TestCase
             | | |
             |---|---|
             | First merged pull request | 2026-10-26 |
-            | Pull requests merged | 3 (to 2026-11-13) |
-            | Issues closed | 5 (4 done, 1 dropped) |
-            | Busiest day | 2 merges (2026-10-26) |
-            | Tokens per merged pull request | 4.00M (12.00M tokens over 3 merges) |
+            | Pull requests merged | 3 counted (to 2026-11-13) |
+            | Issues closed | 5 counted (4 done, 1 dropped) |
+            | Busiest day | 2 counted merges (2026-10-26) |
+            | Tokens per merged pull request | 4.00M measured (12.00M measured tokens over 3 counted merges) |
+
+            Counted: from the pull requests and issues the GitHub API lists. Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
             <!-- journey:end glance -->
             MD, $page);
     }
@@ -92,11 +95,13 @@ final class JourneyPageTest extends TestCase
 
         self::assertStringContainsString(<<<'MD'
             <!-- journey:begin tokens-per-merge -->
-            ![Tokens per merged pull request](journey/tokens-per-merge.svg)
+            ![Tokens per merged pull request (measured)](journey/tokens-per-merge.svg)
 
-            <details markdown="1"><summary>Tokens per merged pull request, as a table</summary>
+            Measured: the day's tokens from the providers' usage answers, summed per day in `docs/journey/usage.jsonl`, divided by the pull requests merged that day, counted from the GitHub API.
 
-            | Day | Tokens per merge |
+            <details markdown="1"><summary>Tokens per merged pull request (measured), as a table</summary>
+
+            | Day | Tokens per merge (measured) |
             |---|---|
             | 10-26 | 2,000,000 |
             | 10-27 | 7,000,000 |
@@ -146,7 +151,30 @@ final class JourneyPageTest extends TestCase
     {
         $tokens = $this->regeneratedTokens(908_000_000, 614);
 
-        self::assertStringContainsString('| Tokens per merged pull request | 1.48M (908M tokens over 614 merges) |', $tokens);
+        self::assertStringContainsString('| Tokens per merged pull request | 1.48M measured (908M measured tokens over 614 counted merges) |', $tokens);
+    }
+
+    public function testTheGlanceTableShowsMeasuredTokensBesideCountedMergesNeverAsOneUnlabeledFigure(): void
+    {
+        $tokens = $this->regeneratedTokens(500, 2);
+
+        self::assertStringContainsString('| Tokens per merged pull request | 250 measured (500 measured tokens over 2 counted merges) |', $tokens);
+    }
+
+    public function testEveryCountRowOfTheGlanceTableCarriesTheCountedMarker(): void
+    {
+        $tokens = $this->regeneratedTokens(500, 2);
+
+        self::assertStringContainsString('| Pull requests merged | 2 counted (to 2026-11-13) |', $tokens);
+        self::assertStringContainsString('| Issues closed | 0 counted (0 done, 0 dropped) |', $tokens);
+        self::assertStringContainsString('| Busiest day | 2 counted merges (2026-10-26) |', $tokens);
+    }
+
+    public function testATableWithoutMergesShowsNoTokenFigureToLabel(): void
+    {
+        $tokens = $this->regeneratedTokens(500, 0);
+
+        self::assertStringContainsString('| Tokens per merged pull request | none yet |', $tokens);
     }
 
     private function regeneratedTokens(int $total, int $merges): string
