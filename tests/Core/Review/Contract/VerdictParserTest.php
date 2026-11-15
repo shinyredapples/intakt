@@ -119,10 +119,12 @@ final class VerdictParserTest extends KernelTestCase
     }
 
     #[DataProviderExternal(BrokenFieldRules::class, 'cases')]
-    public function testABrokenFieldRuleIsRefusedAsUnreadableSayingWhy(string $output, string $why): void
+    public function testABrokenFieldRuleIsRefusedAsUnreadableSayingWhy(string $output, string $why, string ...$otherWordings): void
     {
+        $wordings = array_map(static fn (string $wording): string => preg_quote($wording, '/'), [$why, ...$otherWordings]);
+
         $this->expectException(VerdictUnreadable::class);
-        $this->expectExceptionMessageMatches('/'.preg_quote($why, '/').'/');
+        $this->expectExceptionMessageMatches('/'.implode('|', $wordings).'/');
 
         $_ = new VerdictParser()->parse($this->reviewer()->answering($output));
     }
