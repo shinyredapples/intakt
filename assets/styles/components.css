@@ -484,7 +484,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .step-nav { display: flex; gap: var(--s8); margin-top: var(--s32); padding-top: calc(var(--s16) + var(--s4)); border-top: 1px solid var(--hairline); }
 @media (max-width: 760px) {
   .setup { padding: var(--s24) var(--s16) var(--s48); }
-  .step-nav { position: sticky; bottom: 0; background: var(--page); padding-bottom: var(--s12); }
+  /* Above the fixed tab bar, so the bar never covers the step's button, and over the steps that scroll under it. */
+  .step-nav { position: sticky; bottom: calc(var(--bar) + env(safe-area-inset-bottom)); z-index: 1; background: var(--page); padding-bottom: var(--s12); }
   .step-nav .btn.primary { flex: 1; }
 }
 .step { padding: var(--s24) 0; border-top: 1px solid var(--hairline); }
