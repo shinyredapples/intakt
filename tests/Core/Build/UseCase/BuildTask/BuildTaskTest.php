@@ -145,7 +145,7 @@ final class BuildTaskTest extends TestCase
     {
         touch($this->mirrors);
         $ledger = new InMemoryLedger();
-        $task = new BuildTask(self::listing([Issues::task(7)]), $this->checkoutIn($this->mirrors.'/mirrors'), $ledger);
+        $task = new BuildTask($this->listing([Issues::task(7)]), $this->checkoutIn($this->mirrors.'/mirrors'), $ledger);
 
         try {
             $outcome = $task->run($this->request(7, $this->remote->path));
@@ -203,13 +203,13 @@ final class BuildTaskTest extends TestCase
      */
     private function taskOf(InMemoryLedger $ledger, array $issues): BuildTask
     {
-        return new BuildTask(self::listing($issues), $this->checkout(), $ledger);
+        return new BuildTask($this->listing($issues), $this->checkout(), $ledger);
     }
 
     /**
      * @param list<ListedIssue> $issues
      */
-    private static function listing(array $issues): IssueReads
+    private function listing(array $issues): IssueReads
     {
         $reads = self::createStub(IssueReads::class);
         $reads->method('listOpen')->willReturn(IssueListing::listed($issues, null));

@@ -39,6 +39,7 @@ final readonly class UpdateMirror
      * @throws InvalidArgumentException
      * @throws NetworkGitFailed
      * @throws MirrorNotUpdated
+     * @throws IOException
      */
     public function update(string $project, string $remote): string
     {
