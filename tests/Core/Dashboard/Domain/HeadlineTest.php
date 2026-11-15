@@ -130,6 +130,13 @@ final class HeadlineTest extends TestCase
         self::assertSame('The Code reviewers are reviewing change 3 of '.str_repeat('p', 31).'…. Nothing needs you.', $headline->text());
     }
 
+    public function testAProjectNameOfWideCharactersIsCutByDisplayWidth(): void
+    {
+        $headline = $this->headline([$this->running(str_repeat('項', 20), '3')], []);
+
+        self::assertSame('The Code reviewers are reviewing change 3 of '.str_repeat('項', 15).'…. Nothing needs you.', $headline->text());
+    }
+
     public function testALongChangeNameIsCutLikeAProjectName(): void
     {
         $headline = $this->headline([$this->running('sample', 'feat/a-branch-name-that-goes-on-and-on')], []);
