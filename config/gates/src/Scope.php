@@ -53,9 +53,16 @@ final readonly class Scope
     public function changedPaths(string $mergeBase): array
     {
         $staged = $this->gitLines(['diff-index', '--cached', '--name-only', '-z', $mergeBase]);
-        $untracked = $this->gitLines(['ls-files', '-z', '--others', self::GITIGNORE_ONLY]);
 
-        return array_values(array_unique([...$staged, ...$this->unstagedPaths(), ...$untracked]));
+        return array_values(array_unique([...$staged, ...$this->unstagedPaths(), ...$this->untrackedPaths()]));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function untrackedPaths(): array
+    {
+        return $this->gitLines(['ls-files', '-z', '--others', self::GITIGNORE_ONLY]);
     }
 
     public function includes(string $path): bool
