@@ -1,0 +1,237 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Dashboard\Infrastructure;
+
+use Closure;
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Dashboard\Contract\DashboardTopics;
+use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Domain\Board;
+use Intakt\Core\Dashboard\Domain\Headline;
+use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Dashboard\Infrastructure\BoardHeadlineRoundUpdates;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
+use Intakt\Core\Dashboard\Infrastructure\LiveBoardHeadline;
+use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundProgress;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\StoredSerializerFactory;
+use Override;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
+use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Uid\Uuid;
+use Twig\Environment;
+
+#[CoversClass(BoardHeadlineRoundUpdates::class)]
+#[CoversClass(LiveBoardHeadline::class)]
+#[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LedgerRounds::class)]
+#[UsesClass(RoundPayloads::class)]
+#[UsesClass(LedgerPayloads::class)]
+#[UsesClass(Board::class)]
+#[UsesClass(Headline::class)]
+#[UsesClass(WhoIsWorking::class)]
+#[UsesClass(LiveEvent::class)]
+#[UsesClass(RoundProgress::class)]
+final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
+{
+    private const string ROUND = '0199a5b4-0000-7000-8000-000000000001';
+
+    private const string STREAM_START = '<turbo-stream action="update" target="board-headline"><template>';
+
+    private DashboardLedger $ledger;
+
+    private RecordedRoundUpdates $round;
+
+    private PublishedLiveEvents $live;
+
+    private BufferingLogger $log;
+
+    private LockFactory $locks;
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $this->round = new RecordedRoundUpdates();
+        $this->live = new PublishedLiveEvents();
+        $this->log = new BufferingLogger();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    public function testAStartedReviewerPublishesTheBoardHeadlineOnTheShellTopic(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $this->ledger->startReviewer(self::ROUND, 'security');
+
+        $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
+
+        self::assertSame([DashboardTopics::SHELL], array_map(static fn (LiveEvent $event): string => $event->topic, $this->live->events));
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha. Nothing needs you.', $this->headlineIn(0));
+    }
+
+    public function testThePublishedHeadlineUpdatesTheBoardHeadlineTarget(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+
+        $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
+
+        self::assertStringStartsWith(self::STREAM_START, $this->live->events[0]->turboStream);
+    }
+
+    public function testAStartedReviewerReachesTheRoundsOwnUpdatesToo(): void
+    {
+        $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
+
+        self::assertSame(['reviewer-1'], $this->round->started);
+    }
+
+    public function testAJudgedRoundPublishesAHeadlineWithoutItsReviewers(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $this->ledger->startReviewer(self::ROUND, 'security');
+        $this->ledger->judgeRound(self::ROUND);
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        self::assertSame('Nothing is running. Nothing needs you.', $this->headlineIn(0));
+    }
+
+    public function testAChangedRoundPublishesTheHeadlineAfterTheRoundsOwnUpdate(): void
+    {
+        $publishedBefore = null;
+        $this->round->whilePublishingNextRoundChange = function () use (&$publishedBefore): void {
+            $publishedBefore = count($this->live->events);
+        };
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+
+        self::assertSame(0, $publishedBefore);
+        self::assertCount(1, $this->live->events);
+    }
+
+    public function testAFreshInstallPublishesTheFirstReviewHeadline(): void
+    {
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(0, 2, false));
+
+        self::assertSame('Nothing is running yet. Start the first review.', $this->headlineIn(0));
+    }
+
+    public function testToolCallsTextRetriesSummariesAndStopsReachOnlyTheRoundsOwnUpdates(): void
+    {
+        $round = Uuid::fromString(self::ROUND);
+        $updates = $this->updates();
+
+        $updates->toolCalled($round, 'reviewer-1', 'read_file');
+        $updates->textStreamed($round, 'reviewer-1', 'Reading.');
+        $updates->reviewerAskedAgain($round, 'reviewer-1', 'try-2');
+        $updates->summaryChanged($round);
+        $updates->reviewerStopped($round, 'reviewer-1');
+
+        self::assertSame(['tool reviewer-1 read_file', 'text reviewer-1 Reading.', 'asked again reviewer-1', 'summary '.self::ROUND, 'stopped reviewer-1'], $this->round->seen);
+        self::assertSame([], $this->live->events);
+    }
+
+    public function testAProjectNameIsEscapedInThePublishedHeadline(): void
+    {
+        $this->ledger->startRound(self::ROUND, '</template><b>x</b>');
+        $this->ledger->startReviewer(self::ROUND, 'security');
+
+        $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
+
+        self::assertStringContainsString('of &lt;/template&gt;&lt;b&gt;x&lt;/b&gt;.', $this->live->events[0]->turboStream);
+        self::assertSame(1, substr_count($this->live->events[0]->turboStream, '</template>'));
+    }
+
+    public function testALedgerThatCannotBeReadPublishesNothingAndIsLoggedWithTheRound(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException(new RuntimeException('database is locked'));
+
+        new BoardHeadlineRoundUpdates($this->round, $this->headline($ledger, $this->live))->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
+
+        $logs = $this->log->cleanLogs();
+        self::assertSame([], $this->live->events);
+        self::assertSame([['warning', 'The board headline was not published.']], array_map(static fn (array $log): array => [$log[0], $log[1]], $logs));
+        self::assertSame(self::ROUND, $logs[0][2]['round'] ?? null);
+    }
+
+    public function testAHeadlineReadBeforeAnotherReviewerStartedIsNeverTheLastOnePublished(): void
+    {
+        $other = '0199a5b4-0000-7000-8000-000000000002';
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $this->ledger->startReviewer(self::ROUND, 'security');
+        $secondWorker = $this->headline($this->ledger, $this->live);
+        $live = new class($this->live, function () use ($other, $secondWorker): void {
+            $this->ledger->startRoundOf('feat/b', $other, 1);
+            $this->ledger->startReviewer($other, 'security');
+            $secondWorker->publishLatest(Uuid::fromString($other));
+        }) implements LiveUpdates {
+            /** @param Closure(): void $meanwhile */
+            public function __construct(private readonly LiveUpdates $live, private ?Closure $meanwhile)
+            {
+            }
+
+            #[Override]
+            public function publish(LiveEvent $event): void
+            {
+                $meanwhile = $this->meanwhile;
+                $this->meanwhile = null;
+                $this->live->publish($event);
+
+                if ($meanwhile instanceof Closure) {
+                    $meanwhile();
+                }
+            }
+        };
+
+        new BoardHeadlineRoundUpdates($this->round, $this->headline($this->ledger, $live))->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
+
+        self::assertCount(2, $this->live->events);
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. Nothing needs you.', $this->headlineIn(1));
+    }
+
+    private function updates(): BoardHeadlineRoundUpdates
+    {
+        return new BoardHeadlineRoundUpdates($this->round, $this->headline($this->ledger, $this->live));
+    }
+
+    private function headline(Ledger $ledger, LiveUpdates $live): LiveBoardHeadline
+    {
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+
+        return new LiveBoardHeadline($this->pagesOn($ledger), $twig, $live, $this->locks, $this->log);
+    }
+
+    private function pagesOn(Ledger $ledger): LedgerReviewPages
+    {
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
+
+        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
+    }
+
+    private function headlineIn(int $event): string
+    {
+        $stream = $this->live->events[$event]->turboStream;
+        self::assertStringStartsWith(self::STREAM_START, $stream);
+
+        return trim(html_entity_decode(strip_tags($stream)));
+    }
+}
