@@ -7,7 +7,6 @@ namespace Intakt\Core\Dashboard\UseCase\ShowReview;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
-use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
@@ -49,7 +48,7 @@ final readonly class ShowReviewController
      */
     private function unfinishedTopicsOf(Review $review): array
     {
-        $unfinished = array_filter($review->rounds, static fn (ReviewedRound $reviewed): bool => ReviewState::Judged !== $reviewed->state);
+        $unfinished = array_filter($review->rounds, static fn (ReviewedRound $reviewed): bool => !$reviewed->isJudged() && !$reviewed->hasEnded());
 
         return array_values(array_map(static fn (ReviewedRound $reviewed): string => MercureRoundUpdates::topicOf($reviewed->round), $unfinished));
     }

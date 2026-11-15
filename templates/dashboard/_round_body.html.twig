@@ -5,6 +5,7 @@
 
     {% set unfinished = reviewed.state.name != 'Judged' %}
     <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
+    {% set running = unfinished and not reviewed.hasEnded %}
     {% if not unfinished %}
     {% set failed = reviewed.failedReviewers %}
     <p class="outcome" id="round-{{ reviewed.round }}-outcome">{% if reviewed.outcome is not null %}Outcome: {{ reviewed.outcome.value }}, decided by the quorum policy {{ reviewed.quorum.value }} over all {{ reviewed.reviewers }} reviewers.{% if failed > 0 %} {{ failed }} of {{ reviewed.reviewers }} reviewers failed, and a failed reviewer gives no approval.{% endif %}{% else %}No outcome shown: this round was started before Intakt recorded its quorum policy.{% endif %}</p>
@@ -13,7 +14,7 @@
     <h3>Reviewers</h3>
     <p class="muted">{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
     {# Shown while the round runs with no reviewer started too, because a reviewer that finishes after the page loaded is streamed into it. #}
-    {% if reviewed.outcomes is not empty or unfinished %}
+    {% if reviewed.outcomes is not empty or running %}
     <div class="table-scroll" tabindex="0" role="region" aria-label="Reviewers of round {{ reviewed.round }}">
     <table class="ledger reviewers">
         <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th class="num">Findings</th><th>Note</th><th>Stop</th></tr></thead>
@@ -26,7 +27,7 @@
                 <td>{{ outcome.decision ?? '' }}</td>
                 <td class="num">{{ outcome.findings ?? '' }}</td>
                 <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
-                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if unfinished and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
+                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if running and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">
                     {{ include('dashboard/components/button.html.twig', {kind: 'danger', small: true, type: 'submit', label: 'Stop this reviewer', confirm: 'Click again to stop'}, with_context = false) }}
                 </form>{% endif %}</td>
