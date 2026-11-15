@@ -38,6 +38,31 @@ final class HeadlineTest extends TestCase
         self::assertSame('Nothing is running yet. Start the first review.', $headline->text());
     }
 
+    public function testAFreshInstallIsFreshAndABoardWithACardIsNot(): void
+    {
+        self::assertTrue(new Headline(new WhoIsWorking([]), [], 0)->isFresh());
+        self::assertFalse(new Headline(new WhoIsWorking([]), [], 1)->isFresh());
+    }
+
+    public function testTheCountedFormSaysNothingIsRunningWhenNoReviewerRuns(): void
+    {
+        self::assertSame('Nothing is running.', new Headline(new WhoIsWorking([]), [], 1)->countedSentence());
+    }
+
+    public function testTheCountedFormCountsOneRunningChangeInTheSingular(): void
+    {
+        $headline = $this->headline([$this->running('sample', '3', 'correctness', 'security')], []);
+
+        self::assertSame('The Code reviewers are reviewing 1 change.', $headline->countedSentence());
+    }
+
+    public function testTheCountedFormCountsEveryRunningChangeWithoutNamingOne(): void
+    {
+        $headline = $this->headline([$this->running('sample', '3'), $this->running('shop', '5'), $this->running('docs', '8')], []);
+
+        self::assertSame('The Code reviewers are reviewing 3 changes.', $headline->countedSentence());
+    }
+
     public function testOneRunningReviewNamesTheCodeReviewersAndItsChange(): void
     {
         $headline = $this->headline([$this->running('sample', '3')], []);

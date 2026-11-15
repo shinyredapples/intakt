@@ -29,11 +29,16 @@ final readonly class Headline
     // Ends with "needs you:" while something waits, so the page can link the words that follow to it.
     public function text(): string
     {
-        if (0 === $this->cards) {
+        if ($this->isFresh()) {
             return 'Nothing is running yet. Start the first review.';
         }
 
         return $this->runningSentence().' '.$this->waitingSentence();
+    }
+
+    public function isFresh(): bool
+    {
+        return 0 === $this->cards;
     }
 
     // The first card of Waiting on you, because the Waiting on you page (#911) does not exist yet.
@@ -51,6 +56,18 @@ final readonly class Headline
         }
 
         return 'The '.self::REVIEWERS.' are reviewing '.$this->named($changes).'.';
+    }
+
+    // The phone's form, because two names already pass two lines at 390 wide (#1942, D4), and the lanes and cards name every change.
+    public function countedSentence(): string
+    {
+        $count = count($this->runningChanges());
+
+        return match ($count) {
+            0 => 'Nothing is running.',
+            1 => 'The '.self::REVIEWERS.' are reviewing 1 change.',
+            default => 'The '.self::REVIEWERS.' are reviewing '.$count.' changes.',
+        };
     }
 
     /**

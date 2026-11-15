@@ -163,11 +163,19 @@ final class BoardStylesTest extends TestCase
         self::assertDoesNotMatchRegularExpression('/#[0-9a-fA-F]{3,8}\b|rgb/', $rule);
     }
 
-    public function testOnAPhoneTheHeadlineIsCappedToTwoLines(): void
+    public function testOnAPhoneTheHeadlineCountsTheRunningChangesInsteadOfNamingThem(): void
     {
-        preg_match('/@media \(max-width: 760px\) \{\s*\.page-head \.lead \{([^}]*)\}/', $this->sheet(), $rule);
+        preg_match('/@media \(max-width: 760px\) \{\s*\.page-head \.lead\[data-counted\]::before \{([^}]*)\}\s*\.page-head \.lead \.named \{([^}]*)\}/', $this->sheet(), $rule);
 
-        self::assertMatchesRegularExpression('/-webkit-line-clamp:\s*2;\s*line-clamp:\s*2;\s*overflow:\s*hidden/', $rule[1] ?? '');
+        self::assertMatchesRegularExpression('/^\s*content:\s*attr\(data-counted\);\s*$/', $rule[1] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rule[2] ?? '');
+    }
+
+    public function testNoRuleClipsTheHeadline(): void
+    {
+        $leadRules = array_filter($this->rulesOf($this->sheet()), static fn (string $selector): bool => str_contains($selector, '.lead'), ARRAY_FILTER_USE_KEY);
+
+        self::assertDoesNotMatchRegularExpression('/line-clamp|overflow:\s*hidden|text-overflow/', implode("\n", $leadRules));
     }
 
     private function sheet(): string

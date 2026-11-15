@@ -430,9 +430,10 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .page-head .actions { margin-left: auto; }
 /* The same amber as the Count badge of a Waiting on you column, so no new color. */
 .page-head .lead .needs-you { background: var(--amber); color: var(--ink-fixed); border-radius: var(--r-round); padding: 0 var(--s8); font-weight: 600; }
-/* DESIGN.md, phone: the headline is two lines at most, whatever the names in it. */
+/* DESIGN.md, phone: the headline is two lines at most, so it counts the running changes instead of naming them, never clipped. */
 @media (max-width: 760px) {
-  .page-head .lead { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .page-head .lead[data-counted]::before { content: attr(data-counted); }
+  .page-head .lead .named { display: none; }
 }
 .now-stop-idle ~ .stop-round { display: none; }
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }

@@ -83,6 +83,24 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(0, $lead->filter('a'));
     }
 
+    public function testABoardDuringAReviewCarriesTheCountedFormForAPhone(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $lead = $this->browser->request('GET', '/')->filter('.page-head .lead');
+
+        self::assertSame('The Code reviewers are reviewing 1 change.', $lead->attr('data-counted'));
+        self::assertSame('The Code reviewers are reviewing change 42 of alpha.', $lead->filter('.named')->text());
+    }
+
+    public function testAFreshInstallsHeadlineHasNoCountedForm(): void
+    {
+        $lead = $this->browser->request('GET', '/')->filter('.page-head .lead');
+
+        self::assertNull($lead->attr('data-counted'));
+    }
+
     public function testABoardAfterAJudgedReviewSaysNothingIsRunning(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
