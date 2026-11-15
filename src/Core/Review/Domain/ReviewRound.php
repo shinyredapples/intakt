@@ -10,6 +10,7 @@ use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictStanding;
@@ -51,6 +52,9 @@ final class ReviewRound implements HasPlace
     #[ORM\Column(name: 'verdicts_stale', options: ['default' => false])]
     private bool $verdictsStale = false;
 
+    #[ORM\Column(options: ['default' => false])]
+    private bool $replay = false;
+
     public function __construct(
         #[ORM\Id]
         #[ORM\Column(type: 'uuid')]
@@ -87,6 +91,16 @@ final class ReviewRound implements HasPlace
     public function hasStaleVerdicts(): bool
     {
         return $this->verdictsStale;
+    }
+
+    public function markAsReplay(): void
+    {
+        $this->replay = true;
+    }
+
+    public function replayMark(): ReplayMark
+    {
+        return $this->replay ? ReplayMark::Replay : ReplayMark::Live;
     }
 
     // Throws for a round stored before identities were recorded, because such a round names no head to publish on.
