@@ -77,7 +77,7 @@ final class OptionalProjectMemoryTest extends TestCase
         }
 
         rewind($output);
-        $lines = array_values(array_filter(explode("\n", (string) stream_get_contents($output))));
+        $lines = array_values(array_filter(explode("\n", (string) stream_get_contents($output)), static fn (string $line): bool => '' !== $line));
         self::assertCount(1, $lines);
         /** @var array{level: string, context: array<string, mixed>} $record */
         $record = json_decode($lines[0], true, flags: JSON_THROW_ON_ERROR);
@@ -97,7 +97,7 @@ final class OptionalProjectMemoryTest extends TestCase
         $memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
 
         rewind($output);
-        self::assertCount(2, array_filter(explode("\n", (string) stream_get_contents($output))));
+        self::assertCount(2, array_filter(explode("\n", (string) stream_get_contents($output)), static fn (string $line): bool => '' !== $line));
     }
 
     private function failing(?LogicException $failure = null): ProjectMemory

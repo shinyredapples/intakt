@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use ArrayObject;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
@@ -13,14 +14,15 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 
 // Memory only helps a review, so a project without an embeddings account or a set-up store reviews without it instead of failing every reviewer.
-final class OptionalProjectMemory implements ProjectMemory
+final readonly class OptionalProjectMemory implements ProjectMemory
 {
-    private bool $missingModelReported = false;
+    private ArrayObject $reported;
 
     public function __construct(
-        private readonly ProjectMemory $memory,
-        private readonly LoggerInterface $logger,
+        private ProjectMemory $memory,
+        private LoggerInterface $logger,
     ) {
+        $this->reported = new ArrayObject();
     }
 
     #[Override]
@@ -37,14 +39,15 @@ final class OptionalProjectMemory implements ProjectMemory
         return RelevantMemory::within([], $query->maxBytes);
     }
 
+    // The notice lives in an object held by a readonly property because it must outlive the per-message reset: a reset would bring back one line per review.
     // The same condition holds for every call until the operator adds an account, so one line per start is enough and carries no trace because nothing is broken.
     private function reportMissingModelOnce(string $project, ProjectMemoryNeedsEmbeddingModel $missing): void
     {
-        if ($this->missingModelReported) {
+        if ($this->reported->count() > 0) {
             return;
         }
 
-        $this->missingModelReported = true;
+        $this->reported->append($project);
         $this->logger->info($missing->getMessage(), ['project' => $project]);
     }
 }
