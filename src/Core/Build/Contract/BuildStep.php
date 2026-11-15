@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Build\UseCase\BuildTask;
+namespace Intakt\Core\Build\Contract;
 
 // Declared in the order a build runs them, because the outcome derives the passed steps from that order.
 enum BuildStep: string
