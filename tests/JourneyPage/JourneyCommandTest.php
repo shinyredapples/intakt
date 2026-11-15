@@ -102,6 +102,19 @@ final class JourneyCommandTest extends TestCase
         self::assertStringContainsString('| 10-27 | 3,500,000 |', $this->region('tokens-per-merge'));
     }
 
+    public function testAKeptMergeCountOfZeroIsCountedAgainFromTheRecordedAnswers(): void
+    {
+        $this->runJourney();
+        $counted = $this->page();
+        file_put_contents($this->root.'/docs/journey.md', str_replace(': 2026-10-26=2 2026-10-27=1 -->', ': 2026-10-26=0 2026-10-27=1 -->', $counted));
+
+        $run = $this->runJourney();
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame("docs/journey.md regenerated\n", $run->getOutput());
+        self::assertSame($counted, $this->page());
+    }
+
     public function testAPageWithoutMarkersIsLeftUnwritten(): void
     {
         file_put_contents($this->root.'/docs/journey.md', "No markers here.\n");

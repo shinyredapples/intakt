@@ -9,7 +9,8 @@ use DateTimeImmutable;
 // The merges are counted once for each version of the usage file and kept on the page, so a later merge on a usage day changes the token charts only together with the usage file.
 final readonly class CountedMerges
 {
-    private const string KEPT = '/^<!-- merges counted for usage sha256:([0-9a-f]{64}):((?: \d{4}-\d{2}-\d{2}=\d+)*) -->$/m';
+    // A kept count is positive and fits an integer, because the tokens of its day are divided by it: a line edited to zero or to a huge count is counted again.
+    private const string KEPT = '/^<!-- merges counted for usage sha256:([0-9a-f]{64}):((?: \d{4}-\d{2}-\d{2}=[1-9]\d{0,8})*) -->$/m';
 
     /**
      * @return ?array<string, int>

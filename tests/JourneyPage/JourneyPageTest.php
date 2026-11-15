@@ -130,6 +130,18 @@ final class JourneyPageTest extends TestCase
         self::assertEquals($once, $this->regenerated($once->page));
     }
 
+    public function testAKeptMergeCountOfZeroCountsTheMergesAgain(): void
+    {
+        $digest = (string) hash_file('sha256', self::FIXTURES.'/usage.jsonl');
+        $kept = '<!-- merges counted for usage sha256:'.$digest.': 2026-10-26=0 2026-10-27=1 -->';
+        $page = str_replace('<!-- journey:end tokens-per-merge -->', $kept."\n".'<!-- journey:end tokens-per-merge -->', (string) file_get_contents(self::FIXTURES.'/journey.md'));
+
+        $regenerated = $this->regenerated($page)->page;
+
+        self::assertStringContainsString('<!-- merges counted for usage sha256:'.$digest.': 2026-10-26=2 2026-10-27=1 -->', $regenerated);
+        self::assertStringContainsString('| 10-26 | 2,000,000 |', $regenerated);
+    }
+
     public function testATokenTotalOfAMillionOrMoreIsWrittenInMillions(): void
     {
         $tokens = $this->regeneratedTokens(908_000_000, 614);

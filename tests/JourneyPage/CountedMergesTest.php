@@ -6,6 +6,7 @@ namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -56,6 +57,31 @@ final class CountedMergesTest extends TestCase
     public function testAKeptLineThatDoesNotReadAsCountsIsNotUsed(): void
     {
         self::assertNull(new CountedMerges()->keptOn('<!-- merges counted for usage sha256:'.self::USAGE.': 2026-10-27=one -->', self::USAGE));
+    }
+
+    #[DataProvider('countsThatAreNotAPositiveNumberOfMerges')]
+    public function testAKeptCountThatIsNotAPositiveNumberOfMergesIsNotUsed(string $count): void
+    {
+        self::assertNull(new CountedMerges()->keptOn('<!-- merges counted for usage sha256:'.self::USAGE.': 2026-10-26='.$count.' 2026-10-27=1 -->', self::USAGE));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function countsThatAreNotAPositiveNumberOfMerges(): iterable
+    {
+        yield 'zero' => ['0'];
+        yield 'zero in several digits' => ['00'];
+        yield 'a leading zero' => ['02'];
+        yield 'one digit more than the largest kept count' => ['1000000000'];
+        yield 'more digits than an integer holds' => [str_repeat('9', 30)];
+    }
+
+    public function testTheSmallestAndTheLargestKeptCountAreReadBack(): void
+    {
+        $page = '<!-- merges counted for usage sha256:'.self::USAGE.': 2026-10-26=1 2026-10-27=999999999 -->';
+
+        self::assertSame(['2026-10-26' => 1, '2026-10-27' => 999_999_999], new CountedMerges()->keptOn($page, self::USAGE));
     }
 
     public function testAPageWithoutKeptCountsHasNone(): void
