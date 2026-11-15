@@ -20,12 +20,18 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
+use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackChecks;
+use Intakt\Core\HandBack\Contract\HandBackRefusal;
+use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
@@ -35,6 +41,7 @@ use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -58,6 +65,12 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildTaskRequest::class)]
 #[UsesClass(BuildStepNotRecorded::class)]
 #[UsesClass(BuildCheckoutFailed::class)]
+#[UsesClass(HandBackCheck::class)]
+#[UsesClass(HandBack::class)]
+#[UsesClass(AcceptedHandBack::class)]
+#[UsesClass(RefusedHandBack::class)]
+#[UsesClass(HandBackRefusal::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(Issues::class)]
 #[UsesClass(ScriptedJobRunner::class)]
@@ -89,8 +102,11 @@ final class BuildTaskCommandTest extends TestCase
     /** @var array<string, string> */
     private array $options = [];
 
+    private AcceptedHandBack|RefusedHandBack $checked;
+
     protected function setUp(): void
     {
+        $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
         $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->folder.'/clone');
         new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
@@ -108,7 +124,20 @@ final class BuildTaskCommandTest extends TestCase
         $tester = $this->execute(new InMemoryLedger(), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString("task passed\nmirror passed\nclone passed\nbuild_job passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString("task passed\nmirror passed\nclone passed\nbuild_job passed\nhand_back_check passed\ntitle Task 7", $tester->getDisplay());
+    }
+
+    public function testItExitsWithFailureWhenTheHandBackCheckRefusesTheBundle(): void
+    {
+        $this->checked = new RefusedHandBack(HandBackRefusal::TouchesMain);
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString("build_job passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString('hand_back_check failed: '.HandBackRefusal::TouchesMain->reason(), $tester->getDisplay());
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
     }
 
     public function testItExitsWithFailureWhenTheBuildJobHandsBackNoCommit(): void
@@ -220,8 +249,11 @@ final class BuildTaskCommandTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
         $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence()), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        $checks = self::createStub(HandBackChecks::class);
+        $checks->method('check')->willReturn($this->checked);
+        $handBacks = new HandBackCheck($checkout, $checks, new Filesystem(), $this->folder.'/hand-backs');
 
-        return new BuildTask($issues, $checkout, $routing, $builds, $ledger);
+        return new BuildTask($issues, $checkout, $routing, $builds, $handBacks, $ledger);
     }
 
     private function listing(ListedIssue $task): IssueReads

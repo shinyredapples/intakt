@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Contract;
 
-// What a build needs of git before its job starts: the project's mirror brought up to date, then a clone of it.
+// What a build needs of git: the project's mirror brought up to date, then a clone of it, the mirror's path for the hand-back check, and the checked head taken into the clone.
 interface BuildCheckout
 {
     /**
@@ -16,4 +16,14 @@ interface BuildCheckout
      * @throws BuildCheckoutFailed
      */
     public function makeClone(string $project, string $branch, string $directory): void;
+
+    /**
+     * @throws BuildCheckoutFailed
+     */
+    public function mirrorOf(string $project): string;
+
+    /**
+     * @throws BuildCheckoutFailed
+     */
+    public function takeCheckedHead(string $project, BranchHead $head, string $directory): void;
 }

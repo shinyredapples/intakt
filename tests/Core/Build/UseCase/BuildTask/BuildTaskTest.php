@@ -22,10 +22,12 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -35,8 +37,23 @@ use Intakt\Core\Git\Domain\TaskBranch;
 use Intakt\Core\Git\Infrastructure\GitBuildCheckout;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
+use Intakt\Core\Git\UseCase\TakeCheckedHead\TakeCheckedHead;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
+use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackNotChecked;
+use Intakt\Core\HandBack\Contract\HandBackRefusal;
+use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Core\HandBack\Domain\AttributionLines;
+use Intakt\Core\HandBack\Domain\BundleHeader;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleFile;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\BundleSecretScan;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\GivenHistory;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
+use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
@@ -53,6 +70,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PathGlob;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
@@ -67,11 +85,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(BuildTask::class)]
 #[CoversClass(BuildTaskOutcome::class)]
@@ -79,8 +99,26 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[CoversClass(BuildStepNotRecorded::class)]
 #[CoversClass(GitBuildCheckout::class)]
 #[CoversClass(BuildCheckoutFailed::class)]
+#[CoversClass(HandBackCheck::class)]
+#[UsesClass(CheckHandBack::class)]
+#[UsesClass(BundleFile::class)]
+#[UsesClass(GivenHistory::class)]
+#[UsesClass(IncomingObjects::class)]
+#[UsesClass(RepositoryGit::class)]
+#[UsesClass(StrippedCommits::class)]
+#[UsesClass(BundleSecretScan::class)]
+#[UsesClass(AttributionLines::class)]
+#[UsesClass(BundleHeader::class)]
+#[UsesClass(HandBack::class)]
+#[UsesClass(AcceptedHandBack::class)]
+#[UsesClass(RefusedHandBack::class)]
+#[UsesClass(HandBackRefusal::class)]
+#[UsesClass(HandBackNotChecked::class)]
+#[UsesClass(JobCredentials::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(MakeBuildClone::class)]
+#[UsesClass(TakeCheckedHead::class)]
+#[UsesClass(BranchHead::class)]
 #[UsesClass(MirrorNotUpdated::class)]
 #[UsesClass(BuildCloneNotMade::class)]
 #[UsesClass(Mirrors::class)]
@@ -121,6 +159,11 @@ final class BuildTaskTest extends TestCase
 
     private const string IMAGE = 'intakt-job-alpha:1';
 
+    // Because CI runs as a user without a git identity, and git refuses a commit without one.
+    private const array IDENTITY = ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', '-c', 'commit.gpgsign=false'];
+
+    private string $scanner = 'gitleaks';
+
     private string $mirrors;
 
     private string $clone;
@@ -137,8 +180,11 @@ final class BuildTaskTest extends TestCase
 
     private JobRunner $runner;
 
+    private Filesystem $handBackFiles;
+
     protected function setUp(): void
     {
+        $this->handBackFiles = new Filesystem();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
         $this->clone = $this->mirrors.'-clone';
         $this->output = $this->mirrors.'-output';
@@ -156,26 +202,160 @@ final class BuildTaskTest extends TestCase
     protected function tearDown(): void
     {
         $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->output, $this->mirrors.'-prompts']);
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs']);
         $this->remote->remove();
     }
 
-    public function testATaskWhoseStepsAllPassRecordsEveryStepUpToTheBuildJobInOrder(): void
+    public function testATaskWhoseStepsAllPassEndsAfterTheHandBackCheckWithTheCheckedCloneInPlace(): void
     {
+        $this->runner = $this->committingRunner();
         $ledger = new InMemoryLedger();
 
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
         self::assertFalse($outcome->failed());
-        self::assertSame(BuildStep::BuildJob, $outcome->last);
-        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob], $outcome->passedSteps());
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck], $outcome->passedSteps());
         self::assertSame('Task 7', $outcome->task?->title);
-        self::assertSame(array_fill(0, 4, LedgerEventKind::BuildStepEnded), $ledger->kinds());
-        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
-        self::assertSame(['passed', 'passed', 'passed', 'passed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame(array_fill(0, 5, LedgerEventKind::BuildStepEnded), $ledger->kinds());
+        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'passed'], array_column($ledger->payloads(), 'outcome'));
         self::assertSame('7', $ledger->payloads()[0]['task']);
-        self::assertNull($ledger->payloads()[3]['failure']);
+        self::assertNull($ledger->payloads()[4]['failure']);
         self::assertFileExists($this->clone.'/a.txt');
+        self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
+        self::assertSame('', $this->inClone('status', '--porcelain'));
+        self::assertSame("Build task 7\n", $this->inClone('log', '-1', '--format=%s', 'feat/task'));
+        self::assertSame("commit\n", $this->git(['--git-dir='.new Mirrors($this->mirrors)->pathOf('alpha'), 'cat-file', '-t', trim($this->inClone('rev-parse', 'feat/task'))], $this->mirrors));
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
+    public function testABundleTheHandBackCheckRefusesEndsThereWithItsRefusalRecordedAndNoLaterStepRuns(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame(HandBackRefusal::Unreadable->reason(), $outcome->failure);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob], $outcome->passedSteps());
+        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame(HandBackRefusal::Unreadable->reason(), $ledger->payloads()[4]['failure']);
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
+    public function testABundleOfAnotherBranchEndsAtTheHandBackCheckWithItsRefusal(): void
+    {
+        $this->runner = $this->committingRunner('feat/other');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame(HandBackRefusal::NamesAnotherRef->reason(), $outcome->failure);
+        self::assertSame('failed', $ledger->payloads()[4]['outcome']);
+        self::assertFileDoesNotExist($this->clone.'/b.txt');
+    }
+
+    public function testAGitCallKilledInTheHandBackCheckEndsThereWithFixedWordsAsItsRecordedFailure(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->programs = new ProgramOnPath();
+        $this->programs->killOn('git', 'unbundle');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('the hand-back check was killed by signal 15', $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame('the hand-back check was killed by signal 15', $ledger->payloads()[4]['failure']);
+        self::assertFileDoesNotExist($this->clone.'/b.txt');
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
+    public function testAGitCallKilledWhileTheCloneTakesTheCheckedHeadEndsAtTheHandBackCheckWithFixedWords(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->programs = new ProgramOnPath();
+        $this->programs->killOn('git', '--hard');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('git was killed by signal 15', $outcome->failure);
+        self::assertSame('git was killed by signal 15', $ledger->payloads()[4]['failure']);
+    }
+
+    public function testAHandBackCheckWhoseScannerCannotRunEndsThereWithItsMessage(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->scanner = $this->mirrors.'-no-scanner';
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertStringContainsString('secret scan', (string) $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
+    public function testABundleFolderThatCannotBeCreatedEndsAtTheHandBackCheckWithItsMessage(): void
+    {
+        touch($this->mirrors.'-hand-backs');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertStringContainsString('-hand-backs', (string) $outcome->failure);
+        self::assertSame('failed', $ledger->payloads()[4]['outcome']);
+    }
+
+    public function testARefusedBundleWhoseFileCannotBeRemovedEndsAtTheHandBackCheckWithTheRemovalFailureRecorded(): void
+    {
+        $this->handBackFiles = $this->filesThatCannotRemove('Failed to remove file "handback.bundle": Permission denied');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $ledger->payloads()[4]['failure']);
+    }
+
+    public function testAnAcceptedBundleWhoseFileCannotBeRemovedFailsTheHandBackCheckWithTheRemovalFailureRecorded(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->handBackFiles = $this->filesThatCannotRemove('Failed to remove file "handback.bundle": Permission denied');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $ledger->payloads()[4]['failure']);
+        self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
+    }
+
+    public function testABundleThatCannotBeWrittenEndsAtTheHandBackCheckAndLeavesNoFileBehind(): void
+    {
+        $this->handBackFiles = $this->filesThatCannotWrite('disk full');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('disk full', $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
     }
 
     public function testABuildJobThatHandsBackNoCommitEndsAtTheBuildJobStepWithItsVerdictRecorded(): void
@@ -304,7 +484,7 @@ final class BuildTaskTest extends TestCase
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'model:strong'])])->run($this->request(7, $this->remote->path));
 
-        self::assertFalse($outcome->failed());
+        self::assertContains(BuildStep::BuildJob, $outcome->passedSteps());
     }
 
     public function testAFailedCloneStepRunsNoBuildJob(): void
@@ -515,8 +695,72 @@ final class BuildTaskTest extends TestCase
     private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
     {
         $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence()), $this->runner, new PhpGate(), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $checks = new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
+        $handBacks = new HandBackCheck($checkout, $checks, $this->handBackFiles, $this->mirrors.'-hand-backs');
 
-        return new BuildTask($issues, $checkout, $this->routing, $builds, $ledger);
+        return new BuildTask($issues, $checkout, $this->routing, $builds, $handBacks, $ledger);
+    }
+
+    // Writes the bundle file as the real filesystem does, so the check runs on it, and fails only its removal.
+    private function filesThatCannotRemove(string $message): Filesystem
+    {
+        $real = new Filesystem();
+        $files = self::createStub(Filesystem::class);
+        $files->method('mkdir')->willReturnCallback($real->mkdir(...));
+        $files->method('tempnam')->willReturnCallback($real->tempnam(...));
+        $files->method('dumpFile')->willReturnCallback($real->dumpFile(...));
+        $files->method('remove')->willThrowException(new IOException($message));
+
+        return $files;
+    }
+
+    private function filesThatCannotWrite(string $message): Filesystem
+    {
+        $real = new Filesystem();
+        $files = self::createStub(Filesystem::class);
+        $files->method('mkdir')->willReturnCallback($real->mkdir(...));
+        $files->method('tempnam')->willReturnCallback($real->tempnam(...));
+        $files->method('dumpFile')->willThrowException(new IOException($message));
+        $files->method('remove')->willReturnCallback($real->remove(...));
+
+        return $files;
+    }
+
+    // In a clone of the build clone, because the job commits in a clone of its own in the container, and bundled against main, because docker/job/build.sh bundles it so.
+    private function committingRunner(string $ref = 'feat/task'): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($ref): JobResult {
+            $job = $this->clone.'-job';
+            $this->git(['clone', '--quiet', $spec->inputs[0]->hostPath, $job], dirname($job));
+            new Filesystem()->dumpFile($job.'/b.txt', 'two');
+            $this->git(['add', 'b.txt'], $job);
+            $this->git([...self::IDENTITY, 'commit', '--quiet', '-m', 'Build task 7'], $job);
+            $this->git(['update-ref', 'refs/heads/'.$ref, 'HEAD'], $job);
+            $this->git(['bundle', 'create', '--quiet', $job.'.bundle', $ref, '^origin/main'], $job);
+            $bundle = (string) file_get_contents($job.'.bundle');
+            new Filesystem()->remove([$job, $job.'.bundle']);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => "feat: task 7\n"]));
+        });
+
+        return $runner;
+    }
+
+    private function inClone(string ...$arguments): string
+    {
+        return $this->git(array_values($arguments), $this->clone);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function git(array $arguments, string $directory): string
+    {
+        $process = new Process(['git', ...$arguments], $directory);
+        $process->mustRun();
+
+        return $process->getOutput();
     }
 
     /**
@@ -542,7 +786,7 @@ final class BuildTaskTest extends TestCase
 
     private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
     {
-        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors));
+        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
     }
 
     private function mirrorUpdate(Mirrors $mirrors, PersistingStoreInterface $locks): UpdateMirror
