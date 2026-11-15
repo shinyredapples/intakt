@@ -11,7 +11,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'intakt:build:task', description: 'Read one issue of a project as the task, update the project\'s mirror and make the build clone, recording each step in the ledger')]
+#[AsCommand(name: 'intakt:build:task', description: 'Read one issue of a project as the task, update the project\'s mirror, make the build clone and run the build job in it, recording each step in the ledger')]
 final readonly class BuildTaskCommand
 {
     public function __construct(private BuildTask $buildTask)
@@ -47,13 +47,13 @@ final readonly class BuildTaskCommand
             return sprintf('"%s" is not an issue number', $input->issue);
         }
 
-        foreach (['remote' => $input->remote, 'branch' => $input->branch, 'directory' => $input->directory] as $name => $value) {
+        foreach (['remote' => $input->remote, 'branch' => $input->branch, 'directory' => $input->directory, 'image' => $input->image] as $name => $value) {
             if (null === $value || '' === $value) {
                 return sprintf('The --%s option is required.', $name);
             }
         }
 
-        return new BuildTaskRequest($input->project, (int) $input->issue, (string) $input->remote, (string) $input->branch, (string) $input->directory);
+        return new BuildTaskRequest($input->project, (int) $input->issue, (string) $input->remote, (string) $input->branch, (string) $input->directory, (string) $input->image);
     }
 
     private function report(SymfonyStyle $io, BuildTaskOutcome $outcome): void
