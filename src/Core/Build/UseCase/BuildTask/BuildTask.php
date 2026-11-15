@@ -15,7 +15,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use NoDiscard;
 
-// One run builds one task and stops at the first step that fails; a failed step is recorded, never retried here.
+// Because the build lane calls this for one task at a time, a run stops at the first failed step and never retries it: sending a failure back to the builder is the next task.
 final readonly class BuildTask
 {
     public function __construct(
@@ -34,21 +34,27 @@ final readonly class BuildTask
         $task = $this->readTask($request);
 
         if (!$task instanceof ListedIssue) {
-            return $this->stoppedAt($request, BuildStep::Task, $task, null);
+            $this->record($request, BuildStep::Task, $task);
+
+            return new BuildTaskOutcome(BuildStep::Task, $task, null);
         }
 
         $this->record($request, BuildStep::Task, null);
         $failure = $this->updateMirror($request);
 
         if (null !== $failure) {
-            return $this->stoppedAt($request, BuildStep::Mirror, $failure, $task);
+            $this->record($request, BuildStep::Mirror, $failure);
+
+            return new BuildTaskOutcome(BuildStep::Mirror, $failure, $task);
         }
 
         $this->record($request, BuildStep::Mirror, null);
         $failure = $this->makeClone($request);
 
         if (null !== $failure) {
-            return $this->stoppedAt($request, BuildStep::Clone, $failure, $task);
+            $this->record($request, BuildStep::Clone, $failure);
+
+            return new BuildTaskOutcome(BuildStep::Clone, $failure, $task);
         }
 
         $this->record($request, BuildStep::Clone, null);
@@ -56,7 +62,7 @@ final readonly class BuildTask
         return new BuildTaskOutcome(BuildStep::Clone, null, $task);
     }
 
-    // The failure's text when the task cannot be read, because the caller names the issue and nothing else may stand in for it.
+    // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
     private function readTask(BuildTaskRequest $request): ListedIssue|string
     {
         try {
@@ -66,7 +72,7 @@ final readonly class BuildTask
         }
 
         foreach ($listing->issues() as $issue) {
-            // GitHub lists pull requests among the issues, and a pull request is no task.
+            // Because GitHub lists pull requests among the issues, and a pull request is no task.
             if ($issue->number === $request->issue && !$issue->isPullRequest) {
                 return $issue;
             }
@@ -97,16 +103,9 @@ final readonly class BuildTask
         return null;
     }
 
-    private function stoppedAt(BuildTaskRequest $request, BuildStep $step, string $failure, ?ListedIssue $task): BuildTaskOutcome
-    {
-        $this->record($request, $step, $failure);
-
-        return new BuildTaskOutcome($step, $failure, $task);
-    }
-
     private function record(BuildTaskRequest $request, BuildStep $step, ?string $failure): void
     {
-        // The task is the issue number, never its title or body, which are untrusted text.
+        // Because the title and body are untrusted text, the payload names the task by its number only.
         $payload = json_encode([
             'project' => $request->project,
             'task' => (string) $request->issue,

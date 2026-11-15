@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
-// In the order a build runs them; later parts of the plan add the steps after the clone.
+// Declared in the order a build runs them, because the outcome derives the passed steps from that order.
 enum BuildStep: string
 {
     case Task = 'task';

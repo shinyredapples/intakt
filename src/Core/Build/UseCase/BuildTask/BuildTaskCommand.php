@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -61,7 +62,7 @@ final readonly class BuildTaskCommand
             $io->writeln($step->value.' passed');
         }
 
-        if ($outcome->task?->title !== null && !$outcome->failed()) {
+        if ($outcome->task instanceof ListedIssue) {
             $io->writeln('title '.OutputFormatter::escape($outcome->task->title));
         }
 

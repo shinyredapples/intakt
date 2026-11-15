@@ -18,6 +18,6 @@ Each step appends one `LedgerEventKind::BuildStepEnded` (`build_step_ended`) eve
 
 ## The door
 
-The command prints `<step> passed` for each step that passed, then `title <title>` (escaped, because the title is untrusted) when all passed, or an error block `<step> failed: <message>` and exit code 1 for the failing step. An issue number that is not a whole number from 1 to 999999999, a missing `--remote`, `--branch` or `--directory`, and a step the ledger did not record fail with a message and exit code 1.
+The command prints `<step> passed` for each step that passed, then `title <title>` (escaped, because the title is untrusted) once the task was read, and for a failing step an error block `<step> failed: <message>` and exit code 1. An issue number that is not a whole number from 1 to 999999999, a missing `--remote`, `--branch` or `--directory`, and a step the ledger did not record fail with a message and exit code 1.
 
 Tests: `BuildTaskTest` (a failure at each step, a pull request of the number, a ledger that does not record, all steps passing, over a local git remote), `BuildTaskCommandTest`.

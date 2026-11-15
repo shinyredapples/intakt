@@ -8,7 +8,7 @@ use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 
 final readonly class BuildTaskOutcome
 {
-    // The last step that ran: the one that failed, or the final step when every step passed.
+    // $last is the step that failed, or the final step when every step passed, because the run stops at the first failure.
     public function __construct(
         public BuildStep $last,
         public ?string $failure,
