@@ -51,7 +51,7 @@ final class PagesCommandTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
         self::assertStringContainsString('| Clock | done |', $this->site('index.md'));
-        self::assertMatchesRegularExpression('/\| Pull requests merged \| 3 \(to \d{4}-\d{2}-\d{2}\) \|/', $this->site('journey/index.md'));
+        self::assertMatchesRegularExpression('/\| Pull requests merged \| 3 counted \(to \d{4}-\d{2}-\d{2}\) \|/', $this->site('journey/index.md'));
     }
 
     public function testEveryChartAndTheTimelineIsAnImageOfTheJourneyPageAndLiesBesideIt(): void

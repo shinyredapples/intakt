@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
+use Intakt\Core\Platform\Contract\FigureKind;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(YScale::class)]
 #[UsesClass(ChartPalette::class)]
 #[UsesClass(DailyChart::class)]
+#[UsesClass(FigureSource::class)]
 #[UsesClass(ChartSeries::class)]
 #[UsesClass(JourneyDates::class)]
 final class ChartSvgTest extends TestCase
@@ -49,7 +51,7 @@ final class ChartSvgTest extends TestCase
 
     public function testADayWithoutAValueBreaksTheLineAndTheLastValueIsLabelled(): void
     {
-        $chart = new DailyChart('open', 'Open', ChartForm::Line, $this->days(4), [new ChartSeries('Open issues', [1, 2, null, 3])]);
+        $chart = new DailyChart('open', 'Open', ChartForm::Line, $this->days(4), [new ChartSeries('Open issues', [1, 2, null, 3])], $this->source());
 
         $svg = new LineSvg()->svg($chart);
 
@@ -60,7 +62,7 @@ final class ChartSvgTest extends TestCase
 
     public function testEveryValueWithoutANeighborOnEitherSideIsDrawnAsADot(): void
     {
-        $chart = new DailyChart('merge', 'Merge', ChartForm::Line, $this->days(5), [new ChartSeries('Tokens per merge', [5, null, 7, null, 3])]);
+        $chart = new DailyChart('merge', 'Merge', ChartForm::Line, $this->days(5), [new ChartSeries('Tokens per merge', [5, null, 7, null, 3])], $this->source());
 
         $svg = new LineSvg()->svg($chart);
 
@@ -71,7 +73,7 @@ final class ChartSvgTest extends TestCase
 
     public function testALineWithoutAnyValueDrawsNoPathAndNoLabel(): void
     {
-        $svg = new LineSvg()->svg(new DailyChart('empty', 'Empty', ChartForm::Line, [], [new ChartSeries('Tokens per merge', [])]));
+        $svg = new LineSvg()->svg(new DailyChart('empty', 'Empty', ChartForm::Line, [], [new ChartSeries('Tokens per merge', [])], $this->source()));
 
         self::assertStringNotContainsString('<path', $svg);
         self::assertStringNotContainsString('<circle', $svg);
@@ -87,7 +89,7 @@ final class ChartSvgTest extends TestCase
 
     public function testEachBarOfAYearOfTwoSeriesKeepsAWidthAndItsRoundedTop(): void
     {
-        $svg = new GroupedBarSvg()->svg(new DailyChart('issues', 'Issues', ChartForm::GroupedBars, $this->days(366), [new ChartSeries('Created', array_fill(0, 366, 1)), new ChartSeries('Closed', array_fill(0, 366, 1))]));
+        $svg = new GroupedBarSvg()->svg(new DailyChart('issues', 'Issues', ChartForm::GroupedBars, $this->days(366), [new ChartSeries('Created', array_fill(0, 366, 1)), new ChartSeries('Closed', array_fill(0, 366, 1))], $this->source()));
 
         preg_match_all('/<path d="M([\d.]+),[\d.]+ V[\d.]+ Q[\d.]+,[\d.]+ ([\d.]+),[\d.]+ H([\d.]+) Q([\d.]+),/', $svg, $bars, PREG_SET_ORDER);
 
@@ -97,7 +99,7 @@ final class ChartSvgTest extends TestCase
 
     public function testEverySecondDayIsLabelledOnAChartOfEighteenDays(): void
     {
-        $svg = new GroupedBarSvg()->svg(new DailyChart('issues', 'Issues', ChartForm::GroupedBars, $this->days(18), [new ChartSeries('Created', array_fill(0, 18, 1))]));
+        $svg = new GroupedBarSvg()->svg(new DailyChart('issues', 'Issues', ChartForm::GroupedBars, $this->days(18), [new ChartSeries('Created', array_fill(0, 18, 1))], $this->source()));
 
         self::assertSame(9, substr_count($svg, 'text-anchor="middle" font-size="11"'));
         self::assertStringContainsString('>11-11</text>', $svg);
@@ -106,10 +108,18 @@ final class ChartSvgTest extends TestCase
 
     public function testTextIsEscapedForXml(): void
     {
-        $svg = new StackedBarSvg()->svg(new DailyChart('x', 'Tokens & <more>', ChartForm::StackedBars, [], []));
+        $svg = new StackedBarSvg()->svg(new DailyChart('x', 'Tokens & <more>', ChartForm::StackedBars, [], [], $this->source()));
 
-        self::assertStringContainsString('aria-label="Tokens &amp; &lt;more&gt;"', $svg);
-        self::assertStringContainsString('<title>Tokens &amp; &lt;more&gt;</title>', $svg);
+        self::assertStringContainsString('aria-label="Tokens &amp; &lt;more&gt; (measured)"', $svg);
+        self::assertStringContainsString('<title>Tokens &amp; &lt;more&gt; (measured)</title>', $svg);
+    }
+
+    public function testTheDrawingsTitleNamesTheKindOfItsFigures(): void
+    {
+        $svg = new GroupedBarSvg()->svg(new DailyChart('issues', 'Issues', ChartForm::GroupedBars, $this->days(1), [new ChartSeries('Created', [1])], new FigureSource(FigureKind::Counted, 'the forge')));
+
+        self::assertStringContainsString('aria-label="Issues (counted)"', $svg);
+        self::assertStringContainsString('<title>Issues (counted)</title>', $svg);
     }
 
     /**
@@ -117,7 +127,12 @@ final class ChartSvgTest extends TestCase
      */
     private function chart(ChartForm $form, array $series): DailyChart
     {
-        return new DailyChart('chart', 'Chart', $form, $this->days(1), $series);
+        return new DailyChart('chart', 'Chart', $form, $this->days(1), $series, $this->source());
+    }
+
+    private function source(): FigureSource
+    {
+        return new FigureSource(FigureKind::Measured, 'the usage file');
     }
 
     /**
