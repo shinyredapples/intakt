@@ -39,7 +39,7 @@ final class WorkerBrowser extends KernelBrowser
 
     protected function doRequest(object $request): Response
     {
-        if (null !== $this->step) {
+        if ($this->step instanceof Closure) {
             $request->attributes->set(RunRequestStep::ATTRIBUTE, $this->step);
             $this->step = null;
         }
