@@ -26,7 +26,7 @@ final readonly class Expectations
             throw InvalidExpectations::because($e->getMessage());
         }
 
-        if (!is_array($entries)) {
+        if (!is_array($entries) || !array_is_list($entries)) {
             throw InvalidExpectations::because('the top level must be a list of defects');
         }
 
