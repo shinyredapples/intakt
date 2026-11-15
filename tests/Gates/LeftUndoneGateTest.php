@@ -8,6 +8,7 @@ use Intakt\Gates\AddedLines;
 use Intakt\Gates\LeftUndoneCode;
 use Intakt\Gates\LeftUndoneComments;
 use Intakt\Gates\LeftUndoneGate;
+use Intakt\Gates\LeftUndoneTokens;
 use Intakt\Gates\Scope;
 use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -18,6 +19,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(AddedLines::class)]
 #[CoversClass(LeftUndoneComments::class)]
 #[CoversClass(LeftUndoneCode::class)]
+#[CoversClass(LeftUndoneTokens::class)]
 #[UsesClass(Workspace::class)]
 #[UsesClass(Scope::class)]
 final class LeftUndoneGateTest extends SandboxTestCase

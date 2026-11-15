@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\LeftUndoneCode;
+use Intakt\Gates\LeftUndoneTokens;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(LeftUndoneCode::class)]
+#[CoversClass(LeftUndoneTokens::class)]
 final class LeftUndoneCodeTest extends TestCase
 {
     /**
