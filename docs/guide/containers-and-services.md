@@ -63,7 +63,7 @@ Intakt finds them in your project's config, your `compose.yaml`, the services yo
 Planned, not built yet: today a reviewer reads the change and runs nothing. Once built, a review job gets the same sidecars as the check job, so a reviewer can:
 - run the project's tests against a **real database**;
 - start **the changed application itself** in its box and call it, to see that it boots and answers;
-- write a small test of its own for an edge case and run it there.
+- (planned) write a small test of its own for an edge case and run it there.
 
 ```mermaid
 flowchart LR
