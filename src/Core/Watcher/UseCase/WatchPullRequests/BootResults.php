@@ -7,6 +7,7 @@ namespace Intakt\Core\Watcher\UseCase\WatchPullRequests;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\BootAt;
 use Intakt\Core\Review\Contract\BootHarness;
@@ -35,6 +36,7 @@ final readonly class BootResults
         private WatcherLedger $ledger,
         private Redactor $redactor,
         private LoggerInterface $logger,
+        private ManagerRegistry $registry,
     ) {
     }
 
@@ -50,12 +52,22 @@ final readonly class BootResults
         }
 
         if ($stored instanceof BootRecord && $stored->answersAt($now)) {
+            if ($stored->alertPending()) {
+                $this->alert($key, $stored->outcome());
+                // Forgotten, because the claim changed the row behind the entity manager, which would keep answering with the pending alert.
+                $this->entities->detach($stored);
+            }
+
             return $stored->outcome();
         }
 
         $outcome = $this->safe($this->boot(new BootHarness(new BootAt($source, $key->main))));
-        $this->remember($key, $outcome, $stored);
+        $kept = $this->remember($key, $outcome, $stored);
         $this->record($key, $outcome);
+
+        if ($kept && BootState::Failed === $outcome->state) {
+            $this->alert($key, $outcome);
+        }
 
         return $outcome;
     }
@@ -102,7 +114,7 @@ final readonly class BootResults
     }
 
     // A crash is kept only for its back-off, because it is the boot step's fault and not main's: an expired one is replaced by the new result, so a broken tool is never trusted for good.
-    private function remember(BootKey $key, BootOutcome $outcome, ?BootRecord $expired): void
+    private function remember(BootKey $key, BootOutcome $outcome, ?BootRecord $expired): bool
     {
         $record = new BootRecord($key, $outcome, $this->clock->now());
 
@@ -116,9 +128,36 @@ final readonly class BootResults
             $this->entities->getConnection()->transactional(fn (Connection $inner): int|string => $this->replaceExpiredCrashAndInsert($inner, $record));
         } catch (UniqueConstraintViolationException) {
             // Ignored, because then another worker booted the same main meanwhile, and its row answers the next ask as well as this one would.
+            return false;
         } catch (Throwable $unstored) {
             $this->logger->error("Main's boot result could not be stored, so main boots again next time.", ['exception' => $unstored]);
+
+            return false;
         }
+
+        return true;
+    }
+
+    // Claimed and recorded in one transaction, because the ledger writes through the same connection: a refused alert, or a worker that stops before the commit, leaves the row pending, so a later ask records it. A crash is no alert, because it is the boot step's fault and not main's, and would repeat after every back-off.
+    private function alert(BootKey $key, BootOutcome $outcome): void
+    {
+        try {
+            $this->entities->getConnection()->transactional(function (Connection $claiming) use ($key, $outcome): void {
+                if ($this->claimedAlert($claiming, $key)) {
+                    $this->ledger->mainBootFailed($key, $outcome);
+                }
+            });
+        } catch (Throwable $unrecorded) {
+            // Reset as the ledger resets it after a failed flush, because a line the ledger flushed before the rollback stays managed though the database no longer holds it, and the next flush would close the manager.
+            $this->registry->resetManager();
+            $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
+        }
+    }
+
+    // One conditional update, so of two workers that read the same pending alert only the one that changes the row records it.
+    private function claimedAlert(Connection $claiming, BootKey $key): bool
+    {
+        return 1 === $claiming->update(BootRecord::TABLE, ['alert_pending' => false], BootRecord::keyRow($key) + ['alert_pending' => true], ['alert_pending' => 'boolean']);
     }
 
     // Only a crashed row is deleted, because a worker that already replaced it with a booted or failed result must keep that result for good.

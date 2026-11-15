@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Domain\GoalpostRule;
 use Intakt\Core\Review\Domain\ReviewerState;
 use Intakt\Core\Review\Domain\RoundReviewer;
@@ -70,6 +71,10 @@ final readonly class ReviewWithReviewerHandler
             $this->leases->handBack($reviewer);
 
             throw ReviewerMovesToAnotherAccount::now();
+        } catch (VerdictUnreadable $unreadable) {
+            $this->leases->recordFailure($reviewer, $unreadable->keySafeInWords() ?? $unreadable::class);
+
+            return;
             // Boundary: records every failure because one left uncaught would leave the reviewer running until its hold ends, and keeps the class only because a provider's message can echo a key.
         } catch (Throwable $failure) {
             $this->leases->recordFailure($reviewer, $failure::class);
