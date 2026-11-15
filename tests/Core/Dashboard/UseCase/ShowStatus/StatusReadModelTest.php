@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\ShowStatus;
 
-use Intakt\Core\Build\Contract\BuildStep;
-use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Holds;
 use Intakt\Core\Budget\Contract\SharedHold;
+use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
