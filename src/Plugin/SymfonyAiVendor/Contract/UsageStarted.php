@@ -20,6 +20,9 @@ final readonly class UsageStarted
         public ?string $round = null,
         // The model the tier resolved to, because Claude Code and Codex answers name none and API answers name a dated snapshot; null on rows written before it was kept.
         public ?string $model = null,
+        // The reviewer's id, so a bench can add up one reviewer's calls; left out when null, because the judge's rows and rows written before it was kept never had it.
+        #[Context(normalizationContext: [AbstractObjectNormalizer::SKIP_NULL_VALUES => true])]
+        public ?string $reviewer = null,
     ) {
     }
 }

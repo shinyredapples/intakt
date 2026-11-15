@@ -74,6 +74,27 @@ final class LiveRoundProgressTest extends KernelTestCase
         self::assertSame([$this->state($round, '1/2')], $this->fixture->updates->seen);
     }
 
+    public function testAReviewerAWorkerTakesIsPublishedAsStarted(): void
+    {
+        $this->fixture->start(2);
+        $taken = $this->fixture->bus->messages[0];
+
+        $this->fixture->deliver($taken, new VerdictPerRole([]));
+
+        self::assertSame([$taken->reviewerId], $this->fixture->updates->started);
+    }
+
+    public function testAReviewerThatAlreadyAnsweredIsNotPublishedAsStartedAgainWhenItsMessageComesBack(): void
+    {
+        $this->fixture->start(2);
+        $taken = $this->fixture->bus->messages[0];
+        $this->fixture->deliver($taken, new VerdictPerRole([]));
+
+        $this->fixture->deliver($taken, new VerdictPerRole([]));
+
+        self::assertSame([$taken->reviewerId], $this->fixture->updates->started);
+    }
+
     private function state(ReviewRound $round, string $finished): string
     {
         return sprintf('round %s %s', $round->id()->toRfc4122(), $finished);

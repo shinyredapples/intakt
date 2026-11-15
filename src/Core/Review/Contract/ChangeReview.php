@@ -9,9 +9,10 @@ use Intakt\Core\Budget\Contract\Cost;
 final readonly class ChangeReview
 {
     /**
-     * @param list<PanelVerdict> $verdicts
-     * @param list<Finding>      $actList
-     * @param list<string>       $reasons
+     * @param list<PanelVerdict>    $verdicts
+     * @param list<Finding>         $actList
+     * @param list<string>          $reasons
+     * @param list<ReviewerOutcome> $reviewers
      */
     public function __construct(
         public string $roundId,
@@ -24,6 +25,7 @@ final readonly class ChangeReview
         // Why the round is blocked, in plain words, because a blocked round has no findings to show.
         public array $reasons = [],
         public RoundEnds $end = RoundEnds::Judged,
+        public array $reviewers = [],
     ) {
     }
 
