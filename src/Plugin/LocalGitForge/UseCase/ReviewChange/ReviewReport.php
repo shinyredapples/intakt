@@ -77,7 +77,7 @@ final readonly class ReviewReport
             return $reading;
         }
 
-        return $this->figures->marked($reading, ReviewOutput::KINDS['cost']).(null === $cost->priceDate ? ', price date unknown' : ', prices of '.$cost->priceDate);
+        return $this->figures->marked($reading, ReviewOutput::KINDS['cost']).', '.$cost->priceDateReading();
     }
 
     private function findings(int $count): string

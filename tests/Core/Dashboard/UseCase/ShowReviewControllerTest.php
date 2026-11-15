@@ -309,9 +309,9 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0.0080 USD', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
-        self::assertSame('0.0024 USD', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
-        self::assertSelectorTextContains('p.summary', 'Cost: 0.0104 USD.');
+        self::assertSame('0.0080 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
+        self::assertSame('0.0024 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
+        self::assertStringEndsWith('Cost: 0.0104 USD estimated, price date unknown.', self::wordsOf($crawler->filter('p.summary')));
     }
 
     public function testAnUnknownCostNamesTheModelEscapedAndIsNeverZero(): void
@@ -336,7 +336,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0.0050 USD', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
+        self::assertSame('0.0050 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
         self::assertSelectorTextContains('p.summary', 'Cost: unknown, no price for model-b.');
     }
 
@@ -357,7 +357,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0.0000 USD']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0.0000 USD estimated, price date unknown']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testARoundStartedWithoutAChangeNameIsAReviewOfItsOwn(): void

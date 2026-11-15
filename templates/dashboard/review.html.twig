@@ -21,7 +21,7 @@
             {text: review.change ?: 'round ' ~ round, mono: true},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
-        <p class="lead summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }} {{ include(kind_label, {kind: kinds.Counted, at: 'summary-rounds'}, with_context = false) }}, {{ total.total }} tokens {{ include(kind_label, {kind: kinds.Measured, at: 'summary-tokens'}, with_context = false) }} in all. Cost: {{ review.cost.reading }}.</p>
+        <p class="lead summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }} {{ include(kind_label, {kind: kinds.Counted, at: 'summary-rounds'}, with_context = false) }}, {{ total.total }} tokens {{ include(kind_label, {kind: kinds.Measured, at: 'summary-tokens'}, with_context = false) }} in all. Cost: {{ include('dashboard/components/cost.html.twig', {cost: review.cost, at: 'summary-cost'}, with_context = false) }}.</p>
         {% if not can_start %}
         <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
         {% endif %}
