@@ -114,7 +114,7 @@ timeline
         11-11 : v0.1.0, release train twice a day, test instance follows each tag
         11-12 : M2 Panel and rounds done : v0.2.0 and v0.3.0 : 73 merges in one day : Second review worker, CI run becomes the build's check
         11-13 : Build slots 4 and 5, third review worker, CPU weights : Older work gains priority with age : Backlog cut, 70 issues closed as not planned, 84 parked : First clean-machine run of the judged path finds four defects : Trials of the claude_code and Codex reviewers
-        11-14 : Symfony 8.2.0-BETA2, three fixes sent upstream already in it : Review bench repository : Review figures labeled measured, counted or estimated
+        11-14 : Cooldown exception for Symfony 8.2.0-BETA2 (upgrade pending), three fixes sent upstream already in it : Review bench repository : Review figures labeled measured, counted or estimated
     section Deadline
         11-21 : Demo (planned)
         11-22 : Hackathon deadline 18:00 CET, repository public
@@ -186,8 +186,10 @@ The week before the deadline:
   [#1824](https://github.com/shinyredapples/intakt/issues/1824), [#1835](https://github.com/shinyredapples/intakt/issues/1835),
   [#1836](https://github.com/shinyredapples/intakt/issues/1836)): since 11-14 an approval from either counts only when
   the reviewer has read the change through the review server.
-- **11-14, Symfony 8.2.0-BETA2.** Intakt moved to the beta ([#1842](https://github.com/shinyredapples/intakt/issues/1842),
-  [#1900](https://github.com/shinyredapples/intakt/issues/1900)). Three fixes Intakt sent upstream are in it
+- **11-14, Symfony 8.2.0-BETA2.** The owner allowed a one-time exception to the 3-day release cooldown for
+  `symfony/*` at 8.2.0-BETA2 ([#1842](https://github.com/shinyredapples/intakt/issues/1842),
+  [#1900](https://github.com/shinyredapples/intakt/issues/1900)). The move itself is still to come: the lock file
+  keeps Symfony 8.1 and Highlights says Intakt installs 8.1. Three fixes Intakt sent upstream are in the beta
   (Config: a NaN value skips validation, [symfony/symfony#67911](https://github.com/symfony/symfony/pull/67911);
   Messenger: an early SIGTERM is ignored, [symfony/symfony#67912](https://github.com/symfony/symfony/pull/67912);
   Serializer: a list of objects accepts any object, [symfony/symfony#67913](https://github.com/symfony/symfony/pull/67913)).
