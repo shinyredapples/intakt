@@ -137,6 +137,34 @@ final class HeadlineTest extends TestCase
         self::assertSame('The Code reviewers are reviewing change feat/a-branch-name-that-goes-on… of sample. Nothing needs you.', $headline->text());
     }
 
+    public function testChangeNamesThatReadAsTheSameNumberAreDifferentChanges(): void
+    {
+        $headline = $this->headline([$this->running('sample', '1'), $this->running('sample', '01'), $this->running('sample', '1e0')], []);
+
+        self::assertSame('The Code reviewers are reviewing change 1 of sample, change 01 of sample and 1 more change. Nothing needs you.', $headline->text());
+    }
+
+    public function testAProjectAndChangeThatJoinToTheSameTextAreDifferentPlaces(): void
+    {
+        $headline = $this->headline([$this->running('ab', 'c'), $this->running('a', 'bc')], []);
+
+        self::assertSame('The Code reviewers are reviewing change c of ab and change bc of a. Nothing needs you.', $headline->text());
+    }
+
+    public function testRunningRoundsFromBeforeTheLedgerNamedTheirChangeAreNamedByTheirRound(): void
+    {
+        $headline = $this->headline([$this->unnamed('legacy-round-a'), $this->unnamed('legacy-round-b')], []);
+
+        self::assertSame('The Code reviewers are reviewing round legacy-round-a of sample and round legacy-round-b of sample. Nothing needs you.', $headline->text());
+    }
+
+    public function testTheReviewersOfOneUnnamedRoundAreNamedOnce(): void
+    {
+        $headline = $this->headline([$this->unnamed('legacy-round-a', 'correctness', 'security')], []);
+
+        self::assertSame('The Code reviewers are reviewing round legacy-round-a of sample. Nothing needs you.', $headline->text());
+    }
+
     /**
      * @param list<Review> $running
      * @param list<Review> $waiting
@@ -148,9 +176,22 @@ final class HeadlineTest extends TestCase
 
     private function running(string $project, string $change, string ...$roles): Review
     {
-        $since = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
-        $outcomes = array_map(static fn (string $role): ReviewerOutcome => new ReviewerOutcome($change.'-'.$role, $role, 'standard', $since), [] === $roles ? ['correctness'] : $roles);
+        return $this->review('r-'.$project.'-'.$change, $project, $change, $roles);
+    }
 
-        return new Review([new ReviewedRound(new RoundStart('r-'.$project.'-'.$change, $project, 2), new RoundPlace($change, 1), $since, null)->withOutcomes(array_values($outcomes))]);
+    private function unnamed(string $round, string ...$roles): Review
+    {
+        return $this->review($round, 'sample', '', $roles);
+    }
+
+    /**
+     * @param list<string> $roles
+     */
+    private function review(string $round, string $project, string $change, array $roles): Review
+    {
+        $since = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+        $outcomes = array_map(static fn (string $role): ReviewerOutcome => new ReviewerOutcome($round.'-'.$role, $role, 'standard', $since), [] === $roles ? ['correctness'] : $roles);
+
+        return new Review([new ReviewedRound(new RoundStart($round, $project, 2), new RoundPlace($change, 1), $since, null)->withOutcomes(array_values($outcomes))]);
     }
 }

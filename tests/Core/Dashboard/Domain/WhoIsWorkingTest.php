@@ -39,7 +39,7 @@ final class WhoIsWorkingTest extends TestCase
     {
         $working = new WhoIsWorking([$this->review('feat/a', 2, [$this->running('r1-a')])]);
 
-        self::assertEquals([new Lane('r1-a', 'correctness', 'standard', 'alpha', 'feat/a', 2, $this->since())], $working->lanes());
+        self::assertEquals([new Lane('r1-a', 'correctness', 'standard', 'alpha', 'feat/a', 2, $this->since(), 'r2feat/a')], $working->lanes());
     }
 
     /**

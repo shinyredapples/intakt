@@ -61,13 +61,28 @@ final readonly class Headline
         $places = [];
 
         foreach ($this->working->lanes() as $lane) {
-            $places[] = [$lane->project, $lane->change];
+            $places[$this->placeKey($lane)] ??= $this->place($lane);
         }
 
-        return array_map(
-            fn (array $place): string => 'change '.$this->short($place[1]).' of '.$this->short($place[0]),
-            array_values(array_unique($places, SORT_REGULAR)),
-        );
+        return array_values($places);
+    }
+
+    // Length-prefixed so that no two names meet in one key, and a string key so that "1" and "01" stay apart.
+    private function placeKey(Lane $lane): string
+    {
+        if ('' === $lane->change) {
+            return 'round:'.strlen($lane->roundId).':'.$lane->roundId;
+        }
+
+        return 'change:'.strlen($lane->project).':'.$lane->project.strlen($lane->change).':'.$lane->change;
+    }
+
+    // A round from before the ledger named its change has no change, so the round names it, as on its board card.
+    private function place(Lane $lane): string
+    {
+        $name = '' === $lane->change ? 'round '.$this->short($lane->roundId) : 'change '.$this->short($lane->change);
+
+        return $name.' of '.$this->short($lane->project);
     }
 
     /**
