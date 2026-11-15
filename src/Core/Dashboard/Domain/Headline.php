@@ -13,7 +13,7 @@ final readonly class Headline
     // Two, because the headline holds at most two clauses and the waiting count (#1942); the rest is counted.
     private const int NAMED = 2;
 
-    // Cut because a long name would push the line past two lines on a phone; the lanes and cards show it whole.
+    // Cut because a long name would stretch the line over several lines on a wide screen too; the lanes and cards show it whole.
     private const int NAME_WIDTH = 32;
 
     /**
@@ -26,14 +26,45 @@ final readonly class Headline
     ) {
     }
 
-    // Ends with "needs you:" while something waits, so the page can link the words that follow to it.
-    public function text(): string
+    // The sentence before the waiting count, apart so the page can mark the count with the needs-you style.
+    public function opening(): string
     {
         if (0 === $this->cards) {
             return 'Nothing is running yet. Start the first review.';
         }
 
-        return $this->running().' '.$this->waiting();
+        return $this->running();
+    }
+
+    // Counts the running changes instead of naming them, because named changes can take three lines on a phone and the line must stay within two (#2055, D4).
+    public function shortOpening(): string
+    {
+        $running = count($this->runningChanges());
+
+        if (0 === $running) {
+            return $this->opening();
+        }
+
+        return 'The '.self::REVIEWERS.' are reviewing '.$running.' '.(1 === $running ? 'change' : 'changes').'.';
+    }
+
+    public function waitingCount(): int
+    {
+        return count($this->waiting);
+    }
+
+    // Without the number, because the page prints the number as the needs-you count; empty on a fresh install, whose opening says it all.
+    public function waitingWords(): string
+    {
+        if (0 === $this->cards) {
+            return '';
+        }
+
+        return match ($this->waitingCount()) {
+            0 => 'Nothing needs you.',
+            1 => 'needs you:',
+            default => 'need you:',
+        };
     }
 
     // The first card of Waiting on you, because the Waiting on you page (#911) does not exist yet.
@@ -98,17 +129,6 @@ final readonly class Headline
         }
 
         return implode(', ', $named).' and '.$rest.' more '.(1 === $rest ? 'change' : 'changes');
-    }
-
-    private function waiting(): string
-    {
-        $count = count($this->waiting);
-
-        if (0 === $count) {
-            return 'Nothing needs you.';
-        }
-
-        return $count.(1 === $count ? ' needs' : ' need').' you:';
     }
 
     private function short(string $name): string
