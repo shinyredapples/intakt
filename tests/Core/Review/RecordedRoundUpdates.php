@@ -22,6 +22,12 @@ final class RecordedRoundUpdates implements RoundUpdates
      */
     public array $progress = [];
 
+    // Apart from $seen, because a reviewer starts in every delivery and the tests of what a round shows read $seen as a whole.
+    /**
+     * @var list<string>
+     */
+    public array $started = [];
+
     // Run once while the next round change is being published, so a test can let another worker finish in the middle of it.
     /**
      * @var (Closure(): void)|null
@@ -44,6 +50,12 @@ final class RecordedRoundUpdates implements RoundUpdates
     public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void
     {
         $this->seen[] = sprintf('asked again %s', $reviewer);
+    }
+
+    #[Override]
+    public function reviewerStarted(Uuid $round, string $reviewer): void
+    {
+        $this->started[] = $reviewer;
     }
 
     #[Override]

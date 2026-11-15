@@ -15,6 +15,7 @@ final readonly class LeftUndoneGate implements Gate
     public function __construct(
         private AddedLines $addedLines = new AddedLines(),
         private LeftUndoneComments $comments = new LeftUndoneComments(),
+        private LeftUndoneCode $code = new LeftUndoneCode(),
     ) {
     }
 
@@ -60,8 +61,14 @@ final readonly class LeftUndoneGate implements Gate
                 continue;
             }
 
-            foreach ($this->comments->markersOn($source, $addedLines ?? $this->everyLineOf($source)) as $line => $marker) {
+            $lines = $addedLines ?? $this->everyLineOf($source);
+
+            foreach ($this->comments->markersOn($source, $lines) as $line => $marker) {
                 $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
+            }
+
+            foreach ($this->code->findingsOn($path, $source, $lines) as $line => $finding) {
+                $findings[] = $path.':'.$line.': '.$finding;
             }
         }
 
