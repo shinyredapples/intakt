@@ -12,7 +12,6 @@ final readonly class LeftUndoneComments
     private const string MARKER = '/^(TODO|FIXME|XXX)\b/i';
     public const string ISSUE_REFERENCE = '\(#[1-9][0-9]*\):';
     private const string REASONED_EXCEPTION = '/^(?:TODO|FIXME|XXX)'.self::ISSUE_REFERENCE.'.*[[:alpha:]]/i';
-    private const string LINE_BREAK = '/\r\n|\r|\n/';
 
     /**
      * @param list<int> $addedLines
@@ -53,8 +52,10 @@ final readonly class LeftUndoneComments
             $line += substr_count($source, "\n", $counted, $token->pos - $counted);
             $counted = $token->pos;
 
-            foreach (preg_split(self::LINE_BREAK, $token->text, -1, PREG_SPLIT_OFFSET_CAPTURE) ?: [] as [$text, $offset]) {
-                $lines[] = [$line + substr_count($token->text, "\n", 0, $offset), $text];
+            foreach (explode("\n", $token->text) as $offset => $gitLine) {
+                foreach (explode("\r", $gitLine) as $text) {
+                    $lines[] = [$line + $offset, $text];
+                }
             }
         }
 
