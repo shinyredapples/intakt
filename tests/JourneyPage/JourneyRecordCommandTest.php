@@ -151,6 +151,8 @@ final class JourneyRecordCommandTest extends TestCase
      */
     private function recordedFiles(): array
     {
-        return array_values(array_diff((array) scandir($this->root.'/recorded'), ['.', '..']));
+        $names = scandir($this->root.'/recorded');
+
+        return false === $names ? [] : array_values(array_diff($names, ['.', '..']));
     }
 }

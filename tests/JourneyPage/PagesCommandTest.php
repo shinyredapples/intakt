@@ -137,7 +137,7 @@ final class PagesCommandTest extends TestCase
 
     private function runPages(string $recorded = self::FIXTURES.'/api'): Process
     {
-        $process = new Process([PHP_BINARY, 'bin/pages', 'site', '--recorded='.(realpath($recorded) ?: $recorded)], $this->root);
+        $process = new Process([PHP_BINARY, 'bin/pages', 'site', '--recorded='.$recorded],$this->root);
         $process->run();
 
         return $process;
@@ -153,7 +153,8 @@ final class PagesCommandTest extends TestCase
      */
     private function siteFiles(): array
     {
-        $files = array_map(fn (string $path): string => substr($path, strlen($this->root.'/site/')), [...(glob($this->root.'/site/*.*') ?: []), ...(glob($this->root.'/site/journey/*') ?: [])]);
+        $paths = [...(array) glob($this->root.'/site/*.*'), ...(array) glob($this->root.'/site/journey/*')];
+        $files = array_map(fn (string $path): string => substr($path, strlen($this->root.'/site/')), array_filter($paths, is_string(...)));
         sort($files);
 
         return $files;
