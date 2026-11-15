@@ -22,16 +22,24 @@ final readonly class RunClassifier
 
         $caught = [];
         $missed = [];
+        $valid = [];
         foreach ($expectations->defects as $defect) {
+            // A range the change does not hold is a wrong expectation, so no finding may count as catching it.
+            if (!$change->holdsRangeOf($defect)) {
+                $missed[$defect->id] = FailureCause::Bench;
+                continue;
+            }
+
+            $valid[] = $defect;
             if ($this->anyFindingMatches($outcome->findings, $defect)) {
                 $caught[] = $defect->id;
                 continue;
             }
 
-            $missed[$defect->id] = $change->holdsRangeOf($defect) ? FailureCause::Reviewer : FailureCause::Bench;
+            $missed[$defect->id] = FailureCause::Reviewer;
         }
 
-        $unmatched = $this->unmatchedFindings($expectations, $outcome->findings);
+        $unmatched = $this->unmatchedFindings($valid, $outcome->findings);
 
         return new RunVerdict(
             $expectations->isDefectFree(),
@@ -65,15 +73,16 @@ final readonly class RunClassifier
     }
 
     /**
-     * @param list<Finding> $findings
+     * @param list<PlantedDefect> $defects
+     * @param list<Finding>       $findings
      *
      * @return list<Finding>
      */
-    private function unmatchedFindings(Expectations $expectations, array $findings): array
+    private function unmatchedFindings(array $defects, array $findings): array
     {
         return array_values(array_filter(
             $findings,
-            fn (Finding $finding): bool => !array_any($expectations->defects, fn (PlantedDefect $defect): bool => $this->matcher->matches($finding, $defect)),
+            fn (Finding $finding): bool => !array_any($defects, fn (PlantedDefect $defect): bool => $this->matcher->matches($finding, $defect)),
         ));
     }
 }

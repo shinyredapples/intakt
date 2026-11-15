@@ -78,6 +78,27 @@ final class RunClassifierTest extends KernelTestCase
         self::assertSame(['d1' => FailureCause::Bench], $verdict->missed);
     }
 
+    public function testAFindingInARangePastTheEndOfTheFileIsABenchFailureNotACatch(): void
+    {
+        $findings = $this->scriptedFindings([['src/a.js', 5]]);
+
+        $verdict = $this->classify(self::DEFECTS, RunOutcome::completed($findings), new ChangeFiles(['src/a.js' => 5]));
+
+        self::assertSame([], $verdict->caught);
+        self::assertSame(['d1' => FailureCause::Bench], $verdict->missed);
+        self::assertSame($findings, $verdict->unmatched);
+    }
+
+    public function testAFindingInARangeEndingOnTheLastLineOfTheFileCatchesTheDefect(): void
+    {
+        $findings = $this->scriptedFindings([['src/a.js', 5]]);
+
+        $verdict = $this->classify(self::DEFECTS, RunOutcome::completed($findings), new ChangeFiles(['src/a.js' => 6]));
+
+        self::assertSame(['d1'], $verdict->caught);
+        self::assertSame([], $verdict->missed);
+    }
+
     public function testAMissedDefectOnAFileTheChangeLacksIsABenchFailure(): void
     {
         $verdict = $this->classify(self::DEFECTS, RunOutcome::completed([]), new ChangeFiles([]));

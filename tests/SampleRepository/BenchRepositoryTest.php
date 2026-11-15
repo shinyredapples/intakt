@@ -84,6 +84,14 @@ final class BenchRepositoryTest extends TestCase
         }
     }
 
+    public function testAnUnchangedContextLineIsNotCountedAsAdded(): void
+    {
+        $added = $this->addedLines($this->build(), 'bulk-discount-docs');
+
+        self::assertNotContains(1, $added['README.md'] ?? []);
+        self::assertContains(5, $added['README.md'] ?? []);
+    }
+
     /**
      * @return array<string, array{string}>
      */
@@ -119,12 +127,18 @@ final class BenchRepositoryTest extends TestCase
     {
         $added = [];
         $file = null;
+        $next = 0;
         foreach (explode("\n", $repository->diff('main', 'bench/'.$change)) as $line) {
-            if (str_starts_with($line, '+++ b/')) {
-                $file = substr($line, 6);
-            } elseif (null !== $file && 1 === preg_match('/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/', $line, $hunk)) {
-                $start = (int) $hunk[1];
-                $added[$file] = [...$added[$file] ?? [], ...range($start, $start + (int) ($hunk[2] ?? 1) - 1)];
+            if (str_starts_with($line, '+++ ')) {
+                $file = str_starts_with($line, '+++ b/') ? substr($line, 6) : null;
+            } elseif (str_starts_with($line, '--- ')) {
+                continue;
+            } elseif (1 === preg_match('/^@@ -\S+ \+(\d+)(?:,\d+)? @@/', $line, $hunk)) {
+                $next = (int) $hunk[1];
+            } elseif (null !== $file && str_starts_with($line, '+')) {
+                $added[$file][] = $next++;
+            } elseif (str_starts_with($line, ' ')) {
+                ++$next;
             }
         }
 
