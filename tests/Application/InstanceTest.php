@@ -153,11 +153,19 @@ final class InstanceTest extends InstanceTestCase
     public function testAConsoleCommandStoppedBySignalExitsWith128PlusTheSignalNumberThroughTheInstance(int $signal, int $expected): void
     {
         $command = <<<'PHP'
+            use Symfony\Component\Console\Application;
+            use Symfony\Component\Console\Command\Command;
+            use Symfony\Component\Console\Command\SignalableCommandInterface;
+            use Symfony\Component\Console\Input\ArrayInput;
+            use Symfony\Component\Console\Input\InputInterface;
+            use Symfony\Component\Console\Output\OutputInterface;
+            use Symfony\Component\EventDispatcher\EventDispatcher;
+
             require $argv[1].'/vendor/autoload.php';
-            $command = new class('wait') extends Symfony\Component\Console\Command\Command implements Symfony\Component\Console\Command\SignalableCommandInterface {
+            $command = new class('wait') extends Command implements SignalableCommandInterface {
                 public function getSubscribedSignals(): array { return [SIGINT, SIGTERM]; }
                 public function handleSignal(int $signal, int|false $previousExitCode = 0): int|false { return $previousExitCode; }
-                protected function execute(Symfony\Component\Console\Input\InputInterface $input, Symfony\Component\Console\Output\OutputInterface $output): int
+                protected function execute(InputInterface $input, OutputInterface $output): int
                 {
                     posix_kill(getmypid(), (int) $_SERVER['argv'][2]);
                     pcntl_signal_dispatch();
@@ -166,11 +174,11 @@ final class InstanceTest extends InstanceTestCase
                     return 0;
                 }
             };
-            $application = new Symfony\Component\Console\Application();
+            $application = new Application();
             $application->addCommand($command);
-            $application->setDispatcher(new Symfony\Component\EventDispatcher\EventDispatcher());
+            $application->setDispatcher(new EventDispatcher());
             $application->setAutoExit(false);
-            exit($application->run(new Symfony\Component\Console\Input\ArrayInput(['command' => 'wait'])));
+            exit($application->run(new ArrayInput(['command' => 'wait'])));
             PHP;
 
         $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', $command, self::ROOT, (string) $signal]);
