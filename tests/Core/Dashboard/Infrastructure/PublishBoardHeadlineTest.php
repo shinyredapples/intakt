@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
-use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\PublishBoardHeadline;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
@@ -108,19 +108,10 @@ final class PublishBoardHeadlineTest extends TestCase
 
         $twig = new Environment(new FilesystemLoader(__DIR__.'/../../../../templates'));
         $twig->addFunction(new TwigFunction('path', static fn (string $route): string => '/'.$route));
-        $updates = new class($this->published) implements LiveUpdates {
-            /**
-             * @param list<LiveEvent> $published
-             */
-            public function __construct(private array &$published)
-            {
-            }
-
-            public function publish(LiveEvent $event): void
-            {
-                $this->published[] = $event;
-            }
-        };
+        $updates = self::createStub(LiveUpdates::class);
+        $updates->method('publish')->willReturnCallback(function (LiveEvent $event): void {
+            $this->published[] = $event;
+        });
 
         return new PublishBoardHeadline($pages, $twig, $updates, $locks, $this->log);
     }
