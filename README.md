@@ -31,7 +31,7 @@ The demo needs one provider key or one Hugging Face token, and its calls are bil
 
 The panel's reviewers should run on models of different makers. Two makers through one Hugging Face token satisfy that; two separate providers (for example Anthropic and Hugging Face) are the stronger setup, because one token is one outage, one rate limit and one bill.
 
-Then start the review with the command the log prints at the end of the first start (it begins with `docker compose exec intakt`, so run it as printed from the repository folder), and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The command exits with 0 (approve), 10 (changes) or 11 (blocked); [Reading a verdict](docs/user/README.md#reading-a-verdict) explains what it prints. To let your own agent start reviews, copy the line the first start prints after the review command (it holds the MCP address and a token made for you) and run it:
+Then start the review with the command the start prints last, once the dashboard answers, framed by two lines of `=` beside the dashboard's address (it begins with `docker compose exec intakt`, so run it as printed from the repository folder), and open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The command exits with 0 (approve), 10 (changes) or 11 (blocked); [Reading a verdict](docs/user/README.md#reading-a-verdict) explains what it prints. To let your own agent start reviews, copy the line printed after the review command (it holds the MCP address and a token made for you) and run it:
 
 ```
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the printed token>"
