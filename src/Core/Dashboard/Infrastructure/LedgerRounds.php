@@ -27,6 +27,8 @@ use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -51,6 +53,7 @@ final class LedgerRounds
         private readonly RoundCosts $costs,
         private readonly ChangeDecision $decision,
         private readonly FailureInWords $failures,
+        private readonly RoundEndings $endings,
     ) {
         $this->tokens = new LedgerTokens();
     }
@@ -217,10 +220,17 @@ final class LedgerRounds
         $judged = $this->judged[$round->round] ?? null;
 
         return match (true) {
-            null === $judged => $completed,
+            null === $judged => $this->endedOrRunning($completed),
             $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])),
             default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])),
         };
+    }
+
+    private function endedOrRunning(ReviewedRound $round): ReviewedRound
+    {
+        $ending = $this->endings->ofUnjudged($round->round, $round->reviewers, $round->startedAt);
+
+        return $ending instanceof RoundEnding ? $round->endedAs($ending) : $round;
     }
 
     // Only a judged round with a recorded quorum gets an outcome, because the console decides once the judge is done and a policy must never be guessed.
