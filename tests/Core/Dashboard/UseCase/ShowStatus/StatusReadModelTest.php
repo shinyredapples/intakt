@@ -38,6 +38,7 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -372,7 +373,7 @@ final class StatusReadModelTest extends TestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords());
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
         $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), $redactor, ['alpha' => [], 'beta' => []]);
 
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);

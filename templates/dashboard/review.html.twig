@@ -106,8 +106,11 @@
 <section class="section round" id="round-{{ reviewed.round }}">
     <div class="round-head">
         <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
-        {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
+        {{ include('dashboard/_round_state.html.twig', {state: reviewed.state, ending: reviewed.ending}, with_context = false) }}
     </div>
+    {% if reviewed.ending is not null %}
+    <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">Blocked: {{ reviewed.ending.reason }}</p>
+    {% endif %}
     {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
 </section>
 {% endif %}

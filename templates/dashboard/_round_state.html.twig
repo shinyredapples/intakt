@@ -1,5 +1,9 @@
-{#- A round's state as a chip: a check once judged, a green live dot while it runs. The state- class names it for checks of the page. -#}
+{#- A round's state as a chip: a check once judged, a green live dot while it runs, a warning once it ended without the judge's call. The state- class names it for checks of the page. -#}
 {%- set judged = state.name == 'Judged' -%}
+{%- if ending is defined and ending is not null -%}
+{{ include('dashboard/components/chip.html.twig', {dot: 'needs', label: 'Blocked', on_page: true, extra: 'state-blocked'}, with_context = false) }}
+{%- else -%}
 {{ include('dashboard/components/chip.html.twig', judged
     ? {icon: 'check', label: state.value|capitalize, on_page: true, extra: 'state-judged'}
     : {dot: 'ok', label: state.value|capitalize, on_page: true, extra: 'state-running'}, with_context = false) }}
+{%- endif -%}
