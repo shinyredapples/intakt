@@ -11,11 +11,17 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 
 #[CoversClass(JourneyPage::class)]
+#[CoversClass(JourneyOutput::class)]
 #[CoversClass(GlanceTable::class)]
 #[CoversClass(MilestoneTable::class)]
 #[UsesClass(GitHubReader::class)]
 #[UsesClass(RecordedApi::class)]
 #[UsesClass(UsageReader::class)]
+#[UsesClass(Usage::class)]
+#[UsesClass(TokenUsage::class)]
+#[UsesClass(UsageAccount::class)]
+#[UsesClass(UsageLane::class)]
+#[UsesClass(UsageVendor::class)]
 #[UsesClass(MarkedRegions::class)]
 #[UsesClass(JourneyResource::class)]
 #[UsesClass(JourneyDates::class)]
@@ -23,13 +29,34 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(Milestone::class)]
 #[UsesClass(PullRequest::class)]
 #[UsesClass(PageRegion::class)]
+#[UsesClass(TokenCharts::class)]
+#[UsesClass(CountedMerges::class)]
+#[UsesClass(IssueCharts::class)]
+#[UsesClass(DayRange::class)]
+#[UsesClass(DailyChart::class)]
+#[UsesClass(ChartSeries::class)]
+#[UsesClass(ChartForm::class)]
+#[UsesClass(ChartRegion::class)]
+#[UsesClass(ChartCanvas::class)]
+#[UsesClass(ChartPlot::class)]
+#[UsesClass(ChartBar::class)]
+#[UsesClass(ChartPalette::class)]
+#[UsesClass(YScale::class)]
+#[UsesClass(StackedBarSvg::class)]
+#[UsesClass(GroupedBarSvg::class)]
+#[UsesClass(LineSvg::class)]
+#[UsesClass(MermaidTimeline::class)]
+#[UsesClass(Timeline::class)]
+#[UsesClass(TimelineSection::class)]
+#[UsesClass(TimelinePeriod::class)]
+#[UsesClass(TimelineSvg::class)]
 final class JourneyPageTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/Fixtures';
 
     public function testTheGlanceTableHoldsTheNumbersTheApiAndTheUsageFileGive(): void
     {
-        $page = $this->regenerated();
+        $page = $this->regenerated()->page;
 
         self::assertStringContainsString(<<<'MD'
             <!-- journey:begin glance -->
@@ -46,7 +73,7 @@ final class JourneyPageTest extends TestCase
 
     public function testTheMilestoneTableHoldsOneRowPerMilestoneByDueDate(): void
     {
-        $page = $this->regenerated();
+        $page = $this->regenerated()->page;
 
         self::assertStringContainsString(<<<'MD'
             <!-- journey:begin milestones -->
@@ -59,11 +86,60 @@ final class JourneyPageTest extends TestCase
             MD, $page);
     }
 
+    public function testEachChartRegionShowsItsDrawingAndItsTable(): void
+    {
+        $page = $this->regenerated()->page;
+
+        self::assertStringContainsString(<<<'MD'
+            <!-- journey:begin tokens-per-merge -->
+            ![Tokens per merged pull request](journey/tokens-per-merge.svg)
+
+            <details markdown="1"><summary>Tokens per merged pull request, as a table</summary>
+
+            | Day | Tokens per merge |
+            |---|---|
+            | 10-26 | 2,000,000 |
+            | 10-27 | 7,000,000 |
+            | 10-28 | none |
+
+            </details>
+            <!-- merges counted for usage sha256:4229317b25dec6a4ffa015fcf86bae004d36eb98d792bbea65b0a9c0b7ac319d: 2026-10-26=2 2026-10-27=1 -->
+            <!-- journey:end tokens-per-merge -->
+            MD, $page);
+    }
+
+    public function testTheChartsAndTheTimelineAreDrawnByName(): void
+    {
+        $drawings = $this->regenerated()->drawings;
+
+        self::assertSame(['tokens-by-lane', 'tokens-by-account', 'tokens-per-merge', 'issues-per-day', 'open-issues', 'timeline'], array_keys($drawings));
+        self::assertStringContainsString('Hackathon deadline 18:00 CET, repository public', $drawings['timeline']);
+    }
+
+    public function testTheTimelineBlockStaysAsItIsOnThePage(): void
+    {
+        $page = $this->regenerated()->page;
+
+        self::assertStringContainsString("```mermaid\ntimeline\n    title Intakt & friends\n", $page);
+    }
+
     public function testARerunWithTheSameInputsChangesNothing(): void
     {
         $once = $this->regenerated();
 
-        self::assertSame($once, $this->regenerated($once));
+        self::assertEquals($once, $this->regenerated($once->page));
+    }
+
+    public function testAKeptMergeCountOfZeroCountsTheMergesAgain(): void
+    {
+        $digest = (string) hash_file('sha256', self::FIXTURES.'/usage.jsonl');
+        $kept = '<!-- merges counted for usage sha256:'.$digest.': 2026-10-26=0 2026-10-27=1 -->';
+        $page = str_replace('<!-- journey:end tokens-per-merge -->', $kept."\n".'<!-- journey:end tokens-per-merge -->', (string) file_get_contents(self::FIXTURES.'/journey.md'));
+
+        $regenerated = $this->regenerated($page)->page;
+
+        self::assertStringContainsString('<!-- merges counted for usage sha256:'.$digest.': 2026-10-26=2 2026-10-27=1 -->', $regenerated);
+        self::assertStringContainsString('| 10-26 | 2,000,000 |', $regenerated);
     }
 
     public function testATokenTotalOfAMillionOrMoreIsWrittenInMillions(): void
@@ -80,7 +156,7 @@ final class JourneyPageTest extends TestCase
         return $table->text;
     }
 
-    private function regenerated(?string $page = null): string
+    private function regenerated(?string $page = null): JourneyOutput
     {
         $journey = new JourneyPage(new GitHubReader(new RecordedApi(self::FIXTURES.'/api')), new UsageReader(), new MockClock('2026-11-13 10:00:00'));
 

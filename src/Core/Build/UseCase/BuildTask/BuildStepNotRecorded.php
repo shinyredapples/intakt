@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use RuntimeException;
 
