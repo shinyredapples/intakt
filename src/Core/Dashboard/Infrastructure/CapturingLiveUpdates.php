@@ -16,6 +16,8 @@ use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 use Throwable;
 
 // Writes beside the hub only while the owner captures a review for the demo recording, because the ledger does not hold the live updates a recording must keep.
@@ -30,6 +32,7 @@ final readonly class CapturingLiveUpdates implements LiveUpdates
         private RecordingFormat $format,
         private Filesystem $filesystem,
         private ClockInterface $clock,
+        private LockFactory $locks,
         private LoggerInterface $logger,
     ) {
     }
@@ -37,18 +40,49 @@ final readonly class CapturingLiveUpdates implements LiveUpdates
     #[Override]
     public function publish(LiveEvent $event): void
     {
-        $this->hub->publish($event);
-
         if ('' === $this->capture) {
+            $this->hub->publish($event);
+
+            return;
+        }
+
+        $lock = $this->locks->createLock('dashboard-live-capture');
+
+        // Waited for, and held across the publish and the append, because two workers publishing between each other's two steps would capture their updates in the other order than the hub sent them.
+        if (!$this->capturedOrLogged($event, static fn () => $lock->acquire(true))) {
+            $this->hub->publish($event);
+
             return;
         }
 
         try {
-            // Locked, because every web and queue worker appends to the one file.
-            $this->filesystem->appendToFile($this->capture, $this->format->lineOf(new CapturedUpdate($this->clock->now(), $event->topic, $event->turboStream)), true);
+            $this->hub->publish($event);
+            $this->capturedOrLogged($event, fn () => $this->filesystem->appendToFile($this->capture, $this->format->lineOf(new CapturedUpdate($this->clock->now(), $event->topic, $event->turboStream))));
+        } finally {
+            $this->released($lock, $event);
+        }
+    }
+
+    // Swallowed after a log, because a capture is best effort like the update itself and must never fail the work that published.
+    private function capturedOrLogged(LiveEvent $event, callable $step): bool
+    {
+        try {
+            $step();
+
+            return true;
         } catch (Throwable $failure) {
-            // Swallowed after a log, because a capture is best effort like the update itself and must never fail the work that published.
             $this->logger->warning('A live dashboard update was not captured.', ['topic' => $event->topic, 'exception' => $failure]);
+
+            return false;
+        }
+    }
+
+    private function released(LockInterface $lock, LiveEvent $event): void
+    {
+        try {
+            $lock->release();
+        } catch (Throwable $failure) {
+            $this->logger->warning('The live capture lock was not released.', ['topic' => $event->topic, 'exception' => $failure]);
         }
     }
 }

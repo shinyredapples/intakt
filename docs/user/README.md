@@ -786,12 +786,12 @@ Project memory still needs an OpenAI key: a Hugging Face token alone gives no em
 
 A recording keeps one real review of a change in one file: its ledger events and the live updates the review page received, with the date the review started, the models it called and the Intakt version that wrote the file. Playing a recording back is not built yet.
 
-1. Before the review, set `INTAKT_LIVE_CAPTURE` to a file, for example `INTAKT_LIVE_CAPTURE=/app/var/data/live-updates.jsonl` in `.env.local` for the compose demo, and run `docker compose up -d` so the container is made again with it. From then on every live update is also appended to that file, one line each. If the file cannot be written, the warning "A live dashboard update was not captured." is logged and the review goes on.
+1. Before the review, set `INTAKT_LIVE_CAPTURE` to a file, for example `INTAKT_LIVE_CAPTURE=/app/var/data/live-updates.jsonl` in `.env.local` for the compose demo, and run `docker compose up -d` so the container is made again with it. From then on every live update is also appended to that file, one line each. If the file cannot be written, the warning "A live dashboard update was not captured." is logged and the review goes on. The capture keeps the order the hub received the updates in, because each update is published and appended while holding one lock.
 2. Run the review, for example both rounds of the sample change.
 3. Write the recording: `php bin/console intakt:demo:record sample sample-change sample-review.json` (in the compose demo, prefix `docker compose exec intakt`). It takes every round of that change in that project from the ledger and the captured updates of those rounds, and prints how many of each it wrote.
 4. Set `INTAKT_LIVE_CAPTURE` empty again, since the file keeps growing while it is set.
 
-The command writes nothing and exits 1 when the ledger has no round of that change in that project, when `INTAKT_LIVE_CAPTURE` is empty, when the capture file cannot be read, holds a line that is no captured update (the message names the line) or holds no update of those rounds, or when the recording file cannot be written.
+The command writes nothing and exits 1 when the ledger has no round of that change in that project, when `INTAKT_LIVE_CAPTURE` is empty, when the capture file cannot be read, holds a line that is no captured update (the message names the line) or holds no update of one of those rounds (the message names the round, so a capture started after the first round is refused), or when the recording file cannot be written.
 
 ## Keeping a copy of a project's repository
 

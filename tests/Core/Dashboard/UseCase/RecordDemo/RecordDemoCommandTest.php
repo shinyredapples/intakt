@@ -187,7 +187,16 @@ final class RecordDemoCommandTest extends TestCase
         $capture = $this->directory.'/other.jsonl';
         new Filesystem()->dumpFile($capture, $this->format->lineOf(new CapturedUpdate(new DateTimeImmutable('2026-10-28T12:00:01+00:00'), MercureRoundUpdates::topicOf(self::OTHER), '<turbo-stream>other</turbo-stream>')));
 
-        $this->assertRefused($capture, 'holds no live update of these review rounds.');
+        $this->assertRefused($capture, 'holds no live update of review round '.self::FIRST.'.');
+    }
+
+    public function testACaptureStartedAfterTheFirstRoundWritesNoRecordingAndNamesThatRound(): void
+    {
+        $this->givenTwoRoundsOfTheSampleChange();
+        $capture = $this->directory.'/late.jsonl';
+        new Filesystem()->dumpFile($capture, $this->format->lineOf(new CapturedUpdate(new DateTimeImmutable('2026-10-28T12:00:03+00:00'), MercureRoundUpdates::topicOf(self::SECOND), '<turbo-stream>second</turbo-stream>')));
+
+        $this->assertRefused($capture, 'holds no live update of review round '.self::FIRST.'.');
     }
 
     public function testACaptureWithALineThatIsNoUpdateWritesNoRecordingAndNamesTheLine(): void

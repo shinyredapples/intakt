@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
+use Fiber;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\CapturingLiveUpdates;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
@@ -16,6 +17,10 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\BlockingStoreInterface;
+use Symfony\Component\Lock\Exception\LockStorageException;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(CapturingLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
@@ -83,9 +88,43 @@ final class CapturingLiveUpdatesTest extends TestCase
         self::assertSame([['warning', 'A live dashboard update was not captured.']], array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs()));
     }
 
+    public function testTwoWorkersPublishingAtOnceAreCapturedInTheOrderTheHubReceivedThem(): void
+    {
+        $capture = $this->directory.'/capture.jsonl';
+        $hub = new SuspendingLiveEvents('<turbo-stream>first</turbo-stream>');
+        $updates = new CapturingLiveUpdates($hub, $capture, $this->format(), new Filesystem(), new MockClock('2026-11-01T10:00:00+00:00'), new LockFactory(new FiberWaitingLockStore()), $this->log);
+        $first = new Fiber(static fn () => $updates->publish(new LiveEvent('review/rounds/r-1', '<turbo-stream>first</turbo-stream>')));
+        $second = new Fiber(static fn () => $updates->publish(new LiveEvent('review/rounds/r-1', '<turbo-stream>second</turbo-stream>')));
+
+        $first->start();
+        $second->start();
+        $first->resume();
+
+        if (!$second->isTerminated()) {
+            $second->resume();
+        }
+
+        $captured = array_map(fn (string $line): ?string => $this->format()->updateOf($line)?->data, explode("\n", rtrim(new Filesystem()->readFile($capture))));
+        self::assertSame(['<turbo-stream>first</turbo-stream>', '<turbo-stream>second</turbo-stream>'], $hub->received);
+        self::assertSame($hub->received, $captured);
+    }
+
+    public function testACaptureLockThatCannotBeTakenIsLoggedAndTheUpdateStillPublished(): void
+    {
+        $store = self::createStub(BlockingStoreInterface::class);
+        $store->method('waitAndSave')->willThrowException(new LockStorageException('The lock store is gone.'));
+        $capture = $this->directory.'/capture.jsonl';
+
+        new CapturingLiveUpdates($this->hub, $capture, $this->format(), new Filesystem(), new MockClock('2026-11-01T10:00:00+00:00'), new LockFactory($store), $this->log)->publish(new LiveEvent('review/rounds/r-1', '<turbo-stream></turbo-stream>'));
+
+        self::assertCount(1, $this->hub->events);
+        self::assertFileDoesNotExist($capture);
+        self::assertSame([['warning', 'A live dashboard update was not captured.']], array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs()));
+    }
+
     private function updates(string $capture): CapturingLiveUpdates
     {
-        return new CapturingLiveUpdates($this->hub, $capture, $this->format(), new Filesystem(), new MockClock('2026-11-01T10:00:00+00:00'), $this->log);
+        return new CapturingLiveUpdates($this->hub, $capture, $this->format(), new Filesystem(), new MockClock('2026-11-01T10:00:00+00:00'), new LockFactory(new InMemoryStore()), $this->log);
     }
 
     private function format(): RecordingFormat

@@ -23,8 +23,8 @@ final class RecordingNeedsCapturedUpdates extends RuntimeException
         return new self(sprintf('Line %d of %s is not a captured live update.', $line, $capture));
     }
 
-    public static function noneOfTheRounds(string $capture): self
+    public static function noneOfRound(string $capture, string $round): self
     {
-        return new self(sprintf('%s holds no live update of these review rounds.', $capture));
+        return new self(sprintf('%s holds no live update of review round %s.', $capture, $round));
     }
 }
