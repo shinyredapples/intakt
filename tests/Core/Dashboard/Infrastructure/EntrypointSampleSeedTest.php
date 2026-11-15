@@ -241,7 +241,7 @@ final class EntrypointSampleSeedTest extends TestCase
         $this->waitForMorePolls();
 
         self::assertTrue($this->entrypoint?->isRunning());
-        self::assertStringContainsString('could not print the review command', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringContainsString('could not print the review command', $this->entrypoint->getErrorOutput());
     }
 
     public function testWithoutASampleRepositoryTheStartNeverAsksForTheReviewCommand(): void
