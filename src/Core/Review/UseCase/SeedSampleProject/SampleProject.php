@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\SampleChange;
 use LogicException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
@@ -19,9 +20,9 @@ use Symfony\Component\Yaml\Yaml;
 
 final readonly class SampleProject
 {
-    public const string NAME = 'sample';
+    public const string NAME = SampleChange::PROJECT;
 
-    public const string TASK = 'Add a shipping cost by weight and a report of a customer\'s orders; a cart of 100 or more keeps its discount.';
+    public const string TASK = SampleChange::TASK;
 
     // Named instead of the openai_compatible variables, because the entrypoint sets those from this token with the router as the base URL.
     public const string HUGGING_FACE_TOKEN = 'HF_TOKEN';

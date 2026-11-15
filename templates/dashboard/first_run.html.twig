@@ -3,7 +3,7 @@
 {% block title %}Set up - Intakt{% endblock %}
 
 {% block body %}
-{%- set titles = ['AI providers', 'A project', 'Your own agent'] -%}
+{%- set titles = ['AI providers', 'A project', 'First review', 'Your own agent'] -%}
 {%- set states = first_run.states -%}
 <div class="setup">
     <div class="page-head">
@@ -17,7 +17,7 @@
         <li class="{{ states[loop.index0].value }}">{{ loop.index }} {{ title }}</li>
         {%- endfor %}
     </ol>
-    <p class="step-count">{{ first_run.done }} of {{ titles|length }} steps done</p>
+    <p class="step-count">{{ first_run.done }} of {{ first_run.needed }} steps done</p>
 
     {%- set step = first_run.providers %}
     <section class="step" id="step-providers" data-state="{{ step.state.value }}" aria-labelledby="step-providers-h">
@@ -56,9 +56,23 @@
         {%- endif %}
     </section>
 
+    {%- set step = first_run.firstReview %}
+    <section class="step" id="step-first-review" data-state="{{ step.state.value }}" aria-labelledby="step-first-review-h">
+        <h2 id="step-first-review-h">3 {{ titles[2] }} {{ _self.state(step.state) }}</h2>
+        <p class="lead">{{ step.sentence }}</p>
+        {%- if step.round is not null %}
+        <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: step.round}) }}">Open the review</a>
+        {%- elseif step.sampleCanStart %}
+        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
+            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
+            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
+        </form>
+        {%- endif %}
+    </section>
+
     {%- set step = first_run.agent %}
     <section class="step" id="step-agent" data-state="{{ step.state.value }}" aria-labelledby="step-agent-h">
-        <h2 id="step-agent-h">3 {{ titles[2] }} {{ _self.state(step.state) }}</h2>
+        <h2 id="step-agent-h">4 {{ titles[3] }} {{ _self.state(step.state) }}</h2>
         <p class="lead">{{ step.sentence }}</p>
         <p>The MCP address: <code class="mono address">{{ step.address }}</code></p>
         <p>The client line for Claude Code:</p>

@@ -74,7 +74,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $answering = $this->answering($project, $tier);
         $substitute = $this->substituteOf($project, $tier, $answering);
-        $reserved = fn (ResolvedModel $model, ReviewRequest $asked): UsageReservation => $this->usage->reserve($project, new AnsweringTier($tier, $model), $asked->conversation->round);
+        $reserved = fn (ResolvedModel $model, ReviewRequest $asked): UsageReservation => $this->usage->reserveForReviewer($project, new AnsweringTier($tier, $model), $asked->conversation);
         $attempt = fn (ResolvedModel $model, ReviewRequest $asked): Verdict => $this->verdictOn($model, $reserved($model, $asked), $asked);
         $unstreamed = fn (ReviewRequest $asked): Verdict => $this->unstreamedVerdictOn($answering, $reserved($answering, $asked), $asked);
         $first = fn (): Verdict => $attempt($answering, $request);

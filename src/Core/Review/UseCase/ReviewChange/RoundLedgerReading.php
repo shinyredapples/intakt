@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
+use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -12,9 +13,13 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReviewerFailed;
+use Intakt\Core\Review\Contract\ReviewerStarted;
+use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
@@ -71,6 +76,32 @@ final readonly class RoundLedgerReading implements RoundCosts
         return RoundTokens::of(count($calls), $figures);
     }
 
+    // Only the calls the reviewer made, because the started row names the reviewer and the rows that carry the tokens are tied to it by their call id.
+    public function tokensOfReviewer(string $roundId, string $reviewerId): RoundTokens
+    {
+        $recorded = $this->usageRows();
+        $calls = array_keys($this->callsStartedFor($roundId, $recorded, $reviewerId));
+
+        return RoundTokens::of(count($calls), $this->figuresOf($this->usagesOf($calls, $recorded)));
+    }
+
+    // From the reviewer's first start to its last end in the ledger, in milliseconds, because the ledger's clock is the one the workers share; null while it has no end.
+    public function millisecondsOfReviewer(string $reviewerId): ?int
+    {
+        $started = $this->momentsOf(LedgerEventKind::ReviewerStarted, ReviewerStarted::class, $reviewerId);
+        $ended = [
+            ...$this->momentsOf(LedgerEventKind::VerdictReceived, VerdictReceived::class, $reviewerId),
+            ...$this->momentsOf(LedgerEventKind::ReviewerFailed, ReviewerFailed::class, $reviewerId),
+            ...$this->momentsOf(LedgerEventKind::ReviewerStopped, ReviewerStopped::class, $reviewerId),
+        ];
+
+        if ([] === $started || [] === $ended) {
+            return null;
+        }
+
+        return (int) max($ended)->format('Uv') - (int) min($started)->format('Uv');
+    }
+
     // Priced per call by the model its tier resolved to, because a round's reviewers and its judge may each run on another model, and the vendor's answer names none (Claude Code, Codex) or a dated snapshot. A call without usages is still priced, because its model's price may be unknown, and that must not read as zero. A usage without input tokens makes the cost unknown, because the output alone would read as the whole cost.
     public function costOf(string $roundId): Cost
     {
@@ -89,19 +120,37 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
+     * @param class-string<ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerStopped> $payload
+     *
+     * @return list<DateTimeImmutable>
+     */
+    private function momentsOf(LedgerEventKind $kind, string $payload, string $reviewerId): array
+    {
+        $moments = [];
+
+        foreach ($this->ledger->readOfKind($kind) as $recorded) {
+            if ($reviewerId === $this->payloads->of($recorded, $payload)?->reviewer) {
+                $moments[] = $recorded->recordedAt;
+            }
+        }
+
+        return $moments;
+    }
+
+    /**
      * @param list<RecordedEvent> $recorded
      *
      * @return array<string, string|null>
      */
     // Keyed by call id with the model as value, because only the started row names the round and the model, so the settled or unsettled row that carries the tokens is tied to it by its call id.
-    private function callsStartedFor(string $roundId, array $recorded): array
+    private function callsStartedFor(string $roundId, array $recorded, ?string $reviewerId = null): array
     {
         $calls = [];
 
         foreach ($recorded as $row) {
             $started = $this->payloads->of($row, UsageStarted::class);
 
-            if ('started' === $started?->phase && $roundId === $started->round) {
+            if ('started' === $started?->phase && $roundId === $started->round && (null === $reviewerId || $reviewerId === $started->reviewer)) {
                 $calls[$started->call] = $started->model;
             }
         }

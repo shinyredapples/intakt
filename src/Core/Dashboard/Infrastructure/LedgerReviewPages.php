@@ -31,6 +31,12 @@ final readonly class LedgerReviewPages
         return $this->rounds($this->ledger->readInOrder())->reviewOf($round);
     }
 
+    // Null on a fresh install, because then no review has run.
+    public function firstReview(): ?Review
+    {
+        return array_first($this->rounds($this->ledger->readInOrder())->reviews());
+    }
+
     public function board(): Board
     {
         return $this->boardOf($this->ledger->readInOrder());

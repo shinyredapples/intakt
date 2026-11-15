@@ -30,6 +30,16 @@ final class UsagePayloadsTest extends KernelTestCase
         self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"strong","round":"'.self::ROUND.'","model":"big"}', $json);
     }
 
+    public function testAStartedRowOfAReviewerNamesTheReviewerAndReadsBack(): void
+    {
+        $started = new UsageStarted('a call', 'started', 'alpha', Tier::Standard, self::ROUND, 'big', 'a-reviewer');
+
+        $json = $this->serializer()->serialize($started, 'json');
+
+        self::assertSame('{"call":"a call","phase":"started","project":"alpha","tier":"standard","round":"'.self::ROUND.'","model":"big","reviewer":"a-reviewer"}', $json);
+        self::assertEquals($started, $this->serializer()->deserialize($json, UsageStarted::class, 'json'));
+    }
+
     public function testAStartedRowOutsideARoundHasNoRoundKey(): void
     {
         $json = $this->serializer()->serialize(new UsageStarted('a call', 'started', 'alpha', Tier::Light, model: 'big'), 'json');

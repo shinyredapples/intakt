@@ -1,0 +1,2 @@
+{#- An update of the line's content, from the same partial as the board's head, so the pushed line never differs from a page loaded after it. -#}
+<turbo-stream action="update" target="board-headline"><template>{{ include('dashboard/_board_headline.html.twig', {headline: headline}, with_context = false) }}</template></turbo-stream>
