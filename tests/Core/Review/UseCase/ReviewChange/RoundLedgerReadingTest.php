@@ -226,6 +226,22 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame(0.0, $this->reading()->costOf(self::ROUND)->usd);
     }
 
+    public function testTheModelsOfAReviewerAreTheModelsItsCallsInTheRoundRanOnEachNamedOnce(): void
+    {
+        foreach ([['c1', 'r1', self::ROUND, 'big'], ['c2', 'r1', self::ROUND, 'small'], ['c3', 'r1', self::ROUND, 'big'], ['c4', 'r2', self::ROUND, 'other'], ['c5', 'r1', self::OTHER_ROUND, 'later']] as [$call, $reviewer, $round, $model]) {
+            $this->append(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => $model, 'reviewer' => $reviewer]);
+        }
+
+        self::assertSame(['big', 'small'], $this->reading()->modelsOfReviewer(self::ROUND, 'r1'));
+    }
+
+    public function testAReviewerWhoseCallsStartedBeforeTheModelWasKeptNamesNoModel(): void
+    {
+        $this->append(LedgerEventKind::UsageRecorded, ['call' => 'c1', 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => self::ROUND, 'reviewer' => 'r1']);
+
+        self::assertSame([], $this->reading()->modelsOfReviewer(self::ROUND, 'r1'));
+    }
+
     public function testTheActIdsOfAJudgeDoneRowInTodaysFormatAreRead(): void
     {
         $this->append(LedgerEventKind::JudgeDone, ['round' => self::OTHER_ROUND, 'act' => ['F9'], 'follow_ups' => [], 'findings' => []]);

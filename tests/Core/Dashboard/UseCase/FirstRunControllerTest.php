@@ -27,7 +27,6 @@ use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Tests\Support\CompiledContainers;
-use Intakt\Tests\Support\Log\LogRecords;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -490,7 +489,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        $this->assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
     }
 
     public function testAStartAfterTheSampleRepositoryWasUnsetIsRefused(): void
@@ -504,7 +503,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
-        $this->assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
     }
 
     public function testAProjectNameWithMarkupIsEscaped(): void
@@ -562,17 +561,6 @@ final class FirstRunControllerTest extends WebTestCase
         $this->commands = $commands;
 
         return $commands;
-    }
-
-    // Symfony 8.1 logs an uncaught client error (4xx) at error and 8.2 at warning, so the record counts at either level while both are supported.
-    private function assertLoggedClientError(string $message): void
-    {
-        $records = LogRecords::ofThisRun();
-        self::assertNotNull($records, 'No test log records: run the tests with the UnassertedErrorLogExtension.');
-        self::assertTrue(
-            $records->remove(LogLevel::ERROR, $message) || $records->remove(LogLevel::WARNING, $message),
-            sprintf('Expected an error or warning log record "%s", none was logged.', $message),
-        );
     }
 
     private function browser(): KernelBrowser
