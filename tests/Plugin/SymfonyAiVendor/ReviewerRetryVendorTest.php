@@ -181,6 +181,9 @@ final class ReviewerRetryVendorTest extends KernelTestCase
     }
 
     // Read from the encoded input, because the platform hands its model client the normalized messages, never the message bag.
+    /**
+     * @param array<mixed>|string|object $input
+     */
     private function asksToNameFindings(array|string|object $input): bool
     {
         return str_contains(json_encode($input, JSON_THROW_ON_ERROR), ReviewerPrompt::NAME_FINDINGS_OR_APPROVE);
