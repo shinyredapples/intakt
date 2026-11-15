@@ -81,6 +81,18 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('git fetch', $page->filter('main')->text());
     }
 
+    public function testALaterRunThatFailedAtTheTaskStepShowsTheLaterStepsNotReached(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->passBuildStep('alpha', '42', 'mirror');
+        $this->ledger->passBuildStep('alpha', '42', 'clone');
+        $this->ledger->failBuildStep('42', 'task', 'issue 42 is a pull request');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame(['Task Failed', 'Mirror Not reached', 'Clone Not reached'], $this->stepHeads($page));
+    }
+
     public function testTheStepsOfAnotherTaskOrProjectAreNotShown(): void
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
