@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 use WeakMap;
 
-// Which account error (a limit, a rejection or a provider error) each account of one call failed with as it was sent or as its answer was read, kept by the call because FailoverPlatform's own error names no cause; by class only, because the provider's message can echo a key; excluded from the container because AccountFailoverPlatform builds one per call.
+// Which account error (a limit, a rejection or a provider error) each account of one call failed with as it was sent or as its answer was read, and which accounts could not reach their endpoint as it was sent, kept by the call because FailoverPlatform's own error names no cause; by class only, because the provider's message can echo a key; excluded from the container because AccountFailoverPlatform builds one per call.
 #[Exclude]
 final class SendFailures
 {
@@ -19,6 +19,11 @@ final class SendFailures
      * @var array<string, class-string<Throwable>>
      */
     private array $failures = [];
+
+    /**
+     * @var array<string, true>
+     */
+    private array $unreachable = [];
 
     /**
      * @var WeakMap<Throwable, array<string, true>>
@@ -50,5 +55,16 @@ final class SendFailures
     public function wasRejected(Account $account): bool
     {
         return is_a($this->failures[$account->key()] ?? '', AuthenticationException::class, true);
+    }
+
+    // Kept apart from the account errors, because a transport error cools no account down.
+    public function unreachable(Account $account): void
+    {
+        $this->unreachable[$account->key()] = true;
+    }
+
+    public function isEveryUnreachable(Account ...$accounts): bool
+    {
+        return [] !== $accounts && array_all($accounts, fn (Account $account): bool => isset($this->unreachable[$account->key()]));
     }
 }

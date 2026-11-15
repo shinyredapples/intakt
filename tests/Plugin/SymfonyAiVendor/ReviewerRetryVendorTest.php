@@ -5,10 +5,15 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Closure;
+use Intakt\Core\Ai\Contract\Account;
+use Intakt\Core\Ai\Contract\EveryEndpointUnreachable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Infrastructure\AccountFailoverPlatform;
+use Intakt\Core\Ai\Infrastructure\AccountPlatform;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\SendFailures;
 use Intakt\Core\Ai\Infrastructure\TierPlatform;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
@@ -73,6 +78,11 @@ use Throwable;
 #[UsesClass(TierRoutedPlatform::class)]
 #[UsesClass(UsageLedger::class)]
 #[UsesClass(TierPlatform::class)]
+#[UsesClass(AccountFailoverPlatform::class)]
+#[UsesClass(AccountPlatform::class)]
+#[UsesClass(SendFailures::class)]
+#[UsesClass(EveryEndpointUnreachable::class)]
+#[UsesClass(Account::class)]
 #[UsesClass(ConfiguredTierResolver::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(ReviewerAgent::class)]
@@ -101,6 +111,24 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $verdict = $this->vendor($this->answering($this->unreachable(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
 
         self::assertSame([Decision::Changes, 1], [$verdict->verdict, count($verdict->findings)]);
+        self::assertCount(2, $this->askedToNameFindings);
+    }
+
+    public function testAReviewerWhoseConfiguredAccountsCouldNotReachTheEndpointIsAskedOnceMoreAndThatVerdictCounts(): void
+    {
+        $verdict = $this->vendor($this->answering($this->unreachable(...), $this->namedFinding(...)), onAccounts: true)->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Changes, 1], [$verdict->verdict, count($verdict->findings)]);
+        self::assertSame([false, false], $this->askedToNameFindings);
+    }
+
+    public function testAReviewerWhoseConfiguredAccountsCannotReachTheEndpointTwiceFailsWithThatCause(): void
+    {
+        $vendor = $this->vendor($this->answering($this->unreachable(...), $this->unreachable(...)), onAccounts: true);
+
+        $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertInstanceOf(ProviderUnreachable::class, $failure);
         self::assertCount(2, $this->askedToNameFindings);
     }
 
@@ -222,10 +250,14 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
-    private function vendor(Closure $answer): SymfonyAiVendor
+    // On accounts, the provider's platform is the AccountFailoverPlatform that config/packages/ai.php puts in front of every configured provider.
+    private function vendor(Closure $answer, bool $onAccounts = false): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
         $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        if ($onAccounts) {
+            $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $platform], new NoCooldowns(), new MockClock(self::NOW), new NullLogger());
+        }
         $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
