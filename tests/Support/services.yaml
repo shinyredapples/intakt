@@ -19,7 +19,7 @@ services:
 
     # Runs the step a worker-mode test hands its request, ahead of every other listener, because the compiled dispatcher takes no listener at runtime.
     Intakt\Tests\Application\RunRequestStep:
-        tags: [{ name: kernel.event_listener, event: kernel.request, priority: 4096 }]
+        autoconfigure: true
 
     Intakt\Tests\Support\UnsyncedSqlite:
         tags: ['doctrine.middleware']
