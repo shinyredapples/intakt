@@ -15,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Issue::class)]
 #[UsesClass(Milestone::class)]
 #[UsesClass(PageRegion::class)]
+#[UsesClass(FigureSource::class)]
 final class MilestoneTableTest extends TestCase
 {
     private const string PAGE = "<!-- journey:begin milestones -->\nold\n<!-- journey:end milestones -->\n";
@@ -33,6 +34,14 @@ final class MilestoneTableTest extends TestCase
         $table = new MilestoneTable()->region([new Milestone(1, 'Demo', 'g', null)], [new Issue(1, new DateTimeImmutable('2026-11-01T10:00:00Z'), null, false)]);
 
         self::assertStringContainsString('| Demo | g | none | open | 0 / 1 |', $table->text);
+    }
+
+    public function testTheDoneAndOpenCountsAreLabeledCountedAndNameTheirSource(): void
+    {
+        $table = new MilestoneTable()->region([new Milestone(1, 'Demo', 'g', null)], []);
+
+        self::assertStringStartsWith('| Milestone | Goal | Due | Last issue closed | Done / open (counted) |', $table->text);
+        self::assertStringEndsWith("| Demo | g | none | none | 0 / 0 |\n\nCounted: from the issues the GitHub API lists, by each issue's milestone.", $table->text);
     }
 
     public function testMarkerTextInAMilestoneIsEscapedSoARerunChangesNothing(): void

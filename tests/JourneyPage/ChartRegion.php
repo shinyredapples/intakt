@@ -11,14 +11,16 @@ final readonly class ChartRegion
 {
     public function region(DailyChart $chart): PageRegion
     {
-        $header = '| Day | '.implode(' | ', array_map(static fn (ChartSeries $series): string => $series->label, $chart->series)).' |';
+        $header = '| Day | '.implode(' | ', array_map(static fn (ChartSeries $series): string => $chart->labeled($series->label), $chart->series)).' |';
         $rule = '|---|'.str_repeat('---|', count($chart->series));
         $rows = array_map(fn (int $day, DateTimeImmutable $date): string => '| '.JourneyDates::short($date).' | '.implode(' | ', $this->cells($chart, $day)).' |', array_keys($chart->days), $chart->days);
 
         return new PageRegion($chart->name, implode("\n", [
-            '!['.$chart->title.'](journey/'.$chart->name.'.svg)',
+            '!['.$chart->caption().'](journey/'.$chart->name.'.svg)',
             '',
-            '<details markdown="1"><summary>'.$chart->title.', as a table</summary>',
+            $chart->source->line(),
+            '',
+            '<details markdown="1"><summary>'.$chart->caption().', as a table</summary>',
             '',
             $header,
             $rule,

@@ -21,7 +21,7 @@ final readonly class LineSvg
         $scale = new YScale([] === $values ? 0 : max($values), self::BASELINE, self::BASELINE - ChartCanvas::TOP);
         $plot = new ChartPlot($scale, count($chart->days) > 1 ? (self::RIGHT - ChartCanvas::LEFT) / (count($chart->days) - 1) : 0);
 
-        return $this->canvas->opened($chart->title, self::HEIGHT)
+        return $this->canvas->opened($chart->caption(), self::HEIGHT)
             .$this->canvas->grid($scale, self::RIGHT)
             .$this->canvas->dayLabels($chart, $plot->x(...), self::BASELINE + 16)
             .implode('', array_map(fn (int $series, ChartSeries $values): string => $this->line($values, ChartPalette::color($series), $plot), array_keys($chart->series), $chart->series))

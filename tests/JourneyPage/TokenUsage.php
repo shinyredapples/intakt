@@ -14,6 +14,7 @@ final readonly class TokenUsage
         public UsageAccount $account,
         public UsageLane $lane,
         public int $tokens,
+        public int $reserved,
     ) {
     }
 }

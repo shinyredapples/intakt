@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
+use Intakt\Core\Platform\Contract\FigureKind;
 
 final readonly class MilestoneTable
 {
@@ -17,7 +18,9 @@ final readonly class MilestoneTable
         usort($milestones, static fn (Milestone $a, Milestone $b): int => [$a->due?->getTimestamp() ?? PHP_INT_MAX, $a->number] <=> [$b->due?->getTimestamp() ?? PHP_INT_MAX, $b->number]);
         $rows = array_map(fn (Milestone $milestone): string => $this->row($milestone, $issues), $milestones);
 
-        return new PageRegion('milestones', implode("\n", ['| Milestone | Goal | Due | Last issue closed | Done / open |', '|---|---|---|---|---|', ...$rows]));
+        $counted = new FigureSource(FigureKind::Counted, "from the issues the GitHub API lists, by each issue's milestone");
+
+        return new PageRegion('milestones', implode("\n", ['| Milestone | Goal | Due | Last issue closed | Done / open ('.$counted->kind->value.') |', '|---|---|---|---|---|', ...$rows, '', $counted->line()]));
     }
 
     /**
