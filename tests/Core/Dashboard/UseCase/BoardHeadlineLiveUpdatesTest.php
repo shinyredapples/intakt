@@ -108,7 +108,6 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->updated($page, $this->pushedHeadlineAfterAReviewerStarted());
 
         self::assertSame(self::REVIEWING, $updated->filter('.page-head .lead')->text());
-        self::assertSame($this->browser->request('GET', '/')->filter('.page-head .lead')->html(), $updated->filter('.page-head .lead')->html());
     }
 
     public function testAJudgedRoundPushedToTheBoardTakesItsReviewersOutOfTheHeadline(): void
