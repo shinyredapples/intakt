@@ -35,35 +35,35 @@ final class HeadlineTest extends TestCase
     {
         $headline = new Headline(new WhoIsWorking([]), [], 0);
 
-        self::assertSame('Nothing is running yet. Start the first review.', $headline->text());
+        self::assertSame('Nothing is running yet. Start the first review.', $headline->opening());
     }
 
     public function testOneRunningReviewNamesTheCodeReviewersAndItsChange(): void
     {
         $headline = $this->headline([$this->running('sample', '3')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of sample. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of sample.', $headline->opening());
     }
 
     public function testTheReviewersOfOneChangeAreNamedOnce(): void
     {
         $headline = $this->headline([$this->running('sample', '3', 'correctness', 'security')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of sample. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of sample.', $headline->opening());
     }
 
     public function testTwoRunningReviewsAreBothNamed(): void
     {
         $headline = $this->headline([$this->running('sample', '3'), $this->running('shop', '5')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of shop. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of shop.', $headline->opening());
     }
 
     public function testThreeRunningReviewsNameTwoAndCountOneMore(): void
     {
         $headline = $this->headline([$this->running('sample', '3'), $this->running('shop', '5'), $this->running('docs', '8')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of sample, change 5 of shop and 1 more change. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of sample, change 5 of shop and 1 more change.', $headline->opening());
     }
 
     public function testManyRunningReviewsNameTheFirstTwoAndCountTheRest(): void
@@ -72,7 +72,7 @@ final class HeadlineTest extends TestCase
 
         $headline = $this->headline($reviews, []);
 
-        self::assertSame('The Code reviewers are reviewing change 1 of sample, change 2 of sample and 4 more changes. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 1 of sample, change 2 of sample and 4 more changes.', $headline->opening());
     }
 
     public function testOneWaitingItemIsCountedAndOffered(): void
@@ -81,7 +81,7 @@ final class HeadlineTest extends TestCase
 
         $headline = $this->headline([$this->running('sample', '3'), $this->running('shop', '5')], [$waiting]);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of shop. 1 needs you:', $headline->text());
+        self::assertSame(['The Code reviewers are reviewing change 3 of sample and change 5 of shop.', 1, 'needs you:'], [$headline->opening(), $headline->waitingCount(), $headline->waitingWords()]);
         self::assertSame($waiting, $headline->firstWaiting());
     }
 
@@ -91,8 +91,56 @@ final class HeadlineTest extends TestCase
 
         $headline = $this->headline([], [$first, $this->running('shop', '9'), $this->running('docs', '2')]);
 
-        self::assertSame('Nothing is running. 3 need you:', $headline->text());
+        self::assertSame(['Nothing is running.', 3, 'need you:'], [$headline->opening(), $headline->waitingCount(), $headline->waitingWords()]);
         self::assertSame($first, $headline->firstWaiting());
+    }
+
+    public function testTheOpeningIsTheSentenceBeforeTheWaitingCount(): void
+    {
+        $headline = $this->headline([$this->running('sample', '3')], [$this->running('shop', '9'), $this->running('docs', '2')]);
+
+        self::assertSame('The Code reviewers are reviewing change 3 of sample.', $headline->opening());
+        self::assertSame([2, 'need you:'], [$headline->waitingCount(), $headline->waitingWords()]);
+    }
+
+    public function testTheShortOpeningCountsTheRunningChangesInsteadOfNamingThem(): void
+    {
+        $headline = $this->headline([$this->running('a-project-with-a-very-long-name-for-tests', '3'), $this->running('shop', '5'), $this->running('docs', '2')], []);
+
+        self::assertSame('The Code reviewers are reviewing 3 changes.', $headline->shortOpening());
+    }
+
+    public function testTheShortOpeningOfOneRunningChangeSaysChange(): void
+    {
+        $headline = $this->headline([$this->running('a-project-with-a-very-long-name-for-tests', '3')], []);
+
+        self::assertSame('The Code reviewers are reviewing 1 change.', $headline->shortOpening());
+    }
+
+    public function testWithNothingRunningTheShortOpeningIsTheOpening(): void
+    {
+        self::assertSame(['Nothing is running.', 'Nothing is running yet. Start the first review.'], [new Headline(new WhoIsWorking([]), [], 1)->shortOpening(), new Headline(new WhoIsWorking([]), [], 0)->shortOpening()]);
+    }
+
+    public function testOneWaitingItemIsFollowedByNeedsYou(): void
+    {
+        $headline = $this->headline([], [$this->running('sample', '7')]);
+
+        self::assertSame([1, 'needs you:'], [$headline->waitingCount(), $headline->waitingWords()]);
+    }
+
+    public function testWithNothingWaitingTheWaitingWordsAreTheWholeClause(): void
+    {
+        $headline = $this->headline([$this->running('sample', '3')], []);
+
+        self::assertSame([0, 'Nothing needs you.'], [$headline->waitingCount(), $headline->waitingWords()]);
+    }
+
+    public function testAFreshInstallOpensWithTheWholeLineAndHasNoWaitingWords(): void
+    {
+        $headline = new Headline(new WhoIsWorking([]), [], 0);
+
+        self::assertSame(['Nothing is running yet. Start the first review.', ''], [$headline->opening(), $headline->waitingWords()]);
     }
 
     public function testNothingWaitingOffersNoItem(): void
@@ -104,14 +152,14 @@ final class HeadlineTest extends TestCase
     {
         $headline = new Headline(new WhoIsWorking([]), [], 1);
 
-        self::assertSame('Nothing is running. Nothing needs you.', $headline->text());
+        self::assertSame('Nothing is running.', $headline->opening());
     }
 
     public function testALongProjectNameIsCutToThirtyTwoCharactersWithAnEllipsis(): void
     {
         $headline = $this->headline([$this->running('a-project-with-a-very-long-name-for-tests', '3')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of a-project-with-a-very-long-name…. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of a-project-with-a-very-long-name….', $headline->opening());
     }
 
     public function testAProjectNameOfThirtyTwoCharactersIsKeptWhole(): void
@@ -120,56 +168,56 @@ final class HeadlineTest extends TestCase
 
         $headline = $this->headline([$this->running($name, '3')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of '.$name.'. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of '.$name.'.', $headline->opening());
     }
 
     public function testAProjectNameOfThirtyThreeCharactersIsCut(): void
     {
         $headline = $this->headline([$this->running(str_repeat('p', 33), '3')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of '.str_repeat('p', 31).'…. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of '.str_repeat('p', 31).'….', $headline->opening());
     }
 
     public function testAProjectNameOfWideCharactersIsCutByDisplayWidth(): void
     {
         $headline = $this->headline([$this->running(str_repeat('項', 20), '3')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 3 of '.str_repeat('項', 15).'…. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 3 of '.str_repeat('項', 15).'….', $headline->opening());
     }
 
     public function testALongChangeNameIsCutLikeAProjectName(): void
     {
         $headline = $this->headline([$this->running('sample', 'feat/a-branch-name-that-goes-on-and-on')], []);
 
-        self::assertSame('The Code reviewers are reviewing change feat/a-branch-name-that-goes-on… of sample. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change feat/a-branch-name-that-goes-on… of sample.', $headline->opening());
     }
 
     public function testChangeNamesThatReadAsTheSameNumberAreDifferentChanges(): void
     {
         $headline = $this->headline([$this->running('sample', '1'), $this->running('sample', '01'), $this->running('sample', '1e0')], []);
 
-        self::assertSame('The Code reviewers are reviewing change 1 of sample, change 01 of sample and 1 more change. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change 1 of sample, change 01 of sample and 1 more change.', $headline->opening());
     }
 
     public function testAProjectAndChangeThatJoinToTheSameTextAreDifferentPlaces(): void
     {
         $headline = $this->headline([$this->running('ab', 'c'), $this->running('a', 'bc')], []);
 
-        self::assertSame('The Code reviewers are reviewing change c of ab and change bc of a. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing change c of ab and change bc of a.', $headline->opening());
     }
 
     public function testRunningRoundsFromBeforeTheLedgerNamedTheirChangeAreNamedByTheirRound(): void
     {
         $headline = $this->headline([$this->unnamed('legacy-round-a'), $this->unnamed('legacy-round-b')], []);
 
-        self::assertSame('The Code reviewers are reviewing round legacy-round-a of sample and round legacy-round-b of sample. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing round legacy-round-a of sample and round legacy-round-b of sample.', $headline->opening());
     }
 
     public function testTheReviewersOfOneUnnamedRoundAreNamedOnce(): void
     {
         $headline = $this->headline([$this->unnamed('legacy-round-a', 'correctness', 'security')], []);
 
-        self::assertSame('The Code reviewers are reviewing round legacy-round-a of sample. Nothing needs you.', $headline->text());
+        self::assertSame('The Code reviewers are reviewing round legacy-round-a of sample.', $headline->opening());
     }
 
     /**

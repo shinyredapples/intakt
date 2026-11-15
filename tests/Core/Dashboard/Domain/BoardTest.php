@@ -118,7 +118,7 @@ final class BoardTest extends TestCase
 
     public function testABoardWithoutCardsHasTheHeadlineOfAFreshInstall(): void
     {
-        self::assertSame('Nothing is running yet. Start the first review.', new Board([])->headline()->text());
+        self::assertSame('Nothing is running yet. Start the first review.', new Board([])->headline()->opening());
     }
 
     public function testTheBoardsHeadlineTellsOfItsRunningReviewsAndItsEmptyWaitingOnYou(): void
@@ -126,7 +126,9 @@ final class BoardTest extends TestCase
         $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
         $board = new Board([new Review([$running]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
 
-        self::assertSame('The Code reviewers are reviewing change feat/a of alpha. Nothing needs you.', $board->headline()->text());
+        $headline = $board->headline();
+
+        self::assertSame(['The Code reviewers are reviewing change feat/a of alpha.', 'Nothing needs you.'], [$headline->opening(), $headline->waitingWords()]);
     }
 
     /**
