@@ -9,6 +9,8 @@ use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Server\Infrastructure\ProcessSettings;
@@ -233,6 +235,27 @@ final class WorkerModeTest extends TestCase
         $this->runReviewer($kernel, new UuidV7(), 'Review this change.');
 
         self::assertSame('mcp-owner', $this->nextRequestSees($kernel)->user);
+    }
+
+    public function testShuttingTheKernelDownResetsTheServicesItBuilt(): void
+    {
+        $kernel = $this->bootedKernel(new Kernel('test', true));
+        $this->browserOn($kernel)->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
+        $tokens = $this->container($kernel)->get('security.token_storage');
+        self::assertNotNull($tokens->getToken());
+
+        $kernel->shutdown();
+
+        self::assertNull($tokens->getToken());
+    }
+
+    public function testTheReviewerDoesNotBuildItsToolboxFactoryBeforeItReviews(): void
+    {
+        $kernel = $this->bootedKernel(new Kernel('test', true));
+        $container = $this->container($kernel);
+
+        self::assertInstanceOf(ReviewerAgent::class, $container->get(ReviewerAgent::class));
+        self::assertFalse($container->initialized(ReviewerMcpToolboxFactory::class));
     }
 
     public function testAFlashMessageIsShownOnlyOnceToTheBrowserThatCausedIt(): void
