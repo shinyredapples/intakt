@@ -25,7 +25,7 @@ final class AppImageWorkflowTest extends TestCase
 
     public function testAPullRequestOrABranchPushBuildsTheAppImageOnce(): void
     {
-        self::assertSame(['ci.yml image'], $this->jobsRunning('docker build'));
+        self::assertSame(['ci.yml image', 'image-arm64.yml image'], $this->jobsRunning('docker build'));
     }
 
     /**
@@ -56,8 +56,8 @@ final class AppImageWorkflowTest extends TestCase
 
     public function testBothImageChecksRunOnlyInTheImageJob(): void
     {
-        self::assertSame(['ci.yml image'], $this->jobsRunning('docker/smoke-test.sh'));
-        self::assertSame(['ci.yml image'], $this->jobsRunning('docker/verify-first-start.sh'));
+        self::assertSame(['ci.yml image', 'image-arm64.yml image'], $this->jobsRunning('docker/smoke-test.sh'));
+        self::assertSame(['ci.yml image', 'image-arm64.yml image'], $this->jobsRunning('docker/verify-first-start.sh'));
         self::assertSame(['ci.yml image'], $this->jobsRunning('docker/verify-upgrade.sh'));
     }
 
