@@ -60,14 +60,14 @@ Intakt finds them in your project's config, your `compose.yaml`, the services yo
 
 ## Can reviewers use them?
 
-Yes. A review job gets the same sidecars as the check job, so a reviewer can:
+Planned, not built yet: today a reviewer reads the change and runs nothing. Once built, a review job gets the same sidecars as the check job, so a reviewer can:
 - run the project's tests against a **real database**;
 - start **the changed application itself** in its box and call it, to see that it boots and answers;
 - write a small test of its own for an edge case and run it there.
 
 ```mermaid
 flowchart LR
-  reviewer[Reviewer] -- "writes a small test" --> sandbox[Its sandbox<br/>no internet]
+  reviewer[Reviewer] -- "writes a small test (planned)" --> sandbox[Its sandbox<br/>no internet]
   sandbox --> app[The changed app,<br/>booted for this review]
   app --> db[(Fresh database copy)]
   sandbox -- result --> reviewer
