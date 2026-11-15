@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Memory\Infrastructure;
 
-use LogicException;
+use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
 use Override;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\ModelCatalog\ModelCatalogInterface;
@@ -17,12 +17,12 @@ final readonly class EmbeddingsNotConfigured implements PlatformInterface
     #[Override]
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
-        throw new LogicException('Project memory needs an embedding model: enable an OpenAI account (set OPENAI_API_KEY) to index it.');
+        throw new ProjectMemoryNeedsEmbeddingModel();
     }
 
     #[Override]
     public function getModelCatalog(): ModelCatalogInterface
     {
-        throw new LogicException('Project memory needs an embedding model: enable an OpenAI account (set OPENAI_API_KEY) to index it.');
+        throw new ProjectMemoryNeedsEmbeddingModel();
     }
 }
