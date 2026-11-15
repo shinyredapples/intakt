@@ -31,6 +31,13 @@ final class ExpectationsTest extends TestCase
         self::assertTrue(Expectations::fromJson('[]')->isDefectFree());
     }
 
+    public function testDefectsWithDistinctIdsAreAllRead(): void
+    {
+        $expectations = Expectations::fromJson('[{"id":"d1","file":"a.js","lines":{"from":1,"to":1},"description":"x","severity":"P1"},{"id":"d2","file":"a.js","lines":{"from":1,"to":1},"description":"x","severity":"P3"}]');
+
+        self::assertCount(2, $expectations->defects);
+    }
+
     #[DataProvider('brokenFiles')]
     public function testABrokenFileIsRefusedInWords(string $json, string $reason): void
     {
@@ -55,7 +62,11 @@ final class ExpectationsTest extends TestCase
         return [
             'not json' => ['{', 'Syntax error'],
             'not a list' => ['{"id":"d1"}', 'must be a list'],
+            'empty object' => ['{}', 'must be a list'],
             'entry not an object' => ['[1]', 'must be an object'],
+            'entry an empty list' => ['[[]]', 'must be an object'],
+            'lines a list' => ['[{'.$valid.',"lines":[1,2],"severity":"P1"}]', 'lines of d1'],
+            'id repeated' => ['[{'.$valid.',"lines":{"from":1,"to":1},"severity":"P1"},{'.$valid.',"file":"b.js","lines":{"from":1,"to":1},"severity":"P1"}]', 'd1 is listed more than once'],
             'range reversed' => ['[{'.$valid.',"lines":{"from":5,"to":4},"severity":"P1"}]', 'lines of d1'],
             'range starts at zero' => ['[{'.$valid.',"lines":{"from":0,"to":4},"severity":"P1"}]', 'lines of d1'],
             'range missing' => ['[{'.$valid.',"severity":"P1"}]', 'lines of d1'],

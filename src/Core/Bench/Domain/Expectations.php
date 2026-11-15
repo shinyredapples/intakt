@@ -6,6 +6,7 @@ namespace Intakt\Core\Bench\Domain;
 
 use Intakt\Core\Review\Contract\Severity;
 use JsonException;
+use stdClass;
 
 final readonly class Expectations
 {
@@ -19,16 +20,24 @@ final readonly class Expectations
     public static function fromJson(string $json): self
     {
         try {
-            $entries = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+            // Objects stay objects, so `{}` is refused instead of reading as an empty list.
+            $entries = json_decode($json, false, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $e) {
             throw InvalidExpectations::because($e->getMessage());
         }
 
-        if (!is_array($entries) || !array_is_list($entries)) {
+        if (!is_array($entries)) {
             throw InvalidExpectations::because('the top level must be a list of defects');
         }
 
-        return new self(array_map(self::defect(...), $entries));
+        $defects = array_map(self::defect(...), $entries);
+        $ids = array_map(static fn (PlantedDefect $defect): string => $defect->id, $defects);
+        $repeated = array_keys(array_filter(array_count_values($ids), static fn (int $count): bool => $count > 1));
+        if ([] !== $repeated) {
+            throw InvalidExpectations::because('the defect id '.implode(', ', $repeated).' is listed more than once');
+        }
+
+        return new self($defects);
     }
 
     public function isDefectFree(): bool
@@ -38,14 +47,15 @@ final readonly class Expectations
 
     private static function defect(mixed $entry): PlantedDefect
     {
-        if (!is_array($entry)) {
+        if (!$entry instanceof stdClass) {
             throw InvalidExpectations::because('a defect must be an object');
         }
 
+        $entry = get_object_vars($entry);
         $id = self::text($entry, 'id');
         $lines = $entry['lines'] ?? null;
-        $from = is_array($lines) ? ($lines['from'] ?? null) : null;
-        $to = is_array($lines) ? ($lines['to'] ?? null) : null;
+        $from = $lines instanceof stdClass ? ($lines->from ?? null) : null;
+        $to = $lines instanceof stdClass ? ($lines->to ?? null) : null;
         if (!is_int($from) || !is_int($to) || $from < 1 || $to < $from) {
             throw InvalidExpectations::because('the lines of '.$id.' must be integers with 1 <= from <= to');
         }
