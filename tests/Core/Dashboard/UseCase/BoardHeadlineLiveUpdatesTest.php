@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DOMNode;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
@@ -83,7 +84,6 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
     public function testTheBoardListensToTheShellTopicWhenLiveUpdatesAreOn(): void
     {
-
         $source = $this->browser->request('GET', '/')->filter('turbo-mercure-stream-source');
 
         self::assertCount(1, $source);
@@ -199,7 +199,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
             self::assertNotNull($template);
             $document = $target->ownerDocument;
             self::assertNotNull($document);
-            while (null !== $target->firstChild) {
+            while ($target->firstChild instanceof DOMNode) {
                 $target->removeChild($target->firstChild);
             }
 
