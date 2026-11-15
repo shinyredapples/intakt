@@ -20,7 +20,7 @@ A third helper, the round driver, starts a review on the sample project and move
 |---|---|---|
 | First install and setup | a new install gets its database, shows an empty projects page, is given the sample project (a second time changes nothing), and shows an empty reviews page | built |
 | A task picked, built, reviewed and merged on the demo repository | the whole life of a task | planned |
-| The dashboard showing live progress | the watcher sees a pull request on the sample project (read from a recording, not a forge) and starts a review, the board's opening sentence goes from the fresh-install line to one about the review and back to "Nothing is running.", the review page shows it in progress, every live update the review sends fits the page a person watching it holds, until the judge has ruled and the page shows it judged; whether the browser itself listens for those updates is checked by a separate test, not by this journey | built |
+| The dashboard showing live progress | the watcher sees a pull request on the sample project (read from a recording, not a forge) and starts a review, the board's opening sentence is read once the review has started and again once it is judged ("Nothing is running."), the review page shows it in progress, every live update the review sends fits the page a person watching it holds, until the judge has ruled and the page shows it judged; whether the browser itself listens for those updates is checked by a separate test, not by this journey | built |
 | An owner decision answered | a question that waits for you, and your answer | planned |
 
 ## When a journey fails on main

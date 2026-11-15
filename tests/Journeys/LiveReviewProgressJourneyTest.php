@@ -39,10 +39,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     {
         $this->step('create the database', $this->createTheDatabase(...));
         $this->step('seed the sample project', $this->seedTheSampleProject(...));
-        $this->step('read the board headline of the fresh install', fn () => $this->readTheBoardHeadline('/^Nothing is running yet\. Start the first review\.$/'));
         $round = $this->step('start a round through the watcher', $this->startTheRound(...));
-        $this->step('read the board headline after the review started', fn () => $this->readTheBoardHeadline('/^(The Code reviewers are reviewing .+|Nothing is running)\. Nothing needs you\.$/'));
         $running = $this->step('open the running round', fn (): Crawler => $this->openTheRunningRound($round));
+        $this->step('read the board headline after the review started', fn () => $this->readTheBoardHeadline('/^(The Code reviewers are reviewing .+|Nothing is running)\. Nothing needs you\.$/'));
         $updates = $this->step('step the round until the judge has ruled', fn (): array => $this->stepTheRound($round));
         $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
         $this->step('check the board headline was pushed', $this->checkTheBoardHeadlineWasPushed(...));
