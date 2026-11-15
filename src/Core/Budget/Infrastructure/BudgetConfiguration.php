@@ -28,13 +28,13 @@ final class BudgetConfiguration implements ConfigurationInterface
         $this->prices($budget->arrayNode('prices'));
         // The day the list was read, because an estimate is only as good as its list; Symfony YAML reads an unquoted date as its midnight in UTC, so that timestamp is the same day.
         $budget->scalarNode('price_date')->defaultNull()
-            ->beforeNormalization()->ifTrue(static fn (mixed $date): bool => is_int($date) && 0 === $date % self::SECONDS_PER_DAY)->then(self::dayOf(...))->end()
+            ->beforeNormalization()->ifTrue(static fn (mixed $date): bool => is_int($date) && 0 === $date % self::SECONDS_PER_DAY)->then($this->dayOf(...))->end()
             ->validate()->ifTrue(static fn (mixed $date): bool => !self::isDay($date))->thenInvalid('The price_date must be a date written as YYYY-MM-DD.');
 
         return $tree;
     }
 
-    private static function dayOf(int $midnight): string
+    private function dayOf(int $midnight): string
     {
         $day = DateTimeImmutable::createFromFormat('U', (string) $midnight, new DateTimeZone('UTC'));
 
