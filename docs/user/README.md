@@ -734,7 +734,7 @@ Otherwise a side asks for changes when any of its reviews does. Findings are mat
 
 ## The sample repository
 
-`fixtures/sample-repository/` holds a small shop project to try a review on. `base/` is the base commit and `pull-request/` holds the files the pull request branch adds or changes. The branch carries three deliberate issues (a bug, a new function without a test, and a command built from input), listed in `issues.json` so a later check can tell whether a review found them. The folder's `README.md` has the git commands that turn it into a repository with a `main` branch and a `sample-change` branch. The demo builds that repository for you (see below).
+`fixtures/sample-repository/` holds a small shop project to try a review on. `base/` is the base commit and `pull-request/` holds the files the pull request branch adds or changes. The branch carries three deliberate issues (a bug, a new function without a test, and a command built from input), listed in `issues.json` so a later check can tell whether a review found them. The folder's `README.md` has the git commands that turn it into a repository with a `main` branch and a `sample-change` branch. The demo builds that repository for you (see below). The same folder holds `bench/`, eight small changes (three of them without any defect) with the defects planted in them, which a coming bench command will use to measure how well reviewers find defects; nothing runs them yet.
 
 ## The demo with docker compose
 
@@ -781,6 +781,17 @@ Two things to know when you set up Hugging Face yourself, for example as `openai
 - Name the router provider after the model, as the seeded models do (`:deepinfra`, `:novita`). Every reviewer call uses tools together with structured output, and some router providers refuse that combination: Groq and Cerebras did. DeepInfra and Baseten (for `moonshotai/Kimi-K3`), Novita (for `openai/gpt-oss-120b`) and DeepInfra (for `deepseek-ai/DeepSeek-V4.1-Flash`) accepted it. The router's default provider may be one that refuses, and the error then says only "Bad Request".
 
 Project memory still needs an OpenAI key: a Hugging Face token alone gives no embeddings.
+
+### Recording a review for the demo
+
+A recording keeps one real review of a change in one file: its ledger events and the live updates the review page received, with the date the review started, the models it called and the Intakt version that wrote the file. Playing a recording back is not built yet.
+
+1. Before the review, set `INTAKT_LIVE_CAPTURE` to a file, for example `INTAKT_LIVE_CAPTURE=/app/var/data/live-updates.jsonl` in `.env.local` for the compose demo, and run `docker compose up -d` so the container is made again with it. From then on every live update is also appended to that file, one line each. If the file cannot be written, the warning "A live dashboard update was not captured." is logged and the review goes on. The capture keeps the order the hub received the updates in, because each update is published and appended while holding one lock.
+2. Run the review, for example both rounds of the sample change.
+3. Write the recording: `php bin/console intakt:demo:record sample sample-change sample-review.json` (in the compose demo, prefix `docker compose exec intakt`). It takes every round of that change in that project from the ledger and the captured updates of those rounds, and prints how many of each it wrote.
+4. Set `INTAKT_LIVE_CAPTURE` empty again, since the file keeps growing while it is set.
+
+The command writes nothing and exits 1 when the ledger has no round of that change in that project, when `INTAKT_LIVE_CAPTURE` is empty, when the capture file cannot be read, holds a line that is no captured update (the message names the line) or holds no update of one of those rounds (the message names the round, so a capture started after the first round is refused), or when the recording file cannot be written.
 
 ## Keeping a copy of a project's repository
 
