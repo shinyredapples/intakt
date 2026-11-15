@@ -8,7 +8,7 @@ use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use InvalidArgumentException;
 use NoDiscard;
 
-// The check of a bundle a build handed back, for the build lane, which may use only this module's contract.
+// An interface, because the build task checks what its job hands back and other modules may use only this module's contract.
 interface HandBackChecks
 {
     /**

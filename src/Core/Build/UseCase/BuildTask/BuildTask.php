@@ -58,10 +58,18 @@ final readonly class BuildTask
             return new BuildTaskOutcome(BuildStep::Task, $task, null);
         }
 
+        return $this->runSteps($request, $task);
+    }
+
+    /**
+     * @throws BuildStepNotRecorded
+     */
+    private function runSteps(BuildTaskRequest $request, ListedIssue $task): BuildTaskOutcome
+    {
         $bundle = null;
 
         foreach (BuildStep::cases() as $step) {
-            $result = match ($step) {
+            $failure = match ($step) {
                 // Read before the other steps, because they need the task it returns.
                 BuildStep::Task => null,
                 BuildStep::Mirror => $this->updateMirror($request),
@@ -69,9 +77,13 @@ final readonly class BuildTask
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->checkHandBack($request, $bundle),
             };
+
             // A local of this run, never a property, because a worker keeps the service between runs.
-            $bundle = $result instanceof BuildJobOutcome ? $result->bundle : $bundle;
-            $failure = $result instanceof BuildJobOutcome ? null : $result;
+            if ($failure instanceof BuildJobOutcome) {
+                $bundle = $failure->bundle;
+                $failure = null;
+            }
+
             $this->record($request, $step, $failure);
 
             if (null !== $failure) {
@@ -138,7 +150,7 @@ final readonly class BuildTask
 
     private function checkHandBack(BuildTaskRequest $request, ?string $bundle): ?string
     {
-        // A job that built always hands back a bundle, and the check runs only after it.
+        // Never null, because the check runs only after a build job that built, and such a job always hands back a bundle.
         return $this->handBacks->failureOf($request, $bundle ?? throw new LogicException('the hand-back check runs only after a build job that handed back a bundle'));
     }
 

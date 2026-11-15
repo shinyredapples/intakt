@@ -20,7 +20,7 @@ use Symfony\Component\Filesystem\Filesystem;
 // Checked against the project's mirror, because the check needs a bare repository whose HEAD names main, and the build clone's HEAD names the task's branch.
 final readonly class HandBackCheck
 {
-    // A first build has no rework that asks for a merge of main.
+    // Never asked, because a first build has no rework that asks for a merge of main.
     private const bool MERGE_OF_MAIN_ASKED = false;
 
     public function __construct(

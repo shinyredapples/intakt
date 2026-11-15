@@ -616,7 +616,7 @@ final class BuildTaskTest extends TestCase
         return new BuildTask($issues, $checkout, $this->routing, $builds, $handBacks, $ledger);
     }
 
-    // A job that commits on the clone's branch and hands back that commit as a bundle naming $ref, as docker/job/build.sh does.
+    // Commits in the clone, because the check accepts only a bundle built on what the mirror holds, as docker/job/build.sh bundles it.
     private function committingRunner(string $ref = 'feat/task'): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
@@ -638,7 +638,7 @@ final class BuildTaskTest extends TestCase
 
     private function inClone(string ...$arguments): string
     {
-        return $this->git($arguments, $this->clone);
+        return $this->git(array_values($arguments), $this->clone);
     }
 
     /**
