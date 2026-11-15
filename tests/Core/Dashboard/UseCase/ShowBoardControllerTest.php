@@ -72,7 +72,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         $lead = $this->browser->request('GET', '/')->filter('.page-head .lead');
 
-        self::assertSame('The Code reviewers are reviewing change 42 of alpha. Nothing needs you.', $lead->text());
+        self::assertSame('The Code reviewers are reviewing change 42 of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.', $lead->text());
         self::assertCount(0, $lead->filter('a'));
     }
 
