@@ -63,6 +63,15 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
         self::assertSame('The Code reviewers are reviewing 2 changes.', $line->filter('.headline-short')->text());
     }
 
+    public function testBothOpeningsComeBeforeTheSingularWaitingCountAndItsLink(): void
+    {
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3')]), [$this->review('round-7', '7')], 2));
+
+        self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change. 1 needs you: see what.', $line->text());
+        self::assertSame(['1'], $line->filter('.count.needs')->each(static fn (Crawler $count): string => $count->text()));
+        self::assertSame('/reviews/round-7', $line->filter('a')->attr('href'));
+    }
+
     public function testWithNothingRunningTheHeadlineHasOneOpening(): void
     {
         $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 1));
