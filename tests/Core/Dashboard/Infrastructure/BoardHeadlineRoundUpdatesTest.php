@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
-use Closure;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
@@ -28,7 +27,6 @@ use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
-use Override;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
@@ -165,10 +163,8 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 
         new BoardHeadlineRoundUpdates($this->round, $this->headline($ledger, $this->live))->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
 
-        $logs = $this->log->cleanLogs();
         self::assertSame([], $this->live->events);
-        self::assertSame([['warning', 'The board headline was not published.']], array_map(static fn (array $log): array => [$log[0], $log[1]], $logs));
-        self::assertSame(self::ROUND, $logs[0][2]['round'] ?? null);
+        self::assertSame([['warning', 'The board headline was not published.', self::ROUND, RuntimeException::class]], $this->loggedWarnings());
     }
 
     public function testAHeadlineReadBeforeAnotherReviewerStartedIsNeverTheLastOnePublished(): void
@@ -177,28 +173,11 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
         $this->ledger->startReviewer(self::ROUND, 'security');
         $secondWorker = $this->headline($this->ledger, $this->live);
-        $live = new class($this->live, function () use ($other, $secondWorker): void {
+        $live = new PublishingMeanwhile($this->live, function () use ($other, $secondWorker): void {
             $this->ledger->startRoundOf('feat/b', $other, 1);
             $this->ledger->startReviewer($other, 'security');
             $secondWorker->publishLatest(Uuid::fromString($other));
-        }) implements LiveUpdates {
-            /** @param Closure(): void $meanwhile */
-            public function __construct(private readonly LiveUpdates $live, private ?Closure $meanwhile)
-            {
-            }
-
-            #[Override]
-            public function publish(LiveEvent $event): void
-            {
-                $meanwhile = $this->meanwhile;
-                $this->meanwhile = null;
-                $this->live->publish($event);
-
-                if ($meanwhile instanceof Closure) {
-                    $meanwhile();
-                }
-            }
-        };
+        });
 
         new BoardHeadlineRoundUpdates($this->round, $this->headline($this->ledger, $live))->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
 
@@ -225,6 +204,20 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
         return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
+    }
+
+    /**
+     * @return list<array{mixed, mixed, mixed, string|null}>
+     */
+    private function loggedWarnings(): array
+    {
+        return array_values(array_map(static function (mixed $record): array {
+            $record = is_array($record) ? $record : [];
+            $context = is_array($record[2] ?? null) ? $record[2] : [];
+            $exception = $context['exception'] ?? null;
+
+            return [$record[0] ?? null, $record[1] ?? null, $context['round'] ?? null, is_object($exception) ? $exception::class : null];
+        }, $this->log->cleanLogs()));
     }
 
     private function headlineIn(int $event): string
