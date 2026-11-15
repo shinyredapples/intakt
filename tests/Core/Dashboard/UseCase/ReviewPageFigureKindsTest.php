@@ -86,6 +86,22 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         self::assertSame(['0', '0'], $labels->each(static fn (Crawler $label): ?string => $label->attr('tabindex')));
     }
 
+    public function testEachTooltipIsAnchoredToItsOwnLabelSoAScrollingTableCannotClipIt(): void
+    {
+        $this->givenAJudgedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $labels = $crawler->filter('#round-round-1 table.tokens .figure-kind');
+        self::assertCount(6, $labels);
+        $anchors = $labels->each(static fn (Crawler $label): ?string => $label->attr('style'));
+        self::assertSame(
+            array_map(static fn (?string $anchor): string => str_replace('anchor-name', 'position-anchor', (string) $anchor), $anchors),
+            $labels->each(static fn (Crawler $label): ?string => $label->filter('.figure-kind-tip')->attr('style')),
+        );
+        self::assertSame($labels->each(static fn (Crawler $label): string => 'anchor-name: --'.$label->attr('aria-describedby')), $anchors);
+    }
+
     private function givenAJudgedRound(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);

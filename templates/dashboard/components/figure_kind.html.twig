@@ -1,4 +1,5 @@
 {#- A figure's kind (FigureKind) as a small label after the figure, with the source it comes from shown on hover and focus. -#}
 {%- set tip_id = 'kind-' ~ kind.value ~ '-' ~ random() -%}
-<span class="figure-kind" tabindex="0" data-kind="{{ kind.value }}" aria-describedby="{{ tip_id }}">{{ kind.value }}<span class="figure-kind-tip" role="tooltip" id="{{ tip_id }}">{{ kind.source }}</span></span>
+{#- The tooltip is anchored to its own label by name, because it is placed against the viewport so a scrolling table cannot clip it. -#}
+<span class="figure-kind" tabindex="0" data-kind="{{ kind.value }}" aria-describedby="{{ tip_id }}" style="anchor-name: --{{ tip_id }}">{{ kind.value }}<span class="figure-kind-tip" role="tooltip" id="{{ tip_id }}" style="position-anchor: --{{ tip_id }}">{{ kind.source }}</span></span>
 {#- Trimmed, because the label sits inside a sentence and a trailing newline would show as a space before its comma. -#}
