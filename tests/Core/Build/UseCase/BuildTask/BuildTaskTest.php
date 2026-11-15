@@ -169,7 +169,7 @@ final class BuildTaskTest extends TestCase
     public function testAMirrorWhoseAttributesFileIsRefusedEndsAtTheMirrorStepWithItsFailureRecorded(): void
     {
         $mirrors = new Mirrors($this->mirrors);
-        (void) $this->mirrorUpdate($mirrors, new InMemoryStore())->update('alpha', $this->remote->path);
+        $this->mirrorUpdate($mirrors, new InMemoryStore())->update('alpha', $this->remote->path);
         new Filesystem()->dumpFile($mirrors->pathOf('alpha').'/info/attributes', '*.txt text');
         $ledger = new InMemoryLedger();
 
