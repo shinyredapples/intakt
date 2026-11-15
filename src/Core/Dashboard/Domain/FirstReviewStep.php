@@ -1,0 +1,53 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Dashboard\Domain;
+
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\SampleChange;
+
+final readonly class FirstReviewStep
+{
+    public function __construct(
+        public ?Review $review,
+        public bool $sampleCanStart,
+    ) {
+    }
+
+    public function state(): StepState
+    {
+        return match (true) {
+            $this->review instanceof Review => StepState::Done,
+            $this->sampleCanStart => StepState::Missing,
+            default => StepState::NotNeeded,
+        };
+    }
+
+    public function sentence(): string
+    {
+        if (!$this->review instanceof Review) {
+            return $this->sampleCanStart
+                ? sprintf('No review has run yet: start the review of the change %s of the %s project.', SampleChange::CHANGE, SampleChange::PROJECT)
+                : 'No review has run yet, and this install has no sample change to start one from: review a change of your own project with intakt:review or your agent.';
+        }
+
+        return sprintf('The first review, of the change %s of the %s project, %s.', $this->review->change, $this->review->project, $this->outcome($this->review->latest()));
+    }
+
+    // The round the link opens, the latest of the review, because its page shows every round of the change.
+    public function round(): ?string
+    {
+        return $this->review?->latest()->round;
+    }
+
+    private function outcome(ReviewedRound $round): string
+    {
+        return match (true) {
+            $round->outcome instanceof Decision => 'is judged with the outcome '.$round->outcome->value,
+            $round->isJudged() => 'is judged; its outcome was not recorded',
+            $round->hasEnded() => 'ended without a call of the judge',
+            default => 'is in progress',
+        };
+    }
+}
