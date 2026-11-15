@@ -16,6 +16,7 @@ use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerOutcome;
 use Intakt\Core\Review\Contract\ReviewProgress;
 use Intakt\Core\Review\Contract\RoundEnds;
@@ -154,7 +155,7 @@ final readonly class ReviewChange implements ChangeReviews
         return new ChangeReview(
             $roundId,
             $round->number(),
-            $this->decision->of($request->panel->quorum, array_map($this->voteOf(...), $round->reviewers())),
+            $this->decisionOf($request, $round),
             $this->verdicts->of($round),
             $this->actListOf($round),
             $this->ledger->tokensOf($roundId),
@@ -163,6 +164,16 @@ final readonly class ReviewChange implements ChangeReviews
             RoundEnds::Judged,
             $this->outcomesOf($roundId, $round),
         );
+    }
+
+    // A replay plays a recorded review back, so its verdicts were never given on this change and help no quorum.
+    private function decisionOf(ChangeReviewRequest $request, ReviewRound $round): Decision
+    {
+        if (ReplayMark::Replay === $round->replayMark()) {
+            return Decision::Blocked;
+        }
+
+        return $this->decision->of($request->panel->quorum, array_map($this->voteOf(...), $round->reviewers()));
     }
 
     private function unfinished(ChangeReview $review, int $seconds): ChangeReview
@@ -216,7 +227,7 @@ final readonly class ReviewChange implements ChangeReviews
      */
     private function reasonsOf(ReviewRound $round): array
     {
-        $reasons = [];
+        $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
 
         foreach ($round->reviewers() as $reviewer) {
             if (null !== $reviewer->failure()) {

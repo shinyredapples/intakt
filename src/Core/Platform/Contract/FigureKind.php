@@ -10,4 +10,13 @@ enum FigureKind: string
     case Measured = 'measured';
     case Counted = 'counted';
     case Estimated = 'estimated';
+
+    public function source(): string
+    {
+        return match ($this) {
+            self::Measured => "Measured: read from the provider's usage answer.",
+            self::Counted => "Counted: from the rows of Intakt's ledger.",
+            self::Estimated => 'Estimated: from the configured price list.',
+        };
+    }
 }

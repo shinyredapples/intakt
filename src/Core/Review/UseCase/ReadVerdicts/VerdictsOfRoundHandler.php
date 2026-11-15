@@ -6,9 +6,12 @@ namespace Intakt\Core\Review\UseCase\ReadVerdicts;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Platform\Contract\AsQueryHandler;
+use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
+use Intakt\Core\Review\Contract\VerdictStanding;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Symfony\Component\Uid\Uuid;
 
@@ -26,11 +29,24 @@ final readonly class VerdictsOfRoundHandler
         $round = $this->storedRound($query->roundId);
         $standing = $round->standingAt($query->current, $query->move);
 
+        return new RoundVerdicts($standing, $this->countingOf($round, $standing));
+    }
+
+    /**
+     * @return list<PanelVerdict>
+     */
+    private function countingOf(ReviewRound $round, VerdictStanding $standing): array
+    {
         if (Standing::Stale === $standing->standing) {
-            return new RoundVerdicts($standing, []);
+            return [];
         }
 
-        return new RoundVerdicts($standing, $this->verdicts->of($round));
+        // A replay plays a recorded review back, so its verdicts were never given on this change.
+        if (ReplayMark::Replay === $round->replayMark()) {
+            return [];
+        }
+
+        return $this->verdicts->of($round);
     }
 
     private function storedRound(string $roundId): ReviewRound
