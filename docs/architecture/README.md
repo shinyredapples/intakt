@@ -52,6 +52,7 @@ Models and budget:
 
 Builds:
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
+- [Build task](build-task.md): `intakt:build:task` reads the task, updates the mirror and makes the build clone, recording each step in the ledger
 - [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns
 
 Reviews:
