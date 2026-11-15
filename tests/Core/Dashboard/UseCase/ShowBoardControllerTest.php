@@ -64,6 +64,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
     }
 
+    public function testTheHeadlineCarriesTheIdTheLiveUpdateReplaces(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('p.lead#board-headline'));
+    }
+
     public function testABoardDuringAReviewOpensWithTheCodeReviewersAndTheirChange(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);

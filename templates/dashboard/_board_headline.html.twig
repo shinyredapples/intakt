@@ -1,0 +1,6 @@
+{#- The one home of the board's headline: the page includes it and the live stream replaces it, so both say the same thing. -#}
+{% if lead.firstWaiting %}
+<p class="lead" id="board-headline">{{ lead.runningSentence }} <span class="needs-you">{{ lead.waitingSentence }}</span> <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: lead.firstWaiting.latest.round}) }}">see what</a>.</p>
+{% else %}
+<p class="lead" id="board-headline">{{ lead.text }}</p>
+{% endif %}

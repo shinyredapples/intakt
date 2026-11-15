@@ -33,7 +33,7 @@ final readonly class Headline
             return 'Nothing is running yet. Start the first review.';
         }
 
-        return $this->running().' '.$this->waiting();
+        return $this->runningSentence().' '.$this->waitingSentence();
     }
 
     // The first card of Waiting on you, because the Waiting on you page (#911) does not exist yet.
@@ -42,7 +42,7 @@ final readonly class Headline
         return array_first($this->waiting);
     }
 
-    private function running(): string
+    public function runningSentence(): string
     {
         $changes = $this->runningChanges();
 
@@ -100,7 +100,7 @@ final readonly class Headline
         return implode(', ', $named).' and '.$rest.' more '.(1 === $rest ? 'change' : 'changes');
     }
 
-    private function waiting(): string
+    public function waitingSentence(): string
     {
         $count = count($this->waiting);
 

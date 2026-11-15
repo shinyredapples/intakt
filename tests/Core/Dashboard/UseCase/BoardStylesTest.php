@@ -155,6 +155,21 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.more-btn[hidden]'] ?? '');
     }
 
+    public function testTheWaitingCountOfTheHeadlineUsesTheNeedsYouAmberAndNoNewColor(): void
+    {
+        $rule = $this->rulesOf($this->sheet())['.page-head .lead .needs-you'] ?? '';
+
+        self::assertStringContainsString('background: var(--amber); color: var(--ink-fixed);', $rule);
+        self::assertDoesNotMatchRegularExpression('/#[0-9a-fA-F]{3,8}\b|rgb/', $rule);
+    }
+
+    public function testOnAPhoneTheHeadlineIsCappedToTwoLines(): void
+    {
+        preg_match('/@media \(max-width: 760px\) \{\s*\.page-head \.lead \{([^}]*)\}/', $this->sheet(), $rule);
+
+        self::assertMatchesRegularExpression('/-webkit-line-clamp:\s*2;\s*line-clamp:\s*2;\s*overflow:\s*hidden/', $rule[1] ?? '');
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
