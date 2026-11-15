@@ -21,10 +21,15 @@ final class FirstRunStylesTest extends TestCase
 
     public function testOnAPhoneTheStepButtonRowIsDrawnBelowTheTabBar(): void
     {
-        self::assertSame(1, preg_match('/z-index:\s*(\d+);/', $this->rule('.rail-in', $this->phoneBlock()), $bar));
-        self::assertSame(1, preg_match('/z-index:\s*(\d+);/', $this->rule('.step-nav', $this->phoneBlock()), $row));
-        self::assertGreaterThan(0, (int) $row[1]);
-        self::assertLessThan((int) $bar[1], (int) $row[1]);
+        $row = $this->zIndex('.step-nav');
+
+        self::assertGreaterThan(0, $row);
+        self::assertLessThan($this->zIndex('.rail-in'), $row);
+    }
+
+    private function zIndex(string $selector): int
+    {
+        return 1 === preg_match('/z-index:\s*(\d+);/', $this->rule($selector, $this->phoneBlock()), $found) ? (int) $found[1] : self::fail($selector);
     }
 
     private function sheet(): string
