@@ -11,7 +11,8 @@ Upstream often fixes a bug in a pull request with no issue, or only in a commit 
 3. The commits on upstream's development branch since the pinned version that touch the affected files, and the changelog or upgrade notes of the next release.
 4. Upstream's issues: open and closed.
 
-A lead that upstream has already fixed needs no new folder: the report that raised it records the fixing pull request or commit and the first release that contains it.
+A lead that upstream has already fixed needs no new folder: the fixing pull request or commit and the first release that contains it are recorded in the report of the existing folder it belongs to, or in the report of the task that found the bug.
+
 ## Reports
 
 Each `REPORT.md` ends with `## Upstream status`: the result at the pinned versions, the result on the upstream development branch (run in a scratch copy, never through Intakt's own `composer.json`), the upstream issues found, the pull requests and commits the duplicate check found (or "none found", with the date of the check and the searches made), and the decision: `already reported`, `fixed upstream`, `ready to file`, `filed as pull request` (with the link) or `not a bug`. Once a later `intakt:upstream:run` finds the reproduction passing on a release, the report records that release. A later review by the owner adds an `Owner review` line with its corrections and a `Status` line with the next step; `not filed`, with the reason, marks a report that is not sent upstream although it was `ready to file`.
