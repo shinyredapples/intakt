@@ -9,7 +9,7 @@ use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Domain\ReplayProject;
 
-// A second flag at the same moment fails on the project's primary key rather than storing it twice, and the project is a replay either way.
+// No lock, because a second flag at the same moment fails on the project's primary key rather than storing it twice, and the project is a replay either way.
 #[AsCommandHandler]
 final readonly class FlagProjectAsReplayHandler
 {

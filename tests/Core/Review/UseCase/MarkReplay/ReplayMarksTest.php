@@ -20,7 +20,6 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
 #[Group('persistence')]
@@ -109,7 +108,6 @@ final class ReplayMarksTest extends KernelTestCase
         $container = self::getContainer();
         $commands = $container->get('command.bus');
         $queries = $container->get('query.bus');
-        assert($commands instanceof MessageBusInterface && $queries instanceof MessageBusInterface);
 
         $commands->dispatch(new FlagProjectAsReplay('alpha'));
         $mark = $queries->dispatch(new ReplayMarkOfProject('alpha'))->last(HandledStamp::class)?->getResult();
