@@ -22,4 +22,7 @@ interface RoundUpdates
     public function summaryChanged(Uuid $round): void;
 
     public function reviewerStopped(Uuid $round, string $reviewer): void;
+
+    // After the start is stored and before the vendor call, because the board names a running reviewer for as long as its review takes.
+    public function reviewerStarted(Uuid $round, string $reviewer): void;
 }

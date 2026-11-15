@@ -8,15 +8,13 @@ use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
-use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\Lock\LockFactory;
 use Throwable;
 use Twig\Environment;
 
-// On a round's start and its judgement, because those are the moments a lane appears on the board or leaves it.
+// On a round's start and on every change of its progress, because those are the moments a lane appears on the board or leaves it.
 final readonly class PublishBoardHeadline
 {
     public const string TEMPLATE = 'dashboard/stream/board_headline.stream.html.twig';
@@ -36,35 +34,53 @@ final readonly class PublishBoardHeadline
     #[AsCommandHandler]
     public function opened(RoundOpened $opened): void
     {
-        $this->publishLatest($opened->round);
+        $this->progressed($opened->round);
     }
 
-    #[AsEventListener]
-    public function judged(RoundJudged $judged): void
+    public function progressed(string $round): void
     {
-        $this->publishLatest($judged->roundId);
-    }
-
-    private function publishLatest(string $round): void
-    {
-        $lock = $this->locks->createLock(self::LOCK);
-
         try {
-            // Waited for, because the ledger is read under the lock: the last publication then holds the newest read, never an older one that finished later.
-            $lock->acquire(true);
-            $this->publish();
+            $this->publishLatest();
         } catch (Throwable $failure) {
-            // Swallowed after a log, because the round is already committed and a live update must never change it.
+            // Swallowed after a log, the lock's own failures too, because the round is already committed and a live update must never change it.
             $this->logger->warning('The board headline was not published.', ['round' => $round, 'exception' => $failure]);
-        } finally {
-            $lock->release();
         }
     }
 
-    private function publish(): void
+    // One worker at a time reads the board and publishes it, because two that read and published unordered could leave an older headline on every open page.
+    private function publishLatest(): void
     {
-        $lead = $this->pages->board()->headline();
+        $lock = $this->locks->createLock(self::LOCK);
+        $published = null;
 
-        $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->twig->render(self::TEMPLATE, ['lead' => $lead])));
+        // Tried without waiting, because the worker holding the lock reads the board again after it lets go, and so publishes what this one would have found.
+        while ($lock->acquire(false)) {
+            try {
+                $published = $this->publishedOnce($published);
+            } finally {
+                $lock->release();
+            }
+
+            if ($this->stream() === $published) {
+                return;
+            }
+        }
+    }
+
+    private function publishedOnce(?string $published): string
+    {
+        $stream = $this->stream();
+
+        if ($stream !== $published) {
+            $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $stream));
+        }
+
+        return $stream;
+    }
+
+    // Compared as the rendered stream, because that is exactly what the page would change to.
+    private function stream(): string
+    {
+        return $this->twig->render(self::TEMPLATE, ['lead' => $this->pages->board()->headline()]);
     }
 }

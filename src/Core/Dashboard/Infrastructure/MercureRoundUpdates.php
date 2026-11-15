@@ -13,12 +13,14 @@ use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Override;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 use Twig\Environment;
 
+#[AsAlias(RoundUpdates::class)]
 final readonly class MercureRoundUpdates implements RoundUpdates
 {
     public function __construct(
@@ -77,6 +79,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {
         $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
+    }
+
+    // Nothing on the round's topic, because its page counts finished reviewers, and a start finishes none.
+    #[Override]
+    public function reviewerStarted(Uuid $round, string $reviewer): void
+    {
     }
 
     // Waited for, because a judged round's state must stay the last update of its topic: a worker publishing a tool call's summary finishes first, and the final summary goes out under the same lock, right before the state.

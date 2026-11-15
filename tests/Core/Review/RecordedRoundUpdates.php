@@ -46,6 +46,18 @@ final class RecordedRoundUpdates implements RoundUpdates
         $this->seen[] = sprintf('asked again %s', $reviewer);
     }
 
+    // Apart from what the round page sees, because only the board shows a start.
+    /**
+     * @var list<string>
+     */
+    public array $started = [];
+
+    #[Override]
+    public function reviewerStarted(Uuid $round, string $reviewer): void
+    {
+        $this->started[] = $reviewer;
+    }
+
     #[Override]
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {

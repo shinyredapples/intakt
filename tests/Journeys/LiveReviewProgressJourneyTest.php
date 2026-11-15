@@ -41,10 +41,10 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $this->step('seed the sample project', $this->seedTheSampleProject(...));
         $round = $this->step('start a round through the watcher', $this->startTheRound(...));
         $running = $this->step('open the running round', fn (): Crawler => $this->openTheRunningRound($round));
-        $this->step('read the board headline after the review started', fn () => $this->readTheBoardHeadline('/^(The Code reviewers are reviewing .+|Nothing is running)\. Nothing needs you\.$/'));
+        $this->step('read the board headline before a reviewer runs', fn () => $this->readTheBoardHeadline('/^Nothing is running\. Nothing needs you\.$/'));
         $updates = $this->step('step the round until the judge has ruled', fn (): array => $this->stepTheRound($round));
         $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
-        $this->step('check the board headline was pushed', $this->checkTheBoardHeadlineWasPushed(...));
+        $this->step('read the pushed board headline while a reviewer ran', $this->readThePushedHeadlines(...));
         $this->step('open the judged round', fn () => $this->openTheJudgedRound($round));
         $this->step('read the board headline after the judge ruled', fn () => $this->readTheBoardHeadline('/^Nothing is running\. Nothing needs you\.$/'));
     }
@@ -97,12 +97,16 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertMatchesRegularExpression($pattern, $this->visit('/')->filter('#board-headline')->text());
     }
 
-    // On the shell topic, which every page listens to, so an open board changes its line without a reload.
-    private function checkTheBoardHeadlineWasPushed(): void
+    // From the hub, because a step runs a whole reviewer, so no page load falls while one runs; on the shell topic, which every page listens to, so an open board changes its line without a reload.
+    private function readThePushedHeadlines(): void
     {
-        $pushed = array_filter($this->publishedUpdates(), static fn (Update $update): bool => str_contains($update->getData(), 'target="board-headline"'));
+        $pushed = array_values(array_map(
+            static fn (Update $update): string => trim((string) preg_replace('/\s+/', ' ', strip_tags($update->getData()))),
+            array_filter($this->publishedUpdates(), static fn (Update $update): bool => str_contains($update->getData(), 'target="board-headline"')),
+        ));
 
-        self::assertStringContainsString('Nothing is running.', array_last($pushed)?->getData() ?? self::fail('no board headline was sent to the hub'));
+        self::assertNotSame([], array_filter($pushed, static fn (string $line): bool => 1 === preg_match('/^The Code reviewers are reviewing change .+ of .+\. Nothing needs you\.$/', $line)), 'no pushed headline named the running review: '.implode(' | ', $pushed));
+        self::assertSame('Nothing is running. Nothing needs you.', array_last($pushed));
     }
 
     private function openTheJudgedRound(string $round): void

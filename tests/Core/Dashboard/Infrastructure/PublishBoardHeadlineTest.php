@@ -17,7 +17,6 @@ use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\RoundCosts;
-use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -27,6 +26,7 @@ use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
@@ -64,11 +64,48 @@ final class PublishBoardHeadlineTest extends TestCase
         self::assertStringContainsString('Nothing is running yet. Start the first review.', $this->published[0]->turboStream);
     }
 
-    public function testAJudgedRoundPublishesTheHeadlineToo(): void
+    public function testAProgressedRoundPublishesTheHeadlineToo(): void
     {
-        $this->publisher($this->emptyLedger())->judged(new RoundJudged('r1', 'checkout'));
+        $this->publisher($this->emptyLedger())->progressed('r1');
 
         self::assertCount(1, $this->published);
+    }
+
+    public function testAnUnreachableLockStoreIsLoggedAndNeverReachesTheRound(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('lock store down'));
+        $store->method('delete')->willThrowException(new RuntimeException('lock store down'));
+        $store->method('exists')->willThrowException(new RuntimeException('lock store down'));
+
+        $this->publisher($this->emptyLedger(), new LockFactory($store))->progressed('r1');
+
+        self::assertSame([], $this->published);
+        self::assertSame(['The board headline was not published.'], array_column($this->log->cleanLogs(), 1));
+    }
+
+    public function testALockThatCannotBeReleasedIsLoggedAndNeverReachesTheRound(): void
+    {
+        $store = self::createStub(PersistingStoreInterface::class);
+        $store->method('exists')->willReturn(true);
+        $store->method('delete')->willThrowException(new RuntimeException('release failed'));
+
+        $this->publisher($this->emptyLedger(), new LockFactory($store))->opened(new RoundOpened('r1', 'alpha'));
+
+        self::assertCount(1, $this->published);
+        self::assertSame(['The board headline was not published.'], array_column($this->log->cleanLogs(), 1));
+    }
+
+    public function testAWorkerThatFindsTheLockHeldLeavesThePublicationToItsHolder(): void
+    {
+        $locks = new LockFactory(new InMemoryStore());
+        $held = $locks->createLock('dashboard-board-headline');
+        $held->acquire();
+
+        $this->publisher($this->emptyLedger(), $locks)->progressed('r1');
+
+        self::assertSame([], $this->published);
+        self::assertSame([], $this->log->cleanLogs());
     }
 
     public function testABoardThatCannotBeReadIsLoggedAndTheRoundGoesOn(): void
@@ -86,7 +123,7 @@ final class PublishBoardHeadlineTest extends TestCase
     {
         $locks = new LockFactory(new InMemoryStore());
         $this->publisher($this->emptyLedger(), $locks)->opened(new RoundOpened('r1', 'alpha'));
-        $this->publisher($this->emptyLedger(), $locks)->judged(new RoundJudged('r1', 'checkout'));
+        $this->publisher($this->emptyLedger(), $locks)->progressed('r1');
 
         self::assertCount(2, $this->published);
         self::assertSame([], $this->log->cleanLogs());
