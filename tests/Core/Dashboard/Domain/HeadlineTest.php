@@ -176,22 +176,19 @@ final class HeadlineTest extends TestCase
 
     private function running(string $project, string $change, string ...$roles): Review
     {
-        return $this->review('r-'.$project.'-'.$change, $project, $change, $roles);
+        return $this->review(new RoundStart('r-'.$project.'-'.$change, $project, 2), $change, ...$roles);
     }
 
     private function unnamed(string $round, string ...$roles): Review
     {
-        return $this->review($round, 'sample', '', $roles);
+        return $this->review(new RoundStart($round, 'sample', 2), '', ...$roles);
     }
 
-    /**
-     * @param list<string> $roles
-     */
-    private function review(string $round, string $project, string $change, array $roles): Review
+    private function review(RoundStart $start, string $change, string ...$roles): Review
     {
         $since = new DateTimeImmutable('2026-11-01T10:00:00+00:00');
-        $outcomes = array_map(static fn (string $role): ReviewerOutcome => new ReviewerOutcome($round.'-'.$role, $role, 'standard', $since), [] === $roles ? ['correctness'] : $roles);
+        $outcomes = array_map(static fn (string $role): ReviewerOutcome => new ReviewerOutcome($start->round.'-'.$role, $role, 'standard', $since), [] === $roles ? ['correctness'] : array_values($roles));
 
-        return new Review([new ReviewedRound(new RoundStart($round, $project, 2), new RoundPlace($change, 1), $since, null)->withOutcomes(array_values($outcomes))]);
+        return new Review([new ReviewedRound($start, new RoundPlace($change, 1), $since, null)->withOutcomes($outcomes)]);
     }
 }
