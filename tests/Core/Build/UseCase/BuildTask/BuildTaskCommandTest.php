@@ -4,17 +4,42 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\Contract\TierChoice;
+use Intakt\Core\Build\Contract\TierReason;
+use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskInput;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Job\Contract\JobEgress;
+use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobLimits;
+use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobResult;
+use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Review\Contract\Fence;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -24,6 +49,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(BuildTaskCommand::class)]
 #[UsesClass(BuildTaskInput::class)]
@@ -34,16 +60,68 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[UsesClass(BuildCheckoutFailed::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(Issues::class)]
+#[UsesClass(ScriptedJobRunner::class)]
+#[UsesClass(RunBuildJob::class)]
+#[UsesClass(BuildJob::class)]
+#[UsesClass(BuildJobOutcome::class)]
+#[UsesClass(BuildVerdict::class)]
+#[UsesClass(BuildBrief::class)]
+#[UsesClass(BuilderPrompt::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(PhpGate::class)]
+#[UsesClass(BuildFacts::class)]
+#[UsesClass(TierChoice::class)]
+#[UsesClass(JobSpec::class)]
+#[UsesClass(JobId::class)]
+#[UsesClass(JobInput::class)]
+#[UsesClass(JobLimits::class)]
+#[UsesClass(JobEgress::class)]
+#[UsesClass(JobResult::class)]
+#[UsesClass(JobEnd::class)]
+#[UsesClass(JobOutput::class)]
 final class BuildTaskCommandTest extends TestCase
 {
-    private const array OPTIONS = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => 'clone'];
+    private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+
+    private string $folder = '';
+
+    /** @var array<string, string> */
+    private array $options = [];
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        $this->options = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1'];
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
+    }
 
     public function testItPrintsEachPassedStepAndTheEscapedTitle(): void
     {
-        $tester = $this->execute(new InMemoryLedger(), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...self::OPTIONS]);
+        $tester = $this->execute(new InMemoryLedger(), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString("task passed\nmirror passed\nclone passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString("task passed\nmirror passed\nclone passed\nbuild_job passed\ntitle Task 7", $tester->getDisplay());
+    }
+
+    public function testItExitsWithFailureWhenTheBuildJobHandsBackNoCommit(): void
+    {
+        new Filesystem()->remove($this->folder.'/output/'.RunBuildJob::BUNDLE);
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString("clone passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString('build_job failed: the build made no commit on the task\'s branch', $tester->getDisplay());
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
     }
 
     public function testItReplacesEachControlCharacterOfTheTitleSoItCannotDriveTheTerminal(): void
@@ -74,7 +152,7 @@ final class BuildTaskCommandTest extends TestCase
         $checkout->method('updateMirror')->willThrowException(new BuildCheckoutFailed('git failed after 3 attempts'));
         $ledger = new InMemoryLedger();
 
-        $tester = $this->execute($ledger, $checkout, ['project' => 'alpha', 'issue' => '7', ...self::OPTIONS]);
+        $tester = $this->execute($ledger, $checkout, ['project' => 'alpha', 'issue' => '7', ...$this->options]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('task passed', $tester->getDisplay());
@@ -85,7 +163,7 @@ final class BuildTaskCommandTest extends TestCase
 
     public function testItReportsAStepTheLedgerDidNotRecord(): void
     {
-        $tester = $this->execute(new InMemoryLedger(0), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...self::OPTIONS]);
+        $tester = $this->execute(new InMemoryLedger(0), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('did not record the task step', $tester->getDisplay());
@@ -95,7 +173,7 @@ final class BuildTaskCommandTest extends TestCase
     public function testItRefusesABadInputWithoutRunningAStep(string $issue, string $option, string $message): void
     {
         $ledger = new InMemoryLedger();
-        $options = array_filter(self::OPTIONS, static fn (string $name): bool => $name !== $option, ARRAY_FILTER_USE_KEY);
+        $options = array_filter($this->options, static fn (string $name): bool => $name !== $option, ARRAY_FILTER_USE_KEY);
 
         $tester = $this->execute($ledger, self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => $issue, ...$options]);
 
@@ -115,15 +193,16 @@ final class BuildTaskCommandTest extends TestCase
         yield 'no remote' => ['7', '--remote', 'The --remote option is required.'];
         yield 'no branch' => ['7', '--branch', 'The --branch option is required.'];
         yield 'no directory' => ['7', '--directory', 'The --directory option is required.'];
+        yield 'no image' => ['7', '--image', 'The --image option is required.'];
     }
 
     private function displayOfTitle(string $title): string
     {
         $listed = Issues::task(7);
         $task = new ListedIssue(7, $title, $listed->body, $listed->labels, $listed->author, $listed->updatedAt, $listed->milestoneDue, false);
-        $build = new BuildTask($this->listing($task), self::createStub(BuildCheckout::class), new InMemoryLedger());
+        $build = $this->buildTask($this->listing($task), self::createStub(BuildCheckout::class), new InMemoryLedger());
 
-        return $this->tester($build, ['project' => 'alpha', 'issue' => '7', ...self::OPTIONS])->getDisplay();
+        return $this->tester($build, ['project' => 'alpha', 'issue' => '7', ...$this->options])->getDisplay();
     }
 
     /**
@@ -131,7 +210,18 @@ final class BuildTaskCommandTest extends TestCase
      */
     private function execute(InMemoryLedger $ledger, BuildCheckout $checkout, array $input): CommandTester
     {
-        return $this->tester(new BuildTask($this->listing(Issues::task(7)), $checkout, $ledger), $input);
+        return $this->tester($this->buildTask($this->listing(Issues::task(7)), $checkout, $ledger), $input);
+    }
+
+    private function buildTask(IssueReads $issues, BuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
+    {
+        $routing = self::createStub(BuildRouting::class);
+        $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence()), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+
+        return new BuildTask($issues, $checkout, $routing, $builds, $ledger);
     }
 
     private function listing(ListedIssue $task): IssueReads
