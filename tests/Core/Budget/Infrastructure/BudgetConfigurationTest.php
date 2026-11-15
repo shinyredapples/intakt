@@ -68,6 +68,11 @@ final class BudgetConfigurationTest extends TestCase
         self::assertNull($this->priceDate([]));
     }
 
+    public function testAnEmptyPriceDateIsTheSameAsLeavingItOut(): void
+    {
+        self::assertNull($this->priceDate(['budget' => ['price_date' => null]]));
+    }
+
     /**
      * @return iterable<string, array{mixed}>
      */

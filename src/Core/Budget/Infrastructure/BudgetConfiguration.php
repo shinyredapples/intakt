@@ -26,7 +26,7 @@ final class BudgetConfiguration implements ConfigurationInterface
         $this->prices($budget->arrayNode('prices'));
         // The day the list was read, because an estimate is only as good as its list. Only a quoted day is a string: Symfony YAML turns an unquoted date into a timestamp and moves an impossible day such as 2026-02-30 into the next month, so the day the owner wrote is lost.
         $budget->scalarNode('price_date')->defaultNull()
-            ->validate()->ifTrue(static fn (mixed $date): bool => !self::isDay($date))->thenInvalid('The price_date must be a date written as YYYY-MM-DD in quotes, such as \'2026-11-13\'.');
+            ->validate()->ifTrue(static fn (mixed $date): bool => null !== $date && !self::isDay($date))->thenInvalid('The price_date must be a date written as YYYY-MM-DD in quotes, such as \'2026-11-13\'.');
 
         return $tree;
     }
