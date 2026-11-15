@@ -6,6 +6,7 @@ namespace Intakt\Core\Bench\UseCase\RunBench;
 
 use Closure;
 use Intakt\Core\Bench\Contract\BenchFigures;
+use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
 use Intakt\Core\Bench\Contract\FailureCause;
 use Intakt\Core\Bench\Contract\RepeatedChange;
@@ -119,12 +120,8 @@ final readonly class BenchReport
     private function totals(array $changes): array
     {
         $byReviewer = [];
-        foreach ($changes as $change) {
-            foreach ($change->runs as $run) {
-                foreach ($run->reviewers as $reviewer) {
-                    $byReviewer[$reviewer->role][$reviewer->tier->value][] = $reviewer;
-                }
-            }
+        foreach ($this->everyReviewerResult($changes) as $reviewer) {
+            $byReviewer[$reviewer->role][$reviewer->tier->value][] = $reviewer;
         }
 
         $lines = [];
@@ -135,6 +132,18 @@ final readonly class BenchReport
         }
 
         return $lines;
+    }
+
+    /**
+     * @param list<RepeatedChange> $changes
+     *
+     * @return list<BenchReviewerResult>
+     */
+    private function everyReviewerResult(array $changes): array
+    {
+        $runs = array_merge(...array_map(static fn (RepeatedChange $change): array => $change->runs, $changes));
+
+        return array_merge(...array_map(static fn (BenchReview $run): array => $run->reviewers, $runs));
     }
 
     /**
