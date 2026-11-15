@@ -1,0 +1,9 @@
+[
+  {
+    "id": "free-shipping-boundary",
+    "file": "src/shipping.js",
+    "lines": { "from": 3, "to": 3 },
+    "description": "An order of exactly 50 pays shipping; the comparison must be >=.",
+    "severity": "P2"
+  }
+]
