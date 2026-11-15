@@ -395,10 +395,12 @@ final class LocalGitForgeTest extends TestCase
         $this->repository->checkoutNewBranch('feature');
         $this->repository->commitFile("caf\xe9.txt", "changed content\n");
 
-        $this->expectException(ForgeReadFailed::class);
-        $this->expectExceptionMessage("git listed a changed path that is not valid UTF-8: caf\u{fffd}{E9}.txt.");
-
-        $this->forge()->change(new ChangeId('feature'));
+        try {
+            $this->forge()->change(new ChangeId('feature'));
+            self::fail('A changed path that is not UTF-8 was listed.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame("git listed a changed path that is not valid UTF-8: caf\u{fffd}{E9}.txt.", $failure->getMessage());
+        }
     }
 
     public function testItRefusesAChangeThatDeletesAFileWhoseNameIsNotUtf8(): void
