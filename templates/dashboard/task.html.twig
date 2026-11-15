@@ -1,0 +1,51 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Task {{ task }} in {{ project }} - Intakt{% endblock %}
+
+{% block body %}
+{% set last = steps|last %}
+<div class="page-head">
+    <div>
+        <h1>Task {{ task }} in {{ project }}</h1>
+        {{ include('dashboard/components/meta.html.twig', {facts: [
+            {text: project},
+            {text: '#' ~ task, mono: true},
+            {icon: 'clock', text: 'Last step ended ' ~ last.ended_at|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
+        ]}, with_context = false) }}
+        <p class="lead summary" id="task-where">
+            {%- if last.outcome == 'failed' -%}
+            Stopped at {{ last.step }}: {{ last.failure }}
+            {%- elseif last.step == final -%}
+            Every step passed.
+            {%- else -%}
+            Last recorded step: {{ last.step }} passed.
+            {%- endif -%}
+        </p>
+    </div>
+</div>
+<section class="tl-pane" aria-labelledby="timeline-title">
+<h2 class="timeline-title" id="timeline-title">Timeline</h2>
+{% for step in steps %}
+<section class="section round build-step" id="step-{{ step.step }}">
+    <div class="round-head">
+        <h2>{{ step.step|capitalize }}</h2>
+        {{ include('dashboard/components/chip.html.twig', step.outcome == 'failed'
+            ? {dot: 'needs', label: 'Failed', on_page: true, broken: true, extra: 'step-failed'}
+            : {icon: 'check', label: 'Passed', on_page: true, extra: 'step-passed'}, with_context = false) }}
+    </div>
+    <p class="muted small"><time>{{ step.ended_at|date('Y-m-d H:i:s', 'UTC') }} UTC</time></p>
+    {% if step.failure is not null %}
+    <p class="step-failure">{{ step.failure }}</p>
+    {% endif %}
+</section>
+{% endfor %}
+{% for step in unreached %}
+<section class="section round build-step" id="step-{{ step }}">
+    <div class="round-head">
+        <h2 class="muted">{{ step|capitalize }}</h2>
+        <span class="muted small">Not reached</span>
+    </div>
+</section>
+{% endfor %}
+</section>
+{% endblock %}

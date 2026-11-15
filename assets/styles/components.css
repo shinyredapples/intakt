@@ -472,6 +472,20 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .live-calls { margin: 0 0 var(--s8); padding-left: var(--s16); color: var(--muted); font-family: var(--f-mono); font-size: var(--t13); overflow-wrap: anywhere; }
 .live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .live-text .asked-again { margin: var(--s8) 0; padding-top: var(--s8); border-top: 1px solid var(--hairline); color: var(--muted); font-size: var(--t13); white-space: normal; }
+/* The first-run page (mock setup.html): its 760 px text column, the step markers and one section per step. */
+.setup { max-width: 760px; }
+.steps { display: flex; gap: var(--s8); margin: 0 0 var(--s8); padding: 0; list-style: none; }
+.steps li { display: grid; flex: 1; gap: var(--s8); color: var(--muted); font: 500 var(--t13)/1.3 var(--f-head); }
+.steps li::before { content: ""; height: 4px; border-radius: var(--r-round); background: var(--tint-2); }
+.steps li.done { color: var(--ink); }
+.steps li.done::before { background: var(--primary); }
+.step-count { margin-bottom: var(--s32); color: var(--muted); }
+.step { padding: var(--s24) 0; border-top: 1px solid var(--hairline); }
+.step h2 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s12); margin: 0 0 var(--s8); }
+.step .lead { margin-bottom: var(--s16); color: var(--muted); }
+.step .keyless { margin: 0 0 var(--s16); padding-left: var(--s24); }
+.step .address { overflow-wrap: anywhere; }
+.step .command { margin: 0 0 var(--s16); padding: var(--s12); border-radius: var(--r-btn); background: var(--tint); font-family: var(--f-mono); font-size: var(--t13); white-space: pre-wrap; overflow-wrap: anywhere; }
 .comp-nav { display: flex; flex-wrap: wrap; gap: var(--s8); margin-bottom: var(--s24); }
 .comp-nav a { padding: var(--s4) var(--s12); border-radius: var(--r-chip); background: var(--tint); color: var(--ink); font-size: var(--t13); text-decoration: none; }
 .comp-sec { margin-bottom: var(--s48); }
