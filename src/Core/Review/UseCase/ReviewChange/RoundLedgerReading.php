@@ -85,10 +85,10 @@ final readonly class RoundLedgerReading implements RoundCosts
         return RoundTokens::of(count($calls), $this->figuresOf($this->usagesOf($calls, $recorded)));
     }
 
-    // Each model once, in the order the reviewer's calls started, because a substitute provider may answer some of its calls; a call started before the model was kept names none.
     /**
      * @return list<string>
      */
+    // Each model once, in the order the reviewer's calls started, because a substitute provider may answer some of its calls; a call started before the model was kept names none.
     public function modelsOfReviewer(string $roundId, string $reviewerId): array
     {
         $models = array_filter($this->callsStartedFor($roundId, $this->usageRows(), $reviewerId), static fn (?string $model): bool => null !== $model);
