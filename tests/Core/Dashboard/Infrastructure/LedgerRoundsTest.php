@@ -50,6 +50,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
+use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -509,6 +510,15 @@ final class LedgerRoundsTest extends TestCase
         $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $this->failed('x'));
 
         self::assertSame([ReviewerProgress::Failed, 'stopped at its output limit'], [$review?->rounds[0]->outcomes[0]->progress, $review?->rounds[0]->outcomes[0]->note]);
+    }
+
+    public function testAReviewerThatCouldNotReachItsEndpointIsNotedWithThatCauseInPlainWords(): void
+    {
+        $unreachable = $this->row(LedgerEventKind::ReviewerFailed, new ReviewerFailed('r1', 'x', 'security', Tier::Strong, ProviderUnreachable::class));
+
+        $review = $this->reviewOf('r1', $this->quorumStart(2, QuorumPolicy::All), $unreachable);
+
+        self::assertSame([ReviewerProgress::Failed, 'the model endpoint could not be reached'], [$review?->rounds[0]->outcomes[0]->progress, $review?->rounds[0]->outcomes[0]->note]);
     }
 
     public function testAJudgedRoundWithAFailedReviewerBesideAnApprovalIsBlockedUnderTheAllPolicy(): void
