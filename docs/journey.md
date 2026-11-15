@@ -231,7 +231,7 @@ team, history, settings, setup) follow after the hackathon.
 
 ## How this page is made
 
-[#1740](https://github.com/shinyredapples/intakt/issues/1740): `bin/journey` writes the regions between `journey:begin` and `journey:end` markers: today the At a glance table and the milestone table, from the GitHub API (milestones, issues and pull requests, read when the page is built) and token use from `docs/journey/usage.jsonl`. The charts and the other numbers on this page are a snapshot of 2026-11-13 until the charts are generated too. `docs/journey/usage.jsonl`
+[#1740](https://github.com/shinyredapples/intakt/issues/1740): `bin/journey` writes the regions between `journey:begin` and `journey:end` markers: the At a glance table, the milestone table and the charts with a table of their numbers, from the GitHub API (milestones, issues and pull requests, read when the page is built) and token use from `docs/journey/usage.jsonl`. It draws the charts and the timeline above as SVG files in `docs/journey/`. The numbers written by hand in the text are a snapshot of 2026-11-13, and so are the charts until the command first runs with access to the API. `docs/journey/usage.jsonl`
 holds tokens per day, vendor, account and lane, nothing about limits; Claude and GPT are counted the same way (input and
 output in full, cached input at a tenth). A step that was killed (out of memory, a host restart) reports no usage and
 counts at its reservation: 21M tokens, about 2%. The milestone stories and lessons are written by hand and link to the issue or
