@@ -18,27 +18,17 @@ final class BudgetConfiguration implements ConfigurationInterface
 {
     public const float DEFAULT_CEILING = 90.0;
 
-    private const int SECONDS_PER_DAY = 86_400;
-
     public function getConfigTreeBuilder(): TreeBuilder
     {
         $tree = new TreeBuilder('intakt');
         $budget = $tree->getRootNode()->addDefaultsIfNotSet()->children()->arrayNode('budget')->addDefaultsIfNotSet()->children();
         $this->windows($budget->arrayNode('ceilings'), self::DEFAULT_CEILING);
         $this->prices($budget->arrayNode('prices'));
-        // The day the list was read, because an estimate is only as good as its list; Symfony YAML reads an unquoted date as its midnight in UTC, so that timestamp is the same day.
+        // The day the list was read, because an estimate is only as good as its list. Only a quoted day is a string: Symfony YAML turns an unquoted date into a timestamp and moves an impossible day such as 2026-02-30 into the next month, so the day the owner wrote is lost.
         $budget->scalarNode('price_date')->defaultNull()
-            ->beforeNormalization()->ifTrue(static fn (mixed $date): bool => is_int($date) && 0 === $date % self::SECONDS_PER_DAY)->then($this->dayOf(...))->end()
-            ->validate()->ifTrue(static fn (mixed $date): bool => !self::isDay($date))->thenInvalid('The price_date must be a date written as YYYY-MM-DD.');
+            ->validate()->ifTrue(static fn (mixed $date): bool => !self::isDay($date))->thenInvalid('The price_date must be a date written as YYYY-MM-DD in quotes, such as \'2026-11-13\'.');
 
         return $tree;
-    }
-
-    private function dayOf(int $midnight): string
-    {
-        $day = DateTimeImmutable::createFromFormat('U', (string) $midnight, new DateTimeZone('UTC'));
-
-        return false === $day ? (string) $midnight : $day->format('Y-m-d');
     }
 
     private static function isDay(mixed $date): bool

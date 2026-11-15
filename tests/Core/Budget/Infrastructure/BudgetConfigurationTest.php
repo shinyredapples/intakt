@@ -33,13 +33,34 @@ final class BudgetConfigurationTest extends TestCase
         self::assertSame('2026-11-13', $this->priceDate(['budget' => ['price_date' => '2026-11-13']]));
     }
 
-    // Symfony YAML reads an unquoted date as the timestamp of its midnight in UTC, so the owner may leave out the quotes.
-    public function testAnUnquotedPriceDateInYamlIsTheSameDay(): void
+    public function testAQuotedPriceDateInYamlIsTheDayWritten(): void
     {
-        $contents = Yaml::parse("budget:\n    price_date: 2026-11-13\n");
+        $contents = Yaml::parse("budget:\n    price_date: '2026-11-13'\n");
         self::assertIsArray($contents);
 
         self::assertSame('2026-11-13', $this->priceDate($contents));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unquotedDates(): iterable
+    {
+        yield 'a day that exists' => ['2026-11-13'];
+        yield 'a day that does not exist, which YAML moves to 2026-03-02' => ['2026-02-30'];
+    }
+
+    // Symfony YAML reads an unquoted date as a timestamp and moves an impossible day into the next month, so the day written is lost before it can be checked.
+    #[DataProvider('unquotedDates')]
+    public function testAnUnquotedPriceDateInYamlIsRefusedWithAHintToQuoteIt(string $date): void
+    {
+        $contents = Yaml::parse("budget:\n    price_date: ".$date."\n");
+        self::assertIsArray($contents);
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/price_date must be a date written as YYYY-MM-DD in quotes/');
+
+        $this->priceDate($contents);
     }
 
     public function testWithoutAPriceDateItIsNull(): void
