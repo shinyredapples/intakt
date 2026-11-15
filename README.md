@@ -41,6 +41,8 @@ Then ask the agent to start a review with the values of the printed review comma
 
 ### Timed run
 
+The path was run on x86-64 Linux (a four-core host, 202 s to a running install on 2026-11-13) and, for the build and the first start of the image, on arm64 Linux in CI (the `image-arm64` workflow, which prints both timings in its log, on every push to main). Docker Desktop on Apple Silicon runs that arm64 image. The arm64 row of the table below stays empty until a run's timings are copied in.
+
 `(owner provides)`: the run needs Docker and a live provider key, which the build sandbox has neither of, so no timing or verdict is recorded yet. The owner times these steps on a clean clone (note `.env.local`, not `.env`: `compose.yaml` reads `.env.local`) and fills in the table:
 
 | Step | Command | Time |
