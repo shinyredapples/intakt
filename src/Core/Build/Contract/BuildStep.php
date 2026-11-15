@@ -10,4 +10,5 @@ enum BuildStep: string
     case Task = 'task';
     case Mirror = 'mirror';
     case Clone = 'clone';
+    case BuildJob = 'build_job';
 }
