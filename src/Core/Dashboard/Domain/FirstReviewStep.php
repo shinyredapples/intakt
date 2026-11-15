@@ -6,7 +6,10 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\SampleChange;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
+// Excluded from the container, because FirstRunSteps builds one per page.
+#[Exclude]
 final readonly class FirstReviewStep
 {
     public function __construct(

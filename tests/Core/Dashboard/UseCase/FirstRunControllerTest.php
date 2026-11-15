@@ -498,7 +498,7 @@ final class FirstRunControllerTest extends WebTestCase
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $token = $this->tokenFromThePage();
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = '';
-        // A new kernel reads the variable again, while the session that holds the token stays.
+        // Rebooted, because only a new kernel reads the variable again; the session that holds the token stays.
         $this->browser()->enableReboot();
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
