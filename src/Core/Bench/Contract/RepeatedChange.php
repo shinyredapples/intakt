@@ -37,13 +37,13 @@ final readonly class RepeatedChange
 
     private function outcomeOf(BenchReview $run): string
     {
-        return json_encode([$run->decision->value, array_map(self::reviewerOutcomeOf(...), $run->reviewers)], JSON_THROW_ON_ERROR);
+        return json_encode([$run->decision->value, array_map($this->reviewerOutcomeOf(...), $run->reviewers)], JSON_THROW_ON_ERROR);
     }
 
     /**
      * @return array{string, string, list<string>, bool}
      */
-    private static function reviewerOutcomeOf(BenchReviewerResult $reviewer): array
+    private function reviewerOutcomeOf(BenchReviewerResult $reviewer): array
     {
         $caught = $reviewer->verdict->caught;
         sort($caught);

@@ -41,7 +41,7 @@ final readonly class BenchResultFile
     {
         $ranAt = $this->clock->now()->setTimezone(new DateTimeZone('UTC'));
         $path = $this->pathFor($ranAt);
-        $this->filesystem->dumpFile($path, json_encode($this->documentOf($project, $ranAt, $changes),JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
+        $this->filesystem->dumpFile($path, json_encode($this->documentOf($project, $ranAt, $changes), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)."\n");
 
         return $path;
     }
