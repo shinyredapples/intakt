@@ -139,6 +139,16 @@ final class ReviewChangeCommandTest extends TestCase
         self::assertSame($this->report()->asJson($this->outcome(Decision::Blocked))."\n", $tester->getDisplay());
     }
 
+    public function testTheFormatOptionNamesItsValuesOnceInTheHelp(): void
+    {
+        $application = new Application();
+        $application->addCommand(new ReviewChangeCommand(new LocalChangeReview($this->onePanel(), $this->reviewing(Decision::Blocked)), $this->report()));
+        $tester = new CommandTester($application->find('help'));
+        $tester->execute(['command_name' => 'intakt:review']);
+
+        self::assertSame(1, substr_count($tester->getDisplay(), 'json'));
+    }
+
     public function testAnUnknownProjectFailsWithTheMessageAndTheFailureCode(): void
     {
         $panels = self::createStub(Panels::class);
