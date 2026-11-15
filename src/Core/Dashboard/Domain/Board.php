@@ -35,6 +35,12 @@ final readonly class Board
         return new WhoIsWorking($this->cards);
     }
 
+    // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
+    public function headline(): Headline
+    {
+        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), [] === $this->cards);
+    }
+
     // Every card of every project, so the page limit on the cards shown never lowers the count.
     public function countOf(BoardColumn $column): int
     {
