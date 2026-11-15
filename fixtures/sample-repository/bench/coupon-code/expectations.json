@@ -1,0 +1,9 @@
+[
+  {
+    "id": "coupon-save10-missing",
+    "file": "src/coupon.js",
+    "lines": { "from": 1, "to": 1 },
+    "description": "SAVE10 is not handled, so the task's second code does nothing.",
+    "severity": "P1"
+  }
+]

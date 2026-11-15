@@ -739,7 +739,7 @@ Otherwise a side asks for changes when any of its reviews does. Findings are mat
 
 ## The sample repository
 
-`fixtures/sample-repository/` holds a small shop project to try a review on. `base/` is the base commit and `pull-request/` holds the files the pull request branch adds or changes. The branch carries three deliberate issues (a bug, a new function without a test, and a command built from input), listed in `issues.json` so a later check can tell whether a review found them. The folder's `README.md` has the git commands that turn it into a repository with a `main` branch and a `sample-change` branch. The demo builds that repository for you (see below).
+`fixtures/sample-repository/` holds a small shop project to try a review on. `base/` is the base commit and `pull-request/` holds the files the pull request branch adds or changes. The branch carries three deliberate issues (a bug, a new function without a test, and a command built from input), listed in `issues.json` so a later check can tell whether a review found them. The folder's `README.md` has the git commands that turn it into a repository with a `main` branch and a `sample-change` branch. The demo builds that repository for you (see below). The same folder holds `bench/`, eight small changes (three of them without any defect) with the defects planted in them, which a coming bench command will use to measure how well reviewers find defects; nothing runs them yet.
 
 ## The demo with docker compose
 
