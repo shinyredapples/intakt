@@ -204,7 +204,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], $day));
     }
 
-    // Only a running round shows its session summary.
+    // Running, because the page shows the session summary only for a round still in progress.
     private function givenARunningRoundWhoseSessionCosts(Cost $cost): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
