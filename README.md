@@ -18,7 +18,7 @@ Intakt reviews a change on your repository: a panel of AI reviewers and a judge 
 
 ## Five-minute start
 
-The demo reviews a sample change with two reviewers; the [timed run](#timed-run) says how long each step took:
+The demo reviews a sample change with two reviewers; the [timed run](#timed-run) says how long the start and a review take:
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
@@ -40,7 +40,7 @@ Then ask the agent to start a review with the values of the printed review comma
 
 ### Timed run
 
-Tested platforms: the whole path ran on x86-64 Linux (an earlier run on 2026-11-13, on a four-core host, took 202 s to a running install; the table below holds the later runs of 2026-11-15). On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings; no arm64 run is recorded here yet. Docker Desktop on Apple Silicon runs the arm64 image.
+Tested platforms: the whole path ran on x86-64 Linux, in two sets of runs: the three runs of 2026-11-15 in the table below, and, apart from them, an earlier run on 2026-11-13 on a four-core host, which took 202 s to a running install. On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings; no arm64 run is recorded here yet. Docker Desktop on Apple Silicon runs the arm64 image.
 
 The times below are measured: three runs of this path on 2026-11-15, each from a clean clone with only `HF_TOKEN` and the two secrets in `.env.local` (note `.env.local`, not `.env`: `compose.yaml` reads `.env.local`). Cloning and filling in `.env.local` come first and are not timed, because they depend on your network and your typing.
 
