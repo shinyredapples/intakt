@@ -11,9 +11,9 @@ final readonly class LeftUndoneCode
     private const array TEST_SKIPS = ['markTestSkipped', 'markTestIncomplete'];
     private const string SKIP_ATTRIBUTE = '/^(?:.*\\\\)?(?:Skip|Incomplete)/';
     private const string NOT_IMPLEMENTED = '/\b(?:not (?:yet )?implemented|unimplemented)\b/i';
-    private const string REASONED_THROW = '/^\/\/\s*(?:TODO|FIXME|XXX)'.LeftUndoneComments::ISSUE_REFERENCE.'.*[[:alpha:]]/i';
-    private const string TEST_REASON = ' without a reason; pass a message naming the missing tool or outside condition, or make the test run';
-    private const string THROW_HOW_TO_COMPLY = ' left in the change; implement it, or open an issue and add // TODO(#<issue>): <reason> on the same line';
+    private const string REASONED_THROW = '/^(?:\/\/|#)\s*(?:TODO|FIXME|XXX)'.LeftUndoneComments::ISSUE_REFERENCE.'.*[[:alpha:]]/i';
+    private const string SKIP_HOW_TO_COMPLY = ' without a reason; pass a message naming the missing tool or outside condition, or make the test run';
+    private const string THROW_HOW_TO_COMPLY = 'not-implemented throw left in the change; implement it, or open an issue and add // TODO(#<issue>): <reason> on the same line';
 
     /**
      * @param list<int> $addedLines
@@ -22,10 +22,13 @@ final readonly class LeftUndoneCode
      */
     public function findingsOn(string $path, string $source, array $addedLines): array
     {
-        $inTests = str_starts_with($path, 'tests/');
-        $inSource = str_starts_with($path, 'src/');
+        $detect = match (true) {
+            str_starts_with($path, 'tests/') => $this->skipAt(...),
+            str_starts_with($path, 'src/') => $this->notImplementedThrowAt(...),
+            default => null,
+        };
 
-        if (!$inTests && !$inSource) {
+        if (null === $detect) {
             return [];
         }
 
@@ -33,12 +36,8 @@ final readonly class LeftUndoneCode
         $tokens = $this->tokensWithLines($source);
         $findings = [];
 
-        foreach ($tokens as $index => [$token, $line]) {
-            if (!isset($added[$line])) {
-                continue;
-            }
-
-            $finding = $inTests ? $this->skipAt($tokens, $index) : $this->notImplementedThrowAt($tokens, $index);
+        foreach ($tokens as $index => [, $line]) {
+            $finding = isset($added[$line]) ? $detect($tokens, $index) : null;
 
             if (null !== $finding) {
                 $findings[$line] ??= $finding;
@@ -75,71 +74,77 @@ final readonly class LeftUndoneCode
      */
     private function skipAt(array $tokens, int $index): ?string
     {
-        $token = $tokens[$index][0];
-
-        if ($token->is(T_ATTRIBUTE) || $token->is(',')) {
-            $name = $tokens[$index + 1][0] ?? null;
-
-            return $this->isSkipAttribute($tokens, $index, $name) ? $this->withoutReason($name, 'attribute', $tokens, $index + 2) : null;
+        if ($this->isToken($tokens, $index, T_ATTRIBUTE)) {
+            return $this->skipAttributeAt($tokens, $index);
         }
 
-        $isCall = $token->is(T_STRING) && in_array($token->text, self::TEST_SKIPS, true) && ($tokens[$index - 1][0] ?? null)?->is([T_OBJECT_OPERATOR, T_DOUBLE_COLON]);
+        $isCall = $this->isToken($tokens, $index, T_STRING)
+            && in_array($tokens[$index][0]->text, self::TEST_SKIPS, true)
+            && $this->isToken($tokens, $index - 1, [T_OBJECT_OPERATOR, T_DOUBLE_COLON]);
 
-        return $isCall ? $this->withoutReason($token, 'call', $tokens, $index + 1) : null;
+        return $isCall && !$this->hasReasonAfter($tokens, $index) ? $tokens[$index][0]->text.' call'.self::SKIP_HOW_TO_COMPLY : null;
     }
 
     /**
      * @param list<array{PhpToken, int}> $tokens
      */
-    private function isSkipAttribute(array $tokens, int $index, ?PhpToken $name): bool
+    private function skipAttributeAt(array $tokens, int $start): ?string
     {
-        if (null === $name || !$name->is([T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED])) {
-            return false;
+        foreach ($this->attributeNames($tokens, $start) as $index) {
+            $name = $tokens[$index][0]->text;
+
+            if ($this->isToken($tokens, $index, [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED]) && 1 === preg_match(self::SKIP_ATTRIBUTE, $name) && !$this->hasReasonAfter($tokens, $index)) {
+                return $name.' attribute'.self::SKIP_HOW_TO_COMPLY;
+            }
         }
 
-        // Because a comma only starts a name inside an attribute group, never in an argument list or array.
-        return $tokens[$index][0]->is(T_ATTRIBUTE) || $this->isInsideAttributeGroup($tokens, $index);
+        return null;
     }
 
     /**
      * @param list<array{PhpToken, int}> $tokens
+     *
+     * @return list<int>
      */
-    private function isInsideAttributeGroup(array $tokens, int $index): bool
+    private function attributeNames(array $tokens, int $start): array
     {
+        $names = [];
         $depth = 0;
+        $startsName = true;
 
-        for ($i = $index - 1; $i >= 0; --$i) {
-            $token = $tokens[$i][0];
-
-            if ($token->is([')', ']'])) {
-                ++$depth;
+        for ($index = $start + 1; $index < count($tokens); ++$index) {
+            if ($startsName) {
+                $names[] = $index;
             }
 
-            if ($token->is(['(', '[']) && 0 === $depth--) {
-                return false;
+            if (0 === $depth && $this->isToken($tokens, $index, ']')) {
+                break;
             }
 
-            if ($token->is(T_ATTRIBUTE) && 0 === $depth) {
-                return true;
-            }
+            $depth += $this->depthChange($tokens[$index][0]);
+            $startsName = 0 === $depth && $this->isToken($tokens, $index, ',');
         }
 
-        return false;
+        return $names;
+    }
+
+    private function depthChange(PhpToken $token): int
+    {
+        if ($token->is([T_ATTRIBUTE, '(', '['])) {
+            return 1;
+        }
+
+        return $token->is([')', ']']) ? -1 : 0;
     }
 
     /**
      * @param list<array{PhpToken, int}> $tokens
      */
-    private function withoutReason(PhpToken $name, string $kind, array $tokens, int $next): ?string
+    private function hasReasonAfter(array $tokens, int $nameIndex): bool
     {
-        if ('attribute' === $kind && 1 !== preg_match(self::SKIP_ATTRIBUTE, $name->text)) {
-            return null;
-        }
-
-        $first = $tokens[$next + 1][0] ?? null;
-        $hasReason = ($tokens[$next][0] ?? null)?->is('(') && $first?->is(T_CONSTANT_ENCAPSED_STRING) && 1 === preg_match('/[[:alpha:]]/', $first->text);
-
-        return $hasReason ? null : $name->text.' '.$kind.self::TEST_REASON;
+        return $this->isToken($tokens, $nameIndex + 1, '(')
+            && $this->isToken($tokens, $nameIndex + 2, T_CONSTANT_ENCAPSED_STRING)
+            && 1 === preg_match('/[[:alpha:]]/', $tokens[$nameIndex + 2][0]->text);
     }
 
     /**
@@ -147,16 +152,29 @@ final readonly class LeftUndoneCode
      */
     private function notImplementedThrowAt(array $tokens, int $index): ?string
     {
-        [$throw, $line] = $tokens[$index];
-        $message = $tokens[$index + 4][0] ?? null;
-        $isThrow = $throw->is(T_THROW) && ($tokens[$index + 1][0] ?? null)?->is(T_NEW) && ($tokens[$index + 3][0] ?? null)?->is('(');
+        $isThrow = $this->isToken($tokens, $index, T_THROW)
+            && $this->isToken($tokens, $index + 1, T_NEW)
+            && $this->isToken($tokens, $index + 3, '(')
+            && $this->isToken($tokens, $index + 4, T_CONSTANT_ENCAPSED_STRING)
+            && 1 === preg_match(self::NOT_IMPLEMENTED, $tokens[$index + 4][0]->text);
 
-        if (!$isThrow || !$message?->is(T_CONSTANT_ENCAPSED_STRING) || 1 !== preg_match(self::NOT_IMPLEMENTED, $message->text)) {
-            return null;
-        }
+        return $isThrow && !$this->hasReasonedCommentOn($tokens, $tokens[$index][1]) ? self::THROW_HOW_TO_COMPLY : null;
+    }
 
-        $reasoned = array_any($tokens, fn (array $other): bool => $other[1] === $line && $other[0]->is(T_COMMENT) && 1 === preg_match(self::REASONED_THROW, $other[0]->text));
+    /**
+     * @param list<array{PhpToken, int}> $tokens
+     */
+    private function hasReasonedCommentOn(array $tokens, int $line): bool
+    {
+        return array_any($tokens, static fn (array $entry): bool => $entry[1] === $line && $entry[0]->is(T_COMMENT) && 1 === preg_match(self::REASONED_THROW, $entry[0]->text));
+    }
 
-        return $reasoned ? null : 'not-implemented throw'.self::THROW_HOW_TO_COMPLY;
+    /**
+     * @param list<array{PhpToken, int}>  $tokens
+     * @param int|string|list<int|string> $kinds
+     */
+    private function isToken(array $tokens, int $index, int|string|array $kinds): bool
+    {
+        return isset($tokens[$index]) && $tokens[$index][0]->is($kinds);
     }
 }
