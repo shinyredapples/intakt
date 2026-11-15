@@ -92,7 +92,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use RuntimeException;
-use stdClass;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Agent\MessageStore\ManagedMessageStoreInterface;
 use Symfony\AI\Agent\MessageStore\MessageStoreInterface;
@@ -1194,9 +1193,8 @@ final class SymfonyAiVendorTest extends KernelTestCase
     public function testATestStartsOnTheSharedDispatcherWithNoListenerAnEarlierTestCalled(): void
     {
         self::assertInstanceOf(TraceableEventDispatcher::class, $this->dispatcher);
-        $this->dispatcher->addListener(stdClass::class, static function (): void {
-        });
-        $this->dispatcher->dispatch(new stdClass());
+        // A review calls the listeners the container declares, because the compiled dispatcher takes no listener at runtime since Symfony 8.2.
+        $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()))->review('alpha', Tier::Strong, $this->request());
         self::assertNotSame([], $this->dispatcher->getCalledListeners());
 
         $resetter = self::$platformKernel->getContainer()->get('services_resetter');
