@@ -189,7 +189,7 @@ The week before the deadline:
 - **11-13, Symfony 8.2.0-BETA2.** The beta came out that day, and the owner allowed a one-time exception to the
   3-day release cooldown for `symfony/*` at 8.2.0-BETA2 ([#1842](https://github.com/shinyredapples/intakt/issues/1842),
   [#1900](https://github.com/shinyredapples/intakt/issues/1900)). The move itself is still to come: the lock file
-  keeps Symfony 8.1 and Highlights says Intakt installs 8.1. Three fixes Intakt sent upstream are in the beta
+  keeps Symfony 8.1. Three fixes Intakt sent upstream are in the beta
   (Config: a NaN value skips validation, [symfony/symfony#67911](https://github.com/symfony/symfony/pull/67911);
   Messenger: an early SIGTERM is ignored, [symfony/symfony#67912](https://github.com/symfony/symfony/pull/67912);
   Serializer: a list of objects accepts any object, [symfony/symfony#67913](https://github.com/symfony/symfony/pull/67913)).
