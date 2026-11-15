@@ -9,6 +9,7 @@ use Intakt\Core\Bench\Contract\BenchProvenance;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
 use Intakt\Core\Bench\Contract\FailureCause;
+use Intakt\Core\Bench\Contract\RepeatedChange;
 use Intakt\Core\Bench\Contract\RunVerdict;
 use Intakt\Core\Bench\UseCase\ReviewBenchChange\ReadBenchProvenance;
 use Intakt\Core\Bench\UseCase\RunBench\BenchResultFile;
@@ -39,6 +40,7 @@ use Symfony\Component\Finder\Finder;
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(JudgePrompt::class)]
 #[UsesClass(BenchReview::class)]
+#[UsesClass(RepeatedChange::class)]
 #[UsesClass(BenchReviewerResult::class)]
 #[UsesClass(RunVerdict::class)]
 #[UsesClass(RoundTokens::class)]
@@ -86,16 +88,27 @@ final class BenchResultFileTest extends TestCase
         self::assertCount(2, new Finder()->files()->in($this->directory)->name('*.json'));
     }
 
-    public function testEachChangeHoldsItsDecisionAndItsActList(): void
+    public function testEachRunOfAChangeHoldsItsDecisionAndItsActList(): void
     {
         $result = $this->written([new BenchReview('free-shipping', Decision::Changes, [], [$this->finding('F1', 3)])]);
 
         self::assertSame([[
-            'change' => 'free-shipping',
             'decision' => 'changes',
             'reviewers' => [],
             'act_list' => [['id' => 'F1', 'severity' => 'P1', 'file' => 'src/shipping.js', 'line' => 3, 'text' => 'Text of F1.']],
-        ]], $result['changes']);
+        ]], $result['changes'][0]['runs']);
+    }
+
+    public function testTheResultFileRecordsEachChangesRunsAndWhetherTheyAgreed(): void
+    {
+        $caught = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, ['boundary'], [], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000);
+        $missed = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, [], ['boundary' => FailureCause::Reviewer], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000);
+        $agreeing = new RepeatedChange('free-shipping', [new BenchReview('free-shipping', Decision::Changes, [$caught], []), new BenchReview('free-shipping', Decision::Changes, [$caught], [])]);
+        $disagreeing = new RepeatedChange('price-list', [new BenchReview('price-list', Decision::Changes, [$caught], []), new BenchReview('price-list', Decision::Changes, [$missed], [])]);
+
+        $changes = $this->decoded($this->resultFile()->write('alpha', [$agreeing, $disagreeing, new RepeatedChange('round-total', [new BenchReview('round-total', Decision::Approve, [], [])])]))['changes'];
+
+        self::assertSame([['free-shipping', true, 2], ['price-list', false, 2], ['round-total', null, 1]], array_map(static fn (array $change): array => [$change['change'], $change['agreed'], count($change['runs'])], $changes));
     }
 
     public function testEachReviewerHoldsItsMatchedDefectsMissesFalseAlarmsTokensAndDuration(): void
@@ -105,7 +118,7 @@ final class BenchResultFileTest extends TestCase
 
         $result = $this->written([new BenchReview('free-shipping', Decision::Changes, [$reviewer], [])]);
 
-        $written = $result['changes'][0]['reviewers'][0];
+        $written = $result['changes'][0]['runs'][0]['reviewers'][0];
         self::assertSame(['role-1', 'standard'], [$written['role'], $written['tier']]);
         self::assertSame(['caught-one'], $written['caught']);
         self::assertSame([['id' => 'missed-one', 'cause' => 'reviewer'], ['id' => 'impossible', 'cause' => 'bench']], $written['missed']);
@@ -122,7 +135,7 @@ final class BenchResultFileTest extends TestCase
 
         $result = $this->written([new BenchReview('round-total', Decision::Approve, [$reviewer], [])]);
 
-        self::assertNull($result['changes'][0]['reviewers'][0]['milliseconds']);
+        self::assertNull($result['changes'][0]['runs'][0]['reviewers'][0]['milliseconds']);
     }
 
     public function testAHarnessFailureIsWrittenWithItsReasonAndItsMissesAsTheHarnesses(): void
@@ -132,7 +145,7 @@ final class BenchResultFileTest extends TestCase
 
         $result = $this->written([new BenchReview('coupon-code', Decision::Blocked, [$reviewer], [])]);
 
-        $written = $result['changes'][0]['reviewers'][0];
+        $written = $result['changes'][0]['runs'][0]['reviewers'][0];
         self::assertSame('stopped at its output limit', $written['harness_failure']);
         self::assertSame([['id' => 'coupon', 'cause' => 'harness']], $written['missed']);
     }
@@ -144,7 +157,7 @@ final class BenchResultFileTest extends TestCase
      */
     private function written(array $reviews): array
     {
-        return $this->decoded($this->resultFile()->write('alpha', $reviews));
+        return $this->decoded($this->resultFile()->write('alpha', array_map(static fn (BenchReview $review): RepeatedChange => new RepeatedChange($review->change, [$review]), $reviews)));
     }
 
     private function resultFile(): BenchResultFile
