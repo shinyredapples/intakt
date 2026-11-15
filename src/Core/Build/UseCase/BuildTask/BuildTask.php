@@ -4,10 +4,20 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Ai\Contract\TierResolutionFailure;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\BuildStepOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Job\Contract\DockerEngineFailed;
+use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -15,7 +25,9 @@ use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use InvalidArgumentException;
 use NoDiscard;
+use Symfony\Component\Filesystem\Exception\IOException;
 
 // Because the build lane calls this for one task at a time, a run stops at the first failed step and never retries it: sending a failure back to the builder is the next task.
 final readonly class BuildTask
@@ -23,6 +35,8 @@ final readonly class BuildTask
     public function __construct(
         private IssueReads $issues,
         private BuildCheckout $checkout,
+        private BuildRouting $routing,
+        private RunBuildJob $builds,
         private Ledger $ledger,
     ) {
     }
@@ -41,27 +55,27 @@ final readonly class BuildTask
             return new BuildTaskOutcome(BuildStep::Task, $task, null);
         }
 
-        $this->record($request, BuildStep::Task, null);
-        $failure = $this->updateMirror($request);
+        foreach (BuildStep::cases() as $step) {
+            $failure = $this->failureOf($step, $request, $task);
+            $this->record($request, $step, $failure);
 
-        if (null !== $failure) {
-            $this->record($request, BuildStep::Mirror, $failure);
-
-            return new BuildTaskOutcome(BuildStep::Mirror, $failure, $task);
+            if (null !== $failure) {
+                return new BuildTaskOutcome($step, $failure, $task);
+            }
         }
 
-        $this->record($request, BuildStep::Mirror, null);
-        $failure = $this->makeClone($request);
+        return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
+    }
 
-        if (null !== $failure) {
-            $this->record($request, BuildStep::Clone, $failure);
-
-            return new BuildTaskOutcome(BuildStep::Clone, $failure, $task);
-        }
-
-        $this->record($request, BuildStep::Clone, null);
-
-        return new BuildTaskOutcome(BuildStep::Clone, null, $task);
+    private function failureOf(BuildStep $step, BuildTaskRequest $request, ListedIssue $task): ?string
+    {
+        return match ($step) {
+            // Read before the other steps, because they need the task it returns.
+            BuildStep::Task => null,
+            BuildStep::Mirror => $this->updateMirror($request),
+            BuildStep::Clone => $this->makeClone($request),
+            BuildStep::BuildJob => $this->runBuildJob($request, $task),
+        };
     }
 
     // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
@@ -103,6 +117,27 @@ final readonly class BuildTask
         }
 
         return null;
+    }
+
+    private function runBuildJob(BuildTaskRequest $request, ListedIssue $task): ?string
+    {
+        try {
+            $outcome = $this->builds->run($this->jobOf($request, $task));
+        } catch (BuildRoutingNotConfigured|TierResolutionFailure|BuilderNotOnClaudeCode|InvalidArgumentException|DockerEngineFailed|JobEventNotRecorded|IOException $failure) {
+            return $failure->getMessage();
+        }
+
+        // What the job hands back stays untrusted until the hand-back check, so only its verdict reaches the ledger.
+        return $outcome->built() ? null : $outcome->verdict->reason();
+    }
+
+    private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
+    {
+        // No paths and no setback, because a first build has no file forecast and no earlier round.
+        $choice = $this->routing->tierFor($request->project, BuildFacts::fromLabels($task->labels, []));
+        $brief = new BuildBrief($task->title."\n\n".$task->body, [], null);
+
+        return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }
 
     private function record(BuildTaskRequest $request, BuildStep $step, ?string $failure): void
