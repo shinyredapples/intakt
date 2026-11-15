@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// Knows only whether the owner token is set, because the page must never show the token itself.
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// Knows only whether the owner token is set, because the page must never show the token itself; excluded from the container because FirstRunSteps builds one per page.
+#[Exclude]
 final readonly class AgentStep
 {
     public function __construct(
