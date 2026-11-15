@@ -62,6 +62,9 @@ use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
+/**
+ * @phpstan-import-type ResultDocument from BenchResultFile
+ */
 #[Group('persistence')]
 #[CoversClass(RunBench::class)]
 #[CoversClass(BenchResultFile::class)]
@@ -141,7 +144,7 @@ final class RunBenchTest extends KernelTestCase
     }
 
     /**
-     * @return array{changes: list<array<string, mixed>>}
+     * @return ResultDocument
      */
     private function scriptedRun(): array
     {
@@ -153,9 +156,9 @@ final class RunBenchTest extends KernelTestCase
         $run = new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($this->reviewChange($vendor), new RunClassifier(new DefectMatcher())));
         $file = new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), $this->fixture->clock, $this->results);
 
+        /** @var ResultDocument $decoded */
         $decoded = json_decode(new Filesystem()->readFile($file->write('alpha', $run->reviewEveryChange('alpha'))), true, flags: JSON_THROW_ON_ERROR);
 
-        /** @var array{changes: list<array<string, mixed>>} $decoded */
         return $decoded;
     }
 

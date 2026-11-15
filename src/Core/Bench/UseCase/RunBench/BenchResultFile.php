@@ -15,6 +15,12 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 
+/**
+ * @phpstan-type WrittenFinding array{id: string, severity: string, file: ?string, line: ?int, text: string}
+ * @phpstan-type WrittenReviewer array{role: string, tier: string, caught: list<string>, missed: list<array{id: string, cause: string}>, false_alarms: list<WrittenFinding>, unmatched: list<WrittenFinding>, harness_failure: ?string, tokens: array{calls: int, prompt: int, completion: int, total: int}, milliseconds: ?int}
+ * @phpstan-type WrittenChange array{change: string, decision: string, reviewers: list<WrittenReviewer>, act_list: list<WrittenFinding>}
+ * @phpstan-type ResultDocument array{intakt_version: string, ran_at: string, project: string, prompts: array{reviewer: string, judge: string}, bench_repository: string, changes: list<WrittenChange>}
+ */
 final readonly class BenchResultFile
 {
     public function __construct(
@@ -28,8 +34,6 @@ final readonly class BenchResultFile
 
     /**
      * @param list<BenchReview> $reviews
-     *
-     * @return string the path of the written file
      */
     public function write(string $project, array $reviews): string
     {
@@ -49,7 +53,7 @@ final readonly class BenchResultFile
     /**
      * @param list<BenchReview> $reviews
      *
-     * @return array<string, mixed>
+     * @return ResultDocument
      */
     private function documentOf(string $project, DateTimeImmutable $ranAt, array $reviews): array
     {
@@ -66,7 +70,7 @@ final readonly class BenchResultFile
     }
 
     /**
-     * @return array<string, mixed>
+     * @return WrittenChange
      */
     private function changeOf(BenchReview $review): array
     {
@@ -79,7 +83,7 @@ final readonly class BenchResultFile
     }
 
     /**
-     * @return array<string, mixed>
+     * @return WrittenReviewer
      */
     private function reviewerOf(BenchReviewerResult $reviewer): array
     {
@@ -100,7 +104,7 @@ final readonly class BenchResultFile
     }
 
     /**
-     * @return array<string, mixed>
+     * @return WrittenFinding
      */
     private function findingOf(Finding $finding): array
     {

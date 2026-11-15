@@ -26,7 +26,11 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Finder\Finder;
 
+/**
+ * @phpstan-import-type ResultDocument from BenchResultFile
+ */
 #[CoversClass(BenchResultFile::class)]
 #[UsesClass(ReadBenchProvenance::class)]
 #[UsesClass(BenchProvenance::class)]
@@ -79,7 +83,7 @@ final class BenchResultFileTest extends TestCase
         $file = $this->resultFile();
 
         self::assertNotSame($file->write('alpha', []), $file->write('alpha', []));
-        self::assertCount(2, glob($this->directory.'/*.json') ?: []);
+        self::assertCount(2, new Finder()->files()->in($this->directory)->name('*.json'));
     }
 
     public function testEachChangeHoldsItsDecisionAndItsActList(): void
@@ -136,7 +140,7 @@ final class BenchResultFileTest extends TestCase
     /**
      * @param list<BenchReview> $reviews
      *
-     * @return array<string, mixed>
+     * @return ResultDocument
      */
     private function written(array $reviews): array
     {
@@ -149,14 +153,13 @@ final class BenchResultFileTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return ResultDocument
      */
     private function decoded(string $path): array
     {
+        /** @var ResultDocument $decoded */
         $decoded = json_decode(new Filesystem()->readFile($path), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($decoded);
 
-        /** @var array<string, mixed> $decoded */
         return $decoded;
     }
 

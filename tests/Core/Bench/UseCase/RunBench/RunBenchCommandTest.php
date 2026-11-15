@@ -58,6 +58,9 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 
+/**
+ * @phpstan-import-type ResultDocument from BenchResultFile
+ */
 #[CoversClass(RunBenchCommand::class)]
 #[CoversClass(RunBench::class)]
 #[CoversClass(BenchChangeCheckout::class)]
@@ -134,7 +137,7 @@ final class RunBenchCommandTest extends TestCase
         $tester = $this->runCommand(['--project' => 'alpha'], $this->reviews());
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        $files = glob($this->results.'/*.json') ?: [];
+        $files = $this->resultFiles();
         self::assertCount(1, $files);
         self::assertStringContainsString('result file: '.$files[0], $tester->getDisplay());
     }
@@ -143,9 +146,8 @@ final class RunBenchCommandTest extends TestCase
     {
         $this->runCommand(['--project' => 'alpha'], $this->reviews());
 
-        $result = json_decode(new Filesystem()->readFile((glob($this->results.'/*.json') ?: [''])[0]), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($result);
-        self::assertIsArray($result['changes']);
+        /** @var ResultDocument $result */
+        $result = json_decode(new Filesystem()->readFile($this->resultFiles()[0] ?? self::fail('no result file')), true, flags: JSON_THROW_ON_ERROR);
         self::assertSame(['bulk-discount-docs', 'coupon-code', 'export-orders', 'free-shipping', 'price-list', 'readme-test-command', 'round-total', 'tax-helper'], array_column($result['changes'], 'change'));
     }
 
@@ -154,8 +156,8 @@ final class RunBenchCommandTest extends TestCase
         $display = $this->runCommand(['--project' => 'alpha'], $this->reviews())->getDisplay();
 
         self::assertStringContainsString("free-shipping: decision changes, measured 1 act list findings\n  role-1 (standard), measured: 1 caught, 0 missed, 0 false alarms, 500 prompt tokens, 40 completion tokens, 1 calls, 3000 ms\n", $display);
-        $figureLines = preg_grep('/\d/', explode("\n", $display)) ?: [];
-        self::assertSame([], array_values(preg_grep('/measured|^result file: /', $figureLines, PREG_GREP_INVERT) ?: []));
+        $unlabeled = array_filter(explode("\n", $display), static fn (string $line): bool => 1 === preg_match('/\d/', $line) && !str_contains($line, 'measured') && !str_starts_with($line, 'result file: '));
+        self::assertSame([], array_values($unlabeled));
     }
 
     public function testAFailedReviewEndsTheRunWithoutAFileAndRemovesItsCheckout(): void
@@ -176,6 +178,16 @@ final class RunBenchCommandTest extends TestCase
         $this->runCommand(['--project' => 'alpha'], $this->reviews());
 
         self::assertSame([], glob($this->workspace.'/*'));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resultFiles(): array
+    {
+        $files = glob($this->results.'/*.json');
+
+        return false === $files ? [] : $files;
     }
 
     /**
