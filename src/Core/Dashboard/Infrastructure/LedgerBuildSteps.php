@@ -40,6 +40,30 @@ final readonly class LedgerBuildSteps
         return $this->newestFirst($latest);
     }
 
+    /**
+     * @return list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>
+     */
+    public function latestRunOf(RecordedEvents $events, string $project, string $task): array
+    {
+        $run = [];
+
+        foreach ($events as $recorded) {
+            $step = LedgerEventKind::BuildStepEnded === $recorded->event->kind ? $this->stepOf($recorded) : null;
+
+            if (null === $step || $project !== $step['project'] || $task !== $step['task']) {
+                continue;
+            }
+
+            if (BuildStep::Task->value === $step['step']) {
+                $run = [];
+            }
+
+            $run[] = $step;
+        }
+
+        return $run;
+    }
+
     // A row whose step, outcome or failure is not one the build writes is left out, so a malformed row cannot reach the status as it was stored.
     /**
      * @return array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}|null
