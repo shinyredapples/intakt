@@ -28,7 +28,7 @@ final readonly class GitBuildCheckout implements BuildCheckout
     {
         try {
             $this->mirrors->update($project, $remote);
-        } catch (InvalidArgumentException|ReportableFailure $failure) {
+        } catch (InvalidArgumentException|IOException|ReportableFailure $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
     }

@@ -141,6 +141,25 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    public function testAMirrorsFolderThatCannotBeCreatedEndsAtTheMirrorStepWithItsFailureRecorded(): void
+    {
+        touch($this->mirrors);
+        $ledger = new InMemoryLedger();
+        $task = new BuildTask(self::listing([Issues::task(7)]), $this->checkoutIn($this->mirrors.'/mirrors'), $ledger);
+
+        try {
+            $outcome = $task->run($this->request(7, $this->remote->path));
+        } finally {
+            unlink($this->mirrors);
+        }
+
+        self::assertSame(BuildStep::Mirror, $outcome->last);
+        self::assertTrue($outcome->failed());
+        self::assertSame(['task', 'mirror'], array_column($ledger->payloads(), 'step'));
+        self::assertSame('failed', $ledger->payloads()[1]['outcome']);
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
     public function testABuildCloneThatCannotBeMadeEndsAtTheCloneStepAndLeavesTheFolderAlone(): void
     {
         mkdir($this->clone);
@@ -184,15 +203,28 @@ final class BuildTaskTest extends TestCase
      */
     private function taskOf(InMemoryLedger $ledger, array $issues): BuildTask
     {
+        return new BuildTask(self::listing($issues), $this->checkout(), $ledger);
+    }
+
+    /**
+     * @param list<ListedIssue> $issues
+     */
+    private static function listing(array $issues): IssueReads
+    {
         $reads = self::createStub(IssueReads::class);
         $reads->method('listOpen')->willReturn(IssueListing::listed($issues, null));
 
-        return new BuildTask($reads, $this->checkout(), $ledger);
+        return $reads;
     }
 
     private function checkout(): GitBuildCheckout
     {
-        $mirrors = new Mirrors($this->mirrors);
+        return $this->checkoutIn($this->mirrors);
+    }
+
+    private function checkoutIn(string $directory): GitBuildCheckout
+    {
+        $mirrors = new Mirrors($directory);
         $network = new NetworkGit(new RecordingClock(), new NullLogger());
         $update = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), $mirrors);
 
