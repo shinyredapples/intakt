@@ -8,11 +8,13 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Override;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AsAlias;
 use Symfony\Component\Mercure\HubInterface;
 use Symfony\Component\Mercure\Update;
 use Throwable;
 
 // Through the hub's endpoint, not mercure_publish(), because consumers and the console have no FrankenPHP function; one path serves every process.
+#[AsAlias(LiveUpdates::class)]
 final readonly class MercureLiveUpdates implements LiveUpdates
 {
     public function __construct(
