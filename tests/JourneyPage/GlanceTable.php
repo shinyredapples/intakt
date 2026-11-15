@@ -64,7 +64,7 @@ final readonly class GlanceTable
         return $this->counted($done + $dropped).' ('.$done.' done, '.$dropped.' dropped)';
     }
 
-    // Measured tokens over counted merges: the parts stand beside the ratio with their own markers, never as one figure of mixed kinds.
+    // The parts stand beside the ratio with their own markers, because a ratio of measured tokens to counted merges alone would hide that it mixes kinds.
     private function perMerge(int $tokens, int $merges): string
     {
         $measured = fn (int $amount): string => $this->figures->marked($this->tokens($amount), FigureKind::Measured);
