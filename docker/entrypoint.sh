@@ -79,12 +79,13 @@ web() {
 
 # Plain php, not frankenphp php-cli, until the SIGTERM probe of plan task T28 passes on FrankenPHP 1.13.4.
 # The limits end a consumer on purpose, so what it leaks is dropped; the loop below starts it again.
+# Quiet, because nothing tells when a consumer has printed its start banner, which then followed the demo's review block; Symfony still prints an error at quiet verbosity.
 async() {
-    exec php bin/console messenger:consume async --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600
+    exec php bin/console messenger:consume async --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
 }
 
 scheduler_watcher() {
-    exec php bin/console messenger:consume scheduler_watcher --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600
+    exec php bin/console messenger:consume scheduler_watcher --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
 }
 
 declare -A running=()
