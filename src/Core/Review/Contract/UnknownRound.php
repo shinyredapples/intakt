@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Throwable;
 
-// Lets another module tell a round the Review module never stored from a failure of the query, without reaching into a use case.
+// An interface in the contract, because another module must tell a round the Review module never stored from any other failure of a query, and may not reach into a use case for the exception.
 interface UnknownRound extends Throwable
 {
 }
