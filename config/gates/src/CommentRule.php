@@ -8,7 +8,8 @@ use PhpToken;
 
 final readonly class CommentRule
 {
-    private const string MARKERS = '/\b(TODO|FIXME|XXX|HACK)\b/i';
+    // Because the left-undone gate takes a marker naming its issue as an exception, this gate lets the same form through.
+    private const string MARKERS = '/\b(?:HACK\b|(?:TODO|FIXME|XXX)\b(?!'.LeftUndoneComments::ISSUE_REFERENCE.'))/i';
     private const string GIVES_A_REASON = '~https?://\S+|\b(because|since|so|otherwise|unless|avoids?|keeps?|would|cannot|can\'t|must|needs?|requires?|upstream|workaround)\b~i';
     private const string LOOKS_LIKE_CODE = '/[;{}]\s*$/';
 
