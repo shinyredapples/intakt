@@ -389,14 +389,27 @@ final class LocalGitForgeTest extends TestCase
         self::assertTrue(mb_check_encoding($patch, 'UTF-8'));
     }
 
-    public function testItListsAChangedFileWhoseNameIsNotUtf8WithTheBytesOfItsNameEscaped(): void
+    public function testItRefusesAChangedFileWhoseNameIsNotUtf8SoThatItsNameCannotStandForAnotherFile(): void
     {
+        $this->repository->commitFile("caf\u{fffd}{E9}.txt", "unchanged decoy\n");
         $this->repository->checkoutNewBranch('feature');
-        $this->repository->commitFile("caf\xe9 \u{fffd}.txt", "menu\n");
+        $this->repository->commitFile("caf\xe9.txt", "changed content\n");
 
-        $change = $this->forge()->change(new ChangeId('feature'));
+        $this->expectException(ForgeReadFailed::class);
+        $this->expectExceptionMessage("git listed a changed path that is not valid UTF-8: caf\u{fffd}{E9}.txt.");
 
-        self::assertSame([["caf\u{fffd}{E9} \u{fffd}{EFBFBD}.txt", FileStatus::Added]], $this->pathsAndStatuses($change));
+        $this->forge()->change(new ChangeId('feature'));
+    }
+
+    public function testItRefusesAChangeThatDeletesAFileWhoseNameIsNotUtf8(): void
+    {
+        $this->repository->commitFile("caf\xe9.txt", "menu\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->removeFile("caf\xe9.txt");
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->change(new ChangeId('feature'));
     }
 
     public function testItListsAChangedFileWhoseNameIsUtf8AsItIs(): void
