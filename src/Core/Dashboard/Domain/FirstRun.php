@@ -22,7 +22,7 @@ final readonly class FirstRun
         return [$this->providers->state(), $this->project->state(), $this->firstReview->state(), $this->agent->state()];
     }
 
-    // The first step still to do, as its index; null when nothing is left.
+    // A step that is not needed is never current, because there is nothing for the reader to do in it.
     public function current(): ?int
     {
         foreach ($this->states() as $index => $state) {
