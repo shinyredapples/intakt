@@ -568,6 +568,19 @@ final class LocalGitForgeTest extends TestCase
         self::assertFalse($this->forge()->hasHeadMoved($change));
     }
 
+    public function testItRefusesAHeadMoveWhoseRangeListsAPathThatIsNotUtf8(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('src/New.php', "old\n");
+        $earlier = $this->repository->commitFile("caf\xe9.txt", "menu\n");
+        $this->repository->removeFile("caf\xe9.txt");
+        $moved = $this->forge()->change(new ChangeId('feature'));
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->headMoveSince(new CommitId($earlier), $moved);
+    }
+
     public function testItRefusesAChangeWhoseBranchDoesNotExist(): void
     {
         $this->expectException(ChangeNotFound::class);
