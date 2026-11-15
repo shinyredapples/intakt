@@ -193,6 +193,68 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringNotContainsString('frankenphp run', $this->calls());
     }
 
+    public function testTheReviewCommandIsPrintedOnlyOnceTheServerAnswersItsHealthCheckAndTheDashboard(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_FAILURES' => '2']);
+
+        $this->waitForTheReviewBlock();
+
+        $calls = explode("\n", $this->calls());
+        $shown = array_find_key($calls, static fn (string $call): bool => 'php bin/console intakt:sample:show /data/sample' === $call);
+        $asked = array_keys(array_filter($calls, static fn (string $call): bool => str_starts_with($call, 'curl ')));
+        self::assertCount(4, $asked, $this->calls());
+        self::assertStringEndsWith('http://localhost:2019/metrics', $calls[$asked[2]]);
+        self::assertStringEndsWith('http://localhost:7781/', $calls[$asked[3]]);
+        self::assertGreaterThan($asked[3], $shown);
+        self::assertGreaterThan(array_search('frankenphp run --config Caddyfile --adapter caddyfile', $calls, true), $shown);
+    }
+
+    public function testTheReviewBlockIsTheLastThingTheStartPrints(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_FAILURES' => '1']);
+        $this->waitForTheReviewBlock();
+
+        $this->waitForMorePolls();
+
+        $output = trim((string) $this->entrypoint?->getOutput());
+        self::assertStringContainsString('the server started', $output);
+        self::assertStringEndsWith('the review block', $output);
+    }
+
+    public function testTheReviewCommandIsPrintedOnceNotOnEveryPoll(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheReviewBlock();
+        $asked = substr_count($this->calls(), "\ncurl ");
+
+        $this->waitForMorePolls();
+
+        self::assertSame(1, substr_count($this->calls(), 'intakt:sample:show'));
+        self::assertSame($asked, substr_count($this->calls(), "\ncurl "));
+    }
+
+    public function testAFailedReviewBlockDoesNotStopTheStart(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SHOW_STATUS' => '1']);
+        $this->waitForTheReviewBlock();
+
+        $this->waitForMorePolls();
+
+        self::assertTrue($this->entrypoint?->isRunning());
+        self::assertStringContainsString('could not print the review command', (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    public function testWithoutASampleRepositoryTheStartNeverAsksForTheReviewCommand(): void
+    {
+        $this->startEntrypoint([]);
+        $this->waitForTheServer();
+
+        $this->waitForMorePolls();
+
+        self::assertStringNotContainsString('curl ', $this->calls());
+        self::assertStringNotContainsString('intakt:sample:show', $this->calls());
+    }
+
     public function testASampleRepositoryWithoutAProjectFileIsRefusedByName(): void
     {
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample']);
@@ -262,6 +324,8 @@ final class EntrypointSampleSeedTest extends TestCase
             'MCP_OWNER_ACCESS' => false,
             'MESSENGER_CONSUMERS' => '1',
             'WORKER_MEMORY_CEILING_MB' => '256',
+            'DASHBOARD_PORT' => '7781',
+            'CADDY_ADMIN' => false,
             'INTAKT_SAMPLE_REPOSITORY' => false,
             'INTAKT_CONFIG' => false,
             'HF_TOKEN' => false,
@@ -306,12 +370,31 @@ final class EntrypointSampleSeedTest extends TestCase
     {
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
-        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
-        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
+        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\necho 'the server started'\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
+        // The health check answers only once the server runs and after CURL_FAILURES refused calls, so the test forces a start where the server is not up yet.
+        $filesystem->dumpFile($programs.'/curl', "#!/bin/bash\necho \"curl \$*\" >> \"\$CALLS\"\ngrep -q '^frankenphp run' \"\$CALLS\" || exit 7\n(( \$(grep -c '^curl ' \"\$CALLS\") > \${CURL_FAILURES:-0} )) || exit 7\nexit 0\n");
+        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp', $programs.'/curl'], 0755);
 
         return $programs;
+    }
+
+    private function waitForTheReviewBlock(): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && !str_contains($this->calls(), 'intakt:sample:show')) {
+            usleep(50_000);
+        }
+
+        self::assertStringContainsString('intakt:sample:show', $this->calls(), (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    // Two and a half polls of the entrypoint's one-second loop, so a step it repeats or prints later would have run.
+    private function waitForMorePolls(): void
+    {
+        usleep(2_500_000);
     }
 
     private function waitForTheServer(): void
