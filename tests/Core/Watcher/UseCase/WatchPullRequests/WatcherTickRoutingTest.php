@@ -6,13 +6,13 @@ namespace Intakt\Tests\Core\Watcher\UseCase\WatchPullRequests;
 
 use Intakt\Core\Watcher\UseCase\WatchPullRequests\WatchPullRequests;
 use Intakt\Tests\Support\KernelTestCase;
-use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\CoversNothing;
 use ReflectionProperty;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\Transport\Sender\SendersLocatorInterface;
 use Symfony\Component\Scheduler\Messenger\SchedulerTransportFactory;
 
-#[CoversClass(WatchPullRequests::class)]
+#[CoversNothing]
 final class WatcherTickRoutingTest extends KernelTestCase
 {
     public function testScheduledMessagesGoThroughTheMessengerRouting(): void
