@@ -9,9 +9,9 @@ use Intakt\Core\Budget\Contract\Cost;
 final readonly class ChangeReview
 {
     /**
-     * @param list<PanelVerdict> $verdicts
-     * @param list<Finding>      $actList
-     * @param list<string>       $reasons
+     * @param list<PanelVerdict>    $verdicts
+     * @param list<Finding>         $actList
+     * @param list<string>          $reasons
      * @param list<ReviewerOutcome> $reviewers
      */
     public function __construct(

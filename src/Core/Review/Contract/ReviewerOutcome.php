@@ -12,9 +12,9 @@ final readonly class ReviewerOutcome
     public function __construct(
         public string $role,
         public Tier $tier,
-        // Null when the reviewer gave none, which a failed or unfinished reviewer does not.
+        // Null for a reviewer that failed or has not finished, because it gave none.
         public ?Verdict $verdict,
-        // In plain words, null unless the reviewer failed.
+        // In plain words because it reaches a console, and null unless the reviewer failed.
         public ?string $failure,
         public RoundTokens $tokens,
         public ?int $milliseconds,

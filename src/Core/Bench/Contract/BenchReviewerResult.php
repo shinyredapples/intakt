@@ -15,7 +15,7 @@ final readonly class BenchReviewerResult
     public function __construct(
         public string $role,
         public Tier $tier,
-        // Holds the matched defects as caught, the false alarms and the harness failure of this reviewer's run.
+        // Holds the caught defects, the false alarms and the harness failure together, because the classifier decides them from one run.
         public RunVerdict $verdict,
         public RoundTokens $tokens,
         public ?int $milliseconds,

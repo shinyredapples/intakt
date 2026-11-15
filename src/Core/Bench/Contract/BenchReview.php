@@ -14,12 +14,13 @@ final readonly class BenchReview
 {
     /**
      * @param list<BenchReviewerResult> $reviewers
-     * @param list<Finding>             $actList    the judge's, for the whole round, because it merges the reviewers' findings
+     * @param list<Finding>             $actList
      */
     public function __construct(
         public string $change,
         public Decision $decision,
         public array $reviewers,
+        // The judge's for the whole round, because it merges the reviewers' findings.
         public array $actList,
     ) {
     }

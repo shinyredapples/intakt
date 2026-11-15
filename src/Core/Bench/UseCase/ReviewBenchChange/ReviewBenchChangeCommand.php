@@ -31,7 +31,6 @@ final readonly class ReviewBenchChangeCommand
         SymfonyStyle $io,
         #[Argument('The bench change, the name of a folder under fixtures/sample-repository/bench')] string $change,
         #[Option('The project whose review panel reviews the change')] string $project = '',
-        #[Option('The folder the change is built in, which is removed afterwards')] string $workspace = '',
     ): int {
         if ('' === $project) {
             $io->error('--project is required.');
@@ -39,7 +38,7 @@ final readonly class ReviewBenchChangeCommand
             return Command::FAILURE;
         }
 
-        $directory = ('' === $workspace ? sys_get_temp_dir() : $workspace).'/intakt-bench-'.bin2hex(random_bytes(4));
+        $directory = sys_get_temp_dir().'/intakt-bench-'.bin2hex(random_bytes(4));
 
         try {
             $review = $this->review->of($this->checkout->open($change, $project, $directory));

@@ -9,7 +9,6 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Bench\Contract\BenchProvenance;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
-use Intakt\Core\Bench\Contract\FailureCause;
 use Intakt\Core\Bench\Contract\RunVerdict;
 use Intakt\Core\Bench\Domain\BenchChange;
 use Intakt\Core\Bench\Domain\ChangeFiles;
@@ -30,8 +29,8 @@ use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
-use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -96,14 +95,20 @@ final class ReviewBenchChangeCommandTest extends TestCase
 
     private string $workspace;
 
+    private string|false $temporary;
+
+    // The temporary folder is pointed at an empty one, because the command builds its checkout there and the test must see what it leaves.
     protected function setUp(): void
     {
+        $this->temporary = getenv('TMPDIR');
         $this->workspace = sys_get_temp_dir().'/intakt-bench-command-'.bin2hex(random_bytes(4));
         new Filesystem()->mkdir($this->workspace);
+        putenv('TMPDIR='.$this->workspace);
     }
 
     protected function tearDown(): void
     {
+        putenv(false === $this->temporary ? 'TMPDIR' : 'TMPDIR='.$this->temporary);
         new Filesystem()->remove($this->workspace);
     }
 
@@ -122,7 +127,7 @@ final class ReviewBenchChangeCommandTest extends TestCase
 
     public function testTheChangeBuiltForTheRunIsRemovedAfterwards(): void
     {
-        $this->runCommand(['change' => 'free-shipping', '--project' => 'alpha', '--workspace' => $this->workspace]);
+        $this->runCommand(['change' => 'free-shipping', '--project' => 'alpha']);
 
         self::assertSame([], glob($this->workspace.'/*'));
     }
@@ -137,7 +142,7 @@ final class ReviewBenchChangeCommandTest extends TestCase
 
     public function testAnUnknownChangeIsReportedAndNothingIsLeftBehind(): void
     {
-        $tester = $this->runCommand(['change' => 'no-such-change', '--project' => 'alpha', '--workspace' => $this->workspace]);
+        $tester = $this->runCommand(['change' => 'no-such-change', '--project' => 'alpha']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('There is no bench change named "no-such-change".', $tester->getDisplay());

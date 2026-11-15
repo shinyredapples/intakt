@@ -9,9 +9,9 @@ use Intakt\Core\Bench\Contract\BenchReviewerResult;
 use Intakt\Core\Bench\Domain\BenchChange;
 use Intakt\Core\Bench\Domain\RunClassifier;
 use Intakt\Core\Bench\Domain\RunOutcome;
-use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\ReviewerOutcome;
+use Intakt\Core\Review\Contract\Verdict;
 
 // Reviews through the normal path (panel, judge, ledger), because a bench of another path would measure nothing a user gets.
 final readonly class ReviewBenchChange
@@ -48,7 +48,7 @@ final readonly class ReviewBenchChange
             return RunOutcome::failed($reviewer->failure);
         }
 
-        if (null === $reviewer->verdict) {
+        if (!$reviewer->verdict instanceof Verdict) {
             return RunOutcome::failed('the reviewer gave no verdict');
         }
 
