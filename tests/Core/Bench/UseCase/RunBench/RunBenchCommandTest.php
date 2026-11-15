@@ -159,7 +159,7 @@ final class RunBenchCommandTest extends TestCase
         $reviews = self::createStub(ChangeReviews::class);
         $during = 0;
         $reviews->method('review')->willReturnCallback(function () use (&$during): never {
-            $during = \count(glob($this->workspace.'/*') ?: []);
+            $during = $this->checkoutsNow();
 
             throw new RoundTierNotMapped('alpha', Tier::Standard);
         });
@@ -177,16 +177,23 @@ final class RunBenchCommandTest extends TestCase
     {
         $during = [];
         $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturnCallback(function () use (&$during): ChangeReview {
-            $during[] = \count(glob($this->workspace.'/*') ?: []);
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use (&$during): ChangeReview {
+            $during[] = $this->checkoutsNow();
 
-            return $this->reviews()->review(...\func_get_args());
+            return $this->reviews()->review($request);
         });
 
         $this->runCommand(['--project' => 'alpha'], $reviews);
 
         self::assertSame(array_fill(0, 8, 1), $during);
         self::assertSame([], glob($this->workspace.'/*'));
+    }
+
+    private function checkoutsNow(): int
+    {
+        $entries = glob($this->workspace.'/*');
+
+        return false === $entries ? 0 : count($entries);
     }
 
     /**
