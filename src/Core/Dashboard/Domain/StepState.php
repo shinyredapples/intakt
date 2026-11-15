@@ -8,12 +8,14 @@ enum StepState: string
 {
     case Done = 'done';
     case Missing = 'missing';
+    case NotNeeded = 'not-needed';
 
     public function words(): string
     {
         return match ($this) {
             self::Done => 'Done',
             self::Missing => 'Missing',
+            self::NotNeeded => 'Not needed',
         };
     }
 
@@ -23,6 +25,7 @@ enum StepState: string
         return match ($this) {
             self::Done => 'ok',
             self::Missing => 'needs',
+            self::NotNeeded => 'idle',
         };
     }
 }
