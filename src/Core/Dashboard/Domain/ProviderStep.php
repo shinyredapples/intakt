@@ -30,6 +30,10 @@ final readonly class ProviderStep
             return 'No provider has a key yet: set the variable named below for a provider you use.';
         }
 
-        return sprintf('%s %s a key.', implode(' and ', $this->keyed), 1 === count($this->keyed) ? 'has' : 'have');
+        $keyed = $this->keyed;
+        $last = array_pop($keyed);
+        $names = [] === $keyed ? $last : sprintf('%s and %s', implode(', ', $keyed), $last);
+
+        return sprintf('%s %s a key.', $names, 1 === count($this->keyed) ? 'has' : 'have');
     }
 }

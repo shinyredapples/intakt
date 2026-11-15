@@ -13,10 +13,14 @@ use Intakt\Core\Dashboard\Domain\StepState;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunController;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunSteps;
+use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
+use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
@@ -30,6 +34,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(PanelOfProject::class)]
 #[CoversClass(TierLine::class)]
 #[CoversClass(StepState::class)]
+#[UsesClass(ConfiguredTierResolver::class)]
+#[UsesClass(ConfiguredPanels::class)]
+#[UsesClass(ConfiguredAccounts::class)]
+#[UsesClass(DashboardLedger::class)]
 final class FirstRunControllerTest extends WebTestCase
 {
     // The container is built from these, so each one a test changes is cleared first and restored after.
