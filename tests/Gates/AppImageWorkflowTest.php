@@ -23,9 +23,9 @@ final class AppImageWorkflowTest extends TestCase
     private const string BUILD = 'docker build --tag intakt:ci .';
     private const string DECIDE = 'upgrade';
 
-    public function testAPullRequestOrABranchPushBuildsTheAppImageOnce(): void
+    public function testAPullRequestBuildsTheAppImageOnceAndAPushToMainAlsoOnArm64(): void
     {
-        self::assertSame(['ci.yml image'], $this->jobsRunning('docker build'));
+        self::assertSame(['ci.yml image', 'image-arm64.yml image'], $this->jobsRunning('docker build'));
     }
 
     /**
@@ -54,10 +54,10 @@ final class AppImageWorkflowTest extends TestCase
         yield 'a schedule' => [['schedule' => [['cron' => '0 0 * * *']], 'workflow_dispatch' => null], false];
     }
 
-    public function testBothImageChecksRunOnlyInTheImageJob(): void
+    public function testBothImageChecksRunInBothImageJobsAndTheUpgradeCheckOnlyInCi(): void
     {
-        self::assertSame(['ci.yml image'], $this->jobsRunning('docker/smoke-test.sh'));
-        self::assertSame(['ci.yml image'], $this->jobsRunning('docker/verify-first-start.sh'));
+        self::assertSame(['ci.yml image', 'image-arm64.yml image'], $this->jobsRunning('docker/smoke-test.sh'));
+        self::assertSame(['ci.yml image', 'image-arm64.yml image'], $this->jobsRunning('docker/verify-first-start.sh'));
         self::assertSame(['ci.yml image'], $this->jobsRunning('docker/verify-upgrade.sh'));
     }
 
