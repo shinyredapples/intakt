@@ -19,11 +19,13 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
@@ -34,9 +36,11 @@ use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\OnePerPlace;
+use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
+use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
@@ -79,6 +83,10 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(IgnoredProgress::class)]
 #[UsesClass(ChangeReviewRequest::class)]
+#[UsesClass(FlagProjectAsReplayHandler::class)]
+#[UsesClass(FlagProjectAsReplay::class)]
+#[UsesClass(ReplayProject::class)]
+#[UsesClass(ReplayMark::class)]
 final class ReviewChangeTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -104,6 +112,26 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(Decision::Approve, $review->decision);
         self::assertSame(1, $review->round);
         self::assertSame([Decision::Approve, Decision::Approve], array_map(static fn ($vote): Decision => $vote->verdict->verdict, $review->verdicts));
+    }
+
+    public function testARoundOfAReplayProjectIsBlockedThoughBothReviewersApprove(): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay('alpha'));
+
+        $review = $this->reviewWith(new VerdictPerRole([]));
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame([RoundEndReasons::REPLAY], $review->reasons);
+    }
+
+    public function testARoundOfALiveProjectIsApprovedBesideAReplayProject(): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay('beta'));
+
+        $review = $this->reviewWith(new VerdictPerRole([]));
+
+        self::assertSame(Decision::Approve, $review->decision);
+        self::assertSame([], $review->reasons);
     }
 
     public function testARoundWithAChangesVerdictBelowQuorumAsksForChanges(): void

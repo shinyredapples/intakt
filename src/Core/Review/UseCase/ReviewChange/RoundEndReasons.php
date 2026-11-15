@@ -11,9 +11,16 @@ final readonly class RoundEndReasons
 
     public const string NO_OUTCOME_IN_TIME = 'no outcome in time';
 
+    public const string REPLAY = 'a replay never counts as a verdict: this round plays a recorded review back';
+
     public function judgingFailed(): string
     {
         return self::JUDGING_FAILED;
+    }
+
+    public function replay(): string
+    {
+        return self::REPLAY;
     }
 
     public function noOutcomeInTime(int $seconds): string
