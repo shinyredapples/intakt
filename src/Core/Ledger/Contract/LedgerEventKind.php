@@ -32,6 +32,7 @@ enum LedgerEventKind: string
     case JobNetworkRemoved = 'job_network_removed';
     case JobStartCheckFailed = 'job_start_check_failed';
     case BootResultComputed = 'boot_result_computed';
+    case MainBootFailed = 'main_boot_failed';
     case HeadBootSkipped = 'head_boot_skipped';
     case HandBackAccepted = 'hand_back_accepted';
     case HandBackSentBack = 'hand_back_sent_back';
@@ -41,4 +42,5 @@ enum LedgerEventKind: string
     case BranchPushed = 'branch_pushed';
     case ChangeIntended = 'change_intended';
     case ChangeOpened = 'change_opened';
+    case BuildStepEnded = 'build_step_ended';
 }

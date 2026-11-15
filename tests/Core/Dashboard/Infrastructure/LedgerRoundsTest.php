@@ -39,6 +39,9 @@ use Intakt\Core\Review\Contract\ReviewerStarted;
 use Intakt\Core\Review\Contract\ReviewerStopped;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictReceived;
@@ -47,6 +50,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
+use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -87,9 +91,11 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(PanelVerdict::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(QuorumPolicy::class)]
+#[UsesClass(RoundEnding::class)]
 final class LedgerRoundsTest extends TestCase
 {
     private ?RoundCosts $costs = null;
+    private ?RoundEndings $endings = null;
 
     private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
 
@@ -580,6 +586,28 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame(0.5, $review?->rounds[0]->cost->usd);
     }
 
+    public function testARoundTheJudgeHasNotJudgedTakesTheEndingTheReviewModuleNamesForIt(): void
+    {
+        $ending = new RoundEnding(RoundEnds::NoOutcomeInTime, 'no outcome in time');
+
+        $this->endings = new FixedRoundEndings($ending);
+
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START));
+
+        self::assertSame($ending, $review?->rounds[0]->ending);
+    }
+
+    public function testAJudgedRoundGetsNoEndingEvenWhenTheReviewModuleNamesOne(): void
+    {
+        $ending = new RoundEnding(RoundEnds::NoOutcomeInTime, 'no outcome in time');
+
+        $this->endings = new FixedRoundEndings($ending);
+
+        $review = $this->reviewOf('r1', $this->event(LedgerEventKind::ReviewStarted, self::START), $this->judged());
+
+        self::assertNull($review?->rounds[0]->ending);
+    }
+
     private function noCosts(): RoundCosts
     {
         $costs = self::createStub(RoundCosts::class);
@@ -590,7 +618,7 @@ final class LedgerRoundsTest extends TestCase
 
     private function reviewOf(string $round, RecordedEvent ...$events): ?Review
     {
-        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords());
+        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords(), $this->endings ?? new FixedRoundEndings());
 
         foreach ($events as $event) {
             $rounds->add($event);

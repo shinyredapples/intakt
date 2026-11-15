@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Watcher\Domain;
 
+use DateInterval;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
 use Intakt\Core\Review\Contract\BootOutcome;
@@ -16,6 +17,9 @@ use Intakt\Plugin\Forge\Contract\CommitId;
 final readonly class BootRecord
 {
     public const string TABLE = 'watcher_boot_result';
+
+    // Short, because a crash is the boot step's fault and not main's: it holds off a repeated `composer install` for a few minutes and then main boots again.
+    public const string CRASH_BACK_OFF = 'PT5M';
 
     #[ORM\Id]
     #[ORM\Column(length: 255)]
@@ -35,6 +39,10 @@ final readonly class BootRecord
     #[ORM\Column(type: 'text')]
     private string $reason;
 
+    // Kept with the row, because the owner alert of a failed main must survive a ledger that refuses it and still come only once.
+    #[ORM\Column(name: 'alert_pending', options: ['default' => false])]
+    private bool $alertPending;
+
     public function __construct(
         BootKey $key,
         BootOutcome $outcome,
@@ -46,22 +54,36 @@ final readonly class BootRecord
         $this->toolFingerprint = $key->toolFingerprint;
         $this->state = $outcome->state;
         $this->reason = $outcome->reason;
+        $this->alertPending = BootState::Failed === $outcome->state;
     }
 
     /**
-     * @return array{project: string, main_commit: string, tool_fingerprint: string, state: string, reason: string, recorded_at: DateTimeImmutable}
+     * @return array{project: string, main_commit: string, tool_fingerprint: string, state: string, reason: string, alert_pending: bool, recorded_at: DateTimeImmutable}
      */
     public function row(): array
     {
-        return ['project' => $this->project, 'main_commit' => $this->main, 'tool_fingerprint' => $this->toolFingerprint, 'state' => $this->state->value, 'reason' => $this->reason, 'recorded_at' => $this->recordedAt];
+        return ['project' => $this->project, 'main_commit' => $this->main, 'tool_fingerprint' => $this->toolFingerprint, 'state' => $this->state->value, 'reason' => $this->reason, 'alert_pending' => $this->alertPending, 'recorded_at' => $this->recordedAt];
     }
 
     /**
-     * @return array{recorded_at: string}
+     * @return array{alert_pending: string, recorded_at: string}
      */
     public static function rowTypes(): array
     {
-        return ['recorded_at' => 'utc_datetime_immutable'];
+        return ['alert_pending' => 'boolean', 'recorded_at' => 'utc_datetime_immutable'];
+    }
+
+    /**
+     * @return array{project: string, main_commit: string, tool_fingerprint: string}
+     */
+    public static function keyRow(BootKey $key): array
+    {
+        return ['project' => $key->project, 'main_commit' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint];
+    }
+
+    public function alertPending(): bool
+    {
+        return $this->alertPending;
     }
 
     public function key(): BootKey
@@ -76,6 +98,11 @@ final readonly class BootRecord
             BootState::Failed => BootOutcome::failed($this->reason),
             BootState::Crashed => BootOutcome::crashed($this->reason),
         };
+    }
+
+    public function answersAt(DateTimeImmutable $now): bool
+    {
+        return BootState::Crashed !== $this->state || $this->recordedAt->add(new DateInterval(self::CRASH_BACK_OFF)) > $now;
     }
 
     public function recordedAt(): DateTimeImmutable

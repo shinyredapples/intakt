@@ -9,4 +9,5 @@ final readonly class BudgetServices
 {
     public const string CEILINGS = 'intakt.budget.ceilings';
     public const string PRICES = 'intakt.budget.prices';
+    public const string PRICE_DATE = 'intakt.budget.price_date';
 }

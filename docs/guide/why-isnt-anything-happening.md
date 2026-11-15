@@ -31,6 +31,7 @@ flowchart TD
 | **CI** badge for a long time | GitHub hasn't finished, or never started, the checks | Intakt nudges GitHub after a few minutes and, if that didn't help, hands it to the maintainer agent |
 | A task went **back in line** after waiting too long | it waited past the time limit for its checks, a reviewer or the latest changes from main, so Intakt freed the place for other work and kept the task's spot | nothing: it is picked up again in turn. You hear about it only if it happens three times in a row |
 | **CI was cancelled** | a newer push stopped the checks of the older version; that is not a failure | nothing: Intakt waits for the newer checks, starts them again once if nothing does, and otherwise hands it to the maintainer agent |
+| A banner **Main of <project> does not boot** | main's latest commit failed its boot check, so pull requests are reviewed without that check until main boots again | fix main so `bin/instance` boots; the banner goes away once a new main commit boots |
 | **on hold** | the task needs something outside it (another task, a change to Intakt) | nothing: it comes back by itself when the reason is gone |
 | **dependency** badge | it `Waits for` another task | finish or unblock that task |
 | An item labelled **hands-off** (planned) | a person is driving it, so Intakt neither builds nor reworks it ([details](../design/05-architecture/08-merge.md#hands-off-and-take-over)) | remove `hands-off` to hand it back |
@@ -49,7 +50,7 @@ If the dashboard is slow or does not answer, ask the web server how it is doing.
 
 ## What is Intakt doing right now?
 
-Run `php bin/console intakt:status --format=json`. It prints one line of JSON: for each project, the reviews in progress, the pull requests the watcher holds back and why, the ones handed over to you and the last results, plus any pause or drain in effect and how many messages wait in each background queue. It reads only Intakt's database, so it answers even when no background worker runs; a growing count in the `async` queue then tells you the workers are stopped. It never shows a secret. The fields are described in the [user documentation](../user/README.md#the-status-document-in-progress).
+Run `php bin/console intakt:status --format=json`. It prints one line of JSON: for each project, the reviews in progress, the tasks `intakt:build:task` worked on with the last step each reached (and why it failed, if it did), the pull requests the watcher holds back and why, the ones handed over to you and the last results, plus any pause or drain in effect and how many messages wait in each background queue. It reads only Intakt's database, so it answers even when no background worker runs; a growing count in the `async` queue then tells you the workers are stopped. It never shows a secret. The fields are described in the [user documentation](../user/README.md#the-status-document-in-progress).
 
 ## Reading Intakt's log
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Platform\Contract\FigureKind;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -24,12 +25,23 @@ final readonly class ReviewOutput
         'tokens',
         'cost',
         'reasons',
+        'kinds',
+    ];
+
+    // The text and the JSON read the kind of a figure from here, so the two never disagree: the call and finding counts come from the ledger, the tokens from the provider's answer, the cost from a price list.
+    public const array KINDS = [
+        'round' => FigureKind::Counted,
+        'findings' => FigureKind::Counted,
+        'calls' => FigureKind::Counted,
+        'tokens' => FigureKind::Measured,
+        'cost' => FigureKind::Estimated,
     ];
 
     /**
      * @param list<ReviewOutputVerdict> $verdicts
      * @param list<Finding>             $actList
      * @param list<string>              $reasons
+     * @param array<string, string>     $kinds
      */
     public function __construct(
         public string $roundId,
@@ -41,6 +53,7 @@ final readonly class ReviewOutput
         public RoundTokens $tokens,
         public Cost $cost,
         public array $reasons,
+        public array $kinds,
     ) {
     }
 
@@ -56,6 +69,7 @@ final readonly class ReviewOutput
             $review->tokens,
             $review->cost,
             $review->reasons,
+            array_map(static fn (FigureKind $kind): string => $kind->value, self::KINDS),
         );
     }
 }

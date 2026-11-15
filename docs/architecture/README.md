@@ -19,9 +19,9 @@ Code and conventions:
 
 Checks, CI and releases:
 - [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline; an inline `# zizmor: ignore[<audit>]` without a reason on the same line fails it
-- [The journey page](journey-page.md): `bin/journey` regenerates the At a glance table and the milestone table of `docs/journey.md` from the GitHub API and `docs/journey/usage.jsonl`, writing only between marker comments
+- [The journey page](journey-page.md): `bin/journey` regenerates the At a glance table, the milestone table and the chart regions of `docs/journey.md` from the GitHub API and `docs/journey/usage.jsonl`, writing only between marker comments, and draws the charts and the Mermaid timeline as SVG files in `docs/journey/`
 - [Journeys](journeys.md): the harness, the test vendor, the recording hub, the live round driver, the watcher start and the round stream check the journeys use, and each journey (first install and setup, live review progress on the dashboard); a failing journey names itself and its step, and the live review progress journey has a forced-break proof; `bin/journey-alarm` files or updates one urgent task for a red run
-- [CI](ci.md): also the journeys on main, nightly and on demand. Dependabot updates every image CI and the app use weekly, once a release is 3 days old, except images on GHCR, such as gitleaks (no wait). Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
+- [CI](ci.md): also the journeys, on every pull request and push to main and on main nightly and on demand. Dependabot updates every image CI and the app use weekly, once a release is 3 days old, except images on GHCR, such as gitleaks (no wait). Every image is pinned by tag and digest except the database images in `.github/ci/databases.Dockerfile`, which carry a tag only: whoever has registry access appends `@sha256:<index digest>` to each of its lines, and Dependabot then keeps tag and digest current like the other images.
 - [Releases](releases.md)
 - [Requirements](requirements-and-parity.md): the [external commands](requirements.md) and the [parity](parity.md) behaviors
 
@@ -29,6 +29,7 @@ Running Intakt:
 - [Instance and probes](instance-and-probes.md)
 - [Container image](container-image.md)
 - [The demo with docker compose](demo-with-docker-compose.md)
+- [The demo recording](demo-recording.md): `intakt:demo:record` writes the ledger events and the captured live updates of a change's review rounds into one file, with the date, the models and the Intakt version
 - [Persistence](persistence.md)
 - [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the start check and its reduced mode, the memory-kill cause, and the cleanup after a crash
 - [Job images](job-images.md): a project's job image from its devcontainer, its Dockerfile or one generated from `composer.json`, and the probe that checks its PHP and extensions
@@ -51,6 +52,7 @@ Models and budget:
 
 Builds:
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
+- [Build task](build-task.md): `intakt:build:task` reads the task, updates the mirror, makes the build clone and runs the build job, recording each step in the ledger
 - [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns
 
 Reviews:

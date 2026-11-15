@@ -33,6 +33,11 @@ final class UpperWaitTest extends TestCase
         self::assertSame(3 * 10 + 4, new UpperWait(10, 4)->secondsFor($this->panelOf(3)));
     }
 
+    public function testTheUpperWaitOfAStoredRoundIsWorkedOutFromItsReviewerCount(): void
+    {
+        self::assertSame(2 * 10 + 4, new UpperWait(10, 4)->secondsForReviewers(2));
+    }
+
     private function panelOf(int $reviewers): Panel
     {
         $members = array_map(

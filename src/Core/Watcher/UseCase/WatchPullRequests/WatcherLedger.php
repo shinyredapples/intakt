@@ -67,6 +67,12 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::BootResultComputed, ['project' => $key->project, 'main' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'state' => $outcome->state->value, 'reason' => $outcome->reason]);
     }
 
+    // The infrastructure alert of a main that does not boot, so the gate is off for every head of the project until main boots again.
+    public function mainBootFailed(BootKey $key, BootOutcome $outcome): void
+    {
+        $this->append(LedgerEventKind::MainBootFailed, ['project' => $key->project, 'main' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'reason' => $outcome->reason]);
+    }
+
     public function headBootSkipped(string $project, HeadDecision $green): void
     {
         $this->append(LedgerEventKind::HeadBootSkipped, $this->headOf($project, $green) + ['cause' => BootGate::UNTRUSTED_AUTHOR]);

@@ -83,7 +83,7 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
         return $this->inner->getObject();
     }
 
-    // The bridge reads only the result's text, while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict. A null field holds no answer, so the result's text stays the one read.
+    // The bridge reads only the result's text (upstream/ai-claude-code-platform-structured-output), while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict. A null field holds no answer, so the result's text stays the one read.
     /**
      * @param array<string, mixed> $data
      *

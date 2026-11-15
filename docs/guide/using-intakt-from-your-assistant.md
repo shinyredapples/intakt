@@ -25,9 +25,11 @@ flowchart LR
 | list projects | the projects this install runs (built) | no, read only |
 
 When a review ends, its answer says how it ended, in one of three ways:
-- **judged:** the reviewers and the judge finished, and the decision (approve, changes or blocked) is their result.
+- **judged:** the reviewers and the judge finished, and the decision (approve, changes or blocked) is their result. In a project stored as a replay (a recording played back for the demo), the decision is always blocked, with the reason that a replay never counts as a verdict.
 - **judging failed:** the reviewers reported, but the judge could not finish. The decision is blocked, with the reason that the judging failed.
 - **no outcome in time:** the round did not end within its time limit, for example because no review worker was running. The decision is blocked, with the reason "no outcome in time". Start the worker (`messenger:consume async`) and review again.
+
+The dashboard's review page shows the same ends in the same words: a round that was never judged says **Blocked** with the reason "the judging failed" or "no outcome in time".
 
 The terminal command below blocks for the same two reasons.
 

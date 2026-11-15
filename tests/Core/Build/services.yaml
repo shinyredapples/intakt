@@ -1,0 +1,17 @@
+parameters:
+    # Empty unless a run of intakt:build:task names a recording, so the container builds without one.
+    env(BUILD_RECORDING): ''
+    # Empty unless a run of intakt:build:task names the folder the scripted build job hands back.
+    env(BUILD_JOB_OUTPUT): ''
+
+services:
+    Intakt\Tests\Core\Build\RecordedIssues:
+        autowire: true
+    Intakt\Plugin\GitHubForge\Contract\IssueReads: '@Intakt\Tests\Core\Build\RecordedIssues'
+    Intakt\Tests\Core\Build\ScriptedJobRunner:
+        autowire: true
+    # Only the build job's runner, because the review and check jobs keep the container runner their own tests use.
+    Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob:
+        autowire: true
+        arguments:
+            $jobs: '@Intakt\Tests\Core\Build\ScriptedJobRunner'

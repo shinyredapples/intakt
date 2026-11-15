@@ -14,3 +14,5 @@ git -C "$TARGET" checkout -b sample-change
 cp -R fixtures/sample-repository/pull-request/. "$TARGET"
 git -C "$TARGET" add --all && git -C "$TARGET" commit -m "Add shipping, a report and change the discount"
 ```
+
+`bench/` holds the changes of the review bench: `bench/<change>/tree/` is applied on top of `base/` on its own branch, `task.md` is the task text and `expectations.json` lists the planted defects (empty for a clean change). See `docs/architecture/sample-repository.md`.

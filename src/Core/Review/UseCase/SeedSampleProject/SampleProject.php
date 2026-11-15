@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\SampleChange;
 use LogicException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
@@ -19,9 +20,9 @@ use Symfony\Component\Yaml\Yaml;
 
 final readonly class SampleProject
 {
-    public const string NAME = 'sample';
+    public const string NAME = SampleChange::PROJECT;
 
-    public const string TASK = 'Add a shipping cost by weight and a report of a customer\'s orders; a cart of 100 or more keeps its discount.';
+    public const string TASK = SampleChange::TASK;
 
     // Named instead of the openai_compatible variables, because the entrypoint sets those from this token with the router as the base URL.
     public const string HUGGING_FACE_TOKEN = 'HF_TOKEN';
@@ -115,7 +116,7 @@ final readonly class SampleProject
 
         return '# Written once by intakt:sample:seed; edit it and start again to change the sample project.'.PHP_EOL
             .'# The prices are list prices read on 2026-11-13, in US dollars per million tokens.'.PHP_EOL
-            .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['prices' => $this->prices($models)]], 6, 4);
+            .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['price_date' => '2026-11-13', 'prices' => $this->prices($models)]], 6, 4);
     }
 
     /**

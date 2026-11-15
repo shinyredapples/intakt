@@ -51,8 +51,16 @@ final class LongRunTest extends KernelTestCase
         $review = $this->stillAskingForTools();
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame(['role-1 reviewer failed, the reviewer\'s answer could not be read as a verdict'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, the reviewer\'s answer could not be read as a verdict: the reviewer was still asking for tools after 30 rounds of tool calls.'], $review->reasons);
         self::assertSame([], $review->verdicts);
+    }
+
+    // Issue #1918: the reason is Intakt's own wording, so the ledger keeps it instead of only the class.
+    public function testAReviewerStillAskingForToolsAtTheRoundLimitIsRecordedInTheLedgerWithThatReason(): void
+    {
+        $this->stillAskingForTools();
+
+        self::assertSame(['the reviewer\'s answer could not be read as a verdict: the reviewer was still asking for tools after 30 rounds of tool calls.'], $this->run->payloadValues(LedgerEventKind::ReviewerFailed, 'failure'));
     }
 
     public function testTheCallOfARunThatHitTheRoundLimitAndTheCallOfItsRetryAreEachSettledOnce(): void

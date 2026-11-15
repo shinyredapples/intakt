@@ -34,7 +34,7 @@ final readonly class WhoIsWorking
     /**
      * @return list<Lane>
      */
-    // A judged round has nothing running, so a reviewer still marked running there is a stray row.
+    // A judged or ended round has nothing running, so a reviewer still marked running there is a stray row.
     private function lanesOf(Review $review): array
     {
         $round = $review->activeRound();
@@ -45,6 +45,6 @@ final readonly class WhoIsWorking
 
         $running = array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Running === $outcome->progress);
 
-        return array_values(array_map(static fn (ReviewerOutcome $outcome): Lane => new Lane($outcome->id, $outcome->role, $outcome->tier, $round->project, $round->change, $round->number, $outcome->since), $running));
+        return array_values(array_map(static fn (ReviewerOutcome $outcome): Lane => new Lane($outcome->id, $outcome->role, $outcome->tier, $round->project, $round->change, $round->number, $outcome->since, $round->round), $running));
     }
 }

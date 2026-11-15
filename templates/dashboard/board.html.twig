@@ -8,12 +8,18 @@
 <div class="page-head">
     <div>
         <h1>Board</h1>
-        <p class="lead">Every change under review, in the column of where it is now.</p>
+        {% set lead = board.headline %}
+        <p class="lead">{{ lead.text }}{% if lead.firstWaiting %} <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: lead.firstWaiting.latest.round}) }}">see what</a>.{% endif %}</p>
     </div>
     <div class="actions">
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
     </div>
 </div>
+{% for main in failing_mains %}
+    {% set headline = 'Main of ' ~ main.project ~ ' does not boot' %}
+    {% embed 'dashboard/components/banner.html.twig' with {icon: 'broken', broken: true, project: main.project, short: headline, title: headline ~ '.', text: 'Reviews go ahead without the boot gate until it boots again: ' ~ main.reason} only %}
+    {% endembed %}
+{% endfor %}
 {% for head in failing %}
     {% set headline = 'Pull request ' ~ head.change ~ ' of ' ~ head.project ~ ' failed' %}
     {% set state = head.handedOver ? 'Handed over to the maintainer agent after ' ~ head.fault.failures ~ ' failures' : head.fault.failures ~ (head.fault.failures == 1 ? ' failure' : ' failures') ~ ' in a row, next try at ' ~ head.fault.retryAt|date('H:i', 'UTC') ~ ' UTC' %}

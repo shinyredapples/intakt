@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\SeedSampleProject;
 
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Review\Contract\SampleChange;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
@@ -12,9 +13,9 @@ use Symfony\Component\Process\Process;
 // Built at the first start, because the fixture is plain files rather than a git repository (fixtures/sample-repository/README.md).
 final readonly class SampleRepository
 {
-    public const string BASE = 'main';
+    public const string BASE = SampleChange::BASE;
 
-    public const string BRANCH = 'sample-change';
+    public const string BRANCH = SampleChange::CHANGE;
 
     // A fixed author and moment, so every install builds the same commits and a verdict names the same heads.
     private const array COMMITTER = [

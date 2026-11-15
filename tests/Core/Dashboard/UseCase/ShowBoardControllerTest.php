@@ -8,7 +8,9 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
+use Intakt\Core\Dashboard\Domain\FailingMain;
 use Intakt\Core\Dashboard\Domain\HeadFault;
+use Intakt\Core\Dashboard\Domain\Headline;
 use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -16,6 +18,7 @@ use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
+use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
@@ -37,9 +40,12 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(RoundStart::class)]
 #[UsesClass(Lane::class)]
 #[UsesClass(WhoIsWorking::class)]
+#[UsesClass(Headline::class)]
 #[UsesClass(RefuseForeignHost::class)]
 #[UsesClass(LedgerFailingHeads::class)]
 #[UsesClass(FailingHead::class)]
+#[UsesClass(LedgerFailingMains::class)]
+#[UsesClass(FailingMain::class)]
 #[UsesClass(HeadFault::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
@@ -49,6 +55,46 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame('Board', $page->filter('.page-head h1')->text());
+    }
+
+    public function testAFreshInstallsBoardOpensWithNothingIsRunningYet(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
+    }
+
+    public function testABoardDuringAReviewOpensWithTheCodeReviewersAndTheirChange(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->startReviewer('round-1', 'security');
+
+        $lead = $this->browser->request('GET', '/')->filter('.page-head .lead');
+
+        self::assertSame('The Code reviewers are reviewing change 42 of alpha. Nothing needs you.', $lead->text());
+        self::assertCount(0, $lead->filter('a'));
+    }
+
+    public function testABoardAfterAJudgedReviewSaysNothingIsRunning(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Nothing is running. Nothing needs you.', $page->filter('.page-head .lead')->text());
+    }
+
+    public function testMarkupInAProjectNameIsShownAsTextInTheHeadline(): void
+    {
+        $this->ledger->startRoundOf('<b>42</b>', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $lead = $this->browser->request('GET', '/')->filter('.page-head .lead');
+
+        self::assertStringContainsString('change <b>42</b> of alpha', $lead->text());
+        self::assertCount(0, $lead->filter('b'));
     }
 
     public function testTheBoardShowsTheNineColumnsInTheOrderOfTheDesign(): void
@@ -392,6 +438,17 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame(['alpha', 'beta'], $page->filter('.page-head ~ .banner.broken')->each(static fn (Crawler $banner): ?string => $banner->attr('data-project')));
         self::assertCount(1, $page->filter('.banner + details.working'));
         self::assertCount(0, $page->filter('details.working ~ .banner'));
+    }
+
+    public function testAMainThatFailsToBootIsOneBrokenBannerOfItsProject(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'No status.');
+
+        $banner = $this->browser->request('GET', '/')->filter('.page-head ~ .banner.broken');
+
+        self::assertCount(1, $banner);
+        self::assertSame('alpha', $banner->attr('data-project'));
+        self::assertSame('Main of alpha does not boot. Reviews go ahead without the boot gate until it boots again: No status.', $banner->filter('p')->text());
     }
 
     public function testABackingOffHeadsBannerNamesItsPullRequestItsCauseAndItsNextTry(): void

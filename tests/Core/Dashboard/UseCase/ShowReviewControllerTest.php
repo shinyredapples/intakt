@@ -22,12 +22,19 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
+use Intakt\Core\Review\UseCase\ReviewChange\StoredRoundEndings;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
+use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -40,6 +47,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[CoversClass(ReviewerOutcome::class)]
 #[CoversClass(RoundFinding::class)]
 #[CoversClass(TokenFigures::class)]
+#[UsesClass(StoredRoundEndings::class)]
+#[UsesClass(RoundEnding::class)]
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(RoundLedgerReading::class)]
@@ -72,11 +81,11 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'changes', '2', '', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.', '']],
+            [['correctness', 'standard', 'verdict', 'changes', '2 counted', '', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.', '']],
             $this->rowsOf($crawler->filter('#round-round-1 table.reviewers tbody tr')),
         );
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'approve', '0', '', ''], ['security', 'standard', 'verdict', 'approve', '0', 'answered by the substitute openai, a catch-up review is owed', '']],
+            [['correctness', 'standard', 'verdict', 'approve', '0 counted', '', ''], ['security', 'standard', 'verdict', 'approve', '0 counted', 'answered by the substitute openai, a catch-up review is owed', '']],
             $this->rowsOf($crawler->filter('#round-round-2 table.reviewers tbody tr')),
         );
     }
@@ -177,6 +186,83 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('#round-round-1 .chip.state-running', 'In progress');
     }
 
+    public function testARoundStillWithinItsWaitStaysInProgressAndKeepsItsLiveTopic(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(1, $crawler->filter('#round-round-1-now-phase'));
+        self::assertCount(0, $crawler->filter('.round-ending'));
+    }
+
+    public function testARoundThatNeverReportedShowsAsBlockedWithNoOutcomeInTime(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSelectorTextContains('#round-round-1 .chip.state-blocked', 'Blocked');
+        self::assertStringContainsString('Blocked: '.RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 10800 seconds', $crawler->filter('#round-round-1-ending')->text());
+    }
+
+    public function testARoundThatEndedWithoutAnOutcomeIsNoLongerTheActiveRound(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('#round-round-1-now-phase'));
+        self::assertCount(0, $crawler->filter('#live-log-pane'));
+    }
+
+    public function testAReviewerStillMarkedRunningInARoundThatEndedHasNoStopForm(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertStringContainsString('running', $crawler->filter('#round-round-1-reviewers')->text());
+        self::assertCount(0, $crawler->filter('form.stop-reviewer'));
+    }
+
+    public function testARoundWhoseJudgingFailedHasNoLiveLog(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('#live-log-pane'));
+    }
+
+    public function testARoundWhoseJudgingFailedShowsAsBlockedWithTheReasonTheJudgingFailed(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSelectorTextContains('#round-round-1 .chip.state-blocked', 'Blocked');
+        self::assertSame('Blocked: the judging failed', $crawler->filter('#round-round-1-ending')->text());
+    }
+
+    public function testAJudgedRoundPastTheUpperWaitStaysJudged(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(2, $crawler->filter('section.round .chip.state-judged'));
+        self::assertCount(0, $crawler->filter('.chip.state-blocked'));
+    }
+
     public function testAJudgedRoundCarriesTheJudgedChip(): void
     {
         $this->givenACompletedTwoRoundReview();
@@ -211,9 +297,9 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['1500', '0', '0', '0', '500', '2000', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
-        self::assertSame([['700', '0', '0', '0', '100', '800', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
-        self::assertSelectorTextContains('p.summary', '2 rounds, 2800 tokens in all. Cost: unknown, no price for model-a.');
+        self::assertSame([['1500 measured', '0 measured', '0 measured', '0 measured', '500 measured', '2000 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
+        self::assertSame([['700 measured', '0 measured', '0 measured', '0 measured', '100 measured', '800 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
+        self::assertSame('2 rounds counted, 2800 tokens measured in all. Cost: unknown, no price for model-a.', self::wordsOf($crawler->filter('p.summary')));
     }
 
     public function testEachRoundShowsItsCostAtTheConfiguredPriceAndTheReviewTheSumOfThem(): void
@@ -261,7 +347,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['39504', '38000', '1500', '0', '700', '40204', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['39504 measured', '38000 measured', '1500 measured', '0 measured', '700 measured', '40204 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testTokensOfACallStartedForAnotherRoundAreNotCounted(): void
@@ -271,7 +357,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['0', '0', '0', '0', '0', '0', '0.0000 USD']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0.0000 USD']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testARoundStartedWithoutAChangeNameIsAReviewOfItsOwn(): void
@@ -340,8 +426,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
-        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
+        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings counted', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings counted', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
         self::assertSelectorNotExists('#round-round-1 details[open]');
     }
 
@@ -495,7 +581,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
      */
     private function partsOf(Crawler $summary): array
     {
-        return $summary->children()->each(static fn (Crawler $part): string => trim(preg_replace('/\s+/', ' ', $part->text()) ?? ''));
+        return $summary->children()->each(static fn (Crawler $part): string => self::wordsOf($part));
     }
 
     private function givenARoundJudgedAndASecondRunning(): void
@@ -550,6 +636,18 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
      */
     private function rowsOf(Crawler $rows): array
     {
-        return $rows->each(static fn (Crawler $row): array => $row->filter('td')->each(static fn (Crawler $cell): string => $cell->text()));
+        return $rows->each(static fn (Crawler $row): array => $row->filter('td')->each(static fn (Crawler $cell): string => self::wordsOf($cell)));
+    }
+
+    // A kind label's tooltip words are inside the label, so they are left out to read the figures as a person sees them.
+    private static function wordsOf(Crawler $node): string
+    {
+        $text = $node->text();
+
+        foreach ($node->filter('.figure-kind-tip') as $tip) {
+            $text = str_replace($tip->textContent, '', $text);
+        }
+
+        return trim((string) preg_replace('/\s+/', ' ', $text));
     }
 }

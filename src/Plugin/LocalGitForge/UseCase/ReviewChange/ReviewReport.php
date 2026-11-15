@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Platform\Contract\Figures;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -21,6 +23,7 @@ final readonly class ReviewReport
         #[Target('stored')]
         private SerializerInterface $serializer,
         private VisiblePath $text = new VisiblePath(),
+        private Figures $figures = new Figures(),
     ) {
     }
 
@@ -37,28 +40,49 @@ final readonly class ReviewReport
      */
     public function asLines(ChangeReview $review): array
     {
-        $lines = [sprintf('%s (round %d)', $review->decision->value, $review->round)];
+        $lines = [sprintf('%s (%s)', $review->decision->value, $this->figures->marked('round '.$review->round, ReviewOutput::KINDS['round']))];
 
         foreach ($review->verdicts as $verdict) {
-            $lines[] = sprintf('%s reviewer: %s, %d findings', $verdict->tier->value, $verdict->verdict->verdict->value, count($verdict->verdict->findings));
+            $lines[] = sprintf('%s reviewer: %s, %s', $verdict->tier->value, $verdict->verdict->verdict->value, $this->findings(count($verdict->verdict->findings)));
         }
 
         foreach ($review->reasons as $reason) {
             $lines[] = 'reason: '.$this->text->of($reason);
         }
 
-        $lines[] = sprintf('act list: %d findings', count($review->actList));
+        $lines[] = 'act list: '.$this->findings(count($review->actList));
 
         foreach ($review->actList as $finding) {
-            // The merged ids join the entry's id, so each finding the entry stands for stays traceable from the command's output.
+            // The merged ids join the entry's id, so each finding the entry stands for stays traceable from the command's output; RoundFinding::entryId() joins them alike for the review page.
             $lines[] = sprintf('%s %s %s: %s', $this->text->of(implode('+', [$finding->id, ...$finding->merged])), $finding->severity->value, $this->place($finding), $this->text->of($finding->text));
         }
 
         $tokens = $review->tokens;
-        $lines[] = sprintf('tokens: %d calls, %d prompt%s, %d completion, %d total', $tokens->calls, $tokens->prompt, $this->cacheParts($tokens), $tokens->completion, $tokens->total);
-        $lines[] = 'cost: '.$review->cost->reading($this->text->of(...));
+        $lines[] = sprintf(
+            'tokens: %s, %s',
+            $this->figures->marked($tokens->calls.' calls', ReviewOutput::KINDS['calls']),
+            $this->figures->marked(sprintf('%d prompt%s, %d completion, %d total', $tokens->prompt, $this->cacheParts($tokens), $tokens->completion, $tokens->total), ReviewOutput::KINDS['tokens']),
+        );
+        // The tokens and the cost stay on two lines: one is read from the provider, the other worked out from a price list, so no sum of the two is shown.
+        $lines[] = 'cost: '.$this->cost($review->cost);
 
         return $lines;
+    }
+
+    // An unknown cost has no figure to mark, because there is nothing to mislabel; an estimate names the day of its price list, or says it is not recorded.
+    private function cost(Cost $cost): string
+    {
+        $reading = $cost->reading($this->text->of(...));
+        if (null === $cost->usd) {
+            return $reading;
+        }
+
+        return $this->figures->marked($reading, ReviewOutput::KINDS['cost']).(null === $cost->priceDate ? ', price date unknown' : ', prices of '.$cost->priceDate);
+    }
+
+    private function findings(int $count): string
+    {
+        return $this->figures->marked($count.' findings', ReviewOutput::KINDS['findings']);
     }
 
     // Only the parts a vendor reported, so a round without caching reads as before.

@@ -113,7 +113,8 @@ timeline
         11-10 : CI moves to Ubicloud runners
         11-11 : v0.1.0, release train twice a day, test instance follows each tag
         11-12 : M2 Panel and rounds done : v0.2.0 and v0.3.0 : 73 merges in one day : Second review worker, CI run becomes the build's check
-        11-13 : Build slots 4 and 5, third review worker, CPU weights : Older work gains priority with age
+        11-13 : Build slots 4 and 5, third review worker, CPU weights : Older work gains priority with age : Backlog cut, 70 issues closed as not planned, 84 parked : First clean-machine run of the judged path finds four defects : Trials of the claude_code and Codex reviewers : Cooldown exception for Symfony 8.2.0-BETA2 (upgrade pending)
+        11-14 : Three fixes sent upstream already in the beta : Review bench repository : Review figures labeled measured, counted or estimated
     section Deadline
         11-21 : Demo (planned)
         11-22 : Hackathon deadline 18:00 CET, repository public
@@ -169,6 +170,36 @@ not. Since then every stall gets a cause and a route, and owner decisions are as
 **Planned:** container image, `docker compose up`, a sample repository, the five-minute path.
 **Happened:** the timed run from `git clone` to the first verdict is recorded at the deadline.
 **Releases:** v0.1.0 on 11-11, then a release train twice a day (13:00 and 21:00); a test instance follows each tag.
+
+The week before the deadline:
+
+- **11-13, the backlog cut.** After an audit of every ticket, pull request and CI run, 70 issues were closed as not
+  planned and 84 were parked under the `parked` label. What is left open is what the deadline needs.
+- **11-13, the judged path on a clean machine.** The first run the way a juror will do it: clone,
+  `docker compose up`, then the review command the install prints. The install was running after 202 s and printed
+  the command at 210 s, but the Hugging Face path failed in 2 of 3 runs. The run produced four issues
+  ([#1801](https://github.com/shinyredapples/intakt/issues/1801), [#1802](https://github.com/shinyredapples/intakt/issues/1802),
+  [#1803](https://github.com/shinyredapples/intakt/issues/1803), [#1804](https://github.com/shinyredapples/intakt/issues/1804)).
+- **11-13, the subscription reviewers.** Trials of `claude_code` and Codex as reviewers that run on a subscription
+  instead of an API key showed where they differ from the API path
+  ([#1822](https://github.com/shinyredapples/intakt/issues/1822), [#1823](https://github.com/shinyredapples/intakt/issues/1823),
+  [#1824](https://github.com/shinyredapples/intakt/issues/1824), [#1835](https://github.com/shinyredapples/intakt/issues/1835),
+  [#1836](https://github.com/shinyredapples/intakt/issues/1836)): since 11-14 an approval from either counts only when
+  the reviewer has read the change through the review server.
+- **11-13, Symfony 8.2.0-BETA2.** The beta came out that day, and the owner allowed a one-time exception to the
+  3-day release cooldown for `symfony/*` at 8.2.0-BETA2 ([#1842](https://github.com/shinyredapples/intakt/issues/1842),
+  [#1900](https://github.com/shinyredapples/intakt/issues/1900)). The move itself is still to come: the lock file
+  keeps Symfony 8.1. Three fixes Intakt sent upstream are in the beta
+  (Config: a NaN value skips validation, [symfony/symfony#67911](https://github.com/symfony/symfony/pull/67911);
+  Messenger: an early SIGTERM is ignored, [symfony/symfony#67912](https://github.com/symfony/symfony/pull/67912);
+  Serializer: a list of objects accepts any object, [symfony/symfony#67913](https://github.com/symfony/symfony/pull/67913)).
+  On 11-14 two more Symfony AI reports were filed ([symfony/ai#2944](https://github.com/symfony/ai/issues/2944),
+  [symfony/ai#2945](https://github.com/symfony/ai/issues/2945)) and a comment on
+  [symfony/ai#2617](https://github.com/symfony/ai/pull/2617); the full list is in "Found in the beta" on Highlights.
+- **11-14, measuring the reviews.** The review bench ([#1938](https://github.com/shinyredapples/intakt/issues/1938))
+  got its repository: eight changes with the findings a review should report; the command that runs it comes later.
+  The review report labels every figure as measured, counted or estimated
+  ([#1939](https://github.com/shinyredapples/intakt/issues/1939)); the dashboard follows.
 
 ### M6 to M8: Intakt builds itself
 
@@ -228,10 +259,19 @@ team, history, settings, setup) follow after the hackathon.
   high-priority ones. Ready issues and open pull requests now gain priority with age ([#1733](https://github.com/shinyredapples/intakt/issues/1733)).
 - **A test audit pays for itself.** A dedicated test engineer role reviewed coverage and filed 15 tasks ([#1297](https://github.com/shinyredapples/intakt/issues/1297) to
   [#1312](https://github.com/shinyredapples/intakt/issues/1312)).
+- **Rework, not capacity, was the drag.** From 11-05 to 11-13, 57% of the tokens on merged issues were spent after
+  the first build and first review; 47% of merged issues passed the first review; 349 of 1,091 issues were follow-ups.
+- **Run the judged path the way a juror will.** The first clean-machine run happened on 11-13 and found four defects
+  no test had ([#1801](https://github.com/shinyredapples/intakt/issues/1801) to [#1804](https://github.com/shinyredapples/intakt/issues/1804)).
+- **More builders did not mean more merges.** 11-12: 73 merges for 89M tokens with three builders. 11-13: 50 merges
+  for 126M tokens with five. The tickets were harder and builders waited longer for the two check slots; the limit
+  is tokens per week, not builders.
+- **Cut the backlog on purpose.** More issues were opened than closed on almost every day; the cut of 11-13 (70
+  closed as not planned, 84 parked) made the deadline's work visible again.
 
 ## How this page is made
 
-[#1740](https://github.com/shinyredapples/intakt/issues/1740): `bin/journey` writes the regions between `journey:begin` and `journey:end` markers: today the At a glance table and the milestone table, from the GitHub API (milestones, issues and pull requests, read when the page is built) and token use from `docs/journey/usage.jsonl`. The charts and the other numbers on this page are a snapshot of 2026-11-13 until the charts are generated too. `docs/journey/usage.jsonl`
+[#1740](https://github.com/shinyredapples/intakt/issues/1740): `bin/journey` writes the regions between `journey:begin` and `journey:end` markers: the At a glance table, the milestone table and the charts with a table of their numbers, from the GitHub API (milestones, issues and pull requests, read when the page is built) and token use from `docs/journey/usage.jsonl`. It draws the charts and the timeline above as SVG files in `docs/journey/`. The numbers written by hand in the text are a snapshot of 2026-11-13, and so are the charts until the command first runs with access to the API. `docs/journey/usage.jsonl`
 holds tokens per day, vendor, account and lane, nothing about limits; Claude and GPT are counted the same way (input and
 output in full, cached input at a tenth). A step that was killed (out of memory, a host restart) reports no usage and
 counts at its reservation: 21M tokens, about 2%. The milestone stories and lessons are written by hand and link to the issue or

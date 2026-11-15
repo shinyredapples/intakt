@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\Yaml\Yaml;
 
 #[CoversClass(BudgetConfiguration::class)]
 #[UsesClass(UsageWindow::class)]
@@ -25,6 +26,72 @@ final class BudgetConfigurationTest extends TestCase
     public function testTheOwnerSetsTheCeilingOfOneWindowAndTheOtherKeepsTheDefault(): void
     {
         self::assertSame(['five-hour' => 75.0, 'weekly' => 90.0], $this->ceilings(['budget' => ['ceilings' => ['five-hour' => 75]]]));
+    }
+
+    public function testTheOwnerNamesTheDayTheyReadThePrices(): void
+    {
+        self::assertSame('2026-11-13', $this->priceDate(['budget' => ['price_date' => '2026-11-13']]));
+    }
+
+    public function testAQuotedPriceDateInYamlIsTheDayWritten(): void
+    {
+        $contents = Yaml::parse("budget:\n    price_date: '2026-11-13'\n");
+        self::assertIsArray($contents);
+
+        self::assertSame('2026-11-13', $this->priceDate($contents));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function unquotedDates(): iterable
+    {
+        yield 'a day that exists' => ['2026-11-13'];
+        yield 'a day that does not exist, which YAML moves to 2026-03-02' => ['2026-02-30'];
+    }
+
+    // Symfony YAML reads an unquoted date as a timestamp and moves an impossible day into the next month, so the day written is lost before it can be checked.
+    #[DataProvider('unquotedDates')]
+    public function testAnUnquotedPriceDateInYamlIsRefusedWithAHintToQuoteIt(string $date): void
+    {
+        $contents = Yaml::parse("budget:\n    price_date: ".$date."\n");
+        self::assertIsArray($contents);
+
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/price_date must be a date written as YYYY-MM-DD in quotes/');
+
+        $this->priceDate($contents);
+    }
+
+    public function testWithoutAPriceDateItIsNull(): void
+    {
+        self::assertNull($this->priceDate([]));
+    }
+
+    public function testAnEmptyPriceDateIsTheSameAsLeavingItOut(): void
+    {
+        self::assertNull($this->priceDate(['budget' => ['price_date' => null]]));
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function refusedDates(): iterable
+    {
+        yield 'not a date' => ['last week'];
+        yield 'a day that does not exist' => ['2026-02-30'];
+        yield 'a day without zeros' => ['2026-1-3'];
+        yield 'a number' => [20261113];
+        yield 'a timestamp that is not a midnight' => [1794528001];
+    }
+
+    #[DataProvider('refusedDates')]
+    public function testAPriceDateThatIsNotADayWrittenAsYearMonthDayIsRefused(mixed $date): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/price_date/');
+
+        $this->priceDate(['budget' => ['price_date' => $date]]);
     }
 
     public function testTheShadowCeilingsAreNoLongerABudgetKey(): void
@@ -129,5 +196,16 @@ final class BudgetConfigurationTest extends TestCase
         $configuration = new Processor()->processConfiguration(new BudgetConfiguration(), [$contents]);
 
         return $configuration['budget'][$kind];
+    }
+
+    /**
+     * @param array<mixed> $contents
+     */
+    private function priceDate(array $contents): ?string
+    {
+        /** @var array{budget: array{price_date: string|null}} $configuration */
+        $configuration = new Processor()->processConfiguration(new BudgetConfiguration(), [$contents]);
+
+        return $configuration['budget']['price_date'];
     }
 }
