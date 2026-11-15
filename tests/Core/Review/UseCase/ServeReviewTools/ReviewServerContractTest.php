@@ -188,7 +188,10 @@ final class ReviewServerContractTest extends KernelTestCase
             self::markTestSkipped('Before Symfony 8.2 the access-token authenticator is not the entry point.');
         }
 
-        self::assertSame('Bearer', $this->initializeResponse(null)->headers->get('WWW-Authenticate'));
+        $response = $this->initializeResponse(null);
+
+        self::assertSame(401, $response->getStatusCode());
+        self::assertSame('Bearer', $response->headers->get('WWW-Authenticate'));
     }
 
     public function testACredentialWhoseSignatureBelongsToAnotherRoundIsRefused(): void
