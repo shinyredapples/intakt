@@ -32,11 +32,13 @@ final readonly class GroupedBarSvg
     private function group(DailyChart $chart, ChartPlot $plot, int $day): string
     {
         $count = max(1, count($chart->series));
-        $width = (self::GROUP * $plot->step - ChartCanvas::GAP * ($count - 1)) / $count;
+        // On a long chart the fixed gap would leave a bar no width, so it shrinks to a share of the group.
+        $gap = min(ChartCanvas::GAP, self::GROUP * $plot->step / $count / 4);
+        $width = (self::GROUP * $plot->step - $gap * ($count - 1)) / $count;
         $left = $plot->x($day) + (1 - self::GROUP) / 2 * $plot->step;
         $bars = array_map(
             fn (int $series, ChartSeries $values): string => ($values->values[$day] ?? 0) > 0
-                ? $this->canvas->roundedBar(new ChartBar($left + $series * ($width + ChartCanvas::GAP), $width, $plot->y($values->values[$day]), self::BASELINE), ChartPalette::color($series))
+                ? $this->canvas->roundedBar(new ChartBar($left + $series * ($width + $gap), $width, $plot->y($values->values[$day]), self::BASELINE), ChartPalette::color($series))
                 : '',
             array_keys($chart->series),
             $chart->series,

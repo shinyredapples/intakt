@@ -28,21 +28,31 @@ final readonly class LineSvg
             .'</svg>';
     }
 
-    // A day without a value breaks the line, so a gap is never drawn as zero.
+    // A day without a value breaks the line, so a gap is never drawn as zero; a value with no neighbor to join becomes a dot.
     private function line(ChartSeries $series, string $color, ChartPlot $plot): string
     {
-        $path = '';
-        $previous = null;
+        $drawn = array_filter($series->values, is_int(...));
 
-        foreach ($series->values as $day => $value) {
-            if (null !== $value) {
-                $path .= (null === $previous ? 'M' : 'L').$this->canvas->number($plot->x($day)).','.$this->canvas->number($plot->y($value));
-            }
-
-            $previous = $value;
+        if ([] === $drawn) {
+            return '';
         }
 
-        return '' === $path ? '' : '<path d="'.$path.'" fill="none" stroke="'.$color.'" stroke-width="2" stroke-linejoin="round"/>'.$this->end($series, $color, $plot);
+        $path = '';
+        $dots = '';
+
+        foreach ($drawn as $day => $value) {
+            $joinedBefore = isset($drawn[$day - 1]);
+            $x = $this->canvas->number($plot->x($day));
+            $y = $this->canvas->number($plot->y($value));
+
+            if ($joinedBefore || isset($drawn[$day + 1])) {
+                $path .= ($joinedBefore ? 'L' : 'M').$x.','.$y;
+            } elseif (array_key_last($drawn) !== $day) {
+                $dots .= '<circle cx="'.$x.'" cy="'.$y.'" r="3" fill="'.$color.'"/>';
+            }
+        }
+
+        return ('' === $path ? '' : '<path d="'.$path.'" fill="none" stroke="'.$color.'" stroke-width="2" stroke-linejoin="round"/>').$dots.$this->end($series, $color, $plot);
     }
 
     private function end(ChartSeries $series, string $color, ChartPlot $plot): string

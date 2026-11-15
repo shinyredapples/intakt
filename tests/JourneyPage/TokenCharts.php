@@ -6,22 +6,24 @@ namespace Intakt\Tests\JourneyPage;
 
 use DateTimeImmutable;
 
-// The days come from the usage file alone, so the token charts change only when the usage file does.
+// The days come from the usage file alone and the merges from the counts kept for it, so the token charts change only when the usage file does.
 final readonly class TokenCharts
 {
+    public const string PER_MERGE = 'tokens-per-merge';
+
     /**
-     * @param list<PullRequest> $pullRequests
+     * @param array<string, int> $mergesPerDay
      *
      * @return list<DailyChart>
      */
-    public function charts(Usage $usage, array $pullRequests): array
+    public function charts(Usage $usage, array $mergesPerDay): array
     {
         $days = new DayRange()->days(array_map(static fn (TokenUsage $row): DateTimeImmutable => $row->day, $usage->rows));
 
         return [
             new DailyChart('tokens-by-lane', 'Tokens per day by lane', ChartForm::StackedBars, $days, $this->byLane($usage, $days)),
             new DailyChart('tokens-by-account', 'Tokens per day by account', ChartForm::StackedBars, $days, $this->byAccount($usage, $days)),
-            new DailyChart('tokens-per-merge', 'Tokens per merged pull request', ChartForm::Line, $days, [$this->perMerge($usage, $pullRequests, $days)]),
+            new DailyChart(self::PER_MERGE, 'Tokens per merged pull request', ChartForm::Line, $days, [$this->perMerge($usage, $mergesPerDay, $days)]),
         ];
     }
 
@@ -56,13 +58,12 @@ final readonly class TokenCharts
     }
 
     /**
-     * @param list<PullRequest>       $pullRequests
+     * @param array<string, int>      $merges
      * @param list<DateTimeImmutable> $days
      */
-    private function perMerge(Usage $usage, array $pullRequests, array $days): ChartSeries
+    private function perMerge(Usage $usage, array $merges, array $days): ChartSeries
     {
         $tokens = $this->tokensPerDay($usage->rows);
-        $merges = array_count_values(array_map(static fn (DateTimeImmutable $merged): string => $merged->format('Y-m-d'), array_values(array_filter(array_map(static fn (PullRequest $pullRequest): ?DateTimeImmutable => $pullRequest->merged, $pullRequests)))));
         $values = array_map(static fn (DateTimeImmutable $day): ?int => isset($merges[$day->format('Y-m-d')]) ? intdiv($tokens[$day->format('Y-m-d')] ?? 0, $merges[$day->format('Y-m-d')]) : null, $days);
 
         return new ChartSeries('Tokens per merge', $values);

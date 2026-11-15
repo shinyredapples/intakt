@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\JourneyPage;
 
-enum ChartForm
+enum ChartForm: string
 {
-    case StackedBars;
-    case GroupedBars;
-    case Line;
+    case StackedBars = 'stacked-bars';
+    case GroupedBars = 'grouped-bars';
+    case Line = 'line';
 }

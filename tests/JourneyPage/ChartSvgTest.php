@@ -49,13 +49,24 @@ final class ChartSvgTest extends TestCase
 
     public function testADayWithoutAValueBreaksTheLineAndTheLastValueIsLabelled(): void
     {
-        $chart = new DailyChart('open', 'Open', ChartForm::Line, $this->days(3), [new ChartSeries('Open issues', [1, null, 3])]);
+        $chart = new DailyChart('open', 'Open', ChartForm::Line, $this->days(4), [new ChartSeries('Open issues', [1, 2, null, 3])]);
 
         $svg = new LineSvg()->svg($chart);
 
-        self::assertStringContainsString('<path d="M56,199M790,77" fill="none" stroke="#2a78d6"', $svg);
+        self::assertStringContainsString('<path d="M56,199L300.67,138" fill="none" stroke="#2a78d6"', $svg);
         self::assertStringContainsString('<circle cx="790" cy="77" r="4" fill="#2a78d6"', $svg);
         self::assertStringContainsString('>Open issues 3</text>', $svg);
+    }
+
+    public function testEveryValueWithoutANeighborOnEitherSideIsDrawnAsADot(): void
+    {
+        $chart = new DailyChart('merge', 'Merge', ChartForm::Line, $this->days(5), [new ChartSeries('Tokens per merge', [5, null, 7, null, 3])]);
+
+        $svg = new LineSvg()->svg($chart);
+
+        self::assertStringNotContainsString('<path', $svg);
+        self::assertStringContainsString('<circle cx="56" cy="138" r="3" fill="#2a78d6"/><circle cx="423" cy="89.2" r="3" fill="#2a78d6"/>', $svg);
+        self::assertStringContainsString('<circle cx="790" cy="186.8" r="4" fill="#2a78d6"', $svg);
     }
 
     public function testALineWithoutAnyValueDrawsNoPathAndNoLabel(): void
@@ -72,6 +83,16 @@ final class ChartSvgTest extends TestCase
         $single = new StackedBarSvg()->svg($this->chart(ChartForm::StackedBars, [new ChartSeries('Build', [1])]));
 
         self::assertSame([1, 1, 0], [substr_count($several, '>Build</text>'), substr_count($several, '>Review</text>'), substr_count($single, '>Build</text>')]);
+    }
+
+    public function testEachBarOfAYearOfTwoSeriesKeepsAWidthAndItsRoundedTop(): void
+    {
+        $svg = new GroupedBarSvg()->svg(new DailyChart('issues', 'Issues', ChartForm::GroupedBars, $this->days(366), [new ChartSeries('Created', array_fill(0, 366, 1)), new ChartSeries('Closed', array_fill(0, 366, 1))]));
+
+        preg_match_all('/<path d="M([\d.]+),[\d.]+ V[\d.]+ Q[\d.]+,[\d.]+ ([\d.]+),[\d.]+ H([\d.]+) Q([\d.]+),/', $svg, $bars, PREG_SET_ORDER);
+
+        self::assertCount(732, $bars);
+        self::assertSame([], array_filter($bars, static fn (array $bar): bool => !((float) $bar[1] < (float) $bar[4] && (float) $bar[1] <= (float) $bar[2] && (float) $bar[2] <= (float) $bar[3])));
     }
 
     public function testEverySecondDayIsLabelledOnAChartOfEighteenDays(): void

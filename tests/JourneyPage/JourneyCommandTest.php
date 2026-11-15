@@ -79,17 +79,27 @@ final class JourneyCommandTest extends TestCase
         self::assertSame("docs/journey.md and its drawings are current\n", $second->getOutput());
     }
 
-    public function testTheTokenChartsStayTheSameWhileTheUsageFileDoes(): void
+    public function testTheTokenChartsStayTheSameWhileTheUsageFileDoesEvenAfterAnotherMergeOnAUsageDay(): void
     {
         $this->runJourney();
-        $tokens = array_map($this->drawing(...), self::TOKEN_CHARTS);
+        $tokens = [array_map($this->drawing(...), self::TOKEN_CHARTS), $this->region('tokens-per-merge')];
         $issues = $this->drawing('issues-per-day');
 
         $later = $this->runJourney(self::FIXTURES.'/api-later');
 
-        self::assertSame($tokens, array_map($this->drawing(...), self::TOKEN_CHARTS));
+        self::assertSame($tokens, [array_map($this->drawing(...), self::TOKEN_CHARTS), $this->region('tokens-per-merge')]);
         self::assertNotSame($issues, $this->drawing('issues-per-day'));
         self::assertStringNotContainsString('tokens-', $later->getOutput());
+    }
+
+    public function testAChangedUsageFileCountsTheMergesOfItsDaysAgain(): void
+    {
+        $this->runJourney();
+        file_put_contents($this->root.'/docs/journey/usage.jsonl', "\n", FILE_APPEND);
+
+        $this->runJourney(self::FIXTURES.'/api-later');
+
+        self::assertStringContainsString('| 10-27 | 3,500,000 |', $this->region('tokens-per-merge'));
     }
 
     public function testAPageWithoutMarkersIsLeftUnwritten(): void
@@ -153,6 +163,13 @@ final class JourneyCommandTest extends TestCase
     private function drawing(string $name): string
     {
         return (string) file_get_contents($this->root.'/docs/journey/'.$name.'.svg');
+    }
+
+    private function region(string $name): string
+    {
+        preg_match('/<!-- journey:begin '.$name.' -->\n(.*?)<!-- journey:end '.$name.' -->/s', $this->page(), $region);
+
+        return $region[1] ?? '';
     }
 
     private function expected(string $name): string

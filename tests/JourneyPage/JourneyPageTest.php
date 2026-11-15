@@ -30,6 +30,7 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(PullRequest::class)]
 #[UsesClass(PageRegion::class)]
 #[UsesClass(TokenCharts::class)]
+#[UsesClass(CountedMerges::class)]
 #[UsesClass(IssueCharts::class)]
 #[UsesClass(DayRange::class)]
 #[UsesClass(DailyChart::class)]
@@ -102,6 +103,7 @@ final class JourneyPageTest extends TestCase
             | 10-28 | none |
 
             </details>
+            <!-- merges counted for usage sha256:4229317b25dec6a4ffa015fcf86bae004d36eb98d792bbea65b0a9c0b7ac319d: 2026-10-26=2 2026-10-27=1 -->
             <!-- journey:end tokens-per-merge -->
             MD, $page);
     }

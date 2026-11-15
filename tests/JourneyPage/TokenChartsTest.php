@@ -17,7 +17,6 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(UsageAccount::class)]
 #[UsesClass(UsageLane::class)]
 #[UsesClass(UsageVendor::class)]
-#[UsesClass(PullRequest::class)]
 #[UsesClass(DailyChart::class)]
 #[UsesClass(ChartSeries::class)]
 final class TokenChartsTest extends TestCase
@@ -50,20 +49,9 @@ final class TokenChartsTest extends TestCase
 
     public function testTokensPerMergeDividesADaysTokensByItsMergesAndLeavesADayWithoutAMergeEmpty(): void
     {
-        $perMerge = $this->charts(
-            [$this->on('2026-10-27', 7), $this->on('2026-10-28', 4)],
-            [new PullRequest(new DateTimeImmutable('2026-10-27T09:00:00Z')), new PullRequest(new DateTimeImmutable('2026-10-27T23:59:59Z')), new PullRequest(null)],
-        )[2];
+        $perMerge = $this->charts([$this->on('2026-10-27', 7), $this->on('2026-10-28', 4)], ['2026-10-27' => 2])[2];
 
         self::assertSame([3, null], $perMerge->series[0]->values);
-    }
-
-    public function testMergesOutsideTheUsageDaysDoNotChangeTheTokenCharts(): void
-    {
-        $rows = [$this->on('2026-10-27', 7)];
-        $merged = new PullRequest(new DateTimeImmutable('2026-10-27T09:00:00Z'));
-
-        self::assertEquals($this->charts($rows, [$merged]), $this->charts($rows, [$merged, new PullRequest(new DateTimeImmutable('2026-10-28T00:00:00Z'))]));
     }
 
     public function testAnEmptyUsageFileGivesChartsWithoutDays(): void
@@ -75,14 +63,14 @@ final class TokenChartsTest extends TestCase
     }
 
     /**
-     * @param list<TokenUsage>  $rows
-     * @param list<PullRequest> $pullRequests
+     * @param list<TokenUsage>   $rows
+     * @param array<string, int> $mergesPerDay
      *
      * @return list<DailyChart>
      */
-    private function charts(array $rows, array $pullRequests = []): array
+    private function charts(array $rows, array $mergesPerDay = []): array
     {
-        return new TokenCharts()->charts(new Usage($rows), $pullRequests);
+        return new TokenCharts()->charts(new Usage($rows), $mergesPerDay);
     }
 
     private function row(UsageAccount $account, UsageLane $lane, int $tokens): TokenUsage
