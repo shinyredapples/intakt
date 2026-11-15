@@ -34,6 +34,7 @@ use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(RoundLedgerReading::class)]
@@ -53,15 +54,15 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
 
     public function testTheDashboardAndTheConsoleShowTheSameFigureForAPricedRound(): void
     {
-        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
+        self::getContainer()->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], '2026-11-13'));
         $this->givenARoundFromARecordedUsageAnswer();
 
         $console = $this->consoleFigure();
-        $this->browser->request('GET', '/reviews/'.self::ROUND);
+        $crawler = $this->browser->request('GET', '/reviews/'.self::ROUND);
 
-        self::assertSame('0.0050 USD', $console);
-        self::assertSelectorTextContains('p.summary', 'Cost: '.$console.'.');
-        self::assertSelectorTextContains('table.tokens tbody td:last-child', $console);
+        self::assertSame('0.0050 USD estimated, prices of 2026-11-13', $console);
+        self::assertStringEndsWith('Cost: '.$console.'.', $this->wordsOf($crawler->filter('p.summary')));
+        self::assertSame($console, $this->wordsOf($crawler->filter('table.tokens tbody td:last-child')));
     }
 
     public function testTheDashboardAndTheConsoleShowTheSameUnknownForARoundWithoutAPrice(): void
@@ -104,11 +105,18 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $cost = array_values(array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'cost: ')));
         self::assertCount(1, $cost);
 
-        // The dashboard labels its figures in part 2, so this compares the figure itself, before the console's kind marker.
-        $figure = substr($cost[0], strlen('cost: '));
+        return substr($cost[0], strlen('cost: '));
+    }
 
-        $marker = strpos($figure, ' estimated');
+    // The tooltip's words are inside the label, so they are left out to read the cost as the console prints it.
+    private function wordsOf(Crawler $node): string
+    {
+        $text = $node->text();
 
-        return false === $marker ? $figure : substr($figure, 0, $marker);
+        foreach ($node->filter('.figure-kind-tip') as $tip) {
+            $text = str_replace($tip->textContent, '', $text);
+        }
+
+        return trim((string) preg_replace('/\s+/', ' ', $text));
     }
 }

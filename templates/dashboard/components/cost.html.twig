@@ -1,0 +1,4 @@
+{#- A cost marked estimated, with the day of its price list, as the console prints it. An unknown cost has no figure to mark, because there is nothing to mislabel. -#}
+{#- `at` names the cost's place on the page, so its label's tooltip id is unique (see figure_kind.html.twig). -#}
+{{- cost.reading -}}
+{%- if cost.usd is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: at}, with_context = false) }}, {{ cost.priceDateReading }}{% endif -%}

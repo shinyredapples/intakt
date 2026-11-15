@@ -48,6 +48,19 @@ final readonly class BenchChangeCheckout
     }
 
     /**
+     * @return list<string>
+     */
+    public function names(): array
+    {
+        $names = [];
+        foreach (new Finder()->files()->in($this->fixtures.'/bench')->depth('== 1')->name('expectations.json')->sortByName() as $file) {
+            $names[] = $file->getRelativePath();
+        }
+
+        return $names;
+    }
+
+    /**
      * @throws BenchChangeNotFound
      */
     public function open(string $name, string $project, string $directory): BenchChange

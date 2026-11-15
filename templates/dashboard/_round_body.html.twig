@@ -77,7 +77,7 @@
                 {% for tokens in [reviewed.tokens.prompt, reviewed.tokens.cacheRead, reviewed.tokens.cacheWrite, reviewed.tokens.cached, reviewed.tokens.completion, reviewed.tokens.total] %}
                 <td class="num">{{ tokens }} {{ include(kind_label, {kind: kinds.Measured, at: 'round-' ~ reviewed.round ~ '-tokens-' ~ loop.index}, with_context = false) }}</td>
                 {% endfor %}
-                <td>{{ reviewed.cost.reading }}</td>
+                <td>{{ include('dashboard/components/cost.html.twig', {cost: reviewed.cost, at: 'round-' ~ reviewed.round ~ '-cost'}, with_context = false) }}</td>
             </tr>
         </tbody>
     </table>
