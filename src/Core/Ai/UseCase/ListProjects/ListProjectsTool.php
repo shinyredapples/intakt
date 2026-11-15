@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Ai\UseCase\ListProjects;
 
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Mcp\Contract\ToolAccess;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReplayMarkOfProject;
-use Intakt\Core\Mcp\Contract\ToolAccess;
 use LogicException;
 use Mcp\Capability\Attribute\McpTool;
 use Mcp\Schema\ToolAnnotations;

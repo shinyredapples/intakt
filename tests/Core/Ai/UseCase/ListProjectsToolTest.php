@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\UseCase;
 
 use Intakt\Core\Ai\Contract\TierResolver;
-use Intakt\Core\Ai\UseCase\ListProjects\ListProjectsTool;
 use Intakt\Core\Ai\UseCase\ListProjects\ListedProject;
+use Intakt\Core\Ai\UseCase\ListProjects\ListProjectsTool;
 use Intakt\Core\Ai\UseCase\ListProjects\ProjectList;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReplayMarkOfProject;
@@ -49,7 +49,7 @@ final class ListProjectsToolTest extends TestCase
     }
 
     /**
-     * @param list<string>               $projects
+     * @param list<string>              $projects
      * @param array<string, ReplayMark> $replays
      */
     private function tool(array $projects, array $replays): ListProjectsTool
@@ -57,9 +57,7 @@ final class ListProjectsToolTest extends TestCase
         $resolver = self::createStub(TierResolver::class);
         $resolver->method('projects')->willReturn($projects);
         $bus = self::createStub(MessageBusInterface::class);
-        $bus->method('dispatch')->willReturnCallback(static function (ReplayMarkOfProject $query) use ($replays): Envelope {
-            return (new Envelope($query))->with(new HandledStamp($replays[$query->project] ?? ReplayMark::Live, 'handler'));
-        });
+        $bus->method('dispatch')->willReturnCallback(static fn (ReplayMarkOfProject $query): Envelope => new Envelope($query)->with(new HandledStamp($replays[$query->project] ?? ReplayMark::Live, 'handler')));
 
         return new ListProjectsTool($resolver, $bus);
     }
