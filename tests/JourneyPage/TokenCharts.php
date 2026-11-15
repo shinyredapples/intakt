@@ -70,7 +70,7 @@ final readonly class TokenCharts
     }
 
     /**
-     * @param list<DateTimeImmutable>  $days
+     * @param list<DateTimeImmutable>   $days
      * @param Closure(TokenUsage): bool $belongs
      */
     private function series(string $label, Usage $usage, array $days, Closure $belongs): ?ChartSeries

@@ -43,7 +43,7 @@ final readonly class YScale
             default => [1, ''],
         };
         $step = $this->top / self::STEPS / $unit;
-        $decimals = array_find([0, 1],static fn (int $places): bool => round($step, $places) === $step) ?? 2;
+        $decimals = array_find([0, 1], static fn (int $places): bool => round($step, $places) === $step) ?? 2;
 
         return number_format($tick / $unit, $decimals, '.', '').$suffix;
     }
