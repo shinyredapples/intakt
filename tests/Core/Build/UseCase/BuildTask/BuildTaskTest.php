@@ -85,6 +85,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\LockFactory;
@@ -179,8 +180,11 @@ final class BuildTaskTest extends TestCase
 
     private JobRunner $runner;
 
+    private Filesystem $handBackFiles;
+
     protected function setUp(): void
     {
+        $this->handBackFiles = new Filesystem();
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
         $this->clone = $this->mirrors.'-clone';
         $this->output = $this->mirrors.'-output';
@@ -309,6 +313,36 @@ final class BuildTaskTest extends TestCase
         self::assertSame(BuildStep::HandBackCheck, $outcome->last);
         self::assertStringContainsString('-hand-backs', (string) $outcome->failure);
         self::assertSame('failed', $ledger->payloads()[4]['outcome']);
+    }
+
+    public function testARefusedBundleWhoseFileCannotBeRemovedEndsAtTheHandBackCheckWithTheRemovalFailureRecorded(): void
+    {
+        $this->handBackFiles = $this->filesThatCannotRemove('Failed to remove file "handback.bundle": Permission denied');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $ledger->payloads()[4]['failure']);
+    }
+
+    public function testAnAcceptedBundleWhoseFileCannotBeRemovedFailsTheHandBackCheckWithTheRemovalFailureRecorded(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->handBackFiles = $this->filesThatCannotRemove('Failed to remove file "handback.bundle": Permission denied');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame('Failed to remove file "handback.bundle": Permission denied', $ledger->payloads()[4]['failure']);
+        self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
     }
 
     public function testABuildJobThatHandsBackNoCommitEndsAtTheBuildJobStepWithItsVerdictRecorded(): void
@@ -649,9 +683,22 @@ final class BuildTaskTest extends TestCase
     {
         $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence()), $this->runner, new PhpGate(), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
         $checks = new CheckHandBack(new RepositoryGit(new HardenedGit()), new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
-        $handBacks = new HandBackCheck($checkout, $checks, new Filesystem(), $this->mirrors.'-hand-backs');
+        $handBacks = new HandBackCheck($checkout, $checks, $this->handBackFiles, $this->mirrors.'-hand-backs');
 
         return new BuildTask($issues, $checkout, $this->routing, $builds, $handBacks, $ledger);
+    }
+
+    // Writes the bundle file as the real filesystem does, so the check runs on it, and fails only its removal.
+    private function filesThatCannotRemove(string $message): Filesystem
+    {
+        $real = new Filesystem();
+        $files = self::createStub(Filesystem::class);
+        $files->method('mkdir')->willReturnCallback($real->mkdir(...));
+        $files->method('tempnam')->willReturnCallback($real->tempnam(...));
+        $files->method('dumpFile')->willReturnCallback($real->dumpFile(...));
+        $files->method('remove')->willThrowException(new IOException($message));
+
+        return $files;
     }
 
     // In a clone of the build clone, because the job commits in a clone of its own in the container, and bundled against main, because docker/job/build.sh bundles it so.

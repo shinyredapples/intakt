@@ -41,10 +41,16 @@ final readonly class HandBackCheck
     public function failureOf(BuildTaskRequest $request, string $bundle): ?string
     {
         try {
-            $file = $this->bundleFileOf($bundle);
+            return $this->refusalOfWritten($request, $bundle);
         } catch (IOException $failure) {
+            // Also after an accepted bundle, because a file that cannot be removed leaves the untrusted bundle on disk.
             return $failure->getMessage();
         }
+    }
+
+    private function refusalOfWritten(BuildTaskRequest $request, string $bundle): ?string
+    {
+        $file = $this->bundleFileOf($bundle);
 
         try {
             return $this->refusalOf($request, $file);
