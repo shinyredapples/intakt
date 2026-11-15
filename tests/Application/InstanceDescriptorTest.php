@@ -59,10 +59,18 @@ final class InstanceDescriptorTest extends InstanceTestCase
     public function testTheServerNeverHoldsTheStatusDescriptor(): void
     {
         $statusFile = $this->scratch.'/status';
+        $release = $this->scratch.'/release';
         $caller = $this->callerHoldingManyDescriptors($statusFile);
+        $index = self::stubProject().'/public/index.php';
+        $answer = (string) file_get_contents($index);
+        $this->answerOnlyOnceReleased($index, $release);
 
-        $caller->start();
-        $held = $this->descriptorsOfTheServerWhile($caller);
+        try {
+            $caller->start();
+            $held = $this->descriptorsOfTheServerWhile($caller, $release);
+        } finally {
+            file_put_contents($index, $answer);
+        }
 
         self::assertNotNull($held, 'the server was never seen running');
         self::assertNotContains(realpath($statusFile), $held);
@@ -195,16 +203,26 @@ final class InstanceDescriptorTest extends InstanceTestCase
         return new Process([PHP_BINARY, '-r', $caller], null, $this->environment());
     }
 
+    // The server lives only for the one request the launcher sends, which on a busy machine can end between two looks at /proc; holding the answer keeps it running until it was seen.
+    private function answerOnlyOnceReleased(string $index, string $release): void
+    {
+        file_put_contents($index, "<?php\n\$until = hrtime(true) + 4_000_000_000;\nwhile (!is_file(".var_export($release, true).") && hrtime(true) < \$until) {\n    usleep(10_000);\n}\necho 'ok';\n");
+    }
+
     /**
      * @return list<string>|null
      */
-    private function descriptorsOfTheServerWhile(Process $caller): ?array
+    private function descriptorsOfTheServerWhile(Process $caller, string $release): ?array
     {
         $held = null;
 
         while ($caller->isRunning()) {
             foreach ($this->serverProcesses() as $directory) {
                 $held = [...$held ?? [], ...$this->descriptorTargets($directory)];
+            }
+
+            if (null !== $held) {
+                touch($release);
             }
 
             usleep(20_000);
