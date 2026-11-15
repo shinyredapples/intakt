@@ -6,6 +6,7 @@ namespace Intakt\Tests\Application;
 
 use FilesystemIterator;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -146,6 +147,52 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame(124, $run['exit']);
         self::assertStringContainsString('ran longer than 1 seconds and was killed', $run['errors']);
         self::assertSame('{"status":"ready"}', $run['status']);
+    }
+
+    #[DataProvider('signals')]
+    public function testAConsoleCommandStoppedBySignalExitsWith128PlusTheSignalNumberThroughTheInstance(int $signal, int $expected): void
+    {
+        $command = <<<'PHP'
+            use Symfony\Component\Console\Application;
+            use Symfony\Component\Console\Command\Command;
+            use Symfony\Component\Console\Command\SignalableCommandInterface;
+            use Symfony\Component\Console\Input\ArrayInput;
+            use Symfony\Component\Console\Input\InputInterface;
+            use Symfony\Component\Console\Output\OutputInterface;
+            use Symfony\Component\EventDispatcher\EventDispatcher;
+
+            require $argv[1].'/vendor/autoload.php';
+            $command = new class('wait') extends Command implements SignalableCommandInterface {
+                public function getSubscribedSignals(): array { return [SIGINT, SIGTERM]; }
+                public function handleSignal(int $signal, int|false $previousExitCode = 0): int|false { return $previousExitCode; }
+                protected function execute(InputInterface $input, OutputInterface $output): int
+                {
+                    posix_kill(getmypid(), (int) $_SERVER['argv'][2]);
+                    pcntl_signal_dispatch();
+                    sleep(5);
+
+                    return 0;
+                }
+            };
+            $application = new Application();
+            $application->addCommand($command);
+            $application->setDispatcher(new EventDispatcher());
+            $application->setAutoExit(false);
+            exit($application->run(new ArrayInput(['command' => 'wait'])));
+            PHP;
+
+        $run = $this->runInstance(self::stubProject(), [PHP_BINARY, '-r', $command, self::ROOT, (string) $signal]);
+
+        self::assertSame($expected, $run['exit']);
+    }
+
+    /**
+     * @return iterable<string, array{int, int}>
+     */
+    public static function signals(): iterable
+    {
+        yield 'interrupt' => [SIGINT, 130];
+        yield 'terminate' => [SIGTERM, 143];
     }
 
     /**
