@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Git\Infrastructure;
+
+use Intakt\Core\Git\Contract\BuildCheckout;
+use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Core\Git\Domain\TaskBranch;
+use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
+use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Core\Platform\Contract\ReportableFailure;
+use InvalidArgumentException;
+use Override;
+use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
+
+final readonly class GitBuildCheckout implements BuildCheckout
+{
+    public function __construct(
+        private UpdateMirror $mirrors,
+        private MakeBuildClone $clones,
+    ) {
+    }
+
+    #[Override]
+    public function updateMirror(string $project, string $remote): void
+    {
+        try {
+            $this->mirrors->update($project, $remote);
+        } catch (ProcessFailure $stopped) {
+            // Caught first, because a process failure may also be an InvalidArgumentException, and its message must never be the recorded one.
+            throw BuildCheckoutFailed::stopped($stopped);
+        } catch (InvalidArgumentException|IOException|RepositoryAttributesRefused|LockFailure|ReportableFailure $failure) {
+            throw BuildCheckoutFailed::because($failure);
+        }
+    }
+
+    #[Override]
+    public function makeClone(string $project, string $branch, string $directory): void
+    {
+        try {
+            $this->clones->make($project, new TaskBranch($branch), $directory);
+        } catch (ProcessFailure $stopped) {
+            throw BuildCheckoutFailed::stopped($stopped);
+        } catch (InvalidArgumentException|IOException|RepositoryAttributesRefused|ReportableFailure $failure) {
+            throw BuildCheckoutFailed::because($failure);
+        }
+    }
+}

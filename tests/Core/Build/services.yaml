@@ -1,0 +1,8 @@
+parameters:
+    # Empty unless a run of intakt:build:task names a recording, so the container builds without one.
+    env(BUILD_RECORDING): ''
+
+services:
+    Intakt\Tests\Core\Build\RecordedIssues:
+        autowire: true
+    Intakt\Plugin\GitHubForge\Contract\IssueReads: '@Intakt\Tests\Core\Build\RecordedIssues'
