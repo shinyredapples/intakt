@@ -81,6 +81,55 @@ final class LeftUndoneGateTest extends SandboxTestCase
         self::assertTrue($run->passed('left-undone'), $run->output());
     }
 
+    public function testAMarkerCommentInAFileHoldingANulByteIsReported(): void
+    {
+        $sandbox = $this->changeWithFile('src/Order.php', "<?php\n/* TODO: finish work */\n\$binary = \"\0\";\n");
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertStringContainsString('src/Order.php:2: TODO comment', $run->findingsOf('left-undone'));
+    }
+
+    public function testAMarkerCommentInAFileMarkedAsBinaryIsReported(): void
+    {
+        $sandbox = $this->startedChange();
+        $sandbox->write('.gitattributes', "*.php -diff\n");
+        $sandbox->write('src/Order.php', "<?php\n/* TODO: finish work */\n");
+        $sandbox->commitAll('feat: add a file');
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertStringContainsString('src/Order.php:2: TODO comment', $run->findingsOf('left-undone'));
+    }
+
+    public function testAMarkerCommentInAFileWithCarriageReturnLineEndingsIsReported(): void
+    {
+        $sandbox = $this->changeWithFile('src/Order.php', "<?php\r/* TODO: finish work */\r// FIXME the total\r");
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertStringContainsString('src/Order.php:1: TODO comment', $run->findingsOf('left-undone'));
+    }
+
+    public function testAMarkerCommentAfterCarriageReturnsKeepsTheLineGitNumbersIt(): void
+    {
+        $sandbox = $this->changeWithFile('src/Order.php', "<?php\r\n\r\n/*\r * The order\r * XXX breaks\r */\nfinal class Order {}\n");
+
+        $run = $sandbox->runGate(new LeftUndoneGate());
+
+        self::assertStringContainsString('src/Order.php:3: XXX comment', $run->findingsOf('left-undone'));
+    }
+
+    public function testAReasonedExceptionPassesTheWholeCheck(): void
+    {
+        $sandbox = $this->changeWithFile('src/Order.php', $this->classWithBodyLine('    // TODO(#123): drop once the forge sends the total, because it is computed twice'));
+
+        $run = $sandbox->check('--only=left-undone,comments');
+
+        self::assertTrue($run->passed('left-undone'), $run->output());
+        self::assertTrue($run->passed('comments'), $run->output());
+    }
+
     public function testAMarkerCommentThatExistedBeforeTheChangeIsNotReported(): void
     {
         $sandbox = $this->emptySandbox();

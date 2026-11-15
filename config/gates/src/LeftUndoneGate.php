@@ -9,7 +9,8 @@ final readonly class LeftUndoneGate implements Gate
     // Because fixtures and their copies hold such comments on purpose, as the input a test feeds a rule.
     private const array FIXTURE_PREFIXES = ['tests/Fixtures/', 'fixtures/'];
     private const string HOW_TO_COMPLY = ' comment left in the change; finish the work, or open an issue and write TODO(#<issue>): <reason>';
-    private const array DIFF_OPTIONS = ['--no-color', '--no-ext-diff', '--no-textconv', '--find-renames', '--diff-filter=d'];
+    // Because git prints no lines for a file it takes for binary, such as PHP holding a NUL byte in a string.
+    private const array DIFF_OPTIONS = ['--text', '--no-color', '--no-ext-diff', '--no-textconv', '--find-renames', '--diff-filter=d'];
 
     public function __construct(
         private AddedLines $addedLines = new AddedLines(),
