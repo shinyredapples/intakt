@@ -797,6 +797,26 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame('big', $ledger->payloads()[0]['model']);
     }
 
+    public function testTheStartedRowOfAReviewNamesTheReviewerOfItsConversation(): void
+    {
+        $ledger = new InMemoryLedger();
+        $reviewerId = new UuidV7();
+        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
+
+        $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()), $ledger)->review('alpha', Tier::Strong, $request);
+
+        self::assertSame(['started', $reviewerId->toRfc4122()], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['reviewer'] ?? null]);
+    }
+
+    public function testTheStartedRowOfAReviewWithoutAReviewerIdNamesNoReviewer(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()), $ledger)->review('alpha', Tier::Strong, $this->request());
+
+        self::assertArrayNotHasKey('reviewer', $ledger->payloads()[0]);
+    }
+
     public function testTheStartedRowOfAReviewAnsweredByASubstituteNamesTheSubstitutesModel(): void
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'claude_code', 'model' => 'own', 'substitutes' => [['provider' => 'openai', 'model' => 'sub']]]]]], ['claude_code' => 'disabled']);
