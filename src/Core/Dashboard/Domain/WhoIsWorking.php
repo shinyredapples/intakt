@@ -45,6 +45,6 @@ final readonly class WhoIsWorking
 
         $running = array_filter($round->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Running === $outcome->progress);
 
-        return array_values(array_map(static fn (ReviewerOutcome $outcome): Lane => new Lane($outcome->id, $outcome->role, $outcome->tier, $round->project, $round->change, $round->number, $outcome->since), $running));
+        return array_values(array_map(static fn (ReviewerOutcome $outcome): Lane => new Lane($outcome->id, $outcome->role, $outcome->tier, $round->project, $round->change, $round->number, $outcome->since, $round->round), $running));
     }
 }

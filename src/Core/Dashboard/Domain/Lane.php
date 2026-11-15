@@ -16,6 +16,7 @@ final readonly class Lane
         public string $change,
         public ?int $round,
         public DateTimeImmutable $since,
+        public string $roundId,
     ) {
     }
 }

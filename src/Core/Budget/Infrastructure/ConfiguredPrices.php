@@ -23,6 +23,8 @@ final readonly class ConfiguredPrices implements Prices
     public function __construct(
         #[Autowire(param: BudgetServices::PRICES)]
         private array $prices,
+        #[Autowire(param: BudgetServices::PRICE_DATE)]
+        private ?string $priceDate = null,
     ) {
     }
 
@@ -34,7 +36,7 @@ final readonly class ConfiguredPrices implements Prices
             return Cost::unknown($model ?? self::NO_MODEL);
         }
 
-        return Cost::inUsd($this->dollarsFor($price, $figures));
+        return Cost::inUsd($this->dollarsFor($price, $figures), $this->priceDate);
     }
 
     /**

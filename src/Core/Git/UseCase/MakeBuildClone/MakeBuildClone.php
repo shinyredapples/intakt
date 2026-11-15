@@ -12,6 +12,7 @@ use Intakt\Core\Git\Domain\SourceLine;
 use Intakt\Core\Git\Domain\TaskBranch;
 use InvalidArgumentException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Process;
 use Throwable;
 
@@ -32,6 +33,7 @@ final readonly class MakeBuildClone
      * @throws InvalidArgumentException
      * @throws BuildCloneNotMade
      * @throws RepositoryAttributesRefused
+     * @throws ExceptionInterface
      */
     public function make(string $project, TaskBranch $branch, string $directory): void
     {

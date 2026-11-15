@@ -8,7 +8,8 @@
 <div class="page-head">
     <div>
         <h1>Board</h1>
-        <p class="lead">Every change under review, in the column of where it is now.</p>
+        {% set lead = board.headline %}
+        <p class="lead">{{ lead.text }}{% if lead.firstWaiting %} <a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: lead.firstWaiting.latest.round}) }}">see what</a>.{% endif %}</p>
     </div>
     <div class="actions">
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>

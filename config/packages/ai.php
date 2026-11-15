@@ -143,7 +143,7 @@ return static function (ContainerConfigurator $container): void {
     // The ceilings and prices are the owner's for every account, so they sit beside the projects and go to the budget tree only.
     $budget = array_key_exists('budget', $contents) ? ['budget' => $contents['budget']] : [];
     unset($contents['budget']);
-    /** @var array{budget: array{ceilings: array<string, float>, prices: array<string, array{input: float, output: float, cache_read: float, cache_write: float}>}} $ceilings */
+    /** @var array{budget: array{ceilings: array<string, float>, prices: array<string, array{input: float, output: float, cache_read: float, cache_write: float}>, price_date: string|null}} $ceilings */
     $ceilings = new Processor()->processConfiguration(new BudgetConfiguration(), [$budget]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
@@ -319,6 +319,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(ReviewerForLoopServices::MODES, array_map(static fn (array $project): string => $project['mode'], $projectModes));
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
+    $container->parameters()->set(BudgetServices::PRICE_DATE, $ceilings['budget']['price_date']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)
         ->autowire()

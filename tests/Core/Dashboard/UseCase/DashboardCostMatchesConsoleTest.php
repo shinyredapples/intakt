@@ -104,6 +104,11 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $cost = array_values(array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'cost: ')));
         self::assertCount(1, $cost);
 
-        return substr($cost[0], strlen('cost: '));
+        // The dashboard labels its figures in part 2, so this compares the figure itself, before the console's kind marker.
+        $figure = substr($cost[0], strlen('cost: '));
+
+        $marker = strpos($figure, ' estimated');
+
+        return false === $marker ? $figure : substr($figure, 0, $marker);
     }
 }
