@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
@@ -46,6 +47,9 @@ final class LedgerRounds
     /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable}> */
     private array $judged = [];
 
+    /** @var array<string, ReplayMark> */
+    private array $projectMarks = [];
+
     private readonly LedgerTokens $tokens;
 
     public function __construct(
@@ -54,6 +58,7 @@ final class LedgerRounds
         private readonly ChangeDecision $decision,
         private readonly FailureInWords $failures,
         private readonly RoundEndings $endings,
+        private readonly ReplayMarks $marks,
     ) {
         $this->tokens = new LedgerTokens();
     }
@@ -95,7 +100,7 @@ final class LedgerRounds
         $rounds = [$chosen, ...array_values($others)];
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
-        return new Review(array_map($this->completed(...), $rounds));
+        return new Review(array_map($this->completed(...), $rounds), $this->markOf($chosen->project));
     }
 
     // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review. The ids come from the rounds, not the keys, because PHP turns a key of digits into an integer.
@@ -117,6 +122,12 @@ final class LedgerRounds
         }
 
         return $reviews;
+    }
+
+    // Kept per project for one read, because a board of many changes of one project would otherwise ask the same question for each.
+    private function markOf(string $project): ReplayMark
+    {
+        return $this->projectMarks[$project] ??= $this->marks->ofProject($project);
     }
 
     private function addUsage(RecordedEvent $recorded): void

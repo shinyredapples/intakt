@@ -16,6 +16,9 @@
 <div class="page-head">
     <div>
         <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
+        {% if review.isReplay %}
+        <p class="replay-mark">{{ include('dashboard/components/chip.html.twig', {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
+        {% endif %}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},

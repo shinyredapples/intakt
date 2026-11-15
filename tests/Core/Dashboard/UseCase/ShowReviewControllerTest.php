@@ -20,6 +20,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\RoundEnding;
@@ -60,6 +61,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(ReviewSummary::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(ReplayMarks::class)]
 final class ShowReviewControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewPageShowsEveryRoundOfTheChangeInOrder(): void
@@ -72,6 +74,26 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Review of feat/thing in alpha');
         self::assertSame(['Round 1', 'Round 2'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
+    }
+
+    public function testTheReviewPageOfAProjectFlaggedAsReplayShowsTheReplayMark(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame('Replay A recording played back: its verdicts were never given on this change and never count as one.', $crawler->filter('.page-head .replay-mark')->text());
+    }
+
+    public function testTheReviewPageOfALiveProjectShowsNoReplayMark(): void
+    {
+        $this->flagAsReplay('beta');
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(0, $crawler->filter('.replay-mark'));
     }
 
     public function testEachRoundListsItsReviewersWithTheirVerdicts(): void

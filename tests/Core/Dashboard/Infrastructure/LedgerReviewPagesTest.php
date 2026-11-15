@@ -14,15 +14,18 @@ use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -30,6 +33,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(LedgerReviewPages::class)]
 #[CoversClass(LedgerRounds::class)]
+#[CoversClass(ReplayMarks::class)]
 #[UsesClass(Board::class)]
 #[UsesClass(BoardColumn::class)]
 #[UsesClass(Review::class)]
@@ -123,11 +127,44 @@ final class LedgerReviewPagesTest extends TestCase
         self::assertSame(1.0, $card->cost()->usd);
     }
 
-    private function pagesOn(DashboardLedger $ledger): LedgerReviewPages
+    public function testACardOfAProjectFlaggedAsReplayCarriesTheReplayMark(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+
+        $card = $this->pagesOn($ledger, ['alpha'])->board()->cardsIn(BoardColumn::InReview)[0];
+
+        self::assertSame(ReplayMark::Replay, $card->mark);
+    }
+
+    public function testACardOfAProjectNeverFlaggedCarriesTheLiveMark(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+
+        $card = $this->pagesOn($ledger, ['beta'])->board()->cardsIn(BoardColumn::InReview)[0];
+
+        self::assertSame(ReplayMark::Live, $card->mark);
+    }
+
+    public function testTheReviewPageOfARoundCarriesTheReplayMarkOfItsProject(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->judgeRound('r1');
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        self::assertSame(ReplayMark::Replay, $this->pagesOn($ledger, ['alpha'])->reviewOf('r1')?->mark);
+    }
+
+    /**
+     * @param list<string> $replays
+     */
+    private function pagesOn(DashboardLedger $ledger, array $replays = []): LedgerReviewPages
     {
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
-        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
+        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays)));
     }
 }

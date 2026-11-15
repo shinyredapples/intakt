@@ -28,6 +28,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
 use Intakt\Core\Dashboard\Infrastructure\MessageQueues;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\ProjectStatuses;
 use Intakt\Core\Dashboard\UseCase\ShowStatus\StatusReadModel;
@@ -38,10 +39,12 @@ use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use JsonSchema\Validator;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -60,6 +63,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ReceiverInterface;
 #[CoversClass(LedgerBuildSteps::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
+#[UsesClass(ReplayMarks::class)]
 #[UsesClass(LedgerFailingHeads::class)]
 #[UsesClass(LedgerPayload::class)]
 #[UsesClass(LedgerTokens::class)]
@@ -93,6 +97,9 @@ final class StatusReadModelTest extends TestCase
 
     /** @var array<string, ReceiverInterface> */
     private array $receivers = [];
+
+    /** @var list<string> */
+    private array $replays = [];
 
     protected function setUp(): void
     {
@@ -132,7 +139,7 @@ final class StatusReadModelTest extends TestCase
         $status = $this->read();
 
         self::assertSame([['name' => 'async', 'messages' => 2]], $status['queues']);
-        self::assertSame([['change' => '7', 'round' => 'r1', 'number' => 1, 'started_at' => '2026-10-28T12:00:00+00:00', 'reviewers' => 2, 'steps' => []]], $this->projectOf($status, 'alpha')['lanes']['review']);
+        self::assertSame([['change' => '7', 'mark' => 'live', 'round' => 'r1', 'number' => 1, 'started_at' => '2026-10-28T12:00:00+00:00', 'reviewers' => 2, 'steps' => []]], $this->projectOf($status, 'alpha')['lanes']['review']);
         self::assertSame([], $this->schemaErrorsOf($this->readModel()->json()));
     }
 
@@ -276,7 +283,7 @@ final class StatusReadModelTest extends TestCase
         $project = $this->projectOf($this->read(), 'alpha');
 
         self::assertSame([], $project['lanes']['review']);
-        self::assertSame([['change' => '7', 'round' => 'r1', 'number' => 1, 'decision' => 'approve', 'judged_at' => '2026-10-28T12:00:00+00:00']], $project['last_outcomes']);
+        self::assertSame([['change' => '7', 'mark' => 'live', 'round' => 'r1', 'number' => 1, 'decision' => 'approve', 'judged_at' => '2026-10-28T12:00:00+00:00']], $project['last_outcomes']);
     }
 
     public function testTheEarlierJudgedRoundOfAChangeInReviewAgainIsItsLastOutcome(): void
@@ -398,7 +405,7 @@ final class StatusReadModelTest extends TestCase
     {
         $project = $this->projectOf($this->read(), 'beta');
 
-        self::assertSame(['name' => 'beta', 'lanes' => ['review' => [], 'build' => []], 'guard_decisions' => [], 'waiting_for_owner' => [], 'needs_you' => [], 'last_outcomes' => []], $project);
+        self::assertSame(['name' => 'beta', 'mark' => 'live', 'lanes' => ['review' => [], 'build' => []], 'guard_decisions' => [], 'waiting_for_owner' => [], 'needs_you' => [], 'last_outcomes' => []], $project);
     }
 
     public function testProjectsAreListedByNameAndEachOnce(): void
@@ -417,6 +424,42 @@ final class StatusReadModelTest extends TestCase
         self::assertSame(array_column(SharedHold::cases(), 'value'), $this->schemaAt('properties', 'holds', 'items', 'enum'));
         self::assertSame(array_column(ReviewerProgress::cases(), 'value'), $this->schemaAt(...$project, ...['lanes', 'properties', 'review', 'items', 'properties', 'steps', 'items', 'properties', 'progress', 'enum']));
         self::assertSame([...array_column(Decision::cases(), 'value'), null], $this->schemaAt(...$project, ...['last_outcomes', 'items', 'properties', 'decision', 'enum']));
+    }
+
+    public function testAProjectFlaggedAsReplayAndItsReviewsAreMarkedAsReplay(): void
+    {
+        $this->replays = ['alpha'];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->judgeFindings('r1', ['F1' => 'act']);
+        $this->ledger->startRecordedRoundOf('8', 'r2', 1);
+
+        $alpha = $this->projectOf($this->read(), 'alpha');
+
+        self::assertSame(['replay', ['replay'], ['replay']], [$alpha['mark'], array_column($alpha['lanes']['review'], 'mark'), array_column($alpha['last_outcomes'], 'mark')]);
+    }
+
+    public function testAProjectNeverFlaggedAndItsReviewsAreMarkedAsLive(): void
+    {
+        $this->replays = ['beta'];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->judgeFindings('r1', ['F1' => 'act']);
+        $this->ledger->startRecordedRoundOf('8', 'r2', 1);
+
+        $alpha = $this->projectOf($this->read(), 'alpha');
+
+        self::assertSame(['live', ['live'], ['live']], [$alpha['mark'], array_column($alpha['lanes']['review'], 'mark'), array_column($alpha['last_outcomes'], 'mark')]);
+    }
+
+    public function testAWatchedProjectFlaggedAsReplayIsMarkedBeforeItsFirstReview(): void
+    {
+        $this->replays = ['beta'];
+
+        self::assertSame('replay', $this->projectOf($this->read(), 'beta')['mark']);
+    }
+
+    public function testTheSchemaNamesEveryReplayMarkTheCodeHas(): void
+    {
+        self::assertSame(array_column(ReplayMark::cases(), 'value'), $this->schemaAt('definitions', 'mark', 'enum'));
     }
 
     public function testTheSchemaNamesEveryBuildStepAndStepOutcomeTheCodeHas(): void
@@ -440,20 +483,20 @@ final class StatusReadModelTest extends TestCase
     }
 
     /**
-     * @return array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>}
+     * @return array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, mark: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>}
      */
     private function read(): array
     {
-        /** @var array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status */
+        /** @var array{generated_at: string, holds: list<string>, queues: list<array<string, mixed>>, projects: list<array{name: string, mark: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status */
         $status = json_decode($this->readModel()->json(), true, flags: JSON_THROW_ON_ERROR);
 
         return $status;
     }
 
     /**
-     * @param array{projects: list<array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status
+     * @param array{projects: list<array{name: string, mark: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}>} $status
      *
-     * @return array{name: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}
+     * @return array{name: string, mark: string, lanes: array{review: list<array<string, mixed>>, build: list<array<string, mixed>>}, guard_decisions: list<array<string, mixed>>, waiting_for_owner: list<array<string, mixed>>, needs_you: list<array<string, mixed>>, last_outcomes: list<array<string, mixed>>}
      */
     private function projectOf(array $status, string $name): array
     {
@@ -487,8 +530,9 @@ final class StatusReadModelTest extends TestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
-        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, ['alpha' => [], 'beta' => []]);
+        $marks = new ReplayMarks(new ReplayMarkBus($this->replays));
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
+        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
 
         return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
     }

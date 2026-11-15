@@ -22,6 +22,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -47,6 +48,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(LedgerFailingMains::class)]
 #[UsesClass(FailingMain::class)]
 #[UsesClass(HeadFault::class)]
+#[UsesClass(ReplayMarks::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     public function testTheRootAddressShowsTheBoard(): void
@@ -74,6 +76,26 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertSame('The Code reviewers are reviewing change 42 of alpha. Nothing needs you.', $lead->text());
         self::assertCount(0, $lead->filter('a'));
+    }
+
+    public function testACardOfAProjectFlaggedAsReplayShowsTheReplayMarkOnTheBoard(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $card = $this->browser->request('GET', '/')->filter('article[data-project="alpha"]');
+
+        self::assertSame(['Replay'], $card->filter('.card .top .replay-mark')->each(static fn (Crawler $mark): string => $mark->text()));
+    }
+
+    public function testACardOfALiveProjectShowsNoReplayMarkOnTheBoard(): void
+    {
+        $this->flagAsReplay('beta');
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $card = $this->browser->request('GET', '/')->filter('article[data-project="alpha"]');
+
+        self::assertSame([1, 0], [$card->count(), $card->filter('.replay-mark')->count()]);
     }
 
     public function testABoardAfterAJudgedReviewSaysNothingIsRunning(): void
