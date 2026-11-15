@@ -294,7 +294,46 @@ final class FirstRunControllerTest extends WebTestCase
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
         self::assertSame(['1 AI providers', '2 A project', '3 First review', '4 Your own agent'], $page->filter('ol.steps li')->each(static fn (Crawler $marker): string => $marker->text()));
-        self::assertSame(['done', 'done', 'missing', 'missing'], $page->filter('ol.steps li')->each(static fn (Crawler $marker): string => (string) $marker->attr('class')));
+        self::assertSame(['done', 'done', 'missing current', 'missing'], $page->filter('ol.steps li')->each(static fn (Crawler $marker): string => (string) $marker->attr('class')));
+    }
+
+    public function testTheFirstStepThatIsNotDoneIsTheCurrentStep(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(1, $page->filter('ol.steps li[aria-current="step"]'));
+        self::assertSame('3 First review', $page->filter('ol.steps li[aria-current="step"]')->text());
+    }
+
+    public function testWhenEveryStepIsDoneNoMarkerIsCurrent(): void
+    {
+        $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
+        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('ol.steps li[aria-current]'));
+        self::assertCount(0, $page->filter('ol.steps li.current'));
+    }
+
+    public function testTheFirstReviewButtonSitsInTheStepButtonRow(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(1, $page->filter('#step-first-review .step-nav .btn.primary'));
+    }
+
+    public function testTheReviewLinkSitsInTheStepButtonRow(): void
+    {
+        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(1, $page->filter('#step-first-review .step-nav a.btn.primary'));
     }
 
     public function testTheProgressCountsTheStepsThatAreDone(): void
