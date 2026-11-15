@@ -105,21 +105,15 @@ final class RunBenchCommandTest extends TestCase
 
     private string $results;
 
-    private string|false $temporary;
-
-    // The temporary folder is pointed at an empty one, because the bench builds its checkouts there and the test must see what it leaves.
+    // The checkouts go to a folder of the test, so it can see what the run leaves behind.
     protected function setUp(): void
     {
-        $this->temporary = getenv('TMPDIR');
         $this->workspace = sys_get_temp_dir().'/intakt-bench-run-'.bin2hex(random_bytes(4));
         $this->results = $this->workspace.'-results';
-        new Filesystem()->mkdir($this->workspace);
-        putenv('TMPDIR='.$this->workspace);
     }
 
     protected function tearDown(): void
     {
-        putenv(false === $this->temporary ? 'TMPDIR' : 'TMPDIR='.$this->temporary);
         new Filesystem()->remove([$this->workspace, $this->results]);
     }
 
@@ -163,20 +157,35 @@ final class RunBenchCommandTest extends TestCase
     public function testAFailedReviewEndsTheRunWithoutAFileAndRemovesItsCheckout(): void
     {
         $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willThrowException(new RoundTierNotMapped('alpha', Tier::Standard));
+        $during = 0;
+        $reviews->method('review')->willReturnCallback(function () use (&$during): never {
+            $during = \count(glob($this->workspace.'/*') ?: []);
+
+            throw new RoundTierNotMapped('alpha', Tier::Standard);
+        });
 
         $tester = $this->runCommand(['--project' => 'alpha'], $reviews);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('maps no model to the "standard" tier', $tester->getDisplay());
+        self::assertSame(1, $during);
         self::assertSame([], glob($this->workspace.'/*'));
         self::assertDirectoryDoesNotExist($this->results);
     }
 
     public function testEveryCheckoutIsRemovedAfterASuccessfulRun(): void
     {
-        $this->runCommand(['--project' => 'alpha'], $this->reviews());
+        $during = [];
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(function () use (&$during): ChangeReview {
+            $during[] = \count(glob($this->workspace.'/*') ?: []);
 
+            return $this->reviews()->review(...\func_get_args());
+        });
+
+        $this->runCommand(['--project' => 'alpha'], $reviews);
+
+        self::assertSame(array_fill(0, 8, 1), $during);
         self::assertSame([], glob($this->workspace.'/*'));
     }
 
@@ -199,7 +208,7 @@ final class RunBenchCommandTest extends TestCase
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn($panel);
         $command = new RunBenchCommand(
-            new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($reviews, new RunClassifier(new DefectMatcher()))),
+            new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($reviews, new RunClassifier(new DefectMatcher())), $this->workspace),
             new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), new MockClock('2026-11-15 10:30:00'), $this->results),
         );
         $tester = new CommandTester($command);

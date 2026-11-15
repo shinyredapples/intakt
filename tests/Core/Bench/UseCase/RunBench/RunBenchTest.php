@@ -110,7 +110,7 @@ final class RunBenchTest extends KernelTestCase
 
     protected function tearDown(): void
     {
-        new Filesystem()->remove($this->results);
+        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
         parent::tearDown();
     }
 
@@ -153,7 +153,7 @@ final class RunBenchTest extends KernelTestCase
         $vendor = new UsageRecordingVendor($verdicts, $this->fixture->ledger(), $this->fixture->clock, $byRole);
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn($this->panel());
-        $run = new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($this->reviewChange($vendor), new RunClassifier(new DefectMatcher())));
+        $run = new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($this->reviewChange($vendor), new RunClassifier(new DefectMatcher())), $this->results.'-checkouts');
         $file = new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), $this->fixture->clock, $this->results);
 
         /** @var ResultDocument $decoded */
