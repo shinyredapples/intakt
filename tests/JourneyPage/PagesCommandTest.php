@@ -137,7 +137,7 @@ final class PagesCommandTest extends TestCase
 
     private function runPages(string $recorded = self::FIXTURES.'/api'): Process
     {
-        $process = new Process([PHP_BINARY, 'bin/pages', 'site', '--recorded='.$recorded],$this->root);
+        $process = new Process([PHP_BINARY, 'bin/pages', 'site', '--recorded='.$recorded], $this->root);
         $process->run();
 
         return $process;
