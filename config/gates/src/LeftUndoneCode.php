@@ -9,10 +9,12 @@ final readonly class LeftUndoneCode
     private const array TEST_SKIPS = ['marktestskipped', 'marktestincomplete'];
     private const array CALL_OPERATORS = [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON];
     private const array CLASS_NAMES = [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_NAME_RELATIVE];
-    private const string SKIP_ATTRIBUTE = '/^(?:.*\\\\)?(?:Skip|Incomplete)/i';
-    private const string NOT_IMPLEMENTED = '/\b(?:not (?:yet )?implemented|unimplemented)\b/i';
+    private const string SKIP_ATTRIBUTE = '/(?:^|\\\\)(?:Skip|Incomplete)[^\\\\]*$/i';
+    private const string NOT_IMPLEMENTED = '/\b(?:not\s+(?:yet\s+)?implemented|unimplemented)\b/i';
     private const string NOT_IMPLEMENTED_CLASS = '/(?:NotImplemented|Unimplemented)\w*$/i';
     private const string REASON = '/[[:alpha:]]/';
+    private const string STRING_QUOTES = '/^[bB]?([\'"])(.*)\1$/s';
+    private const string ESCAPE_SEQUENCE = '/\\\\(?:[0-7]{1,3}|x[[:xdigit:]]{1,2}|u\{[[:xdigit:]]*\}|.)/';
     private const string REASONED_THROW = '/^(?:\/\/|#)\s*(?:TODO|FIXME|XXX)'.LeftUndoneComments::ISSUE_REFERENCE.'.*[[:alpha:]]/i';
     private const string SKIP_HOW_TO_COMPLY = ' without a reason; pass a message naming the missing tool or outside condition on the same line, or make the test run';
     private const string THROW_HOW_TO_COMPLY = 'not-implemented throw left in the change; implement it, or open an issue and add // TODO(#<issue>): <reason> on the same line';
@@ -91,10 +93,22 @@ final readonly class LeftUndoneCode
     private function unreasonedSkip(LeftUndoneTokens $tokens, int $nameIndex, string $kind): array
     {
         $line = $tokens->line($nameIndex);
-        // Because a string can run over several lines, while only its text on the line of the name is a reason there.
-        $reasoned = array_any($tokens->stringsInArguments($nameIndex), static fn (array $string): bool => 1 === preg_match(self::REASON, explode("\n", $string[0])[$line - $string[1]] ?? ''));
+        $reasoned = array_any($tokens->stringsInArguments($nameIndex), fn (array $string): bool => $this->givesAReasonOn($line, $string));
 
         return $reasoned ? [] : [[$line, $tokens->line($tokens->argumentsEnd($nameIndex)), $kind.self::SKIP_HOW_TO_COMPLY]];
+    }
+
+    /**
+     * @param array{string, int} $string
+     */
+    private function givesAReasonOn(int $line, array $string): bool
+    {
+        $content = (string) preg_replace(self::STRING_QUOTES, '$2', $string[0]);
+        // Because a string can run over several lines, while only its text on the line of the name is a reason there.
+        $textOnLine = explode("\n", $content)[$line - $string[1]] ?? '';
+
+        // Because an escape such as \t or \n holds a letter in the source but none in the message.
+        return 1 === preg_match(self::REASON, (string) preg_replace(self::ESCAPE_SEQUENCE, '', $textOnLine));
     }
 
     /**

@@ -28,6 +28,8 @@ final class LeftUndoneCodeTest extends TestCase
         yield 'an interpolated message' => ['throw new LogicException("$method not implemented");'];
         yield 'a formatted message' => ["throw new LogicException(sprintf('%s is not yet implemented', \$name));"];
         yield 'a message on the next line' => ["throw new LogicException(\n    'Not implemented',\n);"];
+        yield 'a message with two spaces between its words' => ["throw new LogicException('Not  implemented');"];
+        yield 'a message with a tab between its words' => ["throw new LogicException(\"not\tyet implemented\");"];
     }
 
     #[DataProvider('notImplementedThrows')]
@@ -47,6 +49,8 @@ final class LeftUndoneCodeTest extends TestCase
         yield 'a class that merely holds the word implemented' => ["throw new ImplementedTwiceException('Order is empty');"];
         yield 'a message about another sentence' => ["throw new LogicException('Refunds are implemented by the forge');"];
         yield 'a reasoned exception on the throw line' => ["throw new LogicException( // TODO(#123): the forge sends no total yet\n    'Not implemented',\n);"];
+        yield 'a hash comment with a lower-case fixme' => ["throw new LogicException('Not implemented'); # fixme(#123): the forge sends no total yet"];
+        yield 'a line comment with xxx' => ["throw new LogicException('Not implemented'); // XXX(#123): the forge sends no total yet"];
     }
 
     #[DataProvider('throwsThatAreNotAboutMissingWork')]
@@ -73,6 +77,31 @@ final class LeftUndoneCodeTest extends TestCase
         yield 'a mixed-case static call' => ['self::MarkTestIncomplete();'];
         yield 'a nullsafe call' => ['$this?->markTestSkipped();'];
         yield 'a lower-case attribute' => ['#[skip]'];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function skipAttributes(): iterable
+    {
+        yield 'a bare skip' => ['#[Skip]'];
+        yield 'a bare incomplete' => ['#[Incomplete]'];
+        yield 'a qualified name whose last segment starts with Skip' => ['#[\\Vendor\\SkipIf]'];
+    }
+
+    #[DataProvider('skipAttributes')]
+    public function testAnAddedSkipAttributeIsReported(string $code): void
+    {
+        $findings = new LeftUndoneCode()->findingsOn('tests/OrderTest.php', "<?php\n".$code."\nfunction testOrder() {}", [2]);
+
+        self::assertStringContainsString('attribute without a reason', $findings[2] ?? '');
+    }
+
+    public function testAnAttributeWhoseNamespaceOnlyStartsWithSkipIsNotReported(): void
+    {
+        $findings = new LeftUndoneCode()->findingsOn('tests/OrderTest.php', "<?php\n#[\\Skipper\\Attr]\nfunction testOrder() {}", [2]);
+
+        self::assertSame([], $findings);
     }
 
     #[DataProvider('skipsInAnotherLetterCase')]
@@ -112,6 +141,8 @@ final class LeftUndoneCodeTest extends TestCase
         yield 'a double-quoted message' => ['self::markTestIncomplete("the forge sends no total yet");'];
         yield 'an attribute with a named reason' => ["#[Skip(reason: 'needs the docker socket')]"];
         yield 'a string that goes on after the reason on the line' => ["\$this->markTestSkipped('needs the docker socket\n');"];
+        yield 'a reason with a binary prefix' => ["\$this->markTestSkipped(b'ext-pcntl is not installed');"];
+        yield 'a reason with an escape sequence in it' => ['$this->markTestSkipped("needs\tdocker");'];
     }
 
     #[DataProvider('skipsWithAReason')]
@@ -136,6 +167,12 @@ final class LeftUndoneCodeTest extends TestCase
         yield 'a heredoc reason' => ["\$this->markTestSkipped(<<<TEXT\nneeds the docker socket\nTEXT);"];
         yield 'a call after a comment' => ['$this->markTestSkipped /* why */ ();'];
         yield 'a call in braces inside a string' => ['$text = "{$this->markTestSkipped()}";'];
+        yield 'a tab escape in double quotes' => ['$this->markTestSkipped("\\t");'];
+        yield 'a newline escape in single quotes' => ["\$this->markTestSkipped('\\n');"];
+        yield 'an empty binary string' => ["\$this->markTestSkipped(b'');"];
+        yield 'a unicode escape' => ['$this->markTestSkipped("\\u{2003}");'];
+        yield 'a first-class callable of a method call' => ['$skip = $this->markTestIncomplete(...);'];
+        yield 'a first-class callable of a static call' => ['$skip = self::markTestSkipped(...);'];
     }
 
     #[DataProvider('skipsWithoutAReasonOnTheirLine')]
