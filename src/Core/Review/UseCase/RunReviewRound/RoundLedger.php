@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
@@ -97,7 +98,10 @@ final readonly class RoundLedger
     }
 
     // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
-    public function judgeDone(ReviewRound $round, JudgedFindings $judged): void
+    /**
+     * @param list<DroppedFinding> $dropped
+     */
+    public function judgeDone(ReviewRound $round, JudgedFindings $judged, array $dropped): void
     {
         $act = array_map(static fn (Finding $finding): string => $finding->id, $judged->actList);
 
@@ -106,6 +110,7 @@ final readonly class RoundLedger
             $act,
             array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
             $this->recordedFindings($judged->findings, $act),
+            $dropped,
         ));
     }
 

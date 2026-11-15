@@ -37,9 +37,9 @@ final readonly class JudgeRoundHandler
             return;
         }
 
-        $findings = $this->rounds->findingsOf($round);
-        $judged = JudgedFindings::of($this->judgementOf($round, $findings), $findings);
-        $this->rounds->record($round, $judged);
+        $checked = $this->rounds->checkedFindingsOf($round);
+        $judged = JudgedFindings::of($this->judgementOf($round, $checked->kept), $checked->kept);
+        $this->rounds->record($round, $judged, $checked->dropped);
         $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
     }
 

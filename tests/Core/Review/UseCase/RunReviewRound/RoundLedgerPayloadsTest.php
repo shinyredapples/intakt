@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgedFinding;
@@ -33,8 +39,11 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Serializer\SerializerInterface;
+use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ReviewStarted::class)]
+#[CoversClass(DroppedFinding::class)]
+#[UsesClass(LedgerPayloads::class)]
 #[CoversClass(ReviewerStarted::class)]
 #[CoversClass(VerdictReceived::class)]
 #[CoversClass(CatchUpOwed::class)]
@@ -117,7 +126,31 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[]},{"id":"f2","severity":"P3","text":"A nit.","merged":[]}]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[]},{"id":"f2","severity":"P3","text":"A nit.","merged":[]}],"dropped":[]}', $this->written($done));
+    }
+
+    public function testADoneJudgeIsWrittenWithEachDroppedFindingAndItsReason(): void
+    {
+        $done = new JudgeDone(self::ROUND, [], [], [], [new DroppedFinding('F1', 'It quotes `grepName`, which is in neither the change nor the files it touches.')]);
+
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[{"id":"F1","reason":"It quotes `grepName`, which is in neither the change nor the files it touches."}]}', $this->written($done));
+    }
+
+    public function testADroppedFindingReadsBackFromTheRecordedJudgeDone(): void
+    {
+        $ledger = new InMemoryLedger();
+        $dropped = [new DroppedFinding('F1', 'It quotes `grepName`, which is in neither the change nor the files it touches.')];
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer())->judgeDone(new RoundFixture(self::getContainer())->start(1), JudgedFindings::of(new Judgement([]), []), $dropped);
+
+        self::assertEquals($dropped, $this->readBack($ledger->payloads()[0])?->dropped);
+    }
+
+    public function testAJudgeDoneRecordedBeforeDroppedFindingsExistedReadsWithNoneDropped(): void
+    {
+        $judged = $this->readBack(['round' => self::ROUND, 'act' => ['F1'], 'follow_ups' => [], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'A bug.']]]);
+
+        self::assertSame([['F1'], []], [$judged?->act, $judged?->dropped]);
     }
 
     public function testADoneJudgeRecordsTwoActFindingsAtOnePlaceAsTheActEntryThatNamesTheMergedId(): void
@@ -127,7 +160,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $findings = [$this->findingAt('F1', Severity::P2, 7), $this->findingAt('F2', Severity::P1, 7), $this->findingAt('F3', Severity::P3, 8)];
         $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act), new JudgedFinding('F3', Mark::Defer)]);
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer())->judgeDone($round, JudgedFindings::of($judgement, $findings));
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer())->judgeDone($round, JudgedFindings::of($judgement, $findings), []);
 
         $payload = $ledger->payloads()[0];
         self::assertSame(['F1', 'F2'], $payload['act']);
@@ -140,7 +173,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
     {
-        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
     }
 
     public function testTheLedgerSpreadsTheReviewerIdentityBeforeTheEventsOwnKeys(): void
@@ -160,6 +193,16 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     private function written(object $payload): string
     {
         return $this->serializer()->serialize($payload, 'json');
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function readBack(array $payload): ?JudgeDone
+    {
+        $recorded = new RecordedEvent(new UuidV7(), new LedgerEvent(LedgerEventKind::JudgeDone, json_encode($payload, JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-11-15 12:00:00'));
+
+        return new LedgerPayloads($this->serializer())->of($recorded, JudgeDone::class);
     }
 
     private function serializer(): SerializerInterface

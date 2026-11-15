@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUp;
@@ -19,9 +20,12 @@ use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingLedger;
+use Intakt\Core\Review\Domain\QuoteCheck;
+use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
+use Intakt\Core\Review\UseCase\JudgeRound\ChangeText;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeLimited;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
@@ -59,6 +63,10 @@ use Throwable;
 #[CoversClass(StoredFindings::class)]
 #[CoversClass(FindingLedger::class)]
 #[CoversClass(RoundTransition::class)]
+#[UsesClass(ChangeText::class)]
+#[UsesClass(QuotesInChange::class)]
+#[UsesClass(QuoteCheck::class)]
+#[UsesClass(DroppedFinding::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(RoundJudged::class)]
 #[UsesClass(FollowUp::class)]
@@ -315,6 +323,55 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
+    public function testAFindingQuotingANameAbsentFromTheChangeNeverReachesTheJudgeAndIsRecordedAsDroppedWithItsReason(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->finding('B', Severity::P2)]);
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertSame([['F2', 'Text of B.']], $this->idsAndTexts($asked));
+        self::assertSame(['F2'], $this->judgeDonePayloads()[0]['act']);
+        self::assertSame([['id' => 'F1', 'reason' => 'It quotes `grepName`, which is in neither the change nor the files it touches.']], $this->judgeDonePayloads()[0]['dropped']);
+    }
+
+    public function testAFindingWhoseQuoteIsInTheChangeReachesTheJudgeUnchanged(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, 'The `Thing` class keeps the `old` value.')]);
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertEquals([$this->quoting('F1', Severity::P1, 'The `Thing` class keeps the `old` value.')], $asked->findings);
+        self::assertSame([], $this->judgeDonePayloads()[0]['dropped']);
+    }
+
+    public function testADroppedP1AtTheSamePlaceAsARealFindingIsNeverMergedWithIt(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, 'The `new` line runs a shell.')]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        $done = $this->judgeDonePayloads()[0];
+        self::assertSame(['F2'], $done['act']);
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => 'The `new` line runs a shell.', 'merged' => []]], $done['findings']);
+    }
+
+    public function testARoundWhoseEveryFindingIsDroppedIsJudgedWithoutAskingTheJudge(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.')]);
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        self::assertSame(0, $judge->calls);
+        self::assertSame(RoundState::Judged, $this->fixture->round($round->id()->toRfc4122())->state());
+    }
+
     /**
      * @return iterable<string, array{Throwable}>
      */
@@ -365,6 +422,22 @@ final class JudgeRoundTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+
+        return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    private function quoting(string $id, Severity $severity, string $text): Finding
+    {
+        return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
+    }
+
     private function judgingOf(ReviewRound $round): JudgeRound
     {
         return new JudgeRound($round->id()->toRfc4122());
@@ -375,7 +448,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true]), $this->judgeDonePayloads());
     }
 
     /**

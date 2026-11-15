@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
-use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgedFindings;
+use Intakt\Core\Review\Domain\QuoteCheck;
+use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
@@ -18,6 +20,7 @@ final readonly class JudgedRounds
         private ReviewRounds $rounds,
         private StoredFindings $findings,
         private RoundLedger $ledger,
+        private ChangeText $changeText,
     ) {
     }
 
@@ -29,20 +32,21 @@ final readonly class JudgedRounds
         return RoundState::Judged === $round->state() ? null : $round;
     }
 
-    /**
-     * @return list<Finding>
-     */
-    public function findingsOf(ReviewRound $round): array
+    // Checked before the judge, so a finding that quotes a name the change does not hold is never judged, never on the act list and never merged with a real one.
+    public function checkedFindingsOf(ReviewRound $round): QuoteCheck
     {
-        return $this->findings->reportedIn($round);
+        return new QuotesInChange()->check($this->findings->reportedIn($round), $this->changeText->of($round->checkoutRoot(), $round->diff()));
     }
 
     // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model.
-    public function record(ReviewRound $round, JudgedFindings $judged): void
+    /**
+     * @param list<DroppedFinding> $dropped
+     */
+    public function record(ReviewRound $round, JudgedFindings $judged, array $dropped): void
     {
-        $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged): void {
+        $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged, $dropped): void {
             if ($this->findings->markJudged($locked)) {
-                $this->ledger->judgeDone($locked, $judged);
+                $this->ledger->judgeDone($locked, $judged, $dropped);
             }
         });
     }
