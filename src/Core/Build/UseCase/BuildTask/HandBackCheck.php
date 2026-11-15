@@ -16,8 +16,11 @@ use InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
+use Symfony\Component\Process\Exception\ProcessSignaledException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 
-// Checked against the project's mirror, because the check needs a bare repository whose HEAD names main, and the build clone's HEAD names the task's branch.
+// Checked against the project's mirror, because the check needs a bare repository whose HEAD names main, and the build clone's HEAD names the task's branch; an accepted head then moves the clone's branch, because the job committed in a clone of its own.
 final readonly class HandBackCheck
 {
     // Never asked, because a first build has no rework that asks for a merge of main.
@@ -64,10 +67,28 @@ final readonly class HandBackCheck
             // No credentials, because the build job mounts none yet, so there is nothing to redact.
             $handBack = new HandBack($this->checkout->mirrorOf($request->project), $request->branch, $file, self::MERGE_OF_MAIN_ASKED, new JobCredentials());
             $result = $this->checks->check($handBack);
+
+            if ($result instanceof RefusedHandBack) {
+                return $result->reason();
+            }
+
+            $this->checkout->takeCheckedHead($request->project, $request->branch, $result->head, $request->directory);
+        } catch (ProcessFailure $stopped) {
+            // Caught first, because a process failure may also be an InvalidArgumentException, and its message names the whole command line.
+            return $this->stoppedBy($stopped);
         } catch (BuildCheckoutFailed|InvalidArgumentException|HandBackNotChecked|RepositoryAttributesRefused $failure) {
             return $failure->getMessage();
         }
 
-        return $result instanceof RefusedHandBack ? $result->reason() : null;
+        return null;
+    }
+
+    private function stoppedBy(ProcessFailure $stopped): string
+    {
+        return match (true) {
+            $stopped instanceof ProcessTimedOutException => sprintf('the hand-back check timed out after %s seconds', $stopped->getExceededTimeout()),
+            $stopped instanceof ProcessSignaledException => sprintf('the hand-back check was killed by signal %d', $stopped->getSignal()),
+            default => 'the hand-back check could not run',
+        };
     }
 }

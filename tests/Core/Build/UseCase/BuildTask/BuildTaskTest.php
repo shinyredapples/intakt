@@ -36,6 +36,7 @@ use Intakt\Core\Git\Domain\TaskBranch;
 use Intakt\Core\Git\Infrastructure\GitBuildCheckout;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
+use Intakt\Core\Git\UseCase\TakeCheckedHead\TakeCheckedHead;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
@@ -114,6 +115,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(JobCredentials::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(MakeBuildClone::class)]
+#[UsesClass(TakeCheckedHead::class)]
 #[UsesClass(MirrorNotUpdated::class)]
 #[UsesClass(BuildCloneNotMade::class)]
 #[UsesClass(Mirrors::class)]
@@ -194,7 +196,7 @@ final class BuildTaskTest extends TestCase
     protected function tearDown(): void
     {
         $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs']);
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs']);
         $this->remote->remove();
     }
 
@@ -215,6 +217,8 @@ final class BuildTaskTest extends TestCase
         self::assertSame('7', $ledger->payloads()[0]['task']);
         self::assertNull($ledger->payloads()[4]['failure']);
         self::assertFileExists($this->clone.'/a.txt');
+        self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
+        self::assertSame('', $this->inClone('status', '--porcelain'));
         self::assertSame("Build task 7\n", $this->inClone('log', '-1', '--format=%s', 'feat/task'));
         self::assertSame("commit\n", $this->git(['--git-dir='.new Mirrors($this->mirrors)->pathOf('alpha'), 'cat-file', '-t', trim($this->inClone('rev-parse', 'feat/task'))], $this->mirrors));
         self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
@@ -245,6 +249,38 @@ final class BuildTaskTest extends TestCase
         self::assertSame(BuildStep::HandBackCheck, $outcome->last);
         self::assertSame(HandBackRefusal::NamesAnotherRef->reason(), $outcome->failure);
         self::assertSame('failed', $ledger->payloads()[4]['outcome']);
+        self::assertFileDoesNotExist($this->clone.'/b.txt');
+    }
+
+    public function testAGitCallKilledInTheHandBackCheckEndsThereWithFixedWordsAsItsRecordedFailure(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->programs = new ProgramOnPath();
+        $this->programs->killOn('git', 'unbundle');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('the hand-back check was killed by signal 15', $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame('the hand-back check was killed by signal 15', $ledger->payloads()[4]['failure']);
+        self::assertFileDoesNotExist($this->clone.'/b.txt');
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
+    public function testAGitCallKilledWhileTheCloneTakesTheCheckedHeadEndsAtTheHandBackCheckWithFixedWords(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->programs = new ProgramOnPath();
+        $this->programs->killOn('git', '--hard');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('git was killed by signal 15', $outcome->failure);
+        self::assertSame('git was killed by signal 15', $ledger->payloads()[4]['failure']);
     }
 
     public function testAHandBackCheckWhoseScannerCannotRunEndsThereWithItsMessage(): void
@@ -616,19 +652,20 @@ final class BuildTaskTest extends TestCase
         return new BuildTask($issues, $checkout, $this->routing, $builds, $handBacks, $ledger);
     }
 
-    // Commits in the clone, because the check accepts only a bundle built on what the mirror holds, as docker/job/build.sh bundles it.
+    // Commits in a clone of the build clone, as the job commits in its own clone in the container, and bundles what the mirror lacks, as docker/job/build.sh bundles it.
     private function committingRunner(string $ref = 'feat/task'): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($ref): JobResult {
-            $clone = $spec->inputs[0]->hostPath;
-            new Filesystem()->dumpFile($clone.'/b.txt', 'two');
-            $this->git(['add', 'b.txt'], $clone);
-            $this->git([...self::IDENTITY, 'commit', '--quiet', '-m', 'Build task 7'], $clone);
-            $this->git(['update-ref', 'refs/heads/'.$ref, 'HEAD'], $clone);
-            $this->git(['bundle', 'create', '--quiet', $clone.'.bundle', $ref, '^main'], $clone);
-            $bundle = (string) file_get_contents($clone.'.bundle');
-            unlink($clone.'.bundle');
+            $job = $this->clone.'-job';
+            $this->git(['clone', '--quiet', $spec->inputs[0]->hostPath, $job], dirname($job));
+            new Filesystem()->dumpFile($job.'/b.txt', 'two');
+            $this->git(['add', 'b.txt'], $job);
+            $this->git([...self::IDENTITY, 'commit', '--quiet', '-m', 'Build task 7'], $job);
+            $this->git(['update-ref', 'refs/heads/'.$ref, 'HEAD'], $job);
+            $this->git(['bundle', 'create', '--quiet', $job.'.bundle', $ref, '^origin/main'], $job);
+            $bundle = (string) file_get_contents($job.'.bundle');
+            new Filesystem()->remove([$job, $job.'.bundle']);
 
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => "feat: task 7\n"]));
         });
@@ -675,7 +712,7 @@ final class BuildTaskTest extends TestCase
 
     private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
     {
-        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors), $mirrors);
+        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
     }
 
     private function mirrorUpdate(Mirrors $mirrors, PersistingStoreInterface $locks): UpdateMirror
