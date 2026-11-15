@@ -42,7 +42,7 @@
                     "lanes": {
                         "type": "object",
                         "additionalProperties": false,
-                        "required": ["review"],
+                        "required": ["review", "build"],
                         "properties": {
                             "review": {
                                 "description": "Rounds in progress, newest first.",
@@ -71,6 +71,22 @@
                                                 }
                                             }
                                         }
+                                    }
+                                }
+                            },
+                            "build": {
+                                "description": "Each task intakt:build:task ran, with the last step it recorded, newest first; a failed step is where the run stopped.",
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": ["task", "step", "outcome", "failure", "ended_at"],
+                                    "properties": {
+                                        "task": {"type": "string", "minLength": 1},
+                                        "step": {"enum": ["task", "mirror", "clone"]},
+                                        "outcome": {"enum": ["passed", "failed"]},
+                                        "failure": {"type": ["string", "null"]},
+                                        "ended_at": {"$ref": "#/definitions/moment"}
                                     }
                                 }
                             }
