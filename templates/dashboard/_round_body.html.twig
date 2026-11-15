@@ -27,7 +27,7 @@
                 <td>{{ outcome.tier }}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</td>
                 <td>{{ outcome.decision ?? '' }}</td>
-                <td class="num">{% if outcome.findings is not null %}{{ outcome.findings }} {{ include(kind_label, {kind: kinds.Counted}, with_context = false) }}{% endif %}</td>
+                <td class="num">{% if outcome.findings is not null %}{{ outcome.findings }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-reviewer-' ~ outcome.id}, with_context = false) }}{% endif %}</td>
                 <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
                 <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if running and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">
@@ -75,7 +75,7 @@
         <tbody>
             <tr>
                 {% for tokens in [reviewed.tokens.prompt, reviewed.tokens.cacheRead, reviewed.tokens.cacheWrite, reviewed.tokens.cached, reviewed.tokens.completion, reviewed.tokens.total] %}
-                <td class="num">{{ tokens }} {{ include(kind_label, {kind: kinds.Measured}, with_context = false) }}</td>
+                <td class="num">{{ tokens }} {{ include(kind_label, {kind: kinds.Measured, at: 'round-' ~ reviewed.round ~ '-tokens-' ~ loop.index}, with_context = false) }}</td>
                 {% endfor %}
                 <td>{{ reviewed.cost.reading }}</td>
             </tr>
