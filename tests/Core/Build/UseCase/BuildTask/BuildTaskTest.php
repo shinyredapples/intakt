@@ -4,11 +4,28 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Contract\BuildFacts;
+use Intakt\Core\Build\Contract\BuildRouting;
+use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\TierChoice;
+use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\ModelRouting;
+use Intakt\Core\Build\Domain\RoutingRules;
+use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskOutcome;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
+use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
+use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
@@ -20,11 +37,27 @@ use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\UpdateMirror\MirrorNotUpdated;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
+use Intakt\Core\Job\Contract\JobCause;
+use Intakt\Core\Job\Contract\JobEgress;
+use Intakt\Core\Job\Contract\JobEnd;
+use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobInput;
+use Intakt\Core\Job\Contract\JobLimits;
+use Intakt\Core\Job\Contract\JobOutput;
+use Intakt\Core\Job\Contract\JobRefused;
+use Intakt\Core\Job\Contract\JobResult;
+use Intakt\Core\Job\Contract\JobRunner;
+use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PathGlob;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
+use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
+use Intakt\Tests\Core\Build\ScriptedJobRunner;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
@@ -57,20 +90,65 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(GitCall::class)]
 #[UsesClass(IssueListing::class)]
 #[UsesClass(Issues::class)]
+#[UsesClass(ScriptedJobRunner::class)]
+#[UsesClass(RunBuildJob::class)]
+#[UsesClass(BuildJob::class)]
+#[UsesClass(BuildJobOutcome::class)]
+#[UsesClass(BuildVerdict::class)]
+#[UsesClass(BuildBrief::class)]
+#[UsesClass(BuilderPrompt::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(PhpGate::class)]
+#[UsesClass(ConfiguredBuildRouting::class)]
+#[UsesClass(BuildRoutingNotConfigured::class)]
+#[UsesClass(ModelRouting::class)]
+#[UsesClass(RoutingRules::class)]
+#[UsesClass(BuildFacts::class)]
+#[UsesClass(TierChoice::class)]
+#[UsesClass(PathGlob::class)]
+#[UsesClass(JobSpec::class)]
+#[UsesClass(JobId::class)]
+#[UsesClass(JobInput::class)]
+#[UsesClass(JobLimits::class)]
+#[UsesClass(JobEgress::class)]
+#[UsesClass(JobResult::class)]
+#[UsesClass(JobEnd::class)]
+#[UsesClass(JobOutput::class)]
 final class BuildTaskTest extends TestCase
 {
+    private const string SCRIPT = __DIR__.'/../../../../../docker/job/build.sh';
+
+    private const string IMAGE = 'intakt-job-alpha:1';
+
     private string $mirrors;
 
     private string $clone;
+
+    private string $output;
 
     private TemporaryRepository $remote;
 
     private ?ProgramOnPath $programs = null;
 
+    private BuildRouting $routing;
+
+    private TierResolver $tiers;
+
+    private JobRunner $runner;
+
     protected function setUp(): void
     {
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
         $this->clone = $this->mirrors.'-clone';
+        $this->output = $this->mirrors.'-output';
+        $this->routing = new ConfiguredBuildRouting(['alpha' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => []]], new ModelRouting());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $this->tiers = $tiers;
+        $this->runner = new ScriptedJobRunner($this->output);
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
         $this->remote = new TemporaryRepository();
         $this->remote->commitFile('a.txt', 'one');
     }
@@ -78,24 +156,130 @@ final class BuildTaskTest extends TestCase
     protected function tearDown(): void
     {
         $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone]);
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->output, $this->mirrors.'-prompts']);
         $this->remote->remove();
     }
 
-    public function testATaskWhoseStepsAllPassRecordsTaskMirrorAndCloneInOrder(): void
+    public function testATaskWhoseStepsAllPassRecordsEveryStepUpToTheBuildJobInOrder(): void
     {
         $ledger = new InMemoryLedger();
 
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
 
         self::assertFalse($outcome->failed());
-        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob], $outcome->passedSteps());
         self::assertSame('Task 7', $outcome->task?->title);
-        self::assertSame([LedgerEventKind::BuildStepEnded, LedgerEventKind::BuildStepEnded, LedgerEventKind::BuildStepEnded], $ledger->kinds());
-        self::assertSame(['task', 'mirror', 'clone'], array_column($ledger->payloads(), 'step'));
-        self::assertSame(['passed', 'passed', 'passed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame(array_fill(0, 4, LedgerEventKind::BuildStepEnded), $ledger->kinds());
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'passed'], array_column($ledger->payloads(), 'outcome'));
         self::assertSame('7', $ledger->payloads()[0]['task']);
+        self::assertNull($ledger->payloads()[3]['failure']);
         self::assertFileExists($this->clone.'/a.txt');
+    }
+
+    public function testABuildJobThatHandsBackNoCommitEndsAtTheBuildJobStepWithItsVerdictRecorded(): void
+    {
+        new Filesystem()->remove($this->output.'/'.RunBuildJob::BUNDLE);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame(BuildVerdict::NoCommits->reason(), $outcome->failure);
+        self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone], $outcome->passedSteps());
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame(BuildVerdict::NoCommits->reason(), $ledger->payloads()[3]['failure']);
+    }
+
+    public function testABuildJobWithoutPullRequestTextEndsAtTheBuildJobStep(): void
+    {
+        new Filesystem()->remove($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame(BuildVerdict::NoPullRequestText->reason(), $outcome->failure);
+        self::assertSame('failed', $ledger->payloads()[3]['outcome']);
+    }
+
+    public function testABuildJobTheRunnerRefusesEndsAtTheBuildJobStepWithItsMessage(): void
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willThrowException(JobRefused::forLimits());
+        $this->runner = $runner;
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertSame('A job needs a positive memory limit, CPU share and run time.', $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+    }
+
+    public function testAProjectWithoutRoutingRulesEndsAtTheBuildJobStepAndNoJobRuns(): void
+    {
+        $runner = $this->createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $this->runner = $runner;
+        $this->routing = new ConfiguredBuildRouting([], new ModelRouting());
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertStringContainsString('"alpha"', (string) $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone', 'build_job'], array_column($ledger->payloads(), 'step'));
+        self::assertSame('failed', $ledger->payloads()[3]['outcome']);
+    }
+
+    public function testTheBuildJobRunsInTheCloneOnTheBranchAndImageWithTheTaskAsItsFencedBrief(): void
+    {
+        $ran = null;
+        $prompt = '';
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use (&$ran, &$prompt): JobResult {
+            $ran = $spec;
+            $prompt = (string) file_get_contents($spec->inputs[1]->hostPath);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([]));
+        });
+        $this->runner = $runner;
+
+        (void) $this->taskOf(new InMemoryLedger(), [Issues::task(7, with: ['body' => 'PLANT-body'])])->run($this->request(7, $this->remote->path));
+
+        self::assertInstanceOf(JobSpec::class, $ran);
+        self::assertSame([realpath($this->clone), RunBuildJob::CLONE], [$ran->inputs[0]->hostPath, $ran->inputs[0]->containerPath]);
+        self::assertSame(self::IMAGE, $ran->image);
+        self::assertSame('feat/task', $ran->command[6]);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body"), $prompt);
+    }
+
+    public function testATierLabelOfTheIssueChoosesTheBuildsTier(): void
+    {
+        $tiers = $this->createMock(TierResolver::class);
+        $tiers->expects(self::once())->method('resolve')->with('alpha', Tier::Strong)->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-opus-5-5'));
+        $this->tiers = $tiers;
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7, ['intakt', 'model:strong'])])->run($this->request(7, $this->remote->path));
+
+        self::assertFalse($outcome->failed());
+    }
+
+    public function testAFailedCloneStepRunsNoBuildJob(): void
+    {
+        mkdir($this->clone);
+        $runner = $this->createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $this->runner = $runner;
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Clone, $outcome->last);
+        self::assertSame(['task', 'mirror', 'clone'], array_column($ledger->payloads(), 'step'));
     }
 
     public function testAnIssueTheForgeDoesNotListEndsAtTheTaskStepAndNoMirrorIsMade(): void
@@ -126,7 +310,7 @@ final class BuildTaskTest extends TestCase
         $reads->method('listOpen')->willThrowException(new ForgeReadFailed('GitHub answered 500'));
         $ledger = new InMemoryLedger();
 
-        $outcome = new BuildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
+        $outcome = $this->buildTask($reads, $this->checkout(), $ledger)->run($this->request(7, $this->remote->path));
 
         self::assertSame('GitHub answered 500', $outcome->failure);
         self::assertSame(['task'], array_column($ledger->payloads(), 'step'));
@@ -151,7 +335,7 @@ final class BuildTaskTest extends TestCase
     {
         touch($this->mirrors);
         $ledger = new InMemoryLedger();
-        $task = new BuildTask($this->listing([Issues::task(7)]), $this->checkoutIn($this->mirrors.'/mirrors'), $ledger);
+        $task = $this->buildTask($this->listing([Issues::task(7)]), $this->checkoutIn($this->mirrors.'/mirrors'), $ledger);
 
         try {
             $outcome = $task->run($this->request(7, $this->remote->path));
@@ -187,7 +371,7 @@ final class BuildTaskTest extends TestCase
         $locks = self::createStub(PersistingStoreInterface::class);
         $locks->method('save')->willThrowException(new LockStorageException('the store is down'));
         $ledger = new InMemoryLedger();
-        $task = new BuildTask($this->listing([Issues::task(7)]), $this->checkoutWith(new Mirrors($this->mirrors), $locks), $ledger);
+        $task = $this->buildTask($this->listing([Issues::task(7)]), $this->checkoutWith(new Mirrors($this->mirrors), $locks), $ledger);
 
         $outcome = $task->run($this->request(7, $this->remote->path));
 
@@ -232,7 +416,7 @@ final class BuildTaskTest extends TestCase
     {
         new Filesystem()->dumpFile($this->remote->path.'/.git/info/attributes', '*.txt text');
         $ledger = new InMemoryLedger();
-        $request = new BuildTaskRequest('alpha', 7, $this->remote->path, 'feat/task', $this->remote->path.'/clone');
+        $request = new BuildTaskRequest('alpha', 7, $this->remote->path, 'feat/task', $this->remote->path.'/clone', self::IMAGE);
 
         $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($request);
 
@@ -259,7 +443,7 @@ final class BuildTaskTest extends TestCase
 
     public function testABranchGitDoesNotAcceptEndsAtTheCloneStep(): void
     {
-        $request = new BuildTaskRequest('alpha', 7, $this->remote->path, 'bad..name', $this->clone);
+        $request = new BuildTaskRequest('alpha', 7, $this->remote->path, 'bad..name', $this->clone, self::IMAGE);
 
         $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($request);
 
@@ -286,7 +470,14 @@ final class BuildTaskTest extends TestCase
      */
     private function taskOf(InMemoryLedger $ledger, array $issues): BuildTask
     {
-        return new BuildTask($this->listing($issues), $this->checkout(), $ledger);
+        return $this->buildTask($this->listing($issues), $this->checkout(), $ledger);
+    }
+
+    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
+    {
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence()), $this->runner, new PhpGate(), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+
+        return new BuildTask($issues, $checkout, $this->routing, $builds, $ledger);
     }
 
     /**
@@ -324,6 +515,6 @@ final class BuildTaskTest extends TestCase
 
     private function request(int $issue, string $remote): BuildTaskRequest
     {
-        return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone);
+        return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone, self::IMAGE);
     }
 }

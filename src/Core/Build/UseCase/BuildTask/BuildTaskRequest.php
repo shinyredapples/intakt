@@ -12,6 +12,7 @@ final readonly class BuildTaskRequest
         public string $remote,
         public string $branch,
         public string $directory,
+        public string $image,
     ) {
     }
 }
