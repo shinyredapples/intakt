@@ -14,6 +14,7 @@ use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
+use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -43,6 +44,28 @@ final class BuildTaskCommandTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertStringContainsString("task passed\nmirror passed\nclone passed\ntitle Task 7", $tester->getDisplay());
+    }
+
+    public function testItReplacesEachControlCharacterOfTheTitleSoItCannotDriveTheTerminal(): void
+    {
+        $display = $this->displayOfTitle("Evil \e[2J\e]0;pwned\x07 <error>x</error> \x7F\u{80}\u{9B}31m\ttab\nline");
+
+        self::assertStringContainsString("title Evil ?[2J?]0;pwned? <error>x</error> ???31m?tab?line\n", $display);
+        self::assertDoesNotMatchRegularExpression('/[^\P{Cc}\n]/u', $display);
+    }
+
+    public function testItKeepsEveryOtherCharacterOfTheTitle(): void
+    {
+        $title = "Gr\u{FC}\u{DF}e \u{A0}\u{2713} ~ \u{1F600}";
+
+        self::assertStringContainsString('title '.$title."\n", $this->displayOfTitle($title));
+    }
+
+    public function testItKeepsOnlyThePrintableAsciiOfATitleThatIsNotUtf8(): void
+    {
+        $display = $this->displayOfTitle("Evil \xFF\x9B31m \e[2J~");
+
+        self::assertStringContainsString("title Evil ??31m ?[2J~\n", $display);
     }
 
     public function testItExitsWithFailureAtTheFailingStepAndRunsNoLaterOne(): void
@@ -94,15 +117,38 @@ final class BuildTaskCommandTest extends TestCase
         yield 'no directory' => ['7', '--directory', 'The --directory option is required.'];
     }
 
+    private function displayOfTitle(string $title): string
+    {
+        $listed = Issues::task(7);
+        $task = new ListedIssue(7, $title, $listed->body, $listed->labels, $listed->author, $listed->updatedAt, $listed->milestoneDue, false);
+        $build = new BuildTask($this->listing($task), self::createStub(BuildCheckout::class), new InMemoryLedger());
+
+        return $this->tester($build, ['project' => 'alpha', 'issue' => '7', ...self::OPTIONS])->getDisplay();
+    }
+
     /**
      * @param array<string, string> $input
      */
     private function execute(InMemoryLedger $ledger, BuildCheckout $checkout, array $input): CommandTester
     {
+        return $this->tester(new BuildTask($this->listing(Issues::task(7)), $checkout, $ledger), $input);
+    }
+
+    private function listing(ListedIssue $task): IssueReads
+    {
         $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willReturn(IssueListing::listed([Issues::task(7)], null));
+        $reads->method('listOpen')->willReturn(IssueListing::listed([$task], null));
+
+        return $reads;
+    }
+
+    /**
+     * @param array<string, string> $input
+     */
+    private function tester(BuildTask $build, array $input): CommandTester
+    {
         $application = new Application();
-        $application->addCommand(new BuildTaskCommand(new BuildTask($reads, $checkout, $ledger)));
+        $application->addCommand(new BuildTaskCommand($build));
         $tester = new CommandTester($application->find('intakt:build:task'));
         $tester->execute($input);
 

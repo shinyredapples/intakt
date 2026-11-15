@@ -63,11 +63,20 @@ final readonly class BuildTaskCommand
         }
 
         if ($outcome->task instanceof ListedIssue) {
-            $io->writeln('title '.OutputFormatter::escape($outcome->task->title));
+            $io->writeln('title '.$this->visible($outcome->task->title));
         }
 
         if ($outcome->failed()) {
             $io->error(sprintf('%s failed: %s', $outcome->last->value, $outcome->failure));
         }
+    }
+
+    private function visible(string $title): string
+    {
+        // Because the title is untrusted text, and a control character in it (ESC, BEL, CSI) would drive the operator's terminal; a title that is not UTF-8 keeps only its printable ASCII, since its other bytes cannot be told from control characters.
+        $visible = preg_replace('/\p{Cc}/u', '?', $title) ?? preg_replace('/[^\x20-\x7E]/', '?', $title);
+
+        // Because the title may hold "<info>", which the formatter would read as a tag.
+        return OutputFormatter::escape((string) $visible);
     }
 }
