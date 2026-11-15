@@ -30,6 +30,13 @@ final class ConfiguredPricesTest extends TestCase
 
     private const array OPUS = ['input' => 5.0, 'output' => 25.0, 'cache_read' => 0.5, 'cache_write' => 6.25];
 
+    public function testAPricedCostCarriesTheDayOfThePriceList(): void
+    {
+        $cost = new ConfiguredPrices(['claude-opus-5-5' => self::OPUS], '2026-11-13')->costOf('claude-opus-5-5', new TokenFigures(100, 0, 0, 0, 20));
+
+        self::assertSame('2026-11-13', $cost->priceDate);
+    }
+
     public function testARecordedAnthropicAnswerCostsItsTokensAtTheModelsPricePerMillion(): void
     {
         $row = $this->rowOf(new AnthropicUsage()->extractFromArray(self::ANTHROPIC_USAGE), 'anthropic.default', 'claude-opus-5-5');

@@ -115,7 +115,7 @@ final readonly class SampleProject
 
         return '# Written once by intakt:sample:seed; edit it and start again to change the sample project.'.PHP_EOL
             .'# The prices are list prices read on 2026-11-13, in US dollars per million tokens.'.PHP_EOL
-            .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['prices' => $this->prices($models)]], 6, 4);
+            .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['price_date' => '2026-11-13', 'prices' => $this->prices($models)]], 6, 4);
     }
 
     /**
