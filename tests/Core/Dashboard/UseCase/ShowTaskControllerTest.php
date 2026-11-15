@@ -27,7 +27,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertSame('Task 42 in alpha', $page->filter('h1')->text());
         self::assertSame('Stopped at mirror: git fetch exited with 128', $page->filter('#task-where')->text());
-        self::assertSame(['Task Passed', 'Mirror Failed', 'Clone Not reached', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Failed', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
         self::assertSame('git fetch exited with 128', $page->filter('#step-mirror .step-failure')->text());
     }
 
@@ -40,11 +40,26 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
         self::assertSame('Stopped at clone: the folder exists already', $page->filter('#task-where')->text());
-        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Failed', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Failed', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
         self::assertSame('the folder exists already', $page->filter('#step-clone .step-failure')->text());
     }
 
-    public function testATaskWhoseBuildJobStepPassedSaysEveryStepPassed(): void
+    public function testATaskWhoseHandBackCheckStepPassedSaysEveryStepPassed(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->passBuildStep('alpha', '42', 'mirror');
+        $this->ledger->passBuildStep('alpha', '42', 'clone');
+        $this->ledger->passBuildStep('alpha', '42', 'build_job');
+        $this->ledger->passBuildStep('alpha', '42', 'hand_back_check');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Every step passed.', $page->filter('#task-where')->text());
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Passed', 'Hand back check Passed'], $this->stepHeads($page));
+        self::assertCount(0, $page->filter('.step-failure'));
+    }
+
+    public function testATaskWhoseBuildJobStepPassedSaysTheBuildJobIsTheLastRecordedStep(): void
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
         $this->ledger->passBuildStep('alpha', '42', 'mirror');
@@ -53,9 +68,22 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
-        self::assertSame('Every step passed.', $page->filter('#task-where')->text());
-        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Passed'], $this->stepHeads($page));
-        self::assertCount(0, $page->filter('.step-failure'));
+        self::assertSame('Last recorded step: build_job passed.', $page->filter('#task-where')->text());
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Passed', 'Hand back check Not reached'], $this->stepHeads($page));
+    }
+
+    public function testATaskThatStoppedAtTheHandBackCheckShowsItsRefusal(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->passBuildStep('alpha', '42', 'mirror');
+        $this->ledger->passBuildStep('alpha', '42', 'clone');
+        $this->ledger->passBuildStep('alpha', '42', 'build_job');
+        $this->ledger->failBuildStep('42', 'hand_back_check', 'the bundle is not a readable git bundle');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Stopped at hand_back_check: the bundle is not a readable git bundle', $page->filter('#task-where')->text());
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Passed', 'Hand back check Failed'], $this->stepHeads($page));
     }
 
     public function testATaskWhoseCloneStepPassedSaysTheCloneIsTheLastRecordedStep(): void
@@ -67,7 +95,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
         self::assertSame('Last recorded step: clone passed.', $page->filter('#task-where')->text());
-        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
     }
 
     public function testATaskThatStoppedAtTheBuildJobShowsItsVerdict(): void
@@ -80,7 +108,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
         self::assertSame('Stopped at build_job: the build made no commit on the task\'s branch', $page->filter('#task-where')->text());
-        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Failed'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Failed', 'Hand back check Not reached'], $this->stepHeads($page));
         self::assertSame('the build made no commit on the task\'s branch', $page->filter('#step-build_job .step-failure')->text());
     }
 
@@ -91,7 +119,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
         self::assertSame('Last recorded step: task passed.', $page->filter('#task-where')->text());
-        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
     }
 
     public function testATaskBuiltAgainShowsOnlyItsLatestRun(): void
@@ -104,7 +132,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
-        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Failed', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Failed', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
         self::assertStringNotContainsString('git fetch', $page->filter('main')->text());
     }
 
@@ -117,7 +145,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
-        self::assertSame(['Task Failed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Failed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
     }
 
     public function testTheStepsOfAnotherTaskOrProjectAreNotShown(): void
@@ -128,7 +156,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
-        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
         self::assertStringNotContainsString('failed', $page->filter('main')->text());
     }
 
@@ -140,7 +168,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/tasks/alpha/42');
 
-        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached'], $this->stepHeads($page));
+        self::assertSame(['Task Passed', 'Mirror Not reached', 'Clone Not reached', 'Build job Not reached', 'Hand back check Not reached'], $this->stepHeads($page));
     }
 
     public function testACredentialInTheFailureIsRedacted(): void

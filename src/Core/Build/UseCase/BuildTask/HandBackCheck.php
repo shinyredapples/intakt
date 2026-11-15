@@ -1,0 +1,73 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Build\UseCase\BuildTask;
+
+use Intakt\Core\Git\Contract\BuildCheckout;
+use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackChecks;
+use Intakt\Core\HandBack\Contract\HandBackNotChecked;
+use Intakt\Core\HandBack\Contract\RefusedHandBack;
+use Intakt\Plugin\Forge\Contract\JobCredentials;
+use InvalidArgumentException;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Filesystem\Filesystem;
+
+// Checked against the project's mirror, because the check needs a bare repository whose HEAD names main, and the build clone's HEAD names the task's branch.
+final readonly class HandBackCheck
+{
+    // A first build has no rework that asks for a merge of main.
+    private const bool MERGE_OF_MAIN_ASKED = false;
+
+    public function __construct(
+        private BuildCheckout $checkout,
+        private HandBackChecks $checks,
+        private Filesystem $filesystem,
+        // A file of its own for each run, beside the prompts, because the check reads a bundle from a path.
+        #[Autowire('%kernel.project_dir%/var/hand-backs')]
+        private string $bundleFolder,
+    ) {
+    }
+
+    // The refusal's fixed text or the failure's message, never anything of the bundle, because what the build handed back is untrusted.
+    public function failureOf(BuildTaskRequest $request, string $bundle): ?string
+    {
+        try {
+            $file = $this->bundleFileOf($bundle);
+        } catch (IOException $failure) {
+            return $failure->getMessage();
+        }
+
+        try {
+            return $this->refusalOf($request, $file);
+        } finally {
+            $this->filesystem->remove($file);
+        }
+    }
+
+    private function bundleFileOf(string $bundle): string
+    {
+        $this->filesystem->mkdir($this->bundleFolder, 0o700);
+        $file = $this->filesystem->tempnam($this->bundleFolder, 'handback-', '.bundle');
+        $this->filesystem->dumpFile($file, $bundle);
+
+        return $file;
+    }
+
+    private function refusalOf(BuildTaskRequest $request, string $file): ?string
+    {
+        try {
+            // No credentials, because the build job mounts none yet, so there is nothing to redact.
+            $handBack = new HandBack($this->checkout->mirrorOf($request->project), $request->branch, $file, self::MERGE_OF_MAIN_ASKED, new JobCredentials());
+            $result = $this->checks->check($handBack);
+        } catch (BuildCheckoutFailed|InvalidArgumentException|HandBackNotChecked|RepositoryAttributesRefused $failure) {
+            return $failure->getMessage();
+        }
+
+        return $result instanceof RefusedHandBack ? $result->reason() : null;
+    }
+}

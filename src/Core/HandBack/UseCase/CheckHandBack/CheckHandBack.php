@@ -7,14 +7,16 @@ namespace Intakt\Core\HandBack\UseCase\CheckHandBack;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
+use Intakt\Core\HandBack\Contract\HandBackChecks;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\HandBackRefusal;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\Domain\BundleHeader;
 use InvalidArgumentException;
 use NoDiscard;
+use Override;
 
-final readonly class CheckHandBack
+final readonly class CheckHandBack implements HandBackChecks
 {
     private const string BRANCHES = 'refs/heads/';
 
@@ -32,6 +34,7 @@ final readonly class CheckHandBack
      * @throws HandBackNotChecked
      * @throws RepositoryAttributesRefused
      */
+    #[Override]
     #[NoDiscard]
     public function check(HandBack $handBack): AcceptedHandBack|RefusedHandBack
     {

@@ -7,6 +7,7 @@ namespace Intakt\Core\Git\Infrastructure;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\TaskBranch;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
@@ -22,6 +23,7 @@ final readonly class GitBuildCheckout implements BuildCheckout
     public function __construct(
         private UpdateMirror $mirrors,
         private MakeBuildClone $clones,
+        private Mirrors $mirrorPaths,
     ) {
     }
 
@@ -46,6 +48,16 @@ final readonly class GitBuildCheckout implements BuildCheckout
         } catch (ProcessFailure $stopped) {
             throw BuildCheckoutFailed::stopped($stopped);
         } catch (InvalidArgumentException|IOException|RepositoryAttributesRefused|ReportableFailure $failure) {
+            throw BuildCheckoutFailed::because($failure);
+        }
+    }
+
+    #[Override]
+    public function mirrorOf(string $project): string
+    {
+        try {
+            return $this->mirrorPaths->pathOf($project);
+        } catch (InvalidArgumentException $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
     }
