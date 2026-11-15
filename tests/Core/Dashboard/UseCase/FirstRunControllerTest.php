@@ -490,7 +490,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => 'wrong']);
 
         self::assertResponseStatusCodeSame(400);
-        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
+        $this->assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
     }
 
     public function testAStartAfterTheSampleRepositoryWasUnsetIsRefused(): void
@@ -504,7 +504,7 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
+        $this->assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
     }
 
     public function testAProjectNameWithMarkupIsEscaped(): void
@@ -565,7 +565,7 @@ final class FirstRunControllerTest extends WebTestCase
     }
 
     // Symfony 8.1 logs an uncaught client error (4xx) at error and 8.2 at warning, so the record counts at either level while both are supported.
-    private static function assertLoggedClientError(string $message): void
+    private function assertLoggedClientError(string $message): void
     {
         $records = LogRecords::ofThisRun();
         self::assertNotNull($records, 'No test log records: run the tests with the UnassertedErrorLogExtension.');
