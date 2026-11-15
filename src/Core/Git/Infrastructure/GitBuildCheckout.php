@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Git\Infrastructure;
 
+use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
@@ -55,10 +56,10 @@ final readonly class GitBuildCheckout implements BuildCheckout
     }
 
     #[Override]
-    public function takeCheckedHead(string $project, string $branch, string $head, string $directory): void
+    public function takeCheckedHead(string $project, BranchHead $head, string $directory): void
     {
         try {
-            $this->heads->take($project, new TaskBranch($branch), $head, $directory);
+            $this->heads->take($project, $head, $directory);
         } catch (ProcessFailure $stopped) {
             throw BuildCheckoutFailed::stopped($stopped);
         } catch (InvalidArgumentException|RepositoryAttributesRefused|ReportableFailure $failure) {

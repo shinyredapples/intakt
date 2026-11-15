@@ -25,5 +25,5 @@ interface BuildCheckout
     /**
      * @throws BuildCheckoutFailed
      */
-    public function takeCheckedHead(string $project, string $branch, string $head, string $directory): void;
+    public function takeCheckedHead(string $project, BranchHead $head, string $directory): void;
 }

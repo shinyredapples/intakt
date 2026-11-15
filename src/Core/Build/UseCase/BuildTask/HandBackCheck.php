@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
@@ -16,7 +17,7 @@ use InvalidArgumentException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
+use Symfony\Component\Process\Exception\ExceptionInterface;
 use Symfony\Component\Process\Exception\ProcessSignaledException;
 use Symfony\Component\Process\Exception\ProcessTimedOutException;
 
@@ -72,8 +73,8 @@ final readonly class HandBackCheck
                 return $result->reason();
             }
 
-            $this->checkout->takeCheckedHead($request->project, $request->branch, $result->head, $request->directory);
-        } catch (ProcessFailure $stopped) {
+            $this->checkout->takeCheckedHead($request->project, new BranchHead($request->branch, $result->head), $request->directory);
+        } catch (ExceptionInterface $stopped) {
             // Caught first, because a process failure may also be an InvalidArgumentException, and its message names the whole command line.
             return $this->stoppedBy($stopped);
         } catch (BuildCheckoutFailed|InvalidArgumentException|HandBackNotChecked|RepositoryAttributesRefused $failure) {
@@ -83,7 +84,7 @@ final readonly class HandBackCheck
         return null;
     }
 
-    private function stoppedBy(ProcessFailure $stopped): string
+    private function stoppedBy(ExceptionInterface $stopped): string
     {
         return match (true) {
             $stopped instanceof ProcessTimedOutException => sprintf('the hand-back check timed out after %s seconds', $stopped->getExceededTimeout()),

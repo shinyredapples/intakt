@@ -33,6 +33,7 @@ use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
 use Intakt\Core\Git\Domain\TaskBranch;
+use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Infrastructure\GitBuildCheckout;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
@@ -116,6 +117,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(MakeBuildClone::class)]
 #[UsesClass(TakeCheckedHead::class)]
+#[UsesClass(BranchHead::class)]
 #[UsesClass(MirrorNotUpdated::class)]
 #[UsesClass(BuildCloneNotMade::class)]
 #[UsesClass(Mirrors::class)]
@@ -652,7 +654,7 @@ final class BuildTaskTest extends TestCase
         return new BuildTask($issues, $checkout, $this->routing, $builds, $handBacks, $ledger);
     }
 
-    // Commits in a clone of the build clone, as the job commits in its own clone in the container, and bundles what the mirror lacks, as docker/job/build.sh bundles it.
+    // In a clone of the build clone, because the job commits in a clone of its own in the container, and bundled against main, because docker/job/build.sh bundles it so.
     private function committingRunner(string $ref = 'feat/task'): JobRunner
     {
         $runner = self::createStub(JobRunner::class);

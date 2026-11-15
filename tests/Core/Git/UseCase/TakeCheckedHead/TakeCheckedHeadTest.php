@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Git\UseCase\TakeCheckedHead;
 
+use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Domain\Mirrors;
-use Intakt\Core\Git\Domain\TaskBranch;
 use Intakt\Core\Git\UseCase\TakeCheckedHead\CheckedHeadNotTaken;
 use Intakt\Core\Git\UseCase\TakeCheckedHead\TakeCheckedHead;
 use Intakt\Tests\Core\Git\TemporaryRepository;
@@ -20,8 +20,8 @@ use Symfony\Component\Process\Process;
 
 #[CoversClass(TakeCheckedHead::class)]
 #[CoversClass(CheckedHeadNotTaken::class)]
+#[CoversClass(BranchHead::class)]
 #[UsesClass(Mirrors::class)]
-#[UsesClass(TaskBranch::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(GitCall::class)]
 final class TakeCheckedHeadTest extends TestCase
@@ -84,7 +84,7 @@ final class TakeCheckedHeadTest extends TestCase
     private function headInTheMirrorOnly(): string
     {
         $head = $this->source->commitFile('b.txt', 'two');
-        // Objects only, no ref, as the hand-back check leaves them in the mirror.
+        // Objects only and no ref, because the hand-back check leaves them so in the mirror.
         $this->git(['--git-dir='.$this->mirrors->pathOf('alpha'), 'fetch', '--quiet', $this->source->path, $head], $this->source->path);
 
         return $head;
@@ -92,7 +92,7 @@ final class TakeCheckedHeadTest extends TestCase
 
     private function take(string $head): void
     {
-        new TakeCheckedHead(new HardenedGit(), $this->mirrors)->take('alpha', new TaskBranch('feat/task'), $head, $this->clone);
+        new TakeCheckedHead(new HardenedGit(), $this->mirrors)->take('alpha', new BranchHead('feat/task', $head), $this->clone);
     }
 
     /**
