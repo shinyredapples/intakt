@@ -29,10 +29,10 @@ final readonly class ReviewStarts
     ) {
     }
 
+    // Null when this install has no sample change, so the caller answers that nothing could be started; the number is always 1, so a second press is refused as not next.
     /**
      * @return array{string, string}|null
      */
-    // Null when this install has no sample change, so the caller answers that nothing could be started; the number is always 1, so a second press is refused as not next.
     public function startSampleChange(): ?array
     {
         $source = $this->sample->source();

@@ -413,12 +413,12 @@ final class FirstRunControllerTest extends WebTestCase
     public function testTheStepLinksToTheLatestRoundOfTheFirstReviewInTheLedger(): void
     {
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
-        $this->ledger->startRoundOf('feat/other', 'round-2', 1);
-        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-3', 2);
+        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-2', 2);
+        $this->ledger->startRoundOf('feat/other', 'round-3', 1);
 
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
 
-        self::assertSame('/reviews/round-3', $page->filter('#step-first-review a.btn.primary')->attr('href'));
+        self::assertSame('/reviews/round-2', $page->filter('#step-first-review a.btn.primary')->attr('href'));
     }
 
     public function testWithoutASampleRepositoryAndNoReviewTheStepIsNotNeededAndThePageHasNoPrimaryButton(): void
