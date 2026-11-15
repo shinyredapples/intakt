@@ -18,19 +18,27 @@ final class BudgetConfiguration implements ConfigurationInterface
 {
     public const float DEFAULT_CEILING = 90.0;
 
+    private const int SECONDS_PER_DAY = 86_400;
+
     public function getConfigTreeBuilder(): TreeBuilder
     {
         $tree = new TreeBuilder('intakt');
         $budget = $tree->getRootNode()->addDefaultsIfNotSet()->children()->arrayNode('budget')->addDefaultsIfNotSet()->children();
         $this->windows($budget->arrayNode('ceilings'), self::DEFAULT_CEILING);
         $this->prices($budget->arrayNode('prices'));
-        // The day the list was read, because a price changes and an estimate is only as good as its list.
-        // Symfony YAML reads an unquoted date as the timestamp of its midnight in UTC, so that form is the same day.
+        // The day the list was read, because an estimate is only as good as its list; Symfony YAML reads an unquoted date as its midnight in UTC, so that timestamp is the same day.
         $budget->scalarNode('price_date')->defaultNull()
-            ->beforeNormalization()->ifTrue(static fn (mixed $date): bool => is_int($date) && 0 === $date % 86400)->then(static fn (int $midnight): string => gmdate('Y-m-d', $midnight))->end()
+            ->beforeNormalization()->ifTrue(static fn (mixed $date): bool => is_int($date) && 0 === $date % self::SECONDS_PER_DAY)->then(self::dayOf(...))->end()
             ->validate()->ifTrue(static fn (mixed $date): bool => !self::isDay($date))->thenInvalid('The price_date must be a date written as YYYY-MM-DD.');
 
         return $tree;
+    }
+
+    private static function dayOf(int $midnight): string
+    {
+        $day = DateTimeImmutable::createFromFormat('U', (string) $midnight, new DateTimeZone('UTC'));
+
+        return false === $day ? (string) $midnight : $day->format('Y-m-d');
     }
 
     private static function isDay(mixed $date): bool

@@ -36,7 +36,10 @@ final class BudgetConfigurationTest extends TestCase
     // Symfony YAML reads an unquoted date as the timestamp of its midnight in UTC, so the owner may leave out the quotes.
     public function testAnUnquotedPriceDateInYamlIsTheSameDay(): void
     {
-        self::assertSame('2026-11-13', $this->priceDate(Yaml::parse("budget:\n    price_date: 2026-11-13\n")));
+        $contents = Yaml::parse("budget:\n    price_date: 2026-11-13\n");
+        self::assertIsArray($contents);
+
+        self::assertSame('2026-11-13', $this->priceDate($contents));
     }
 
     public function testWithoutAPriceDateItIsNull(): void
