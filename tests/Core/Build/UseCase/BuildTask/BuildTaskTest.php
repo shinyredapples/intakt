@@ -235,6 +235,45 @@ final class BuildTaskTest extends TestCase
         self::assertSame('failed', $ledger->payloads()[3]['outcome']);
     }
 
+    public function testATierOnAProviderOtherThanClaudeCodeEndsAtTheBuildJobStepAndNoJobRuns(): void
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'claude-sonnet-5-5'));
+        $this->tiers = $tiers;
+        $runner = $this->createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $this->runner = $runner;
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertStringContainsString('needs provider "claude_code"', (string) $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+    }
+
+    public function testACloneThatIsNoFolderAnymoreEndsAtTheBuildJobStepAndNoJobRuns(): void
+    {
+        $clone = $this->clone;
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturnCallback(static function () use ($clone): ResolvedModel {
+            new Filesystem()->remove($clone);
+
+            return new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5');
+        });
+        $this->tiers = $tiers;
+        $runner = $this->createMock(JobRunner::class);
+        $runner->expects(self::never())->method('run');
+        $this->runner = $runner;
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::BuildJob, $outcome->last);
+        self::assertStringContainsString('is no folder', (string) $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+    }
+
     public function testTheBuildJobRunsInTheCloneOnTheBranchAndImageWithTheTaskAsItsFencedBrief(): void
     {
         $ran = null;
