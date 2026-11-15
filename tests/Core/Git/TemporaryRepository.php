@@ -34,6 +34,14 @@ final readonly class TemporaryRepository
         return $this->commit('Change '.$path);
     }
 
+    public function makeExecutable(string $path): string
+    {
+        chmod($this->path.'/'.$path, 0o755);
+        $this->git('add', '--all');
+
+        return $this->commit('Make '.$path.' executable');
+    }
+
     public function removeFile(string $path): string
     {
         unlink($this->path.'/'.$path);

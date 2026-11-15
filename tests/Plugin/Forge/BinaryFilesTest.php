@@ -35,7 +35,16 @@ final class BinaryFilesTest extends TestCase
             default => "old\n",
         });
 
-        self::assertSame(self::TEXT."diff --git a/b.bin b/b.bin\nindex ".self::BASE.'..'.self::HEAD." 100644\nBinary file, not shown: 1 bytes at the base, 2 bytes at the head\n", $named);
+        self::assertSame(self::TEXT."diff --git a/b.bin b/b.bin\nindex ".self::BASE.'..'.self::HEAD." 100644\nBinary file, not shown: 1 byte at the base, 2 bytes at the head\n", $named);
+    }
+
+    public function testABinaryFileOfOneByteIsNamedInTheSingularAndAnEmptyBlobInThePlural(): void
+    {
+        $binary = "diff --git a/b.bin b/b.bin\nindex ".self::BASE.'..'.self::HEAD." 100644\n--- a/b.bin\n+++ b/b.bin\n@@ -0,0 +1 @@\n+\0\n";
+
+        $named = new BinaryFiles()->named($binary, static fn (string $id): string => self::HEAD === $id ? "\0" : '');
+
+        self::assertStringEndsWith("Binary file, not shown: 0 bytes at the base, 1 byte at the head\n", $named);
     }
 
     public function testAFileIsNamedAsBinaryWhenItsNulByteLiesOutsideTheLinesShown(): void
