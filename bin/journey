@@ -45,20 +45,32 @@ if (false === $page) {
 $api = null === $recorded ? new GhCliApi((string) getenv('GITHUB_REPOSITORY')) : new RecordedApi($recorded);
 
 try {
-    $regenerated = new JourneyPage(new GitHubReader($api), new UsageReader(), new NativeClock())->regenerated($page, $root.'/docs/journey/usage.jsonl');
+    $output = new JourneyPage(new GitHubReader($api), new UsageReader(), new NativeClock())->regenerated($page, $root.'/docs/journey/usage.jsonl');
 } catch (JourneyInputFailed $failure) {
     fwrite(STDERR, $failure->getMessage()."\n");
     exit(1);
 }
 
-if ($regenerated === $page) {
-    fwrite(STDOUT, "docs/journey.md is current\n");
+$files = [];
+
+foreach ($output->drawings as $name => $svg) {
+    $files['docs/journey/'.$name.'.svg'] = $svg."\n";
+}
+
+// The page goes last, so a failed drawing never leaves a page that points at a chart it did not write.
+$files['docs/journey.md'] = $output->page;
+$changed = array_filter($files, static fn (string $content, string $path): bool => !is_file($root.'/'.$path) || file_get_contents($root.'/'.$path) !== $content, ARRAY_FILTER_USE_BOTH);
+
+if ([] === $changed) {
+    fwrite(STDOUT, "docs/journey.md and its drawings are current\n");
     exit(0);
 }
 
-if (false === @file_put_contents($pageFile, $regenerated)) {
-    fwrite(STDERR, "cannot write docs/journey.md\n");
-    exit(1);
-}
+foreach ($changed as $path => $content) {
+    if (false === @file_put_contents($root.'/'.$path, $content)) {
+        fwrite(STDERR, 'cannot write '.$path."\n");
+        exit(1);
+    }
 
-fwrite(STDOUT, "docs/journey.md regenerated\n");
+    fwrite(STDOUT, $path." regenerated\n");
+}

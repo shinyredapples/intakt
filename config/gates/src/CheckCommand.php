@@ -209,6 +209,7 @@ final readonly class CheckCommand
             new ContainerLintGate(),
             new RatchetListsGate(),
             new WorkflowsGate(),
+            new LeftUndoneGate(),
         ];
     }
 

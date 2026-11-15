@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Build\UseCase\BuildTask;
 
+use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -110,7 +112,7 @@ final readonly class BuildTask
             'project' => $request->project,
             'task' => (string) $request->issue,
             'step' => $step->value,
-            'outcome' => null === $failure ? 'passed' : 'failed',
+            'outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value,
             'failure' => $failure,
         ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
 

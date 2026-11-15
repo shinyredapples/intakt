@@ -81,6 +81,19 @@ final readonly class Workspace
         return $this->scope->repositoryFiles();
     }
 
+    /**
+     * @return list<string>
+     */
+    public function untrackedPaths(): array
+    {
+        return $this->scope->untrackedPaths();
+    }
+
+    public function isPhpFileInScope(string $path): bool
+    {
+        return $this->scope->includes($path);
+    }
+
     public function isFast(): bool
     {
         return Mode::ChangedFilesOnly === $this->mode;

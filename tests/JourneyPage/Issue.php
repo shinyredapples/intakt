@@ -10,6 +10,7 @@ final readonly class Issue
 {
     public function __construct(
         public ?int $milestone,
+        public DateTimeImmutable $created,
         public ?DateTimeImmutable $closed,
         public bool $dropped,
     ) {

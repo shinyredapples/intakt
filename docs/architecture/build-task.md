@@ -14,7 +14,7 @@ The run stops at the first step that fails, with that step's own message in `Bui
 
 ## The ledger
 
-Each step appends one `LedgerEventKind::BuildStepEnded` (`build_step_ended`) event with the JSON payload `project`, `task` (the issue number as text), `step` (`task`, `mirror` or `clone`, a `BuildStep` case), `outcome` (`passed` or `failed`) and `failure` (the message, or null). The issue's title and body are never in the payload. A ledger that does not record an event stops the run with `BuildStepNotRecorded` before the next step. Showing these events in the dashboard's task detail and in `intakt:status` is a later part.
+Each step appends one `LedgerEventKind::BuildStepEnded` (`build_step_ended`) event with the JSON payload `project`, `task` (the issue number as text), `step` (`task`, `mirror` or `clone`, a `Build/Contract/BuildStep` case), `outcome` (`passed` or `failed`, a `Build/Contract/BuildStepOutcome` case) and `failure` (the message, or null). The issue's title and body are never in the payload. A ledger that does not record an event stops the run with `BuildStepNotRecorded` before the next step. `intakt:status` shows the last of these events of each task in `lanes.build` (see [Status read model](status.md)); showing them in the dashboard's task detail is a later part.
 
 ## The door
 
