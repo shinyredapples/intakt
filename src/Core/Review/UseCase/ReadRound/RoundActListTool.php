@@ -35,7 +35,7 @@ final readonly class RoundActListTool
         $round = $this->rounds->forTool($roundId);
         $judged = RoundState::Judged === $round->state();
 
-        return new RoundActList($round->id()->toRfc4122(), $judged, $judged ? $this->actOf($round) : []);
+        return new RoundActList($round->id()->toRfc4122(), $judged, $judged ? $this->actOf($round) : [], $round->replayMark());
     }
 
     /**

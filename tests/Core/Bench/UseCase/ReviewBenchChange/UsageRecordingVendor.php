@@ -31,7 +31,8 @@ final readonly class UsageRecordingVendor implements Vendor
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
         $role = $request->conversation->rolePrompt;
-        $call = 'call-'.$role;
+        // One call per role and round, because a usage row is matched by its call and a bench run reviews many rounds on one ledger.
+        $call = 'call-'.$role.'-'.$request->conversation->round?->toRfc4122();
         $this->clock->sleep($this->byRole[$role]['seconds']);
         $this->append(['call' => $call, 'phase' => 'started', 'project' => $project, 'tier' => $tier->value, 'round' => $request->conversation->round?->toRfc4122(), 'model' => 'big', 'reviewer' => $request->conversation->reviewerId?->toRfc4122()]);
         $tokens = $this->byRole[$role]['tokens'];

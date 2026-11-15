@@ -59,6 +59,16 @@ final class CostTest extends TestCase
         self::assertSame('0.0000 USD', Cost::none()->reading());
     }
 
+    public function testThePriceDateReadingNamesTheDayOfThePriceList(): void
+    {
+        self::assertSame('prices of 2026-11-13', Cost::inUsd(0.25, '2026-11-13')->priceDateReading());
+    }
+
+    public function testThePriceDateReadingSaysUnknownWhenNoDayIsConfigured(): void
+    {
+        self::assertSame('price date unknown', Cost::inUsd(0.25)->priceDateReading());
+    }
+
     public function testAnUnknownCostNamesEachUnpricedModelOnceThroughTheGivenFilter(): void
     {
         self::assertSame('unknown, no price for <a>, <b>', Cost::unknown('a', 'b', 'a')->reading(static fn (string $model): string => '<'.$model.'>'));

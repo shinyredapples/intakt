@@ -466,7 +466,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [], false)]));
 
-        self::assertSame('0.9000 USD', $updated->filter('.ls-cost dd')->first()->text());
+        self::assertStringStartsWith('0.9000 USD estimated', $updated->filter('.ls-cost dd')->first()->text());
         self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
     }
 
