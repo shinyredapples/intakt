@@ -27,6 +27,7 @@ use Intakt\Plugin\GitHubForge\Contract\IssueReads;
 use Intakt\Plugin\GitHubForge\Contract\ListedIssue;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use Intakt\Tests\Core\Git\UseCase\PushBranch\ProgramOnPath;
 use Intakt\Tests\Plugin\GitHubWorkSource\Issues;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -34,7 +35,9 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(BuildTask::class)]
@@ -62,6 +65,8 @@ final class BuildTaskTest extends TestCase
 
     private TemporaryRepository $remote;
 
+    private ?ProgramOnPath $programs = null;
+
     protected function setUp(): void
     {
         $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
@@ -72,6 +77,7 @@ final class BuildTaskTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->programs?->remove();
         new Filesystem()->remove([$this->mirrors, $this->clone]);
         $this->remote->remove();
     }
@@ -160,6 +166,83 @@ final class BuildTaskTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    public function testAMirrorWhoseAttributesFileIsRefusedEndsAtTheMirrorStepWithItsFailureRecorded(): void
+    {
+        $mirrors = new Mirrors($this->mirrors);
+        (void) $this->mirrorUpdate($mirrors, new InMemoryStore())->update('alpha', $this->remote->path);
+        new Filesystem()->dumpFile($mirrors->pathOf('alpha').'/info/attributes', '*.txt text');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Mirror, $outcome->last);
+        self::assertStringContainsString('info/attributes', (string) $outcome->failure);
+        self::assertSame(['task', 'mirror'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testAMirrorLockThatCannotBeAcquiredEndsAtTheMirrorStepWithItsFailureRecorded(): void
+    {
+        $locks = self::createStub(PersistingStoreInterface::class);
+        $locks->method('save')->willThrowException(new LockStorageException('the store is down'));
+        $ledger = new InMemoryLedger();
+        $task = new BuildTask($this->listing([Issues::task(7)]), $this->checkoutWith(new Mirrors($this->mirrors), $locks), $ledger);
+
+        $outcome = $task->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Mirror, $outcome->last);
+        self::assertSame('Failed to acquire the "git-mirror-alpha" lock.', $outcome->failure);
+        self::assertSame(['task', 'mirror'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testAGitCallKilledInTheMirrorStepEndsThereWithFixedWordsAsItsRecordedFailure(): void
+    {
+        $this->programs = new ProgramOnPath();
+        $this->programs->killOn('git', '--remove-section');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Mirror, $outcome->last);
+        self::assertSame('git was killed by signal 15', $outcome->failure);
+        self::assertSame(['task', 'mirror'], array_column($ledger->payloads(), 'step'));
+        self::assertSame('git was killed by signal 15', $ledger->payloads()[1]['failure']);
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testAGitCallKilledInTheCloneStepEndsThereWithFixedWordsAndNoCloneIsLeft(): void
+    {
+        $this->programs = new ProgramOnPath();
+        $this->programs->killOn('git', 'checkout');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::Clone, $outcome->last);
+        self::assertSame('git was killed by signal 15', $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone'], array_column($ledger->payloads(), 'step'));
+        self::assertSame(['passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    public function testACloneFolderWhoseRepositoryHasAnAttributesFileEndsAtTheCloneStep(): void
+    {
+        new Filesystem()->dumpFile($this->remote->path.'/.git/info/attributes', '*.txt text');
+        $ledger = new InMemoryLedger();
+        $request = new BuildTaskRequest('alpha', 7, $this->remote->path, 'feat/task', $this->remote->path.'/clone');
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($request);
+
+        self::assertSame(BuildStep::Clone, $outcome->last);
+        self::assertStringContainsString('info/attributes', (string) $outcome->failure);
+        self::assertSame(['task', 'mirror', 'clone'], array_column($ledger->payloads(), 'step'));
+        self::assertSame('failed', $ledger->payloads()[2]['outcome']);
+        self::assertDirectoryDoesNotExist($this->remote->path.'/clone');
+    }
+
     public function testABuildCloneThatCannotBeMadeEndsAtTheCloneStepAndLeavesTheFolderAlone(): void
     {
         mkdir($this->clone);
@@ -224,11 +307,19 @@ final class BuildTaskTest extends TestCase
 
     private function checkoutIn(string $directory): GitBuildCheckout
     {
-        $mirrors = new Mirrors($directory);
-        $network = new NetworkGit(new RecordingClock(), new NullLogger());
-        $update = new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory(new InMemoryStore()), $mirrors);
+        return $this->checkoutWith(new Mirrors($directory), new InMemoryStore());
+    }
 
-        return new GitBuildCheckout($update, new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors));
+    private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
+    {
+        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors));
+    }
+
+    private function mirrorUpdate(Mirrors $mirrors, PersistingStoreInterface $locks): UpdateMirror
+    {
+        $network = new NetworkGit(new RecordingClock(), new NullLogger());
+
+        return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory($locks), $mirrors);
     }
 
     private function request(int $issue, string $remote): BuildTaskRequest

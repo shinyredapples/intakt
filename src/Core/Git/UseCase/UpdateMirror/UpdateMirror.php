@@ -8,12 +8,15 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
+use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
 use InvalidArgumentException;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
+use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
 use Symfony\Component\Process\Process;
 
 final readonly class UpdateMirror
@@ -40,6 +43,9 @@ final readonly class UpdateMirror
      * @throws NetworkGitFailed
      * @throws MirrorNotUpdated
      * @throws IOException
+     * @throws RepositoryAttributesRefused
+     * @throws ProcessFailure
+     * @throws LockFailure
      */
     public function update(string $project, string $remote): string
     {

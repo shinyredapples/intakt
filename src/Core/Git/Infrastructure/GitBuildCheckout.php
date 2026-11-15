@@ -14,6 +14,8 @@ use Intakt\Core\Platform\Contract\ReportableFailure;
 use InvalidArgumentException;
 use Override;
 use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Lock\Exception\ExceptionInterface as LockFailure;
+use Symfony\Component\Process\Exception\ExceptionInterface as ProcessFailure;
 
 final readonly class GitBuildCheckout implements BuildCheckout
 {
@@ -28,7 +30,10 @@ final readonly class GitBuildCheckout implements BuildCheckout
     {
         try {
             $this->mirrors->update($project, $remote);
-        } catch (InvalidArgumentException|IOException|ReportableFailure $failure) {
+        } catch (ProcessFailure $stopped) {
+            // Caught first, because a process failure may also be an InvalidArgumentException, and its message must never be the recorded one.
+            throw BuildCheckoutFailed::stopped($stopped);
+        } catch (InvalidArgumentException|IOException|RepositoryAttributesRefused|LockFailure|ReportableFailure $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
     }
@@ -38,6 +43,8 @@ final readonly class GitBuildCheckout implements BuildCheckout
     {
         try {
             $this->clones->make($project, new TaskBranch($branch), $directory);
+        } catch (ProcessFailure $stopped) {
+            throw BuildCheckoutFailed::stopped($stopped);
         } catch (InvalidArgumentException|IOException|RepositoryAttributesRefused|ReportableFailure $failure) {
             throw BuildCheckoutFailed::because($failure);
         }
