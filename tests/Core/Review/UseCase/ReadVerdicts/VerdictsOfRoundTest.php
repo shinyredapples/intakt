@@ -5,15 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ReadVerdicts;
 
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\IdentityField;
 use Intakt\Core\Review\Contract\PanelVerdict;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\RoundVerdicts;
 use Intakt\Core\Review\Contract\Standing;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use Intakt\Core\Review\Contract\VerdictsOfRound;
 use Intakt\Core\Review\Contract\VerdictStanding;
+use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
+use Intakt\Core\Review\UseCase\MarkReplay\FlagProjectAsReplayHandler;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
 use Intakt\Core\Review\UseCase\ReadVerdicts\VerdictsOfRoundHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\IdentityNotOfRound;
@@ -45,6 +49,10 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(CommitId::class)]
 #[UsesClass(CommitRange::class)]
 #[UsesClass(HeadMove::class)]
+#[UsesClass(FlagProjectAsReplayHandler::class)]
+#[UsesClass(FlagProjectAsReplay::class)]
+#[UsesClass(ReplayProject::class)]
+#[UsesClass(ReplayMark::class)]
 final class VerdictsOfRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -108,6 +116,27 @@ final class VerdictsOfRoundTest extends KernelTestCase
         self::assertSame([], $verdicts->counting);
     }
 
+    public function testTheVerdictsOfAReviewOfAReplayProjectNeverCount(): void
+    {
+        $this->flag('alpha');
+        $round = $this->reviewedRound();
+
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+
+        self::assertSame(Standing::Current, $verdicts->standing->standing);
+        self::assertSame([], $verdicts->counting);
+    }
+
+    public function testTheVerdictsOfAReviewOfALiveProjectCountBesideAReplayProject(): void
+    {
+        $this->flag('beta');
+        $round = $this->reviewedRound();
+
+        $verdicts = $this->fixture->verdictsOf(new VerdictsOfRound($round, $this->fixture->identityAt(SampleIdentity::HEAD, 2), new HeadMove(HeadMoveKind::Unmoved, [])));
+
+        self::assertCount(2, $verdicts->counting);
+    }
+
     public function testAnUnknownRoundIsRefused(): void
     {
         $this->expectException(RoundNotFound::class);
@@ -147,5 +176,10 @@ final class VerdictsOfRoundTest extends KernelTestCase
         }
 
         return $round->id()->toRfc4122();
+    }
+
+    private function flag(string $project): void
+    {
+        new FlagProjectAsReplayHandler($this->fixture->entities)(new FlagProjectAsReplay($project));
     }
 }
