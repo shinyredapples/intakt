@@ -49,7 +49,7 @@ final readonly class Headline
         return count($this->waiting);
     }
 
-    // The words after the waiting count, or the whole clause while nothing waits; a fresh install has none.
+    // Without the number, because the page prints the number as the needs-you count; empty on a fresh install, whose opening says it all.
     public function waitingWords(): string
     {
         if (0 === $this->cards) {

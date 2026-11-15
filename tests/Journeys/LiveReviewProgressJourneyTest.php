@@ -85,7 +85,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertMatchesRegularExpression(self::REVIEWING, $lines[0]);
     }
 
-    // The judged round has no reviewer running, and the board loaded now says what the last pushed headline said.
+    // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
     private function readTheBoardHeadline(): void
     {
         $line = $this->visit('/')->filter('#board-headline')->text();
