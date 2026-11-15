@@ -103,8 +103,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     {
         $pushed = array_filter($this->publishedUpdates(), static fn (Update $update): bool => str_contains($update->getData(), 'target="board-headline"'));
 
-        self::assertNotSame([], $pushed);
-        self::assertStringContainsString('Nothing is running.', array_last($pushed)->getData());
+        self::assertStringContainsString('Nothing is running.', array_last($pushed)?->getData() ?? self::fail('no board headline was sent to the hub'));
     }
 
     private function openTheJudgedRound(string $round): void
