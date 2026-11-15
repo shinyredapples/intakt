@@ -49,11 +49,11 @@ final class ReviewReportTest extends TestCase
 
         self::assertSame([
             'changes (round 1 counted)',
-            'strong reviewer: changes, 1 findings',
-            'standard reviewer: approve, 0 findings',
-            'act list: 1 findings',
+            'strong reviewer: changes, 1 findings counted',
+            'standard reviewer: approve, 0 findings counted',
+            'act list: 1 findings counted',
             'F1 P1 src/Feature.php:3: Missing check.',
-            'tokens: 2 calls, 100 prompt, 20 completion, 120 total measured',
+            'tokens: 2 calls counted, 100 prompt, 20 completion, 120 total measured',
             'cost: 0.0001 USD estimated, price date unknown',
         ], $lines);
     }
@@ -82,14 +82,14 @@ final class ReviewReportTest extends TestCase
     {
         $lines = $this->report()->asLines($this->review(Decision::Changes, RoundTokens::of(3, new TokenFigures(39504, 38000, 1500, 0, 700))));
 
-        self::assertContains('tokens: 3 calls, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total measured', $lines);
+        self::assertContains('tokens: 3 calls counted, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total measured', $lines);
     }
 
     public function testTheTokenLineShowsCachedTokensAVendorDoesNotSplit(): void
     {
         $lines = $this->report()->asLines($this->review(Decision::Changes, RoundTokens::of(1, new TokenFigures(39504, 0, 0, 39500, 700))));
 
-        self::assertContains('tokens: 1 calls, 39504 prompt (39500 cached), 700 completion, 40204 total measured', $lines);
+        self::assertContains('tokens: 1 calls counted, 39504 prompt (39500 cached), 700 completion, 40204 total measured', $lines);
     }
 
     public function testTheCostLineShowsTheRoundsCostInDollars(): void
@@ -146,9 +146,33 @@ final class ReviewReportTest extends TestCase
     {
         $document = $this->documentOf($this->review(Decision::Changes, cost: Cost::inUsd(0.0459, '2026-11-13')));
 
-        self::assertSame(['round' => 'counted', 'tokens' => 'measured', 'cost' => 'estimated'], $document['kinds']);
+        self::assertSame(['round' => 'counted', 'findings' => 'counted', 'calls' => 'counted', 'tokens' => 'measured', 'cost' => 'estimated'], $document['kinds']);
         self::assertIsArray($document['cost']);
         self::assertSame('2026-11-13', $document['cost']['price_date']);
+    }
+
+    public function testTheCallCountComesFromTheLedgerSoItIsMarkedCountedBesideTheMeasuredTokens(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes));
+
+        self::assertContains('tokens: 2 calls counted, 100 prompt, 20 completion, 120 total measured', $lines);
+    }
+
+    public function testTheFindingCountsOfEachReviewerAndOfTheActListAreMarkedCounted(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes));
+
+        self::assertContains('strong reviewer: changes, 1 findings counted', $lines);
+        self::assertContains('act list: 1 findings counted', $lines);
+    }
+
+    public function testTheSchemaRefusesCallsMarkedAsMeasured(): void
+    {
+        $document = $this->documentOf($this->review(Decision::Approve));
+        self::assertIsArray($document['kinds']);
+        $document['kinds']['calls'] = 'measured';
+
+        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
     }
 
     public function testTheSchemaRefusesAnOutputWithoutItsKinds(): void
@@ -162,7 +186,7 @@ final class ReviewReportTest extends TestCase
     public function testTheSchemaRefusesACostMarkedAsMeasured(): void
     {
         $document = $this->documentOf($this->review(Decision::Approve));
-        $document['kinds'] = ['round' => 'counted', 'tokens' => 'measured', 'cost' => 'measured'];
+        $document['kinds'] = ['round' => 'counted', 'findings' => 'counted', 'calls' => 'counted', 'tokens' => 'measured', 'cost' => 'measured'];
 
         self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
     }

@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Config\Definition\Exception\InvalidConfigurationException;
 use Symfony\Component\Config\Definition\Processor;
+use Symfony\Component\Yaml\Yaml;
 
 #[CoversClass(BudgetConfiguration::class)]
 #[UsesClass(UsageWindow::class)]
@@ -32,6 +33,12 @@ final class BudgetConfigurationTest extends TestCase
         self::assertSame('2026-11-13', $this->priceDate(['budget' => ['price_date' => '2026-11-13']]));
     }
 
+    // Symfony YAML reads an unquoted date as the timestamp of its midnight in UTC, so the owner may leave out the quotes.
+    public function testAnUnquotedPriceDateInYamlIsTheSameDay(): void
+    {
+        self::assertSame('2026-11-13', $this->priceDate(Yaml::parse("budget:\n    price_date: 2026-11-13\n")));
+    }
+
     public function testWithoutAPriceDateItIsNull(): void
     {
         self::assertNull($this->priceDate([]));
@@ -46,6 +53,7 @@ final class BudgetConfigurationTest extends TestCase
         yield 'a day that does not exist' => ['2026-02-30'];
         yield 'a day without zeros' => ['2026-1-3'];
         yield 'a number' => [20261113];
+        yield 'a timestamp that is not a midnight' => [1794528001];
     }
 
     #[DataProvider('refusedDates')]

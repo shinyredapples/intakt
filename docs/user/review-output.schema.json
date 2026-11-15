@@ -68,9 +68,15 @@
         "kinds": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["round", "tokens", "cost"],
+            "required": ["round", "findings", "calls", "tokens", "cost"],
             "properties": {
                 "round": {
+                    "enum": ["counted"]
+                },
+                "findings": {
+                    "enum": ["counted"]
+                },
+                "calls": {
                     "enum": ["counted"]
                 },
                 "tokens": {

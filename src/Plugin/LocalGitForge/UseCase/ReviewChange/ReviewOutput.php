@@ -28,6 +28,15 @@ final readonly class ReviewOutput
         'kinds',
     ];
 
+    // The text and the JSON read the kind of a figure from here, so the two never disagree: the call and finding counts come from the ledger, the tokens from the provider's answer, the cost from a price list.
+    public const array KINDS = [
+        'round' => FigureKind::Counted,
+        'findings' => FigureKind::Counted,
+        'calls' => FigureKind::Counted,
+        'tokens' => FigureKind::Measured,
+        'cost' => FigureKind::Estimated,
+    ];
+
     /**
      * @param list<ReviewOutputVerdict> $verdicts
      * @param list<Finding>             $actList
@@ -60,7 +69,7 @@ final readonly class ReviewOutput
             $review->tokens,
             $review->cost,
             $review->reasons,
-            ['round' => FigureKind::Counted->value, 'tokens' => FigureKind::Measured->value, 'cost' => FigureKind::Estimated->value],
+            array_map(static fn (FigureKind $kind): string => $kind->value, self::KINDS),
         );
     }
 }
