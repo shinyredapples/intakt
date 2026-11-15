@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\UseCase\ShowTask\ShowTaskController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LogLevel;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -172,7 +173,7 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/tasks/alpha/7');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "The ledger holds no build step of this task."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "The ledger holds no build step of this task."', NotFoundHttpException::class));
     }
 
     /**

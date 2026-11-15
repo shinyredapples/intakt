@@ -18,6 +18,7 @@ use Intakt\Core\Dashboard\Infrastructure\SearchIndex;
 use Intakt\Core\Dashboard\UseCase\Search\SearchController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LogLevel;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -257,7 +258,7 @@ final class SearchControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/search?q[]=alpha');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "Invalid query parameter "q"."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING,sprintf('Uncaught PHP Exception %s: "Invalid query parameter "q"."', NotFoundHttpException::class));
     }
 
     /**
