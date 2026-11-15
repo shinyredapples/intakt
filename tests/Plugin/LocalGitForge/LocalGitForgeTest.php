@@ -376,6 +376,54 @@ final class LocalGitForgeTest extends TestCase
         self::assertStringContainsString('absent at the base, 29 bytes at the head', $patch);
     }
 
+    public function testItKeepsTheModeLinesOfABinaryFileWhoseModeAloneChangedAndNamesItNotBinary(): void
+    {
+        $this->repository->commitFile('logo.png', self::PNG);
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->makeExecutable('logo.png');
+
+        $patch = $this->forge()->change(new ChangeId('feature'))->diff->patch;
+
+        self::assertSame("diff --git a/logo.png b/logo.png\nold mode 100644\nnew mode 100755\n", $patch);
+        self::assertStringNotContainsString('Binary file, not shown', $patch);
+        self::assertTrue(mb_check_encoding($patch, 'UTF-8'));
+    }
+
+    public function testItRefusesAChangedFileWhoseNameIsNotUtf8SoThatItsNameCannotStandForAnotherFile(): void
+    {
+        $this->repository->commitFile("caf\u{fffd}{E9}.txt", "unchanged decoy\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile("caf\xe9.txt", "changed content\n");
+
+        try {
+            $this->forge()->change(new ChangeId('feature'));
+            self::fail('A changed path that is not UTF-8 was listed.');
+        } catch (ForgeReadFailed $failure) {
+            self::assertSame("git listed a changed path that is not valid UTF-8: caf\u{fffd}{E9}.txt.", $failure->getMessage());
+        }
+    }
+
+    public function testItRefusesAChangeThatDeletesAFileWhoseNameIsNotUtf8(): void
+    {
+        $this->repository->commitFile("caf\xe9.txt", "menu\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->removeFile("caf\xe9.txt");
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->change(new ChangeId('feature'));
+    }
+
+    public function testItListsAChangedFileWhoseNameIsUtf8AsItIs(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile("caf\u{e9} \u{fffd}.txt", "menu\n");
+
+        $change = $this->forge()->change(new ChangeId('feature'));
+
+        self::assertSame([["caf\u{e9} \u{fffd}.txt", FileStatus::Added]], $this->pathsAndStatuses($change));
+    }
+
     public function testItKeepsTheLinesOfATextFileChangedBesideABinaryFile(): void
     {
         $this->repository->checkoutNewBranch('feature');
@@ -518,6 +566,19 @@ final class LocalGitForgeTest extends TestCase
         $change = $this->forge()->change(new ChangeId('feature'));
 
         self::assertFalse($this->forge()->hasHeadMoved($change));
+    }
+
+    public function testItRefusesAHeadMoveWhoseRangeListsAPathThatIsNotUtf8(): void
+    {
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('src/New.php', "old\n");
+        $earlier = $this->repository->commitFile("caf\xe9.txt", "menu\n");
+        $this->repository->removeFile("caf\xe9.txt");
+        $moved = $this->forge()->change(new ChangeId('feature'));
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->forge()->headMoveSince(new CommitId($earlier), $moved);
     }
 
     public function testItRefusesAChangeWhoseBranchDoesNotExist(): void
