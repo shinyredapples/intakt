@@ -12,7 +12,7 @@ The path from a clone to a first verdict, in order:
 
 What the guide covers today, feature by feature; the parts marked planned arrive later:
 
-- Running the demo with `docker compose up`: it seeds a sample project and a sample repository with a change to review (see [The demo](#the-demo-with-docker-compose)); the timed run to the first verdict has its record in the [README](../../README.md#timed-run), still to be filled in by the owner
+- Running the demo with `docker compose up`: it seeds a sample project and a sample repository with a change to review (see [The demo](#the-demo-with-docker-compose)); the timed run to the first verdict has its measured times in the [README](../../README.md#timed-run)
 - Choosing a review panel by the size or paths of a change, and the dry run `intakt:review:panel` (see below). A project's panel and its quorum policy (`all`: every reviewer approves; `majority`: more than half approve; `one-strong-plus-one`: at least two approve, one of them a strong reviewer) are set in the configuration file (see below), and `intakt:review` runs it (see [below](#reviewing-a-branch)).
 - Reviewing a branch of a local repository with `intakt:review` (see [below](#reviewing-a-branch)); reviewing a pull request is planned
 - Checking whether a verdict still counts for a branch of a local repository, with `intakt:verdict:identity` (see [below](#checking-whether-a-verdict-still-counts))
@@ -778,7 +778,7 @@ The first start seeds the demo, in the volume:
 - the sample repository at `/app/var/data/sample-repository`, with the branch `sample-change` to review against `main`;
 - the project `sample` in `/app/var/data/intakt.yaml`, with a panel of two reviewers (`correctness` and `security`) that must both approve. With one Anthropic or OpenAI key, both reviewers use that provider; with both keys, `correctness` uses Anthropic and `security` uses OpenAI. With `HF_TOKEN` beside one or both keys, `security` moves to Hugging Face, so the two reviewers use two providers; with `HF_TOKEN` alone, see [Running the demo on a Hugging Face token](#running-the-demo-on-a-hugging-face-token).
 
-Once the server answers its health check and the dashboard answers, every start ends its log with a block between two lines of `=`: the dashboard's address (`Open the dashboard: http://localhost:7781`) and the command that reviews the sample change, in the form your shell runs from the repository folder (it runs the console inside the container). The command works as soon as it appears. Copy it as printed:
+Once the server answers its health check and the dashboard answers, every start ends its log with a block between two lines of `=`: the dashboard's address (`Open the dashboard: http://localhost:7781`) and the command that reviews the sample change, in the form your shell runs from the repository folder (it runs the console inside the container). The command works as soon as it appears. Leave `docker compose up` running, open a second terminal in the repository folder and run the command there as printed; the request log in the first terminal may keep scrolling:
 
 ```
 docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
