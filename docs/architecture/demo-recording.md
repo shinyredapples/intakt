@@ -21,7 +21,7 @@ The ledger holds no live updates, so they are captured while the review runs. `C
 
 | Key | Holds |
 |---|---|
-| `reviewed_at` | the moment of the review's first ledger row |
+| `reviewed_at` | the moment of the first round's `review_started` row |
 | `intakt_version` | Composer's root package version, with `@<commit>` when Composer knows the commit (`dev-main@<sha>` in a checkout) |
 | `models` | the models the rounds called |
 | `project`, `change` | as given to the command |

@@ -13,9 +13,4 @@ final class RecordingIsMalformed extends RuntimeException
     {
         return new self('The recording is not a recording of a review: '.$reason->getMessage(), 0, $reason);
     }
-
-    public static function notARecording(): self
-    {
-        return new self('The recording is not a recording of a review.');
-    }
 }

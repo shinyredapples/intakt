@@ -20,44 +20,52 @@ final readonly class ReviewRowsOfChange
     ) {
     }
 
-    public function of(string $project, string $change): ReviewRows
+    // Null when the ledger holds no round of the change in the project.
+    public function of(string $project, string $change): ?ReviewRows
     {
         $rows = iterator_to_array($this->ledger->readInOrder(), false);
-        $rounds = $this->roundsOf($rows, $project, $change);
+        $starts = $this->startsOf($rows, $project, $change);
+
+        if ([] === $starts) {
+            return null;
+        }
+
+        $rounds = array_map(static fn (ReviewedRound $start): string => $start->round, $starts);
         $calls = $this->callsIn($rows, $rounds);
 
         return new ReviewRows(
+            $starts[0]->startedAt,
             $rounds,
             array_values(array_filter($rows, fn (RecordedEvent $row): bool => $this->belongs($row, $rounds, array_keys($calls)))),
-            array_values(array_unique(array_filter($calls))),
+            array_values(array_unique(array_filter($calls, static fn (?string $model): bool => null !== $model && '' !== $model))),
         );
     }
 
     /**
      * @param list<RecordedEvent> $rows
      *
-     * @return list<string>
+     * @return list<ReviewedRound>
      */
-    private function roundsOf(array $rows, string $project, string $change): array
+    private function startsOf(array $rows, string $project, string $change): array
     {
-        $rounds = [];
+        $starts = [];
 
         foreach ($rows as $row) {
             $started = LedgerEventKind::ReviewStarted === $row->event->kind ? $this->payloads->startOf($row) : null;
 
             if ($started instanceof ReviewedRound && $project === $started->project && $change === $started->change) {
-                $rounds[] = $started->round;
+                $starts[] = $started;
             }
         }
 
-        return $rounds;
+        return $starts;
     }
 
     /**
      * @param list<RecordedEvent> $rows
      * @param list<string>        $rounds
      *
-     * @return array<string, string|null> the model of each call, by call id
+     * @return array<string, string|null>
      */
     private function callsIn(array $rows, array $rounds): array
     {

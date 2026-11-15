@@ -35,12 +35,10 @@ final readonly class RecordingFormat
     public function read(string $json): Recording
     {
         try {
-            $recording = $this->serializer->deserialize($json, Recording::class, 'json', self::MOMENTS);
+            return $this->serializer->deserialize($json, Recording::class, 'json', self::MOMENTS);
         } catch (ExceptionInterface $failure) {
             throw RecordingIsMalformed::because($failure);
         }
-
-        return $recording instanceof Recording ? $recording : throw RecordingIsMalformed::notARecording();
     }
 
     public function lineOf(CapturedUpdate $update): string
@@ -52,11 +50,9 @@ final readonly class RecordingFormat
     public function updateOf(string $line): ?CapturedUpdate
     {
         try {
-            $update = $this->serializer->deserialize($line, CapturedUpdate::class, 'json', self::MOMENTS);
+            return $this->serializer->deserialize($line, CapturedUpdate::class, 'json', self::MOMENTS);
         } catch (ExceptionInterface) {
             return null;
         }
-
-        return $update instanceof CapturedUpdate ? $update : null;
     }
 }

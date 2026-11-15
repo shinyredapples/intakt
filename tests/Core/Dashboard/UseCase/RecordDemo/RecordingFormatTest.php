@@ -50,7 +50,7 @@ final class RecordingFormatTest extends TestCase
     {
         $read = self::format()->read(self::format()->write(self::recording()));
 
-        self::assertSame('{"round":"r-1","note":"café \/ <b>"}', array_first($read->events)->payload);
+        self::assertSame(['{"round":"r-1","note":"café \/ <b>"}'], array_map(static fn (RecordedLedgerEvent $event): string => $event->payload, $read->events));
     }
 
     public function testACapturedUpdateReadsBackFromItsLine(): void
@@ -97,6 +97,7 @@ final class RecordingFormatTest extends TestCase
     private static function without(string $key): string
     {
         $decoded = json_decode(self::written(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
         unset($decoded[$key]);
 
         return json_encode($decoded, JSON_THROW_ON_ERROR);

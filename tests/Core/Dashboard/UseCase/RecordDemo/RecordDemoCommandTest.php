@@ -12,6 +12,7 @@ use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdates;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordDemoCommand;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordDemoInput;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
@@ -35,6 +36,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(CapturedUpdates::class)]
 #[CoversClass(RecordingNeedsCapturedUpdates::class)]
 #[UsesClass(ReviewRows::class)]
+#[UsesClass(RecordDemoInput::class)]
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
 #[UsesClass(CapturedUpdate::class)]
@@ -90,11 +92,13 @@ final class RecordDemoCommandTest extends TestCase
 
         $first = array_first($this->recorded()->events);
 
+        self::assertNotNull($stored);
+        self::assertNotNull($first);
         self::assertSame([$stored->id->toRfc4122(), $stored->event->payload], [$first->id, $first->payload]);
         self::assertEquals($stored->recordedAt, $first->recordedAt);
     }
 
-    public function testTheRecordingIsDatedByTheFirstRowOfTheReview(): void
+    public function testTheRecordingIsDatedByTheStartOfItsFirstRound(): void
     {
         $this->givenTwoRoundsOfTheSampleChange();
 
