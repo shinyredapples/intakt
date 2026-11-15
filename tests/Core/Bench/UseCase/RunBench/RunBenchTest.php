@@ -8,6 +8,7 @@ use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
+use Intakt\Core\Bench\Contract\RepeatedChange;
 use Intakt\Core\Bench\Contract\RunVerdict;
 use Intakt\Core\Bench\Domain\BenchChange;
 use Intakt\Core\Bench\Domain\ChangeFiles;
@@ -64,10 +65,13 @@ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 /**
  * @phpstan-import-type ResultDocument from BenchResultFile
+ * @phpstan-import-type WrittenChange from BenchResultFile
+ * @phpstan-import-type WrittenRun from BenchResultFile
  */
 #[Group('persistence')]
 #[CoversClass(RunBench::class)]
 #[CoversClass(BenchResultFile::class)]
+#[UsesClass(RepeatedChange::class)]
 #[UsesClass(BenchChangeCheckout::class)]
 #[UsesClass(ReviewBenchChange::class)]
 #[UsesClass(ReadBenchProvenance::class)]
@@ -118,7 +122,7 @@ final class RunBenchTest extends KernelTestCase
     {
         $changes = $this->scriptedRun()['changes'];
 
-        $freeShipping = array_find($changes, static fn (array $change): bool => 'free-shipping' === $change['change']) ?? self::fail('free-shipping is not in the result file');
+        $freeShipping = $this->runOf($changes, 'free-shipping');
         [$first, $second] = $freeShipping['reviewers'];
         self::assertSame(['free-shipping-boundary'], $first['caught']);
         self::assertSame([['id' => 'free-shipping-boundary', 'cause' => 'reviewer']], $second['missed']);
@@ -132,8 +136,7 @@ final class RunBenchTest extends KernelTestCase
     {
         $changes = $this->scriptedRun()['changes'];
 
-        $roundTotal = array_find($changes, static fn (array $change): bool => 'round-total' === $change['change']) ?? self::fail('round-total is not in the result file');
-        self::assertSame(['F1'], array_column($roundTotal['reviewers'][0]['false_alarms'], 'id'));
+        self::assertSame(['F1'], array_column($this->runOf($changes, 'round-total')['reviewers'][0]['false_alarms'], 'id'));
     }
 
     public function testAScriptedRunReviewsEveryBenchChangeOnce(): void
@@ -141,25 +144,61 @@ final class RunBenchTest extends KernelTestCase
         $changes = $this->scriptedRun()['changes'];
 
         self::assertSame(['bulk-discount-docs', 'coupon-code', 'export-orders', 'free-shipping', 'price-list', 'readme-test-command', 'round-total', 'tax-helper'], array_column($changes, 'change'));
+        self::assertSame(array_fill(0, 8, 1), array_map(static fn (array $change): int => count($change['runs']), $changes));
+    }
+
+    public function testRepeatedScriptedRunsWithTheSameAnswersAgreeOnEveryChange(): void
+    {
+        $changes = $this->scriptedRun(2, [$this->findsTheBoundary()])['changes'];
+
+        self::assertSame(array_fill(0, 8, true), array_column($changes, 'agreed'));
+    }
+
+    public function testRepeatedScriptedRunsWhereOnlyOneCatchesTheDefectDoNotAgree(): void
+    {
+        $changes = $this->scriptedRun(2, [$this->findsTheBoundary(), new VerdictPerRole([])])['changes'];
+
+        $freeShipping = array_find($changes, static fn (array $change): bool => 'free-shipping' === $change['change']) ?? self::fail('free-shipping is not in the result file');
+        self::assertFalse($freeShipping['agreed']);
+        self::assertSame([['free-shipping-boundary'], []], array_map(static fn (array $run): array => $run['reviewers'][0]['caught'], $freeShipping['runs']));
     }
 
     /**
+     * @param positive-int         $repeat
+     * @param list<VerdictPerRole> $answersPerRound
+     *
      * @return ResultDocument
      */
-    private function scriptedRun(): array
+    private function scriptedRun(int $repeat = 1, array $answersPerRound = []): array
     {
-        $verdicts = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/shipping.js', 3, null, 'Off by one.', FixableBy::Builder, false, null, null)], [], [])]);
         $byRole = ['Look at part 1.' => ['seconds' => 3, 'tokens' => 500], 'Look at part 2.' => ['seconds' => 1, 'tokens' => 200]];
-        $vendor = new UsageRecordingVendor($verdicts, $this->fixture->ledger(), $this->fixture->clock, $byRole);
+        $vendors = array_map(fn (VerdictPerRole $verdicts): Vendor => new UsageRecordingVendor($verdicts, $this->fixture->ledger(), $this->fixture->clock, $byRole), [] === $answersPerRound ? [$this->findsTheBoundary()] : $answersPerRound);
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn($this->panel());
-        $run = new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($this->reviewChange($vendor), new RunClassifier(new DefectMatcher())), $this->results.'-checkouts');
+        $run = new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($this->reviewChange(new VendorPerRound($vendors)), new RunClassifier(new DefectMatcher())), $this->results.'-checkouts');
         $file = new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), $this->fixture->clock, $this->results);
 
         /** @var ResultDocument $decoded */
-        $decoded = json_decode(new Filesystem()->readFile($file->write('alpha', $run->reviewEveryChange('alpha'))), true, flags: JSON_THROW_ON_ERROR);
+        $decoded = json_decode(new Filesystem()->readFile($file->write('alpha', $run->reviewEveryChange('alpha', $repeat))), true, flags: JSON_THROW_ON_ERROR);
 
         return $decoded;
+    }
+
+    private function findsTheBoundary(): VerdictPerRole
+    {
+        return new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/shipping.js', 3, null, 'Off by one.', FixableBy::Builder, false, null, null)], [], [])]);
+    }
+
+    /**
+     * @param list<WrittenChange> $changes
+     *
+     * @return WrittenRun
+     */
+    private function runOf(array $changes, string $name): array
+    {
+        $change = array_find($changes, static fn (array $change): bool => $name === $change['change']) ?? self::fail($name.' is not in the result file');
+
+        return $change['runs'][0];
     }
 
     private function reviewChange(Vendor $vendor): ReviewChange

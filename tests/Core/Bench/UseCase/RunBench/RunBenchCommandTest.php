@@ -6,9 +6,11 @@ namespace Intakt\Tests\Core\Bench\UseCase\RunBench;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Bench\Contract\BenchFigures;
 use Intakt\Core\Bench\Contract\BenchProvenance;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
+use Intakt\Core\Bench\Contract\RepeatedChange;
 use Intakt\Core\Bench\Contract\RunVerdict;
 use Intakt\Core\Bench\Domain\BenchChange;
 use Intakt\Core\Bench\Domain\ChangeFiles;
@@ -20,6 +22,7 @@ use Intakt\Core\Bench\Domain\RunOutcome;
 use Intakt\Core\Bench\UseCase\ReviewBenchChange\BenchChangeCheckout;
 use Intakt\Core\Bench\UseCase\ReviewBenchChange\ReadBenchProvenance;
 use Intakt\Core\Bench\UseCase\ReviewBenchChange\ReviewBenchChange;
+use Intakt\Core\Bench\UseCase\RunBench\BenchReport;
 use Intakt\Core\Bench\UseCase\RunBench\BenchResultFile;
 use Intakt\Core\Bench\UseCase\RunBench\RunBench;
 use Intakt\Core\Bench\UseCase\RunBench\RunBenchCommand;
@@ -64,6 +67,9 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(RunBenchCommand::class)]
 #[CoversClass(RunBench::class)]
 #[CoversClass(BenchChangeCheckout::class)]
+#[CoversClass(BenchReport::class)]
+#[CoversClass(RepeatedChange::class)]
+#[UsesClass(BenchFigures::class)]
 #[UsesClass(BenchResultFile::class)]
 #[UsesClass(ReviewBenchChange::class)]
 #[UsesClass(ReadBenchProvenance::class)]
@@ -147,11 +153,77 @@ final class RunBenchCommandTest extends TestCase
 
     public function testEveryPrintedFigureIsLabeledAsMeasured(): void
     {
-        $display = $this->runCommand(['--project' => 'alpha'], $this->reviews())->getDisplay();
+        $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->reviews())->getDisplay();
 
-        self::assertStringContainsString("free-shipping: decision changes, measured 1 act list findings\n  role-1 (standard), measured: 1 caught, 0 missed, 0 false alarms, 500 prompt tokens, 40 completion tokens, 1 calls, 3000 ms\n", $display);
-        $unlabeled = array_filter(explode("\n", $display), static fn (string $line): bool => 1 === preg_match('/\d/', $line) && !str_contains($line, 'measured') && !str_starts_with($line, 'result file: '));
+        self::assertStringContainsString("free-shipping run 1 of 2: decision changes, measured 1 act list findings\n  role-1 (standard), measured: 1 caught, 0 missed, 0 false alarms, 500 prompt tokens, 40 completion tokens, 1 calls, 3000 ms\n", $display);
+        $figures = explode("\n", substr($display, (int) strpos($display, "figures:\n")));
+        $unlabeled = array_filter($figures, static fn (string $line): bool => 1 === preg_match('/\d/', $line) && !str_contains($line, 'measured') && !str_starts_with($line, 'result file: '));
         self::assertSame([], array_values($unlabeled));
+    }
+
+    public function testARepeatBelowOneIsRefusedBeforeAnyCheckout(): void
+    {
+        $tester = $this->runCommand(['--project' => 'alpha', '--repeat' => '0'], $this->reviews());
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('--repeat must be at least 1', $tester->getDisplay());
+        self::assertDirectoryDoesNotExist($this->workspace);
+        self::assertDirectoryDoesNotExist($this->results);
+    }
+
+    public function testARepeatOfThreeReviewsEveryChangeThreeTimesEachFromAFreshCheckout(): void
+    {
+        $during = [];
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use (&$during): ChangeReview {
+            $during[] = $this->checkoutsNow();
+
+            return $this->reviews()->review($request);
+        });
+
+        $this->runCommand(['--project' => 'alpha', '--repeat' => '3'], $reviews);
+
+        self::assertSame(array_fill(0, 24, 1), $during);
+        self::assertSame(array_fill(0, 8, 3), array_map(static fn (array $change): int => count($change['runs']), $this->resultDocument()['changes']));
+    }
+
+    public function testTheReportPrintsEveryFailureCauseBeforeTheFirstFigure(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->everySecondReviewFails())->getDisplay();
+
+        $firstFigure = (int) strpos($display, 'measured');
+        foreach (["  coupon-code run 1: role-1 (standard) missed coupon-save10-missing, cause reviewer\n", "  free-shipping run 2: role-1 (standard) harness failure, left out of the figures: stopped at its output limit\n"] as $cause) {
+            self::assertStringContainsString($cause, $display);
+            self::assertLessThan($firstFigure, strpos($display, $cause));
+        }
+    }
+
+    public function testRunsWithTheSameOutcomeAreReportedAsAgreeing(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->reviews())->getDisplay();
+
+        self::assertStringContainsString("free-shipping: runs agree, measured over 2 compared of 2 runs\n", $display);
+    }
+
+    public function testRunsWhereOnlyOneCatchesTheDefectAreReportedAsDisagreeing(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->everySecondReviewFindsNothing())->getDisplay();
+
+        self::assertStringContainsString("free-shipping: runs disagree, measured over 2 compared of 2 runs\n", $display);
+    }
+
+    public function testARunWithAHarnessFailureLeavesTheChangeNotComparable(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->everySecondReviewFails())->getDisplay();
+
+        self::assertStringContainsString("free-shipping: runs not comparable, measured over 1 compared of 2 runs\n", $display);
+    }
+
+    public function testTheReportTotalsEachReviewerAndTierOverEveryRun(): void
+    {
+        $display = $this->runCommand(['--project' => 'alpha', '--repeat' => '2'], $this->reviews())->getDisplay();
+
+        self::assertStringContainsString("  role-1 (standard), measured over 16 rounds: 2 of 10 planted defects found, 6 false alarms, 0 harness failures left out, 8640 tokens (8000 prompt, 640 completion, 16 calls)\n", $display);
     }
 
     public function testAFailedReviewEndsTheRunWithoutAFileAndRemovesItsCheckout(): void
@@ -216,12 +288,52 @@ final class RunBenchCommandTest extends TestCase
         $panels->method('panelForChange')->willReturn($panel);
         $command = new RunBenchCommand(
             new RunBench(new BenchChangeCheckout($panels, self::FIXTURES), new ReviewBenchChange($reviews, new RunClassifier(new DefectMatcher())), $this->workspace),
+            new BenchReport(),
             new BenchResultFile(new ReadBenchProvenance(new HashedReviewPrompts(), self::FIXTURES), new MockClock('2026-11-15 10:30:00'), $this->results),
         );
         $tester = new CommandTester($command);
         $tester->execute($input);
 
         return $tester;
+    }
+
+    /**
+     * @return ResultDocument
+     */
+    private function resultDocument(): array
+    {
+        /** @var ResultDocument $result */
+        $result = json_decode(new Filesystem()->readFile($this->resultFiles()[0] ?? self::fail('no result file')), true, flags: JSON_THROW_ON_ERROR);
+
+        return $result;
+    }
+
+    private function everySecondReviewFails(): ChangeReviews
+    {
+        $failed = new ReviewerOutcome('role-1', Tier::Standard, null, 'stopped at its output limit', new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500);
+
+        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Blocked, [], [], new RoundTokens(1, 100, 0, 0, 0, 0, 100), Cost::none(), [], reviewers: [$failed]));
+    }
+
+    private function everySecondReviewFindsNothing(): ChangeReviews
+    {
+        $nothing = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Approve, [], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000);
+
+        return $this->everySecondReview(new ChangeReview('round', 1, Decision::Approve, [], [], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$nothing]));
+    }
+
+    // The second run of each change gets the other answer, because the runs of a change follow each other.
+    private function everySecondReview(ChangeReview $other): ChangeReviews
+    {
+        $calls = 0;
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use (&$calls, $other): ChangeReview {
+            ++$calls;
+
+            return 0 === $calls % 2 ? $other : $this->reviews()->review($request);
+        });
+
+        return $reviews;
     }
 
     private function reviews(): ChangeReviews
