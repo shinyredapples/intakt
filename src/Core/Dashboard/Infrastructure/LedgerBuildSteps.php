@@ -53,7 +53,7 @@ final readonly class LedgerBuildSteps
         $outcome = is_string($payload['outcome'] ?? null) ? BuildStepOutcome::tryFrom($payload['outcome']) : null;
         $failure = $payload['failure'] ?? null;
 
-        if (!is_string($project) || !is_string($task) || null === $step || null === $outcome) {
+        if (!is_string($project) || '' === $project || !is_string($task) || '' === $task || null === $step || null === $outcome) {
             return null;
         }
 
