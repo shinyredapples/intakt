@@ -69,7 +69,7 @@ final readonly class BuildTask
         $bundle = null;
 
         foreach (BuildStep::cases() as $step) {
-            $failure = match ($step) {
+            $result = match ($step) {
                 // Read before the other steps, because they need the task it returns.
                 BuildStep::Task => null,
                 BuildStep::Mirror => $this->updateMirror($request),
@@ -78,9 +78,11 @@ final readonly class BuildTask
                 BuildStep::HandBackCheck => $this->checkHandBack($request, $bundle),
             };
 
+            $failure = $result;
+
             // A local of this run, never a property, because a worker keeps the service between runs.
-            if ($failure instanceof BuildJobOutcome) {
-                $bundle = $failure->bundle;
+            if ($result instanceof BuildJobOutcome) {
+                $bundle = $result->bundle;
                 $failure = null;
             }
 
