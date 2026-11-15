@@ -1,0 +1,87 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Intakt\Tests\JourneyPage\MermaidTimeline;
+use Symfony\Component\Process\Process;
+
+const USAGE = "usage: bin/pages <folder> [--recorded=<folder with the recorded API answers>]\n";
+const JOURNEY_LINK = "How Intakt was built, with its milestones, token use and issue flow: [the journey](journey/).\n";
+
+$autoload = __DIR__.'/../vendor/autoload.php';
+
+if (!is_file($autoload)) {
+    fwrite(STDERR, "run composer install first\n");
+    exit(2);
+}
+
+require $autoload;
+
+$folder = null;
+$recorded = null;
+
+foreach (array_slice($argv, 1) as $argument) {
+    if (str_starts_with($argument, '--recorded=') && null === $recorded) {
+        $recorded = $argument;
+
+        continue;
+    }
+
+    if (str_starts_with($argument, '-') || null !== $folder) {
+        fwrite(STDERR, USAGE);
+        exit(2);
+    }
+
+    $folder = $argument;
+}
+
+if (null === $folder) {
+    fwrite(STDERR, USAGE);
+    exit(2);
+}
+
+$root = dirname(__DIR__);
+
+foreach ([['bin/highlights'], ['bin/journey', ...(null === $recorded ? [] : [$recorded])]] as $command) {
+    $run = new Process([PHP_BINARY, $root.'/'.$command[0], ...array_slice($command, 1)]);
+    $run->setTimeout(timeout: null);
+    $run->run(static fn (string $type, string $output): int|false => fwrite(Process::ERR === $type ? STDERR : STDOUT, $output));
+
+    if (!$run->isSuccessful()) {
+        exit(1);
+    }
+}
+
+$journey = (string) file_get_contents($root.'/docs/journey.md');
+$highlights = explode("\n", (string) file_get_contents($root.'/docs/highlights.md'), 2);
+// Pages serves the journey page at /journey/, so its drawings lie beside it, and its Jekyll does not render Mermaid.
+$files = [
+    'index.md' => $highlights[0]."\n\n".JOURNEY_LINK.($highlights[1] ?? ''),
+    'journey/index.md' => (string) preg_replace(MermaidTimeline::BLOCK, '![Timeline](timeline.svg)', str_replace('](journey/', '](', $journey)),
+];
+
+foreach (glob($root.'/docs/journey/*.svg') ?: [] as $drawing) {
+    $files['journey/'.basename($drawing)] = (string) file_get_contents($drawing);
+}
+
+$changed = array_filter($files, static fn (string $content, string $path): bool => !is_file($folder.'/'.$path) || file_get_contents($folder.'/'.$path) !== $content, ARRAY_FILTER_USE_BOTH);
+
+if ([] === $changed) {
+    fwrite(STDOUT, "site is current\n");
+    exit(0);
+}
+
+if (!is_dir($folder.'/journey') && !@mkdir($folder.'/journey', recursive: true)) {
+    fwrite(STDERR, 'cannot make '.$folder."/journey\n");
+    exit(1);
+}
+
+foreach ($changed as $path => $content) {
+    if (false === @file_put_contents($folder.'/'.$path, $content)) {
+        fwrite(STDERR, 'cannot write '.$folder.'/'.$path."\n");
+        exit(1);
+    }
+
+    fwrite(STDOUT, $folder.'/'.$path." written\n");
+}

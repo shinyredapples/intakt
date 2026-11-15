@@ -1,0 +1,3 @@
+## Symfony components
+
+| Scheduler | the watcher tick (`#[AsSchedule]`, one `RecurringMessage` per project, every minute), run in the image by its own `messenger:consume scheduler_watcher` process; `use_messenger_routing: true` sends a scheduled message through the Messenger routing of its class, and the tick, which has none, stays in that process; usage probes, deadlines and the weekly branch cleanup are planned | in progress | T38 (#490), `src/Core/Watcher/UseCase/WatchPullRequests/WatcherSchedule.php`; T22 (#28, part #690), `docker/entrypoint.sh`; #1900, `config/packages/scheduler.yaml`; T14 (#19), T30 (#24) |
