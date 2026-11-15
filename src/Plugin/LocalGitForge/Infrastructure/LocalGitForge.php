@@ -211,7 +211,16 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
 
     private function changedFiles(CommitRange $commits): ChangedFiles
     {
-        return $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...self::DIFF_OPTIONS, ...$this->range($commits)]));
+        $files = $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...self::DIFF_OPTIONS, ...$this->range($commits)]));
+
+        // Because -z gives each path's raw bytes while every path reaches prompts and payloads that must be UTF-8; an escaped path could be the valid name of another file, so it is refused.
+        foreach ($files as $file) {
+            if (!mb_check_encoding($file->path, 'UTF-8')) {
+                throw new ForgeReadFailed(sprintf('git listed a changed path that is not valid UTF-8: %s.', $this->binaryFiles->escaped($file->path)));
+            }
+        }
+
+        return $files;
     }
 
     /**
