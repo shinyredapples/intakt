@@ -248,14 +248,14 @@ final class RunBenchCommandTest extends TestCase
     {
         $display = $this->runCommand(['--project' => 'alpha'], $this->everySecondReviewFindsNothing([]))->getDisplay();
 
-        self::assertStringContainsString("  role-1 (standard, model not recorded), measured over 4 rounds:", $display);
+        self::assertStringContainsString('  role-1 (standard, model not recorded), measured over 4 rounds:', $display);
     }
 
     public function testAReviewerAnsweredByTwoModelsNamesBoth(): void
     {
         $display = $this->runCommand(['--project' => 'alpha'], $this->everySecondReviewFindsNothing(['big', 'small']))->getDisplay();
 
-        self::assertStringContainsString("  role-1 (standard, models big and small), measured over 4 rounds:", $display);
+        self::assertStringContainsString('  role-1 (standard, models big and small), measured over 4 rounds:', $display);
     }
 
     public function testAFailedReviewEndsTheRunWithoutAFileAndRemovesItsCheckout(): void
