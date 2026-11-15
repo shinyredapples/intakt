@@ -56,7 +56,10 @@ final readonly class LeftUndoneTokens
      */
     public function is(int $index, int|string|array $kinds): bool
     {
-        return isset($this->code[$index]) && $this->code[$index][0]->is($kinds);
+        // Because PhpToken::is() compares a string kind with the text, so string content that is only "(" would match too.
+        $ids = array_map(static fn (int|string $kind): int => is_string($kind) ? ord($kind) : $kind, (array) $kinds);
+
+        return isset($this->code[$index]) && in_array($this->code[$index][0]->id, $ids, true);
     }
 
     public function text(int $index): string

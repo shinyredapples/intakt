@@ -111,6 +111,7 @@ final class LeftUndoneCodeTest extends TestCase
         yield 'a formatted message' => ["\$this->markTestSkipped(sprintf('needs %s', \$tool));"];
         yield 'a double-quoted message' => ['self::markTestIncomplete("the forge sends no total yet");'];
         yield 'an attribute with a named reason' => ["#[Skip(reason: 'needs the docker socket')]"];
+        yield 'a string that goes on after the reason on the line' => ["\$this->markTestSkipped('needs the docker socket\n');"];
     }
 
     #[DataProvider('skipsWithAReason')]
@@ -130,6 +131,11 @@ final class LeftUndoneCodeTest extends TestCase
         yield 'an interpolation without words' => ['$this->markTestSkipped("$why");'];
         yield 'a reason on the next line' => ["\$this->markTestSkipped(\n    'needs the docker socket'\n);"];
         yield 'an attribute reason on the next line' => ["#[Skip(\n    'needs the docker socket'\n)]"];
+        yield 'a string that opens on the line with its reason on the next' => ["\$this->markTestSkipped('\nneeds a missing tool');"];
+        yield 'an interpolated string with its reason on the next line' => ["\$this->markTestSkipped(\"\n\$tool is missing\");"];
+        yield 'a heredoc reason' => ["\$this->markTestSkipped(<<<TEXT\nneeds the docker socket\nTEXT);"];
+        yield 'a call after a comment' => ['$this->markTestSkipped /* why */ ();'];
+        yield 'a call in braces inside a string' => ['$text = "{$this->markTestSkipped()}";'];
     }
 
     #[DataProvider('skipsWithoutAReasonOnTheirLine')]
@@ -138,6 +144,29 @@ final class LeftUndoneCodeTest extends TestCase
         $findings = new LeftUndoneCode()->findingsOn('tests/OrderTest.php', "<?php\n".$code, range(2, 4));
 
         self::assertStringContainsString('without a reason; pass a message naming the missing tool or outside condition on the same line', $findings[2] ?? '');
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function skipNamesThatCallNothing(): iterable
+    {
+        yield 'a property in a double-quoted string' => ['$text = "$object->markTestSkipped";'];
+        yield 'the call text in a double-quoted string' => ['$code = "$this->markTestSkipped();";'];
+        yield 'the call text in a heredoc' => ["\$code = <<<TEXT\n\$this->markTestSkipped();\nTEXT;"];
+        yield 'a parenthesis alone between two interpolations' => ['$code = "$this->markTestSkipped($why)";'];
+        yield 'a parenthesis alone in a heredoc' => ["\$code = <<<TEXT\n\$this->markTestSkipped(\$why);\nTEXT;"];
+        yield 'a property read' => ['$flag = $this->markTestSkipped;'];
+        yield 'a nullsafe property read' => ['$flag = $this?->markTestSkipped;'];
+        yield 'a class constant' => ['$name = self::markTestIncomplete;'];
+    }
+
+    #[DataProvider('skipNamesThatCallNothing')]
+    public function testASkipNameWithoutACallIsNotReported(string $code): void
+    {
+        $findings = new LeftUndoneCode()->findingsOn('tests/OrderTest.php', "<?php\n".$code, range(2, 4));
+
+        self::assertSame([], $findings);
     }
 
     public function testAChangeInsideTheArgumentsOfAnUnchangedSkipLineReportsTheSkip(): void

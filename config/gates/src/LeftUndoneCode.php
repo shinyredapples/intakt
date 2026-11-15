@@ -63,7 +63,8 @@ final readonly class LeftUndoneCode
         // Because PHP resolves method names case insensitively, so MARKTESTSKIPPED() skips the test as well.
         $isCall = $tokens->is($index, T_STRING)
             && in_array(strtolower($tokens->text($index)), self::TEST_SKIPS, true)
-            && $tokens->is($index - 1, self::CALL_OPERATORS);
+            && $tokens->is($index - 1, self::CALL_OPERATORS)
+            && $tokens->is($index + 1, '(');
 
         return $isCall ? $this->unreasonedSkip($tokens, $index, $tokens->text($index).' call') : [];
     }
@@ -90,7 +91,8 @@ final readonly class LeftUndoneCode
     private function unreasonedSkip(LeftUndoneTokens $tokens, int $nameIndex, string $kind): array
     {
         $line = $tokens->line($nameIndex);
-        $reasoned = array_any($tokens->stringsInArguments($nameIndex), static fn (array $string): bool => $string[1] === $line && 1 === preg_match(self::REASON, $string[0]));
+        // Because a string can run over several lines, while only its text on the line of the name is a reason there.
+        $reasoned = array_any($tokens->stringsInArguments($nameIndex), static fn (array $string): bool => 1 === preg_match(self::REASON, explode("\n", $string[0])[$line - $string[1]] ?? ''));
 
         return $reasoned ? [] : [[$line, $tokens->line($tokens->argumentsEnd($nameIndex)), $kind.self::SKIP_HOW_TO_COMPLY]];
     }
