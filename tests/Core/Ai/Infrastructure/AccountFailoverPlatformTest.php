@@ -51,9 +51,9 @@ use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpClient\Exception\TransportException;
-use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Throwable;
 
 // On the native clock, because the cooldowns are RateLimiter windows, which read the system time themselves.
@@ -484,7 +484,7 @@ final class AccountFailoverPlatformTest extends TestCase
 
         $this->expectExceptionObject(new PlatformRuntimeException('All platforms failed.'));
 
-        $_ = $this->accounts($this->answering($unreachable), $this->answering($broken))->invoke('big', 'Review.');
+        $this->accounts($this->answering($unreachable), $this->answering($broken))->invoke('big', 'Review.');
     }
 
     public function testACallWhoseFirstAccountCannotReachItsEndpointIsAnsweredByTheNextAccount(): void
