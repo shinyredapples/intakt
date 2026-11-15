@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
+use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Platform\Contract\FigureKind;
+use Intakt\Core\Platform\Contract\Figures;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\RoundTokens;
@@ -21,6 +24,7 @@ final readonly class ReviewReport
         #[Target('stored')]
         private SerializerInterface $serializer,
         private VisiblePath $text = new VisiblePath(),
+        private Figures $figures = new Figures(),
     ) {
     }
 
@@ -37,7 +41,7 @@ final readonly class ReviewReport
      */
     public function asLines(ChangeReview $review): array
     {
-        $lines = [sprintf('%s (round %d)', $review->decision->value, $review->round)];
+        $lines = [sprintf('%s (%s)', $review->decision->value, $this->figures->marked('round '.$review->round, FigureKind::Counted))];
 
         foreach ($review->verdicts as $verdict) {
             $lines[] = sprintf('%s reviewer: %s, %d findings', $verdict->tier->value, $verdict->verdict->verdict->value, count($verdict->verdict->findings));
@@ -55,10 +59,22 @@ final readonly class ReviewReport
         }
 
         $tokens = $review->tokens;
-        $lines[] = sprintf('tokens: %d calls, %d prompt%s, %d completion, %d total', $tokens->calls, $tokens->prompt, $this->cacheParts($tokens), $tokens->completion, $tokens->total);
-        $lines[] = 'cost: '.$review->cost->reading($this->text->of(...));
+        $lines[] = 'tokens: '.$this->figures->marked(sprintf('%d calls, %d prompt%s, %d completion, %d total', $tokens->calls, $tokens->prompt, $this->cacheParts($tokens), $tokens->completion, $tokens->total), FigureKind::Measured);
+        // The tokens and the cost stay on two lines: one is read from the provider, the other worked out from a price list, so no sum of the two is shown.
+        $lines[] = 'cost: '.$this->cost($review->cost);
 
         return $lines;
+    }
+
+    // An unknown cost has no figure to mark, because there is nothing to mislabel; an estimate names the day of its price list, or says it is not recorded.
+    private function cost(Cost $cost): string
+    {
+        $reading = $cost->reading($this->text->of(...));
+        if (null === $cost->usd) {
+            return $reading;
+        }
+
+        return $this->figures->marked($reading, FigureKind::Estimated).(null === $cost->priceDate ? ', price date unknown' : ', prices of '.$cost->priceDate);
     }
 
     // Only the parts a vendor reported, so a round without caching reads as before.

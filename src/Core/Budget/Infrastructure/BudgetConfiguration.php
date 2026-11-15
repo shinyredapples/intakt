@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Budget\Infrastructure;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\Definition\Builder\FloatNodeDefinition;
@@ -22,8 +24,21 @@ final class BudgetConfiguration implements ConfigurationInterface
         $budget = $tree->getRootNode()->addDefaultsIfNotSet()->children()->arrayNode('budget')->addDefaultsIfNotSet()->children();
         $this->windows($budget->arrayNode('ceilings'), self::DEFAULT_CEILING);
         $this->prices($budget->arrayNode('prices'));
+        // The day the list was read, because a price changes and an estimate is only as good as its list.
+        $budget->scalarNode('price_date')->defaultNull()->validate()->ifTrue(static fn (mixed $date): bool => !self::isDay($date))->thenInvalid('The price_date must be a date written as YYYY-MM-DD.');
 
         return $tree;
+    }
+
+    private static function isDay(mixed $date): bool
+    {
+        if (!is_string($date)) {
+            return false;
+        }
+
+        $day = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
+
+        return false !== $day && $day->format('Y-m-d') === $date;
     }
 
     private function windows(ArrayNodeDefinition $node, float $default): void

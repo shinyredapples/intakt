@@ -27,6 +27,36 @@ final class BudgetConfigurationTest extends TestCase
         self::assertSame(['five-hour' => 75.0, 'weekly' => 90.0], $this->ceilings(['budget' => ['ceilings' => ['five-hour' => 75]]]));
     }
 
+    public function testTheOwnerNamesTheDayTheyReadThePrices(): void
+    {
+        self::assertSame('2026-11-13', $this->priceDate(['budget' => ['price_date' => '2026-11-13']]));
+    }
+
+    public function testWithoutAPriceDateItIsNull(): void
+    {
+        self::assertNull($this->priceDate([]));
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function refusedDates(): iterable
+    {
+        yield 'not a date' => ['last week'];
+        yield 'a day that does not exist' => ['2026-02-30'];
+        yield 'a day without zeros' => ['2026-1-3'];
+        yield 'a number' => [20261113];
+    }
+
+    #[DataProvider('refusedDates')]
+    public function testAPriceDateThatIsNotADayWrittenAsYearMonthDayIsRefused(mixed $date): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+        $this->expectExceptionMessageMatches('/price_date/');
+
+        $this->priceDate(['budget' => ['price_date' => $date]]);
+    }
+
     public function testTheShadowCeilingsAreNoLongerABudgetKey(): void
     {
         $this->expectException(InvalidConfigurationException::class);
@@ -129,5 +159,16 @@ final class BudgetConfigurationTest extends TestCase
         $configuration = new Processor()->processConfiguration(new BudgetConfiguration(), [$contents]);
 
         return $configuration['budget'][$kind];
+    }
+
+    /**
+     * @param array<mixed> $contents
+     */
+    private function priceDate(array $contents): ?string
+    {
+        /** @var array{budget: array{price_date: string|null}} $configuration */
+        $configuration = new Processor()->processConfiguration(new BudgetConfiguration(), [$contents]);
+
+        return $configuration['budget']['price_date'];
     }
 }

@@ -6,7 +6,7 @@ namespace Intakt\Core\Budget\Contract;
 
 use Closure;
 
-// Unknown as soon as one call has no price, because a partial sum would read as the whole cost and the design never shows an estimate.
+// Unknown as soon as one call has no price, because a partial sum would read as the whole cost and a cost is an estimate, so it carries the date of the price list it was worked out from.
 final readonly class Cost
 {
     /**
@@ -15,6 +15,7 @@ final readonly class Cost
     private function __construct(
         public ?float $usd,
         public array $unpriced,
+        public ?string $priceDate = null,
     ) {
     }
 
@@ -23,9 +24,9 @@ final readonly class Cost
         return new self(0.0, []);
     }
 
-    public static function inUsd(float $usd): self
+    public static function inUsd(float $usd, ?string $priceDate = null): self
     {
-        return new self($usd, []);
+        return new self($usd, [], $priceDate);
     }
 
     public static function unknown(string ...$unpriced): self
@@ -39,7 +40,7 @@ final readonly class Cost
             return self::unknown(...$this->unpriced, ...$other->unpriced);
         }
 
-        return self::inUsd($this->usd + $other->usd);
+        return self::inUsd($this->usd + $other->usd, $this->priceDate ?? $other->priceDate);
     }
 
     // The one wording of a cost, for the console and the dashboard. Unknown rather than 0, so a missing price is never read as a free round, and a priced cost too small to show is never read as free either. A model name comes from the ledger, so each surface passes how it makes a name safe to show.

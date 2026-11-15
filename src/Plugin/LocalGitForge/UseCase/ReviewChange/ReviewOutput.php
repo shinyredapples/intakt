@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Platform\Contract\FigureKind;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -24,12 +25,14 @@ final readonly class ReviewOutput
         'tokens',
         'cost',
         'reasons',
+        'kinds',
     ];
 
     /**
      * @param list<ReviewOutputVerdict> $verdicts
      * @param list<Finding>             $actList
      * @param list<string>              $reasons
+     * @param array<string, string>     $kinds
      */
     public function __construct(
         public string $roundId,
@@ -41,6 +44,7 @@ final readonly class ReviewOutput
         public RoundTokens $tokens,
         public Cost $cost,
         public array $reasons,
+        public array $kinds,
     ) {
     }
 
@@ -56,6 +60,7 @@ final readonly class ReviewOutput
             $review->tokens,
             $review->cost,
             $review->reasons,
+            ['round' => FigureKind::Counted->value, 'tokens' => FigureKind::Measured->value, 'cost' => FigureKind::Estimated->value],
         );
     }
 }
