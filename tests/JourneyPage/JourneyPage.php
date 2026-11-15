@@ -28,7 +28,7 @@ final readonly class JourneyPage
 
         $merges = new CountedMerges()->keptOn($page, $usageDigest) ?? new CountedMerges()->countedFor($usage, $pullRequests);
         $charts = [...new TokenCharts()->charts($usage, $merges), ...new IssueCharts()->charts($issues)];
-        $glance = new GlanceTable($this->clock->now())->region($issues, $pullRequests, $usage->total());
+        $glance = new GlanceTable($this->clock->now())->region($issues, $pullRequests, $usage);
         $milestones = new MilestoneTable()->region($this->github->milestones(), $issues);
         $countedMerges = new CountedMerges()->line($usageDigest, $merges);
         $chartRegions = array_map(fn (DailyChart $chart): PageRegion => $this->region($chart, $countedMerges), $charts);

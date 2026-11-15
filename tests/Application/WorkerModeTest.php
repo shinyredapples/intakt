@@ -31,7 +31,6 @@ use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Console\Tester\ApplicationTester;
-use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -267,7 +266,7 @@ final class WorkerModeTest extends TestCase
 
     // Read inside a real request, because that is what a request starts with after the kernel restored the process settings at the terminate of the one before.
     #[NoDiscard]
-    private function nextRequestSeesProcess(KernelBrowser $browser): ProcessSettings
+    private function nextRequestSeesProcess(WorkerBrowser $browser): ProcessSettings
     {
         $seen = null;
         $this->requestThatRuns($browser, static function () use (&$seen): void {
@@ -278,16 +277,9 @@ final class WorkerModeTest extends TestCase
         return $seen;
     }
 
-    // Removed again after the request, because a kept kernel would run it in every later request too.
-    private function requestThatRuns(KernelBrowser $browser, Closure $step): void
+    private function requestThatRuns(WorkerBrowser $browser, Closure $step): void
     {
-        $kernel = $browser->getKernel();
-        $kernel->boot();
-        $dispatcher = $this->container($kernel)->get('event_dispatcher');
-        $dispatcher->addListener(KernelEvents::REQUEST, $step, 4096);
-
-        $browser->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
-        $dispatcher->removeListener(KernelEvents::REQUEST, $step);
+        $browser->requestRunning($step, '/mcp/owner', ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
     }
 
     private function otherLocale(): void
@@ -304,7 +296,7 @@ final class WorkerModeTest extends TestCase
         return $kernel;
     }
 
-    private function browserOn(KernelInterface $kernel): KernelBrowser
+    private function browserOn(KernelInterface $kernel): WorkerBrowser
     {
         return new WorkerBrowser($kernel, ['HTTP_HOST' => self::HOST]);
     }

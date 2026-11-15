@@ -17,4 +17,9 @@ final readonly class Usage
     {
         return array_sum(array_map(static fn (TokenUsage $row): int => $row->tokens, $this->rows));
     }
+
+    public function reserved(): int
+    {
+        return array_sum(array_map(static fn (TokenUsage $row): int => $row->reserved, $this->rows));
+    }
 }
