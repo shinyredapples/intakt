@@ -68,8 +68,10 @@ final class ArmImageWorkflowTest extends TestCase
         self::assertIsArray($jobs);
         self::assertSame(['image'], array_keys($jobs));
 
-        /** @var Job */
-        return $jobs['image'];
+        /** @var Job $job */
+        $job = $jobs['image'];
+
+        return $job;
     }
 
     /**
@@ -77,7 +79,9 @@ final class ArmImageWorkflowTest extends TestCase
      */
     private function workflow(): array
     {
-        /** @var array<string, mixed> */
-        return Yaml::parseFile(self::WORKFLOW);
+        /** @var array<string, mixed> $workflow */
+        $workflow = Yaml::parseFile(self::WORKFLOW);
+
+        return $workflow;
     }
 }
