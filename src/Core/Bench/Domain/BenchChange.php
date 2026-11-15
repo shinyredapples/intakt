@@ -6,7 +6,6 @@ namespace Intakt\Core\Bench\Domain;
 
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 
-// One bench change ready to review: what the review is asked and what a correct review would find.
 final readonly class BenchChange
 {
     public function __construct(
