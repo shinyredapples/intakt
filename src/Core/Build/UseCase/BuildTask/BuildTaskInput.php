@@ -26,4 +26,7 @@ final class BuildTaskInput
 
     #[Option('The folder to clone into, which must not exist yet')]
     public ?string $directory = null;
+
+    #[Option('The project\'s job image the build job runs in')]
+    public ?string $image = null;
 }

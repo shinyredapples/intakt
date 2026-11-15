@@ -28,7 +28,7 @@
 {% for step in steps %}
 <section class="section round build-step" id="step-{{ step.step }}">
     <div class="round-head">
-        <h2>{{ step.step|capitalize }}</h2>
+        <h2>{{ step.step|replace({'_': ' '})|capitalize }}</h2>
         {{ include('dashboard/components/chip.html.twig', step.outcome == 'failed'
             ? {dot: 'needs', label: 'Failed', on_page: true, broken: true, extra: 'step-failed'}
             : {icon: 'check', label: 'Passed', on_page: true, extra: 'step-passed'}, with_context = false) }}
@@ -42,7 +42,7 @@
 {% for step in unreached %}
 <section class="section round build-step" id="step-{{ step }}">
     <div class="round-head">
-        <h2 class="muted">{{ step|capitalize }}</h2>
+        <h2 class="muted">{{ step|replace({'_': ' '})|capitalize }}</h2>
         <span class="muted small">Not reached</span>
     </div>
 </section>
