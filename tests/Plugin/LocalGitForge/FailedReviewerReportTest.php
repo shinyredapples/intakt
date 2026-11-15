@@ -77,8 +77,8 @@ final class FailedReviewerReportTest extends KernelTestCase
         $review = $reviewChange->review($this->request(), new IgnoredProgress());
         $lines = new ReviewReport(StoredSerializerFactory::create())->asLines($review);
 
-        self::assertSame('blocked (round 1)', $lines[0]);
-        self::assertContains('standard reviewer: approve, 0 findings', $lines);
+        self::assertSame('blocked (round 1 counted)', $lines[0]);
+        self::assertContains('standard reviewer: approve, 0 findings counted', $lines);
         self::assertContains('reason: role-1 reviewer failed, stopped at its output limit', $lines);
         self::assertStringNotContainsString('Exception', implode("\n", $lines));
     }

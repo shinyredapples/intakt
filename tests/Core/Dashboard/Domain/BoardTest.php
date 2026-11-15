@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
+use Intakt\Core\Dashboard\Domain\Headline;
 use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -27,6 +28,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(Lane::class)]
 #[UsesClass(WhoIsWorking::class)]
+#[UsesClass(Headline::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(Cost::class)]
@@ -112,6 +114,19 @@ final class BoardTest extends TestCase
         $board = new Board([new Review([$running]), new Review([$this->round('r2', 'feat/b', 1)])]);
 
         self::assertSame(['r1-a'], array_map(static fn (Lane $lane): string => $lane->reviewer, $board->whoIsWorking()->lanes()));
+    }
+
+    public function testABoardWithoutCardsHasTheHeadlineOfAFreshInstall(): void
+    {
+        self::assertSame('Nothing is running yet. Start the first review.', new Board([])->headline()->text());
+    }
+
+    public function testTheBoardsHeadlineTellsOfItsRunningReviewsAndItsEmptyWaitingOnYou(): void
+    {
+        $running = $this->round('r1', 'feat/a', 1)->withOutcomes([new ReviewerOutcome('r1-a', 'correctness', 'standard', $this->morning())]);
+        $board = new Board([new Review([$running]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha. Nothing needs you.', $board->headline()->text());
     }
 
     /**

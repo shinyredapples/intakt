@@ -6,6 +6,8 @@ namespace Intakt\Tests\Plugin\LocalGitForge;
 
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Platform\Contract\FigureKind;
+use Intakt\Core\Platform\Contract\Figures;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -34,6 +36,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewOutputVerdict::class)]
 #[UsesClass(RoundTokens::class)]
 #[UsesClass(Cost::class)]
+#[UsesClass(Figures::class)]
+#[UsesClass(FigureKind::class)]
 #[UsesClass(TokenFigures::class)]
 final class ReviewReportTest extends TestCase
 {
@@ -44,13 +48,13 @@ final class ReviewReportTest extends TestCase
         $lines = $this->report()->asLines($this->review(Decision::Changes));
 
         self::assertSame([
-            'changes (round 1)',
-            'strong reviewer: changes, 1 findings',
-            'standard reviewer: approve, 0 findings',
-            'act list: 1 findings',
+            'changes (round 1 counted)',
+            'strong reviewer: changes, 1 findings counted',
+            'standard reviewer: approve, 0 findings counted',
+            'act list: 1 findings counted',
             'F1 P1 src/Feature.php:3: Missing check.',
-            'tokens: 2 calls, 100 prompt, 20 completion, 120 total',
-            'cost: 0.0001 USD',
+            'tokens: 2 calls counted, 100 prompt, 20 completion, 120 total measured',
+            'cost: 0.0001 USD estimated, price date unknown',
         ], $lines);
     }
 
@@ -78,35 +82,35 @@ final class ReviewReportTest extends TestCase
     {
         $lines = $this->report()->asLines($this->review(Decision::Changes, RoundTokens::of(3, new TokenFigures(39504, 38000, 1500, 0, 700))));
 
-        self::assertContains('tokens: 3 calls, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total', $lines);
+        self::assertContains('tokens: 3 calls counted, 39504 prompt (38000 cache read, 1500 cache write), 700 completion, 40204 total measured', $lines);
     }
 
     public function testTheTokenLineShowsCachedTokensAVendorDoesNotSplit(): void
     {
         $lines = $this->report()->asLines($this->review(Decision::Changes, RoundTokens::of(1, new TokenFigures(39504, 0, 0, 39500, 700))));
 
-        self::assertContains('tokens: 1 calls, 39504 prompt (39500 cached), 700 completion, 40204 total', $lines);
+        self::assertContains('tokens: 1 calls counted, 39504 prompt (39500 cached), 700 completion, 40204 total measured', $lines);
     }
 
     public function testTheCostLineShowsTheRoundsCostInDollars(): void
     {
         $lines = $this->report()->asLines($this->review(Decision::Changes, cost: Cost::inUsd(0.045895)));
 
-        self::assertSame('cost: 0.0459 USD', array_last($lines));
+        self::assertSame('cost: 0.0459 USD estimated, price date unknown', array_last($lines));
     }
 
     public function testTheCostLineOfACostTooSmallForFourDecimalsIsNotPrintedAsZero(): void
     {
         $lines = $this->report()->asLines($this->review(Decision::Changes, cost: Cost::inUsd(0.000038)));
 
-        self::assertSame('cost: less than 0.0001 USD', array_last($lines));
+        self::assertSame('cost: less than 0.0001 USD estimated, price date unknown', array_last($lines));
     }
 
     public function testTheCostLineOfACostOfNothingIsPrintedAsZero(): void
     {
         $lines = $this->report()->asLines($this->review(Decision::Changes, cost: Cost::inUsd(0.0)));
 
-        self::assertSame('cost: 0.0000 USD', array_last($lines));
+        self::assertSame('cost: 0.0000 USD estimated, price date unknown', array_last($lines));
     }
 
     public function testTheCostLineSaysTheCostIsUnknownAndNamesTheModelsWithoutAPrice(): void
@@ -114,6 +118,77 @@ final class ReviewReportTest extends TestCase
         $lines = $this->report()->asLines($this->review(Decision::Changes, cost: Cost::inUsd(0.01)->plus(Cost::unknown('local-small', 'gpt-5'))));
 
         self::assertSame('cost: unknown, no price for local-small, gpt-5', array_last($lines));
+    }
+
+    public function testTheCostLineNamesTheDayOfThePriceList(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes, cost: Cost::inUsd(0.0459, '2026-11-13')));
+
+        self::assertSame('cost: 0.0459 USD estimated, prices of 2026-11-13', array_last($lines));
+    }
+
+    public function testTheCostLineOfAnUnknownCostCarriesNoKindBecauseItShowsNoFigure(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes, cost: Cost::unknown()));
+
+        self::assertSame('cost: unknown', array_last($lines));
+    }
+
+    public function testTheTokensAndTheCostAreNeverAddedIntoOneLine(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes));
+
+        self::assertCount(1, array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'tokens: ')));
+        self::assertCount(1, array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'cost: ')));
+    }
+
+    public function testTheJsonOutputCarriesTheKindOfTheRoundTheTokensAndTheCost(): void
+    {
+        $document = $this->documentOf($this->review(Decision::Changes, cost: Cost::inUsd(0.0459, '2026-11-13')));
+
+        self::assertSame(['round' => 'counted', 'findings' => 'counted', 'calls' => 'counted', 'tokens' => 'measured', 'cost' => 'estimated'], $document['kinds']);
+        self::assertIsArray($document['cost']);
+        self::assertSame('2026-11-13', $document['cost']['price_date']);
+    }
+
+    public function testTheCallCountComesFromTheLedgerSoItIsMarkedCountedBesideTheMeasuredTokens(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes));
+
+        self::assertContains('tokens: 2 calls counted, 100 prompt, 20 completion, 120 total measured', $lines);
+    }
+
+    public function testTheFindingCountsOfEachReviewerAndOfTheActListAreMarkedCounted(): void
+    {
+        $lines = $this->report()->asLines($this->review(Decision::Changes));
+
+        self::assertContains('strong reviewer: changes, 1 findings counted', $lines);
+        self::assertContains('act list: 1 findings counted', $lines);
+    }
+
+    public function testTheSchemaRefusesCallsMarkedAsMeasured(): void
+    {
+        $document = $this->documentOf($this->review(Decision::Approve));
+        self::assertIsArray($document['kinds']);
+        $document['kinds']['calls'] = 'measured';
+
+        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
+    }
+
+    public function testTheSchemaRefusesAnOutputWithoutItsKinds(): void
+    {
+        $document = $this->documentOf($this->review(Decision::Approve));
+        unset($document['kinds']);
+
+        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
+    }
+
+    public function testTheSchemaRefusesACostMarkedAsMeasured(): void
+    {
+        $document = $this->documentOf($this->review(Decision::Approve));
+        $document['kinds'] = ['round' => 'counted', 'findings' => 'counted', 'calls' => 'counted', 'tokens' => 'measured', 'cost' => 'measured'];
+
+        self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
     }
 
     public function testTheJsonOutputOfARoundWithAnUnknownCostValidatesAgainstTheDocumentedSchema(): void

@@ -59,7 +59,7 @@ final class ReviewOutputTest extends TestCase
         $output = $this->whenTheReviewIsWritten();
 
         self::assertSame(
-            ['round_id' => 'round-1', 'round' => 2, 'decision' => 'changes', 'tokens' => ['calls' => 2, 'prompt' => 100, 'cache_read' => 60, 'cache_write' => 30, 'cached' => 5, 'completion' => 20, 'total' => 120], 'cost' => ['usd' => 0.045895, 'unpriced' => []], 'reasons' => ['a reason']],
+            ['round_id' => 'round-1', 'round' => 2, 'decision' => 'changes', 'tokens' => ['calls' => 2, 'prompt' => 100, 'cache_read' => 60, 'cache_write' => 30, 'cached' => 5, 'completion' => 20, 'total' => 120], 'cost' => ['usd' => 0.045895, 'unpriced' => [], 'price_date' => null], 'reasons' => ['a reason'], 'kinds' => ['round' => 'counted', 'findings' => 'counted', 'calls' => 'counted', 'tokens' => 'measured', 'cost' => 'estimated']],
             array_diff_key($output, ['exit_code' => true, 'verdicts' => true, 'act_list' => true]),
         );
     }
