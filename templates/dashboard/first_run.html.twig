@@ -1,0 +1,80 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}Set up - Intakt{% endblock %}
+
+{% block body %}
+{%- set titles = ['AI providers', 'A project', 'Your own agent'] -%}
+{%- set states = first_run.states -%}
+<div class="setup">
+    <div class="page-head">
+        <div>
+            <h1>Set up Intakt</h1>
+            <p class="lead">What this install has set up and what is still missing, read from the running install.</p>
+        </div>
+    </div>
+    <ol class="steps" aria-label="Setup progress">
+        {%- for title in titles %}
+        <li class="{{ states[loop.index0].value }}">{{ loop.index }} {{ title }}</li>
+        {%- endfor %}
+    </ol>
+    <p class="step-count">{{ first_run.done }} of {{ titles|length }} steps done</p>
+
+    {%- set step = first_run.providers %}
+    <section class="step" id="step-providers" data-state="{{ step.state.value }}" aria-labelledby="step-providers-h">
+        <h2 id="step-providers-h">1 {{ titles[0] }} {{ _self.state(step.state) }}</h2>
+        <p class="lead">{{ step.sentence }}</p>
+        {%- if step.keyless is not empty %}
+        <ul class="keyless">
+            {%- for message in step.keyless %}
+            <li>{{ message }}</li>
+            {%- endfor %}
+        </ul>
+        {%- endif %}
+        {%- if step.firstProject is not null %}
+        <p class="tiers-of">The tiers of the project {{ step.firstProject }}:</p>
+        <table class="ledger tiers">
+            <thead><tr><th scope="col">Tier</th><th scope="col">Provider</th><th scope="col">Model or problem</th></tr></thead>
+            <tbody>
+                {%- for line in step.tiers %}
+                <tr><td>{{ line.tier }}</td><td>{{ line.provider }}</td><td>{{ line.modelOrProblem }}</td></tr>
+                {%- endfor %}
+            </tbody>
+        </table>
+        {%- endif %}
+    </section>
+
+    {%- set step = first_run.project %}
+    <section class="step" id="step-project" data-state="{{ step.state.value }}" aria-labelledby="step-project-h">
+        <h2 id="step-project-h">2 {{ titles[1] }} {{ _self.state(step.state) }}</h2>
+        <p class="lead">{{ step.sentence }}</p>
+        {%- if step.panels is not empty %}
+        <div class="list">
+            {%- for panel in step.panels %}
+            {{ include('dashboard/components/list_row.html.twig', {title: panel.project, explanation: panel.description}, with_context = false) }}
+            {%- endfor %}
+        </div>
+        {%- endif %}
+    </section>
+
+    {%- set step = first_run.agent %}
+    <section class="step" id="step-agent" data-state="{{ step.state.value }}" aria-labelledby="step-agent-h">
+        <h2 id="step-agent-h">3 {{ titles[2] }} {{ _self.state(step.state) }}</h2>
+        <p class="lead">{{ step.sentence }}</p>
+        <p>The MCP address: <code class="mono address">{{ step.address }}</code></p>
+        <p>The client line for Claude Code:</p>
+        <pre class="command"><code class="client-line">{{ step.clientLine }}</code></pre>
+        {%- if step.hasToken %}
+        {%- if step.tokenCommand is not null %}
+        <p class="token-from">This command prints the line with the token filled in:</p>
+        <pre class="command"><code class="token-command">{{ step.tokenCommand }}</code></pre>
+        {%- else %}
+        <p class="token-from">Replace &lt;the token&gt; with the value of MCP_OWNER_TOKEN.</p>
+        {%- endif %}
+        {%- endif %}
+    </section>
+</div>
+{% endblock %}
+
+{% macro state(state) -%}
+{{ include('dashboard/components/chip.html.twig', {label: state.words, dot: state.dot, on_page: true}, with_context = false) }}
+{%- endmacro %}
