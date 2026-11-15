@@ -78,13 +78,12 @@ final readonly class BuildTask
                 BuildStep::HandBackCheck => $this->checkHandBack($request, $bundle),
             };
 
-            $failure = $result;
-
             // A local of this run, never a property, because a worker keeps the service between runs.
             if ($result instanceof BuildJobOutcome) {
                 $bundle = $result->bundle;
-                $failure = null;
             }
+
+            $failure = $this->failureIn($result);
 
             $this->record($request, $step, $failure);
 
@@ -94,6 +93,12 @@ final readonly class BuildTask
         }
 
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
+    }
+
+    // A job that built hands back its outcome instead of a failure, so its step passed.
+    private function failureIn(BuildJobOutcome|string|null $result): ?string
+    {
+        return $result instanceof BuildJobOutcome ? null : $result;
     }
 
     // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
