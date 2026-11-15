@@ -23,14 +23,14 @@ final class MilestoneTableTest extends TestCase
     {
         $closed = new DateTimeImmutable('2026-11-05T10:00:00Z');
 
-        $table = new MilestoneTable()->region([new Milestone(1, 'All dropped', 'g', $closed), new Milestone(2, 'Empty', 'g', $closed)], [new Issue(1, $closed, true)]);
+        $table = new MilestoneTable()->region([new Milestone(1, 'All dropped', 'g', $closed), new Milestone(2, 'Empty', 'g', $closed)], [new Issue(1, $closed, $closed, true)]);
 
         self::assertStringContainsString("| All dropped | g | 11-05 | none | 0 / 0 |\n| Empty | g | 11-05 | none | 0 / 0 |", $table->text);
     }
 
     public function testAMilestoneWithAnOpenIssueShowsOpen(): void
     {
-        $table = new MilestoneTable()->region([new Milestone(1, 'Demo', 'g', null)], [new Issue(1, null, false)]);
+        $table = new MilestoneTable()->region([new Milestone(1, 'Demo', 'g', null)], [new Issue(1, new DateTimeImmutable('2026-11-01T10:00:00Z'), null, false)]);
 
         self::assertStringContainsString('| Demo | g | none | open | 0 / 1 |', $table->text);
     }

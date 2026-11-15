@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\JourneyPage;
 
+use BackedEnum;
+use DateTimeImmutable;
+use DateTimeZone;
+
 // Only the five named fields are accepted, so that no limit, reset time or quota can pass through.
 final readonly class UsageReader
 {
     private const array FIELDS = ['day', 'vendor', 'account', 'lane', 'tokens'];
 
-    public function tokensIn(string $file): int
+    public function usageIn(string $file): Usage
     {
         $text = is_file($file) ? file_get_contents($file) : false;
 
@@ -19,10 +23,10 @@ final readonly class UsageReader
 
         $lines = array_filter(explode("\n", $text), static fn (string $line): bool => '' !== trim($line));
 
-        return array_sum(array_map($this->tokensOf(...), array_keys($lines), $lines));
+        return new Usage(array_map($this->rowOf(...), array_keys($lines), $lines));
     }
 
-    private function tokensOf(int $index, string $line): int
+    private function rowOf(int $index, string $line): TokenUsage
     {
         $row = json_validate($line) ? json_decode($line, true) : null;
 
@@ -41,9 +45,32 @@ final readonly class UsageReader
             throw $this->rejected($index, 'tokens must be a whole number of zero or more');
         }
 
-        return array_all(['day', 'vendor', 'account', 'lane'], static fn (string $field): bool => is_string($row[$field]) && '' !== $row[$field])
-            ? $tokens
-            : throw $this->rejected($index, 'day, vendor, account and lane must be text');
+        if (!array_all(['day', 'vendor', 'account', 'lane'], static fn (string $field): bool => is_string($row[$field]) && '' !== $row[$field])) {
+            throw $this->rejected($index, 'day, vendor, account and lane must be text');
+        }
+
+        return new TokenUsage(
+            $this->day($index, $row['day']),
+            UsageVendor::tryFrom($row['vendor']) ?? throw $this->unknown($index, 'vendor', UsageVendor::cases()),
+            UsageAccount::tryFrom($row['account']) ?? throw $this->unknown($index, 'account', UsageAccount::cases()),
+            UsageLane::tryFrom($row['lane']) ?? throw $this->unknown($index, 'lane', UsageLane::cases()),
+            $tokens,
+        );
+    }
+
+    private function day(int $index, string $text): DateTimeImmutable
+    {
+        $day = DateTimeImmutable::createFromFormat('!Y-m-d', $text, new DateTimeZone('UTC'));
+
+        return false !== $day && $day->format('Y-m-d') === $text ? $day : throw $this->rejected($index, 'day must be a date written YYYY-MM-DD');
+    }
+
+    /**
+     * @param list<BackedEnum> $known
+     */
+    private function unknown(int $index, string $field, array $known): JourneyInputFailed
+    {
+        return $this->rejected($index, $field.' must be one of '.implode(', ', array_map(static fn (BackedEnum $case): string => (string) $case->value, $known)));
     }
 
     private function rejected(int $index, string $reason): JourneyInputFailed

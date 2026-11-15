@@ -100,13 +100,14 @@ final readonly class GitHubReader
             throw $this->malformed(JourneyResource::Issues);
         }
 
+        $created = $this->moment($item, 'created_at');
         $closed = 'closed' === $item['state'] ? $this->moment($item, 'closed_at') : null;
 
-        if ('closed' === $item['state'] && !$closed instanceof DateTimeImmutable) {
+        if (!$created instanceof DateTimeImmutable || ('closed' === $item['state'] && !$closed instanceof DateTimeImmutable)) {
             throw $this->malformed(JourneyResource::Issues);
         }
 
-        return new Issue($number, $closed, in_array($reason, ['not_planned', 'duplicate'], true));
+        return new Issue($number, $created, $closed, in_array($reason, ['not_planned', 'duplicate'], true));
     }
 
     /**
