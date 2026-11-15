@@ -50,22 +50,17 @@ final readonly class HandBackCheck
 
     private function refusalOfWritten(BuildTaskRequest $request, string $bundle): ?string
     {
-        $file = $this->bundleFileOf($bundle);
+        $this->filesystem->mkdir($this->bundleFolder, 0o700);
+        $file = $this->filesystem->tempnam($this->bundleFolder, 'handback-', '.bundle');
 
         try {
+            // Inside the try, because tempnam already made the file, and a write that fails must not leave it behind.
+            $this->filesystem->dumpFile($file, $bundle);
+
             return $this->refusalOf($request, $file);
         } finally {
             $this->filesystem->remove($file);
         }
-    }
-
-    private function bundleFileOf(string $bundle): string
-    {
-        $this->filesystem->mkdir($this->bundleFolder, 0o700);
-        $file = $this->filesystem->tempnam($this->bundleFolder, 'handback-', '.bundle');
-        $this->filesystem->dumpFile($file, $bundle);
-
-        return $file;
     }
 
     private function refusalOf(BuildTaskRequest $request, string $file): ?string

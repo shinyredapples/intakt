@@ -345,6 +345,19 @@ final class BuildTaskTest extends TestCase
         self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
     }
 
+    public function testABundleThatCannotBeWrittenEndsAtTheHandBackCheckAndLeavesNoFileBehind(): void
+    {
+        $this->handBackFiles = $this->filesThatCannotWrite('disk full');
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::HandBackCheck, $outcome->last);
+        self::assertSame('disk full', $outcome->failure);
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
+        self::assertSame([], glob($this->mirrors.'-hand-backs/*'));
+    }
+
     public function testABuildJobThatHandsBackNoCommitEndsAtTheBuildJobStepWithItsVerdictRecorded(): void
     {
         new Filesystem()->remove($this->output.'/'.RunBuildJob::BUNDLE);
@@ -697,6 +710,18 @@ final class BuildTaskTest extends TestCase
         $files->method('tempnam')->willReturnCallback($real->tempnam(...));
         $files->method('dumpFile')->willReturnCallback($real->dumpFile(...));
         $files->method('remove')->willThrowException(new IOException($message));
+
+        return $files;
+    }
+
+    private function filesThatCannotWrite(string $message): Filesystem
+    {
+        $real = new Filesystem();
+        $files = self::createStub(Filesystem::class);
+        $files->method('mkdir')->willReturnCallback($real->mkdir(...));
+        $files->method('tempnam')->willReturnCallback($real->tempnam(...));
+        $files->method('dumpFile')->willThrowException(new IOException($message));
+        $files->method('remove')->willReturnCallback($real->remove(...));
 
         return $files;
     }
