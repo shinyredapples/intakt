@@ -18,6 +18,7 @@ final readonly class LedgerBuildSteps
      */
     public function in(RecordedEvents $events): array
     {
+        /** @var array<string, array<string, array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}>> $latest */
         $latest = [];
 
         foreach ($events as $recorded) {
@@ -56,7 +57,11 @@ final readonly class LedgerBuildSteps
             return null;
         }
 
-        if ((BuildStepOutcome::Failed === $outcome) !== is_string($failure)) {
+        if (!is_string($failure) && null !== $failure) {
+            return null;
+        }
+
+        if ((BuildStepOutcome::Failed === $outcome) !== (null !== $failure)) {
             return null;
         }
 

@@ -115,9 +115,9 @@ final class StatusReadModelTest extends TestCase
         $this->ledger->recordRedHead('alpha', '9', 'c');
         $this->ledger->failHead('alpha', '10', 2);
         $this->ledger->handOverHead('alpha', '11', 'a');
-        $this->ledger->endBuildStep('alpha', '12', 'task');
-        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed');
-        $this->ledger->endBuildStep('alpha', '13', 'clone');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->failBuildStep('12', 'mirror', 'git fetch failed');
+        $this->ledger->passBuildStep('alpha', '13', 'clone');
 
         $json = $this->readModel()->json();
 
@@ -170,8 +170,8 @@ final class StatusReadModelTest extends TestCase
 
     public function testATaskThatStoppedAtTheMirrorShowsTheMirrorStepAndItsFailure(): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'task');
-        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed: remote not found');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->failBuildStep('12', 'mirror', 'git fetch failed: remote not found');
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
@@ -180,9 +180,9 @@ final class StatusReadModelTest extends TestCase
 
     public function testATaskThatStoppedAtTheCloneShowsTheCloneStepAndItsFailure(): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'task');
-        $this->ledger->endBuildStep('alpha', '12', 'mirror');
-        $this->ledger->endBuildStep('alpha', '12', 'clone', 'the folder exists already');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->passBuildStep('alpha', '12', 'mirror');
+        $this->ledger->failBuildStep('12', 'clone', 'the folder exists already');
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
@@ -191,9 +191,9 @@ final class StatusReadModelTest extends TestCase
 
     public function testATaskWhoseStepsAllPassedShowsItsCloneStepPassed(): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'task');
-        $this->ledger->endBuildStep('alpha', '12', 'mirror');
-        $this->ledger->endBuildStep('alpha', '12', 'clone');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->passBuildStep('alpha', '12', 'mirror');
+        $this->ledger->passBuildStep('alpha', '12', 'clone');
 
         $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
 
@@ -202,26 +202,26 @@ final class StatusReadModelTest extends TestCase
 
     public function testATaskThatIsStillRunningShowsTheLastStepItPassed(): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
 
         self::assertSame([['task', 'passed']], array_map(static fn (array $task): array => [$task['step'], $task['outcome']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
     }
 
     public function testATaskBuiltAgainShowsWhereItsLatestRunIs(): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'task');
-        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed');
-        $this->ledger->endBuildStep('alpha', '12', 'task', 'project "alpha" has no open issue 12');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->failBuildStep('12', 'mirror', 'git fetch failed');
+        $this->ledger->failBuildStep('12', 'task', 'project "alpha" has no open issue 12');
 
         self::assertSame([['task', 'failed']], array_map(static fn (array $task): array => [$task['step'], $task['outcome']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
     }
 
     public function testTheTasksOfABuildLaneAreListedNewestFirstUnderTheirProject(): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'task');
-        $this->ledger->endBuildStep('alpha', '13', 'task');
-        $this->ledger->endBuildStep('beta', '14', 'task');
-        $this->ledger->endBuildStep('alpha', '12', 'mirror');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
+        $this->ledger->passBuildStep('alpha', '13', 'task');
+        $this->ledger->passBuildStep('beta', '14', 'task');
+        $this->ledger->passBuildStep('alpha', '12', 'mirror');
 
         $status = $this->read();
 
@@ -238,6 +238,7 @@ final class StatusReadModelTest extends TestCase
         yield 'an unknown outcome' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'skipped', 'failure' => null]];
         yield 'a failed step without its failure' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => null]];
         yield 'a passed step with a failure' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'passed', 'failure' => 'git fetch failed']];
+        yield 'a failure that is no string' => [['project' => 'alpha', 'task' => '12', 'step' => 'mirror', 'outcome' => 'failed', 'failure' => 128]];
         yield 'a task that is no string' => [['project' => 'alpha', 'task' => 12, 'step' => 'mirror', 'outcome' => 'passed', 'failure' => null]];
         yield 'a step that is no string' => [['project' => 'alpha', 'task' => '12', 'step' => ['mirror'], 'outcome' => 'passed', 'failure' => null]];
         yield 'no project' => [['task' => '12', 'step' => 'mirror', 'outcome' => 'passed', 'failure' => null]];
@@ -249,7 +250,7 @@ final class StatusReadModelTest extends TestCase
     #[DataProvider('malformedBuildSteps')]
     public function testABuildStepTheBuildDoesNotWriteIsLeftOut(array $payload): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'task');
+        $this->ledger->passBuildStep('alpha', '12', 'task');
         $this->ledger->recordBuildStep($payload);
 
         self::assertSame([['task', 'passed']], array_map(static fn (array $task): array => [$task['step'], $task['outcome']], $this->projectOf($this->read(), 'alpha')['lanes']['build']));
@@ -257,7 +258,7 @@ final class StatusReadModelTest extends TestCase
 
     public function testABuildStepFailureIsRedactedBeforeItIsReported(): void
     {
-        $this->ledger->endBuildStep('alpha', '12', 'mirror', 'git fetch failed for token-abc');
+        $this->ledger->failBuildStep('12', 'mirror', 'git fetch failed for token-abc');
 
         $json = $this->readModel(redacting: 'token-abc')->json();
 

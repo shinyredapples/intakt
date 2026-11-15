@@ -193,9 +193,14 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::HeadFailed, ['project' => $project, 'change' => $change, 'head' => 'a', 'failures' => 1, 'retry_at' => '2026-10-28T12:01:00+00:00']);
     }
 
-    public function endBuildStep(string $project, string $task, string $step, ?string $failure = null): void
+    public function passBuildStep(string $project, string $task, string $step): void
     {
-        $this->recordBuildStep(['project' => $project, 'task' => $task, 'step' => $step, 'outcome' => null === $failure ? 'passed' : 'failed', 'failure' => $failure]);
+        $this->recordBuildStep(['project' => $project, 'task' => $task, 'step' => $step, 'outcome' => 'passed', 'failure' => null]);
+    }
+
+    public function failBuildStep(string $task, string $step, string $failure): void
+    {
+        $this->recordBuildStep(['project' => 'alpha', 'task' => $task, 'step' => $step, 'outcome' => 'failed', 'failure' => $failure]);
     }
 
     /**
