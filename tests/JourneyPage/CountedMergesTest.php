@@ -97,8 +97,8 @@ final class CountedMergesTest extends TestCase
     private function usage(): Usage
     {
         return new Usage([
-            new TokenUsage(new DateTimeImmutable('2026-10-26T00:00:00Z'), UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, 1),
-            new TokenUsage(new DateTimeImmutable('2026-10-28T00:00:00Z'), UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, 1),
+            new TokenUsage(new DateTimeImmutable('2026-10-26T00:00:00Z'), UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, 1, 0),
+            new TokenUsage(new DateTimeImmutable('2026-10-28T00:00:00Z'), UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, 1, 0),
         ]);
     }
 }

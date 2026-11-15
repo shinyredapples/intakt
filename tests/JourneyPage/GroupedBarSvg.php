@@ -21,7 +21,7 @@ final readonly class GroupedBarSvg
         $scale = new YScale([] === $values ? 0 : max($values), self::BASELINE, self::BASELINE - ChartCanvas::TOP);
         $plot = new ChartPlot($scale, (ChartCanvas::RIGHT - ChartCanvas::LEFT) / max(1, count($chart->days)));
 
-        return $this->canvas->opened($chart->title, self::HEIGHT)
+        return $this->canvas->opened($chart->caption(), self::HEIGHT)
             .$this->canvas->grid($scale, ChartCanvas::RIGHT)
             .implode('', array_map(fn (int $day): string => $this->group($chart, $plot, $day), array_keys($chart->days)))
             .$this->canvas->dayLabels($chart, static fn (int $day): float => $plot->x($day) + $plot->step / 2, self::BASELINE + 16)
