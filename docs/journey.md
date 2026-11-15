@@ -13,16 +13,18 @@ behind it are on [Highlights](https://shinyredapples.github.io/intakt/).
 |---|---|
 | First commit | 2026-10-24 |
 | First merged pull request | 2026-10-26 |
-| Pull requests merged | 614 (to 2026-11-13) |
-| Issues closed | 773 (761 done, 12 dropped) |
-| Busiest day | 73 merges (2026-11-12) |
+| Pull requests merged | 614 counted (to 2026-11-13) |
+| Issues closed | 773 counted (761 done, 12 dropped) |
+| Busiest day | 73 counted merges (2026-11-12) |
 | First release | v0.1.0, 2026-11-11; v0.3.0 on 2026-11-12 |
-| First-pass approvals | 53% of builds approved without a send-back since a builder self-check started on 11-08 (100 of 190), against 38% from 11-03 to 11-08 (165 merges) |
-| Tokens per merged pull request | 1.48M (908M tokens over 614 merges) |
+| First-pass approvals | 53% counted of builds approved without a send-back since a builder self-check started on 11-08 (100 of 190), against 38% counted from 11-03 to 11-08 (165 merges) |
+| Tokens per merged pull request | 1.48M measured (908M measured tokens over 614 counted merges) |
+
+Counted: from the pull requests and issues the GitHub API lists, and for first-pass approvals from the build loop's records. Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
 <!-- journey:end glance -->
 
 
-Merged pull requests per day:
+Merged pull requests per day, counted from the GitHub API:
 
 <!-- journey:begin merges-per-day -->
 ```
@@ -50,44 +52,54 @@ Merged pull requests per day:
 
 ## Token usage
 
-Tokens per day the loop spent on Intakt across every account: 908M from 10-27 to 11-13, 785M on Claude and 124M on
-GPT. Building took 69%, reviewing 31% (Claude 17.5%, GPT 13.6%). Tokens are counted the same way for both vendors: input
+Tokens per day the loop spent on Intakt across every account: 908M measured from 10-27 to 11-13, 785M measured on Claude and 124M measured
+on GPT. Building took 69% measured, reviewing 31% measured (Claude 17.5%, GPT 13.6%). Tokens are counted the same way for both vendors: input
 and output in full, cached input at a tenth.
 
 <!-- journey:begin tokens-by-lane -->
-![Tokens per day by lane](journey/tokens-by-lane.svg)
+![Tokens per day by lane (measured)](journey/tokens-by-lane.svg)
+
+Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
 <!-- journey:end tokens-by-lane -->
 
 By account. Until 10-31 the loop ran on Claude account 1 alone; from 10-31 each job picks the account with the most
 room that would otherwise go unused, and from 11-04 an API key takes over only when the
-subscriptions are spent (32M tokens so far: 30M on 11-06 to 11-08 and 2M on 11-13). GPT reviews every head from its own subscription.
+subscriptions are spent (32M measured tokens so far: 30M measured on 11-06 to 11-08 and 2M measured on 11-13). GPT reviews every head from its own subscription.
 
 <!-- journey:begin tokens-by-account -->
-![Tokens per day by account](journey/tokens-by-account.svg)
+![Tokens per day by account (measured)](journey/tokens-by-account.svg)
+
+Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
 <!-- journey:end tokens-by-account -->
 
 Tokens per merged pull request, per day:
 
 <!-- journey:begin tokens-per-merge -->
-![Tokens per merged pull request](journey/tokens-per-merge.svg)
+![Tokens per merged pull request (measured)](journey/tokens-per-merge.svg)
+
+Measured: the day's tokens from the providers' usage answers, summed per day in `docs/journey/usage.jsonl`, divided by the pull requests merged that day, counted from the GitHub API.
 <!-- journey:end tokens-per-merge -->
 
 
 ## Issues created and closed
 
-1,055 issues were filed from 10-27 to 11-13 and 773 closed (761 done, 12 dropped). Most new issues come from the work
+1,055 counted issues were filed from 10-27 to 11-13 and 773 counted were closed (761 done, 12 dropped). Most new issues come from the work
 itself: plan tasks split into parts, review follow-ups and design findings. Closing kept pace in the first days; from
 10-31, when the switch plan added M6 to M8, more were filed than closed almost every day, and 11-12 was the first day
 since 10-30 that closed more than it filed.
 
 <!-- journey:begin issues-per-day -->
-![Issues created and closed per day](journey/issues-per-day.svg)
+![Issues created and closed per day (counted)](journey/issues-per-day.svg)
+
+Counted: from the issues the GitHub API lists.
 <!-- journey:end issues-per-day -->
 
 Open issues at the end of each day:
 
 <!-- journey:begin open-issues -->
-![Open issues per day](journey/open-issues.svg)
+![Open issues per day (counted)](journey/open-issues.svg)
+
+Counted: from the issues the GitHub API lists.
 <!-- journey:end open-issues -->
 
 ## Timeline
@@ -136,7 +148,7 @@ timeline
 | M8 Switch | Intakt replaces the loop | 2027-01-07 | open | 2 / 8 |
 <!-- journey:end milestones -->
 
-M3 and M4 finished eleven days early. M5 grew from 8 planned tasks to 292 issues: on 2026-11-03 every quality and
+M3 and M4 finished eleven days early. M5 grew from 8 planned tasks to 292 counted issues: on 2026-11-03 every quality and
 robustness issue a demo visitor could hit moved into it.
 
 ### M0 to M2: the review core (10-24 to 11-12)
@@ -246,9 +258,9 @@ team, history, settings, setup) follow after the hackathon.
 
 ## What we learned
 
-- **Fix small findings before the merge, not after.** A polish round inside the pull request cost about 74k tokens;
-  the same items as a follow-up issue cost about 490k. Polish-before-merge became the default (89 polish rounds,
-  77 merged in one week).
+- **Fix small findings before the merge, not after.** A polish round inside the pull request cost about 74k measured tokens;
+  the same items as a follow-up issue cost about 490k measured. Polish-before-merge became the default (89 counted polish rounds,
+  77 counted merged in one week).
 - **Rules belong in gates, not in prompts.** Coding rules the reviewers kept repeating (final classes, no magic
   strings, typed module contracts) became static gates ([#604](https://github.com/shinyredapples/intakt/issues/604), [#841](https://github.com/shinyredapples/intakt/issues/841) to [#845](https://github.com/shinyredapples/intakt/issues/845)); `AGENTS.md` keeps judgement only.
 - **Prove races by construction.** A flaky test is reproduced with a forced order, never by running it a hundred times.
@@ -260,12 +272,12 @@ team, history, settings, setup) follow after the hackathon.
   high-priority ones. Ready issues and open pull requests now gain priority with age ([#1733](https://github.com/shinyredapples/intakt/issues/1733)).
 - **A test audit pays for itself.** A dedicated test engineer role reviewed coverage and filed 15 tasks ([#1297](https://github.com/shinyredapples/intakt/issues/1297) to
   [#1312](https://github.com/shinyredapples/intakt/issues/1312)).
-- **Rework, not capacity, was the drag.** From 11-05 to 11-13, 57% of the tokens on merged issues were spent after
-  the first build and first review; 47% of merged issues passed the first review; 349 of 1,091 issues were follow-ups.
+- **Rework, not capacity, was the drag.** From 11-05 to 11-13, 57% measured of the tokens on merged issues were spent after
+  the first build and first review; 47% counted of merged issues passed the first review; 349 of 1,091 counted issues were follow-ups.
 - **Run the judged path the way a juror will.** The first clean-machine run happened on 11-13 and found four defects
   no test had ([#1801](https://github.com/shinyredapples/intakt/issues/1801) to [#1804](https://github.com/shinyredapples/intakt/issues/1804)).
-- **More builders did not mean more merges.** 11-12: 73 merges for 89M tokens with three builders. 11-13: 50 merges
-  for 126M tokens with five. The tickets were harder and builders waited longer for the two check slots; the limit
+- **More builders did not mean more merges.** 11-12: 73 counted merges for 89M measured tokens with three builders. 11-13: 50 counted merges
+  for 126M measured tokens with five. The tickets were harder and builders waited longer for the two check slots; the limit
   is tokens per week, not builders.
 - **Cut the backlog on purpose.** More issues were opened than closed on almost every day; the cut of 11-13 (70
   closed as not planned, 84 parked) made the deadline's work visible again.
@@ -275,5 +287,12 @@ team, history, settings, setup) follow after the hackathon.
 [#1740](https://github.com/shinyredapples/intakt/issues/1740): `bin/journey` writes the regions between `journey:begin` and `journey:end` markers: the At a glance table, the milestone table and the charts with a table of their numbers, from the GitHub API (milestones, issues and pull requests, read when the page is built) and token use from `docs/journey/usage.jsonl`. It draws the charts and the timeline above as SVG files in `docs/journey/`. The numbers written by hand in the text are a snapshot of 2026-11-13, and so are the charts until the command first runs with access to the API. `docs/journey/usage.jsonl`
 holds tokens per day, vendor, account and lane, nothing about limits; Claude and GPT are counted the same way (input and
 output in full, cached input at a tenth). A step that was killed (out of memory, a host restart) reports no usage and
-counts at its reservation: 21M tokens, about 2%. The milestone stories and lessons are written by hand and link to the issue or
+counts at its reservation: 21M of the tokens, about 2%, are such reservations, not measured usage. The token figures still include them, because `usage.jsonl` does not keep
+them apart. The milestone stories and lessons are written by hand and link to the issue or
 pull request behind a claim where there is one.
+
+Each figure is followed by its kind, as in Intakt's review report: `measured` for tokens the providers' usage answers
+reported, `counted` for merges, issues and rounds counted from the GitHub API or the build loop's records. The page shows
+no cost, so nothing on it is `estimated`. Each chart names its kind in its title and says under the drawing where its
+series come from; a figure that divides measured tokens by counted merges shows both parts beside it, each with its own
+kind.

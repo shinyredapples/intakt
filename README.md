@@ -13,7 +13,7 @@ The aim: give it a spec, and AI agents plan, build, review and merge the work on
 - **Why it is different:** a panel of reviewers on models of different makers returns structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
 - **Why you will be able to trust it:** it will spend only the budget you give it, ask you only when a person is needed, and act as its own forge identity, never as you.
 
-![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round](docs/assets/dashboard-review.png)
+![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
 
 [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
@@ -74,6 +74,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 - Findings keep their ids across rounds, so reviewers cannot move the goalposts. A judge step tells the builder what to act on.
 - Agents start reviews and read findings through an MCP server.
 - A small live dashboard shows each round as it streams.
+- Every figure says what kind it is: token counts the provider reported are `measured`, rounds and findings from the ledger are `counted`, and a cost from your price list is `estimated`, with the date of the prices. Figures of different kinds are never added into one total.
 - `docker compose up` with a sample repository and your API keys (or a Hugging Face token) runs it in five minutes.
 
 ## Status
@@ -100,7 +101,7 @@ Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 - [Why the AI can't wreck your project](docs/guide/why-the-ai-cant-wreck-your-project.md): the safety design in plain words.
 - [Showcase](docs/showcase/README.md): this repository built by an AI loop, in figures and examples.
 - [Highlights](https://shinyredapples.github.io/intakt/): every Symfony and Symfony AI feature Intakt uses or plans, with its status, published from main (built from [`docs/highlights.d/`](docs/highlights.d/)).
-- [Journey](docs/journey.md): how Intakt got from an empty repository to the demo, with its milestones, decisions, capacity, CI, token use and issue flow.
+- [Journey](docs/journey.md): how Intakt got from an empty repository to the demo, with its milestones, decisions, capacity, CI, token use (measured) and issue flow (counted).
 - [Spec](docs/spec.md) and [plan](docs/plan.md) of the first release.
 - [AGENTS.md](AGENTS.md): the rules for anyone, person or agent, changing the code.
 
