@@ -206,7 +206,7 @@ final class InstanceDescriptorTest extends InstanceTestCase
     // The server lives only for the one request the launcher sends, which on a busy machine can end between two looks at /proc; holding the answer keeps it running until it was seen.
     private function answerOnlyOnceReleased(string $index, string $release): void
     {
-        file_put_contents($index, "<?php\n\$until = microtime(true) + 4;\nwhile (!is_file(".var_export($release, true).") && microtime(true) < \$until) {\n    usleep(10_000);\n}\necho 'ok';\n");
+        file_put_contents($index, "<?php\n\$until = hrtime(true) + 4_000_000_000;\nwhile (!is_file(".var_export($release, true).") && hrtime(true) < \$until) {\n    usleep(10_000);\n}\necho 'ok';\n");
     }
 
     /**
