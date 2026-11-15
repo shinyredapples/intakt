@@ -12,6 +12,7 @@ use LogicException;
 use Mcp\Capability\Attribute\McpTool;
 use Mcp\Schema\ToolAnnotations;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
@@ -25,6 +26,7 @@ final readonly class ListProjectsTool
 {
     public function __construct(
         private TierResolver $resolver,
+        #[Autowire(service: 'query.bus')]
         private MessageBusInterface $queries,
     ) {
     }
