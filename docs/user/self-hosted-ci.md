@@ -12,6 +12,8 @@ Set the repository variable `CI_RUNS_ON` (Settings, Secrets and variables, Actio
 
 These jobs then run on a runner with all of those labels: `check`, `journeys`, `changes`, `persistence` and `image` from `ci.yml`, `journeys` from `journeys.yml`, `image` from `release-image.yml` and `publish` from `ci-image.yml` (both push to `ghcr.io`, see [The published CI image](#the-published-ci-image)). The `alarm` job of `journeys.yml` always runs on GitHub's `ubuntu-24.04`, because it uses the `gh` command those runners have. Delete the variable to go back to GitHub's runners. Pull requests from forks never run, on either kind of runner.
 
+`CI_RUNS_ON` does not move the `image` job of `image-arm64.yml`, which builds and starts the app image on arm64 on a push to main or by hand. It runs on GitHub's `ubuntu-24.04-arm` unless the variable `CI_ARM_RUNS_ON` holds a JSON label list (or one JSON string) of an arm64 runner, for example `["self-hosted","linux","ARM64"]`.
+
 ## A hosted runner service
 
 A service that runs each job on a new VM and throws the VM away afterwards (for example Ubicloud) is set up the same way: install its GitHub App on the repository and put its runner label in `CI_RUNS_ON`, for example `["ubicloud-standard-4"]`. Such services register their runners as self-hosted, so also set the repository variable `CI_DISPOSABLE_RUNNER` to `true`: the jobs then allow user namespaces and lift AppArmor on that VM, as they do on GitHub's runners. Never set it for a machine you keep.
