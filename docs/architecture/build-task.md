@@ -20,4 +20,6 @@ Each step appends one `LedgerEventKind::BuildStepEnded` (`build_step_ended`) eve
 
 The command prints `<step> passed` for each step that passed, then `title <title>` (escaped, because the title is untrusted) once the task was read, and for a failing step an error block `<step> failed: <message>` and exit code 1. An issue number that is not a whole number from 1 to 999999999, a missing `--remote`, `--branch` or `--directory`, and a step the ledger did not record fail with a message and exit code 1.
 
-Tests: `BuildTaskTest` (a failure at each step, a pull request of the number, a ledger that does not record, all steps passing, over a local git remote), `BuildTaskCommandTest`.
+`GitHubIssueReads` is the container's `IssueReads` in `dev` and `prod`; in the test environment `tests/Core/Build/services.yaml` replaces it with `RecordedIssues`, which serves the file `BUILD_RECORDING` names (a JSON list of issues in GitHub's shape), so the command runs on an install without GitHub.
+
+Tests: `BuildTaskTest` (a failure at each step, a mirrors folder that cannot be created, a pull request of the number, a ledger that does not record, all steps passing, over a local git remote), `BuildTaskCommandTest`.
