@@ -1,0 +1,35 @@
+#!/bin/sh
+# Records the GitHub answers bin/journey --recorded=<folder> reads. It runs on the CI runner, because the CI image has
+# no gh and the token stays out of the container. The resources and the query are those of JourneyResource
+# (tests/JourneyPage/JourneyRecordCommandTest.php keeps them the same).
+set -eu
+
+if [ "$#" -ne 1 ]; then
+    echo 'usage: bin/journey-record <folder>' >&2
+    exit 2
+fi
+
+folder=$1
+repository=${GITHUB_REPOSITORY:-}
+
+if [ -z "$repository" ]; then
+    echo 'GITHUB_REPOSITORY is empty' >&2
+    exit 1
+fi
+
+mkdir -p "$folder"
+# The answers wait in a hidden folder until all three arrived, so a failed call never leaves half a recording.
+partial=$(mktemp -d "$folder/.journey-record.XXXXXX")
+trap 'rm -rf "$partial"' EXIT
+trap 'exit 1' HUP INT TERM
+
+for resource in milestones issues pulls; do
+    if ! gh api "repos/$repository/$resource?state=all&per_page=100" --paginate --slurp > "$partial/$resource.json"; then
+        echo "gh api failed for $resource" >&2
+        exit 1
+    fi
+done
+
+for resource in milestones issues pulls; do
+    mv "$partial/$resource.json" "$folder/$resource.json"
+done

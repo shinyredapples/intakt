@@ -7,7 +7,7 @@ namespace Intakt\Tests\JourneyPage;
 // A line this reader does not know fails the run, so the drawn timeline never silently drops what github.com shows.
 final readonly class MermaidTimeline
 {
-    private const string BLOCK = '/^```mermaid\n[ \t]*timeline[ \t]*\n(.*?)^```[ \t]*$/ms';
+    public const string BLOCK = '/^```mermaid\n[ \t]*timeline[ \t]*\n(.*?)^```[ \t]*$/ms';
     private const string SEPARATOR = '/\s+:\s+/';
 
     public function in(string $page): Timeline
