@@ -48,7 +48,7 @@ final class LedgerRounds
     private array $judged = [];
 
     /** @var array<string, ReplayMark> */
-    private array $projectMarks = [];
+    private array $roundMarks = [];
 
     private readonly LedgerTokens $tokens;
 
@@ -100,7 +100,7 @@ final class LedgerRounds
         $rounds = [$chosen, ...array_values($others)];
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
-        return new Review(array_map($this->completed(...), $rounds), $this->markOf($chosen->project));
+        return new Review(array_map($this->completed(...), $rounds), $this->markOfAll($rounds));
     }
 
     // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review. The ids come from the rounds, not the keys, because PHP turns a key of digits into an integer.
@@ -124,10 +124,25 @@ final class LedgerRounds
         return $reviews;
     }
 
-    // Kept per project for one read, because a board of many changes of one project would otherwise ask the same question for each.
-    private function markOf(string $project): ReplayMark
+    /**
+     * @param non-empty-list<ReviewedRound> $rounds
+     */
+    // A review is a replay only when every round of it is, because the page then says none of its verdicts counts, and a round opened before its project was flagged stays live.
+    private function markOfAll(array $rounds): ReplayMark
     {
-        return $this->projectMarks[$project] ??= $this->marks->ofProject($project);
+        foreach ($rounds as $round) {
+            if (ReplayMark::Live === $this->markOf($round)) {
+                return ReplayMark::Live;
+            }
+        }
+
+        return ReplayMark::Replay;
+    }
+
+    // Kept per round for one read, because the board and a review page may ask for the same round more than once.
+    private function markOf(ReviewedRound $round): ReplayMark
+    {
+        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
     }
 
     private function addUsage(RecordedEvent $recorded): void

@@ -157,14 +157,45 @@ final class LedgerReviewPagesTest extends TestCase
         self::assertSame(ReplayMark::Replay, $this->pagesOn($ledger, ['alpha'])->reviewOf('r1')?->mark);
     }
 
+    public function testACardWhoseRoundWasStoredLiveStaysLiveAfterItsProjectWasFlagged(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+
+        $card = $this->pagesOn($ledger, ['alpha'], ['r1' => ReplayMark::Live])->board()->cardsIn(BoardColumn::InReview)[0];
+
+        self::assertSame(ReplayMark::Live, $card->mark);
+    }
+
+    public function testAReviewWithALiveRoundBeforeItsReplayRoundsIsLive(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->judgeRound('r1');
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        self::assertSame(ReplayMark::Live, $this->pagesOn($ledger, ['alpha'], ['r1' => ReplayMark::Live, 'r2' => ReplayMark::Replay])->reviewOf('r2')?->mark);
+    }
+
+    public function testAReviewWhoseRoundsAreAllStoredAsReplayIsAReplay(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->judgeRound('r1');
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        self::assertSame(ReplayMark::Replay, $this->pagesOn($ledger, [], ['r1' => ReplayMark::Replay, 'r2' => ReplayMark::Replay])->reviewOf('r1')?->mark);
+    }
+
     /**
-     * @param list<string> $replays
+     * @param list<string>              $replays
+     * @param array<string, ReplayMark> $stored
      */
-    private function pagesOn(DashboardLedger $ledger, array $replays = []): LedgerReviewPages
+    private function pagesOn(DashboardLedger $ledger, array $replays = [], array $stored = []): LedgerReviewPages
     {
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
-        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays)));
+        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays, $stored)));
     }
 }
