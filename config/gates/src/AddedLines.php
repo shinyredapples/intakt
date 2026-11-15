@@ -12,7 +12,7 @@ final readonly class AddedLines
     /**
      * @param list<string> $paths
      *
-     * @return array<string, list<int>>
+     * @return list<array{string, list<int>}>
      *
      * @throws ScopeFailure
      */
@@ -25,7 +25,7 @@ final readonly class AddedLines
             throw new ScopeFailure('git diff listed '.count($paths).' files but printed '.count($sections).' patches');
         }
 
-        return array_combine($paths, array_map($this->numbersIn(...), array_map(strval(...), $sections)));
+        return array_map(fn (string $path, string $section): array => [$path, $this->numbersIn($section)], $paths, array_map(strval(...), $sections));
     }
 
     /**

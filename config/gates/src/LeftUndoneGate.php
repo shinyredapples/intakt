@@ -50,7 +50,7 @@ final readonly class LeftUndoneGate implements Gate
     {
         $findings = [];
 
-        foreach ($this->scannedLinesSince($workspace, $mergeBase) as $path => $addedLines) {
+        foreach ($this->scannedLinesSince($workspace, $mergeBase) as [$path, $addedLines]) {
             $source = $this->sourceOf($workspace, $path);
 
             if (null === $source) {
@@ -68,21 +68,19 @@ final readonly class LeftUndoneGate implements Gate
     }
 
     /**
-     * @return array<string, ?list<int>>
+     * @return list<array{string, ?list<int>}>
      */
     private function scannedLinesSince(Workspace $workspace, string $mergeBase): array
     {
         $paths = $this->nulSeparated($this->gitOutput($workspace, ['diff', '--name-only', '-z', ...self::DIFF_OPTIONS, $mergeBase]));
         $patch = $this->gitOutput($workspace, ['diff', '--unified=0', ...self::DIFF_OPTIONS, $mergeBase]);
         // Because a file git does not track yet has no lines on the base, every line of it is added.
-        $untracked = array_fill_keys($workspace->untrackedPaths(), null);
+        $untracked = array_map(static fn (string $path): array => [$path, null], $workspace->untrackedPaths());
 
-        // Because PHP turns a key such as "123" into a number, the key is read back as the path it was.
-        return array_filter(
-            $this->addedLines->byPath($paths, $patch) + $untracked,
-            fn (int|string $path): bool => $this->isScanned($workspace, (string) $path),
-            ARRAY_FILTER_USE_KEY,
-        );
+        return array_values(array_filter(
+            [...$this->addedLines->byPath($paths, $patch), ...$untracked],
+            fn (array $file): bool => $this->isScanned($workspace, $file[0]),
+        ));
     }
 
     private function isScanned(Workspace $workspace, string $path): bool
