@@ -13,6 +13,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LogLevel;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ListReviewsController::class)]
@@ -148,7 +149,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews?project[]=alpha');
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedClientError(sprintf('Uncaught PHP Exception %s: "Invalid query parameter "project"."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "Invalid query parameter "project"."', NotFoundHttpException::class));
     }
 
     public function testTheReviewListSaysSoWhenTheLedgerHasNoReviews(): void
