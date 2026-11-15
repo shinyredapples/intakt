@@ -55,6 +55,13 @@ final class TokenChartsTest extends TestCase
         self::assertSame([3, null], $perMerge->series[0]->values);
     }
 
+    public function testReservedTokensAreDrawnInNoTokenChart(): void
+    {
+        $charts = $this->charts([$this->on('2026-10-27', 6, reserved: 4)], ['2026-10-27' => 2]);
+
+        self::assertSame([[6], [6], [3]], array_map(static fn (DailyChart $chart): array => $chart->series[0]->values, $charts));
+    }
+
     public function testAnEmptyUsageFileGivesChartsWithoutDays(): void
     {
         $charts = $this->charts([]);
@@ -78,14 +85,14 @@ final class TokenChartsTest extends TestCase
     {
         $vendor = UsageAccount::GptSubscription === $account ? UsageVendor::Gpt : UsageVendor::Claude;
 
-        return new TokenUsage(new DateTimeImmutable('2026-10-27T00:00:00Z'), $vendor, $account, $lane, $tokens);
+        return new TokenUsage(new DateTimeImmutable('2026-10-27T00:00:00Z'), $vendor, $account, $lane, $tokens, 0);
     }
 
-    private function on(string $day, int $tokens): TokenUsage
+    private function on(string $day, int $tokens, int $reserved = 0): TokenUsage
     {
         $date = DateTimeImmutable::createFromFormat('!Y-m-d', $day, new DateTimeZone('UTC'));
         self::assertInstanceOf(DateTimeImmutable::class, $date);
 
-        return new TokenUsage($date, UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, $tokens);
+        return new TokenUsage($date, UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, $tokens, $reserved);
     }
 }

@@ -7,11 +7,13 @@ namespace Intakt\Tests\JourneyPage;
 use DateTimeImmutable;
 use Intakt\Core\Platform\Contract\FigureKind;
 
+// Only the measured tokens are drawn, because a reservation is an estimate and a total over both would mix kinds.
 // The days come from the usage file alone and the merges from the counts kept for it, so the token charts change only when the usage file does.
 final readonly class TokenCharts
 {
     public const string PER_MERGE = 'tokens-per-merge';
-    public const string USAGE = "the providers' usage answers, summed per day in `docs/journey/usage.jsonl`";
+    public const string USAGE = "the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`";
+    public const string RESERVED = 'the reservations of steps that were killed before they reported usage, from the `reserved` field of `docs/journey/usage.jsonl` and never added to the measured tokens';
 
     /**
      * @param array<string, int> $mergesPerDay

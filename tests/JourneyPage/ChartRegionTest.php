@@ -53,12 +53,12 @@ final class ChartRegionTest extends TestCase
 
     public function testATokenChartNamesItsSeriesAsMeasuredAndSaysTheyComeFromTheUsageFile(): void
     {
-        $chart = new TokenCharts()->charts(new Usage([new TokenUsage(new DateTimeImmutable('2026-10-27'), UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, 5)]), [])[0];
+        $chart = new TokenCharts()->charts(new Usage([new TokenUsage(new DateTimeImmutable('2026-10-27'), UsageVendor::Claude, UsageAccount::Claude1, UsageLane::Build, 5, 0)]), [])[0];
 
         $region = new ChartRegion()->region($chart);
 
         self::assertStringContainsString('![Tokens per day by lane (measured)]', $region->text);
-        self::assertStringContainsString("Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.", $region->text);
+        self::assertStringContainsString("Measured: the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`.", $region->text);
         self::assertStringContainsString('| Day | Claude, building (measured) |', $region->text);
     }
 

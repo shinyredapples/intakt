@@ -67,11 +67,27 @@ final class JourneyPageTest extends TestCase
             | Pull requests merged | 3 counted (to 2026-11-13) |
             | Issues closed | 5 counted (4 done, 1 dropped) |
             | Busiest day | 2 counted merges (2026-10-26) |
-            | Tokens per merged pull request | 4.00M measured (12.00M measured tokens over 3 counted merges) |
+            | Tokens per merged pull request | 4.00M measured (12.00M measured tokens over 3 counted merges; not included: 500000 estimated tokens reserved for killed steps) |
 
-            Counted: from the pull requests and issues the GitHub API lists. Measured: the providers' usage answers, summed per day in `docs/journey/usage.jsonl`.
+            Counted: from the pull requests and issues the GitHub API lists. Measured: the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`. Estimated: the reservations of steps that were killed before they reported usage, from the `reserved` field of `docs/journey/usage.jsonl` and never added to the measured tokens.
             <!-- journey:end glance -->
             MD, $page);
+    }
+
+    public function testTokensReservedForKilledStepsStandBesideTheMeasuredTokensNeverInThem(): void
+    {
+        $tokens = $this->regeneratedTokens(908_000_000, 614, 21_000_000);
+
+        self::assertStringContainsString('| Tokens per merged pull request | 1.48M measured (908M measured tokens over 614 counted merges; not included: 21.00M estimated tokens reserved for killed steps) |', $tokens);
+        self::assertStringContainsString('Estimated: the reservations of steps', $tokens);
+    }
+
+    public function testWithoutReservedTokensTheGlanceTableNamesNoEstimatedFigure(): void
+    {
+        $tokens = $this->regeneratedTokens(500, 2);
+
+        self::assertStringNotContainsString('estimated', $tokens);
+        self::assertStringNotContainsString('Estimated', $tokens);
     }
 
     public function testTheMilestoneTableHoldsOneRowPerMilestoneByDueDate(): void
@@ -80,11 +96,13 @@ final class JourneyPageTest extends TestCase
 
         self::assertStringContainsString(<<<'MD'
             <!-- journey:begin milestones -->
-            | Milestone | Goal | Due | Last issue closed | Done / open |
+            | Milestone | Goal | Due | Last issue closed | Done / open (counted) |
             |---|---|---|---|---|
             | M0 Unblock | fixes the build loop needed first | 10-27 | 11-05 | 2 / 0 |
             | M5 Demo | `docker compose up` \| the path | 11-21 | open | 1 / 1 |
             | M8 Switch |  | 2027-01-07 | open | 0 / 1 |
+
+            Counted: from the issues the GitHub API lists, by each issue's milestone.
             <!-- journey:end milestones -->
             MD, $page);
     }
@@ -97,7 +115,7 @@ final class JourneyPageTest extends TestCase
             <!-- journey:begin tokens-per-merge -->
             ![Tokens per merged pull request (measured)](journey/tokens-per-merge.svg)
 
-            Measured: the day's tokens from the providers' usage answers, summed per day in `docs/journey/usage.jsonl`, divided by the pull requests merged that day, counted from the GitHub API.
+            Measured: the day's tokens from the providers' usage answers, summed per day from the `tokens` field of `docs/journey/usage.jsonl`, divided by the pull requests merged that day, counted from the GitHub API.
 
             <details markdown="1"><summary>Tokens per merged pull request (measured), as a table</summary>
 
@@ -108,7 +126,7 @@ final class JourneyPageTest extends TestCase
             | 10-28 | none |
 
             </details>
-            <!-- merges counted for usage sha256:4229317b25dec6a4ffa015fcf86bae004d36eb98d792bbea65b0a9c0b7ac319d: 2026-10-26=2 2026-10-27=1 -->
+            <!-- merges counted for usage sha256:4c57f6d07fef244adbbf6703f2b1369f256c7082783c26ff3682154ab813fecc: 2026-10-26=2 2026-10-27=1 -->
             <!-- journey:end tokens-per-merge -->
             MD, $page);
     }
@@ -177,9 +195,9 @@ final class JourneyPageTest extends TestCase
         self::assertStringContainsString('| Tokens per merged pull request | none yet |', $tokens);
     }
 
-    private function regeneratedTokens(int $total, int $merges): string
+    private function regeneratedTokens(int $total, int $merges, int $reserved = 0): string
     {
-        $table = new GlanceTable(new MockClock('2026-11-13')->now())->region([], array_fill(0, $merges, new PullRequest(new DateTimeImmutable('2026-10-26'))), $total);
+        $table = new GlanceTable(new MockClock('2026-11-13')->now())->region([], array_fill(0, $merges, new PullRequest(new DateTimeImmutable('2026-10-26'))), $total, $reserved);
 
         return $table->text;
     }

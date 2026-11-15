@@ -24,7 +24,7 @@ final readonly class GlanceTable
      * @param list<Issue>       $issues
      * @param list<PullRequest> $pullRequests
      */
-    public function region(array $issues, array $pullRequests, int $tokens): PageRegion
+    public function region(array $issues, array $pullRequests, int $tokens, int $reserved): PageRegion
     {
         $merges = array_values(array_filter(array_map(static fn (PullRequest $pullRequest): ?DateTimeImmutable => $pullRequest->merged, $pullRequests)));
         $perDay = array_count_values(array_map(static fn (DateTimeImmutable $merged): string => $merged->format('Y-m-d'), $merges));
@@ -35,9 +35,13 @@ final readonly class GlanceTable
             ['Pull requests merged', $this->counted(count($merges)).' (to '.$this->today->format('Y-m-d').')'],
             ['Issues closed', $this->closed($issues)],
             ['Busiest day', [] === $perDay ? 'none yet' : $this->counted(max($perDay)).' merges ('.array_search(max($perDay), $perDay, true).')'],
-            ['Tokens per merged pull request', [] === $merges ? 'none yet' : $this->perMerge($tokens, count($merges))],
+            ['Tokens per merged pull request', [] === $merges ? 'none yet' : $this->perMerge($tokens, count($merges), $reserved)],
         ];
-        $sources = [new FigureSource(FigureKind::Counted, 'from the pull requests and issues the GitHub API lists'), new FigureSource(FigureKind::Measured, TokenCharts::USAGE)];
+        $sources = [
+            new FigureSource(FigureKind::Counted, 'from the pull requests and issues the GitHub API lists'),
+            new FigureSource(FigureKind::Measured, TokenCharts::USAGE),
+            ...([] !== $merges && $reserved > 0 ? [new FigureSource(FigureKind::Estimated, TokenCharts::RESERVED)] : []),
+        ];
 
         return new PageRegion('glance', implode("\n", [
             '| | |',
@@ -65,11 +69,13 @@ final readonly class GlanceTable
     }
 
     // The parts stand beside the ratio with their own markers, because a ratio of measured tokens to counted merges alone would hide that it mixes kinds.
-    private function perMerge(int $tokens, int $merges): string
+    // The reserved tokens stand apart for the same reason: added to the measured ones, they would make a total of two kinds.
+    private function perMerge(int $tokens, int $merges, int $reserved): string
     {
         $measured = fn (int $amount): string => $this->figures->marked($this->tokens($amount), FigureKind::Measured);
+        $apart = $reserved > 0 ? '; not included: '.$this->figures->marked($this->tokens($reserved), FigureKind::Estimated).' tokens reserved for killed steps' : '';
 
-        return $measured(intdiv($tokens, $merges)).' ('.$measured($tokens).' tokens over '.$this->counted($merges).' merges)';
+        return $measured(intdiv($tokens, $merges)).' ('.$measured($tokens).' tokens over '.$this->counted($merges).' merges'.$apart.')';
     }
 
     private function tokens(int $tokens): string
