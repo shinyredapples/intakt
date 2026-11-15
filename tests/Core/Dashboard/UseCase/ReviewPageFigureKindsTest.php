@@ -101,7 +101,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $text = $node->text();
 
         foreach ($node->filter('.figure-kind-tip') as $tip) {
-            $text = str_replace((string) $tip->textContent, '', $text);
+            $text = str_replace($tip->textContent, '', $text);
         }
 
         $text = trim((string) preg_replace('/\s+/', ' ', $text));

@@ -299,7 +299,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertSame([['1500 measured', '0 measured', '0 measured', '0 measured', '500 measured', '2000 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
         self::assertSame([['700 measured', '0 measured', '0 measured', '0 measured', '100 measured', '800 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
-        self::assertSame('2 rounds counted, 2800 tokens measured in all. Cost: unknown, no price for model-a.', $this->wordsOf($crawler->filter('p.summary')));
+        self::assertSame('2 rounds counted, 2800 tokens measured in all. Cost: unknown, no price for model-a.', self::wordsOf($crawler->filter('p.summary')));
     }
 
     public function testEachRoundShowsItsCostAtTheConfiguredPriceAndTheReviewTheSumOfThem(): void
@@ -645,7 +645,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $text = $node->text();
 
         foreach ($node->filter('.figure-kind-tip') as $tip) {
-            $text = str_replace((string) $tip->textContent, '', $text);
+            $text = str_replace($tip->textContent, '', $text);
         }
 
         return trim((string) preg_replace('/\s+/', ' ', $text));
