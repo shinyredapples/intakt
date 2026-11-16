@@ -11,15 +11,13 @@ use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Execution\Update\Progress;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\AI\Platform\Result\ToolCall;
-use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
 
-// Apart from ReviewerRuns, because what the dashboard sees of a running reviewer (its tool calls, its text and their pace) changes for other reasons than how the agent runs.
+// Apart from ReviewerRuns, because what the dashboard sees of a running reviewer (its tool calls, its narration and its answer) changes for other reasons than how the agent runs.
 final readonly class LiveProgress
 {
     public function __construct(
         private RoundUpdates $updates,
-        private ClockInterface $clock,
     ) {
     }
 
@@ -37,7 +35,7 @@ final readonly class LiveProgress
             $this->updates->reviewerAskedAgain($round, $name, $reviewer->id->toRfc4122());
         }
 
-        $text = new StreamedTextBatch(fn (string $piece) => $this->updates->textStreamed($round, $name, $piece), $this->clock);
+        $text = new StreamedTextBatch(fn (string $piece) => $this->updates->textStreamed($round, $name, $piece));
 
         return $execution->onProgress(function (Progress $progress) use ($round, $name, $text): void {
             $payload = $progress->getPayload();
@@ -50,7 +48,7 @@ final readonly class LiveProgress
             if ($payload instanceof TextDelta) {
                 $text->add($payload->getText());
             }
-        })->onResult($text->flush(...));
+        });
     }
 
     // Null for an answer that could not be read as a verdict, so the page says so instead of showing the raw answer, which StreamedTextBatch holds back.

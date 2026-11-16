@@ -217,7 +217,7 @@ final class AnthropicToolUsingReviewerTest extends WebTestCase
         $catalog ??= new ModelCatalog(['claude-sonnet-5-5' => ['class' => Claude::class, 'capabilities' => [Capability::INPUT_MESSAGES, Capability::OUTPUT_TEXT, Capability::OUTPUT_STRUCTURED, Capability::TOOL_CALLING, Capability::THINKING]]]);
         $platform = Factory::createPlatform('key', new MockHttpClient($responses), $catalog, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $ledger = new InMemoryLedger();
-        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks($ledger, new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests($ledger, new LedgerPayloads(StoredSerializerFactory::create()))));
+        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks($ledger, new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests($ledger, new LedgerPayloads(StoredSerializerFactory::create()))));
         $toolbox = new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout);
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn () => $toolbox, $runs);
         $brief = new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []);

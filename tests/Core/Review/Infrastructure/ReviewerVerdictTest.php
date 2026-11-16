@@ -261,11 +261,19 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame([null], $this->updates->answers);
     }
 
-    public function testStreamedProseOfTheReviewerIsPublishedAsTextAndThenReadAsNoVerdict(): void
+    public function testAStreamedAnswerInProseThatCannotBeReadIsPublishedAsUnreadableAndNeverAsItsText(): void
     {
         $this->refused('Add a cart.', [], $this->streamed('Looks good ', 'to me.'));
 
-        self::assertSame([sprintf('text %s Looks good ', $this->conversation->toRfc4122())], $this->updates->seen);
+        self::assertSame([], $this->updates->seen);
+        self::assertSame([null], $this->updates->answers);
+    }
+
+    public function testAStreamedAnswerWithProseBeforeItsJsonIsPublishedAsUnreadableAndNeverAsItsText(): void
+    {
+        $this->refused('Add a cart.', [], $this->streamed('Here is my review: ', '{"verdict":"approve","findings":[],"resolved":[],"follow_ups":[]}'));
+
+        self::assertSame([], $this->updates->seen);
         self::assertSame([null], $this->updates->answers);
     }
 
@@ -872,7 +880,7 @@ final class ReviewerVerdictTest extends WebTestCase
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
         $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, new MockClock()), new ReviewerStopping(new StopRequests($this->ledger, new LedgerPayloads(StoredSerializerFactory::create())))));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates), new ReviewerStopping(new StopRequests($this->ledger, new LedgerPayloads(StoredSerializerFactory::create())))));
 
         // Collected in finally, so a case whose answer is refused can still count the calls and tool calls it made.
         try {
