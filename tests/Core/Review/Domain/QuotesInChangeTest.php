@@ -379,6 +379,31 @@ final class QuotesInChangeTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
+    public static function doubleBacktickQuotesInTheChangeHoldingASingleBacktickQuote(): iterable
+    {
+        yield 'padded, the single-backtick quote last' => ['The command `` customerName + `suffix` `` needs escaping with `escapeShellArg`.'];
+        yield 'padded, the single-backtick quote first' => ['The command `` `suffix` + customerName `` needs escaping with `escapeShellArg`.'];
+        yield 'not padded at the opening pair' => ['The command ``customerName + `suffix` `` needs escaping with `escapeShellArg`.'];
+    }
+
+    #[DataProvider('doubleBacktickQuotesInTheChangeHoldingASingleBacktickQuote')]
+    public function testAFindingIsKeptWhenADoubleBacktickQuoteInTheChangeHoldsASingleBacktickQuote(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAnAbsentDoubleBacktickQuoteHoldingASingleBacktickQuoteIsDropped(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding('The command `` grepName + `suffix` `` is not defined.'), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function spansThatMayBeProse(): iterable
     {
         yield 'prose between two lone backticks' => ['The ` character opens the literal and another ` closes it.'];

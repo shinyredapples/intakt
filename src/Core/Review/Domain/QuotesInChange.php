@@ -22,6 +22,8 @@ final readonly class QuotesInChange
     private const string PADDED_QUOTE = '/(?<!`)``(?!`)'.self::CODE.'(?=``(?!`))/';
     // What is left between two runs of backticks is a single-backtick quote with white space at an edge, a quote in longer or unequal runs, or prose between lone backticks, which plain code cannot tell apart, so such a span keeps a finding when it is in the change and never drops one.
     private const string UNSURE_QUOTE = '/(?<!`)`+'.self::CODE.'(?=`)/';
+    // Read before single-backtick quotes are taken out, because a double-backtick quote may hold one, which would otherwise cut the quote apart and hide its names; a lone pair in prose may pair with the quote's pair too, so such a span only keeps a finding.
+    private const string QUOTE_HOLDING_BACKTICKS = '/(?<!`)``(?!`)(?<code>(?:[^`\n]|\n(?![ \t]*\n)|(?<!`)`(?!`))+?)(?=``(?!`))/';
     // Put where a sure quote is taken out, so that no later span runs across it.
     private const string BLANK_LINE = "\n\n";
     private const string NAME = '/[A-Za-z_][A-Za-z0-9_]*/';
@@ -36,7 +38,7 @@ final readonly class QuotesInChange
         $quotes = [...$this->sureQuotesIn($text), ...$this->paddedQuotesIn($rest)];
 
         // Kept when any quote is found, because a quote may rightly name the fix the change still lacks.
-        if ([] === $quotes || $this->anyIsInChange($quotes, $change) || $this->anyIsInChange($this->unsureQuotesIn($rest), $change)) {
+        if ([] === $quotes || $this->anyIsInChange($quotes, $change) || $this->anyIsInChange($this->unsureQuotesIn($text, $rest), $change)) {
             return null;
         }
 
@@ -80,11 +82,12 @@ final readonly class QuotesInChange
     /**
      * @return list<non-empty-list<string>>
      */
-    private function unsureQuotesIn(string $rest): array
+    private function unsureQuotesIn(string $text, string $rest): array
     {
         preg_match_all(self::UNSURE_QUOTE, $rest, $found);
+        preg_match_all(self::QUOTE_HOLDING_BACKTICKS, $text, $holding);
 
-        return $this->checked($found['code']);
+        return $this->checked([...$found['code'], ...$holding['code']]);
     }
 
     /**
