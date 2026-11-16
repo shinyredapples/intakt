@@ -116,6 +116,58 @@ final class BoardTest extends TestCase
         self::assertSame(['r1-a'], array_map(static fn (Lane $lane): string => $lane->reviewer, $board->whoIsWorking()->lanes()));
     }
 
+    public function testDoneStartsOpenWhenEveryOtherColumnIsEmpty(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertFalse($board->startsCollapsed(BoardColumn::Done));
+    }
+
+    public function testDoneStartsCollapsedWhileAnotherColumnHoldsACard(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertTrue($board->startsCollapsed(BoardColumn::Done));
+    }
+
+    public function testABoardWhoseOnlyCardsAreDoneStartsScrolledToDone(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertTrue($board->startsScrolledToDone());
+    }
+
+    public function testABoardWithACardOutsideDoneStartsAtItsFirstColumn(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertFalse($board->startsScrolledToDone());
+    }
+
+    public function testABoardWithoutCardsStartsAtItsFirstColumn(): void
+    {
+        self::assertFalse(new Board([])->startsScrolledToDone());
+    }
+
+    public function testDoneStartsOpenOnABoardWithoutCards(): void
+    {
+        self::assertFalse(new Board([])->startsCollapsed(BoardColumn::Done));
+    }
+
+    public function testBacklogStillStartsCollapsedWhenEveryOtherColumnIsEmpty(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertTrue($board->startsCollapsed(BoardColumn::Backlog));
+    }
+
+    public function testAColumnThatNeverFoldsStaysOpenWhileOthersHoldCards(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);
+
+        self::assertFalse($board->startsCollapsed(BoardColumn::InReview));
+    }
+
     public function testABoardWithoutCardsHasTheHeadlineOfAFreshInstall(): void
     {
         self::assertSame('Nothing is running yet. Start the first review.', new Board([])->headline()->opening());

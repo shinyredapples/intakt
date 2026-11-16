@@ -4,11 +4,12 @@ import { FakeClick, FakeElement, root } from './stimulus-controller.mjs';
 
 const { highlightFindings } = await import(new URL('assets/finding-highlight.js', root));
 
-class FakeRow extends FakeElement {
+class FakeCard extends FakeElement {
     scrolledTo = null;
 
-    constructor(fold) {
+    constructor(ids, fold) {
         super();
+        this.setAttribute('data-finding', ids);
         this.fold = fold;
         this.classList.remove = (name) => this.classes.delete(name);
         this.classList.add = (name) => this.classes.add(name);
@@ -35,28 +36,28 @@ class FakeButton extends FakeElement {
 
 class FakePage {
     listeners = new Map();
-    rows = new Map();
-    cells = [];
+    entries = new Map();
+    cards = [];
 
     addEventListener(type, listener) {
         this.listeners.set(type, listener);
     }
 
     querySelectorAll(selector) {
-        if (selector === 'tr.selected') {
-            return [...this.rows.values()].filter((row) => row.classes.has('selected'));
+        if (selector === 'li.selected') {
+            return this.cards.filter((card) => card.classes.has('selected'));
         }
-        assert.equal(selector, 'td[data-finding]');
+        assert.equal(selector, 'li[data-finding]');
 
-        return this.cells;
+        return this.cards;
     }
 
     entry(id, fold = null) {
-        const row = new FakeRow(fold);
-        this.rows.set(id, row);
-        this.cells.push({ getAttribute: () => id, closest: (selector) => (selector === 'tr' ? row : null) });
+        const card = new FakeCard(id, fold);
+        this.entries.set(id, card);
+        this.cards.push(card);
 
-        return row;
+        return card;
     }
 
     choose(id) {
@@ -87,10 +88,10 @@ test('choosing a finding id highlights its timeline entry', () => {
 
     page.choose('FF1');
 
-    const row = page.rows.get('FF1');
-    assert.equal(row.classes.has('selected'), true);
-    assert.equal(row.getAttribute('aria-current'), 'true');
-    assert.deepEqual(row.scrolledTo, { block: 'center' });
+    const card = page.entries.get('FF1');
+    assert.equal(card.classes.has('selected'), true);
+    assert.equal(card.getAttribute('aria-current'), 'true');
+    assert.deepEqual(card.scrolledTo, { block: 'center' });
 });
 
 test('choosing a finding id opens the folded round its entry sits in', () => {
@@ -110,18 +111,16 @@ test('choosing a second finding id moves the highlight off the first entry', () 
 
     page.choose('FF2');
 
-    assert.equal(page.rows.get('FF1').classes.has('selected'), false);
-    assert.equal(page.rows.get('FF1').getAttribute('aria-current'), null);
-    assert.equal(page.rows.get('FF2').classes.has('selected'), true);
+    assert.equal(page.entries.get('FF1').classes.has('selected'), false);
+    assert.equal(page.entries.get('FF1').getAttribute('aria-current'), null);
+    assert.equal(page.entries.get('FF2').classes.has('selected'), true);
 });
 
 test('a finding id judged in two rounds highlights the entry of the later round', () => {
     const page = new FakePage();
-    const earlier = new FakeRow(null);
-    const later = new FakeRow(null);
-    page.rows.set('earlier', earlier);
-    page.rows.set('later', later);
-    page.cells.push({ getAttribute: () => 'FF1', closest: () => earlier }, { getAttribute: () => 'FF1', closest: () => later });
+    const earlier = new FakeCard('FF1', null);
+    const later = new FakeCard('FF1', null);
+    page.cards.push(earlier, later);
     highlightFindings(page);
 
     page.choose('FF1');
@@ -136,7 +135,7 @@ test('a finding id with no timeline entry yet highlights nothing and keeps the e
 
     page.choose('FF9');
 
-    assert.equal(page.rows.get('FF1').classes.has('selected'), true);
+    assert.equal(page.entries.get('FF1').classes.has('selected'), true);
 });
 
 test('choosing a finding id merged into an act entry highlights that entry', () => {
@@ -144,7 +143,7 @@ test('choosing a finding id merged into an act entry highlights that entry', () 
 
     page.choose('FF2');
 
-    assert.equal(page.rows.get('FF1 FF2').classes.has('selected'), true);
+    assert.equal(page.entries.get('FF1 FF2').classes.has('selected'), true);
 });
 
 test('a finding id that only starts another entry\'s id highlights nothing', () => {
@@ -152,7 +151,7 @@ test('a finding id that only starts another entry\'s id highlights nothing', () 
 
     page.choose('FF1');
 
-    assert.equal(page.rows.get('FF12').classes.has('selected'), false);
+    assert.equal(page.entries.get('FF12').classes.has('selected'), false);
 });
 
 test('a click outside a finding id highlights nothing', () => {
@@ -160,5 +159,5 @@ test('a click outside a finding id highlights nothing', () => {
 
     page.click(new FakeButton('Stop this reviewer'));
 
-    assert.equal(page.rows.get('FF1').classes.has('selected'), false);
+    assert.equal(page.entries.get('FF1').classes.has('selected'), false);
 });

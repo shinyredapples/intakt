@@ -511,6 +511,25 @@ test('a pushed column keeps the fold this tab chose', () => {
     assert.equal(page.column('col-done').classList.contains('collapsed'), false);
 });
 
+test('a Done column pushed open onto a tab that folded it is folded again and its strip says so', () => {
+    const page = new Browser('light').open();
+
+    page.pushColumn('col-done', false);
+
+    assert.equal(page.column('col-done').classList.contains('collapsed'), true);
+    assert.equal(page.column('col-done').querySelector('.col-fold').getAttribute('aria-expanded'), 'false');
+});
+
+test('a Done column pushed folded onto a tab that showed it open stays open and its strip says so', () => {
+    const page = new Browser('light').open();
+    page.column('col-done').classList.toggle('collapsed', false);
+
+    page.pushColumn('col-done', true);
+
+    assert.equal(page.column('col-done').classList.contains('collapsed'), false);
+    assert.equal(page.column('col-done').querySelector('.col-fold').getAttribute('aria-expanded'), 'true');
+});
+
 test('a pushed column tells the page once its cards are filtered', () => {
     const page = new Browser('light').open();
     const seen = page.listenForShownProjects();

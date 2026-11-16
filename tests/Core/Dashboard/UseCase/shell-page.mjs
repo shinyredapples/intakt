@@ -72,10 +72,11 @@ class FakeSelect extends FakeElement {
     }
 }
 
-// A board column as the server renders it, so also as a push brings it: open unless it starts collapsed, never expanded.
+// A board column as the server renders it, so also as a push brings it: open unless it starts collapsed, never expanded, its strip saying which.
 class FakeColumn extends FakeElement {
     constructor(page, id, collapsed = false) {
-        super(page);
+        super(page, '', { '.col-fold': new FakeElement(page) });
+        this.children['.col-fold'].setAttribute('aria-expanded', !collapsed);
         this.id = id;
         this.classes = new Set(['col', ...(collapsed ? ['collapsed'] : [])]);
         this.classList = {
@@ -258,7 +259,7 @@ export class Browser {
             },
             column: (id) => shownElements[`#${id}`],
             // What Turbo does with a replace stream for a board column: put the server's column, in its start state, where the shown one was.
-            pushColumn: (id) => {
+            pushColumn: (id, collapsed = id === 'col-done') => {
                 const stream = new FakeElement(page);
                 stream.setAttribute('action', 'replace');
                 stream.setAttribute('target', id);
@@ -266,7 +267,7 @@ export class Browser {
                     target: stream,
                     detail: {
                         render: () => {
-                            shownElements[`#${id}`] = new FakeColumn(page, id, id === 'col-done');
+                            shownElements[`#${id}`] = new FakeColumn(page, id, collapsed);
                             show(shownElements, allShown);
                         },
                     },
