@@ -93,6 +93,29 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/overflow-x:\s*auto;/', $rules['.table-scroll'] ?? '');
     }
 
+    public function testTheSummarysCostPutsEachFigureUnderItsLabelInsteadOfBesideIt(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*1fr;/', $rules['.ls-cost'] ?? '');
+        self::assertMatchesRegularExpression('/text-align:\s*left;/', $rules['.ls-cost dd'] ?? '');
+    }
+
+    public function testACostFigureWrapsAtWordBoundariesAndNeverLetterByLetter(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*break-word;/', $rules['.ls-cost dd'] ?? '');
+        self::assertDoesNotMatchRegularExpression('/anywhere/', ($rules['.ls-cost dd'] ?? '').($rules['.ls-cost dt'] ?? ''));
+    }
+
+    public function testALabelInTheSummaryKeepsAReadableMinimumWidth(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/grid-template-columns:\s*minmax\(8ch,\s*1fr\)\s+auto;/', $rules['.ls-dl'] ?? '');
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');

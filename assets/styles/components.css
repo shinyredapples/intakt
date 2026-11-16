@@ -439,6 +439,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 }
 
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
+.page-head .task-sentence { margin: var(--s4) 0 var(--s8); font-size: var(--t15); overflow-wrap: anywhere; }
 .page-head .lead { margin-top: calc(var(--s4) + 2px); color: var(--muted); font-size: var(--t15); }
 /* The board headline counts its running changes below 761 px, so it stays within two lines on a phone (decision D4 of the board headline). */
 .headline-short { display: none; }
@@ -550,9 +551,13 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .log-summary { flex: none; max-height: 45vh; overflow: auto; display: grid; gap: var(--s16); padding-top: var(--s12); border-top: 1px solid var(--hairline); }
 .log-summary h3 { margin: 0 0 var(--s4); color: var(--muted); font: 500 var(--t13)/1.3 var(--f-head); }
 .ls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s16); }
-.ls-dl { display: grid; grid-template-columns: 1fr auto; gap: var(--s4) var(--s12); margin: 0; font-size: var(--t15); }
+.ls-dl { display: grid; grid-template-columns: minmax(8ch, 1fr) auto; gap: var(--s4) var(--s12); margin: 0; font-size: var(--t15); }
 .ls-dl dt { color: var(--muted); overflow-wrap: anywhere; }
 .ls-dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+/* A wide `auto` value column (the long cost text) squeezed the label column to one character per line, so each figure goes under its label. */
+.ls-cost { grid-template-columns: 1fr; }
+.ls-cost dt { overflow-wrap: break-word; }
+.ls-cost dd { text-align: left; overflow-wrap: break-word; }
 .ls-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s4); font-size: var(--t15); }
 .ls-list li { display: flex; align-items: baseline; gap: var(--s8); min-width: 0; }
 .ls-list .mono { overflow-wrap: anywhere; }
