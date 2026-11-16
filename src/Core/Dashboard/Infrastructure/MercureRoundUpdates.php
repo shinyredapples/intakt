@@ -93,14 +93,14 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $lock = $this->summaryLockOf($round);
 
         if (!$this->doneOrLogged($round, static fn () => $lock->acquire(true))) {
-            $this->publishState($round, $progress);
+            $this->publishJudgedState($round, $progress);
 
             return;
         }
 
         try {
             $this->doneOrLogged($round, fn () => $this->publishFinalSummary($round));
-            $this->publishState($round, $progress);
+            $this->publishJudgedState($round, $progress);
         } finally {
             // Through doneOrLogged, because this runs inside the judge's event dispatch, outside the guard summaryChanged() puts around its own release.
             $this->doneOrLogged($round, static fn () => $lock->release(), 'The live session summary lock was not released.');
@@ -189,6 +189,11 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     private function publishState(Uuid $round, RoundProgress $progress): void
     {
         $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
+    }
+
+    private function publishJudgedState(Uuid $round, RoundProgress $progress): void
+    {
+        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
     }
 
     /**
