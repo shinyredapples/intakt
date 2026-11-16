@@ -22,8 +22,8 @@ final readonly class QuotesInChange
     private const string PADDED_QUOTE = '/(?<!`)``(?!`)'.self::CODE.'(?=``(?!`))/';
     // What is left between two runs of backticks is a single-backtick quote with white space at an edge, a quote in longer or unequal runs, or prose between lone backticks, which plain code cannot tell apart, so such a span keeps a finding when it is in the change and never drops one.
     private const string UNSURE_QUOTE = '/(?<!`)`+'.self::CODE.'(?=`)/';
-    // Read before single-backtick quotes are taken out, because a double-backtick quote may hold one, which would otherwise cut the quote apart and hide its names; a lone pair in prose may pair with the quote's pair too, so such a span only keeps a finding.
-    private const string QUOTE_HOLDING_BACKTICKS = '/(?<!`)``(?!`)(?<code>(?:[^`\n]|\n(?![ \t]*\n)|(?<!`)`(?!`))+?)(?=``(?!`))/';
+    // Read before single-backtick quotes are taken out, because a quote in a run of two or more backticks may hold shorter runs, which would otherwise cut the quote apart and hide its names; a run of the same length in prose may pair with the quote's run too, so such a span only keeps a finding.
+    private const string QUOTE_HOLDING_BACKTICKS = '/(?<!`)(`{2,})(?!`)(?<code>(?:[^`\n]|\n(?![ \t]*\n)|`+)+?)(?=(?<!`)\1(?!`))/';
     // Put where a sure quote is taken out, so that no later span runs across it.
     private const string BLANK_LINE = "\n\n";
     private const string NAME = '/[A-Za-z_][A-Za-z0-9_]*/';

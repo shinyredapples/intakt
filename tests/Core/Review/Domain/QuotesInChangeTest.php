@@ -394,6 +394,31 @@ final class QuotesInChangeTest extends TestCase
         self::assertNull($reason);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function longerBacktickQuotesInTheChangeHoldingShorterOnes(): iterable
+    {
+        yield 'three backticks holding a single-backtick quote' => ['The command ```customerName + `suffix` ``` needs escaping with `escapeShellArg`.'];
+        yield 'three backticks holding a double-backtick quote' => ['The command ``` ``suffix`` + customerName ``` needs escaping with `escapeShellArg`.'];
+        yield 'four backticks holding a three-backtick run' => ['The command ```` customerName + ```suffix``` ```` needs escaping with `escapeShellArg`.'];
+    }
+
+    #[DataProvider('longerBacktickQuotesInTheChangeHoldingShorterOnes')]
+    public function testAFindingIsKeptWhenALongerBacktickQuoteInTheChangeHoldsShorterBacktickRuns(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAnAbsentThreeBacktickQuoteHoldingASingleBacktickQuoteIsDropped(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding('The command ```grepName + `suffix` ``` is not defined.'), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
     public function testAnAbsentDoubleBacktickQuoteHoldingASingleBacktickQuoteIsDropped(): void
     {
         $reason = new QuotesInChange()->reasonToDrop($this->finding('The command `` grepName + `suffix` `` is not defined.'), self::CHANGE);
