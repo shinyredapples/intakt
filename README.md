@@ -23,7 +23,7 @@ docker compose up         # Intakt, its database and a sample repository
 
 The calls are billed to the key's or the token's owner. Without an Anthropic or OpenAI key, a Hugging Face token (`HF_TOKEN`) alone puts the two reviewers on models of two different makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
-The first start ends by printing the review command and, after it, an MCP line. Leave `docker compose up` running (its log keeps scrolling) and take any of three paths from a second terminal in the repository folder:
+The start ends, once the dashboard answers, with the review command framed by two lines of `=` beside the dashboard's address (it begins with `docker compose exec intakt`), followed by an MCP line. Leave `docker compose up` running (its request log may keep scrolling, which is expected) and take any of three paths from a second terminal in the repository folder; each works as soon as the command appears:
 
 | Path | Command | What you see |
 | --- | --- | --- |

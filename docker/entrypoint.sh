@@ -79,12 +79,13 @@ web() {
 
 # Plain php, not frankenphp php-cli, until the SIGTERM probe of plan task T28 passes on FrankenPHP 1.13.4.
 # The limits end a consumer on purpose, so what it leaks is dropped; the loop below starts it again.
+# Quiet, because nothing tells when a consumer has printed its start banner, which then followed the demo's review block; Symfony still prints an error at quiet verbosity.
 async() {
-    exec php bin/console messenger:consume async --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600
+    exec php bin/console messenger:consume async --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
 }
 
 scheduler_watcher() {
-    exec php bin/console messenger:consume scheduler_watcher --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600
+    exec php bin/console messenger:consume scheduler_watcher --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
 }
 
 declare -A running=()
@@ -143,6 +144,24 @@ restart_ended() {
     done
 }
 
+# Bash runs the TERM trap only after a foreground command ends, so a call that takes seconds would add them to the 8 s grace of stop_all and pass Docker's 10 s stop timeout; as a job it is waited for, because wait returns at once on a trapped signal, and stop_all ends it with the other jobs.
+as_job() {
+    "$@" &
+    wait "$!"
+}
+
+# Asked from the poll below instead of waited for before it, so ended children still start again while the server comes up.
+# Printed only once the health check and the dashboard answer, because a command copied earlier failed, and last, because the server's start output buried it.
+# Two seconds at most per call, because a stuck server would otherwise hold the poll and with it the restart of an ended consumer; the stop does not wait for a call, because each runs as a job.
+review_shown=
+show_sample_review_once() {
+    [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} && -z $review_shown ]] || return 0
+    as_job curl --fail --silent --max-time 2 --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics" || return 0
+    as_job curl --fail --silent --max-time 2 --output /dev/null "http://localhost:${DASHBOARD_PORT}/" || return 0
+    review_shown=1
+    as_job php bin/console intakt:sample:show "$INTAKT_SAMPLE_REPOSITORY" || echo "intakt: could not print the review command; run php bin/console intakt:sample:show $INTAKT_SAMPLE_REPOSITORY" >&2
+}
+
 trap 'stop_all 0' TERM INT
 
 start web
@@ -155,4 +174,5 @@ start scheduler_watcher
 while :; do
     sleep 1
     restart_ended
+    show_sample_review_once
 done
