@@ -11,7 +11,9 @@ use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
@@ -24,7 +26,7 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\RoundOpened;
-use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Tests\Support\ListedReviews;
 use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -58,6 +60,8 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(PublishProjectFilter::class)]
 #[UsesClass(FilterProjects::class)]
 #[UsesClass(LedgerReviews::class)]
+#[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(LedgerPayloads::class)]
 #[UsesClass(ProjectSummary::class)]
@@ -148,7 +152,7 @@ final class ShellHubTest extends TestCase
         $ledger->method('readInOrder')->willReturn(new RecordedEvents([
             new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":1}'), new DateTimeImmutable('2026-11-10T12:00:00+00:00')),
         ]));
-        $projects = new FilterProjects(new LedgerReviews($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))));
+        $projects = new FilterProjects(ListedReviews::on($ledger));
         $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
 
         new PublishProjectFilter($projects, $twig, $this->updates(), new LockFactory(new InMemoryStore()), $this->logger)(new RoundOpened('r1', 'alpha'));
