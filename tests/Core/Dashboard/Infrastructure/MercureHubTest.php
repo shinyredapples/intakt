@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
@@ -30,6 +31,7 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Symfony\Contracts\HttpClient\ResponseInterface;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
+use Twig\TwigFunction;
 
 // Against the real built-in hub, because history and the Last-Event-ID catch-up are the hub's behavior and a double would only repeat what the test assumes.
 #[Group('hub')]
@@ -37,6 +39,7 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
+#[UsesClass(ComponentOptions::class)]
 final class MercureHubTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';
@@ -105,9 +108,12 @@ final class MercureHubTest extends TestCase
         $this->round = Uuid::v7()->toRfc4122();
         $this->client = HttpClient::create();
         $logger = new BufferingLogger();
+        // Registered because the judged stream renders a component, which asks for its options through this function.
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
+        $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
         $this->updates = new MercureRoundUpdates(
             new MercureLiveUpdates(new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
-            new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates')),
+            $twig,
             self::createStub(SessionSummaries::class),
             new LockFactory(new InMemoryStore()),
             $logger,

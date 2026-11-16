@@ -1,0 +1,6 @@
+{# The state of the round first, so the finished count, the reviewer rows and the stop already read as judged; the judged parts follow. #}
+{{ include('dashboard/stream/round_changed.stream.html.twig') }}
+<turbo-stream action="replace" target="round-{{ round }}-head-state"><template><span id="round-{{ round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: constant('Intakt\\Core\\Dashboard\\Domain\\ReviewState::Judged')}, with_context = false) }}</span></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">judged</span></template></turbo-stream>
+{# The stream carries no findings, so the judge's call itself is read from the ledger on the next load. #}
+<turbo-stream action="replace" target="round-{{ round }}-now-judge"><template><p class="muted" id="round-{{ round }}-now-judge">The judge has judged this round. Reload the page to see its call and the findings to fix.</p></template></turbo-stream>

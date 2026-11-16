@@ -153,7 +153,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
-            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]);
+            .$this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]);
 
         foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
             self::assertCount(1, $page->filter('#'.$target), $target);
@@ -202,7 +202,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
-            .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]));
+            .$this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]));
 
         self::assertSame('stopped', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
         self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
@@ -213,10 +213,24 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenARunningRound();
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
 
         self::assertSame('Now: round 1 judged', $updated->filter('#state-block-title')->text());
         self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
+    }
+
+    public function testAJudgedRoundPushedToThePageShowsTheRoundHeadAsJudged(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        self::assertCount(1, $page->filter('#round-round-1-head-state .chip.state-running'));
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertSame('Judged', $updated->filter('#round-round-1-head-state .chip.state-judged')->text());
+        self::assertCount(0, $updated->filter('.round-head .chip.state-running'));
+        self::assertSame('judged', $updated->filter('#round-round-1-now-phase')->text());
+        self::assertSame('Judged.', $updated->filter('#round-round-1-state')->text());
     }
 
     public function testAJudgedRoundPushedToThePageTakesAwayTheStopOfTheRound(): void
