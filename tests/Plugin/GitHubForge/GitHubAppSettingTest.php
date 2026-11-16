@@ -8,9 +8,6 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\ErrorHandler\BufferingLogger;
-use Symfony\Component\Messenger\Event\WorkerStartedEvent;
-use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Messenger\Worker;
 
 #[CoversClass(GitHubAppSetting::class)]
 final class GitHubAppSettingTest extends TestCase
@@ -21,7 +18,7 @@ final class GitHubAppSettingTest extends TestCase
     {
         $log = new BufferingLogger();
 
-        new GitHubAppSetting('', $log)->onWorkerStarted($this->workerStarted());
+        new GitHubAppSetting('', $log)->onWorkerStarted();
 
         self::assertSame([['info', self::NOTICE, []]], $log->cleanLogs());
     }
@@ -30,7 +27,7 @@ final class GitHubAppSettingTest extends TestCase
     {
         $log = new BufferingLogger();
 
-        new GitHubAppSetting('12345', $log)->onWorkerStarted($this->workerStarted());
+        new GitHubAppSetting('12345', $log)->onWorkerStarted();
 
         self::assertSame([], $log->cleanLogs());
     }
@@ -40,15 +37,10 @@ final class GitHubAppSettingTest extends TestCase
         $log = new BufferingLogger();
         $setting = new GitHubAppSetting('', $log);
 
-        $setting->onWorkerStarted($this->workerStarted());
+        $setting->onWorkerStarted();
         $setting->whenConfigured(static function (): void {
         });
 
         self::assertSame([['info', self::NOTICE, []]], $log->cleanLogs());
-    }
-
-    private function workerStarted(): WorkerStartedEvent
-    {
-        return new WorkerStartedEvent(new Worker([], $this->createStub(MessageBusInterface::class)));
     }
 }

@@ -24,8 +24,8 @@ final readonly class GitHubAppSetting
     }
 
     // At the worker's start too, because a project in live mode (the demo) never reaches the forge, and the notice belongs to every start without an App.
-    #[AsEventListener]
-    public function onWorkerStarted(WorkerStartedEvent $event): void
+    #[AsEventListener(event: WorkerStartedEvent::class)]
+    public function onWorkerStarted(): void
     {
         if ('' === trim($this->appId)) {
             $this->reportMissingAppOnce();
