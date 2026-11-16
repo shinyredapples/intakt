@@ -1,11 +1,9 @@
-# Intakt
-
-<p align="center">
+<h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/intakt-lockup-dark.svg">
-    <img src="docs/assets/intakt-lockup.svg" alt="intakt" width="420">
+    <img src="docs/assets/intakt-lockup.svg" alt="Intakt" width="300">
   </picture>
-</p>
+</h1>
 
 Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge checks every finding against the task before it reaches the act list. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
 
@@ -21,15 +19,13 @@ cp .env.dist .env.local   # add a provider API key or a Hugging Face token, and 
 docker compose up         # Intakt, its database and a sample repository
 ```
 
-The calls are billed to the key's or the token's owner. Without an Anthropic or OpenAI key, a Hugging Face token (`HF_TOKEN`) alone puts the two reviewers on models of two different makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
-
-The start ends, once the dashboard answers, with the review command framed by two lines of `=` beside the dashboard's address (it begins with `docker compose exec intakt`), followed by an MCP line. Leave `docker compose up` running (its request log may keep scrolling, which is expected) and take any of three paths from a second terminal in the repository folder; each works as soon as the command appears:
+Calls are billed to the key's or token's owner; `HF_TOKEN` alone puts the two reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)). Once the dashboard answers, the start prints the review command between two lines of `=` (it begins with `docker compose exec intakt`), then an MCP line. Leave it running (its log may keep scrolling) and, from a second terminal in the repository folder, take a path:
 
 | Path | Command | What you see |
 | --- | --- | --- |
-| Console | the printed `intakt:review sample-change ...` command | the verdict and the act list; exit 0, 10 or 11 ([Reading a verdict](docs/user/README.md#reading-a-verdict)) |
-| Dashboard | open `http://localhost:7781` | each round live, with the judge's call on every finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
-| MCP | the printed `claude mcp add ...` line | your agent starts a review (`start_review`) and reads the act list ([details](docs/user/mcp.md)) |
+| Console | the printed `intakt:review` | the verdict and act list, exit 0, 10 or 11 ([how to read it](docs/user/README.md#reading-a-verdict)) |
+| Dashboard | `http://localhost:7781` | each round live, the judge's call on every finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
+| MCP | the printed `claude mcp add` | your agent starts a review and reads the act list ([details](docs/user/mcp.md)) |
 
 <details>
 <summary>Screenshot: the dashboard's review page for the sample change</summary>
