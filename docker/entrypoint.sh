@@ -58,8 +58,7 @@ rebuild_container() {
 
 # Assigned apart from the export, because export would hide a failed write, and a start without the token would leave the printed MCP setup unusable.
 export_owner_token() {
-    local file token
-    file="$(dirname "$INTAKT_CONFIG")/mcp-owner-token"
+    local file=${MCP_OWNER_KEPT_FILE:?set MCP_OWNER_KEPT_FILE to where the MCP owner token is kept} token
     token=$(kept_secret "$file") || token=
     if [[ ! $token =~ ^[0-9a-f]{64}$ ]]; then
         echo "intakt: could not make or read the MCP owner token in $file; set MCP_OWNER_TOKEN or make its folder writable" >&2
