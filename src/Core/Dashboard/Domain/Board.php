@@ -51,6 +51,12 @@ final readonly class Board
         return $column->startsCollapsed();
     }
 
+    // Done is the last of nine columns and lies past the edge of a laptop's board, so opening it alone is not enough to show the finished review on arrival.
+    public function startsScrolledToDone(): bool
+    {
+        return $this->everyColumnButDoneIsEmpty() && 0 < $this->countOf(BoardColumn::Done);
+    }
+
     // Every card of every project, so the page limit on the cards shown never lowers the count.
     public function countOf(BoardColumn $column): int
     {

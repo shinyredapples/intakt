@@ -160,6 +160,7 @@
                     render(stream);
                     const pushed = document.getElementById(replaced.id);
                     pushed?.classList.toggle('collapsed', collapsed);
+                    pushed?.querySelector('.col-fold')?.setAttribute('aria-expanded', String(!collapsed));
                     pushed?.toggleAttribute('data-expanded', expanded);
                     showProject();
                 };

@@ -245,11 +245,33 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
+        $page = $this->browser->request('GET', '/');
+
+        $done = $this->column($page, 'Done');
+        self::assertStringNotContainsString('collapsed', (string) $done->attr('class'));
+        self::assertSame('/reviews/round-1', $done->filter('.col-cards a.card')->attr('href'));
+        self::assertNotNull($page->filter('.board-wrap')->attr('data-scroll-to-end'));
+    }
+
+    // The layout puts this tab's own fold back on a pushed column, so an open Done still needs the strip that opens it again.
+    public function testADoneColumnThatStartsOpenKeepsItsStripSayingItIsExpandedAndItsHide(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
         $done = $this->column($this->browser->request('GET', '/'), 'Done');
 
-        self::assertStringNotContainsString('collapsed', (string) $done->attr('class'));
-        self::assertCount(0, $done->filter('.col-fold, .col-hide'));
-        self::assertSame('/reviews/round-1', $done->filter('.col-cards a.card')->attr('href'));
+        self::assertSame('true', $done->filter('button.col-fold')->attr('aria-expanded'));
+        self::assertCount(1, $done->filter('.col-head button.col-hide'));
+    }
+
+    public function testABoardWithARunningReviewStartsAtItsFirstColumn(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('43', 'round-2', 1);
+
+        self::assertNull($this->browser->request('GET', '/')->filter('.board-wrap')->attr('data-scroll-to-end'));
     }
 
     public function testACollapsedColumnsStripShowsItsNameAndCountSideBySide(): void

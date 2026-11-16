@@ -71,6 +71,33 @@ test('the right edge fades on load while columns are hidden to the right', () =>
     assert.deepEqual(wrap.fades(), ['more-right']);
 });
 
+test('a board marked to start at its end scrolls to Done on load and fades only its left edge', () => {
+    const page = new FakePage();
+    page.wrap.setAttribute('data-scroll-to-end', '');
+
+    markBoardEdges(page, new FakeTarget());
+
+    assert.equal(page.wrap.board.scrollLeft, 556);
+    assert.deepEqual(page.wrap.fades(), ['more-left']);
+});
+
+test('a board scrolled to its end on load keeps the scroll the person chose afterwards', () => {
+    const page = new FakePage();
+    page.wrap.setAttribute('data-scroll-to-end', '');
+    markBoardEdges(page, new FakeTarget());
+    page.wrap.board.scrollLeft = 0;
+
+    page.dispatch('intakt:project-shown');
+
+    assert.equal(page.wrap.board.scrollLeft, 0);
+});
+
+test('an unmarked board stays at its first column on load', () => {
+    const { board } = boardOnAPage();
+
+    assert.equal(board.scrollLeft, 0);
+});
+
 test('no edge fades when the board fits', () => {
     const page = new FakePage();
     page.wrap.board.scrollWidth = 1136;

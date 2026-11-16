@@ -130,6 +130,25 @@ final class BoardTest extends TestCase
         self::assertTrue($board->startsCollapsed(BoardColumn::Done));
     }
 
+    public function testABoardWhoseOnlyCardsAreDoneStartsScrolledToDone(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertTrue($board->startsScrolledToDone());
+    }
+
+    public function testABoardWithACardOutsideDoneStartsAtItsFirstColumn(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertFalse($board->startsScrolledToDone());
+    }
+
+    public function testABoardWithoutCardsStartsAtItsFirstColumn(): void
+    {
+        self::assertFalse(new Board([])->startsScrolledToDone());
+    }
+
     public function testDoneStartsOpenOnABoardWithoutCards(): void
     {
         self::assertFalse(new Board([])->startsCollapsed(BoardColumn::Done));
