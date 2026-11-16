@@ -21,6 +21,8 @@ final class ClockedLedger implements Ledger
 
     private ?int $failingAppend = null;
 
+    private float $secondsPerAppend = 0.0;
+
     public function __construct(private readonly ClockInterface $clock)
     {
     }
@@ -28,6 +30,12 @@ final class ClockedLedger implements Ledger
     public function failAppend(int $number): void
     {
         $this->failingAppend = $number;
+    }
+
+    // Each append then moves the clock on, as a database write takes time the replay must not add to the recorded gaps.
+    public function takeSecondsPerAppend(float $seconds): void
+    {
+        $this->secondsPerAppend = $seconds;
     }
 
     public function append(LedgerEvent $event): AppendResult
@@ -38,6 +46,7 @@ final class ClockedLedger implements Ledger
 
         $id = Uuid::v7();
         $this->recorded[] = new RecordedEvent($id, $event, $this->clock->now());
+        $this->clock->sleep($this->secondsPerAppend);
 
         return AppendResult::appended($id);
     }

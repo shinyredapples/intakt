@@ -104,6 +104,18 @@ final class ReplaysRecordingTest extends TestCase
         );
     }
 
+    public function testTheTimeAnAppendTakesIsNotAddedToTheRecordedGaps(): void
+    {
+        $this->ledger->takeSecondsPerAppend(3.0);
+
+        $this->replays()->replay($this->recordedRun(), 2.0);
+
+        self::assertSame(
+            ['09:00:00.000000', '09:00:05.000000', '09:00:08.000000', '09:01:05.500000', '09:01:08.500000'],
+            array_map(static fn (RecordedEvent $row): string => $row->recordedAt->format('H:i:s.u'), $this->appended()),
+        );
+    }
+
     public function testARowIsNotAppendedBeforeTheClockReachesItsMoment(): void
     {
         $this->ledger->failAppend(3);

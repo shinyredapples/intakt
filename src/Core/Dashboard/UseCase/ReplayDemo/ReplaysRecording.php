@@ -63,14 +63,16 @@ final readonly class ReplaysRecording
         }
     }
 
+    // Each row's moment counts from the replay's start, so the time an append takes is not added to the gaps that follow it.
     private function appendAtTheRecordedPace(Recording $recording, float $factor): void
     {
-        $previous = array_first($recording->events)?->recordedAt;
+        $first = array_first($recording->events)?->recordedAt;
+        $start = $this->clock->now();
 
         foreach ($recording->events as $number => $event) {
-            $this->clock->sleep($this->secondsBetween($previous, $event->recordedAt) / $factor);
+            $due = $this->secondsBetween($first, $event->recordedAt) / $factor;
+            $this->clock->sleep(max(0.0, $due - $this->secondsBetween($start, $this->clock->now())));
             $this->append($event, $recording, $number);
-            $previous = $event->recordedAt;
         }
     }
 
@@ -83,7 +85,7 @@ final readonly class ReplaysRecording
         }
     }
 
-    // A row recorded before the one ahead of it follows at once, because the ledger keeps the recorded order.
+    // A row recorded before the first one follows at once, because the ledger keeps the recorded order.
     private function secondsBetween(?DateTimeImmutable $earlier, DateTimeImmutable $later): float
     {
         if (!$earlier instanceof DateTimeImmutable) {
