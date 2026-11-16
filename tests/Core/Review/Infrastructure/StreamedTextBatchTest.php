@@ -97,6 +97,48 @@ final class StreamedTextBatchTest extends TestCase
         self::assertSame(['text r1 I read match {case} in the cart next.'], $this->updates->seen);
     }
 
+    public function testAJsonAnswerFollowedByProseWithBracesIsNeverPublished(): void
+    {
+        $this->released("```json\n{\"verdict\":\"changes\",\"findings\":[{\"id\":\"F1\"}]}\n```\nLet me check match {case} once more.");
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testAJsonAnswerAfterProseWithBracesIsNeverPublished(): void
+    {
+        $this->released('I checked {case}. Verdict: {"verdict":"approve","findings":[]}');
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testTwoJsonObjectsInOneTurnAreNeverPublished(): void
+    {
+        $this->released("Draft: {\"verdict\":\"approve\",\"findings\":[]}\nFinal: {\"verdict\":\"changes\",\"findings\":[]}");
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testAnAlmostJsonAnswerIsNeverPublished(): void
+    {
+        $this->released('{"verdict":"changes","findings":[{"id":"F1","severity":"P1",}]}');
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testAJsonAnswerCutOffAfterItsFirstKeyIsNeverPublished(): void
+    {
+        $this->released("I am done.\n{ \"verd");
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testProseWithQuotesAndBracesThatOpenNoJsonObjectIsStillPublished(): void
+    {
+        $this->released('I read "match" in {case} and {} next.');
+
+        self::assertSame(['text r1 I read "match" in {case} and {} next.'], $this->updates->seen);
+    }
+
     public function testAJsonTurnIsDroppedAndTheNextTurnIsStillPublished(): void
     {
         $batch = $this->batch('r1');
