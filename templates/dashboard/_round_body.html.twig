@@ -53,16 +53,6 @@
     {{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}
 
     <h3>Tokens and cost</h3>
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Tokens and cost of round {{ reviewed.round }}">
-    <table class="ledger tokens">
-        <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost</th></tr></thead>
-        <tbody>
-            <tr>
-                {% for tokens in [reviewed.tokens.prompt, reviewed.tokens.cacheRead, reviewed.tokens.cacheWrite, reviewed.tokens.cached, reviewed.tokens.completion, reviewed.tokens.total] %}
-                <td class="num">{{ tokens }} {{ include(kind_label, {kind: kinds.Measured, at: 'round-' ~ reviewed.round ~ '-tokens-' ~ loop.index}, with_context = false) }}</td>
-                {% endfor %}
-                <td>{{ include('dashboard/components/cost.html.twig', {cost: reviewed.cost, at: 'round-' ~ reviewed.round ~ '-cost'}, with_context = false) }}</td>
-            </tr>
-        </tbody>
-    </table>
-    </div>
+    {# From the review summary's macro, because the judged round's live update replaces the table with the same markup. #}
+    {% import 'dashboard/_review_summary.html.twig' as review_summary %}
+    {{ review_summary.round_tokens(reviewed) }}

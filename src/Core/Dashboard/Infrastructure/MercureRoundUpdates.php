@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Closure;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundProgress;
@@ -202,24 +203,37 @@ final readonly class MercureRoundUpdates implements RoundUpdates
 
     private function publishJudgedState(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $this->judgedRoundOf($round)]);
+        $review = $this->judgedReviewOf($round);
+        $reviewed = null === $review ? null : $this->judgedRoundIn($review, $round);
+
+        $this->publish($round, RoundStream::RoundJudged, [
+            'round' => $round->toRfc4122(),
+            'progress' => $progress,
+            'reviewed' => $reviewed,
+            'review' => null === $reviewed ? null : $review,
+        ]);
     }
 
-    // Read as the page reads it, because the live findings must be exactly what a reload shows; null leaves them to that reload.
-    private function judgedRoundOf(Uuid $round): ?ReviewedRound
+    // Read as the page reads it, because the live findings and totals must be exactly what a reload shows; null leaves them out of the update.
+    private function judgedReviewOf(Uuid $round): ?Review
     {
         $id = $round->toRfc4122();
 
         try {
-            $rounds = $this->pages->reviewOf($id)->rounds ?? [];
+            return $this->pages->reviewOf($id);
         } catch (Throwable $failure) {
             // Logged and swallowed, because the judged state must still go out when its findings cannot be read.
             $this->logger->warning('The judged round was not read for its live update.', ['round' => $id, 'exception' => $failure]);
 
             return null;
         }
+    }
 
-        return array_find($rounds, static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id && $reviewed->isJudged());
+    private function judgedRoundIn(Review $review, Uuid $round): ?ReviewedRound
+    {
+        $id = $round->toRfc4122();
+
+        return array_find($review->rounds, static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id && $reviewed->isJudged());
     }
 
     /**

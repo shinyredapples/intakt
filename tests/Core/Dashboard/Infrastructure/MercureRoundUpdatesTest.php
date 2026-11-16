@@ -492,8 +492,25 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertCount(1, $this->published);
         self::assertStringNotContainsString('target="round-'.self::ROUND.'-judged"', $this->published[0]->getData());
-        self::assertStringContainsString('Reload the page', $this->published[0]->getData());
+        self::assertStringNotContainsString('Reload', $this->published[0]->getData());
         self::assertSame([], $this->log->cleanLogs());
+    }
+
+    public function testAJudgedRoundCarriesItsTokensAndTheReviewsTotalsInItsJudgedState(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->judgeFindings(self::ROUND, ['F1' => 'act']);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        $judged = array_last($this->published);
+        self::assertNotNull($judged);
+        $targets = array_map($this->actionAndTargetOf(...), $this->streamsOf($judged));
+        foreach (['round-'.self::ROUND.'-tokens', 'review-summary-tokens', 'review-summary-cost', 'round-'.self::ROUND.'-review-cost'] as $target) {
+            self::assertContains('replace '.$target, $targets);
+        }
     }
 
     public function testAJudgedStateGoesOutWhenTheSummaryLockCannotBeTaken(): void

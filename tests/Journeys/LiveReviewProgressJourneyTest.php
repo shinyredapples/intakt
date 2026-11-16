@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys;
 
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
+use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Tests\Journeys\Support\JourneyTestCase;
 use Intakt\Tests\Journeys\Support\RoundStreamCheck;
+use Intakt\Tests\Journeys\Support\StreamedPage;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\DomCrawler\Crawler;
@@ -21,6 +23,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string ENDED_TEXT = 'Judged.';
+    private const string JUDGED_CALL = 'The judge has judged this round. Its call and the findings to fix are in the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string HEADLINE_TARGET = 'target="board-headline"';
     private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
@@ -48,7 +51,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $updates = $this->step('step the round until the judge has ruled', fn (): array => $this->stepTheRound($round));
         $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
         $this->step('read the board headline pushed once a reviewer started', fn () => $this->readThePushedHeadline($round));
-        $this->step('open the judged round', fn () => $this->openTheJudgedRound($round));
+        $live = $this->step('apply the recorded updates to the running page', fn (): Crawler => new StreamedPage()->after($running, MercureRoundUpdates::topicOf($round), $updates));
+        $judged = $this->step('open the judged round', fn (): Crawler => $this->openTheJudgedRound($round));
+        $this->step('read the judged content on the running page as a reload shows it', fn () => $this->readTheJudgedContentWithoutAReload($round, $live, $judged));
         $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
     }
 
@@ -124,12 +129,25 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         return $this->liveRoundDriver()->stepUntilEnded($round);
     }
 
-    private function openTheJudgedRound(string $round): void
+    private function openTheJudgedRound(string $round): Crawler
     {
         $page = $this->visit('/reviews/'.$round);
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
         self::assertSame('judged', mb_strtolower($page->filter('.state-judged')->text()));
+
+        return $page;
+    }
+
+    // The page opened while the round ran, changed only by what the hub was sent, against a new load of the judged round.
+    private function readTheJudgedContentWithoutAReload(string $round, Crawler $live, Crawler $judged): void
+    {
+        self::assertSame(self::JUDGED_CALL, $live->filter('#round-'.$round.'-now-judge')->text());
+        self::assertSame($judged->filter('#round-'.$round.'-judged')->html(), $live->filter('#round-'.$round.'-judged')->html());
+        self::assertSame($judged->filter('#round-'.$round.'-tokens')->html(), $live->filter('#round-'.$round.'-tokens')->html());
+        self::assertSame($judged->filter('.page-head p.meta')->html(), $live->filter('.page-head p.meta')->html());
+        self::assertSame($judged->filter('#review-summary-cost')->text(), 'Cost: '.$live->filter('#round-'.$round.'-review-cost')->text());
+        self::assertStringNotContainsString('Reload', $live->filter('body')->text());
     }
 
     /**

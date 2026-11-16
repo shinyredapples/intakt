@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Budget\Contract\Prices;
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -358,7 +360,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['F1'], $updated->filter('#round-'.$id.'-judged li.finding-card .fc-id')->each(static fn (Crawler $id): string => $id->text()));
     }
 
-    public function testAJudgedRoundStreamedWithoutItsFindingsStillPointsToAReload(): void
+    public function testAJudgedRoundStreamedWithoutItsFindingsSaysTheyCouldNotBeReadWithoutAskingForAReload(): void
     {
         $this->givenARunningRound();
         $page = $this->browser->request('GET', '/reviews/round-1');
@@ -366,8 +368,47 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true), 'reviewed' => null]));
 
         self::assertSame('The judge has not judged this round yet.', $updated->filter('#round-round-1-judged')->text());
-        self::assertSame('The judge has judged this round. Reload the page to see its call and the findings to fix.', $updated->filter('#round-round-1-now-judge')->text());
+        self::assertSame('The judge has judged this round. Its call and the findings to fix could not be read for this update.', $updated->filter('#round-round-1-now-judge')->text());
         self::assertCount(0, $updated->filter('#round-round-1-outcome'));
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheRoundsTokensAndCostAsAReloadDoesOnceTheRoundIsJudged(): void
+    {
+        $id = $this->givenAPricedRoundOpenedBeforeItsTokens();
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('0 ', $page->filter('#round-'.$id.'-tokens table.tokens tbody td')->eq(5)->text());
+
+        $updated = $this->judgedAfterTokens($page, $id);
+
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('1300 ', $updated->filter('#round-'.$id.'-tokens table.tokens tbody td')->eq(5)->text());
+        self::assertStringStartsWith('0.0050 USD estimated', $updated->filter('#round-'.$id.'-tokens table.tokens tbody td')->eq(6)->text());
+        self::assertSame($reloaded->filter('#round-'.$id.'-tokens')->html(), $updated->filter('#round-'.$id.'-tokens')->html());
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheReviewsTotalTokensAndCostInItsHeaderOnceTheRoundIsJudged(): void
+    {
+        $id = $this->givenAPricedRoundOpenedBeforeItsTokens();
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('0 tokens', $page->filter('#review-summary-tokens')->text());
+
+        $updated = $this->judgedAfterTokens($page, $id);
+
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('1,300 tokens', $updated->filter('#review-summary-tokens')->text());
+        self::assertStringStartsWith('Cost: 0.0050 USD estimated', $updated->filter('#review-summary-cost')->text());
+        self::assertSame($reloaded->filter('.page-head p.meta')->html(), $updated->filter('.page-head p.meta')->html());
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheReviewSoFarCostInTheSessionSummaryOnceTheRoundIsJudged(): void
+    {
+        $id = $this->givenAPricedRoundOpenedBeforeItsTokens();
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('0.0000 USD', $page->filter('#round-'.$id.'-review-cost')->text());
+
+        $updated = $this->judgedAfterTokens($page, $id);
+
+        self::assertStringStartsWith('0.0050 USD estimated', $updated->filter('#round-'.$id.'-review-cost')->text());
     }
 
     public function testAToolCallPublishedForAReviewerThatStartedAfterThePageLoadedMakesTheStopOfTheRoundAvailable(): void
@@ -828,6 +869,33 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     private function pairsOf(Crawler $list): array
     {
         return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), $term->nextAll()->first()->text()]);
+    }
+
+    // Running with a session summary, so the page shows the review-so-far cost, and priced, so the cost has a figure to change.
+    private function givenAPricedRoundOpenedBeforeItsTokens(): string
+    {
+        $this->browser->disableReboot();
+        $container = self::getContainer();
+        $container->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], null));
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [], [], [], false));
+        $container->set(SessionSummaries::class, $summaries);
+        $this->givenTheHubRecordsWhatIsPublished();
+        $id = Uuid::v7()->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->startReviewer($id, 'correctness');
+
+        return $id;
+    }
+
+    private function judgedAfterTokens(Crawler $page, string $id): Crawler
+    {
+        $this->ledger->useTokens($id, 1000, 300);
+        $this->ledger->answer($id, 'correctness', 1);
+        $this->ledger->judgeFindings($id, ['F1' => 'act']);
+        $this->publishedUpdates()->roundChanged(Uuid::fromString($id), new RoundProgress(1, 1, true));
+
+        return $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
     }
 
     private function givenARunningRound(): void

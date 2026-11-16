@@ -15,8 +15,10 @@
         </div>
 {% endmacro %}
 
-{# Only this round's cost is a part: the review-wide cell is outside the streams, because a round's updates know nothing of the other rounds. #}
 {% macro round_cost(round, summary) %}<dd id="round-{{ round }}-summary-cost">{{ include('dashboard/components/cost.html.twig', {cost: summary.cost, at: 'round-' ~ round ~ '-summary-cost'}, with_context = false) }}</dd>{% endmacro %}
+
+{# Left out of the summary stream, because a round's summary knows nothing of the other rounds; the judged round's update replaces it, because that update reads the whole review. #}
+{% macro review_cost(round, cost) %}<dd id="round-{{ round }}-review-cost">{{ include('dashboard/components/cost.html.twig', {cost: cost, at: 'round-' ~ round ~ '-review-cost'}, with_context = false) }}</dd>{% endmacro %}
 
 {% macro files(round, summary) %}
     <div id="round-{{ round }}-summary-files">

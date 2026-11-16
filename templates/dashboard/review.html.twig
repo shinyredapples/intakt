@@ -5,6 +5,7 @@
 {% block content_width %} roomy{% endblock %}
 
 {% block body %}
+{% import 'dashboard/_review_summary.html.twig' as review_summary %}
 {% set total = review.tokens %}
 {% set latest = review.rounds|last %}
 {% set active = review.activeRound %}
@@ -27,12 +28,13 @@
         {% else %}
         <p class="task-sentence muted">Task not recorded.</p>
         {% endif %}
+        {# The tokens and cost from the review summary's macros, because the judged round's live update replaces both totals by their ids. #}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
             {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round ' : ' rounds '), include: {template: kind_label, with: {kind: kinds.Counted, at: 'summary-rounds'}}},
-            {icon: 'tokens', text: total.total|number_format(0, '.', ',') ~ ' tokens ', include: {template: kind_label, with: {kind: kinds.Measured, at: 'summary-tokens'}}},
-            {icon: 'wallet', text: 'Cost: ', include: {template: 'dashboard/components/cost.html.twig', with: {cost: review.cost, at: 'summary-cost'}}},
+            {icon: 'tokens', text: review_summary.tokens(total)},
+            {icon: 'wallet', text: review_summary.cost(review.cost)},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
         {% if not can_start %}
