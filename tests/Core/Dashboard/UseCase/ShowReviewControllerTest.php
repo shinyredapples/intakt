@@ -322,14 +322,42 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSame(['Judged', 'Judged'], $crawler->filter('section.round .chip.state-judged')->each(static fn (Crawler $chip): string => $chip->text()));
     }
 
-    public function testThePageHeadHoldsTheTitleAndTheSummaryAsItsLead(): void
+    public function testThePageHeadHoldsTheTitleTheTaskSentenceAndTheMetaLine(): void
     {
         $this->givenACompletedTwoRoundReview();
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertSame('Review of feat/thing in alpha', $crawler->filter('.page-head h1')->text());
-        self::assertCount(1, $crawler->filter('.page-head p.summary.lead'));
+        self::assertCount(1, $crawler->filter('.page-head p.task-sentence'));
+        self::assertCount(1, $crawler->filter('.page-head p.meta'));
+    }
+
+    public function testThePageHeadShowsTheTaskSentenceOfTheLatestRoundUnderTheTitle(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Add the thing.', $crawler->filter('.page-head h1 + p.task-sentence')->text());
+    }
+
+    public function testThePageHeadSaysTheTaskWasNotRecordedWhenTheRoundHasNoSource(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Task not recorded.', $crawler->filter('.page-head p.task-sentence.muted')->text());
+    }
+
+    public function testTheMetaLineGivesRoundsTokensCostAndTimeEachItsIcon(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(4, $crawler->filter('.page-head p.meta > span svg.i'));
     }
 
     public function testEachRoundNamesItsIdAndStartOnItsMetaLine(): void
@@ -349,7 +377,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertSame([['1500 measured', '0 measured', '0 measured', '0 measured', '500 measured', '2000 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
         self::assertSame([['700 measured', '0 measured', '0 measured', '0 measured', '100 measured', '800 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
-        self::assertSame('2 rounds counted, 2800 tokens measured in all. Cost: unknown, no price for model-a.', self::wordsOf($crawler->filter('p.summary')));
+        self::assertSame('alphafeat/thing 2 rounds counted 2,800 tokens measured Cost: unknown, no price for model-a Latest round started 2026-10-28 12:00:00 UTC', self::wordsOf($crawler->filter('.page-head p.meta')));
     }
 
     public function testEachRoundShowsItsCostAtTheConfiguredPriceAndTheReviewTheSumOfThem(): void
@@ -361,7 +389,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertSame('0.0080 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
         self::assertSame('0.0024 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
-        self::assertStringEndsWith('Cost: 0.0104 USD estimated, price date unknown.', self::wordsOf($crawler->filter('p.summary')));
+        self::assertStringContainsString('Cost: 0.0104 USD estimated, price date unknown', self::wordsOf($crawler->filter('.page-head p.meta')));
     }
 
     public function testAnUnknownCostNamesTheModelEscapedAndIsNeverZero(): void
@@ -387,7 +415,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('0.0050 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
-        self::assertSelectorTextContains('p.summary', 'Cost: unknown, no price for model-b.');
+        self::assertSelectorTextContains('.page-head p.meta', 'Cost: unknown, no price for model-b');
     }
 
     public function testAnAnthropicRoundShowsItsCacheReadsAndWritesWithinThePromptAndTheirSumAsTotal(): void
@@ -467,7 +495,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['alpha', 'feat/thing', 'Latest round started 2026-10-28 12:00:00 UTC'], $crawler->filter('.page-head p.meta span')->each(static fn (Crawler $fact): string => $fact->text()));
+        self::assertSame(['alpha', 'feat/thing', '2 rounds counted', '2,800 tokens measured', 'Latest round started 2026-10-28 12:00:00 UTC'], array_values(array_filter($crawler->filter('.page-head p.meta > span')->each(static fn (Crawler $fact): string => self::wordsOf($fact)), static fn (string $fact): bool => !str_starts_with($fact, 'Cost:'))));
     }
 
     public function testACompletedRoundFoldsToOneLineWithOutcomeFindingCountAndTimeSpan(): void
