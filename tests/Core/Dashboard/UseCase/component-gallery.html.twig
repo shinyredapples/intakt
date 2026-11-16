@@ -85,5 +85,8 @@
     {{ include(c ~ 'error_line.html.twig', {failed: "Couldn't connect.", text: 'The vendor said the key is not valid. Nothing was saved.'}) }}
 
     {{ include(c ~ 'toast.html.twig', {message: 'All projects paused', undo_url: '#', undo_token: 'token'}) }}
+
+    <h2>Characters</h2>
+    <span class="character-row">{{ include(c ~ 'character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 24}) }}<span>Judge</span></span>
 </div>
 {% endblock %}
