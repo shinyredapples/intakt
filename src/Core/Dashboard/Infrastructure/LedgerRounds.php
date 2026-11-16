@@ -224,7 +224,7 @@ final class LedgerRounds
     private function moved(ReviewerOutcome $outcome, ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerBlocked|ReviewerStopped|CatchUpOwed $row, DateTimeImmutable $at): ReviewerOutcome
     {
         return match (true) {
-            $row instanceof ReviewerStarted => $outcome->restarted($at),
+            $row instanceof ReviewerStarted => $outcome->restarted($at, $row->model),
             $row instanceof VerdictReceived => $outcome->answered($row->decision->value, $row->findings, $row->mode),
             $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),

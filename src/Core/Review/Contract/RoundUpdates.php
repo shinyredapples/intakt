@@ -13,6 +13,9 @@ interface RoundUpdates
 
     public function textStreamed(Uuid $round, string $reviewer, string $text): void;
 
+    // Typed, never the reviewer's text, because its raw answer on the live log reads as leaked internals; an unreadable answer arrives as one marker (ReadAnswer::unreadable()).
+    public function answerRead(Uuid $round, string $reviewer, ReadAnswer $answer): void;
+
     // Named by the retry's conversation id, because a retry that falls back to an unstreamed call reports its start twice and must be shown once.
     public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void;
 

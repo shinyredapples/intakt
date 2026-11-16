@@ -8,7 +8,6 @@ use Intakt\Core\Review\Infrastructure\StreamedTextBatch;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(StreamedTextBatch::class)]
@@ -18,15 +17,12 @@ final class StreamedTextBatchTest extends TestCase
 
     private RecordedRoundUpdates $updates;
 
-    private MockClock $clock;
-
     protected function setUp(): void
     {
         $this->updates = new RecordedRoundUpdates();
-        $this->clock = new MockClock('2026-01-01 00:00:00');
     }
 
-    public function testManyDeltasInOneIntervalPublishTheFirstAndThenTheRestWhenTheAnswerEnds(): void
+    public function testManyDeltasOfATurnArePublishedAsOnePieceWhenItIsReleased(): void
     {
         $batch = $this->batch('r1');
 
@@ -34,30 +30,35 @@ final class StreamedTextBatchTest extends TestCase
             $batch->add('x');
         }
 
-        self::assertSame(['text r1 x'], $this->updates->seen);
+        self::assertSame([], $this->updates->seen);
 
-        $batch->flush();
+        $batch->release();
 
-        self::assertSame(['text r1 x', 'text r1 '.str_repeat('x', 99)], $this->updates->seen);
+        self::assertSame(['text r1 '.str_repeat('x', 100)], $this->updates->seen);
     }
 
-    public function testDeltasSpreadOverTimePublishAtMostOncePerInterval(): void
+    public function testTextThatIsNeverReleasedIsNeverPublished(): void
     {
         $batch = $this->batch('r1');
-        $answer = '';
 
-        for ($i = 0; $i < 200; ++$i) {
-            $batch->add('d');
-            $answer .= 'd';
-            $this->clock->sleep(0.01);
-        }
+        $batch->add('I read the cart.');
+        $batch->release();
+        $batch->add('{"verdict":"approve",');
 
-        $batch->flush();
+        self::assertSame(['text r1 I read the cart.'], $this->updates->seen);
+    }
 
-        $secondsOfDeltas = 2;
-        $publishesPerSecond = 4;
-        self::assertLessThanOrEqual($secondsOfDeltas * $publishesPerSecond + 2, count($this->updates->seen));
-        self::assertSame($answer, $this->publishedText('r1'));
+    public function testEachReleasedTurnIsPublishedOnceAndInOrder(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add('First.');
+        $batch->release();
+        $batch->release();
+        $batch->add('Second.');
+        $batch->release();
+
+        self::assertSame(['text r1 First.', 'text r1 Second.'], $this->updates->seen);
     }
 
     public function testTwoReviewersAreBatchedSeparately(): void
@@ -69,30 +70,103 @@ final class StreamedTextBatchTest extends TestCase
         $second->add('b');
         $first->add('c');
         $second->add('d');
-        $first->flush();
-        $second->flush();
+        $first->release();
+        $second->release();
 
-        self::assertSame('ac', $this->publishedText('r1'));
-        self::assertSame('bd', $this->publishedText('r2'));
+        self::assertSame(['text r1 ac', 'text r2 bd'], $this->updates->seen);
     }
 
-    public function testAnAnswerWithoutTextPublishesNothing(): void
+    public function testATurnThatIsAJsonAnswerIsNeverPublishedEvenWhenReleased(): void
     {
-        $this->batch('r1')->flush();
+        $this->released('{"verdict":"changes","findings":[{"id":"discount-boundary"}]}');
 
         self::assertSame([], $this->updates->seen);
     }
 
-    private function batch(string $reviewer): StreamedTextBatch
+    public function testAJsonAnswerInAFenceAfterProseIsNeverPublished(): void
     {
-        return new StreamedTextBatch(fn (string $text) => $this->updates->textStreamed(Uuid::fromString(self::ROUND), $reviewer, $text), $this->clock);
+        $this->released("Here is my verdict:\n```json\n{\"verdict\":\"approve\",\"findings\":[]}\n```");
+
+        self::assertSame([], $this->updates->seen);
     }
 
-    private function publishedText(string $reviewer): string
+    public function testProseWithBracesThatAreNoJsonIsStillPublished(): void
     {
-        $prefix = 'text '.$reviewer.' ';
-        $texts = array_map(static fn (string $line): string => substr($line, strlen($prefix)), array_filter($this->updates->seen, static fn (string $line): bool => str_starts_with($line, $prefix)));
+        $this->released('I read match {case} in the cart next.');
 
-        return implode('', $texts);
+        self::assertSame(['text r1 I read match {case} in the cart next.'], $this->updates->seen);
+    }
+
+    public function testAJsonAnswerFollowedByProseWithBracesIsNeverPublished(): void
+    {
+        $this->released("```json\n{\"verdict\":\"changes\",\"findings\":[{\"id\":\"F1\"}]}\n```\nLet me check match {case} once more.");
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testAJsonAnswerAfterProseWithBracesIsNeverPublished(): void
+    {
+        $this->released('I checked {case}. Verdict: {"verdict":"approve","findings":[]}');
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testTwoJsonObjectsInOneTurnAreNeverPublished(): void
+    {
+        $this->released("Draft: {\"verdict\":\"approve\",\"findings\":[]}\nFinal: {\"verdict\":\"changes\",\"findings\":[]}");
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testAnAlmostJsonAnswerIsNeverPublished(): void
+    {
+        $this->released('{"verdict":"changes","findings":[{"id":"F1","severity":"P1",}]}');
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testAJsonAnswerCutOffAfterItsFirstKeyIsNeverPublished(): void
+    {
+        $this->released("I am done.\n{ \"verd");
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testProseWithQuotesAndBracesThatOpenNoJsonObjectIsStillPublished(): void
+    {
+        $this->released('I read "match" in {case} and {} next.');
+
+        self::assertSame(['text r1 I read "match" in {case} and {} next.'], $this->updates->seen);
+    }
+
+    public function testAJsonTurnIsDroppedAndTheNextTurnIsStillPublished(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add('{"verdict":"approve"}');
+        $batch->release();
+        $batch->add('I read the cart.');
+        $batch->release();
+
+        self::assertSame(['text r1 I read the cart.'], $this->updates->seen);
+    }
+
+    public function testATurnWithoutTextPublishesNothing(): void
+    {
+        $this->batch('r1')->release();
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    private function released(string $turn): void
+    {
+        $batch = $this->batch('r1');
+        $batch->add($turn);
+        $batch->release();
+    }
+
+    private function batch(string $reviewer): StreamedTextBatch
+    {
+        return new StreamedTextBatch(fn (string $text) => $this->updates->textStreamed(Uuid::fromString(self::ROUND), $reviewer, $text));
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Override;
@@ -32,6 +33,12 @@ final readonly class BoardHeadlineRoundUpdates implements RoundUpdates
     public function textStreamed(Uuid $round, string $reviewer, string $text): void
     {
         $this->round->textStreamed($round, $reviewer, $text);
+    }
+
+    #[Override]
+    public function answerRead(Uuid $round, string $reviewer, ReadAnswer $answer): void
+    {
+        $this->round->answerRead($round, $reviewer, $answer);
     }
 
     #[Override]

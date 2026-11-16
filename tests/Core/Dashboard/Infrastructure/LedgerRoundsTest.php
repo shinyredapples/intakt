@@ -198,6 +198,59 @@ final class LedgerRoundsTest extends TestCase
         self::assertEquals(new DateTimeImmutable('2026-10-28T12:20:00+00:00'), $review?->rounds[0]->outcomes[0]->since);
     }
 
+    public function testAReviewerStartedWithAModelKeepsThatModelAfterItsVerdict(): void
+    {
+        $reviewer = '"round":"r1","reviewer":"x","role":"correctness","tier":"standard"';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.',"model":"standard-model"}'),
+            $this->event(LedgerEventKind::VerdictReceived, '{'.$reviewer.',"decision":"approve","findings":0}'),
+        );
+
+        $outcome = $review?->rounds[0]->outcomes[0];
+
+        self::assertSame([ReviewerProgress::Answered, 'standard-model'], [$outcome?->progress, $outcome?->model]);
+    }
+
+    public function testAReviewerStartRecordedBeforeTheModelWasKeptReadsWithNoModel(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}'),
+        );
+
+        $outcome = $review?->rounds[0]->outcomes[0];
+
+        self::assertSame([ReviewerProgress::Running, null], [$outcome?->progress, $outcome?->model]);
+    }
+
+    public function testAReviewerStartedAgainOnAnotherModelShowsTheModelOfItsLatestStart(): void
+    {
+        $reviewer = '"round":"r1","reviewer":"x","role":"correctness","tier":"standard"';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.',"model":"first-model"}'),
+            $this->event(LedgerEventKind::ReviewerStopped, '{'.$reviewer.'}'),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.',"model":"second-model"}'),
+        );
+
+        self::assertSame('second-model', $review?->rounds[0]->outcomes[0]->model);
+    }
+
+    public function testAReviewerWithoutARecordedStartHasNoModel(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::VerdictReceived, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard","decision":"approve","findings":0}'),
+        );
+
+        self::assertNull($review?->rounds[0]->outcomes[0]->model);
+    }
+
     #[DataProvider('modes')]
     public function testAVerdictCarriesItsRecordedModeAndReadsAsOrdinaryWithoutOne(string $field, ProjectMode $expected): void
     {

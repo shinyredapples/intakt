@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Ai\Contract\ProjectNotConfigured;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -46,6 +50,9 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundLedger::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(JudgedFindings::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(ProjectNotConfigured::class)]
+#[UsesClass(ConfiguredTierResolver::class)]
 final class RoundLedgerPayloadsTest extends KernelTestCase
 {
     private const string ROUND = '0195f0a2-7c1e-7000-8000-000000000001';
@@ -75,9 +82,56 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame('{"round":"'.self::ROUND.'","project":"alpha","reviewers":1,"change":"feat\/x","number":1,"task":"T7"}', $this->written($started));
     }
 
-    public function testAStartedReviewerIsWrittenWithItsIdentity(): void
+    public function testAStartedReviewerWithoutAModelIsWrittenWithItsIdentityAlone(): void
     {
         self::assertSame(self::IDENTITY.'}', $this->written(new ReviewerStarted(self::ROUND, self::REVIEWER, 'security', Tier::Strong)));
+    }
+
+    public function testAStartedReviewerWithAModelIsWrittenWithItsModelAfterItsIdentity(): void
+    {
+        self::assertSame(self::IDENTITY.',"model":"strong-model"}', $this->written(new ReviewerStarted(self::ROUND, self::REVIEWER, 'security', Tier::Strong, 'strong-model')));
+    }
+
+    public function testAStartedReviewerRowWrittenBeforeTheModelWasRecordedReadsWithNoModel(): void
+    {
+        $started = $this->serializer()->deserialize(self::IDENTITY.'}', ReviewerStarted::class, 'json');
+
+        self::assertInstanceOf(ReviewerStarted::class, $started);
+        self::assertSame(['security', null], [$started->role, $started->model]);
+    }
+
+    public function testAReviewersStartRecordsTheModelItsTierResolvesTo(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'resolved-model'));
+        $ledger = new InMemoryLedger();
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->reviewerStarted($reviewer);
+
+        self::assertSame('resolved-model', $ledger->payloads()[0]['model']);
+    }
+
+    public function testAReviewerWhoseTierDoesNotResolveIsStillRecordedAsStartedWithoutAModel(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willThrowException(new ProjectNotConfigured('alpha'));
+        $ledger = new InMemoryLedger();
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->reviewerStarted($reviewer);
+
+        self::assertSame(['round', 'reviewer', 'role', 'tier'], array_keys($ledger->payloads()[0]));
+    }
+
+    public function testOnlyTheStartOfAReviewerCarriesItsModel(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $ledger = new InMemoryLedger();
+
+        $this->roundLedger($ledger)->reviewerStopped($reviewer);
+
+        self::assertArrayNotHasKey('model', $ledger->payloads()[0]);
     }
 
     public function testAReceivedVerdictIsWrittenWithTodaysDecisionAndModeValues(): void
@@ -127,7 +181,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $findings = [$this->findingAt('F1', Severity::P2, 7), $this->findingAt('F2', Severity::P1, 7), $this->findingAt('F3', Severity::P3, 8)];
         $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act), new JudgedFinding('F3', Mark::Defer)]);
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer())->judgeDone($round, JudgedFindings::of($judgement, $findings));
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of($judgement, $findings));
 
         $payload = $ledger->payloads()[0];
         self::assertSame(['F1', 'F2'], $payload['act']);
@@ -153,15 +207,18 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     public function testTheLedgerSpreadsTheReviewerIdentityBeforeTheEventsOwnKeys(): void
     {
         $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
-        $serializer = self::getContainer()->get('serializer.stored');
-        self::assertInstanceOf(SerializerInterface::class, $serializer);
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $serializer)->reviewerFailed($reviewer, 'RuntimeException');
+        $this->roundLedger($ledger)->reviewerFailed($reviewer, 'RuntimeException');
 
         $payload = $ledger->payloads()[0];
         self::assertSame(['round', 'reviewer', 'role', 'tier', 'failure'], array_keys($payload));
         self::assertSame([$reviewer->round()->id()->toRfc4122(), $reviewer->id()->toRfc4122()], [$payload['round'], $payload['reviewer']]);
+    }
+
+    private function roundLedger(InMemoryLedger $ledger): RoundLedger
+    {
+        return new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'standard-model']]]], []));
     }
 
     private function written(object $payload): string
