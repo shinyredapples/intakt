@@ -87,6 +87,8 @@ final class StopReviewerEndToEndTest extends WebTestCase
             array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped], true))),
         );
         self::assertContains('stopped '.$message->reviewerId, $this->fixture->updates->seen);
+        self::assertSame([], $this->fixture->updates->answers);
+        self::assertSame([], array_values(array_filter($this->fixture->updates->seen, static fn (string $line): bool => str_starts_with($line, 'answer '))));
 
         $crawler = $this->browser->request('GET', $page);
 
