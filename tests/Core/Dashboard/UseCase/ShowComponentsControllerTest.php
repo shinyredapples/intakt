@@ -90,6 +90,22 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         }
     }
 
+    public function testTheComponentsPageShowsEveryCharacterAndPoseNextToItsNameInBothThemes(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertResponseIsSuccessful();
+        foreach (['light', 'dark'] as $theme) {
+            $section = $page->filter('#c-characters .spec[data-theme="'.$theme.'"]');
+            self::assertSame(
+                ['Code reviewer: Meerkat with a magnifying glass', 'Judge: Owl with a gavel', 'Waiting', 'Conducting', 'Bowing'],
+                $section->filter('.character-row')->each(static fn (Crawler $row): string => $row->text()),
+                $theme,
+            );
+            self::assertCount(2 * (2 * 2 + 3), $section->filter('img.character[alt=""]'), $theme);
+        }
+    }
+
     public function testTheComponentsPageFocusesTheBlockedCardOfTheMockInEachTheme(): void
     {
         $page = $this->browser->request('GET', '/components');
