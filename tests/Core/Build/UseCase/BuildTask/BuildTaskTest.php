@@ -830,7 +830,7 @@ final class BuildTaskTest extends TestCase
         return $runner;
     }
 
-    // Removes the bundle file of the first checks as the real filesystem does, and fails only the removal after check number $checks.
+    // Removes the earlier bundle files as the real filesystem does, because the run reaches the pre-push check only when the hand-back check passed.
     private function filesThatCannotRemoveAfter(int $checks, string $message): Filesystem
     {
         $real = new Filesystem();
