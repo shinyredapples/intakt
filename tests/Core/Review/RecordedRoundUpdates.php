@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review;
 
 use Closure;
+use Intakt\Core\Review\Contract\ReadAnswer;
+use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Override;
@@ -21,6 +23,11 @@ final class RecordedRoundUpdates implements RoundUpdates
      * @var list<RoundProgress>
      */
     public array $progress = [];
+
+    /**
+     * @var list<ReadAnswer>
+     */
+    public array $answers = [];
 
     // Apart from $seen, because a reviewer starts in every delivery and the tests of what a round shows read $seen as a whole.
     /**
@@ -44,6 +51,14 @@ final class RecordedRoundUpdates implements RoundUpdates
     public function textStreamed(Uuid $round, string $reviewer, string $text): void
     {
         $this->seen[] = sprintf('text %s %s', $reviewer, $text);
+    }
+
+    #[Override]
+    public function answerRead(Uuid $round, string $reviewer, ReadAnswer $answer): void
+    {
+        $this->answers[] = $answer;
+        $findings = array_map(static fn (ReadFinding $finding): string => sprintf(' [%s %s:%s %s]', $finding->severity->value, $finding->file ?? '-', $finding->line ?? '-', $finding->title), $answer->findings);
+        $this->seen[] = sprintf('answer %s %s%s', $reviewer, $answer->verdict->value ?? 'unreadable', implode('', $findings));
     }
 
     #[Override]
