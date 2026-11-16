@@ -61,6 +61,24 @@ bin/console about    # the app boots on SQLite
 
 What the journeys cover and how to run one: [Checking the whole product](docs/guide/checking-the-whole-product.md).
 
+### Review bench
+
+The review bench measures how well the panel finds defects: it reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask; nothing in `bin/check` or CI runs it. With the demo running, this reproduces the result below:
+
+```
+docker compose exec intakt php bin/console intakt:bench --project=sample --repeat=3
+```
+
+**No result has been measured yet.** The table gets its figures from the first real run's result file; until then it holds none.
+
+| Reviewer | Defects found (measured) | False alarms (measured) | Tokens per change (measured) |
+| --- | --- | --- | --- |
+| Panel (`correctness` and `security`) | not measured yet | not measured yet | not measured yet |
+| `correctness` alone | not measured yet | not measured yet | not measured yet |
+| `security` alone | not measured yet | not measured yet | not measured yet |
+
+Date of the run: not measured yet. Models: not measured yet. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
+
 ## The first release: the review loop
 
 Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):

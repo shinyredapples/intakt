@@ -42,4 +42,5 @@ flowchart LR
 
 - Point Intakt at a project of your own: [setting up Intakt](setting-up-intakt.md).
 - Write your first real task: [writing a good task](writing-a-good-task.md).
+- See how good the reviewers are: the review bench gives them eight small changes, five with a hidden mistake and three without, and counts what they caught and what they flagged by error. It uses your paid models, so it runs only when you start it: `docker compose exec intakt php bin/console intakt:bench --project=sample`. What it costs and how to read it: [the review bench](../user/README.md#the-review-bench).
 - Stop the demo with `docker compose down`; add `-v` to remove its data too.
