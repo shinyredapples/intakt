@@ -88,7 +88,7 @@ final readonly class ReviewedRound
      */
     public function actFindings(): array
     {
-        return array_values(array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call));
+        return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
     }
 
     public function failedReviewers(): int
