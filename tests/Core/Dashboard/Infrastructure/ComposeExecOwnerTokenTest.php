@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// Two processes, as on the demo: the entrypoint makes the token, then a command started apart from it, as docker compose exec starts one, gets only what compose.yaml sets.
+// Two processes, because docker compose exec starts a command that never ran the entrypoint, so it gets only what compose.yaml sets and not the token the entrypoint exported.
 #[CoversClass(OwnerToken::class)]
 final class ComposeExecOwnerTokenTest extends TestCase
 {
