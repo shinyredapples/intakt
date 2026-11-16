@@ -4,7 +4,7 @@ For owners who run Intakt. Each feature gets a page here, written in the same ch
 
 The path from a clone to a first verdict, in order:
 
-1. **Set up:** `cp .env.dist .env.local`, set a provider key (or a Hugging Face token, `HF_TOKEN`) and the two secrets, and run `docker compose up` ([the demo](#the-demo-with-docker-compose)). Without Docker: `composer install`, `php bin/console doctrine:migrations:migrate`, and the keys as described in [Configuring providers and API keys](#configuring-providers-and-api-keys).
+1. **Set up:** run `docker compose up -d --wait`; no file needs editing to start, and a provider key (or a Hugging Face token, `HF_TOKEN`) goes in `.env.local` ([the demo](#the-demo-with-docker-compose)). Without Docker: `composer install`, `php bin/console doctrine:migrations:migrate`, and the keys as described in [Configuring providers and API keys](#configuring-providers-and-api-keys).
 2. **Choose the panel:** copy `config/intakt.example.yaml` to `config/intakt.yaml` and set the project's tiers and its `review:` section ([Capability tiers per project](#capability-tiers-per-project)); `php bin/console intakt:review:panel <project>` shows the panel a change would get without calling a model.
 3. **Start the workers:** `php bin/console messenger:consume async` ([Background work](#background-work)); the container already runs them.
 4. **Review a branch:** `php bin/console intakt:review <branch> --project=<project> --task="..."` ([Reviewing a branch](#reviewing-a-branch)) and read the outcome ([Reading a verdict](#reading-a-verdict)).
@@ -109,7 +109,7 @@ docker run -d --name intakt -p 127.0.0.1:7781:7781 -v intakt-data:/app/var/data 
 - FrankenPHP's admin API listens on `localhost:2019` inside the container and nothing publishes it; read it with `docker exec intakt php bin/console intakt:server:status`.
 - A worker is replaced after `FRANKENPHP_LOOP_MAX` requests (default 500) and when it holds more than `WORKER_MEMORY_CEILING_MB` megabytes (default 256) after a request; it finishes sending the answer first, so no request fails. A crash is restarted by FrankenPHP itself.
 - The queue workers and the scheduler (see [Background work](#background-work)) run in the same container, beside the web server: `MESSENGER_CONSUMERS` workers (default 3, so the reviewers of a panel of three run at once) and one scheduler. When one of them stops, for any reason, it is started again a second later and the container logs `intakt: async ended with status 137, starting it again` (`scheduler_watcher` for the scheduler). A worker also ends on purpose after an hour or once it holds more than `WORKER_MEMORY_CEILING_MB` megabytes, between two messages, and is started again the same way. `docker stop` lets each worker finish the message it is on for up to 8 seconds, then stops what still runs; a message cut off is handed out again later.
-- Start the container with `--restart unless-stopped`, so Docker starts it again after a crash or a reboot. When the web server itself stops, the container stops the workers and the scheduler and exits, so this restart brings all of them back. The image has a health check that asks FrankenPHP's metrics endpoint every 30 seconds; read it with `docker inspect --format '{{.State.Health.Status}}' intakt` (`healthy` or `unhealthy`).
+- Start the container with `--restart unless-stopped`, so Docker starts it again after a crash or a reboot. When the web server itself stops, the container stops the workers and the scheduler and exits, so this restart brings all of them back. The image has a health check (`intakt-healthcheck`) that asks FrankenPHP's metrics endpoint and the dashboard every 30 seconds and, in the demo, also waits for the seed; read it with `docker inspect --format '{{.State.Health.Status}}' intakt` (`healthy` or `unhealthy`).
 
 ## Checking the server
 
@@ -783,24 +783,30 @@ The command prints no row for the panel as a whole. The README's panel row is wo
 ## The demo with docker compose
 
 ```
-cp .env.dist .env.local   # fill in one or two provider keys (or HF_TOKEN) and the two secrets
-docker compose up
+cp .env.dist .env.local   # optional: set one or two provider keys (or HF_TOKEN)
+docker compose up -d --wait
 ```
 
-`.env.local` needs at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `HF_TOKEN`, and `APP_SECRET` and `MERCURE_JWT_SECRET` (generate each with `openssl rand -hex 32`). The image is built from the `Dockerfile`, the dashboard answers on `http://localhost:7781` (on this computer only), and the data lives in the volume `intakt-data`.
+No file needs editing to start: without `.env.local` the dashboard opens, and `docker compose up -d --wait` returns once the container reports healthy, which it does only when the dashboard answers and the sample is seeded. A review needs at least one of `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `HF_TOKEN` in `.env.local` (copy `.env.dist`; every value in it is optional). When `APP_SECRET` or `MERCURE_JWT_SECRET` is empty, the first start makes a random one (64 hex characters) and keeps it in the volume, in `/app/var/data/app-secret` and `/app/var/data/mercure-jwt-secret` (mode 0600, never printed), so a restart keeps it; a value you set in `.env.local` wins and no file is written for it. A start that cannot write the file stops with `intakt: could not make or read APP_SECRET in <file>; ...`. The image is built from the `Dockerfile`, the dashboard answers on `http://localhost:7781` (on this computer only), and the data lives in the volume `intakt-data`.
 
 The first start seeds the demo, in the volume:
 
 - the sample repository at `/app/var/data/sample-repository`, with the branch `sample-change` to review against `main`;
 - the project `sample` in `/app/var/data/intakt.yaml`, with a panel of two reviewers (`correctness` and `security`) that must both approve. With one Anthropic or OpenAI key, both reviewers use that provider; with both keys, `correctness` uses Anthropic and `security` uses OpenAI. With `HF_TOKEN` beside one or both keys, `security` moves to Hugging Face, so the two reviewers use two providers; with `HF_TOKEN` alone, see [Running the demo on a Hugging Face token](#running-the-demo-on-a-hugging-face-token).
 
-Once the server answers its health check and the dashboard answers, every start ends its log with a block between two lines of `=`: the dashboard's address (`Open the dashboard: http://localhost:7781`) and the command that reviews the sample change, in the form your shell runs from the repository folder (it runs the console inside the container). The command works as soon as it appears. Leave `docker compose up` running, open a second terminal in the repository folder and run the command there as printed; the request log in the first terminal may keep scrolling:
+Once the server answers its health check and the dashboard answers, every start ends its log with one line, `intakt: the dashboard is ready at http://localhost:7781`; with `docker compose up -d --wait` the same moment is when the command returns. The start no longer prints the review command. Print it, and the line that connects an MCP client, when you want them, in the repository folder:
+
+```
+docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository
+```
+
+It prints the command that reviews the sample change, in the form your shell runs from the repository folder (it runs the console inside the container):
 
 ```
 docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
 ```
 
-The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is set in `.env.local` (then yours is used), keeps it in `/app/var/data/mcp-owner-token` on the volume, and allows write tools for the demo (`MCP_OWNER_ACCESS` defaults to `mcp_tool_write` in the container). The same block prints, after the review command, a line to connect an MCP client:
+The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is set in `.env.local` (then yours is used), keeps it in `/app/var/data/mcp-owner-token` on the volume, and allows write tools for the demo (`MCP_OWNER_ACCESS` defaults to `mcp_tool_write` in the container). The `intakt:sample:show` command above also prints a line to connect an MCP client, after the review command:
 
 ```
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"
@@ -808,7 +814,7 @@ claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header 
 
 Run it, install the [`intakt-review` skill](../../skills/intakt-review/README.md) and say "intakt review the demo": for the sample project the skill uses the values below, and makes its fixes inside the container (a work tree of `sample-change` at `/app/var/data/sample-fixes`, through `docker compose exec intakt`, so run the agent in this folder), because the sample repository lives in the `intakt-data` volume, not on the host. Without the skill, ask your agent to start a review with the values of the review command above: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository` (the default `.` is not the sample) and the text after `--task=` as the task. A start that cannot make or read the token file stops before the seed with `intakt: could not make or read the MCP owner token in /app/var/data/mcp-owner-token`; two starts at once on one volume get the same token.
 
-The token is a secret that sits in the log (`docker compose logs intakt`) and in the volume; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
+The token is a secret that sits in the volume and in what `intakt:sample:show` prints; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
 
 Later starts keep both as they are (the log says `Kept`), also when you add a key. To seed again, for example after adding the second key, remove the volume with `docker compose down -v` (this also removes the database) or delete `/app/var/data/intakt.yaml` in the container and start again. Without any provider key the first start stops with `Set ANTHROPIC_API_KEY or OPENAI_API_KEY or HF_TOKEN to seed the sample project.`; an `openai_compatible` endpoint other than the Hugging Face router does not count for the seed, because the seeded models are router models. Without one of the secrets it stops naming the missing one.
 
