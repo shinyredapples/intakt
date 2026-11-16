@@ -319,7 +319,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         );
         self::assertSame(['#round-'.$id.'-finding-F1'], $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
         self::assertSame('P2F1 Text of F1.', $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->text());
-        self::assertSame('Outcome: changes, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
+        self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
         self::assertSame('Judged.', $updated->filter('#round-'.$id.'-state')->text());
         self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-head-state .chip')->text());
         $reloaded = $this->browser->request('GET', '/reviews/'.$id);

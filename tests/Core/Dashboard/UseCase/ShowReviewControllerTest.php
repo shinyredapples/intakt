@@ -398,7 +398,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSelectorTextContains('#round-round-1-head-state .chip', 'Failed');
-        self::assertSame('Blocked: the judging failed', $crawler->filter('#round-round-1-ending')->text());
+        self::assertSame('Failed: the judging failed', $crawler->filter('#round-round-1-ending')->text());
     }
 
     public function testAJudgedRoundPastTheUpperWaitStaysJudged(): void
@@ -727,6 +727,18 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('Approved', $crawler->filter('#round-round-1 summary > .chip.approved')->text());
+    }
+
+    public function testAJudgedRoundsOutcomeLineWordsTheQuorumsDecisionAsChangesRequested(): void
+    {
+        $this->ledger->startRoundOfQuorum('feat/thing', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $crawler->filter('#round-round-1-outcome')->text());
     }
 
     public function testARoundWhoseReviewersAllFailedShowsTheFailedChipInItsSummary(): void

@@ -96,6 +96,12 @@ final readonly class ReviewedRound
         return ReviewOutcome::of($this);
     }
 
+    // The quorum's own decision in the page's words, apart from the round's outcome, because a round whose reviewers all failed still has a quorum that blocked it.
+    public function quorumOutcome(): ?ReviewOutcome
+    {
+        return $this->outcome instanceof Decision ? ReviewOutcome::ofDecision($this->outcome) : null;
+    }
+
     public function failedReviewers(): int
     {
         return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));

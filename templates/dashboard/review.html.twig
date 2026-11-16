@@ -126,7 +126,7 @@
         <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, outcome: reviewed.reviewOutcome, plain: true}, with_context = false) }}</span>
     </div>
     {% if reviewed.ending is not null %}
-    <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">Blocked: {{ reviewed.ending.reason }}</p>
+    <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">{{ reviewed.reviewOutcome.value }}: {{ reviewed.ending.reason }}</p>
     {% endif %}
     {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
 </section>
