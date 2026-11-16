@@ -36,7 +36,7 @@ The first start ends by printing the review command (it begins with `docker comp
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the printed token>"
 ```
 
-Then ask the agent to start a review with the values of the printed review command: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository`, and the text after `--task=` as the task ([details](docs/user/mcp.md)); how a review runs inside is drawn in [the review flow](docs/architecture/review-flow.md). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+Then install the [`intakt-review` skill](skills/intakt-review/README.md) (copy its folder into your agent's skills folder) and say "intakt review": the agent fills in the values, runs the loop and reports. Without the skill, ask the agent to start a review with the values of the printed review command: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository`, and the text after `--task=` as the task ([details](docs/user/mcp.md)); how a review runs inside is drawn in [the review flow](docs/architecture/review-flow.md). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
 
 ### Timed run
 

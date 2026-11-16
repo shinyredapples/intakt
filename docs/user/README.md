@@ -791,7 +791,7 @@ The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is se
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"
 ```
 
-Run it, then ask your agent to start a review with the values of the review command above: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository` (the default `.` is not the sample) and the text after `--task=` as the task. A start that cannot make or read the token file stops before the seed with `intakt: could not make or read the MCP owner token in /app/var/data/mcp-owner-token`; two starts at once on one volume get the same token.
+Run it, install the [`intakt-review` skill](../../skills/intakt-review/README.md) and say "intakt review" (the agent finds the values itself; for the sample project it needs the repository below). Without the skill, ask your agent to start a review with the values of the review command above: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository` (the default `.` is not the sample) and the text after `--task=` as the task. A start that cannot make or read the token file stops before the seed with `intakt: could not make or read the MCP owner token in /app/var/data/mcp-owner-token`; two starts at once on one volume get the same token.
 
 The token is a secret that sits in the log (`docker compose logs intakt`) and in the volume; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
 

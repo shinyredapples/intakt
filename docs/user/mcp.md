@@ -25,6 +25,10 @@ Starting a review changes things, so it is off until you turn it on in `.env.loc
 
 Then give the client the token as a bearer header: `claude mcp add --transport http intakt http://localhost:8000/mcp/owner --header "Authorization: Bearer $MCP_OWNER_TOKEN"`. Both must hold: a client with the right token is still refused while `MCP_OWNER_ACCESS` is `mcp_tool_read`, and a client without the token is refused while writes are allowed. A client that sends a wrong token is refused for every call, reads included. A token sent as a tool argument counts for nothing.
 
+## The review skill
+
+`skills/intakt-review/SKILL.md` is an agent skill for Claude Code and Codex: copy its folder into the agent's skills folder and say "intakt review". The agent fills in the arguments of `start_review` from the current repository (project, branch, base, repository path, and the task from your words or the last commit message), asks only for what it cannot find, changes only what the act list names and never widens the change. It stops when the decision is approve, when only P3 findings remain, or after 3 rounds (5 when an open finding is about security or data loss); running out of rounds is not an approval. A finding still open after two rounds is reported with both sides instead of being fixed again. Its report gives the verdict, the rounds used, the findings fixed and left open, and the stop reason. It needs the token and write access above.
+
 ## What it can do
 
 - `list_projects` is marked read-only and not destructive, so a client may call it without asking you. It returns `{"projects": [{"name": "alpha", "mark": "live"}, {"name": "beta", "mark": "replay"}]}`, or an empty list when no project is configured.
