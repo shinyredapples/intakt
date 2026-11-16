@@ -70,6 +70,13 @@ final class FirstRunStylesTest extends TestCase
         self::assertMatchesRegularExpression('/max-height:\s*140px;/', $this->rule('.setup .page-head .character', $this->phoneBlock()));
     }
 
+    public function testTheSetupHeadKeepsTheMascotBesideTheTitleOnAPhone(): void
+    {
+        self::assertMatchesRegularExpression('/flex-wrap:\s*nowrap;/', $this->rule('.setup .page-head', $this->desktopRules()));
+        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $this->rule('.setup .page-head > div', $this->desktopRules()));
+        self::assertMatchesRegularExpression('/min-width:\s*0;/', $this->rule('.setup .page-head > div', $this->desktopRules()));
+    }
+
     private function zIndex(string $selector): int
     {
         return 1 === preg_match('/z-index:\s*(\d+);/', $this->rule($selector, $this->phoneBlock()), $found) ? (int) $found[1] : self::fail($selector);
