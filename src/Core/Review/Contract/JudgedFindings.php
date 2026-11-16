@@ -11,9 +11,9 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class JudgedFindings
 {
     /**
-     * @param list<Finding>  $findings
-     * @param list<Finding>  $actList
-     * @param list<FollowUp> $followUps
+     * @param list<Finding>        $findings
+     * @param list<Finding>        $actList
+     * @param list<FollowUp>       $followUps
      * @param list<DroppedFinding> $dropped
      */
     private function __construct(
