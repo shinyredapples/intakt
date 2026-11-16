@@ -17,11 +17,13 @@ use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\ForgeRateLimited;
 use Intakt\Plugin\Forge\Contract\ForgeReadFailed;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
@@ -41,6 +43,7 @@ final readonly class BuildTask
         private RunBuildJob $builds,
         private HandBackCheck $handBacks,
         private PrePushCheck $prePushChecks,
+        private PushStep $pushes,
         private Ledger $ledger,
     ) {
     }
@@ -68,6 +71,8 @@ final readonly class BuildTask
     private function runSteps(BuildTaskRequest $request, ListedIssue $task): BuildTaskOutcome
     {
         $bundle = null;
+        $text = null;
+        $accepted = null;
 
         foreach (BuildStep::cases() as $step) {
             $result = match ($step) {
@@ -76,13 +81,19 @@ final readonly class BuildTask
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
-                BuildStep::HandBackCheck => $this->handBacks->failureOf($request, $this->handedBack($bundle)),
+                BuildStep::HandBackCheck => $this->handBacks->check($request, $this->handedBack($bundle)),
                 BuildStep::PrePushCheck => $this->prePushChecks->failureOf($request, $this->handedBack($bundle)),
+                BuildStep::Push => $this->push($request, $accepted, $text),
             };
 
-            // A local of this run, never a property, because a worker keeps the service between runs.
+            // Locals of this run, never properties, because a worker keeps the service between runs.
             if ($result instanceof BuildJobOutcome) {
                 $bundle = $result->bundle;
+                $text = $result->pullRequestText;
+            }
+
+            if ($result instanceof AcceptedHandBack) {
+                $accepted = $result;
             }
 
             $failure = $this->failureIn($result);
@@ -97,10 +108,10 @@ final readonly class BuildTask
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
     }
 
-    // A job that built hands back its outcome instead of a failure, so its step passed.
-    private function failureIn(BuildJobOutcome|string|null $result): ?string
+    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
+    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
     {
-        return $result instanceof BuildJobOutcome ? null : $result;
+        return is_string($result) ? $result : null;
     }
 
     // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
@@ -161,6 +172,26 @@ final readonly class BuildTask
     {
         // Never null, because the checks run only after a build job that built, and such a job always hands back a bundle.
         return $bundle ?? throw new LogicException('the checks run only after a build job that handed back a bundle');
+    }
+
+    private function push(BuildTaskRequest $request, ?AcceptedHandBack $accepted, ?string $text): ?string
+    {
+        // Never null, because the push runs only after a hand-back check that accepted the head, and a build job that built always hands back its text.
+        if (!$accepted instanceof AcceptedHandBack || null === $text) {
+            throw new LogicException('the push runs only after an accepted hand-back of a build job that handed back its text');
+        }
+
+        $changeText = $this->changeTextOf($text);
+
+        return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
+    }
+
+    // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
+    private function changeTextOf(string $text): ChangeText|string
+    {
+        [$title, $body] = [...explode("\n", $text, 2), ''];
+
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), trim($body));
     }
 
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
