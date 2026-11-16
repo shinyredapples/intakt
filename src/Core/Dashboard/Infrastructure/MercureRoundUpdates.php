@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\Verdict;
 use Override;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsAlias;
@@ -50,6 +51,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     }
 
     #[Override]
+    public function answerGiven(Uuid $round, string $reviewer, ?Verdict $verdict): void
+    {
+        $this->publish($round, RoundStream::AnswerGiven, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'verdict' => $verdict]);
+    }
+
+    #[Override]
     public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void
     {
         $this->publish($round, RoundStream::ReviewerAskedAgain, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'try' => $try]);
@@ -81,7 +88,7 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
     }
 
-    // Nothing on the round's topic, because the review page places a reviewer from its first tool call or text (stream/_reviewer_placed).
+    // Nothing on the round's topic, because the review page places a reviewer from its first tool call, text or answer (stream/_reviewer_placed).
     #[Override]
     public function reviewerStarted(Uuid $round, string $reviewer): void
     {

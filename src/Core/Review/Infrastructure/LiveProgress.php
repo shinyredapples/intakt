@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Core\Review\Contract\Verdict;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Execution\Update\Progress;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
@@ -31,8 +32,7 @@ final readonly class LiveProgress
             return $execution;
         }
 
-        // The ledger's reviewer id when there is one, because the dashboard places a reviewer by it and a retry runs under a new conversation id.
-        $name = ($reviewer->reviewerId ?? $reviewer->id)->toRfc4122();
+        $name = $this->nameOf($reviewer);
         if ($reviewer->askedAgain) {
             $this->updates->reviewerAskedAgain($round, $name, $reviewer->id->toRfc4122());
         }
@@ -43,6 +43,7 @@ final readonly class LiveProgress
             $payload = $progress->getPayload();
 
             if ($payload instanceof ToolCall) {
+                $text->nextTurn();
                 $this->updates->toolCalled($round, $name, $payload->getName());
             }
 
@@ -50,5 +51,21 @@ final readonly class LiveProgress
                 $text->add($payload->getText());
             }
         })->onResult($text->flush(...));
+    }
+
+    // Null for an answer that could not be read as a verdict, so the page says so instead of showing the raw answer, which StreamedTextBatch holds back.
+    public function answered(ReviewerConversation $reviewer, ?Verdict $verdict): void
+    {
+        $round = $reviewer->round;
+
+        if ($round instanceof Uuid) {
+            $this->updates->answerGiven($round, $this->nameOf($reviewer), $verdict);
+        }
+    }
+
+    // The ledger's reviewer id when there is one, because the dashboard places a reviewer by it and a retry runs under a new conversation id.
+    private function nameOf(ReviewerConversation $reviewer): string
+    {
+        return ($reviewer->reviewerId ?? $reviewer->id)->toRfc4122();
     }
 }

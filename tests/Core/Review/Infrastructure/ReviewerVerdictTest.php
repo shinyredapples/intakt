@@ -162,18 +162,18 @@ final class ReviewerVerdictTest extends WebTestCase
         parent::tearDown();
     }
 
-    public function testAProviderThatStreamsOnlyWhenAskedPublishesTheTextAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
+    public function testAProviderThatStreamsOnlyWhenAskedPublishesTheReadAnswerAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
     {
         $this->catalog = new FallbackModelCatalog();
         $reads = [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])];
 
         $streamed = $this->review('Add a cart.', $reads, self::APPROVE);
-        $published = implode('', array_map(static fn (string $update): string => explode(' ', $update, 3)[2], array_filter($this->updates->seen, static fn (string $update): bool => str_starts_with($update, 'text '))));
+        $answers = $this->updates->answers;
         $this->catalog = new UnstreamedModelCatalog();
         $this->conversation = new UuidV7();
         $unstreamed = $this->review('Add a cart.', $reads, self::APPROVE);
 
-        self::assertSame(self::APPROVE, $published);
+        self::assertEquals([$streamed], $answers);
         self::assertEquals($unstreamed, $streamed, json_encode($streamed->findings, JSON_THROW_ON_ERROR));
         self::assertSame(Decision::Approve, $streamed->verdict);
         self::assertSame([], $this->ledger->kinds());
@@ -245,11 +245,35 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame([sprintf('tool %s read_file', $this->conversation->toRfc4122())], $this->updates->seen);
     }
 
-    public function testStreamedTextOfTheReviewerIsPublishedInTheOrderItArrived(): void
+    public function testAStreamedJsonAnswerIsNeverPublishedAsTextButAsTheVerdictReadFromIt(): void
     {
-        $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
+        $verdict = $this->review('Add a cart.', [], $this->streamed(" \n", '{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
 
-        self::assertSame([sprintf('text %s {"verdict":"approve",', $this->conversation->toRfc4122()), sprintf('text %s "findings":[],"resolved":[],"follow_ups":[]}', $this->conversation->toRfc4122())], $this->updates->seen);
+        self::assertSame([], $this->updates->seen);
+        self::assertEquals([$verdict], $this->updates->answers);
+    }
+
+    public function testAStreamedAnswerThatCannotBeReadIsPublishedAsUnreadableAndNeverAsItsText(): void
+    {
+        $this->refused('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[]}'));
+
+        self::assertSame([], $this->updates->seen);
+        self::assertSame([null], $this->updates->answers);
+    }
+
+    public function testStreamedProseOfTheReviewerIsPublishedAsTextAndThenReadAsNoVerdict(): void
+    {
+        $this->refused('Add a cart.', [], $this->streamed('Looks good ', 'to me.'));
+
+        self::assertSame([sprintf('text %s Looks good ', $this->conversation->toRfc4122())], $this->updates->seen);
+        self::assertSame([null], $this->updates->answers);
+    }
+
+    public function testAReviewerRefusedForAskingForToolsTooOftenPublishesNoAnswerBecauseItGaveNone(): void
+    {
+        $this->refused('Add a cart.', array_fill(0, 40, new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])), self::APPROVE);
+
+        self::assertSame([], $this->updates->answers);
     }
 
     public function testAStreamedVerdictKeepsTheApprovalTheModelAnswered(): void

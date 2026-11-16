@@ -120,7 +120,8 @@ final class CutStreamRetryVendorTest extends KernelTestCase
 
         $this->vendor($answer)->review('alpha', Tier::Strong, $this->request($inARound));
 
-        self::assertSame(['text '.self::REVIEWER.' {"verdict":"approve",', 'asked again '.self::REVIEWER], $this->updates->seen);
+        self::assertSame(['asked again '.self::REVIEWER], $this->updates->seen);
+        self::assertCount(1, $this->updates->answers);
     }
 
     public function testTheFirstTryOfAReviewerIsNotMarkedAsAskedAgain(): void

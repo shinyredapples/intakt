@@ -83,6 +83,78 @@ final class StreamedTextBatchTest extends TestCase
         self::assertSame([], $this->updates->seen);
     }
 
+    public function testATurnThatOpensWithAJsonDocumentIsNeverPublished(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add(" \n");
+        $batch->add('{"verdict":');
+        $this->clock->sleep(1);
+        $batch->add('"changes"}');
+        $batch->flush();
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testATurnThatOpensWithAFencedBlockIsNeverPublished(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add('`');
+        $batch->add("``json\n{\"verdict\":\"approve\"}\n```");
+        $batch->flush();
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testBlankTextWaitsUntilTheTurnShowsItIsProseAndIsThenPublishedWithIt(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add("\n");
+        self::assertSame([], $this->updates->seen);
+
+        $batch->add('Looking at the cart.');
+
+        self::assertSame(["text r1 \nLooking at the cart."], $this->updates->seen);
+    }
+
+    public function testProseKeepsPublishingABraceItWritesLaterInTheSameTurn(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add('The array ');
+        $batch->add('{a, b} is sorted.');
+        $batch->flush();
+
+        self::assertSame('The array {a, b} is sorted.', $this->publishedText('r1'));
+    }
+
+    public function testProseBeforeAToolCallIsPublishedAndTheAnswerAfterItIsHeldBack(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add('Let me read');
+        $batch->add(' the cart.');
+        $batch->nextTurn();
+        $batch->add('{"verdict":"approve"}');
+        $batch->flush();
+
+        self::assertSame('Let me read the cart.', $this->publishedText('r1'));
+    }
+
+    public function testAnAnswerHeldBackDoesNotHoldBackTheProseOfTheTurnAfterIt(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add('{"note":');
+        $batch->nextTurn();
+        $batch->add('Reading the tests now.');
+        $batch->flush();
+
+        self::assertSame('Reading the tests now.', $this->publishedText('r1'));
+    }
+
     private function batch(string $reviewer): StreamedTextBatch
     {
         return new StreamedTextBatch(fn (string $text) => $this->updates->textStreamed(Uuid::fromString(self::ROUND), $reviewer, $text), $this->clock);

@@ -9,14 +9,20 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
+use Intakt\Core\Review\Contract\Verdict;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\Exception\LockAcquiringException;
 use Symfony\Component\Lock\Exception\LockReleasingException;
@@ -39,6 +45,8 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(SessionSummary::class)]
 #[UsesClass(ToolCallCount::class)]
 #[UsesClass(Cost::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(Finding::class)]
 final class MercureRoundUpdatesTest extends TestCase
 {
     private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
@@ -93,6 +101,43 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates()->textStreamed(Uuid::fromString(self::ROUND), self::REVIEWER, '</template><script>alert(1)</script>');
 
         self::assertStringContainsString('&lt;/template&gt;&lt;script&gt;alert(1)&lt;/script&gt;', $this->published[0]->getData());
+        self::assertStringNotContainsString('<script>', $this->published[0]->getData());
+    }
+
+    public function testAnAnswerAppendsItsVerdictAndOneLinePerFindingToTheReviewersLiveText(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('src/Cart.php', 12, "Discount applies one cent early.\nThe boundary is off by one."), $this->finding('src/Tax.php', null, 'Rounding is not named.')], [], []);
+
+        $this->updates()->answerGiven(Uuid::fromString(self::ROUND), self::REVIEWER, $verdict);
+
+        $answer = $this->answerIn($this->published[0]);
+        self::assertSame(['Verdict: changes', 'P2 src/Cart.php:12 Discount applies one cent early.', 'P2 src/Tax.php Rounding is not named.'], $answer);
+        self::assertStringContainsString(sprintf('<turbo-stream action="append" target="reviewer-%s-text">', self::REVIEWER), $this->published[0]->getData());
+    }
+
+    public function testAFindingWithoutAFileShowsNoPlace(): void
+    {
+        $verdict = new Verdict(Decision::Blocked, [$this->finding(null, 3, 'The change cannot be read.')], [], []);
+
+        $this->updates()->answerGiven(Uuid::fromString(self::ROUND), self::REVIEWER, $verdict);
+
+        self::assertSame(['Verdict: blocked', 'P2 The change cannot be read.'], $this->answerIn($this->published[0]));
+    }
+
+    public function testAnAnswerThatCouldNotBeReadShowsOneLineSayingSo(): void
+    {
+        $this->updates()->answerGiven(Uuid::fromString(self::ROUND), self::REVIEWER, null);
+
+        self::assertSame(['The answer could not be read as a verdict.'], $this->answerIn($this->published[0]));
+    }
+
+    public function testTheTextOfAFindingIsEscapedInTheTurboStream(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('<b>a</b>.php', 1, '</template><script>alert(1)</script>')], [], []);
+
+        $this->updates()->answerGiven(Uuid::fromString(self::ROUND), self::REVIEWER, $verdict);
+
+        self::assertStringContainsString('&lt;b&gt;a&lt;/b&gt;.php:1</span> &lt;/template&gt;&lt;script&gt;', $this->published[0]->getData());
         self::assertStringNotContainsString('<script>', $this->published[0]->getData());
     }
 
@@ -422,6 +467,19 @@ final class MercureRoundUpdatesTest extends TestCase
         }
 
         return $classes;
+    }
+
+    private function finding(?string $file, ?int $line, string $text): Finding
+    {
+        return new Finding('F1', Severity::P2, $file, $line, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function answerIn(Update $update): array
+    {
+        return new Crawler('<template>'.$update->getData().'</template>')->filter('turbo-stream[action="append"] .answer p')->each(static fn (Crawler $line): string => $line->text());
     }
 
     /**

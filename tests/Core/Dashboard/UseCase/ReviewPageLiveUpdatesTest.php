@@ -18,6 +18,7 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -27,6 +28,7 @@ use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
@@ -406,6 +408,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame(['read_file'], $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-activity li')->each(static fn (Crawler $call): string => $call->text()));
         self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
+    }
+
+    public function testAnAnswerPushedToThePageReadsInTheLiveLogAsItsVerdictAndOneLinePerFindingWithoutJson(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $found = new Finding('discount-boundary-regression', Severity::P1, 'src/Cart.php', 42, null, "Discount applies one cent early.\nThe check uses > where the task says >=.", FixableBy::Builder, false, null, null);
+
+        $updated = $this->replaced($page, $this->stream('answer_given', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'verdict' => new Verdict(Decision::Changes, [$found], [], [])]));
+
+        $text = $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text');
+        self::assertSame(['Verdict: changes', 'P1 src/Cart.php:42 Discount applies one cent early.'], $text->filter('p')->each(static fn (Crawler $line): string => $line->text()));
+        self::assertStringNotContainsString('{', $text->text());
+        self::assertStringNotContainsString('}', $text->text());
     }
 
     public function testAReviewerAskedAgainShowsWhereTheRetryStartsBetweenTheFirstTrysTextAndTheRetrysText(): void

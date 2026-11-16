@@ -13,6 +13,9 @@ interface RoundUpdates
 
     public function textStreamed(Uuid $round, string $reviewer, string $text): void;
 
+    // Null when the answer could not be read as a verdict, because the page then says so and never shows the raw answer.
+    public function answerGiven(Uuid $round, string $reviewer, ?Verdict $verdict): void;
+
     // Named by the retry's conversation id, because a retry that falls back to an unstreamed call reports its start twice and must be shown once.
     public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void;
 

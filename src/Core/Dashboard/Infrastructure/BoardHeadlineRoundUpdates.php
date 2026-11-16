@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Core\Review\Contract\Verdict;
 use Override;
 use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
@@ -32,6 +33,12 @@ final readonly class BoardHeadlineRoundUpdates implements RoundUpdates
     public function textStreamed(Uuid $round, string $reviewer, string $text): void
     {
         $this->round->textStreamed($round, $reviewer, $text);
+    }
+
+    #[Override]
+    public function answerGiven(Uuid $round, string $reviewer, ?Verdict $verdict): void
+    {
+        $this->round->answerGiven($round, $reviewer, $verdict);
     }
 
     #[Override]

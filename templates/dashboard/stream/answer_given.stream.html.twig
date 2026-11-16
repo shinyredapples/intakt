@@ -1,0 +1,11 @@
+{{ include('dashboard/stream/_reviewer_placed.stream.html.twig') }}<turbo-stream action="append" target="reviewer-{{ reviewer }}-text"><template><div class="answer">
+{%- if verdict is null -%}
+<p class="answer-unreadable">The answer could not be read as a verdict.</p>
+{%- else -%}
+<p class="answer-verdict">Verdict: {{ verdict.verdict.value }}</p>
+{%- for finding in verdict.findings -%}
+<p class="answer-finding"><span class="mono">{{ finding.severity.value }}</span>
+{%- if finding.file is not null %} <span class="mono">{{ finding.file }}{{ finding.line is null ? '' : ':' ~ finding.line }}</span>{% endif %} {{ finding.text|split("\n")|first|trim }}</p>
+{%- endfor -%}
+{%- endif -%}
+</div></template></turbo-stream>

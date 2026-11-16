@@ -126,7 +126,7 @@ final readonly class ReviewerAgent implements Reviewer
         $stream = new StreamAcceptance();
 
         try {
-            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer));
+            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer), $reviewer);
         } catch (BadRequestException|InvalidRequestException $refused) {
             $this->fellBackUnlessAccepted($stream, $refused, $reviewer);
         }
@@ -145,13 +145,18 @@ final readonly class ReviewerAgent implements Reviewer
 
     private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
     {
-        return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer));
+        return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer), $reviewer);
     }
 
-    private function answerOf(ExecutionInterface $execution): Verdict
+    // Shown only for what the reviewer answered, because the failures below are Intakt's own verdicts and reach the page as the round's state.
+    private function answerOf(ExecutionInterface $execution, ReviewerConversation $reviewer): Verdict
     {
         try {
-            return $this->prompt->verdictIn($execution);
+            $verdict = $this->prompt->verdictIn($execution);
+        } catch (VerdictUnreadable $unreadable) {
+            $this->runs->answered($reviewer, null);
+
+            throw $unreadable;
         } catch (MaxIterationsExceededException) {
             throw VerdictUnreadable::becauseKeySafe(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
         } catch (ReviewServerLost) {
@@ -160,5 +165,9 @@ final readonly class ReviewerAgent implements Reviewer
             // Read from the execution, never from the message, so only a run ReviewerStopping cancelled ends as stopped and any other failure stays an error.
             return ExecutionStatus::Cancelled === $execution->getStatus() ? Verdict::reviewerStopped() : throw $failure;
         }
+
+        $this->runs->answered($reviewer, $verdict);
+
+        return $verdict;
     }
 }

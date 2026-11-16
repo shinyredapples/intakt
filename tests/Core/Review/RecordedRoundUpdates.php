@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review;
 use Closure;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
+use Intakt\Core\Review\Contract\Verdict;
 use Override;
 use Symfony\Component\Uid\Uuid;
 
@@ -28,6 +29,12 @@ final class RecordedRoundUpdates implements RoundUpdates
      */
     public array $started = [];
 
+    // Apart from $seen, because every reviewer that answers gives one and the tests of what a round streams read $seen as a whole; null for an unreadable answer.
+    /**
+     * @var list<?Verdict>
+     */
+    public array $answers = [];
+
     // Run once while the next round change is being published, so a test can let another worker finish in the middle of it.
     /**
      * @var (Closure(): void)|null
@@ -44,6 +51,12 @@ final class RecordedRoundUpdates implements RoundUpdates
     public function textStreamed(Uuid $round, string $reviewer, string $text): void
     {
         $this->seen[] = sprintf('text %s %s', $reviewer, $text);
+    }
+
+    #[Override]
+    public function answerGiven(Uuid $round, string $reviewer, ?Verdict $verdict): void
+    {
+        $this->answers[] = $verdict;
     }
 
     #[Override]
