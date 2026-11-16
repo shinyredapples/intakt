@@ -16,6 +16,6 @@ interface BranchPush
      * @throws ChangeTextHoldsSecret
      * @throws ForgeWriteFailed
      */
-    #[NoDiscard('a merge-main outcome has to go back to the builder')]
-    public function push(BranchPushRequest $request): PushedBranch|MainConflicts;
+    #[NoDiscard('a merge-main outcome has to go back to the builder, and a refused push to its caller')]
+    public function push(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush;
 }

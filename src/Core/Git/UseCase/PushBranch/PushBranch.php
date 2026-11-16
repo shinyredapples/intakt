@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\MainConflicts;
 use Intakt\Core\Git\Contract\PushedBranch;
+use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeOpening;
 use Intakt\Plugin\Forge\Contract\ProposedChange;
@@ -31,8 +32,8 @@ final readonly class PushBranch implements BranchPush
 
     // Repeated from the interface, because PHP reports a discarded result only for the method that runs.
     #[Override]
-    #[NoDiscard('a merge-main outcome has to go back to the builder')]
-    public function push(BranchPushRequest $request): PushedBranch|MainConflicts
+    #[NoDiscard('a merge-main outcome has to go back to the builder, and a refused push to its caller')]
+    public function push(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
         // Without waiting, because a push that meets another push of the same branch has nothing to add; its caller tries again later.
         $lock = $this->locks->createLock('push:'.hash('sha256', json_encode([$request->project, $request->branch], JSON_THROW_ON_ERROR)));
@@ -48,23 +49,23 @@ final readonly class PushBranch implements BranchPush
         }
     }
 
-    private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts
+    private function pushed(BranchPushRequest $request): PushedBranch|MainConflicts|RefusedPush
     {
         $main = $this->mainOf($request->repository);
         $head = $this->signed->of($request->repository, $request->accepted, $main);
         $this->signed->verify($request->repository, $head, $main);
 
-        $conflicts = $this->conflictsOrLanded($request, $head, $main);
+        $notLanded = $this->notLanded($request, $head, $main);
 
-        if ($conflicts instanceof MainConflicts) {
-            return $conflicts;
+        if (null !== $notLanded) {
+            return $notLanded;
         }
 
         return new PushedBranch($head, $this->openedChange($request, $head, $main));
     }
 
     // Null only when the remote branch is the signed head, because the caller writes the pull request for nothing else.
-    private function conflictsOrLanded(BranchPushRequest $request, string $head, string $main): ?MainConflicts
+    private function notLanded(BranchPushRequest $request, string $head, string $main): MainConflicts|RefusedPush|null
     {
         // Read on every call, also for a recorded push, because the ledger knows nothing of a later head or of another writer that moved the branch since.
         $remoteTip = $this->remoteTip($request);
@@ -81,9 +82,7 @@ final readonly class PushBranch implements BranchPush
             return $conflicts;
         }
 
-        $this->pushOnce($request, $head, $remoteTip);
-
-        return null;
+        return $this->pushOnce($request, $head, $remoteTip);
     }
 
     private function mainOf(string $repository): string
@@ -101,7 +100,7 @@ final readonly class PushBranch implements BranchPush
         return null === $paths ? null : new MainConflicts($paths);
     }
 
-    private function pushOnce(BranchPushRequest $request, string $head, ?string $remoteTip): void
+    private function pushOnce(BranchPushRequest $request, string $head, ?string $remoteTip): ?RefusedPush
     {
         $alreadyThere = $remoteTip === $head;
 
@@ -114,11 +113,24 @@ final readonly class PushBranch implements BranchPush
             $this->records->intend($request, $head);
         }
 
-        if (!$alreadyThere) {
-            $this->git->outputFromRemote($request->repository, ['push', '--quiet', '--', $request->remote, $head.':'.self::BRANCHES.$request->branch]);
+        $exitCode = $alreadyThere ? 0 : $this->git->exitCodeAtRemote($request->repository, ['push', '--quiet', '--', $request->remote, $head.':'.self::BRANCHES.$request->branch]);
+
+        if (0 !== $exitCode) {
+            return $this->refused($request, $head, $exitCode);
         }
 
         $this->records->push($request, $head);
+
+        return null;
+    }
+
+    // Recorded, because the caller of a later part reports the refusal from the ledger; the next call reads the remote branch first and tries the push again.
+    private function refused(BranchPushRequest $request, string $head, int $exitCode): RefusedPush
+    {
+        $refused = new RefusedPush(sprintf('the remote refused the push of %s (git push exited with %d)', $request->branch, $exitCode));
+        $this->records->refuse($request, $head, $refused->reason);
+
+        return $refused;
     }
 
     private function remoteTip(BranchPushRequest $request): ?string

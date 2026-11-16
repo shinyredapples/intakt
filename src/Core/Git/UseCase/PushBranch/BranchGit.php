@@ -57,6 +57,17 @@ final readonly class BranchGit
         return $process->isSuccessful() ? $process->getOutput() : throw BranchNotPushed::because(sprintf('git %s failed with exit code %d', $arguments[0] ?? '', $process->getExitCode() ?? -1));
     }
 
+    // The exit code alone, because the caller records a refused push as its own outcome, and git's error output may repeat the remote's address.
+    /**
+     * @param list<string> $arguments
+     *
+     * @throws BranchNotPushed
+     */
+    public function exitCodeAtRemote(string $repository, array $arguments): int
+    {
+        return $this->finished($this->process($repository, $arguments, self::NETWORK), $arguments)->getExitCode() ?? -1;
+    }
+
     // Null when the two merge cleanly, else the paths that conflict, because the caller needs both; the merge writes objects only, never a ref or a work tree.
     /**
      * @return list<string>|null
