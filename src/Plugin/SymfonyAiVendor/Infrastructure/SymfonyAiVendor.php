@@ -32,6 +32,7 @@ use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
+use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use Intakt\Plugin\Vendor\Contract\VendorAccountBusy;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
@@ -46,6 +47,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autoconfigure;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Throwable;
 
 // Public because no service injects it before the panel (plan T8), and an unused private service is removed.
@@ -78,9 +80,10 @@ final readonly class SymfonyAiVendor implements Vendor
         $attempt = fn (ResolvedModel $model, ReviewRequest $asked): Verdict => $this->verdictOn($model, $reserved($model, $asked), $asked);
         $unstreamed = fn (ReviewRequest $asked): Verdict => $this->unstreamedVerdictOn($answering, $reserved($answering, $asked), $asked);
         $first = fn (): Verdict => $attempt($answering, $request);
-        $retry = fn (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|IncompleteStreamException $failure): Verdict => match (true) {
+        $retry = fn (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException $failure): Verdict => match (true) {
             $failure instanceof MaxOutputTokensException, $failure instanceof VerdictUnreadable => $attempt($this->withMoreRoom($answering, $tier), $this->inNewConversation($request)),
-            $failure instanceof ChangesWithoutFindings => $attempt($answering, $this->inNewConversation($request)),
+            $failure instanceof ChangesWithoutFindings => $attempt($answering, $this->askedToNameFindings($request)),
+            $failure instanceof ProviderUnreachable => $attempt($answering, $this->inNewConversation($request)),
             $answering->provider->streams() && !$failure->getPrevious() instanceof RetryableExceptionInterface => $this->unstreamedAfter($failure, fn (): Verdict => $unstreamed($this->inNewConversation($request))),
             default => throw $failure,
         };
@@ -89,16 +92,16 @@ final readonly class SymfonyAiVendor implements Vendor
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut(fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
     }
 
-    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
+    // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
     /**
-     * @param Closure(): Verdict                                                                                            $first
-     * @param Closure(MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|IncompleteStreamException): Verdict $retry
+     * @param Closure(): Verdict                                                                                                                $first
+     * @param Closure(MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException): Verdict $retry
      */
     private function retriedOnce(Closure $first, Closure $retry): Verdict
     {
         try {
             return $first();
-        } catch (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|IncompleteStreamException $failure) {
+        } catch (MaxOutputTokensException|VerdictUnreadable|ChangesWithoutFindings|ProviderUnreachable|IncompleteStreamException $failure) {
             return $retry($failure);
         }
     }
@@ -140,6 +143,22 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $stopped = $request->conversation;
         $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId, askedAgain: true);
+
+        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+    }
+
+    // Told what its answer lacked, so the same reviewer names its findings or approves instead of repeating an empty changes answer.
+    private function askedToNameFindings(ReviewRequest $request): ReviewRequest
+    {
+        $refused = $request->conversation;
+        $conversation = new ReviewerConversation(
+            $refused->rolePrompt,
+            new UuidV7(UuidV7::generate($this->clock->now())),
+            $refused->round,
+            $refused->reviewerId,
+            askedAgain: true,
+            askedToNameFindings: true,
+        );
 
         return new ReviewRequest($request->checkout, $request->brief, $conversation);
     }
@@ -294,6 +313,7 @@ final readonly class SymfonyAiVendor implements Vendor
             $failure instanceof AuthenticationException => new ProviderRejectedTheKey($failure),
             $failure instanceof EveryAccountCoolingDown => new ProviderRateLimited($failure->secondsUntilAnAccountIsFree, $failure),
             $failure instanceof RetryableExceptionInterface => new ProviderFailedTransiently($failure),
+            $failure instanceof TransportExceptionInterface => new ProviderUnreachable($failure),
             default => $failure,
         };
     }

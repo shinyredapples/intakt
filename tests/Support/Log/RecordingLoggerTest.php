@@ -8,6 +8,7 @@ use Intakt\Tests\Support\Log\Fixtures\StringableName;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 #[CoversClass(RecordingLogger::class)]
 #[UsesClass(LogRecords::class)]
@@ -47,5 +48,27 @@ final class RecordingLoggerTest extends TestCase
         new RecordingLogger($this->records)->error('Failed {items} and {missing}.', ['items' => ['a']]);
 
         self::assertSame([['level' => 'error', 'message' => 'Failed {items} and {missing}.']], $this->records->takeErrors());
+    }
+
+    public function testARecordWhoseContextHoldsAnExceptionIsMarkedAsTraced(): void
+    {
+        new RecordingLogger($this->records)->info('Retried {name}.', ['name' => 'the sync', 'exception' => new RuntimeException('Disk full.')]);
+
+        self::assertSame([['level' => 'info', 'message' => 'Retried the sync.', 'traced' => true]], $this->records->all());
+    }
+
+    public function testARecordWithoutAnExceptionInItsContextIsNotMarkedAsTraced(): void
+    {
+        new RecordingLogger($this->records)->info('Retried {name}.', ['name' => 'the sync']);
+
+        self::assertSame([['level' => 'info', 'message' => 'Retried the sync.']], $this->records->all());
+    }
+
+    public function testReadingEveryRecordLeavesThemInTheFile(): void
+    {
+        new RecordingLogger($this->records)->error('Disk on fire.');
+        $this->records->all();
+
+        self::assertSame([['level' => 'error', 'message' => 'Disk on fire.']], $this->records->takeErrors());
     }
 }

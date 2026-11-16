@@ -9,7 +9,7 @@ use Psr\Log\LogLevel;
 use RuntimeException;
 
 /**
- * @phpstan-type Record array{level: string, message: string}
+ * @phpstan-type Record array{level: string, message: string, traced?: true}
  */
 final readonly class LogRecords
 {
@@ -43,9 +43,23 @@ final readonly class LogRecords
         return false === $file || '' === $file ? null : new self($file);
     }
 
-    public function add(string $level, string $message): void
+    // Traced marks a record whose context holds an exception, because the service log prints that exception's trace.
+    public function add(string $level, string $message, bool $traced = false): void
     {
-        file_put_contents($this->file, $this->encoded(['level' => $level, 'message' => $message]), FILE_APPEND | LOCK_EX);
+        $record = ['level' => $level, 'message' => $message];
+        if ($traced) {
+            $record['traced'] = true;
+        }
+
+        file_put_contents($this->file, $this->encoded($record), FILE_APPEND | LOCK_EX);
+    }
+
+    /**
+     * @return list<Record>
+     */
+    public function all(): array
+    {
+        return $this->whileLocked($this->records(...));
     }
 
     public function remove(string $level, string $message): bool
