@@ -26,7 +26,7 @@ enum ReviewOutcome: string
             return self::Failed;
         }
 
-        return null === $round->outcome ? null : self::ofDecision($round->outcome);
+        return $round->outcome instanceof Decision ? self::ofDecision($round->outcome) : null;
     }
 
     // A reviewer still running or stopped has given nothing yet, so it has no outcome; its progress is shown apart from it.
