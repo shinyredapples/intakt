@@ -80,8 +80,10 @@ final class DemoReviewLogTest extends KernelTestCase
      */
     private function warningsAndTraces(BufferingLogger $log): array
     {
+        /** @var list<array{string, string, array<mixed>}> $records */
+        $records = $log->cleanLogs();
         $flagged = [];
-        foreach ($log->cleanLogs() as [$level, $message, $context]) {
+        foreach ($records as [$level, $message, $context]) {
             if (in_array($level, self::WARNING_AND_ABOVE, true) || array_any($context, static fn (mixed $value): bool => $value instanceof Throwable)) {
                 $flagged[] = $level.': '.$message;
             }
