@@ -9,6 +9,7 @@ use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Log\LogLevel;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ShowErrorController::class)]
@@ -45,5 +46,17 @@ final class ShowErrorControllerTest extends DashboardPageTestCase
         self::assertSame(1, $crawler->filter('[data-theme-toggle]')->count());
         self::assertStringContainsString("localStorage.getItem('intakt-theme')", $crawler->filter('head script')->first()->html());
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/settings""', NotFoundHttpException::class));
+    }
+
+    public function testAMethodTheAddressDoesNotAllowShowsTheShellAndKeepsTheAllowHeader(): void
+    {
+        $crawler = $this->browser->request('POST', '/');
+
+        self::assertResponseStatusCodeSame(405);
+        self::assertResponseHeaderSame('Allow', 'GET');
+        self::assertSame('This request could not be answered.', $crawler->filter('.page-head .lead')->text());
+        self::assertSame(1, $crawler->filter('.shell .rail')->count());
+        self::assertSame(0, $crawler->filter('main code')->count());
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "POST http://localhost:7780/": Method Not Allowed (Allow: GET)"', MethodNotAllowedHttpException::class));
     }
 }

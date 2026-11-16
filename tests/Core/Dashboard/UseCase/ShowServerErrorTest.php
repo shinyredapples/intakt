@@ -14,6 +14,7 @@ use Psr\Log\LogLevel;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
+use Twig\Environment;
 
 // Apart from the page tests, because their base class fixes the ledger the kernel serves and a failing one must replace it.
 #[CoversClass(ShowErrorController::class)]
@@ -56,7 +57,7 @@ final class ShowServerErrorTest extends WebTestCase
         $this->takeServerErrorLogs($crawler);
     }
 
-    public function testAServerErrorWhoseShellCannotBeRenderedStillShowsAReferenceAndALinkToTheBoard(): void
+    public function testALedgerThatStaysDownStillLeavesTheShellWithTheThemeSwitch(): void
     {
         $failing = self::createStub(Ledger::class);
         $failing->method('readInOrder')->willThrowException(new RuntimeException('the ledger is gone'));
@@ -65,10 +66,31 @@ final class ShowServerErrorTest extends WebTestCase
         $crawler = $this->browser->request('GET', '/');
 
         self::assertResponseStatusCodeSame(500);
+        self::assertSame(1, $crawler->filter('.shell .rail')->count());
+        self::assertSame(1, $crawler->filter('[data-theme-toggle]')->count());
+        self::assertSame(['All projects'], $crawler->filter('#projfilter option')->each(static fn (Crawler $option): string => $option->text()));
+        self::assertStringNotContainsString('the ledger is gone', $crawler->html());
+        self::assertLoggedError(LogLevel::WARNING, 'The error page lists no projects, because they could not be read.');
+        $this->takeServerErrorLogs($crawler);
+    }
+
+    public function testAServerErrorWhosePageCannotBeRenderedStillShowsAReferenceAndALinkToTheBoard(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn(new RecordedEvents([]));
+        self::getContainer()->set(Ledger::class, $ledger);
+        $twig = self::createStub(Environment::class);
+        $twig->method('render')->willThrowException(new RuntimeException('the templates are gone'));
+        self::getContainer()->set('twig', $twig);
+
+        $crawler = $this->browser->request('GET', '/');
+
+        self::assertResponseStatusCodeSame(500);
         self::assertSame('/', $crawler->filter('a')->attr('href'));
         $reference = $crawler->filter('code')->text();
         self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $reference));
-        self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the ledger is gone"', RuntimeException::class));
+        self::assertLoggedError(LogLevel::WARNING, 'The error page was shown without the dashboard shell.');
+        self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the templates are gone"', RuntimeException::class));
     }
 
     private function readsFailOnce(): void

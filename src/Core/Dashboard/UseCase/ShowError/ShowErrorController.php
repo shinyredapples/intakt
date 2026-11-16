@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowError;
 
+use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
@@ -22,6 +23,7 @@ final readonly class ShowErrorController
     public function __construct(
         private Environment $twig,
         private LoggerInterface $logger,
+        private FilterProjects $projects,
     ) {
     }
 
@@ -30,8 +32,10 @@ final readonly class ShowErrorController
         $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
         $reference = $status >= Response::HTTP_INTERNAL_SERVER_ERROR ? $this->referenceFor($exception) : null;
         $message = $this->messageFor($status);
+        // Carried over as the framework's own error page does, so a 405 still names its allowed methods.
+        $headers = $exception instanceof HttpExceptionInterface ? $exception->getHeaders() : [];
 
-        return new Response($this->render($status, $message, $reference), $status);
+        return new Response($this->render($status, $message, $reference), $status, $headers);
     }
 
     private function messageFor(int $status): string
@@ -55,12 +59,27 @@ final readonly class ShowErrorController
     private function render(int $status, string $message, ?string $reference): string
     {
         try {
-            return $this->twig->render('dashboard/error.html.twig', ['status' => $status, 'message' => $message, 'reference' => $reference]);
+            return $this->twig->render('dashboard/error.html.twig', ['status' => $status, 'message' => $message, 'reference' => $reference, 'project_names' => $this->projectNames()]);
         } catch (Throwable $failure) {
-            // The shell reads the ledger, which may be the very thing that failed, so a page without it still answers.
             $this->logger->warning('The error page was shown without the dashboard shell.', ['exception' => $failure]);
 
             return $this->plainPage($message, $reference);
+        }
+    }
+
+    /**
+     * The shell's project filter is its only ledger read, and the ledger may be the very thing that failed, so the shell still answers without the projects.
+     *
+     * @return list<string>
+     */
+    private function projectNames(): array
+    {
+        try {
+            return $this->projects->names();
+        } catch (Throwable $failure) {
+            $this->logger->warning('The error page lists no projects, because they could not be read.', ['exception' => $failure]);
+
+            return [];
         }
     }
 
