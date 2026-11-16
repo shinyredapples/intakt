@@ -57,10 +57,6 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private string $directory;
 
-    private string $ownerToken = '';
-
-    private string $composeService = '';
-
     private string $compatibleBaseUrl = SampleProject::HUGGING_FACE_ROUTER;
 
     protected function setUp(): void
@@ -252,7 +248,7 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     public function testAFailedBuildLeavesNoRepositoryForALaterStartToKeep(): void
     {
-        $command = new SeedSampleProjectCommand(new SampleRepository($this->directory.'/no-fixtures'), $this->project(Provider::Anthropic), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken, $this->composeService);
+        $command = new SeedSampleProjectCommand(new SampleRepository($this->directory.'/no-fixtures'), $this->project(Provider::Anthropic), new LockFactory(new InMemoryStore()));
 
         $failure = null;
         try {
@@ -264,40 +260,17 @@ final class SeedSampleProjectCommandTest extends TestCase
         self::assertSame(['.', '..', 'intakt.yaml'], scandir($this->directory));
     }
 
-    public function testOutsideTheComposeDemoItPrintsTheReviewCommandAsTheConsoleRunsIt(): void
+    public function testTheSeedLeavesTheReviewCommandToTheStartOnceTheServerAnswers(): void
     {
         $display = $this->seed(Provider::Anthropic)->getDisplay();
 
-        self::assertStringContainsString('Review the sample change: php bin/console intakt:review sample-change --project=sample --repository='.$this->repository().' --base=main --task=', $display);
-    }
-
-    public function testInTheComposeDemoItPrintsTheReviewCommandAsTheHostShellRunsIt(): void
-    {
-        $this->composeService = 'intakt';
-
-        $display = $this->seed(Provider::Anthropic)->getDisplay();
-
-        self::assertStringContainsString('Review the sample change: docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository='.$this->repository().' --base=main --task=', $display);
-    }
-
-    public function testItPrintsTheMcpAddressAndTheOwnerTokenNextToTheReviewCommand(): void
-    {
-        $this->ownerToken = 'demo-owner-token';
-        $display = $this->seed(Provider::Anthropic)->getDisplay();
-
-        self::assertStringContainsString('http://localhost:7781/mcp/owner --header "Authorization: Bearer demo-owner-token"', $display);
-    }
-
-    public function testItPrintsNoMcpSetupWhenNoOwnerTokenIsSet(): void
-    {
-        $display = $this->seed(Provider::Anthropic)->getDisplay();
-
+        self::assertStringNotContainsString('intakt:review', $display);
         self::assertStringNotContainsString('mcp/owner', $display);
     }
 
     private function seed(Provider ...$keyed): CommandTester
     {
-        $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()), 'http://localhost:7781', $this->ownerToken, $this->composeService);
+        $command = new SeedSampleProjectCommand(new SampleRepository(self::FIXTURES), $this->project(...$keyed), new LockFactory(new InMemoryStore()));
         $tester = $this->tester($command);
         $tester->execute(['repository' => $this->repository(), 'configuration' => $this->configuration()]);
 
