@@ -189,6 +189,46 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertSame(['bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration'], $this->consoleCallsBeforeTheConsumers());
     }
 
+    public function testTheComposeDemoCreatesTheDemoProjectAfterTheSeed(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'INTAKT_COMPOSE_SERVICE' => 'intakt']);
+
+        $this->waitForTheServer();
+
+        self::assertSame([
+            'bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration',
+            'bin/console cache:warmup --no-interaction',
+            'bin/console intakt:sample:seed /data/sample '.$this->directory.'/intakt.yaml',
+            'bin/console cache:warmup --no-interaction',
+            'bin/console intakt:demo:create',
+            'bin/console intakt:ai:tiers',
+        ], $this->consoleCallsBeforeTheConsumers());
+    }
+
+    public function testASampleStartedOutsideComposeCreatesNoDemoProject(): void
+    {
+        self::assertNotContains('bin/console intakt:demo:create', $this->theDefaultDemo()['consoleCalls']);
+    }
+
+    public function testAComposeServiceWithoutASampleRepositoryCreatesNoDemoProject(): void
+    {
+        $this->startEntrypoint(['INTAKT_COMPOSE_SERVICE' => 'intakt']);
+
+        $this->waitForTheServer();
+
+        self::assertNotContains('bin/console intakt:demo:create', $this->consoleCallsBeforeTheConsumers());
+    }
+
+    public function testAFailedDemoProjectStopsTheEntrypointBeforeTheServerStarts(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'INTAKT_COMPOSE_SERVICE' => 'intakt', 'CREATE_STATUS' => '1']);
+
+        $this->entrypoint?->wait();
+
+        self::assertSame(1, $this->entrypoint?->getExitCode());
+        self::assertStringNotContainsString('frankenphp run', $this->calls());
+    }
+
     public function testAFailedSeedStopsTheEntrypointBeforeTheServerStarts(): void
     {
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SEED_STATUS' => '1']);
@@ -448,6 +488,7 @@ final class EntrypointSampleSeedTest extends TestCase
             'CADDY_ADMIN' => false,
             'INTAKT_SAMPLE_REPOSITORY' => false,
             'INTAKT_CONFIG' => false,
+            'INTAKT_COMPOSE_SERVICE' => false,
             'HF_TOKEN' => false,
             'OPENAI_COMPATIBLE_BASE_URL' => false,
             'OPENAI_COMPATIBLE_API_KEY' => false,
@@ -491,7 +532,7 @@ final class EntrypointSampleSeedTest extends TestCase
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
         // A consumer started without --quiet prints Symfony's banner (the success line to standard output, the comments to standard error) only once the review block is out (bounded), so the test forces the order a slow consumer start takes; with CONSUMERS_IGNORE_SIGTERM a consumer ignores the stop like one whose worker does not exist yet (upstream/messenger-consume-ignores-early-sigterm), so the stop runs its whole grace period; with SHOW_SECONDS the review block takes that long and notes its end, so the test forces a stop that arrives while it runs.
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && trap '' TERM; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && trap '' TERM; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:demo:create*) exit \"\${CREATE_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
         $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; exit 0;; esac\necho 'the server started'\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         // The health check answers only once the server runs and after CURL_FAILURES refused calls, so the test forces a start where the server is not up yet; with CURL_SECONDS every call takes that long and notes its end, so the test forces a stop that arrives while one runs.
