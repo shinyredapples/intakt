@@ -35,11 +35,25 @@ final class RoundFindingTest extends TestCase
         self::assertSame([['text' => 'a', 'code' => true]], $finding->textSpans());
     }
 
-    public function testAnUnmatchedBacktickStaysPlainText(): void
+    public function testAnUnmatchedBacktickMakesTheWordAfterItCode(): void
+    {
+        $finding = new RoundFinding('F1', 'P1', 'Call `write() before returning.');
+
+        self::assertSame([['text' => 'Call ', 'code' => false], ['text' => 'write()', 'code' => true], ['text' => ' before returning.', 'code' => false]], $finding->textSpans());
+    }
+
+    public function testAnUnmatchedBacktickWithoutAWordAfterItIsDropped(): void
     {
         $finding = new RoundFinding('F1', 'P1', 'The ` key is unused.');
 
-        self::assertSame([['text' => 'The ` key is unused.', 'code' => false]], $finding->textSpans());
+        self::assertSame([['text' => 'The  key is unused.', 'code' => false]], $finding->textSpans());
+    }
+
+    public function testBacktickRunsOfDifferentLengthsLeaveNoBacktick(): void
+    {
+        $finding = new RoundFinding('F1', 'P1', 'See ``a` here.');
+
+        self::assertSame([['text' => 'See ', 'code' => false], ['text' => 'a', 'code' => true], ['text' => ' here.', 'code' => false]], $finding->textSpans());
     }
 
     public function testAFindingWithoutTextHasNoSpans(): void

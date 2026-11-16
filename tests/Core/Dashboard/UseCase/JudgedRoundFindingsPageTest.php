@@ -42,6 +42,28 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertStringNotContainsString('`', $crawler->filter('#round-round-1 .finding-cards')->text());
     }
 
+    public function testAnUnmatchedBacktickLeavesNoLiteralBacktickInACard(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Call `write() before returning.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertStringNotContainsString('`', $crawler->filter('#round-round-1 .finding-card')->text());
+        self::assertSame('write()', $crawler->filter('#round-round-1 .finding-card code')->text());
+    }
+
+    public function testMarkupInAFindingsTextOrCodeStaysText(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', '<img src=x onerror=alert(1)> `<script>alert(1)</script>`');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.finding-card img, .finding-card script'));
+        self::assertSame('<script>alert(1)</script>', $crawler->filter('#round-round-1 .finding-card code')->text());
+    }
+
     public function testADroppedFindingsCardNamesWhyItWasDropped(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
