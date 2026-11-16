@@ -1,4 +1,4 @@
-Repository: symfony/ai. Template: Bug Report (label `Bug`). Not posted: the owner approves this text first.
+Repository: symfony/ai. Template: Bug Report (label `Bug`). Posted as https://github.com/symfony/ai/issues/2962 on 2026-11-16; the text below is its body as posted.
 
 Title: [Platform][ClaudeCode] A response format becomes `--response-format Array` instead of the CLI's `--json-schema`
 
@@ -12,7 +12,7 @@ The Claude Code CLI has a structured-output option: `--json-schema <schema>` hol
 
 ### Versions
 
-`symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12, Claude Code CLI 2.1.302. Still the same on `main` (999d5fb).
+`symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12, Claude Code CLI 2.1.322. Still the same on `main` (999d5fb).
 
 ### How to reproduce
 
@@ -35,7 +35,7 @@ echo (new ResultConverter())->convert(new RawProcessResult($process))->getConten
 ### Actual behavior
 
 ```
-Warning: Array to string conversion
+PHP Warning:  Array to string conversion in .../src/Bridge/ClaudeCode/ModelClient.php on line 109
 ... --model sonnet --response-format json_schema --response-format Array -p Judge the change.
 I returned the verdict.
 ```
@@ -50,4 +50,4 @@ I returned the verdict.
 
 ### Additional context
 
-Related, not the same: #2714 (common invocation options through `PlatformOptions`), #2465 (merged, plain JSON-schema results in `asObject()`). The open #2957 rewrites `ClaudeCode\ModelClient::request()` and, as written, would drop `response_format` instead of passing it on. The CLI takes the `--json-schema` value as a JSON string.
+Related, not the same: #2714 (common invocation options through `PlatformOptions`), #2465 (merged, plain JSON-schema results in `asObject()`). The open #2957 rewrites `ClaudeCode\ModelClient::request()` and, as written, would drop `response_format` instead of passing it on. #2945 is a different report, on the Anthropic bridge. The CLI takes the `--json-schema` value as a JSON string.

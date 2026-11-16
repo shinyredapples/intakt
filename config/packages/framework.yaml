@@ -5,6 +5,9 @@ framework:
     # Note that the session will be started ONLY if you read or write from it.
     session: true
 
+    # Every uncaught exception answers inside the dashboard's shell, with a way back to the board.
+    error_controller: Intakt\Core\Dashboard\UseCase\ShowError\ShowErrorController
+
     # Stored verdicts and findings (de)serialize through this one serializer; the snake_case converter keeps the stored keys when a property is camelCase.
     serializer:
         named_serializers:

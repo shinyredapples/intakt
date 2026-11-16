@@ -29,6 +29,22 @@ class FakeElement {
         this.attributes.set(name, String(value));
     }
 
+    hasAttribute(name) {
+        return this.attributes.has(name);
+    }
+
+    toggleAttribute(name, force) {
+        if (force) {
+            this.attributes.set(name, '');
+        } else {
+            this.attributes.delete(name);
+        }
+    }
+
+    matches() {
+        return false;
+    }
+
     addEventListener(type, listener) {
         this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
     }
@@ -53,6 +69,23 @@ class FakeSelect extends FakeElement {
 
     get selectedOptions() {
         return this.options.filter((option) => option.value === this.value);
+    }
+}
+
+// A board column as the server renders it, so also as a push brings it: open unless it starts collapsed, never expanded.
+class FakeColumn extends FakeElement {
+    constructor(page, id, collapsed = false) {
+        super(page);
+        this.id = id;
+        this.classes = new Set(['col', ...(collapsed ? ['collapsed'] : [])]);
+        this.classList = {
+            contains: (name) => this.classes.has(name),
+            toggle: (name, force) => (force ? this.classes.add(name) : this.classes.delete(name)),
+        };
+    }
+
+    matches(selector) {
+        return selector === '.board > .col';
     }
 }
 
@@ -106,6 +139,7 @@ export class Browser {
             body: null,
             addEventListener: (type, listener) => documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener]),
             dispatchEvent: (event) => (documentListeners.get(event.type) ?? []).forEach((listener) => listener(event)),
+            getElementById: (id) => shown[`#${id}`] ?? null,
             querySelector: (selector) => shown[selector] ?? null,
             querySelectorAll: (selector) => shownAll[selector] ?? [],
         };
@@ -152,11 +186,10 @@ export class Browser {
         const more = this.more ? new FakeElement(page) : null;
         const sheet = this.more ? Object.assign(new FakeElement(page), { hidden: true }) : null;
         const sheetLink = new FakeElement(page);
+        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true) };
+        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': rows };
 
-        show(
-            { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet },
-            { '[data-theme-toggle]': themeToggles, '[data-project]': rows },
-        );
+        show(shownElements, allShown);
         context.location.href = this.address;
         runInNewContext(shellScript, context);
 
@@ -217,6 +250,24 @@ export class Browser {
                         render: () => {
                             projectFilter.options = [{ value: '', textContent: 'All projects' }, ...projects.map((project) => ({ value: project, textContent: project }))];
                             projectFilter.value = '';
+                        },
+                    },
+                };
+                (documentListeners.get('turbo:before-stream-render') ?? []).forEach((listener) => listener(event));
+                event.detail.render(stream);
+            },
+            column: (id) => shownElements[`#${id}`],
+            // What Turbo does with a replace stream for a board column: put the server's column, in its start state, where the shown one was.
+            pushColumn: (id) => {
+                const stream = new FakeElement(page);
+                stream.setAttribute('action', 'replace');
+                stream.setAttribute('target', id);
+                const event = {
+                    target: stream,
+                    detail: {
+                        render: () => {
+                            shownElements[`#${id}`] = new FakeColumn(page, id, id === 'col-done');
+                            show(shownElements, allShown);
                         },
                     },
                 };

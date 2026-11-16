@@ -11,7 +11,9 @@ use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\PublishProjectFilter;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
@@ -22,7 +24,7 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\RoundOpened;
-use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Tests\Support\ListedReviews;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -43,6 +45,8 @@ use Twig\Loader\FilesystemLoader;
 #[CoversClass(PublishProjectFilter::class)]
 #[UsesClass(FilterProjects::class)]
 #[UsesClass(LedgerReviews::class)]
+#[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(LedgerPayloads::class)]
 #[UsesClass(ProjectSummary::class)]
@@ -202,7 +206,7 @@ final class PublishProjectFilterTest extends TestCase
 
     private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
     {
-        $projects = new FilterProjects(new LedgerReviews($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))));
+        $projects = new FilterProjects(ListedReviews::on($ledger));
         $updates = new MercureLiveUpdates(new Hub(self::HUB, new StaticTokenProvider(self::TOKEN), httpClient: $hub), $this->log);
 
         return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $locks, $this->log);

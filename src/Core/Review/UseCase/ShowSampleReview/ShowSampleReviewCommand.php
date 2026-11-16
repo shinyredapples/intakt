@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ShowSampleReview;
 
+use Intakt\Core\Mcp\Contract\OwnerClientLine;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
 use SensitiveParameter;
@@ -74,14 +75,11 @@ final readonly class ShowSampleReviewCommand
 
     private function printMcpSetup(SymfonyStyle $io): void
     {
-        if ('' === $this->ownerToken) {
+        $client = new OwnerClientLine($this->baseUrl, $this->ownerToken);
+        if (!$client->hasToken()) {
             return;
         }
 
-        $io->writeln(OutputFormatter::escape(sprintf(
-            'Connect an MCP client: claude mcp add --transport http intakt %s/mcp/owner --header "Authorization: Bearer %s"',
-            rtrim($this->baseUrl, '/'),
-            $this->ownerToken,
-        )));
+        $io->writeln(OutputFormatter::escape('Connect an MCP client: '.$client->line()));
     }
 }

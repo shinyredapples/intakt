@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -29,6 +30,7 @@ use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 #[CoversClass(RefuseForeignHost::class)]
+#[UsesClass(DashboardHost::class)]
 #[UsesClass(LedgerPayload::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerReviews::class)]
@@ -52,11 +54,9 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
     public static function foreignHosts(): iterable
     {
         foreach (['/projects', '/reviews', '/reviews/round-1', '/search'] as $page) {
-            yield $page.' on another name' => [$page, 'attacker.example:7780'];
-            yield $page.' on another name without a port' => [$page, 'attacker.example'];
-            yield $page.' on loopback without the port' => [$page, 'localhost'];
-            yield $page.' on loopback with another port' => [$page, '127.0.0.1:8080'];
-            yield $page.' on a name that starts like loopback' => [$page, 'localhost.attacker.example:7780'];
+            foreach (DashboardHostTest::FOREIGN_HOSTS as $name => $host) {
+                yield $page.' on '.$name => [$page, $host];
+            }
         }
     }
 
@@ -66,9 +66,9 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
     public static function loopbackHosts(): iterable
     {
         foreach (['/projects', '/reviews', '/reviews/round-1'] as $page) {
-            yield $page.' on localhost' => [$page, 'localhost:7780'];
-            yield $page.' on IPv4 loopback' => [$page, '127.0.0.1:7780'];
-            yield $page.' on IPv6 loopback' => [$page, '[::1]:7780'];
+            foreach (DashboardHostTest::LOOPBACK_HOSTS as $name => $host) {
+                yield $page.' on '.$name => [$page, $host];
+            }
         }
     }
 
@@ -100,7 +100,7 @@ final class RefuseForeignHostTest extends DashboardPageTestCase
         $request->attributes->set('_route', 'mcp_list_tools');
         $event = new RequestEvent(self::createStub(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
 
-        new RefuseForeignHost(7780)($event);
+        new RefuseForeignHost(new DashboardHost(7780))($event);
 
         self::assertFalse($event->hasResponse());
     }

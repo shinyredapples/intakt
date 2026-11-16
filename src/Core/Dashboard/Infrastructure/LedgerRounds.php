@@ -124,6 +124,15 @@ final class LedgerRounds
         return $reviews;
     }
 
+    // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round.
+    /**
+     * @return list<ReviewedRound>
+     */
+    public function inStartOrder(): array
+    {
+        return array_map($this->completed(...), array_values($this->started));
+    }
+
     // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
     private function markOf(ReviewedRound $round): ReplayMark
     {
