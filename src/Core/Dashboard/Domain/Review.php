@@ -21,6 +21,12 @@ final readonly class Review
         $this->change = $rounds[0]->change;
     }
 
+    // Derived from the rounds and never stored, because one live round means some verdict of the change was given on it.
+    public function everyRoundIsAReplay(): bool
+    {
+        return array_all($this->rounds, static fn (ReviewedRound $round): bool => $round->isReplay());
+    }
+
     public function latest(): ReviewedRound
     {
         return array_last($this->rounds);

@@ -21,6 +21,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
+use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
 #[CoversClass(FlagProjectAsReplayHandler::class)]
@@ -101,6 +102,23 @@ final class ReplayMarksTest extends KernelTestCase
         $this->expectException(RoundNotFound::class);
 
         $this->markOfRound('not-a-round');
+    }
+
+    public function testTheReplayMarkOfAReviewNeverStoredIsRefused(): void
+    {
+        $this->expectException(RoundNotFound::class);
+
+        $this->markOfRound(Uuid::v7()->toRfc4122());
+    }
+
+    // A reviewer's handler asks for the mark through the board while it still holds its round, so the answer must not detach that round.
+    public function testReadingTheReplayMarkOfAReviewLeavesTheRoundTheCallerHoldsManaged(): void
+    {
+        $round = $this->fixture->start(2);
+
+        $this->markOfRound($round->id()->toRfc4122());
+
+        self::assertTrue($this->fixture->entities->contains($round));
     }
 
     public function testAnotherModuleFlagsAProjectAndReadsItsMarkThroughTheBuses(): void

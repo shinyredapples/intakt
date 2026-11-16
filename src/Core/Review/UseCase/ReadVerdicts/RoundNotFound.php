@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ReadVerdicts;
 
+use Intakt\Core\Review\Contract\UnknownRound;
 use RuntimeException;
 
-final class RoundNotFound extends RuntimeException
+final class RoundNotFound extends RuntimeException implements UnknownRound
 {
     public static function for(string $roundId): self
     {

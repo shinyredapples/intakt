@@ -20,6 +20,7 @@ use Intakt\Core\Dashboard\Domain\RoundSource;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -51,6 +52,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -63,6 +65,7 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(RoundPayloads::class)]
 #[CoversClass(LedgerPayloads::class)]
 #[CoversClass(LedgerTokens::class)]
+#[UsesClass(ReplayMarks::class)]
 #[UsesClass(ReviewStarted::class)]
 #[UsesClass(ReviewerStarted::class)]
 #[UsesClass(VerdictReceived::class)]
@@ -618,7 +621,7 @@ final class LedgerRoundsTest extends TestCase
 
     private function reviewOf(string $round, RecordedEvent ...$events): ?Review
     {
-        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords(), $this->endings ?? new FixedRoundEndings());
+        $rounds = new LedgerRounds(new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs ?? $this->noCosts(), new ChangeDecision(), new FailureInWords(), $this->endings ?? new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
         foreach ($events as $event) {
             $rounds->add($event);
