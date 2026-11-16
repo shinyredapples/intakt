@@ -11,6 +11,7 @@ enum RoundStream: string
     case ReviewerAskedAgain = 'reviewer_asked_again';
     case SummaryChanged = 'summary_changed';
     case RoundChanged = 'round_changed';
+    case RoundJudged = 'round_judged';
     case ReviewerStopped = 'reviewer_stopped';
 
     public function template(): string
