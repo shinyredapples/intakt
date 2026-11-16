@@ -5,26 +5,31 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use Intakt\Core\Review\Contract\Decision;
 
 final readonly class ReviewSummary
 {
     public string $round;
     public string $project;
     public int $reviewers;
+    public string $change;
+    public ?int $number;
     public ReviewState $state;
+    public DateTimeImmutable $startedAt;
+    public ?Decision $outcome;
+    public ?int $findingCount;
 
-    public function __construct(
-        RoundStart $start,
-        public DateTimeImmutable $startedAt,
-    ) {
-        $this->state = ReviewState::InProgress;
-        $this->round = $start->round;
-        $this->project = $start->project;
-        $this->reviewers = $start->reviewers;
-    }
-
-    public function judged(): self
+    // The count is null until the judge is done, because a round in progress has no judged findings yet and 0 would read as a clean round.
+    public function __construct(ReviewedRound $round)
     {
-        return clone ($this, ['state' => ReviewState::Judged]);
+        $this->round = $round->round;
+        $this->project = $round->project;
+        $this->reviewers = $round->reviewers;
+        $this->change = $round->change;
+        $this->number = $round->number;
+        $this->state = $round->state;
+        $this->startedAt = $round->startedAt;
+        $this->outcome = $round->outcome;
+        $this->findingCount = $round->isJudged() ? count($round->findings) : null;
     }
 }
