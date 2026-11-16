@@ -98,7 +98,8 @@
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
 <section class="section round" id="round-{{ reviewed.round }}">
-    <details class="ev">
+    {# Only the newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down. #}
+    <details class="ev"{% if loop.last %} open{% endif %}>
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
@@ -107,6 +108,7 @@
             <span class="muted small">{{ reviewed.outcome is not null ? reviewed.outcome.value : 'outcome not recorded' }}, {% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
             {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
             <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
+            {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}
         </summary>
         {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
     </details>

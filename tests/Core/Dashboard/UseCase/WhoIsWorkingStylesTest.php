@@ -30,7 +30,7 @@ final class WhoIsWorkingStylesTest extends TestCase
 
     public function testTheChevronTurnsWhenTheSummaryIsOpen(): void
     {
-        self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('.working[open] .chev', $this->sheet()));
+        self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('details[open] > summary .chev', $this->sheet()));
     }
 
     private function sheet(): string

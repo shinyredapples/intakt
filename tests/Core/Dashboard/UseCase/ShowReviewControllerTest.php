@@ -322,6 +322,57 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertSame(['Judged', 'Judged'], $crawler->filter('section.round .chip.state-judged')->each(static fn (Crawler $chip): string => $chip->text()));
     }
 
+    public function testTheNewestJudgedRoundStartsOpenAndAnOlderOneStartsClosed(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([false, true], $crawler->filter('section.round details.ev')->each(static fn (Crawler $round): bool => null !== $round->attr('open')));
+    }
+
+    public function testAJudgedReviewShowsItsFindingsWithoutAClick(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'defer']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(2, $crawler->filter('#round-round-1 details.ev[open] table.findings tbody tr'));
+    }
+
+    public function testAJudgedRoundStartsClosedWhileANewerRoundIsStillInReview(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', []);
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(1, $crawler->filter('#round-round-1 details.ev'));
+        self::assertCount(0, $crawler->filter('details.ev[open]'));
+    }
+
+    public function testEveryJudgedRoundRowCarriesTheChevronInItsSummary(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame([1, 1], $crawler->filter('section.round details.ev > summary')->each(static fn (Crawler $row): int => $row->filter('svg.chev')->count()));
+    }
+
+    public function testARoundStillInReviewIsNoDisclosureAndCarriesNoChevron(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('#round-round-1 details, #round-round-1 .chev'));
+    }
+
     public function testThePageHeadHoldsTheTitleAndTheSummaryAsItsLead(): void
     {
         $this->givenACompletedTwoRoundReview();
@@ -476,8 +527,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings counted', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
-        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings counted', '12:00 to 12:00 UTC'], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
+        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings counted', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings counted', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
         self::assertSelectorNotExists('#round-round-1 details[open]');
     }
 
