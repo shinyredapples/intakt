@@ -10,10 +10,16 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\ToolCallCount;
+use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -151,6 +157,41 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString(sprintf('<turbo-stream action="append" targets="#reviewer-%1$s-text:not(:has(#reviewer-%1$s-try-try-2))">', self::REVIEWER), $data);
         self::assertStringContainsString(sprintf('<p class="asked-again" id="reviewer-%s-try-try-2">Asked again:', self::REVIEWER), $data);
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $data);
+    }
+
+    public function testAReadAnswerPublishesItsVerdictAndEachFindingsSeverityFileLineAndTitleAndNoJson(): void
+    {
+        $this->updates()->answerRead(Uuid::fromString(self::ROUND), self::REVIEWER, $this->readAnswer('Discount boundary regression'));
+
+        $data = $this->published[0]->getData();
+        self::assertSame(['review/rounds/'.self::ROUND], $this->published[0]->getTopics());
+        self::assertStringContainsString('Verdict: changes', $data);
+        self::assertStringContainsString('P1 src/Cart.php:12 Discount boundary regression', $data);
+        self::assertStringContainsString(sprintf('target="reviewer-%s-text"', self::REVIEWER), $data);
+        self::assertStringNotContainsString('{"', $data);
+        self::assertStringNotContainsString('"findings"', $data);
+    }
+
+    public function testAnUnreadableAnswerPublishesOnlyTheCouldNotBeReadMarker(): void
+    {
+        $this->updates()->answerRead(Uuid::fromString(self::ROUND), self::REVIEWER, ReadAnswer::unreadable());
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('The answer could not be read.', $this->published[0]->getData());
+        self::assertStringNotContainsString('Verdict:', $this->published[0]->getData());
+    }
+
+    public function testAFindingTitleIsEscapedInTheTurboStream(): void
+    {
+        $this->updates()->answerRead(Uuid::fromString(self::ROUND), self::REVIEWER, $this->readAnswer('</template><script>x</script>'));
+
+        self::assertStringContainsString('&lt;/template&gt;&lt;script&gt;x&lt;/script&gt;', $this->published[0]->getData());
+        self::assertStringNotContainsString('<script>', $this->published[0]->getData());
+    }
+
+    private function readAnswer(string $title): ReadAnswer
+    {
+        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
     }
 
     public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedOnceByTheLiveUpdates(): void
