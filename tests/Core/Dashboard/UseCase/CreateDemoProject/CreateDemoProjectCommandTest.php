@@ -77,6 +77,7 @@ final class CreateDemoProjectCommandTest extends KernelTestCase
 
         self::assertSame(Command::SUCCESS, $again->getStatusCode());
         self::assertSame(ReplayMark::Replay, $this->markOfTheDemoProject());
+        self::assertSame(1, $this->replayProjectRows());
     }
 
     public function testTheDemoProjectIsSeparateFromTheSampleProject(): void
@@ -95,6 +96,14 @@ final class CreateDemoProjectCommandTest extends KernelTestCase
         $application->addCommand(new CreateDemoProjectCommand($commands, $composeService));
 
         return new CommandTester($application->find('intakt:demo:create'));
+    }
+
+    private function replayProjectRows(): int
+    {
+        $entities = self::getContainer()->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+
+        return (int) $entities->getConnection()->fetchOne('SELECT COUNT(*) FROM review_replay_project');
     }
 
     private function markOfTheDemoProject(): ReplayMark
