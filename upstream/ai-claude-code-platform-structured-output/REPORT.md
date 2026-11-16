@@ -1,6 +1,6 @@
 # [Claude Code] A response format never reaches the CLI's `--json-schema` option
 
-Versions: `symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, `symfony/process` v8.1.10, PHP 8.5.12, Claude Code CLI 2.1.302.
+Filed as symfony/ai#2962 on 2026-11-16. Versions: `symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, `symfony/process` v8.1.10, PHP 8.5.12, Claude Code CLI 2.1.302.
 
 ## What happens
 
@@ -42,4 +42,5 @@ The trial of 2026-11-13 that led here (prose around one fenced `json` block) was
 - **Fix pull request:** `issue only`. The fix spans `ModelClient`, `ResultConverter` (both paths, streamed and not) and `ModelCatalog`, and whether the bridge should map the response format or refuse it is the maintainers' choice, while #2714 may change how invocation options reach the bridges.
 - **Non-duplicates (2026-11-16):** #2957 (open pull request, rewrites `ModelClient::request()`; as written it drops `response_format` instead of passing it on, named in `ISSUE.md`) and #2945; neither adds structured output to the bridge.
 - **Checked:** 2026-11-16 against `symfony/ai` `main` 999d5fbeea73 (2026-11-15 20:17 +0100, #2917) and the newest release v1.0.0-BETA1 (f620d0fc6790, `v1.0.0-BETA1` is the newest tag); duplicate search in `symfony/ai` issues and pull requests, open, merged and closed, over all 2959 of them fetched through the REST list API (the GitHub search API was rate limited) and matched locally on `claude` together with `json[-_ ]schema|structured_output|response_format|OUTPUT_STRUCTURED|structured output`, plus every title containing `claude.?code`; commits `git log v1.0.0-BETA1..origin/main -- src/platform/src/Bridge/ClaudeCode/` and `git log -S"json-schema"|-S"structured_output"|-S"OUTPUT_STRUCTURED"` on the bridge and platform paths; none adds structured output to the bridge.
-- **Decision:** `ready to file`. The issue text is `ISSUE.md`. If #2957 merges before posting, the check is redone.
+- **Decision:** `filed as` https://github.com/symfony/ai/issues/2962 (2026-11-16), a new issue with the text of `ISSUE.md` as posted (`main` 999d5fb, Claude Code CLI 2.1.322, #2465 merged, one line each on #2957 and #2945, the observed `Array to string conversion` warning line), after a claim-by-claim check of that text against `main` 999d5fbeea73 and v1.0.0-BETA1.
+- **Status:** watch #2962 for a maintainer reply, and recheck if the open #2957 merges: as written it would drop `response_format` silently instead of passing a bad flag.
