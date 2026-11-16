@@ -88,7 +88,15 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     #[Override]
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {
-        $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->startedReviewerOf($round, $reviewer)?->stopped()]);
+        $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->stoppedReviewerOf($round, $reviewer)]);
+    }
+
+    // Read from the whole round, because a reviewer can be stopped after it answered and its row must keep the verdict and findings a reload shows; a stop is rare, unlike streamed text. Marked stopped here too, because this stream announces the stop whatever the read saw.
+    private function stoppedReviewerOf(Uuid $round, string $reviewer): ?ReviewerOutcome
+    {
+        $recorded = array_find($this->outcomesOf($round), static fn (ReviewerOutcome $outcome): bool => $outcome->id === $reviewer);
+
+        return ($recorded ?? $this->startedReviewerOf($round, $reviewer))?->stopped();
     }
 
     // Nothing on the round's topic, because the review page places a reviewer from its first tool call or text (stream/_reviewer_placed).

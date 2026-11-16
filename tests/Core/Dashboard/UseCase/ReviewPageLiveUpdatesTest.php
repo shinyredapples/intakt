@@ -437,6 +437,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([['correctness', 'standard tier, model not recorded', 'stopped', 'no answer']], $this->rowsOf($this->replaced($page, $this->publishedStreams())));
     }
 
+    public function testAReviewerStoppedAfterItAnsweredGetsARowWithItsRecordedOutcomeAndFindings(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->answer($id, 'correctness', 1);
+        $this->ledger->stopReviewer($id, 'correctness');
+
+        $this->publishedUpdates()->reviewerStopped($round, $id.'-correctness');
+
+        $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
+        self::assertSame([['correctness', 'Kimi K3', 'stopped']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertStringStartsWith('1 ', $rows[0][3] ?? '');
+    }
+
     public function testAReviewerThatFailedAfterThePageLoadedShowsTheFailedStateInRedWithItsCause(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
