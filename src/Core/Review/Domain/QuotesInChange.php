@@ -11,8 +11,8 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class QuotesInChange
 {
-    // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet.
-    private const string FENCED_BLOCK = '/(`{3,}|~{3,}).*?(?:\1|\z)/s';
+    // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet; fences count only at a line start, as in Markdown, so backticks inside a fenced line never close the block.
+    private const string FENCED_BLOCK = '/^ {0,3}((`|~)\2{2,})[^\n]*(?:\n.*?)??(?:\n {0,3}\1\2*[ \t]*$|\z)/ms';
     private const string INLINE_QUOTE = '/(?<!`)(`{1,2})(?!`)([^`\n]+?)(?<!`)\1(?!`)/';
     private const string NAME = '/[A-Za-z_][A-Za-z0-9_]*/';
     // Left out, because a path or a file name may rightly name a file the change should add.

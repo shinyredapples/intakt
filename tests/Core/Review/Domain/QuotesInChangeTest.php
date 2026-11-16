@@ -99,6 +99,24 @@ final class QuotesInChangeTest extends TestCase
         self::assertNull($reason);
     }
 
+    public function testThreeBackticksInsideAFencedLineDoNotCloseTheBlock(): void
+    {
+        $text = "Suggested fix:\n```js\nconst marker = '```';\nescapeArgument(`suggestedName`);\n```";
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAQuoteAfterAClosedFencedBlockIsChecked(): void
+    {
+        $text = "Suggested fix:\n~~~\nrun(`customerName`);\n~~~~\n`grepName` is not defined.";
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */
