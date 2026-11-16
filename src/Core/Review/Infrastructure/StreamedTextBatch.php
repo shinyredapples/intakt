@@ -26,15 +26,25 @@ final class StreamedTextBatch
         $this->turn .= $text;
     }
 
-    // Published only when a tool call follows, because only then is a turn's text known to be narration: the turn that ends the call is the answer, which reaches the live view only as read (LiveProgress::answered()).
+    // Published only when a tool call follows, because only then may a turn's text be narration: the turn that ends the call is the answer, which reaches the live view only as read (LiveProgress::answered()).
     public function release(): void
     {
-        if ('' === $this->turn) {
+        $text = $this->turn;
+        $this->turn = '';
+
+        if ('' === $text || $this->holdsAJsonObject($text)) {
             return;
         }
 
-        $text = $this->turn;
-        $this->turn = '';
         ($this->publish)($text);
+    }
+
+    // Dropped even though a tool call follows, because a model may write its answer and then call a tool anyway, and the answer's JSON reaches the live view only as read; prose around it and fences do not hide it.
+    private function holdsAJsonObject(string $text): bool
+    {
+        $start = strpos($text, '{');
+        $end = strrpos($text, '}');
+
+        return false !== $start && false !== $end && $start < $end && json_validate(substr($text, $start, $end - $start + 1));
     }
 }

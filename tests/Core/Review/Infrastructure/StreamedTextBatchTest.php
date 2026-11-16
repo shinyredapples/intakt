@@ -76,11 +76,51 @@ final class StreamedTextBatchTest extends TestCase
         self::assertSame(['text r1 ac', 'text r2 bd'], $this->updates->seen);
     }
 
+    public function testATurnThatIsAJsonAnswerIsNeverPublishedEvenWhenReleased(): void
+    {
+        $this->released('{"verdict":"changes","findings":[{"id":"discount-boundary"}]}');
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testAJsonAnswerInAFenceAfterProseIsNeverPublished(): void
+    {
+        $this->released("Here is my verdict:\n```json\n{\"verdict\":\"approve\",\"findings\":[]}\n```");
+
+        self::assertSame([], $this->updates->seen);
+    }
+
+    public function testProseWithBracesThatAreNoJsonIsStillPublished(): void
+    {
+        $this->released('I read match {case} in the cart next.');
+
+        self::assertSame(['text r1 I read match {case} in the cart next.'], $this->updates->seen);
+    }
+
+    public function testAJsonTurnIsDroppedAndTheNextTurnIsStillPublished(): void
+    {
+        $batch = $this->batch('r1');
+
+        $batch->add('{"verdict":"approve"}');
+        $batch->release();
+        $batch->add('I read the cart.');
+        $batch->release();
+
+        self::assertSame(['text r1 I read the cart.'], $this->updates->seen);
+    }
+
     public function testATurnWithoutTextPublishesNothing(): void
     {
         $this->batch('r1')->release();
 
         self::assertSame([], $this->updates->seen);
+    }
+
+    private function released(string $turn): void
+    {
+        $batch = $this->batch('r1');
+        $batch->add($turn);
+        $batch->release();
     }
 
     private function batch(string $reviewer): StreamedTextBatch

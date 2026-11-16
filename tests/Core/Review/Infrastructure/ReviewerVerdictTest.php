@@ -281,6 +281,16 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringNotContainsString('"verdict"', implode("\n", $this->updates->seen));
     }
 
+    public function testAJsonAnswerStreamedBeforeAToolCallIsNeverPublishedAsNarration(): void
+    {
+        $this->catalog = new FallbackModelCatalog();
+        $this->narration = str_split(VerdictDocument::fromTheDesign()->with('resolved', [])->json(), 40);
+
+        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+    }
+
     public function testAnUnreadableStreamedAnswerPublishesOnlyTheMarkerAndStillFailsTheReviewWithItsReason(): void
     {
         $refused = $this->refused('Add a cart.', [], $this->streamed('{"verdict":"approve","findings":[],', '"resolved":[],"follow_ups":[],"trust_me":true}'));
