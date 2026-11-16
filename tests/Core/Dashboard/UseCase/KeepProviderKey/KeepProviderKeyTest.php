@@ -97,7 +97,7 @@ final class KeepProviderKeyTest extends TestCase
     }
 
     /**
-     * @param ArrayObject<int, array{string, array<string, mixed>}> $calls
+     * @param ArrayObject<int, array{string, array<mixed>}> $calls
      */
     private function useCase(ArrayObject $calls, Closure $answer): KeepProviderKey
     {

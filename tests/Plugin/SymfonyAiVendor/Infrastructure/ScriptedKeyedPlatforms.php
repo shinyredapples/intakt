@@ -16,8 +16,8 @@ use Symfony\AI\Platform\Test\MockPlatformFactory;
 final readonly class ScriptedKeyedPlatforms implements KeyedPlatforms
 {
     /**
-     * @param ArrayObject<int, array{string, array<string, mixed>}> $calls
-     * @param Closure(): (ResultInterface|string)                   $answer
+     * @param ArrayObject<int, array{string, array<mixed>}> $calls
+     * @param Closure(): (ResultInterface|string)           $answer
      */
     public function __construct(
         private ArrayObject $calls,
@@ -28,7 +28,6 @@ final readonly class ScriptedKeyedPlatforms implements KeyedPlatforms
     public function platformFor(ProviderKey $key): PlatformInterface
     {
         return MockPlatformFactory::createPlatform(function (Model $model, array|string|object $input, array $options): ResultInterface|string {
-            /* @var array<string, mixed> $options */
             $this->calls->append([$model->getName(), $options]);
 
             return ($this->answer)();

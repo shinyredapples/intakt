@@ -67,8 +67,8 @@ final class SymfonyAiKeyCheckTest extends TestCase
     }
 
     /**
-     * @param ArrayObject<int, array{string, array<string, mixed>}> $calls
-     * @param Closure(): (string|never)                             $answer
+     * @param ArrayObject<int, array{string, array<mixed>}> $calls
+     * @param Closure(): (string|never)                     $answer
      */
     private function check(string $key, ArrayObject $calls, Closure $answer): KeyCheckOutcome
     {
