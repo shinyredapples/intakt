@@ -1,6 +1,6 @@
-From 5c30e1c4 Mon Sep 17 00:00:00 2001
-From: haraldpdl <haraldpdl@users.noreply.github.com>
-Date: Mon, 16 Nov 2026
+From 5c30e1c4523da7c8fbba47d4ebdbab2ae7c5cb7c Mon Sep 17 00:00:00 2001
+From: Harald Ponce de Leon <haraldpdl@gmail.com>
+Date: Mon, 16 Nov 2026 02:24:40 +0000
 Subject: [PATCH] [Platform][ClaudeCode] Report cache creation and cache read
  tokens apart
 
@@ -16,7 +16,7 @@ now set, as the Anthropic bridge sets them; cachedTokens keeps the sum.
  2 files changed, 28 insertions(+), 5 deletions(-)
 
 diff --git a/src/platform/src/Bridge/ClaudeCode/Tests/TokenUsageExtractorTest.php b/src/platform/src/Bridge/ClaudeCode/Tests/TokenUsageExtractorTest.php
-index e331d3dd..73107e8b 100644
+index e331d3d..73107e8 100644
 --- a/src/platform/src/Bridge/ClaudeCode/Tests/TokenUsageExtractorTest.php
 +++ b/src/platform/src/Bridge/ClaudeCode/Tests/TokenUsageExtractorTest.php
 @@ -61,6 +61,29 @@ final class TokenUsageExtractorTest extends TestCase
@@ -50,7 +50,7 @@ index e331d3dd..73107e8b 100644
  
      public function testExtractReturnsNullForStreaming()
 diff --git a/src/platform/src/Bridge/ClaudeCode/TokenUsageExtractor.php b/src/platform/src/Bridge/ClaudeCode/TokenUsageExtractor.php
-index 52f97fdb..008c5025 100644
+index 52f97fd..008c502 100644
 --- a/src/platform/src/Bridge/ClaudeCode/TokenUsageExtractor.php
 +++ b/src/platform/src/Bridge/ClaudeCode/TokenUsageExtractor.php
 @@ -36,16 +36,16 @@ final class TokenUsageExtractor implements TokenUsageExtractorInterface
