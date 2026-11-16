@@ -77,6 +77,41 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertCount(0, $page->filter('.rail [aria-current]'));
     }
 
+    public function testTheRailMarksOnlyTheProjectsItemCurrentOnAReviewPage(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['projects'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+    }
+
+    public function testTheRailMarksOnlyTheProjectsItemCurrentOnAProjectsReviewList(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/reviews?project=alpha');
+
+        self::assertSame(['projects'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+    }
+
+    public function testTheRailMarksNoItemCurrentOnAReviewListOfAProjectTheInstallDoesNotList(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        self::assertCount(0, $this->browser->request('GET', '/reviews?project=missing')->filter('.rail [aria-current]'));
+    }
+
+    public function testTheRailTellsTheShellWhichItemItMarksCurrentForItsSectionAlone(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/reviews?project=alpha');
+
+        self::assertSame(['projects'], $page->filter('.rail [data-section-current]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+        self::assertCount(0, $this->browser->request('GET', '/projects')->filter('.rail [data-section-current]'));
+    }
+
     public function testACollapsedRailStillNamesEachItem(): void
     {
         $item = $this->browser->request('GET', '/reviews')->filter('.rail a.nav[data-k="projects"]');

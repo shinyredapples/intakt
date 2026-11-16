@@ -200,7 +200,16 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         self::assertStringContainsString('calc(var(--bar) + var(--s16) + env(safe-area-inset-bottom))', $rules['.toast'] ?? '');
     }
 
-    private function railWithHistory(string $currentRoute): Crawler
+    public function testTheMoreItemAndItsPageAreCurrentOnAPageInItsSection(): void
+    {
+        $rail = $this->railWithHistory(DashboardRoutes::SHOW_REVIEW, currentSection: 'history');
+
+        self::assertSame('page', $rail->filter('.rail .nav.more')->attr('aria-current'));
+        self::assertSame('page', $rail->filter('#more a')->attr('aria-current'));
+        self::assertCount(0, $rail->filter('.rail a.nav[data-k="projects"][aria-current]'));
+    }
+
+    private function railWithHistory(string $currentRoute, ?string $currentSection = null): Crawler
     {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
@@ -210,6 +219,7 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
             'rail_items' => [['key' => 'projects', 'label' => 'Projects', 'icon' => 'projects', 'route' => DashboardRoutes::LIST_PROJECTS]],
             'more_items' => [['key' => 'history', 'label' => 'History', 'icon' => 'clock', 'route' => DashboardRoutes::LIST_REVIEWS]],
             'current_route' => $currentRoute,
+            'current_section' => $currentSection,
         ]));
     }
 
