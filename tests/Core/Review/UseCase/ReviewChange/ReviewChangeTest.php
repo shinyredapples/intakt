@@ -156,6 +156,13 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
     }
 
+    public function testAReviewerThatCouldNotReachItsEndpointIsNamedWithThatCauseInPlainWords(): void
+    {
+        $review = $this->reviewWith(new UnreachableForRole('Look at part 1.'));
+
+        self::assertSame(['role-1 reviewer failed, the model endpoint could not be reached'], $review->reasons);
+    }
+
     public function testAFailedReviewerBesideOneAskingForChangesGivesChangesAndStillNamesTheFailure(): void
     {
         $changes = new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], []);
