@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
-use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\Fence;
