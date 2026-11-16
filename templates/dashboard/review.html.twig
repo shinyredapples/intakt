@@ -105,9 +105,12 @@
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
-            {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
+            {% set outcome = reviewed.reviewOutcome %}
+            {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}{% endif %}
+            {# Plain muted text, because the outcome is the headline and the process state only says where the round stands. #}
+            <span class="muted small state-judged">{{ reviewed.state.value|capitalize }}</span>
             {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. That count stays unlabeled: it counts marks, not findings, and no figure is added here. #}
-            <span class="muted small">{{ reviewed.outcome is not null ? reviewed.outcome.value : 'outcome not recorded' }}, {% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
+            <span class="muted small">{% if outcome is null %}outcome not recorded, {% endif %}{% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
             {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
             <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
             {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}

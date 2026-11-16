@@ -68,17 +68,46 @@ final class SearchControllerTest extends DashboardPageTestCase
         self::assertSame('Project, 1 review round', $this->rowsOf($crawler, 'Projects')->filter('.sub')->text());
     }
 
-    public function testAReviewResultNamesItsProjectAndStateAndLinksToItsPage(): void
+    public function testAReviewResultIsTitledByItsChangeAndRoundAndNamesItsProjectAndState(): void
     {
-        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->startRoundOf('sample-change', 'round-1', 2);
         $this->ledger->judgeRound('round-1');
 
         $crawler = $this->browser->request('GET', '/search?q=round-1');
 
         $row = $this->rowsOf($crawler, 'Reviews');
-        self::assertSame('Round round-1', $row->filter('.lbl')->text());
+        self::assertSame('sample-change, round 2', $row->filter('.lbl')->text());
         self::assertSame('alpha, judged', $row->filter('.sub')->text());
+    }
+
+    public function testTheWholeReviewRowIsTheLinkToItsPage(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 2);
+
+        $row = $this->rowsOf($this->browser->request('GET', '/search?q=sample'), 'Reviews');
+
+        self::assertSame('a', $row->nodeName());
         self::assertSame('/reviews/round-1', $row->attr('href'));
+        self::assertCount(0, $row->filter('.res a, .res button'));
+    }
+
+    public function testAReviewRowShowsItsRoundIdAsACopyableDetailAndNotInItsTitle(): void
+    {
+        $this->ledger->startRoundOf('sample-change', '0b7e2c1a-5d3f-4e8a-9c6b-2f1d0a9e8b7c', 2);
+
+        $row = $this->rowsOf($this->browser->request('GET', '/search?q=sample'), 'Reviews');
+
+        self::assertSame('0b7e2c1a-5d3f-4e8a-9c6b-2f1d0a9e8b7c', $row->filter('.round-id code')->text());
+        self::assertStringNotContainsString('0b7e2c1a', $row->filter('.lbl')->text());
+    }
+
+    public function testAResultThatIsNoReviewShowsNoRoundId(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/search?q=alpha');
+
+        self::assertCount(0, $this->rowsOf($crawler, 'Projects')->filter('.round-id'));
     }
 
     public function testEveryWordOfTheQueryMustMatch(): void
@@ -89,7 +118,7 @@ final class SearchControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/search?q=beta+progress');
 
         self::assertSame(['Reviews'], $this->groupsOf($crawler));
-        self::assertSame(['Round round-2'], $this->rowsOf($crawler, 'Reviews')->filter('.lbl')->each(static fn (Crawler $title): string => $title->text()));
+        self::assertSame(['round-2'], $this->rowsOf($crawler, 'Reviews')->filter('.round-id code')->each(static fn (Crawler $id): string => $id->text()));
     }
 
     public function testAPageIsFoundByItsName(): void
@@ -154,14 +183,14 @@ final class SearchControllerTest extends DashboardPageTestCase
     public function testAnEmptyQueryShowsTheNewestRoundsAsRecentThenTheActions(): void
     {
         foreach (range(1, 6) as $number) {
-            $this->ledger->startRound('round-'.$number, 'alpha');
+            $this->ledger->startRoundOf('sample-change', 'round-'.$number, $number);
         }
 
         $crawler = $this->browser->request('GET', '/search?q=+');
 
         self::assertSame(['Recent', 'Actions'], $this->groupsOf($crawler));
         self::assertSame(
-            ['Round round-6', 'Round round-5', 'Round round-4', 'Round round-3', 'Round round-2'],
+            ['sample-change, round 6', 'sample-change, round 5', 'sample-change, round 4', 'sample-change, round 3', 'sample-change, round 2'],
             $this->rowsOf($crawler, 'Recent')->filter('.lbl')->each(static fn (Crawler $title): string => $title->text()),
         );
     }
