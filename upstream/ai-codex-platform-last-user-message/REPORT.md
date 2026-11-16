@@ -1,6 +1,6 @@
 # [Codex] Every user message but the last is dropped from the prompt
 
-Draft, not posted. Versions: `symfony/ai-codex-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12.
+Fixed by symfony/ai#2891 (merged 2026-11-06). Versions: `symfony/ai-codex-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12.
 
 ## What happens
 
@@ -23,12 +23,7 @@ Every user message in the prompt, in order (for example separated by a blank lin
 
 ## Upstream status
 
-Checked on 2026-11-02.
-
-- **Pinned versions:** still fails. `php bin/console intakt:upstream:run` at `symfony/ai-*` v1.0.0-BETA1: `still fails  ai-codex-platform-last-user-message`.
-- **Development branch:** still fails. The same run in a scratch copy with every `symfony/ai-*` package at `main` (`symfony/ai-codex-platform` 937734bb71b9, `symfony/ai-platform` 17c452fa350f): `still fails  ai-codex-platform-last-user-message`.
-- **Existing issue or pull request:** symfony/ai#2544 (open, "[Platform] ClaudeCode and Codex bridges drop conversation history; support multi-turn via CLI session resume"), the same bug: it names the `MessageBagNormalizer` of both CLI bridges keeping only the system prompt and the last user message, and asks for session resume as the fix. Related, not the same: #2545 (open RFC, persistent-process clients for coding CLIs).
-- **Searches** (`symfony/ai` issues and pull requests, open and closed): `Codex MessageBagNormalizer`, `Codex "user message"`, `multi-turn`, `label:Platform Codex`.
-- **Decision:** `already reported` (https://github.com/symfony/ai/issues/2544). This reproduction adds a case the issue does not show: several user messages in one turn, with no assistant message between them.
-- **Owner review (2026-11-03, `main` 17d320e7):** point 3 of the proposal in #2544 ("the MessageBagNormalizer can stay as it is") is not enough: with resume, two user messages after the last assistant message still lose the first, and one `Message::ofUser('a', 'b')` keeps only its first text block, in both the Codex and the ClaudeCode normalizer. `reproduce.php` gained the multi-block case (fails at the pinned versions).
-- **Status:** `already reported`; a comment for #2544 is ready in `COMMENT.md`.
+- **Checked:** 2026-11-14. Ran against the default branch `main` of `symfony/ai` (c4cb5da): the reproduction passes. The newest release, v1.0.0-BETA1, still fails: `php bin/console intakt:upstream:run` prints `still fails  ai-codex-platform-last-user-message`.
+- **Existing issue or pull request:** symfony/ai#2544 (open, "[Platform] ClaudeCode and Codex bridges drop conversation history; support multi-turn via CLI session resume") stays open as the session-resume feature; it is not this bug.
+- **Pull requests and commits:** fixed upstream by symfony/ai#2891 (merged 2026-11-06), which keeps every user message and every text block in the Codex prompt.
+- **Status:** `fixed upstream` on the development branch by #2891; the first release after v1.0.0-BETA1 will carry it, and none is out yet. Once it is: record that release here, and revisit `src/Core/Ai/Infrastructure/CodexMessageBagNormalizer.php`.

@@ -89,6 +89,8 @@ if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     rebuild_container
     php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
     rebuild_container
+    # Only when compose runs this service, because a plain docker run of the image with a sample (the CI smoke start) is not the compose demo and the command refuses there.
+    [[ -z ${INTAKT_COMPOSE_SERVICE:-} ]] || php bin/console intakt:demo:create
     print_provider_notes_once
     # Set last, so the health check is green only once the sample is seeded; cleared above on every start, so a restart is not healthy before the seed has run again.
     touch "$READY_MARK"

@@ -19,12 +19,19 @@ use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ReadAnswer;
+use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
@@ -57,6 +64,10 @@ use Twig\TwigFunction;
 #[UsesClass(ToolCallCount::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ComponentOptions::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(ReadFinding::class)]
+#[UsesClass(ReadAnswer::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundPayloads::class)]
@@ -177,6 +188,41 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $data);
     }
 
+    public function testAReadAnswerPublishesItsVerdictAndEachFindingsSeverityFileLineAndTitleAndNoJson(): void
+    {
+        $this->updates()->answerRead(Uuid::fromString(self::ROUND), self::REVIEWER, $this->readAnswer('Discount boundary regression'));
+
+        $data = $this->published[0]->getData();
+        self::assertSame(['review/rounds/'.self::ROUND], $this->published[0]->getTopics());
+        self::assertStringContainsString('Verdict: changes', $data);
+        self::assertStringContainsString('P1 src/Cart.php:12 Discount boundary regression', $data);
+        self::assertStringContainsString(sprintf('target="reviewer-%s-text"', self::REVIEWER), $data);
+        self::assertStringNotContainsString('{"', $data);
+        self::assertStringNotContainsString('"findings"', $data);
+    }
+
+    public function testAnUnreadableAnswerPublishesOnlyTheCouldNotBeReadMarker(): void
+    {
+        $this->updates()->answerRead(Uuid::fromString(self::ROUND), self::REVIEWER, ReadAnswer::unreadable());
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('The answer could not be read.', $this->published[0]->getData());
+        self::assertStringNotContainsString('Verdict:', $this->published[0]->getData());
+    }
+
+    public function testAFindingTitleIsEscapedInTheTurboStream(): void
+    {
+        $this->updates()->answerRead(Uuid::fromString(self::ROUND), self::REVIEWER, $this->readAnswer('</template><script>x</script>'));
+
+        self::assertStringContainsString('&lt;/template&gt;&lt;script&gt;x&lt;/script&gt;', $this->published[0]->getData());
+        self::assertStringNotContainsString('<script>', $this->published[0]->getData());
+    }
+
+    private function readAnswer(string $title): ReadAnswer
+    {
+        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
+    }
+
     public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedOnceByTheLiveUpdates(): void
     {
         $refusal = new RuntimeException('the hub refused the update');
@@ -213,7 +259,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $row = 'round-'.self::ROUND.'-reviewer-'.self::REVIEWER;
 
         self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state">stopped</td>', $row, $row), $data);
-        self::assertStringContainsString(sprintf('target="%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
+        self::assertStringContainsString(sprintf('targets="#%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
     }
 
     public function testAHubThatRefusesAStoppedReviewerIsLoggedAndDoesNotFailTheCaller(): void

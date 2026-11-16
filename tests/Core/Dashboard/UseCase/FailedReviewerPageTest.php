@@ -66,7 +66,8 @@ final class FailedReviewerPageTest extends WebTestCase
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
 
         self::assertResponseIsSuccessful();
-        self::assertSame([['role-1', 'failed', '', 'stopped at its output limit'], ['role-2', 'verdict', 'approve', '']], $this->reviewerRows($page));
+        self::assertSame([['role-1', 'standard-model', 'failed: stopped at its output limit'], ['role-2', 'standard-model', 'approve']], $this->reviewerRows($page));
+        self::assertSame(['failed: stopped at its output limit'], $page->filter('table.reviewers .failed')->each(static fn (Crawler $cause): string => $cause->text()));
         self::assertSame(
             'Outcome: '.$review->decision->value.', decided by the quorum policy all over all 2 reviewers. 1 of 2 reviewers failed, and a failed reviewer gives no approval.',
             $page->filter('#round-'.$review->roundId.'-outcome')->text(),
@@ -123,7 +124,7 @@ final class FailedReviewerPageTest extends WebTestCase
      */
     private function reviewerRows(Crawler $page): array
     {
-        $rows = $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $row): array => [$row->filter('td')->eq(0)->text(), $row->filter('td')->eq(2)->text(), $row->filter('td')->eq(3)->text(), $row->filter('td')->eq(5)->text()]);
+        $rows = $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $row): array => [$row->filter('td')->eq(0)->text(), $row->filter('td')->eq(1)->text(), $row->filter('td')->eq(2)->text()]);
         sort($rows);
 
         return $rows;

@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\ReadRound;
 
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
@@ -58,6 +59,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundFindingsResource::class)]
 #[CoversClass(ReadableRounds::class)]
 #[UsesClass(RoundLedgerReading::class)]
+#[UsesClass(DroppedFinding::class)]
 #[UsesClass(StoredVerdicts::class)]
 #[UsesClass(PanelVerdict::class)]
 #[UsesClass(ReviewRound::class)]
@@ -103,6 +105,37 @@ final class ReadRoundToolsTest extends KernelTestCase
 
         self::assertSame('complete', $status->state);
         self::assertSame(['verdict', 'verdict'], array_map(static fn (ReviewerStatus $reviewer): string => $reviewer->state, $status->reviewers));
+    }
+
+    public function testTheStatusOfAJudgedRoundListsAFindingQuotingANameAbsentFromTheChangeAsDroppedWithItsReason(): void
+    {
+        $round = $this->judgedRoundReporting([$this->quoting('A', '`grepName` is not defined.'), $this->quoting('B', '`old` is still read.')]);
+
+        $status = $this->statusTool()($round->id()->toRfc4122());
+
+        self::assertSame('judged', $status->state);
+        self::assertEquals([new DroppedFinding('F1', Severity::P1, '`grepName` is not defined.', 'src/Thing.php', 1, 'none of its 1 quoted code fragments is in the change')], $status->dropped);
+    }
+
+    public function testAFindingWithoutAQuoteAndASymbolAbsentFromTheChangeIsNotListedAsDropped(): void
+    {
+        $round = $this->judgedRoundReporting([new Finding('A', Severity::P1, 'src/Thing.php', 1, 'grepName', 'The command is built from user input.', FixableBy::Builder, false, null, null)]);
+
+        $status = $this->statusTool()($round->id()->toRfc4122());
+
+        self::assertSame([], $status->dropped);
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $this->actList()($round->id()->toRfc4122())->act));
+    }
+
+    public function testTheStatusOfARoundTheJudgeHasNotAnsweredListsNoDroppedFindings(): void
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->quoting('A', '`grepName` is not defined.')], [], [])]));
+
+        $status = $this->statusTool()($round->id()->toRfc4122());
+
+        self::assertSame('complete', $status->state);
+        self::assertSame([], $status->dropped);
     }
 
     public function testTheVerdictsOfAReviewedRoundCarryEachReviewersDecision(): void
@@ -270,14 +303,31 @@ final class ReadRoundToolsTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
+    /**
+     * @param list<Finding> $findings
+     */
+    private function judgedRoundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))(new JudgeRound($round->id()->toRfc4122()));
+
+        return $this->fixture->round($round->id()->toRfc4122());
+    }
+
     private function statusTool(): RoundStatusTool
     {
-        return new RoundStatusTool($this->readable());
+        return new RoundStatusTool($this->readable(), $this->ledgerReading());
     }
 
     private function actList(): RoundActListTool
     {
-        return new RoundActListTool($this->readable(), $this->fixture->findingStore(), new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([])));
+        return new RoundActListTool($this->readable(), $this->fixture->findingStore(), $this->ledgerReading());
+    }
+
+    private function ledgerReading(): RoundLedgerReading
+    {
+        return new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]));
     }
 
     private function findingsResource(): RoundFindingsResource
@@ -300,6 +350,12 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function findingAt(string $id): Finding
     {
         return new Finding($id, Severity::P1, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    // At one place, so a finding that is dropped would otherwise be merged with the other.
+    private function quoting(string $id, string $text): Finding
+    {
+        return new Finding($id, Severity::P1, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
     }
 
     private function finding(string $id, Severity $severity): Finding
