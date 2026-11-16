@@ -52,7 +52,32 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
         $line = $this->rendered(new Headline(new WhoIsWorking([$running]), [], 1));
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change. Nothing needs you.', $line->text());
-        self::assertCount(0, $line->filter('.count, a'));
+        self::assertCount(0, $line->filter('.count'));
+    }
+
+    public function testTheLeadLinksToTheReviewOfTheRunningRound(): void
+    {
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3'), $this->review('round-5', '5')]), [], 2));
+
+        $link = $line->filter('a');
+
+        self::assertSame(['/reviews/round-3'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of sample. The Code reviewers are reviewing 2 changes.', $link->text());
+    }
+
+    public function testTheLeadLinkAndTheSeeWhatLinkStandSideBySide(): void
+    {
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3')]), [$this->review('round-7', '7')], 2));
+
+        self::assertSame(['/reviews/round-3', '/reviews/round-7'], $line->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertCount(0, $line->filter('a a'));
+    }
+
+    public function testTheLeadHasNoLinkWhenNothingIsRunning(): void
+    {
+        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 1));
+
+        self::assertCount(0, $line->filter('a'));
     }
 
     public function testARunningChangeIsNamedOnWideScreensAndCountedOnPhones(): void
@@ -69,7 +94,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change. 1 needs you: see what.', $line->text());
         self::assertSame(['1'], $line->filter('.count.needs')->each(static fn (Crawler $count): string => $count->text()));
-        self::assertSame('/reviews/round-7', $line->filter('a')->attr('href'));
+        self::assertSame('/reviews/round-7', $line->filter('a')->last()->attr('href'));
     }
 
     public function testWithNothingRunningTheHeadlineHasOneOpening(): void

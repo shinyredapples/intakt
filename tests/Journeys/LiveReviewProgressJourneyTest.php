@@ -47,7 +47,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $running = $this->step('open the running round', fn (): Crawler => $this->openTheRunningRound($round));
         $updates = $this->step('step the round until the judge has ruled', fn (): array => $this->stepTheRound($round));
         $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
-        $this->step('read the board headline pushed once a reviewer started', $this->readThePushedHeadline(...));
+        $this->step('read the board headline pushed once a reviewer started', fn () => $this->readThePushedHeadline($round));
         $this->step('open the judged round', fn () => $this->openTheJudgedRound($round));
         $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
     }
@@ -76,13 +76,14 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         return $round;
     }
 
-    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running.
-    private function readThePushedHeadline(): void
+    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened.
+    private function readThePushedHeadline(string $round): void
     {
         $lines = $this->pushedHeadlines();
 
         self::assertNotSame([], $lines);
-        self::assertMatchesRegularExpression(self::REVIEWING, $lines[0]);
+        self::assertMatchesRegularExpression(self::REVIEWING, $lines[0]->text());
+        self::assertSame(['/reviews/'.$round], $lines[0]->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
     }
 
     // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
@@ -91,17 +92,17 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $line = $this->visit('/')->filter('#board-headline')->text();
 
         self::assertSame('Nothing is running. Nothing needs you.', $line);
-        self::assertSame($line, array_last($this->pushedHeadlines()));
+        self::assertSame($line, array_last($this->pushedHeadlines())?->text());
     }
 
     /**
-     * @return list<string>
+     * @return list<Crawler>
      */
     private function pushedHeadlines(): array
     {
         $headlines = array_filter($this->publishedUpdates(), static fn (Update $update): bool => in_array(DashboardTopics::SHELL, $update->getTopics(), true) && str_contains($update->getData(), self::HEADLINE_TARGET));
 
-        return array_values(array_map(static fn (Update $update): string => new Crawler($update->getData())->filter('template')->text(), $headlines));
+        return array_values(array_map(static fn (Update $update): Crawler => new Crawler($update->getData())->filter('turbo-stream[target="board-headline"] template'), $headlines));
     }
 
     private function openTheRunningRound(string $round): Crawler
