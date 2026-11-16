@@ -30,6 +30,7 @@ use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -75,6 +76,7 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(ReviewerStopped::class)]
 #[UsesClass(CatchUpOwed::class)]
 #[UsesClass(JudgeDone::class)]
+#[UsesClass(DroppedFinding::class)]
 #[UsesClass(JudgeDoneFinding::class)]
 #[UsesClass(UsageStarted::class)]
 #[UsesClass(UsageSettled::class)]
@@ -378,6 +380,41 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.')->calledBy(JudgeCall::Act), new RoundFinding('F2', 'P3', 'Later.')->calledBy(JudgeCall::FollowUp)], $review?->rounds[0]->findings);
+    }
+
+    public function testAJudgedRoundReadsBackTheFindingsDroppedBeforeTheJudgeWithTheirReasons(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], [], [new DroppedFinding('F1', Severity::P2, 'Call `ghost`.', 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')])),
+        );
+
+        self::assertEquals([new RoundFinding('F1', 'P2', 'Call `ghost`.', [], 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')], $review?->rounds[0]->dropped);
+        self::assertSame([], $review->rounds[0]->findings);
+    }
+
+    public function testAJudgeRowWrittenBeforeDropReasonsWereRecordedReadsWithNoDroppedFindings(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1","text":"Broken."}]}'),
+        );
+
+        self::assertSame([], $review?->rounds[0]->dropped);
+    }
+
+    public function testAnUnreadableDroppedEntryIsLeftOutAndTheRoundStaysJudged(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":[],"follow_ups":[],"findings":[],"dropped":[{"id":"F1"},{"id":"F2","severity":"P2","text":"T.","file":null,"line":null,"reason":"why"}]}'),
+        );
+
+        self::assertTrue($review?->rounds[0]->isJudged());
+        self::assertSame(['F2'], array_map(static fn (RoundFinding $finding): string => $finding->id, $review->rounds[0]->dropped));
     }
 
     public function testAJudgedFindingInTheReadModelNamesItsFileAndLine(): void

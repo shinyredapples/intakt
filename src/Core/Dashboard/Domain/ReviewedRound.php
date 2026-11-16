@@ -28,6 +28,9 @@ final readonly class ReviewedRound
     /** @var list<RoundFinding> */
     public array $findings;
 
+    /** @var list<RoundFinding> */
+    public array $dropped;
+
     public bool $findingTextRecorded;
     public ReviewState $state;
     public TokenFigures $tokens;
@@ -52,6 +55,7 @@ final readonly class ReviewedRound
         $this->source = $place->source;
         $this->outcomes = [];
         $this->findings = [];
+        $this->dropped = [];
         $this->findingTextRecorded = true;
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenFigures::none();
@@ -126,6 +130,14 @@ final readonly class ReviewedRound
     public function judgedFromMarksOnly(array $marked, DateTimeImmutable $judgedAt): self
     {
         return clone ($this->judgedWith($marked, $judgedAt), ['findingTextRecorded' => false]);
+    }
+
+    /**
+     * @param list<RoundFinding> $dropped
+     */
+    public function withDropped(array $dropped): self
+    {
+        return clone ($this, ['dropped' => $dropped]);
     }
 
     public function withTokens(TokenFigures $tokens): self

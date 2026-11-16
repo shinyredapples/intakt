@@ -119,6 +119,36 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
     /**
      * @return list<list<string>>
      */
+    public function testAFindingQuotingANameAbsentFromTheChangeIsShownAsDroppedWithItsReason(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName` first <b>now</b>.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([['P2', 'F1', 'Call ghostName first <b>now</b>.', 'src/A.php:3', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->cardsOf($crawler->filter('#round-round-1 [data-dropped]')));
+    }
+
+    public function testARoundWhoseOnlyFindingWasDroppedDoesNotSayTheReviewersReportedNone(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeWithOnlyADroppedFinding('round-1', 'Call `ghostName`.', 'none of its 1 quoted code fragments is in the change');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1-judged')->text());
+    }
+
+    public function testARoundWithNoDroppedFindingShowsNoDroppedCard(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('[data-dropped]'));
+    }
+
     private function cardsOf(Crawler $cards): array
     {
         return $cards->each(static fn (Crawler $card): array => [
