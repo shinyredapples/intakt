@@ -8,7 +8,6 @@ use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase as SymfonyWebTestCase;
 use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\Clock\MockClock;
 
 // A base of its own, because the extension can only warn and #612 (D3) asks that the web test itself fails.
 abstract class WebTestCase extends SymfonyWebTestCase
@@ -28,7 +27,6 @@ abstract class WebTestCase extends SymfonyWebTestCase
     protected static function clockAt(string $moment): void
     {
         $clock = self::getContainer()->get(ClockInterface::class);
-        assert($clock instanceof MockClock);
         $clock->modify($moment);
     }
 }
