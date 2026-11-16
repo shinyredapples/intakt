@@ -124,7 +124,7 @@ final class LedgerRounds
         return $reviews;
     }
 
-    // In the ledger order of each round's first readable start, the order the review list sorts by.
+    // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round.
     /**
      * @return list<ReviewedRound>
      */
