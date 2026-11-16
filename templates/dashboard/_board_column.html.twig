@@ -1,7 +1,7 @@
 {# One board column, shared by the page and by the columns LiveBoardHeadline pushes, so a pushed column never differs from one on a page loaded after it. #}
 {% set cards = board.cardsIn(column) %}
 {% set needs = column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') %}
-{% set folds = column.startsCollapsed %}
+{% set folds = board.startsCollapsed(column) %}
 {% set slug = column.value|lower|replace({' ': '-'}) %}
 {% set count = board.countOf(column) %}
 {% set crowded = cards|length > limit %}

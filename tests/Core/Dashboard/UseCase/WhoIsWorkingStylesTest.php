@@ -33,6 +33,16 @@ final class WhoIsWorkingStylesTest extends TestCase
         self::assertMatchesRegularExpression('/rotate\(180deg\)/', $this->rule('details[open] > summary .chev', $this->sheet()));
     }
 
+    // A tinted line with a hover would look like the strip that opens, which it is not.
+    public function testTheNobodyIsWorkingLineIsMutedWithoutTintAtTheSummarysHeight(): void
+    {
+        $rule = $this->rule('.working-none', $this->sheet());
+
+        self::assertMatchesRegularExpression('/min-height:\s*44px;.*color:\s*var\(--muted\)/s', $rule);
+        self::assertStringNotContainsString('background', $rule);
+        self::assertStringNotContainsString('.working-none:hover', $this->sheet());
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');

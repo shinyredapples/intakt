@@ -229,8 +229,10 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('needs', (string) $count->attr('class'));
     }
 
-    public function testOnlyBacklogAndDoneStartCollapsed(): void
+    public function testOnlyBacklogAndDoneStartCollapsedWhileAReviewRuns(): void
     {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(['col-backlog', 'col-done'], $page->filter('.board > section.col.collapsed')->each(static fn (Crawler $column): string => (string) $column->attr('id')));
@@ -238,10 +240,23 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(2, $page->filter('.board .col-hide'));
     }
 
+    public function testTheFinishedReviewsCardIsVisibleOnArrivalWhenNothingElseIsOnTheBoard(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $done = $this->column($this->browser->request('GET', '/'), 'Done');
+
+        self::assertStringNotContainsString('collapsed', (string) $done->attr('class'));
+        self::assertCount(0, $done->filter('.col-fold, .col-hide'));
+        self::assertSame('/reviews/round-1', $done->filter('.col-cards a.card')->attr('href'));
+    }
+
     public function testACollapsedColumnsStripShowsItsNameAndCountSideBySide(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('43', 'round-2', 1);
 
         $strip = $this->column($this->browser->request('GET', '/'), 'Done')->filter('button.col-fold');
 
@@ -254,6 +269,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('43', 'round-2', 1);
 
         $page = $this->browser->request('GET', '/');
 
@@ -265,6 +281,8 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
     public function testACollapsedColumnsStripSaysItIsCollapsedAndControlsTheColumnsCards(): void
     {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
         $column = $this->column($this->browser->request('GET', '/'), 'Done');
         $strip = $column->filter('button.col-fold');
 
@@ -447,20 +465,28 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('2 working', $summary->text());
     }
 
-    public function testABoardWithNobodyRunningSaysNobodyIsWorking(): void
+    public function testABoardWithNobodyRunningSaysNobodyIsWorkingInAPlainLineAboveTheColumns(): void
     {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
         $page = $this->browser->request('GET', '/');
 
-        self::assertSame('Nobody is working yet', $page->filter('.working .w-sum')->text());
-        self::assertCount(0, $page->filter('.working .lane'));
+        self::assertSame('Nobody is working', $page->filter('p.working-none')->text());
+        self::assertCount(0, $page->filter('details.working, .working summary, .working .chev'));
+        self::assertCount(1, $page->filter('p.working-none + section .board-wrap > .board'));
     }
 
-    public function testTheSummaryIsAClosedDisclosureWithAChevronAboveTheColumns(): void
+    public function testWhileAReviewerRunsTheSummaryIsAClosedDisclosureWithAChevronAboveTheColumns(): void
     {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
         $page = $this->browser->request('GET', '/');
 
         self::assertCount(1, $page->filter('details.working:not([open]) > summary svg.chev'));
-        self::assertCount(1, $page->filter('details.working + section .board'));
+        self::assertCount(1, $page->filter('details.working + section .board-wrap > .board'));
+        self::assertCount(0, $page->filter('.working-none'));
     }
 
     public function testTheBoardLinksToTheReviewListBehindIt(): void
@@ -486,8 +512,8 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(['alpha', 'beta'], $page->filter('.page-head ~ .banner.broken')->each(static fn (Crawler $banner): ?string => $banner->attr('data-project')));
-        self::assertCount(1, $page->filter('.banner + details.working'));
-        self::assertCount(0, $page->filter('details.working ~ .banner'));
+        self::assertCount(1, $page->filter('.banner + .working-none'));
+        self::assertCount(0, $page->filter('.working-none ~ .banner'));
     }
 
     public function testAMainThatFailsToBootIsOneBrokenBannerOfItsProject(): void

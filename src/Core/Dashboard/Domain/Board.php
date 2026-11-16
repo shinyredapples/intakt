@@ -41,9 +41,24 @@ final readonly class Board
         return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards));
     }
 
+    // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.
+    public function startsCollapsed(BoardColumn $column): bool
+    {
+        if (BoardColumn::Done === $column && $this->everyColumnButDoneIsEmpty()) {
+            return false;
+        }
+
+        return $column->startsCollapsed();
+    }
+
     // Every card of every project, so the page limit on the cards shown never lowers the count.
     public function countOf(BoardColumn $column): int
     {
         return count($this->cardsIn($column));
+    }
+
+    private function everyColumnButDoneIsEmpty(): bool
+    {
+        return array_all(BoardColumn::cases(), fn (BoardColumn $column): bool => BoardColumn::Done === $column || 0 === $this->countOf($column));
     }
 }
