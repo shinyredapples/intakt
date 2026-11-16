@@ -144,16 +144,22 @@ restart_ended() {
     done
 }
 
-# Asked from the poll below instead of waited for, so ended children still start again and the TERM trap still runs while the server comes up.
+# Bash runs the TERM trap only after a foreground command ends, so a call that takes seconds would add them to the 8 s grace of stop_all and pass Docker's 10 s stop timeout; as a job it is waited for, because wait returns at once on a trapped signal, and stop_all ends it with the other jobs.
+as_job() {
+    "$@" &
+    wait "$!"
+}
+
+# Asked from the poll below instead of waited for before it, so ended children still start again while the server comes up.
 # Printed only once the health check and the dashboard answer, because a command copied earlier failed, and last, because the server's start output buried it.
-# Two seconds at most per call, because a stuck server would otherwise hold the poll and with it the stop inside Docker's 10 s timeout.
+# Two seconds at most per call, because a stuck server would otherwise hold the poll and with it the restart of an ended consumer; the stop does not wait for a call, because each runs as a job.
 review_shown=
 show_sample_review_once() {
     [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} && -z $review_shown ]] || return 0
-    curl --fail --silent --max-time 2 --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics" || return 0
-    curl --fail --silent --max-time 2 --output /dev/null "http://localhost:${DASHBOARD_PORT}/" || return 0
+    as_job curl --fail --silent --max-time 2 --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics" || return 0
+    as_job curl --fail --silent --max-time 2 --output /dev/null "http://localhost:${DASHBOARD_PORT}/" || return 0
     review_shown=1
-    php bin/console intakt:sample:show "$INTAKT_SAMPLE_REPOSITORY" || echo "intakt: could not print the review command; run php bin/console intakt:sample:show $INTAKT_SAMPLE_REPOSITORY" >&2
+    as_job php bin/console intakt:sample:show "$INTAKT_SAMPLE_REPOSITORY" || echo "intakt: could not print the review command; run php bin/console intakt:sample:show $INTAKT_SAMPLE_REPOSITORY" >&2
 }
 
 trap 'stop_all 0' TERM INT
