@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\ListReviews;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\ReviewRow;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
+use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
@@ -24,6 +25,7 @@ final readonly class ListReviewsController
         private LedgerFailingHeads $failingHeads,
         private LivePageRendering $pages,
         private ForgeBudgets $forgeBudgets,
+        private FilterProjects $filterProjects,
         private ClockInterface $clock,
     ) {
     }
@@ -37,7 +39,14 @@ final readonly class ListReviewsController
             'failing' => $this->failingHeads->now(),
             'forge_budgets' => $this->forgeBudgets->thisHour(),
             'linked_project' => $project,
+            'project_trail' => $this->listed($project),
         ]));
+    }
+
+    // A name the install does not list is no option of the filter, which then shows every project, so no breadcrumb or rail mark may name it.
+    private function listed(?string $project): ?string
+    {
+        return in_array($project, $this->filterProjects->names(), true) ? $project : null;
     }
 
     /**

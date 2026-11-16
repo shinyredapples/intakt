@@ -55,7 +55,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame('Live log of round 1', $crawler->filter('.task-grid > aside.log-pane h2')->text());
-        self::assertSame('correctness (standard) live', $crawler->filter('.log-pane #reviewer-round-1-correctness h3')->text());
+        self::assertSame('correctness (standard tier, model not recorded) live', $crawler->filter('.log-pane #reviewer-round-1-correctness h3')->text());
     }
 
     public function testThePlainPageStillShowsTheSessionSummaryItWasLoadedWith(): void

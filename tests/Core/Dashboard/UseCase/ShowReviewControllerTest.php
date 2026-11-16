@@ -754,8 +754,19 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertSelectorTextContains('.state-block h2', 'Now: round 2 in review');
-        self::assertSame(['correctness (standard): verdict, approve', 'security (standard): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSame(['correctness (standard tier, model not recorded): verdict, approve', 'security (standard tier, model not recorded): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
         self::assertSelectorTextContains('.state-block', 'The judge has not judged this round yet.');
+    }
+
+    public function testTheCurrentStateBlockAndTheLiveLogNameEachReviewerByRoleAndModelLikeTheTable(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'Kimi K3');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['correctness (Kimi K3): running'], $crawler->filter('.state-block .sb-list li')->each(static fn (Crawler $item): string => $item->text()));
+        self::assertSame(['correctness (Kimi K3) live'], $crawler->filter('.log-pane .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
     }
 
     public function testAnOpenFindingLinksToItsRowInTheTimeline(): void
@@ -801,7 +812,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertCount(2, $crawler->filter('.task-grid > .tl-pane .round'));
         self::assertSame('Live log of round 2', $crawler->filter('.task-grid > aside.log-pane h2')->text());
-        self::assertSame(['correctness (standard) live', 'security (standard) live'], $crawler->filter('.log-pane #round-round-2-live .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
+        self::assertSame(['correctness (standard tier, model not recorded) live', 'security (standard tier, model not recorded) live'], $crawler->filter('.log-pane #round-round-2-live .live h3')->each(static fn (Crawler $heading): string => $heading->text()));
         self::assertCount(0, $crawler->filter('.tl-pane .live'));
     }
 
