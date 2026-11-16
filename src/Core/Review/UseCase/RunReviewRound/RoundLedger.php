@@ -125,7 +125,7 @@ final readonly class RoundLedger
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged), $shown);
+        return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line), $shown);
     }
 
     /**

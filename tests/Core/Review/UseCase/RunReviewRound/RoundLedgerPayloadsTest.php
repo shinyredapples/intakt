@@ -117,7 +117,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[]},{"id":"f2","severity":"P3","text":"A nit.","merged":[]}]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null}]}', $this->written($done));
     }
 
     public function testADoneJudgeRecordsTwoActFindingsAtOnePlaceAsTheActEntryThatNamesTheMergedId(): void
@@ -132,10 +132,17 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $payload = $ledger->payloads()[0];
         self::assertSame(['F1', 'F2'], $payload['act']);
         self::assertSame([
-            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2']],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => []],
-            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => []],
+            ['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'merged' => ['F2'], 'file' => 'src/A.php', 'line' => 7],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of F2.', 'merged' => [], 'file' => 'src/A.php', 'line' => 7],
+            ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of F3.', 'merged' => [], 'file' => 'src/A.php', 'line' => 8],
         ], $payload['findings']);
+    }
+
+    public function testAJudgeRowWrittenWithoutFileAndLineStillReadsWithBothNull(): void
+    {
+        $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug."}', JudgeDoneFinding::class, 'json');
+
+        self::assertSame([null, null], [$finding->file, $finding->line]);
     }
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
