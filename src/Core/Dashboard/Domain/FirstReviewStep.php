@@ -44,7 +44,7 @@ final readonly class FirstReviewStep
         return $this->review?->latest()->round;
     }
 
-    // Bowing only once the latest round is approved: state() is Done for any review, an unfinished or sent-back one included.
+    // Not derived from state(), because that is Done for any review, an unfinished or sent-back one included.
     public function mascot(): MascotPose
     {
         return Decision::Approve === $this->review?->latest()->outcome ? MascotPose::Bowing : MascotPose::Conducting;
