@@ -64,14 +64,14 @@ final class ReviewSkillMatchesServerTest extends KernelTestCase
     }
 
     /**
-     * @return array<string, list<string>> argument names of each tool, the nested ones of the `review` object included
+     * @return array<string, list<string>>
      */
     private function serverTools(): array
     {
         $tools = [];
 
-        foreach ($this->listedTools() as $tool) {
-            $tools[$tool['name']] = $this->argumentNames($tool['inputSchema'] ?? []);
+        foreach ($this->listedTools() as $name => $schema) {
+            $tools[$name] = $this->argumentNames($schema);
         }
 
         return $tools;
@@ -84,17 +84,18 @@ final class ReviewSkillMatchesServerTest extends KernelTestCase
     {
         $required = [];
 
-        foreach ($this->listedTools() as $tool) {
-            $schema = $tool['inputSchema'] ?? [];
-            $inner = $schema['properties']['review'] ?? null;
-            $required[$tool['name']] = [...$schema['required'] ?? [], ...is_array($inner) ? $inner['required'] ?? [] : []];
+        foreach ($this->listedTools() as $name => $schema) {
+            $properties = $schema['properties'] ?? [];
+            self::assertIsArray($properties);
+            $inner = $properties['review'] ?? null;
+            $required[$name] = [...$this->strings($schema['required'] ?? []), ...is_array($inner) ? $this->strings($inner['required'] ?? []) : []];
         }
 
         return $required;
     }
 
     /**
-     * @return list<array<string, mixed>>
+     * @return array<string, array<mixed>>
      */
     private function listedTools(): array
     {
@@ -102,10 +103,29 @@ final class ReviewSkillMatchesServerTest extends KernelTestCase
         self::assertInstanceOf(Kernel::class, $kernel);
         $client = new McpServerClient($kernel);
         $client->initialize('2025-11-25');
-        $tools = McpServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
-        self::assertIsArray($tools);
+        $listed = McpServerClient::at($client->call('tools/list', [], 2), 'result', 'tools');
+        self::assertIsArray($listed);
+        $tools = [];
 
-        return array_values(array_filter($tools, is_array(...)));
+        foreach ($listed as $tool) {
+            self::assertIsArray($tool);
+            self::assertIsString($tool['name']);
+            $schema = $tool['inputSchema'] ?? [];
+            self::assertIsArray($schema);
+            $tools[$tool['name']] = $schema;
+        }
+
+        return $tools;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function strings(mixed $values): array
+    {
+        self::assertIsArray($values);
+
+        return array_values(array_map(static fn (mixed $value): string => is_string($value) ? $value : '', $values));
     }
 
     /**
@@ -133,7 +153,8 @@ final class ReviewSkillMatchesServerTest extends KernelTestCase
      */
     private function skillTools(): array
     {
-        self::assertSame(1, preg_match('/^## Tools\n(.*?)(?=^## |\z)/ms', $this->skill(), $section), 'The skill has no "## Tools" section.');
+        $found = preg_match('/^## Tools\n(.*?)(?=^## |\z)/ms', $this->skill(), $section);
+        self::assertSame(1, $found, 'The skill has no "## Tools" section.');
         $tools = [];
 
         foreach (explode("\n", $section[1]) as $line) {
