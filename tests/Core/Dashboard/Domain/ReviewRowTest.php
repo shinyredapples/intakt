@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewRow;
@@ -67,8 +68,16 @@ final class ReviewRowTest extends TestCase
 
     private function row(RoundPlace $place, string $now): ReviewRow
     {
-        $round = new ReviewedRound(new RoundStart('r1', 'demo', 2), $place, new DateTimeImmutable(self::STARTED), QuorumPolicy::All);
+        $round = new ReviewedRound(new RoundStart('r1', 'demo', 2), $place, $this->moment(self::STARTED), QuorumPolicy::All);
 
-        return new ReviewRow(new ReviewSummary($round), new DateTimeImmutable($now));
+        return new ReviewRow(new ReviewSummary($round), $this->moment($now));
+    }
+
+    private function moment(string $moment): DateTimeImmutable
+    {
+        $parsed = DateTimeImmutable::createFromFormat(DATE_ATOM, $moment, new DateTimeZone('UTC'));
+        self::assertInstanceOf(DateTimeImmutable::class, $parsed);
+
+        return $parsed;
     }
 }
