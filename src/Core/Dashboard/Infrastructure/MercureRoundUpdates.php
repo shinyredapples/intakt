@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Closure;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -47,6 +48,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     public function textStreamed(Uuid $round, string $reviewer, string $text): void
     {
         $this->publish($round, RoundStream::TextStreamed, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'text' => $text]);
+    }
+
+    // Nothing yet, because the review page has no place for a read answer until the round's stream renders one.
+    #[Override]
+    public function answerRead(Uuid $round, string $reviewer, ReadAnswer $answer): void
+    {
     }
 
     #[Override]

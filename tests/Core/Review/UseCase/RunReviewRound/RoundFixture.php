@@ -12,6 +12,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -87,6 +88,7 @@ final readonly class RoundFixture
     public const string TASK = 'Add the thing.';
     public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
+    public const string MODEL = 'standard-model';
 
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
@@ -147,7 +149,7 @@ final readonly class RoundFixture
 
     public function startHandlerOn(MessageBusInterface $queue): RunReviewRoundHandler
     {
-        return new RunReviewRoundHandler(new RoundOpening($this->rounds($this->entities), new RoundLedger($this->ledger, $this->modes, $this->serializer), $queue));
+        return new RunReviewRoundHandler(new RoundOpening($this->rounds($this->entities), $this->roundLedger($this->ledger), $queue));
     }
 
     public function startFromSource(ChangeSource $source): string
@@ -226,7 +228,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedger($this->ledger, $this->modes, $this->serializer), new ChangeText(new DiffPaths())), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths())), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.
@@ -286,7 +288,7 @@ final readonly class RoundFixture
         $entities = new EntityManager($connection, $this->entities->getConfiguration());
         $command = new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt(SampleIdentity::HEAD, $reviewers)), $this->panelOf($reviewers), new RequestedRound(self::CHANGE));
 
-        $ledger = new RoundLedger(new InMemoryLedger(), $this->modes, $this->serializer);
+        $ledger = $this->roundLedger(new InMemoryLedger());
 
         return new RunReviewRoundHandler(new RoundOpening($this->rounds($entities), $ledger, $this->bus))($command);
     }
@@ -357,9 +359,14 @@ final readonly class RoundFixture
 
     private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
     {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), new RoundLedger($ledger ?? $this->ledger, $this->modes, $this->serializer), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), $this->roundLedger($ledger ?? $this->ledger), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
 
         return new ReviewerLeases($entities, $moves, $this->clock);
+    }
+
+    private function roundLedger(Ledger $ledger): RoundLedger
+    {
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL]]]], []));
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
