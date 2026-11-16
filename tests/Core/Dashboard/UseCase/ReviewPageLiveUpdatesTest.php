@@ -338,7 +338,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame([['correctness', 'standard', 'verdict', '', '', '', '']], $this->rowsOf($updated));
+        self::assertSame([['correctness', 'standard tier, model not recorded', 'verdict', 'no answer yet', '']], $this->rowsOf($updated));
     }
 
     public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowInTheCurrentStateBlock(): void

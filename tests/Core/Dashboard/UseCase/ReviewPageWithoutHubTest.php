@@ -44,7 +44,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertSame('0 of 2 reviewers finished.', $crawler->filter('#round-round-1-state')->text());
-        self::assertSame([['correctness', 'standard', 'running', '', '', '', 'Stop this reviewer']], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text())));
+        self::assertSame([['correctness', 'standard tier, model not recorded', 'running', 'no answer yet', 'Stop this reviewer']], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text())));
     }
 
     public function testThePlainPageStillShowsTheLiveLogBesideTheTimeline(): void

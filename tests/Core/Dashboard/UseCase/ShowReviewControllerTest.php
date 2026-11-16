@@ -131,13 +131,82 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'changes', '2 counted', '', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.', '']],
+            [['correctness', 'standard tier, model not recorded', 'changes', '2 counted'], ['security', 'standard tier, model not recorded', 'failed: The provider is down.', 'no answer']],
             $this->rowsOf($crawler->filter('#round-round-1 table.reviewers tbody tr')),
         );
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'approve', '0 counted', '', ''], ['security', 'standard', 'verdict', 'approve', '0 counted', 'answered by the substitute openai, a catch-up review is owed', '']],
+            [['correctness', 'standard tier, model not recorded', 'approve', '0 counted'], ['security', 'standard tier, model not recorded', 'approve; answered by the substitute openai, a catch-up review is owed', '0 counted']],
             $this->rowsOf($crawler->filter('#round-round-2 table.reviewers tbody tr')),
         );
+    }
+
+    public function testEachReviewerIsNamedByRoleAndModelWithItsOutcomeAndFindingCount(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+        $this->ledger->startReviewerOn('round-1', 'security', 'model-b');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeFindings('round-1', []);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([['correctness', 'kimi-k3', 'changes', '2 counted'], ['security', 'model-b', 'approve', '0 counted']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+    }
+
+    public function testAJudgedRoundsReviewersTableHasNoEmptyColumn(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('#round-round-1 table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertNotContains('', array_merge(...$this->rowsOf($crawler->filter('table.reviewers tbody tr'))));
+    }
+
+    public function testAReviewerStartedBeforeTheModelWasRecordedShowsItsTierInsteadOfAnEmptyModel(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('standard tier, model not recorded', $crawler->filter('table.reviewers tbody td')->eq(1)->text());
+    }
+
+    public function testARunningReviewerShowsAStateDotAndAnAnsweredOneACheck(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+        $this->ledger->startReviewerOn('round-1', 'security', 'model-b');
+        $this->ledger->answer('round-1', 'security', 0);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(
+            [[1, 0, 'running'], [0, 1, 'approve']],
+            $crawler->filter('table.reviewers tbody td[id$="-state"]')->each(static fn (Crawler $cell): array => [$cell->filter('.dot')->count(), $cell->filter('svg.i')->count(), $cell->text()]),
+        );
+    }
+
+    public function testAFailedReviewerShowsItsCauseInRed(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['failed: The provider is down.'], $crawler->filter('#round-round-1 table.reviewers .failed')->each(static fn (Crawler $cause): string => $cause->text()));
+    }
+
+    public function testARunningReviewerHasNoFindingCountYetButSaysSo(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings', 'Stop'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertSame([['correctness', 'kimi-k3', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
     public function testTheReviewPageShowsAVerdictRecordedInTheRemovedShadowModeLikeAnOrdinaryOne(): void
@@ -151,7 +220,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
-        self::assertSame(['approve', 'approve'], [$rows[0][3], $rows[1][3]]);
+        self::assertSame(['approve', 'approve'], [$rows[0][2], $rows[1][2]]);
     }
 
     public function testAFailedReviewerAnsweredByASubstituteShowsBothNotesSeparated(): void
@@ -164,7 +233,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
-        self::assertSame('The provider is down.; answered by the substitute openai, a catch-up review is owed', $rows[0][5]);
+        self::assertSame('failed: The provider is down.; answered by the substitute openai, a catch-up review is owed', $rows[0][2]);
     }
 
     public function testAReviewerStartedAgainAfterAFailureShowsAsRunning(): void
@@ -176,7 +245,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'standard', 'running', '', '', '', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'standard tier, model not recorded', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
         self::assertSelectorTextContains('section.round', '1 of 2 reviewers started.');
     }
 
