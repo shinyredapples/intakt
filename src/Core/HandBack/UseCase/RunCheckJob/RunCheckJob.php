@@ -6,6 +6,10 @@ namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
+use Intakt\Core\HandBack\Contract\CheckJob;
+use Intakt\Core\HandBack\Contract\CheckJobOutcome;
+use Intakt\Core\HandBack\Contract\CheckJobs;
+use Intakt\Core\HandBack\Contract\CheckVerdict;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\CheckHandBack;
@@ -25,10 +29,11 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Gate\Contract\Gate;
 use InvalidArgumentException;
 use NoDiscard;
+use Override;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 
-final readonly class RunCheckJob
+final readonly class RunCheckJob implements CheckJobs
 {
     public const string MIRROR = '/input/mirror';
 
@@ -67,6 +72,7 @@ final readonly class RunCheckJob
      * @throws DockerEngineFailed
      * @throws JobEventNotRecorded
      */
+    #[Override]
     #[NoDiscard]
     public function run(CheckJob $job): CheckJobOutcome|RefusedHandBack
     {

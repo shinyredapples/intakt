@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
+namespace Intakt\Core\HandBack\Contract;
 
 use Intakt\Core\HandBack\Domain\LostContent;
 
