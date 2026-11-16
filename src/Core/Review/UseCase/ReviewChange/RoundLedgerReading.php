@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerFailed;
@@ -41,15 +42,15 @@ final readonly class RoundLedgerReading implements RoundCosts
      */
     public function actIdsOf(string $roundId): array
     {
-        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
-            $judged = $this->payloads->of($recorded, JudgeDone::class);
+        return $this->judgeDoneOf($roundId)->act ?? [];
+    }
 
-            if ($roundId === $judged?->round) {
-                return $judged->act;
-            }
-        }
-
-        return [];
+    /**
+     * @return list<DroppedFinding>
+     */
+    public function droppedOf(string $roundId): array
+    {
+        return $this->judgeDoneOf($roundId)->dropped ?? [];
     }
 
     // Null for a round whose start was recorded before the quorum was, so its outcome cannot be decided.
@@ -120,6 +121,19 @@ final readonly class RoundLedgerReading implements RoundCosts
         $models = $this->callsStartedFor($roundId, $recorded);
 
         return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
+    }
+
+    private function judgeDoneOf(string $roundId): ?JudgeDone
+    {
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
+            $judged = $this->payloads->of($recorded, JudgeDone::class);
+
+            if ($roundId === $judged?->round) {
+                return $judged;
+            }
+        }
+
+        return null;
     }
 
     /**

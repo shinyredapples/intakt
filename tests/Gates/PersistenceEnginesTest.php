@@ -79,7 +79,7 @@ final class PersistenceEnginesTest extends SandboxTestCase
             self::assertNotContains('intakt-composer-cache:/composer-cache:ro', $arguments);
         }
         clearstatcache();
-        self::assertSame('0755', substr(sprintf('%o', fileperms($sandbox->root.'/temp/composer-cache')), -4));
+        self::assertSame(0o755, fileperms($sandbox->root.'/temp/composer-cache') & 0o777);
     }
 
     public function testACallWithoutTheComposerCacheFailsBeforeAnyEngineRuns(): void
