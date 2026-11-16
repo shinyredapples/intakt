@@ -47,6 +47,22 @@ final class OwnerTokenTest extends TestCase
         self::assertSame('', new OwnerToken('', $this->file)->value());
     }
 
+    public function testAKeptFileThatCannotBeReadGivesNoTokenWithoutAWarning(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('This user ignores file permissions (superuser).');
+        }
+
+        $this->keep(str_repeat('ab', 32));
+        chmod((string) $this->file, 0o000);
+
+        try {
+            self::assertSame('', new OwnerToken('', $this->file)->value());
+        } finally {
+            chmod((string) $this->file, 0o600);
+        }
+    }
+
     private function keep(string $content): void
     {
         $this->file = sys_get_temp_dir().'/'.uniqid('owner-token-', true);
