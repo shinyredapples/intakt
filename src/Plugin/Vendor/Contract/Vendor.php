@@ -24,6 +24,7 @@ interface Vendor
      * @throws VendorAccountOut
      * @throws NoProviderLeft
      * @throws ProviderRejectedTheKey
+     * @throws ProviderUnreachable
      * @throws ChangesWithoutFindings
      */
     #[NoDiscard('a verdict that is not read approves nothing')]
@@ -36,6 +37,7 @@ interface Vendor
      * @throws VendorAccountOut
      * @throws NoProviderLeft
      * @throws ProviderRejectedTheKey
+     * @throws ProviderUnreachable
      */
     #[NoDiscard('a judgement that is not read decides nothing')]
     public function judge(string $project, JudgeRequest $request): Judgement;

@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
+use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -30,6 +31,11 @@ final class FailureInWordsTest extends TestCase
     public function testATransientProviderFailureIsToldInPlainWords(): void
     {
         self::assertSame('the provider kept failing', new FailureInWords()->of(ProviderFailedTransiently::class));
+    }
+
+    public function testAnEndpointThatCouldNotBeReachedIsToldInPlainWords(): void
+    {
+        self::assertSame('the model endpoint could not be reached', new FailureInWords()->of(ProviderUnreachable::class));
     }
 
     public function testAnAnswerThatIsNoVerdictIsToldInPlainWords(): void

@@ -7,6 +7,7 @@ namespace Intakt\Tests\Plugin\GitHubForge;
 use Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation;
 use Intakt\Plugin\GitHubForge\Infrastructure\AppJwt;
 use Intakt\Plugin\GitHubForge\Infrastructure\CheckedInstallationTokens;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubChangeOpener;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubForge;
@@ -61,7 +62,7 @@ final class ScriptedGitHub
     {
         [$calls, $checked] = $this->stack();
 
-        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks));
+        return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, self::APP_ID), new VerdictLocks($this->locks), new GitHubAppSetting(self::APP_ID, new NullLogger()));
     }
 
     public function opener(): GitHubChangeOpener
