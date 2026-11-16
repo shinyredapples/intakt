@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\Domain\StepState;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunController;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunSteps;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
@@ -27,6 +28,7 @@ use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Tests\Support\CompiledContainers;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -58,6 +60,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(StartFirstReviewController::class)]
 #[CoversClass(ReviewStarts::class)]
 #[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(ReplayMarks::class)]
 #[UsesClass(ConfiguredTierResolver::class)]
 #[UsesClass(ConfiguredPanels::class)]
 #[UsesClass(ConfiguredAccounts::class)]
@@ -539,6 +542,8 @@ final class FirstRunControllerTest extends WebTestCase
         self::getContainer()->set(Ledger::class, $this->ledger);
         // The ledger stamps its rows at one moment, so a round is not overdue and ended by the time the page reads it.
         self::getContainer()->set(ClockInterface::class, new MockClock($this->now));
+        // Answered without the database, because the first review step reads the ledger in memory and this test creates no schema.
+        self::getContainer()->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
         if ($this->commands instanceof MessageBusInterface) {
             self::getContainer()->set('command.bus', $this->commands);
         }

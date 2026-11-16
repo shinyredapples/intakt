@@ -14,15 +14,18 @@ use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -30,6 +33,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(LedgerReviewPages::class)]
 #[CoversClass(LedgerRounds::class)]
+#[CoversClass(ReplayMarks::class)]
 #[UsesClass(Board::class)]
 #[UsesClass(BoardColumn::class)]
 #[UsesClass(Review::class)]
@@ -123,11 +127,85 @@ final class LedgerReviewPagesTest extends TestCase
         self::assertSame(1.0, $card->cost()->usd);
     }
 
-    private function pagesOn(DashboardLedger $ledger): LedgerReviewPages
+    public function testACardOfAProjectFlaggedAsReplayCarriesTheReplayMark(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+
+        $card = $this->pagesOn($ledger, ['alpha'])->board()->cardsIn(BoardColumn::InReview)[0];
+
+        self::assertSame(ReplayMark::Replay, $card->latest()->mark);
+    }
+
+    public function testACardOfAProjectNeverFlaggedCarriesTheLiveMark(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+
+        $card = $this->pagesOn($ledger, ['beta'])->board()->cardsIn(BoardColumn::InReview)[0];
+
+        self::assertSame(ReplayMark::Live, $card->latest()->mark);
+    }
+
+    public function testEveryRoundUnknownToReviewTakesTheReplayMarkOfItsProject(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->judgeRound('r1');
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        self::assertSame([ReplayMark::Replay, ReplayMark::Replay], $this->marksOf($this->pagesOn($ledger, ['alpha'])->reviewOf('r1')));
+    }
+
+    public function testARoundStoredLiveStaysLiveAfterItsProjectWasFlagged(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+
+        $card = $this->pagesOn($ledger, ['alpha'], ['r1' => ReplayMark::Live])->board()->cardsIn(BoardColumn::InReview)[0];
+
+        self::assertSame(ReplayMark::Live, $card->latest()->mark);
+    }
+
+    public function testAReplayRoundOpenedAfterALiveRoundOfTheSameChangeIsMarkedAsAReplay(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->judgeRound('r1');
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        $review = $this->pagesOn($ledger, ['alpha'], ['r1' => ReplayMark::Live, 'r2' => ReplayMark::Replay])->reviewOf('r2');
+
+        self::assertSame([[ReplayMark::Live, ReplayMark::Replay], false], [$this->marksOf($review), $review?->everyRoundIsAReplay()]);
+    }
+
+    public function testAReviewWhoseRoundsAreAllStoredAsReplayIsAReplayThroughout(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->judgeRound('r1');
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        self::assertTrue($this->pagesOn($ledger, [], ['r1' => ReplayMark::Replay, 'r2' => ReplayMark::Replay])->reviewOf('r1')?->everyRoundIsAReplay());
+    }
+
+    /**
+     * @return list<?ReplayMark>
+     */
+    private function marksOf(?Review $review): array
+    {
+        return array_map(static fn (ReviewedRound $round): ?ReplayMark => $round->mark, $review->rounds ?? []);
+    }
+
+    /**
+     * @param list<string>              $replays
+     * @param array<string, ReplayMark> $stored
+     */
+    private function pagesOn(DashboardLedger $ledger, array $replays = [], array $stored = []): LedgerReviewPages
     {
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
-        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
+        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus($replays, $stored)));
     }
 }

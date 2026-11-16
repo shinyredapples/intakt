@@ -19,6 +19,7 @@ use Intakt\Core\Dashboard\Domain\WhoIsWorking;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -34,6 +35,7 @@ use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -52,6 +54,7 @@ use Symfony\Component\Clock\MockClock;
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(RoundPayloads::class)]
+#[UsesClass(ReplayMarks::class)]
 #[UsesClass(LedgerPayloads::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(DoctrineLedger::class)]
@@ -84,7 +87,7 @@ final class WhoIsWorkingOnSqliteTest extends KernelTestCase
 
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
         $lanes = $pages->board()->whoIsWorking()->lanes();
 
