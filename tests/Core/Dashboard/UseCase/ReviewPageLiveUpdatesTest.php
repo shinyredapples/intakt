@@ -597,6 +597,30 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringNotContainsString('{"', $text->text());
     }
 
+    public function testAnUnreadableAnswerReachesTheReviewPageAsOneCouldNotBeReadLineAndNoRawText(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => ReadAnswer::unreadable()]));
+
+        $text = $updated->filter('#reviewer-round-1-correctness-text');
+        self::assertSame(['The answer could not be read.'], $text->children()->each(static fn (Crawler $line): string => $line->text()));
+        self::assertCount(1, $text->filter('.answer-unreadable'));
+        self::assertStringNotContainsString('{', $text->text());
+    }
+
+    public function testAFindingWithoutAFileReachesTheReviewPageAsItsSeverityAndTitleOnly(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, 'Missing changelog', FixableBy::Builder, false, null, null)], [], []));
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+        self::assertSame(['P2 Missing changelog'], $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->each(static fn (Crawler $line): string => $line->text()));
+    }
+
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
         $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
