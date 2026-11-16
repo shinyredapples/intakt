@@ -123,6 +123,13 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/padding:\s*0 var\(--s8\)/', $this->rulesOf($this->componentSheet())['.palette .q input'] ?? '');
     }
 
+    public function testOnPhonesTheSearchFieldKeepsTheInputFloorOf48Px(): void
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->componentSheet(), $phone);
+
+        self::assertMatchesRegularExpression('/height:\s*48px/', $this->rulesOf(implode("\n", $phone[1]))['.overlay .palette .q input'] ?? '');
+    }
+
     public function testTheBreadcrumbSeparatesItsCrumbsWithAMutedSlash(): void
     {
         $rules = $this->rulesOf($this->componentSheet());

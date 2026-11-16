@@ -440,6 +440,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .overlay:not([hidden]) { padding: 0; }
   .overlay .palette { display: flex; flex-direction: column; max-width: none; height: 100dvh; margin: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); border: 0; border-radius: 0; }
   .overlay .palette .q { flex: none; }
+  /* The phone floor for inputs (DESIGN.md, Floors); the 60 px row still leaves the ring room. */
+  .overlay .palette .q input { height: 48px; }
   .overlay .palette .q kbd, .overlay .palette footer { display: none; }
   .overlay .palette .q .btn { display: inline-flex; min-height: 44px; }
   .overlay .palette .results { flex: 1; min-height: 0; max-height: none; }

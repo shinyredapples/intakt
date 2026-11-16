@@ -1,5 +1,5 @@
-{#- crumbs: list of {label, href?}; the last is the page itself, so it carries no link and is the current page. -#}
-<nav class="crumbs" aria-label="Breadcrumb">
+{#- crumbs: list of {label, href?}; the last is the page itself, so it carries no link and is the current page. project_trail, when set, names the project the trail follows, so the shell can drop it once the project filter shows another. -#}
+<nav class="crumbs" aria-label="Breadcrumb"{% if project_trail is defined %} data-project-trail="{{ project_trail }}"{% endif %}>
     <ol>
         {%- for crumb in crumbs %}
         <li>{% if loop.last %}<span aria-current="page">{{ crumb.label }}</span>{% else %}<a href="{{ crumb.href }}">{{ crumb.label }}</a>{% endif %}</li>

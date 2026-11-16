@@ -102,6 +102,12 @@
         if (!shownFilter) {
             return;
         }
+        // A project link's breadcrumb and Projects mark name its project, so they go once the filter shows another or all projects, as a reload of the address without the link would show.
+        const trail = document.querySelector('[data-project-trail]');
+        if (trail && trail.dataset.projectTrail !== shownFilter.value) {
+            trail.remove();
+            document.querySelectorAll('[data-section-current]').forEach((mark) => mark.removeAttribute('aria-current'));
+        }
         const chosen = phone.matches ? '' : shownFilter.value;
         document.querySelectorAll('[data-project]').forEach((item) => {
             item.hidden = chosen !== '' && item.dataset.project !== chosen;

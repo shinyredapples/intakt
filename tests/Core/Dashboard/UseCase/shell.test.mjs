@@ -192,6 +192,47 @@ test('choosing a project leaves an address without a project link alone', () => 
     assert.equal(browser.address, 'http://localhost/reviews');
 });
 
+test('a project link keeps its breadcrumb and the Projects mark while its project is chosen', () => {
+    const page = new Browser('light', { address: 'http://localhost/reviews?project=alpha' }).open();
+
+    assert.equal(page.breadcrumbShown(), true);
+    assert.equal(page.projectsMarked(), true);
+});
+
+test('choosing another project after a project link removes its breadcrumb and the Projects mark', () => {
+    const page = new Browser('light', { address: 'http://localhost/reviews?project=alpha' }).open();
+
+    page.chooseProject('beta');
+
+    assert.equal(page.breadcrumbShown(), false);
+    assert.equal(page.projectsMarked(), false);
+});
+
+test('choosing all projects after a project link removes its breadcrumb and the Projects mark', () => {
+    const page = new Browser('light', { address: 'http://localhost/reviews?project=alpha' }).open();
+
+    page.chooseProject('');
+
+    assert.equal(page.breadcrumbShown(), false);
+    assert.equal(page.projectsMarked(), false);
+});
+
+test('a pushed project list without the linked project removes its breadcrumb and the Projects mark', () => {
+    const page = new Browser('light', { address: 'http://localhost/reviews?project=alpha' }).open();
+
+    page.pushStream('projfilter', ['beta']);
+
+    assert.equal(page.breadcrumbShown(), false);
+    assert.equal(page.projectsMarked(), false);
+});
+
+test('a phone keeps the breadcrumb of a project link, because its top bar has no project filter', () => {
+    const page = new Browser('light', { phone: true, address: 'http://localhost/reviews?project=alpha' }).open();
+
+    assert.equal(page.breadcrumbShown(), true);
+    assert.equal(page.projectsMarked(), true);
+});
+
 test('a project link to a project the install does not list leaves the stored project chosen', () => {
     const browser = new Browser('light', { address: 'http://localhost/reviews?project=gone' });
     browser.storage.set('intakt-project', 'alpha');

@@ -65,6 +65,30 @@ final class ProjectBreadcrumbTest extends DashboardPageTestCase
         self::assertSame(['Projects', '0'], $this->crumbsOf('/reviews?project=0')->each(static fn (Crawler $crumb): string => trim($crumb->text())));
     }
 
+    public function testAReviewListOfAProjectTheInstallDoesNotListShowsNoBreadcrumb(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/reviews?project=missing');
+
+        self::assertResponseIsSuccessful();
+        self::assertCount(0, $page->filter('nav.crumbs'));
+    }
+
+    public function testAProjectsReviewListNamesTheProjectOfItsBreadcrumbForTheProjectFilter(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        self::assertSame('alpha', $this->browser->request('GET', '/reviews?project=alpha')->filter('nav.crumbs')->attr('data-project-trail'));
+    }
+
+    public function testTheBreadcrumbOfAReviewPageStaysWhateverTheProjectFilterShows(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        self::assertNull($this->browser->request('GET', '/reviews/round-1')->filter('nav.crumbs')->attr('data-project-trail'));
+    }
+
     public function testTheUnfilteredReviewListShowsNoBreadcrumb(): void
     {
         $this->ledger->startRound('round-1', 'alpha');
