@@ -6,7 +6,6 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 
-// A row of the review list, titled by change and round, because a round id is 36 characters a reader cannot tell apart.
 final readonly class ReviewRow
 {
     private const int MINUTE = 60;
@@ -21,7 +20,7 @@ final readonly class ReviewRow
 
     public function title(): string
     {
-        return sprintf('%s, round %s', '' === $this->review->change ? 'Unnamed change' : $this->review->change, $this->review->number ?? 'not numbered');
+        return $this->review->title();
     }
 
     // Whole units, rounded down, so a round never reads as older than it is; a clock behind the start reads as just now.

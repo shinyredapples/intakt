@@ -8,6 +8,8 @@ const ACTION = '[data-search-action]';
 const CANCEL = '[data-search-cancel]';
 const RESULT_LINK = '#search-results a[href]';
 const RESULT_OPTION = '#search-results [role="option"]';
+// Only the id's own text, so the rest of its line, the label and the space beside it, still opens the review and the whole row stays one target.
+const ROUND_ID = '#search-results .round-id code';
 const FAILED = '<div class="test-result err" role="alert"><p><strong>Search did not answer.</strong> Type again to try once more; nothing was changed.</p></div>';
 
 // One entry per case of Dashboard\Domain\SearchAction; SearchOverlayTest checks that every case has one.
@@ -95,15 +97,20 @@ class Search {
             ACTIONS[action.dataset.searchAction](this);
             return;
         }
+        // The round id is there to be selected and copied, so a click on it keeps the search open where it is.
+        if (target?.closest?.(ROUND_ID)) {
+            event.preventDefault();
+            return;
+        }
         // The link opens its page as it is; the overlay only gets out of the way and gives the shell back.
         if (target?.closest?.(RESULT_LINK)) {
             this.close();
         }
     }
 
-    // An option has tabindex -1, so a press would take the focus from the field, where the arrows and Enter act; the click still follows.
+    // An option has tabindex -1, so a press would take the focus from the field, where the arrows and Enter act; the click still follows. A press on the round id is the browser's, because holding it back would also stop the selection that copies the id.
     press(event) {
-        if (this.isOpen() && event.target?.closest?.(RESULT_OPTION)) {
+        if (this.isOpen() && event.target?.closest?.(RESULT_OPTION) && !event.target.closest(ROUND_ID)) {
             event.preventDefault();
         }
     }

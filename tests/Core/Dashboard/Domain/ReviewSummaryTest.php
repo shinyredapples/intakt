@@ -64,8 +64,18 @@ final class ReviewSummaryTest extends TestCase
         self::assertSame(0, $summary->findingCount);
     }
 
-    private function round(): ReviewedRound
+    public function testASummaryIsTitledByItsChangeAndRoundNumber(): void
     {
-        return new ReviewedRound(new RoundStart('r1', 'demo', 2), new RoundPlace('sample-change', 2), new DateTimeImmutable('2026-01-01T00:00:00+00:00'), QuorumPolicy::All);
+        self::assertSame('sample-change, round 2', new ReviewSummary($this->round())->title());
+    }
+
+    public function testASummaryOfAnUnnamedUnnumberedChangeIsTitledWithBothFallbacks(): void
+    {
+        self::assertSame('Unnamed change, round not numbered', new ReviewSummary($this->round(new RoundPlace('', null)))->title());
+    }
+
+    private function round(RoundPlace $place = new RoundPlace('sample-change', 2)): ReviewedRound
+    {
+        return new ReviewedRound(new RoundStart('r1', 'demo', 2), $place, new DateTimeImmutable('2026-01-01T00:00:00+00:00'), QuorumPolicy::All);
     }
 }
