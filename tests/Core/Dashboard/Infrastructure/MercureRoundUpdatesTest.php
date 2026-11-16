@@ -7,7 +7,11 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use Fiber;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\Decision;
@@ -15,12 +19,23 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\ReplayMarkBus;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -53,6 +68,12 @@ use Twig\TwigFunction;
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReadFinding::class)]
 #[UsesClass(ReadAnswer::class)]
+#[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LedgerRounds::class)]
+#[UsesClass(RoundPayloads::class)]
+#[UsesClass(ReplayMarks::class)]
+#[UsesClass(Review::class)]
+#[UsesClass(ReviewedRound::class)]
 final class MercureRoundUpdatesTest extends TestCase
 {
     private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
@@ -66,9 +87,12 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private BufferingLogger $log;
 
+    private Ledger $ledger;
+
     protected function setUp(): void
     {
         $this->log = new BufferingLogger();
+        $this->ledger = new DashboardLedger();
     }
 
     public function testUpdatesOfARoundReachTheHubInTheOrderTheyHappened(): void
@@ -218,7 +242,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig = self::createStub(Environment::class);
         $twig->method('render')->willThrowException($failure);
 
-        new MercureRoundUpdates($this->live(), $twig, self::createStub(SessionSummaries::class), new LockFactory(new InMemoryStore()), $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+        new MercureRoundUpdates($this->live(), $twig, self::createStub(SessionSummaries::class), $this->pages(), new LockFactory(new InMemoryStore()), $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
 
         self::assertSame(
             [['warning', 'A live round update was not rendered.', ['round' => self::ROUND, 'stream' => 'tool_called', 'exception' => $failure]]],
@@ -428,6 +452,50 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
+    public function testAJudgedRoundCarriesTheJudgesCallAndTheFindingsInItsJudgedState(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->judgeFindings(self::ROUND, ['F1' => 'act']);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        $judged = array_last($this->published);
+        self::assertNotNull($judged);
+        self::assertContains('replace round-'.self::ROUND.'-judged', array_map($this->actionAndTargetOf(...), $this->streamsOf($judged)));
+        self::assertStringContainsString('<span class="fc-text">Text of F1.</span>', $judged->getData());
+        self::assertStringContainsString('<p class="fc-call">Fix now</p>', $judged->getData());
+    }
+
+    public function testAJudgedRoundWhoseFindingsCannotBeReadStillPublishesItsJudgedStateAndLogsWhy(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException($failure);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('Judged.', $this->published[0]->getData());
+        self::assertStringNotContainsString('target="round-'.self::ROUND.'-judged"', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'The judged round was not read for its live update.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
+    public function testAJudgedRoundTheLedgerDoesNotHoldPublishesItsJudgedStateWithoutFindings(): void
+    {
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertCount(1, $this->published);
+        self::assertStringNotContainsString('target="round-'.self::ROUND.'-judged"', $this->published[0]->getData());
+        self::assertStringContainsString('Reload the page', $this->published[0]->getData());
+        self::assertSame([], $this->log->cleanLogs());
+    }
+
     public function testAJudgedStateGoesOutWhenTheSummaryLockCannotBeTaken(): void
     {
         $store = self::createStub(PersistingStoreInterface::class);
@@ -502,9 +570,18 @@ final class MercureRoundUpdatesTest extends TestCase
             $this->live($publisher),
             $twig,
             $summaries ?? self::createStub(SessionSummaries::class),
+            $this->pages(),
             new LockFactory($locks ?? new InMemoryStore()),
             $this->log,
         );
+    }
+
+    private function pages(): LedgerReviewPages
+    {
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::none());
+
+        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     // The first read pauses its fiber and answers a running round, because it stands for a read taken before the judge committed; every later one finds the round judged, since the judge commits before it publishes.

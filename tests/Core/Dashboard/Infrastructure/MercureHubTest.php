@@ -6,10 +6,22 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\ReplayMarkBus;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Tests\Support\WorkerPorts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -40,6 +52,10 @@ use Twig\TwigFunction;
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(ComponentOptions::class)]
+#[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LedgerRounds::class)]
+#[UsesClass(RoundPayloads::class)]
+#[UsesClass(ReplayMarks::class)]
 final class MercureHubTest extends TestCase
 {
     private const string SECRET = 'a-test-key-that-is-at-least-thirty-two-bytes-long';
@@ -115,6 +131,7 @@ final class MercureHubTest extends TestCase
             new MercureLiveUpdates(new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
             $twig,
             self::createStub(SessionSummaries::class),
+            new LedgerReviewPages(new DashboardLedger(), new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), self::createStub(RoundCosts::class), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())),
             new LockFactory(new InMemoryStore()),
             $logger,
         );
