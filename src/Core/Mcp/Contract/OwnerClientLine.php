@@ -26,13 +26,13 @@ final readonly class OwnerClientLine
     // The bearer header only with a token, because the owner server lets a client read without one.
     public function line(): string
     {
-        $line = sprintf('claude mcp add --transport http intakt %s', self::shellWord(rtrim($this->baseUrl, '/').'/mcp/owner'));
+        $line = sprintf('claude mcp add --transport http intakt %s', $this->shellWord(rtrim($this->baseUrl, '/').'/mcp/owner'));
 
-        return $this->hasToken() ? sprintf('%s --header %s', $line, self::shellWord('Authorization: Bearer '.$this->ownerToken)) : $line;
+        return $this->hasToken() ? sprintf('%s --header %s', $line, $this->shellWord('Authorization: Bearer '.$this->ownerToken)) : $line;
     }
 
     // The owner pastes the line into a shell, so a value the shell would expand is single-quoted; a plain value keeps the familiar form.
-    private static function shellWord(string $value): string
+    private function shellWord(string $value): string
     {
         if (1 === preg_match('#^[A-Za-z0-9:/._%@+=-]+$#', $value)) {
             return $value;
