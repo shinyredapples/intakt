@@ -114,6 +114,16 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
+    public function judgeToFixAtLine7OfA(string $round, string $text): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => ['F1'],
+            'follow_ups' => [],
+            'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => $text, 'merged' => [], 'file' => 'src/A.php', 'line' => 7]],
+        ]);
+    }
+
     /**
      * @param list<string> $act
      * @param list<string> $followUps

@@ -267,6 +267,53 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $updated->filter('form.stop-round'));
     }
 
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheJudgesCallAndTheFindingsOnceTheRoundIsJudged(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->startReviewer($id, 'security');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertSame('The judge has not judged this round yet.', $page->filter('#round-'.$id.'-judged')->text());
+
+        $this->ledger->answer($id, 'security', 2);
+        $this->ledger->judgeFindings($id, ['F1' => 'act', 'F2' => 'defer']);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertSame(
+            [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
+            $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
+        );
+        self::assertSame('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
+    }
+
+    public function testAJudgedRoundWhoseFindingsWereNotRecordedSaysSoInTheLiveUpdateAsOnLoad(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+
+        $this->ledger->judgeMarksOnly($id, ['F1'], []);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(0, 0, true));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertStringStartsWith("This round's findings were not recorded", $updated->filter('#round-'.$id.'-judged p.muted')->text());
+        self::assertSame(['F1'], $updated->filter('#round-'.$id.'-judged li.finding-card .fc-id')->each(static fn (Crawler $id): string => $id->text()));
+    }
+
+    public function testAJudgedRoundStreamedWithoutItsFindingsStillPointsToAReload(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true), 'reviewed' => null]));
+
+        self::assertSame('The judge has not judged this round yet.', $updated->filter('#round-round-1-judged')->text());
+        self::assertSame('The judge has judged this round. Reload the page to see its call and the findings to fix.', $updated->filter('#round-round-1-now-judge')->text());
+    }
+
     public function testAToolCallPublishedForAReviewerThatStartedAfterThePageLoadedMakesTheStopOfTheRoundAvailable(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
@@ -659,9 +706,11 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         });
         $twig = $container->get(Environment::class);
         $summaries = $container->get(SessionSummaries::class);
+        $pages = $container->get(LedgerReviewPages::class);
         self::assertInstanceOf(Environment::class, $twig);
         self::assertInstanceOf(SessionSummaries::class, $summaries);
-        $container->set(RoundUpdates::class, new MercureRoundUpdates(new MercureLiveUpdates($hub, new NullLogger()), $twig, $summaries, new LockFactory(new InMemoryStore()), new NullLogger()));
+        self::assertInstanceOf(LedgerReviewPages::class, $pages);
+        $container->set(RoundUpdates::class, new MercureRoundUpdates(new MercureLiveUpdates($hub, new NullLogger()), $twig, $summaries, $pages, new LockFactory(new InMemoryStore()), new NullLogger()));
     }
 
     // No stored summary, so the round's own streams are the only updates the hub records.

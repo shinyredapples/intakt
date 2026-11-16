@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ShowSampleReview;
 
+use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Review\UseCase\ShowSampleReview\ShowSampleReviewCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
@@ -19,6 +20,8 @@ final class ShowSampleReviewCommandTest extends TestCase
     private string $ownerToken = '';
 
     private string $composeService = '';
+
+    private ?string $keptFile = null;
 
     public function testOutsideTheComposeDemoItPrintsTheReviewCommandAsTheConsoleRunsIt(): void
     {
@@ -69,11 +72,27 @@ final class ShowSampleReviewCommandTest extends TestCase
         self::assertSame('Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer demo-owner-token"', $lines[2]);
     }
 
-    public function testItPrintsNoMcpSetupWhenNoOwnerTokenIsSet(): void
+    public function testWithTheVariableEmptyAndTheTokenFilePresentTheMcpLineShowsThatToken(): void
+    {
+        $file = sys_get_temp_dir().'/'.uniqid('owner-token-', true);
+        file_put_contents($file, str_repeat('ab', 32)."\n");
+        $this->keptFile = $file;
+
+        try {
+            $lines = $this->framedLines();
+        } finally {
+            unlink($file);
+        }
+
+        self::assertSame('Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer '.str_repeat('ab', 32).'"', $lines[2]);
+    }
+
+    public function testWithNeitherTheVariableNorAValidFileOneLineSaysHowToGetTheToken(): void
     {
         $tester = $this->show();
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertStringContainsString('No MCP owner token found: set MCP_OWNER_TOKEN in .env.local', $tester->getDisplay());
         self::assertStringNotContainsString('mcp/owner', $tester->getDisplay());
     }
 
@@ -90,7 +109,7 @@ final class ShowSampleReviewCommandTest extends TestCase
     private function show(): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ShowSampleReviewCommand('http://localhost:7781', $this->ownerToken, $this->composeService, 7781));
+        $application->addCommand(new ShowSampleReviewCommand('http://localhost:7781', new OwnerToken($this->ownerToken, $this->keptFile), $this->composeService, 7781));
         $tester = new CommandTester($application->find('intakt:sample:show'));
         $tester->execute(['repository' => self::REPOSITORY]);
 

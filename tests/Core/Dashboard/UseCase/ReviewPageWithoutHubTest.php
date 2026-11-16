@@ -85,7 +85,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertCount(1, $crawler->filter('form.stop-reviewer button[data-arm-confirm="Click again to stop"]'));
         self::assertCount(1, $crawler->filter('.page-head form.stop-round button[data-arm-confirm="Click again to stop the round"]'));
         self::assertSame(
-            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { switchTaskPanes } from '%s'; import { highlightFindings } from '%s'; import { foldColumns } from '%s'; import { showMoreCards } from '%s'; import { toggleBanners } from '%s'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document); highlightFindings(document); foldColumns(document); showMoreCards(document); toggleBanners(document);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('task-panes.js'), $packages->getUrl('finding-highlight.js'), $packages->getUrl('column-fold.js'), $packages->getUrl('column-more.js'), $packages->getUrl('banner-toggle.js'))],
+            [sprintf("import { holdBackDangerButtons } from '%s'; import { offerSearch } from '%s'; import { switchTaskPanes } from '%s'; import { highlightFindings } from '%s'; import { foldColumns } from '%s'; import { showMoreCards } from '%s'; import { toggleBanners } from '%s'; import { markBoardEdges } from '%s'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document); highlightFindings(document); foldColumns(document); showMoreCards(document); toggleBanners(document); markBoardEdges(document, window);", $packages->getUrl('arm.js'), $packages->getUrl('search.js'), $packages->getUrl('task-panes.js'), $packages->getUrl('finding-highlight.js'), $packages->getUrl('column-fold.js'), $packages->getUrl('column-more.js'), $packages->getUrl('banner-toggle.js'), $packages->getUrl('board-edge.js'))],
             $crawler->filter('head script[type="module"]')->each(static fn (Crawler $script): string => $script->text()),
         );
     }
@@ -126,7 +126,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertCount(0, $crawler->filter('script[type="importmap"]'));
         self::assertSame('F1', $crawler->filter('.log-summary .ls-findings button')->attr('data-highlight-finding'));
-        self::assertCount(1, $crawler->filter('#round-round-1 td[data-finding="F1"]'));
+        self::assertCount(1, $crawler->filter('#round-round-1 li[data-finding="F1"]'));
     }
 
     public function testTheHighlightScriptThePlainPageImportsIsServedByTheInstall(): void
@@ -171,6 +171,17 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('export function showMoreCards(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
+    public function testTheBoardEdgeScriptThePlainPageImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('board-edge.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function markBoardEdges(page, view)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void
