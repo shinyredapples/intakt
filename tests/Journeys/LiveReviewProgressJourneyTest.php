@@ -135,7 +135,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $table = [];
 
         foreach ($updates as $update) {
-            preg_match_all('#<li><span><strong>([^<]+)</strong> \(([^)]+)\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">([^<]+)</span>#', $update->getData(), $rows, PREG_SET_ORDER);
+            preg_match_all('#<li class="character-row">(?:<img [^>]+>)+<span><strong>([^<]+)</strong> \(([^)]+)\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">([^<]+)</span>#', $update->getData(), $rows, PREG_SET_ORDER);
             $now = [...$now, ...array_map(static fn (array $row): array => [$row[1], $row[2], $row[3]], $rows)];
             preg_match_all('#<template><tr><td>([^<]+)</td>\s*<td>([^<]+)</td>#', $update->getData(), $rows, PREG_SET_ORDER);
             $table = [...$table, ...array_map(static fn (array $row): array => [$row[1], $row[2]], $rows)];

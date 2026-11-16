@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -79,6 +80,7 @@ use Twig\Environment;
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReadFinding::class)]
 #[UsesClass(ReadAnswer::class)]
+#[UsesClass(Character::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -556,6 +558,56 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
 
         self::assertSame(['correctness (Kimi K3): running'], $this->replaced($page, $this->publishedStreams())->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testAReviewerRowPlacedByAStreamShowsExactlyOneCodeReviewerHeadOf24Pixels(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+
+        $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
+
+        $row = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-now-reviewers li');
+        self::assertCount(1, $row);
+        self::assertSame(['', ''], $row->children('img.character')->each(static fn (Crawler $img): ?string => $img->attr('alt')));
+        self::assertSame([['24', '24'], ['24', '24']], $row->children('img.character')->each(static fn (Crawler $img): array => [$img->attr('width'), $img->attr('height')]));
+        self::assertCount(2, $row->filter('img[src*="code_reviewer-"]'));
+    }
+
+    public function testAReviewerRowPlacedByAStreamIsTheRowThePageRendersOnLoad(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->answer($id, 'correctness', 1);
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
+
+        $placed = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-now-reviewers li')->outerHtml();
+        $loaded = $this->browser->request('GET', '/reviews/'.$id)->filter('#round-'.$id.'-now-reviewers li')->outerHtml();
+        self::assertSame($loaded, $placed);
+    }
+
+    public function testAReviewerRowPlacedWhileItsStartCannotBeReadKeepsItsFallbackTextAndOneHead(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
+
+        $row = $updated->filter('#round-round-1-now-reviewers li');
+        self::assertSame('A reviewer (role not read): running', $row->text());
+        self::assertCount(2, $row->children('img.character'));
+    }
+
+    public function testTheOwlBesideTheJudgesCallSurvivesTheJudgedUpdate(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertCount(2, $updated->filter('#round-round-1-now-judge')->ancestors()->first()->filter('img[src*="judge-"][width="48"]'));
+        self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
     }
 
     public function testAReviewerThePageAlreadyListsKeepsItsOneRowWhenItFinishes(): void
