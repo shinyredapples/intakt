@@ -20,6 +20,7 @@ start_demo() {
         --env MERCURE_JWT_SECRET="$(openssl rand -hex 32)" \
         --env ANTHROPIC_API_KEY=unused \
         --env INTAKT_CONFIG=/app/var/data/intakt.yaml \
+        --env MCP_OWNER_KEPT_FILE=/app/var/data/mcp-owner-token \
         --env INTAKT_SAMPLE_REPOSITORY=/app/var/data/sample-repository \
         --volume "$volume:/app/var/data" \
         "$image" >/dev/null

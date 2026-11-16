@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Mcp\Contract\OwnerClientLine;
+use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -146,7 +147,7 @@ final class DemoReviewCommandTest extends TestCase
     {
         $tester = $this->whenTheDemoRuns($this->reviewing(Decision::Approve), ownerToken: '');
 
-        self::assertSame('Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner', array_last($this->lines($tester)));
+        self::assertStringStartsWith('No MCP owner token found: set MCP_OWNER_TOKEN', (string) array_last($this->lines($tester)));
     }
 
     #[DataProvider('decisions')]
@@ -220,7 +221,7 @@ final class DemoReviewCommandTest extends TestCase
         $routes->add(DashboardRoutes::SHOW_REVIEW, new Route('/reviews/{round}'));
 
         // The base URL with a trailing slash, as an owner may set it, so the line proves it is trimmed.
-        return new DemoReviewCommand($review, $this->report(), new UrlGenerator($routes, new RequestContext()), $repository, 7781, 'http://localhost:7781/', $ownerToken);
+        return new DemoReviewCommand($review, $this->report(), new UrlGenerator($routes, new RequestContext()), $repository, 7781, 'http://localhost:7781/', new OwnerToken($ownerToken, null));
     }
 
     private function whenTheDemoIsRun(DemoReviewCommand $command): CommandTester
