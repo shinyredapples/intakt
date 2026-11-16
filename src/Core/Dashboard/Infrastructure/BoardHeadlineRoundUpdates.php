@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\AsDecorator;
 use Symfony\Component\DependencyInjection\Attribute\AutowireDecorated;
 use Symfony\Component\Uid\Uuid;
 
-// Only a start and a round change move the headline, because those are the events that add or remove a lane or a card; a tool call or a text changes neither.
+// Only a start and a round change move the headline and the cards, because those are the events that add or remove a lane or a card; a tool call or a text changes neither.
 #[AsDecorator(RoundUpdates::class)]
 final readonly class BoardHeadlineRoundUpdates implements RoundUpdates
 {

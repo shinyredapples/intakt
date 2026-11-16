@@ -1,2 +1,7 @@
 {#- An update of the line's content, from the same partial as the board's head, so the pushed line never differs from a page loaded after it. -#}
 <turbo-stream action="update" target="board-headline"><template>{{ include('dashboard/_board_headline.html.twig', {headline: headline}, with_context = false) }}</template></turbo-stream>
+{#- The columns a round moves between, replaced whole from the board's own partial: a round starts in In review and ends in Done. -#}
+{% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
+{% for column in [constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::InReview'), constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::Done')] %}
+<turbo-stream action="replace" target="col-{{ column.value|lower|replace({' ': '-'}) }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit}, with_context = false) }}</template></turbo-stream>
+{% endfor %}

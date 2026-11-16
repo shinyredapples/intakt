@@ -150,6 +150,18 @@
         phone.addEventListener('change', showProject);
         // Turbo appends a stream to the document element, so only the document sees it.
         document.addEventListener('turbo:before-stream-render', (event) => {
+            const replaced = document.getElementById(event.target.getAttribute('target') ?? '');
+            if (event.target.getAttribute('action') === 'replace' && replaced?.matches('.board > .col')) {
+                const render = event.detail.render;
+                // The pushed column comes from the server with its start state and every card shown, so the person's own fold and project choice are put back on it.
+                event.detail.render = (stream) => {
+                    const collapsed = replaced.classList.contains('collapsed');
+                    render(stream);
+                    document.getElementById(replaced.id)?.classList.toggle('collapsed', collapsed);
+                    showProject();
+                };
+                return;
+            }
             const shownFilter = document.querySelector('#projfilter');
             if (event.target.getAttribute('target') !== 'projfilter' || !shownFilter) {
                 return;
