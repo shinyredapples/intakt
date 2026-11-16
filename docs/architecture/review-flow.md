@@ -32,7 +32,7 @@ flowchart TD
     judge -->|failed for good| failed[("failure transport: JudgeRound parked, round stays complete")]
     failed --> outFailed["intakt:review ends blocked: the judging failed"]
     wait -->|upper wait passed| outLate["intakt:review ends blocked: no outcome in time"]
-    judge --> publish["PublishVerdict: a reviewer-for-loop round publishes its status and comment on the head"]
+    judge --> publish["PublishVerdict: a reviewer-for-loop round publishes its status and comment on the head (nothing without a GitHub App)"]
 ```
 
 A built head reaches this flow only after its hand-back round ([Hand-back checks](hand-back.md#the-round)): `intakt:hand-back:check` checks the bundle and the pull request text, and a refusal goes back to the builder once with its fixed reason (`hand_back_sent_back`) and hands the task over the second time in a row (`hand_back_handed_over`), so no review is spent on it. Today nothing connects the two: the build lane (T56) will run the round, push an accepted head and send the reason to the builder or the hand-over to the maintainer agent.
