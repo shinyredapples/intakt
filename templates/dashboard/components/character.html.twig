@@ -1,4 +1,4 @@
-{#- A role's Character or an octopus MascotPose as decoration beside the text that names it: an empty alt, a fixed size, one image per theme. -#}
+{#- Both theme images are always emitted because a pane's theme can differ from the page's, so CSS picks the visible one by the nearest [data-theme]. -#}
 {%- set mascot = character in enum_cases('Intakt\\Core\\Dashboard\\Domain\\MascotPose') -%}
 {%- for theme in ['light', 'dark'] -%}
 {%- if mascot -%}
