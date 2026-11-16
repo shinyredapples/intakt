@@ -68,7 +68,7 @@ use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
-// The command the README gives, on the real review pipeline and the kernel's database, with only the vendor scripted: its figures come from stored rounds and ledger rows.
+// Only the vendor is scripted, because the figures the command prints must come from stored rounds and ledger rows, as on an install.
 #[Group('persistence')]
 #[CoversClass(RunBenchCommand::class)]
 #[CoversClass(BenchReport::class)]
@@ -180,7 +180,7 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
         return new VerdictPerRole([self::CORRECTNESS => new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, $planted->file, $planted->from, null, 'Off by one.', FixableBy::Builder, false, null, null)], [], [])]);
     }
 
-    // The demo project's panel: the same two roles on the same tiers.
+    // The demo project's roles and tiers, so the reviewers are named here as in the README's table.
     private function demoPanel(): Panel
     {
         return new Panel([
@@ -189,7 +189,7 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
         ], QuorumPolicy::All);
     }
 
-    // The worker and the judge run whenever the review waits, as the two worker processes of an install do.
+    // The reviews and the judge run when the review waits, because no worker process runs beside a test.
     private function reviewChange(Vendor $vendor): ReviewChange
     {
         $delivered = 0;
