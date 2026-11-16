@@ -9,6 +9,8 @@ services:
             # On the data volume, so the seeded project and the sample repository survive a restart and the seed runs once.
             INTAKT_CONFIG: /app/var/data/intakt.yaml
             INTAKT_SAMPLE_REPOSITORY: /app/var/data/sample-repository
+            # Where the entrypoint keeps the MCP owner token. Set here, not exported by the entrypoint, so commands run by docker compose exec read the same file.
+            MCP_OWNER_KEPT_FILE: /app/var/data/mcp-owner-token
             # The service's own name, so the printed review command runs from the host shell in this folder.
             INTAKT_COMPOSE_SERVICE: intakt
         ports:

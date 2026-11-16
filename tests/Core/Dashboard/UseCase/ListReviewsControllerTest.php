@@ -6,14 +6,22 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\FailingHead;
 use Intakt\Core\Dashboard\Domain\HeadFault;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
+use Intakt\Core\Dashboard\Domain\ReviewRow;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
+use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ListReviewsController::class)]
@@ -22,40 +30,146 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(FailingHead::class)]
 #[UsesClass(HeadFault::class)]
 #[UsesClass(ReviewSummary::class)]
+#[UsesClass(ReviewRow::class)]
+#[UsesClass(ReviewOutcome::class)]
 #[UsesClass(RoundStart::class)]
 final class ListReviewsControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewListShowsEachRoundWithItsProjectNewestFirst(): void
     {
-        $this->ledger->startRound('round-1', 'alpha');
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
         $this->ledger->startRound('round-2', 'beta');
 
         $crawler = $this->browser->request('GET', '/reviews');
 
         self::assertResponseIsSuccessful();
-        self::assertSame(['round-2', 'round-1'], $crawler->filter('tbody tr td:first-child')->each(static fn ($cell): string => $cell->text()));
-        self::assertSame('beta', $crawler->filter('tbody tr:first-child td:nth-child(2)')->text());
-        self::assertSame('2', $crawler->filter('tbody tr:first-child td:nth-child(3)')->text());
-        self::assertSame('2026-10-28 12:00:00', $crawler->filter('tbody tr:first-child td:nth-child(4)')->text());
+        self::assertSame(['round-2', 'round-1'], $crawler->filter('.review-row .round-id code')->each(static fn ($id): string => $id->text()));
+        self::assertSame('beta', $crawler->filter('.review-row')->first()->filter('.pname')->text());
+        self::assertSame('2 reviewers', $crawler->filter('.review-row')->first()->filter('.reviewers')->text());
     }
 
-    public function testTheTableOfRoundsScrollsInANamedRegionTheKeyboardReaches(): void
+    public function testEachRoundIsTitledByItsChangeAndRoundNumberInsteadOfItsId(): void
+    {
+        $this->ledger->startRoundOf('sample-change', '0195a3c4-7b1e-7c2d-9f00-1a2b3c4d5e6f', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('sample-change, round 2', $crawler->filter('.review-row .review-title')->text());
+    }
+
+    public function testTheWholeRowIsOneLinkToTheRoundsReview(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('/reviews/round-1', $crawler->filter('.review-row > a.review-link')->attr('href'));
+        self::assertCount(1, $crawler->filter('.review-row > a.review-link .review-title'));
+        self::assertCount(1, $crawler->filter('.review-row > a.review-link .review-facts'));
+    }
+
+    // Outside the link, because text inside a link cannot be selected without following it.
+    public function testTheRoundIdIsASmallDetailOutsideTheLinkThatSelectsWhole(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('round-1', $crawler->filter('.review-row > .round-id code')->text());
+        self::assertCount(0, $crawler->filter('.review-link .round-id'));
+    }
+
+    public function testTheListOfRoundsIsANamedList(): void
     {
         $this->ledger->startRound('round-1', 'alpha');
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('Review rounds', $crawler->filter('.table-scroll[tabindex="0"][role="region"]')->last()->attr('aria-label'));
+        self::assertSame('Review rounds', $crawler->filter('ol.review-rows')->attr('aria-label'));
     }
 
-    public function testARoundWithAJudgeDecisionIsListedAsJudged(): void
+    public function testAJudgedRoundShowsItsOutcomeChip(): void
+    {
+        $this->ledger->startRoundOfQuorum('sample-change', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Approved', $crawler->filter('.review-facts .chip.approved')->text());
+    }
+
+    public function testARoundThatEndedWithoutAnOutcomeInTimeShowsTheBlockedChipAndNoFindingCount(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Blocked', $crawler->filter('.review-facts .chip')->first()->text());
+        self::assertCount(0, $crawler->filter('.review-facts .findings'));
+    }
+
+    public function testARoundWhoseJudgingFailedShowsTheFailedChipAndNoFindingCount(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Failed', $crawler->filter('.review-facts .chip')->first()->text());
+        self::assertCount(0, $crawler->filter('.review-facts .findings'));
+    }
+
+    public function testAJudgedRoundShowsHowManyFindingsTheJudgeKept(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'defer']);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('2 findings', $crawler->filter('.review-facts .findings')->text());
+    }
+
+    public function testAJudgedRoundWithOneFindingSaysFindingInTheSingular(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act']);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('1 finding', $crawler->filter('.review-facts .findings')->text());
+    }
+
+    public function testARoundInProgressShowsNoFindingCount(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertCount(0, $crawler->filter('.review-facts .findings'));
+    }
+
+    public function testARoundShowsWhenItStartedAsARelativeTimeWithTheStampAsItsTooltip(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $time = $this->browser->request('GET', '/reviews')->filter('.review-facts time');
+
+        self::assertSame('just now', $time->text());
+        self::assertSame('2026-10-28 12:00:00 UTC', $time->attr('title'));
+        self::assertSame('2026-10-28T12:00:00+00:00', $time->attr('datetime'));
+    }
+
+    public function testAJudgedRoundWithoutAnOutcomeIsListedAsJudged(): void
     {
         $this->ledger->startRound('round-1', 'alpha');
         $this->ledger->judgeRound('round-1');
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('Judged', $crawler->filter('tbody tr td:nth-child(5) .chip.state-judged')->text());
+        self::assertSame('Judged', $crawler->filter('.review-facts .chip.state-judged')->text());
     }
 
     public function testARoundWithoutAJudgeDecisionIsListedAsInProgress(): void
@@ -64,7 +178,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('In progress', $crawler->filter('tbody tr td:nth-child(5) .chip.state-running')->text());
+        self::assertSame('In progress', $crawler->filter('.review-facts .chip.state-running')->text());
     }
 
     public function testThePageHeadNamesThePageAndSaysWhatItLists(): void
@@ -93,7 +207,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews?project=alpha');
 
         self::assertCount(1, $crawler->filter('#projfilter option[value="beta"]'));
-        self::assertCount(1, $crawler->filter('tr[data-project="beta"]'));
+        self::assertCount(1, $crawler->filter('.review-row[data-project="beta"]'));
     }
 
     public function testAProjectParameterTheInstallDoesNotListLeavesTheFilterOnAllProjects(): void
@@ -103,7 +217,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews?project=gone');
 
         self::assertCount(0, $crawler->filter('#projfilter option[selected]'), 'Without a selected option the browser shows the first one, All projects.');
-        self::assertSame(['round-1'], $crawler->filter('tbody tr td:first-child')->each(static fn ($cell): string => $cell->text()));
+        self::assertSame(['round-1'], $crawler->filter('.review-row .round-id code')->each(static fn ($id): string => $id->text()));
     }
 
     public function testAProjectLinkMarksOnlyTheProjectWithExactlyThatNameSelected(): void
@@ -157,7 +271,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews');
 
         self::assertSelectorTextContains('main .empty', 'No review has started yet.');
-        self::assertSelectorNotExists('table');
+        self::assertSelectorNotExists('.review-rows');
         self::assertSelectorNotExists('.failing-heads');
     }
 

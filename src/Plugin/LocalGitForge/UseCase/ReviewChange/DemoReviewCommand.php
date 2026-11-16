@@ -6,10 +6,10 @@ namespace Intakt\Plugin\LocalGitForge\UseCase\ReviewChange;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Mcp\Contract\OwnerClientLine;
+use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\SampleChange;
-use SensitiveParameter;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Command\SignalableCommandInterface;
@@ -33,9 +33,7 @@ final readonly class DemoReviewCommand implements SignalableCommandInterface
         private int $dashboardPort,
         #[Autowire(env: 'REVIEW_MCP_BASE_URL')]
         private string $mcpBaseUrl,
-        #[SensitiveParameter]
-        #[Autowire(env: 'MCP_OWNER_TOKEN')]
-        private string $ownerToken,
+        private OwnerToken $ownerToken,
     ) {
     }
 
@@ -105,6 +103,6 @@ final readonly class DemoReviewCommand implements SignalableCommandInterface
     // Escaped and on one line, because the line is pasted as one command and the token may hold characters the console reads as tags.
     private function printMcpLine(SymfonyStyle $io): void
     {
-        $io->writeln(OutputFormatter::escape('Connect an MCP client: '.new OwnerClientLine($this->mcpBaseUrl, $this->ownerToken)->line()));
+        $io->writeln(OutputFormatter::escape(new OwnerClientLine($this->mcpBaseUrl, $this->ownerToken->value())->setup()));
     }
 }

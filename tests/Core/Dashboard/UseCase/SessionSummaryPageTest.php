@@ -97,7 +97,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['F1', 'F2'], $crawler->filter('#round-round-1 table.findings td[data-finding]')->each(static fn (Crawler $cell): string => (string) $cell->attr('data-finding')));
+        self::assertSame(['F1', 'F2'], $crawler->filter('#round-round-1 ul.finding-cards li[data-finding]')->each(static fn (Crawler $card): string => (string) $card->attr('data-finding')));
     }
 
     public function testAFindingTheRoundCheckedAndReportedAgainIsListedOnceAsOpen(): void
@@ -170,7 +170,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertCount(1, $crawler->filter('.ls-findings button[data-highlight-finding="F2"]'));
-        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 td[data-finding~="F2"]')->each(static fn (Crawler $cell): string => $cell->text()));
+        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 li[data-finding~="F2"] .fc-id')->each(static fn (Crawler $id): string => $id->text()));
     }
 
     public function testTheStylesheetKeepsTheSummaryInViewWhileTheLogScrollsAboveIt(): void

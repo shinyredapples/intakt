@@ -48,6 +48,14 @@ final class ComposeDemoTest extends TestCase
         self::assertStringStartsWith('/app/var/data/', $service['environment']['INTAKT_SAMPLE_REPOSITORY']);
     }
 
+    public function testComposeGivesEveryExecutedCommandTheFileTheEntrypointKeepsTheOwnerTokenIn(): void
+    {
+        $service = $this->service();
+
+        self::assertSame('/app/var/data/mcp-owner-token', $service['environment']['MCP_OWNER_KEPT_FILE']);
+        self::assertStringStartsWith(dirname($service['environment']['INTAKT_CONFIG']).'/', $service['environment']['MCP_OWNER_KEPT_FILE']);
+    }
+
     public function testTheServiceNamesItselfSoThePrintedReviewCommandRunsFromTheHost(): void
     {
         /** @var array{services: array<string, array{environment: array<string, string>}>} $compose */

@@ -60,22 +60,26 @@
 {{ include('dashboard/components/empty.html.twig', {title: 'No reviews yet', text: 'No review has started yet.'}, with_context = false) }}
 {% else %}
 <section class="section">
-<div class="table-scroll" tabindex="0" role="region" aria-label="Review rounds">
-<table class="ledger">
-    <thead><tr><th>Round</th><th>Project</th><th>Reviewers</th><th>Started (UTC)</th><th>State</th></tr></thead>
-    <tbody>
-    {% for review in reviews %}
-        <tr data-project="{{ review.project }}">
-            <td class="mono"><a href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: review.round}) }}">{{ review.round }}</a></td>
-            <td>{{ review.project }}</td>
-            <td class="num">{{ review.reviewers }}</td>
-            <td class="when">{{ review.startedAt|date('Y-m-d H:i:s', 'UTC') }}</td>
-            <td>{{ include('dashboard/_round_state.html.twig', {state: review.state}, with_context = false) }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-</div>
+<ol class="review-rows" aria-label="Review rounds">
+{% for row in reviews %}
+    {% set review = row.review %}
+    <li class="review-row" data-project="{{ review.project }}">
+        <a class="review-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: review.round}) }}">
+            <span class="review-title">{{ row.title }}</span>
+            <span class="review-facts">
+                <span class="pname">{{ review.project }}</span>
+                {{ review.outcome is not null
+                    ? include('dashboard/components/outcome_chip.html.twig', {outcome: review.outcome, on_page: true}, with_context = false)
+                    : include('dashboard/_round_state.html.twig', {state: review.state}, with_context = false) }}
+                {% if review.findingCount is not null %}<span class="findings">{{ review.findingCount }} {{ review.findingCount == 1 ? 'finding' : 'findings' }}</span>{% endif %}
+                <span class="reviewers">{{ review.reviewers }} {{ review.reviewers == 1 ? 'reviewer' : 'reviewers' }}</span>
+                <time datetime="{{ review.startedAt|date('c', 'UTC') }}" title="{{ review.startedAt|date('Y-m-d H:i:s', 'UTC') }} UTC">{{ row.startedAgo }}</time>
+            </span>
+        </a>
+        <p class="round-id">Round id <code>{{ review.round }}</code></p>
+    </li>
+{% endfor %}
+</ol>
 </section>
 {% endif %}
 {% endblock %}

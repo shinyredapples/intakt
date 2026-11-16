@@ -247,7 +247,7 @@ final class DashboardShellTest extends DashboardPageTestCase
         $this->ledger->startRound('round-1', 'alpha');
         $this->ledger->startRound('round-2', 'beta');
 
-        $rows = $this->browser->request('GET', '/reviews')->filter('main.content tbody tr');
+        $rows = $this->browser->request('GET', '/reviews')->filter('main.content .review-row');
 
         self::assertSame(['beta', 'alpha'], $rows->each(static fn (Crawler $row): string => (string) $row->attr('data-project')));
     }

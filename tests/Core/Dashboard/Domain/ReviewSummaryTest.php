@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
@@ -22,6 +23,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(RoundStart::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundFinding::class)]
+#[UsesClass(ReviewOutcome::class)]
 final class ReviewSummaryTest extends TestCase
 {
     public function testAListedRoundKeepsItsIdProjectReviewersAndStart(): void
@@ -52,7 +54,7 @@ final class ReviewSummaryTest extends TestCase
 
         $summary = new ReviewSummary($judged);
 
-        self::assertSame([ReviewState::Judged, Decision::Changes, 2], [$summary->state, $summary->outcome, $summary->findingCount]);
+        self::assertSame([ReviewState::Judged, ReviewOutcome::ChangesRequested, 2], [$summary->state, $summary->outcome, $summary->findingCount]);
     }
 
     public function testAJudgedRoundWithoutFindingsCountsZero(): void

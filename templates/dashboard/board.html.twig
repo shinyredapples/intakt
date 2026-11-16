@@ -27,8 +27,12 @@
         {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
     {% endembed %}
 {% endfor %}
+{# A disclosure with no lane would open to nothing, so it is a plain line until a lane runs. #}
+{% if working.lanes is empty %}
+<p class="working working-none" id="working">Nobody is working</p>
+{% else %}
 <details class="working" id="working">
-    <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working ? working.working ~ ' working' : 'Nobody is working yet' }}</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
+    <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working }} working</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
     <div class="lanes">
     {% for lane in working.lanes %}
         <div class="lane" data-project="{{ lane.project }}">
@@ -39,14 +43,17 @@
     {% endfor %}
     </div>
 </details>
+{% endif %}
 <section aria-labelledby="board-h">
     <h2 id="board-h" class="sr-only">Tasks by state</h2>
-    {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. #}
+    {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. The wrapper carries the edge classes assets/board-edge.js sets, because the fade they turn on masks the board inside it; the same script scrolls a board marked data-scroll-to-end to Done once. #}
     {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
+    <div class="board-wrap"{% if board.startsScrolledToDone %} data-scroll-to-end{% endif %}>
     <div class="board">
     {% for column in columns %}
         {{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit}, with_context = false) }}
     {% endfor %}
+    </div>
     </div>
 </section>
 {% endblock %}

@@ -94,6 +94,7 @@ final class DemoOwnerTokenSdkClientTest extends KernelTestCase
             'MCP_OWNER_ACCESS' => false,
             'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample-repository',
             'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
+            'MCP_OWNER_KEPT_FILE' => $this->directory.'/mcp-owner-token',
         ]);
         $start->run();
 
