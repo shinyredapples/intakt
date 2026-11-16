@@ -6,6 +6,7 @@ namespace Intakt\Tests\Support\Log;
 
 use Psr\Log\AbstractLogger;
 use Stringable;
+use Throwable;
 
 final class RecordingLogger extends AbstractLogger
 {
@@ -18,7 +19,11 @@ final class RecordingLogger extends AbstractLogger
      */
     public function log(mixed $level, string|Stringable $message, array $context = []): void
     {
-        $this->records->add(is_string($level) ? $level : get_debug_type($level), $this->filledIn((string) $message, $context));
+        $this->records->add(
+            is_string($level) ? $level : get_debug_type($level),
+            $this->filledIn((string) $message, $context),
+            array_any($context, static fn (mixed $value): bool => $value instanceof Throwable),
+        );
     }
 
     /**
