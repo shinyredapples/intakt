@@ -14,7 +14,6 @@ use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerRunningEvent;
-use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Worker;
 use Throwable;
