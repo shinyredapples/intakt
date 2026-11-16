@@ -22,6 +22,7 @@ final readonly class ReviewerOutcome
         public string $role,
         public string $tier,
         public DateTimeImmutable $since,
+        public ?string $model = null,
     ) {
         $this->progress = ReviewerProgress::Running;
         $this->decision = null;
@@ -31,9 +32,10 @@ final readonly class ReviewerOutcome
         $this->mode = ProjectMode::Live;
     }
 
-    public function restarted(DateTimeImmutable $at): self
+    // The model comes from the latest start alone, because a reviewer started again may run on another model, and a start written before the model was recorded has none.
+    public function restarted(DateTimeImmutable $at, ?string $model): self
     {
-        return new self($this->id, $this->role, $this->tier, $at);
+        return new self($this->id, $this->role, $this->tier, $at, $model);
     }
 
     public function answered(string $decision, int $findings, ProjectMode $mode): self
