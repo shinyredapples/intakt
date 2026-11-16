@@ -61,8 +61,12 @@ services:
     Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokens:
         arguments:
             $installationId: '%env(GITHUB_APP_INSTALLATION_ID)%'
-    # Built when first needed, so only the installation check and the forge need the two settings.
+    Intakt\Plugin\GitHubForge\Infrastructure\GitHubAppSetting:
+        arguments:
+            $appId: '%env(GITHUB_APP_ID)%'
+    # Lazy, so the forge can be built without an App (the demo) and the two settings are parsed only when a call first reaches GitHub.
     Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation:
+        lazy: true
         factory: ['Intakt\Plugin\GitHubForge\Domain\ExpectedInstallation', 'fromSettings']
         arguments: ['%env(GITHUB_APP_PERMISSIONS)%', '%env(GITHUB_APP_REPOSITORIES)%']
     # Empty while no maintainer App runs, so no bot but Intakt's own steers.
