@@ -265,11 +265,11 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .col-fold { display: none; }
 .col-hide { margin-left: auto; height: 28px; }
 .col-hide:focus-visible { outline-offset: -2px; }
-/* Only from 761 px, because Backlog and Done are not collapsed on phones (DESIGN.md, Phone), and the phone board shows one column at a time, so it has no hidden side to fade. assets/board-edge.js sets more-left and more-right. */
+/* Only from 761 px, because Backlog and Done are not collapsed on phones (DESIGN.md, Phone), and the phone board shows one column at a time, so it has no hidden side to fade. assets/board-edge.js sets more-left and more-right; the mask reads only alpha, so the opaque ink token stands in for the mock's raw black. */
 @media (min-width: 761px) {
-  .board-wrap.more-right .board { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 64px), transparent); }
-  .board-wrap.more-left.more-right .board { -webkit-mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 64px), transparent); mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 64px), transparent); }
-  .board-wrap.more-left:not(.more-right) .board { -webkit-mask-image: linear-gradient(to right, transparent, #000 48px); mask-image: linear-gradient(to right, transparent, #000 48px); }
+  .board-wrap.more-right .board { -webkit-mask-image: linear-gradient(to right, var(--ink) calc(100% - 64px), transparent); mask-image: linear-gradient(to right, var(--ink) calc(100% - 64px), transparent); }
+  .board-wrap.more-left.more-right .board { -webkit-mask-image: linear-gradient(to right, transparent, var(--ink) 48px, var(--ink) calc(100% - 64px), transparent); mask-image: linear-gradient(to right, transparent, var(--ink) 48px, var(--ink) calc(100% - 64px), transparent); }
+  .board-wrap.more-left:not(.more-right) .board { -webkit-mask-image: linear-gradient(to right, transparent, var(--ink) 48px); mask-image: linear-gradient(to right, transparent, var(--ink) 48px); }
   .board .col.collapsed { flex: 0 0 108px; min-width: 108px; }
   .col.collapsed .col-head, .col.collapsed .col-cards { display: none; }
   .col.collapsed .col-fold {
