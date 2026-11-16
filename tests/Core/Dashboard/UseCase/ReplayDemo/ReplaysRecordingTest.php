@@ -1,0 +1,241 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
+
+use DateTimeImmutable;
+use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
+use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Tests\Support\StoredSerializerFactory;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+
+#[CoversClass(ReplaysRecording::class)]
+#[CoversClass(ReplayIsRefused::class)]
+#[CoversClass(ReplayStopped::class)]
+#[UsesClass(Recording::class)]
+#[UsesClass(RecordedLedgerEvent::class)]
+#[UsesClass(RecordingFormat::class)]
+final class ReplaysRecordingTest extends TestCase
+{
+    private const string ROUND = '0196a000-0000-7000-8000-000000000001';
+
+    private const string CALL = '0196a000-0000-7000-8000-0000000000c1';
+
+    // Escaped as the stored serializer writes it, so a test sees that the rewritten row keeps the escapes.
+    private const string TASK = '"Fix the cart \\/ caf\\u00e9."';
+
+    private const string START = '2026-11-16T09:00:00.000000+00:00';
+
+    private MockClock $clock;
+
+    private ClockedLedger $ledger;
+
+    private InMemoryStore $locks;
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock(self::START);
+        $this->ledger = new ClockedLedger($this->clock);
+        $this->locks = new InMemoryStore();
+    }
+
+    public function testReplayingARecordingAppendsTheSameLedgerRowsAsTheRecordedRunInRecordedOrder(): void
+    {
+        $recording = $this->recordedRun();
+
+        $this->replays()->replay($recording, 1.0);
+
+        self::assertSame(
+            array_map(static fn (RecordedLedgerEvent $event): array => [$event->kind, self::withProject($event->payload, CreateDemoProjectCommand::NAME)], $recording->events),
+            array_map(static fn (RecordedEvent $row): array => [$row->event->kind, $row->event->payload], $this->appended()),
+        );
+    }
+
+    public function testARowThatNamesNoProjectIsAppendedAsItsStoredText(): void
+    {
+        $recording = $this->recordedRun();
+
+        $this->replays()->replay($recording, 1.0);
+
+        self::assertSame($recording->events[1]->payload, $this->appended()[1]->event->payload);
+        self::assertSame($recording->events[3]->payload, $this->appended()[3]->event->payload);
+    }
+
+    public function testTheReviewStartedRowNamesTheDemoProjectNotTheRecordedOne(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame(
+            '{"round":"'.self::ROUND.'","project":"demo-replay","reviewers":2,"change":"sample-change","number":1,"task":'.self::TASK.',"repository":"\/app\/var\/data\/sample-repository","base":"main","quorum":{}}',
+            $this->appended()[0]->event->payload,
+        );
+    }
+
+    public function testTheUsageRowOfAModelCallNamesTheDemoProject(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        $usage = json_decode($this->appended()[2]->event->payload, true);
+
+        self::assertIsArray($usage);
+        self::assertSame(CreateDemoProjectCommand::NAME, $usage['project'] ?? null);
+    }
+
+    public function testEachRowIsAppendedOnceTheClockHasAdvancedByItsRecordedGapDividedByTheFactor(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 4.0);
+
+        self::assertSame(
+            ['09:00:00.000000', '09:00:02.500000', '09:00:02.750000', '09:00:32.750000', '09:00:32.750000'],
+            array_map(static fn (RecordedEvent $row): string => $row->recordedAt->format('H:i:s.u'), $this->appended()),
+        );
+    }
+
+    public function testTheTimeAnAppendTakesIsNotAddedToTheRecordedGaps(): void
+    {
+        $this->ledger->takeSecondsPerAppend(3.0);
+
+        $this->replays()->replay($this->recordedRun(), 2.0);
+
+        self::assertSame(
+            ['09:00:00.000000', '09:00:05.000000', '09:00:08.000000', '09:01:05.500000', '09:01:08.500000'],
+            array_map(static fn (RecordedEvent $row): string => $row->recordedAt->format('H:i:s.u'), $this->appended()),
+        );
+    }
+
+    public function testARowIsNotAppendedBeforeTheClockReachesItsMoment(): void
+    {
+        $this->ledger->failAppend(3);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 2.0);
+        } catch (ReplayStopped) {
+        }
+
+        self::assertSame('09:00:05.000000', array_last($this->appended())?->recordedAt->format('H:i:s.u'));
+        self::assertSame('09:00:05.500000', $this->clock->now()->format('H:i:s.u'));
+    }
+
+    public function testARowRecordedBeforeThePreviousOneIsAppendedWithoutWaiting(): void
+    {
+        $this->replays()->replay($this->recording([$this->row(LedgerEventKind::ReviewerStarted, '{"round":"r"}', 10), $this->row(LedgerEventKind::ReviewerStarted, '{"round":"r"}', 4)]), 1.0);
+
+        self::assertSame(self::START, $this->clock->now()->format('Y-m-d\TH:i:s.uP'));
+    }
+
+    public function testAFailedAppendStopsTheReplayAndLaterRowsAreNotWritten(): void
+    {
+        $this->ledger->failAppend(2);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('The replay went on after a failed append.');
+        } catch (ReplayStopped $stopped) {
+            self::assertStringContainsString('disk full', $stopped->getMessage());
+        }
+
+        self::assertCount(1, $this->appended());
+    }
+
+    public function testARecordingWhoseRoundIsAlreadyInTheLedgerIsRefusedBeforeAnyRowIsWritten(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('A recording whose round the ledger holds was replayed again.');
+        } catch (ReplayIsRefused $refused) {
+            self::assertStringContainsString(self::ROUND, $refused->getMessage());
+        }
+
+        self::assertCount(5, $this->appended());
+    }
+
+    public function testARecordingOfAnotherRoundIsReplayedBesideAnEarlierReplay(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        $this->replays()->replay($this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"another-round","project":"sample"}', 0)]), 1.0);
+
+        self::assertCount(6, $this->appended());
+    }
+
+    public function testAReplayIsRefusedWhileAnotherReplayRuns(): void
+    {
+        $running = new LockFactory($this->locks)->createLock(ReplaysRecording::LOCK);
+        $running->acquire();
+
+        $this->expectException(ReplayIsRefused::class);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+        } finally {
+            self::assertSame([], $this->appended());
+        }
+    }
+
+    public function testTheReplayLetsTheNextReplayRunOnceItEnds(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertTrue(new LockFactory($this->locks)->createLock(ReplaysRecording::LOCK)->acquire());
+    }
+
+    private function replays(): ReplaysRecording
+    {
+        return new ReplaysRecording($this->ledger, $this->clock, new LockFactory($this->locks));
+    }
+
+    /**
+     * @return list<RecordedEvent>
+     */
+    private function appended(): array
+    {
+        return iterator_to_array($this->ledger->readInOrder(), false);
+    }
+
+    // Written through the stored serializer and read back from a file, as the record command leaves it, so the rows are the text a live review stores.
+    private function recordedRun(): Recording
+    {
+        $format = new RecordingFormat(StoredSerializerFactory::create());
+
+        return $format->read($format->write($this->recording([
+            $this->row(LedgerEventKind::ReviewStarted, '{"round":"'.self::ROUND.'","project":"sample","reviewers":2,"change":"sample-change","number":1,"task":'.self::TASK.',"repository":"\/app\/var\/data\/sample-repository","base":"main","quorum":{}}', 0),
+            $this->row(LedgerEventKind::ReviewerStarted, '{"round":"'.self::ROUND.'","reviewer":"r-1","role":"correctness","tier":"standard"}', 10),
+            $this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"sample","tier":"standard","round":"'.self::ROUND.'","model":"claude-opus-5-5"}', 11),
+            $this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"settled","usages":[{"model":"claude-opus-5-5","total":1.0}]}', 131),
+            $this->row(LedgerEventKind::VerdictReceived, '{"round":"'.self::ROUND.'","reviewer":"r-1","role":"correctness","tier":"standard","decision":"approve","findings":0}', 131),
+        ])));
+    }
+
+    /**
+     * @param list<RecordedLedgerEvent> $events
+     */
+    private function recording(array $events): Recording
+    {
+        return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, []);
+    }
+
+    private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
+    {
+        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000aa', $kind, $payload, new DateTimeImmutable('2026-11-16T09:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
+    }
+
+    private static function withProject(string $payload, string $project): string
+    {
+        return str_replace('"project":"sample"', '"project":"'.$project.'"', $payload);
+    }
+}
