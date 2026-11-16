@@ -10,8 +10,6 @@ use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
-use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\Clock\MockClock;
 
 abstract class DashboardPageTestCase extends WebTestCase
 {
@@ -27,7 +25,7 @@ abstract class DashboardPageTestCase extends WebTestCase
         $this->ledger = new DashboardLedger();
         self::getContainer()->set(Ledger::class, $this->ledger);
         // The ledger stamps its rows at one moment, so a round only counts as overdue in the tests that move the clock on.
-        self::getContainer()->set(ClockInterface::class, new MockClock('2026-10-28T12:00:00+00:00'));
+        self::clockAt('2026-10-28T12:00:00+00:00');
         // Answered without the database, because these pages read every other fact from the ledger in memory and a page test creates no schema.
         $this->replayMarks = new ReplayMarkBus();
         self::getContainer()->set(ReplayMarks::class, new ReplayMarks($this->replayMarks));

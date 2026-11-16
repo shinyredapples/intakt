@@ -1,4 +1,9 @@
 services:
+    # A clock the tests move, because replacing the framework's clock with set() throws once anything has created it.
+    clock:
+        class: Symfony\Component\Clock\MockClock
+        public: true
+
     # Records into the PHPUnit run's file instead of the logger's stderr; outside a PHPUnit run the redacted JSON logger stays, so an instance keeps its server log.
     intakt.test.recording_logger:
         class: Psr\Log\LoggerInterface
