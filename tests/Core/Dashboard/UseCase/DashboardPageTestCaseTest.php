@@ -15,7 +15,7 @@ use Symfony\Component\Clock\ClockInterface;
 #[UsesClass(PinnableClockFactory::class)]
 final class DashboardPageTestCaseTest extends DashboardPageTestCase
 {
-    // The order CI met at random: something created the clock before the page setup set its moment.
+    // Forced by hand, because CI met this order only at random (#2295): something created the clock before the page setup set its moment.
     public function testThePageSetupSetsTheMomentOfAClockThatWasCreatedBeforeIt(): void
     {
         self::ensureKernelShutdown();
