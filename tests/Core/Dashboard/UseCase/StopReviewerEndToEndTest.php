@@ -93,7 +93,7 @@ final class StopReviewerEndToEndTest extends WebTestCase
         $crawler = $this->browser->request('GET', $page);
 
         self::assertSame('stopped', $crawler->filter('td[id$="-state"]')->text());
-        self::assertSame('blocked', $crawler->filter('table.reviewers tbody tr td')->eq(3)->text());
+        self::assertCount(0, $crawler->filter('td[id$="-state"] .dot'));
         self::assertCount(0, $crawler->filter('form.stop-reviewer'));
     }
 

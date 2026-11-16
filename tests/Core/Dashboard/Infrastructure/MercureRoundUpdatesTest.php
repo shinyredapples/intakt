@@ -259,7 +259,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $row = 'round-'.self::ROUND.'-reviewer-'.self::REVIEWER;
 
         self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state">stopped</td>', $row, $row), $data);
-        self::assertStringContainsString(sprintf('target="%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
+        self::assertStringContainsString(sprintf('targets="#%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
     }
 
     public function testAHubThatRefusesAStoppedReviewerIsLoggedAndDoesNotFailTheCaller(): void

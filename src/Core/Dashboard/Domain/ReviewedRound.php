@@ -91,6 +91,11 @@ final readonly class ReviewedRound
         return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
     }
 
+    public function reviewOutcome(): ?ReviewOutcome
+    {
+        return ReviewOutcome::of($this);
+    }
+
     public function failedReviewers(): int
     {
         return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));

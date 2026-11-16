@@ -163,8 +163,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
             .$this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]);
 
-        foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
-            self::assertCount(1, $page->filter('#'.$target), $target);
+        foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => $stream->attr('targets') ?? '#'.$stream->attr('target')) as $selector) {
+            self::assertCount(1, $page->filter($selector), $selector);
         }
     }
 
@@ -421,7 +421,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame([['round-1-correctness', '', 'verdict', '', '', 'started after this page loaded', '']], $this->rowsOf($updated));
+        self::assertSame([['round-1-correctness', 'started after this page loaded', 'verdict', 'shown after a reload']], $this->rowsOf($updated));
     }
 
     public function testAReviewerStoppedAfterThePageLoadedWithoutItGetsAStoppedRowInTheReviewersTable(): void
@@ -431,7 +431,29 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness']));
 
-        self::assertSame([['round-1-correctness', '', 'stopped', '', '', 'started after this page loaded', '']], $this->rowsOf($updated));
+        self::assertSame([['round-1-correctness', 'started after this page loaded', 'stopped', 'shown after a reload']], $this->rowsOf($updated));
+    }
+
+    public function testAReviewerThatFinishesAfterThePageLoadedFillsAsManyCellsAsATableWithoutAStopColumnHasHeaders(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-security' => FinishedState::Verdict])]));
+
+        self::assertSame([4], $this->cellCountsOf($updated));
+        self::assertCount(4, $updated->filter('table.reviewers thead th'));
+    }
+
+    public function testAReviewerThatFinishesAfterThePageLoadedFillsAsManyCellsAsATableWithAStopColumnHasHeaders(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-security' => FinishedState::Verdict])]));
+
+        self::assertSame([5, 5], $this->cellCountsOf($updated));
+        self::assertCount(5, $updated->filter('table.reviewers thead th'));
     }
 
     public function testAReviewerTheTableAlreadyListsKeepsItsOneRowWhenItFinishes(): void
@@ -441,7 +463,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame([['correctness', 'standard', 'verdict', '', '', '', '']], $this->rowsOf($updated));
+        self::assertSame([['correctness', 'standard tier, model not recorded', 'verdict', 'no answer yet', '']], $this->rowsOf($updated));
     }
 
     public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowInTheCurrentStateBlock(): void
@@ -662,6 +684,14 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     private function rowsOf(Crawler $page): array
     {
         return $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text()));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function cellCountsOf(Crawler $page): array
+    {
+        return $page->filter('table.reviewers tbody tr')->each(static fn (Crawler $tr): int => $tr->filter('td')->count());
     }
 
     // Done by hand on the parsed page, because no browser runs Turbo in the tests.
