@@ -110,6 +110,14 @@ final class SampleProjectSeedTest extends KernelTestCase
         }
     }
 
+    public function testWithoutAProviderKeyTheSeedSucceedsWithTheRepositoryAndNoProjectSoTheStartGoesOn(): void
+    {
+        $this->seed();
+
+        self::assertDirectoryExists($this->directory.'/sample-repository/.git');
+        self::assertFileDoesNotExist($this->directory.'/intakt.yaml');
+    }
+
     // Set directly, because HF_TOKEN becomes these two only in the image's entrypoint, which this test does not run.
     private function setTheHuggingFaceRouter(): void
     {

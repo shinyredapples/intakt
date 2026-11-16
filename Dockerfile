@@ -54,19 +54,20 @@ ENV APP_ENV=prod \
 
 COPY --from=vendor /app /app
 COPY docker/entrypoint.sh /usr/local/bin/intakt-entrypoint
+COPY docker/healthcheck.sh /usr/local/bin/intakt-healthcheck
 
 # One fixed user id, so a volume can be chowned to it from the host.
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin intakt \
     && mkdir -p /app/var/data \
     && chown -R intakt:intakt /app/var \
-    && chmod 755 /usr/local/bin/intakt-entrypoint
+    && chmod 755 /usr/local/bin/intakt-entrypoint /usr/local/bin/intakt-healthcheck
 
 USER intakt
 # No VOLUME: this is also Intakt's own job image, and the job runner refuses an image that declares one. Mount /app/var/data when running it.
 EXPOSE 7781
 
-# The admin API answers on localhost only; its metrics endpoint stops answering when the server is stuck, so Docker marks the container unhealthy.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl --fail --silent --show-error --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics" || exit 1
+# The admin API answers on localhost only; its metrics endpoint stops answering when the server is stuck, so Docker marks the container unhealthy. The script also asks the dashboard and, in the demo, waits for the seed.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD ["intakt-healthcheck"]
 
 ENTRYPOINT ["intakt-entrypoint"]
