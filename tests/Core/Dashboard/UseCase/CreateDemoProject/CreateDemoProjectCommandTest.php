@@ -103,7 +103,10 @@ final class CreateDemoProjectCommandTest extends KernelTestCase
         $entities = self::getContainer()->get('doctrine')->getManager();
         self::assertInstanceOf(EntityManagerInterface::class, $entities);
 
-        return (int) $entities->getConnection()->fetchOne('SELECT COUNT(*) FROM review_replay_project');
+        $rows = $entities->getConnection()->fetchOne('SELECT COUNT(*) FROM review_replay_project');
+        self::assertIsInt($rows);
+
+        return $rows;
     }
 
     private function markOfTheDemoProject(): ReplayMark
