@@ -45,7 +45,6 @@ use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory;
 use Symfony\AI\Platform\Bridge\Anthropic\ModelCatalog;
 use Symfony\AI\Platform\Capability;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
@@ -118,7 +117,7 @@ final class BinaryFileReadReviewTest extends KernelTestCase
         ];
         $catalog = new ModelCatalog(['reviewer-model' => ['class' => Claude::class, 'capabilities' => [Capability::INPUT_MESSAGES, Capability::OUTPUT_TEXT, Capability::OUTPUT_STRUCTURED, Capability::TOOL_CALLING, Capability::THINKING]]]);
         $platform = Factory::createPlatform('key', new MockHttpClient($this->responses), $catalog, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests($this->fixture->ledger(), $this->fixture->ledgerPayloads())));
+        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests($this->fixture->ledger(), $this->fixture->ledgerPayloads())));
         $checkout = new Checkout($this->repository->path);
         $toolboxes = static fn (ReviewRequest $request): Toolbox => new ReviewerToolboxFactory()->inCheckout($checkout);
         $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), $toolboxes, $runs);

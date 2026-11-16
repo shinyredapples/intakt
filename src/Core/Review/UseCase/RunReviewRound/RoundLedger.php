@@ -6,6 +6,8 @@ namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierResolutionFailure;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -39,6 +41,7 @@ final readonly class RoundLedger
         private ProjectModes $modes,
         #[Target('stored')]
         private SerializerInterface $serializer,
+        private TierResolver $tiers,
     ) {
     }
 
@@ -58,9 +61,10 @@ final readonly class RoundLedger
         ));
     }
 
+    // The model goes with the start, because the dashboard names a reviewer by it from the ledger alone and a later change of the tier's model must not rename it.
     public function reviewerStarted(RoundReviewer $reviewer): void
     {
-        $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer)));
+        $this->append(LedgerEventKind::ReviewerStarted, new ReviewerStarted(...$this->identify($reviewer), model: $this->modelOf($reviewer)));
     }
 
     // The mode goes with each verdict, because the mode of its moment is lost once the project is switched.
@@ -126,6 +130,16 @@ final readonly class RoundLedger
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
         return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line), $shown);
+    }
+
+    // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
+    private function modelOf(RoundReviewer $reviewer): ?string
+    {
+        try {
+            return $this->tiers->resolve($reviewer->round()->project(), $reviewer->tier())->model;
+        } catch (TierResolutionFailure) {
+            return null;
+        }
     }
 
     /**

@@ -537,7 +537,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('/reviews/round-1', $crawler->filter('tbody td:first-child a')->attr('href'));
+        self::assertSame('/reviews/round-1', $crawler->filter('.review-row a.review-link')->attr('href'));
     }
 
     public function testTheHeaderShowsTheMetaLineWithProjectChangeAndLatestStart(): void
