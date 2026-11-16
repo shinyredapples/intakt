@@ -1,14 +1,15 @@
 <div id="round-{{ reviewed.round }}-judged">
     {% if reviewed.state.name != 'Judged' %}
     <p class="muted">The judge has not judged this round yet.</p>
-    {% elseif reviewed.findings is empty and reviewed.findingTextRecorded %}
+    {% elseif reviewed.findings is empty and reviewed.dropped is empty and reviewed.findingTextRecorded %}
     <p class="muted">The reviewers reported no findings, so the judge had nothing to mark.</p>
-    {% elseif reviewed.findings is empty %}
+    {% elseif reviewed.findings is empty and reviewed.dropped is empty %}
     <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
     {% else %}
     {% if not reviewed.findingTextRecorded %}
     <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
     {% endif %}
+    {% if reviewed.findings is not empty %}
     <ul class="finding-cards" aria-label="Findings of round {{ reviewed.round }}">
         {% for finding in reviewed.findings %}
         <li class="finding-card" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">
@@ -21,5 +22,20 @@
         </li>
         {% endfor %}
     </ul>
+    {% endif %}
+    {% if reviewed.dropped is not empty %}
+    <ul class="finding-cards" aria-label="Findings of round {{ reviewed.round }} dropped before the judge">
+        {% for finding in reviewed.dropped %}
+        <li class="finding-card" id="round-{{ reviewed.round }}-dropped-{{ finding.id }}" data-finding="{{ finding.id }}" data-dropped="{{ finding.id }}">
+            <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
+            <div class="fc-body">
+                <p class="fc-title"><span class="mono fc-id">{{ finding.id }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
+                <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
+                <p class="fc-call">Dropped before the judge: {{ finding.droppedBecause }}</p>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
     {% endif %}
 </div>

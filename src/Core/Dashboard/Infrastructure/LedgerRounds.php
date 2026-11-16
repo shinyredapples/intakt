@@ -17,6 +17,7 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
@@ -44,7 +45,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable}> */
+    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable}> */
     private array $judged = [];
 
     /** @var array<string, ReplayMark> */
@@ -165,8 +166,16 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt]];
+            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt]];
         }
+    }
+
+    /**
+     * @return list<RoundFinding>
+     */
+    private function droppedFindings(RecordedEvent $recorded): array
+    {
+        return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
     }
 
     /**
@@ -241,8 +250,8 @@ final class LedgerRounds
 
         return match (true) {
             null === $judged => $this->endedOrRunning($completed),
-            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])),
-            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
+            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
         };
     }
 
