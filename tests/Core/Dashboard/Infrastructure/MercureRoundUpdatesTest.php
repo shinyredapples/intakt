@@ -418,8 +418,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $judged = array_last($this->published);
         self::assertNotNull($judged);
         self::assertContains('replace round-'.self::ROUND.'-judged', array_map($this->actionAndTargetOf(...), $this->streamsOf($judged)));
-        self::assertStringContainsString('<td>Text of F1.</td>', $judged->getData());
-        self::assertStringContainsString('<td>Fix now</td>', $judged->getData());
+        self::assertStringContainsString('<span class="fc-text">Text of F1.</span>', $judged->getData());
+        self::assertStringContainsString('<p class="fc-call">Fix now</p>', $judged->getData());
     }
 
     public function testAJudgedRoundWhoseFindingsCannotBeReadStillPublishesItsJudgedStateAndLogsWhy(): void

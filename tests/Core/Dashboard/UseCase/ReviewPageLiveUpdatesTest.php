@@ -283,7 +283,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
         self::assertSame(
             [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
-            $updated->filter('#round-'.$id.'-judged table.findings tbody tr')->each(static fn (Crawler $tr): array => $tr->filter('td')->each(static fn (Crawler $td): string => $td->text())),
+            $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
         );
         self::assertSame('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
     }
@@ -300,7 +300,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
         self::assertStringStartsWith("This round's findings were not recorded", $updated->filter('#round-'.$id.'-judged p.muted')->text());
-        self::assertSame(['F1'], $updated->filter('#round-'.$id.'-judged table.findings tbody td.mono')->each(static fn (Crawler $td): string => $td->text()));
+        self::assertSame(['F1'], $updated->filter('#round-'.$id.'-judged li.finding-card .fc-id')->each(static fn (Crawler $id): string => $id->text()));
     }
 
     public function testAJudgedRoundStreamedWithoutItsFindingsStillPointsToAReload(): void
