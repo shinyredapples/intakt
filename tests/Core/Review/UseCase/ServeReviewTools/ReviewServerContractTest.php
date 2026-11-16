@@ -25,6 +25,7 @@ use Intakt\Tests\Support\SymfonyRelease;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\Uid\Uuid;
 
@@ -181,6 +182,18 @@ final class ReviewServerContractTest extends KernelTestCase
         }
     }
 
+    public function testARequestWithoutACredentialIsAnsweredWithABearerChallenge(): void
+    {
+        if (!SymfonyRelease::isAtLeast('8.2')) {
+            self::markTestSkipped('Before Symfony 8.2 the access-token authenticator is not the entry point.');
+        }
+
+        $response = $this->initializeResponse(null);
+
+        self::assertSame(401, $response->getStatusCode());
+        self::assertSame('Bearer', $response->headers->get('WWW-Authenticate'));
+    }
+
     public function testACredentialWhoseSignatureBelongsToAnotherRoundIsRefused(): void
     {
         $signature = explode('.', $this->credential->issueFor($this->roundId))[1];
@@ -305,6 +318,11 @@ final class ReviewServerContractTest extends KernelTestCase
 
     private function initializeStatus(?string $bearer): int
     {
+        return $this->initializeResponse($bearer)->getStatusCode();
+    }
+
+    private function initializeResponse(?string $bearer): Response
+    {
         $server = ['HTTP_HOST' => 'localhost', 'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json, text/event-stream'];
 
         if (null !== $bearer) {
@@ -318,7 +336,7 @@ final class ReviewServerContractTest extends KernelTestCase
             'POST',
             server: $server,
             content: $body,
-        ))->getStatusCode();
+        ));
     }
 
     /**

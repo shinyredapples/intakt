@@ -28,7 +28,7 @@ final class ReviewChangeInput
     #[Option('The check command the head must pass')]
     public string $checkCommand = 'bin/check';
 
-    #[Option('The output format: text or json')]
+    #[Option('The output format')]
     public OutputFormat $format = OutputFormat::Text;
 
     #[Option('The local repository, relative to the working directory or absolute')]
