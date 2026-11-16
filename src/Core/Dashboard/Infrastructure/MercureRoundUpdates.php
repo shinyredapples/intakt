@@ -203,7 +203,7 @@ final readonly class MercureRoundUpdates implements RoundUpdates
             $review = $this->pages->reviewOf($id);
             $judged = array_find($review->rounds ?? [], static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id);
         } catch (Throwable $failure) {
-            // Without the judged round the page still turns to judged and tells the reader to reload.
+            // Logged and swallowed because the judged state must still go out: without the round the page turns to judged and tells the reader to reload.
             $this->logger->warning('A judged round could not be read for its live update.', ['round' => $id, 'exception' => $failure]);
         }
 

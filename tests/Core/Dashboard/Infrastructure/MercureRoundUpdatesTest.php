@@ -58,6 +58,8 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private BufferingLogger $log;
 
+    private ?Ledger $ledger = null;
+
     protected function setUp(): void
     {
         $this->log = new BufferingLogger();
@@ -375,7 +377,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $ledger->startRoundOf('feat/a', self::ROUND, 1);
         $ledger->judgeFindings(self::ROUND, ['F1' => 'act']);
 
-        $this->updates(null, null, null, $ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+        $this->ledger = $ledger;
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertStringContainsString('target="round-'.self::ROUND.'-judgment"', $this->published[0]->getData());
         self::assertStringContainsString('Text of F1.', $this->published[0]->getData());
@@ -390,7 +393,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willThrowException($failure);
 
-        $this->updates(null, null, null, $ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+        $this->ledger = $ledger;
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertCount(1, $this->published);
         self::assertStringContainsString('Reload the page to see its call', $this->published[0]->getData());
@@ -480,7 +484,7 @@ final class MercureRoundUpdatesTest extends TestCase
     /**
      * @param (callable(Update): string)|null $publisher
      */
-    private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null, ?PersistingStoreInterface $locks = null, ?Ledger $ledger = null): MercureRoundUpdates
+    private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null, ?PersistingStoreInterface $locks = null): MercureRoundUpdates
     {
         // Registered because the judged stream renders a component, which asks for its options through this function.
         $twig = new Environment(new FilesystemLoader(__DIR__.'/../../../../templates'));
@@ -492,7 +496,7 @@ final class MercureRoundUpdatesTest extends TestCase
             $summaries ?? self::createStub(SessionSummaries::class),
             new LockFactory($locks ?? new InMemoryStore()),
             $this->log,
-            ListedReviews::pagesOn($ledger ?? new DashboardLedger()),
+            ListedReviews::pagesOn($this->ledger ?? new DashboardLedger()),
         );
     }
 
