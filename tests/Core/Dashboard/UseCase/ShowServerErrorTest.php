@@ -58,7 +58,7 @@ final class ShowServerErrorTest extends WebTestCase
 
     public function testAServerErrorWhoseShellCannotBeRenderedStillShowsAReferenceAndALinkToTheBoard(): void
     {
-        $failing = $this->createStub(Ledger::class);
+        $failing = self::createStub(Ledger::class);
         $failing->method('readInOrder')->willThrowException(new RuntimeException('the ledger is gone'));
         self::getContainer()->set(Ledger::class, $failing);
 
@@ -74,7 +74,7 @@ final class ShowServerErrorTest extends WebTestCase
     private function readsFailOnce(): void
     {
         $reads = 0;
-        $ledger = $this->createStub(Ledger::class);
+        $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willReturnCallback(static function () use (&$reads): RecordedEvents {
             if (1 === ++$reads) {
                 throw new RuntimeException('the ledger is gone');

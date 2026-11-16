@@ -43,7 +43,7 @@ final readonly class ShowErrorController
         };
     }
 
-    // The reference is the only thing the page shows of the failure; the log line carries the same reference and the exception.
+    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
     private function referenceFor(Throwable $exception): string
     {
         $reference = bin2hex(random_bytes(4));
