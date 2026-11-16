@@ -39,6 +39,12 @@ final readonly class ProviderKey
         return $this->kind;
     }
 
+    // Handed out because the check call must send the key to its provider; the key goes nowhere else.
+    public function secret(): string
+    {
+        return $this->key->getValue();
+    }
+
     public function configured(): ConfiguredKey
     {
         $key = $this->key->getValue();
