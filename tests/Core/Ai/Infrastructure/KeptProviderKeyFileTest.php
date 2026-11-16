@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\ConfiguredKey;
-use Intakt\Core\Ai\Contract\KeptProviderKey;
+use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\KeyKind;
+use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -16,11 +17,12 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(KeptProviderKeyFile::class)]
-#[CoversClass(KeptProviderKey::class)]
+#[CoversClass(KeptProviderKeyNotWritten::class)]
 #[CoversClass(KeptProviderKeyUnreadable::class)]
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(ConfiguredKey::class)]
 #[UsesClass(KeyKind::class)]
+#[UsesClass(KeyNotRecognised::class)]
 final class KeptProviderKeyFileTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
@@ -61,7 +63,7 @@ final class KeptProviderKeyFileTest extends TestCase
     public function testNoKeptFileMeansNoConfiguredKey(): void
     {
         self::assertNotInstanceOf(ConfiguredKey::class, $this->file()->configured());
-        self::assertNotInstanceOf(KeptProviderKey::class, $this->file()->read());
+        self::assertNotInstanceOf(ProviderKey::class, $this->file()->read());
     }
 
     public function testAKeptFileThatCannotBeParsedThrowsWithNoneOfItsContentInTheMessage(): void
@@ -80,7 +82,7 @@ final class KeptProviderKeyFileTest extends TestCase
     {
         $filesystem = new Filesystem();
 
-        foreach (['{"kind":"other","key":"x"}', '{"kind":"openai"}', '{"kind":"openai","key":""}', '[]', '"text"'] as $json) {
+        foreach (['{"kind":"other","key":"hf_'.self::BODY.'"}', '{"kind":"openai"}', '{"kind":"openai","key":""}', '[]', '"text"'] as $json) {
             $filesystem->dumpFile($this->directory.'/provider-key.json', $json);
 
             try {
@@ -117,11 +119,35 @@ final class KeptProviderKeyFileTest extends TestCase
         self::assertSame('9999', $file->configured()->lastCharacters);
     }
 
-    public function testAShortKeyShowsAtMostAQuarterOfItself(): void
+    public function testAKeptKeyTooShortForItsFormIsUnreadableInsteadOfShownWhole(): void
     {
-        $short = new KeptProviderKey(KeyKind::OpenAi, 'abcdefgh');
+        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"kind":"openai","key":"abc"}');
 
-        self::assertSame('gh', $short->configured()->lastCharacters);
+        $this->expectException(KeptProviderKeyUnreadable::class);
+
+        $this->file()->configured();
+    }
+
+    public function testAKeptKeyWhoseFormNamesAnotherKindIsUnreadable(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"kind":"anthropic","key":"hf_'.self::BODY.'"}');
+
+        $this->expectException(KeptProviderKeyUnreadable::class);
+
+        $this->file()->read();
+    }
+
+    public function testAKeyThatCannotBeWrittenThrowsWithNoTraceOfTheKey(): void
+    {
+        new Filesystem()->dumpFile($this->directory, 'a file where the directory belongs');
+
+        try {
+            $this->file()->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+            self::fail('The key should not be written.');
+        } catch (KeptProviderKeyNotWritten $notWritten) {
+            self::assertNull($notWritten->getPrevious());
+            self::assertStringNotContainsString(self::BODY, print_r($notWritten->getTrace(), true).$notWritten);
+        }
     }
 
     private function file(): KeptProviderKeyFile

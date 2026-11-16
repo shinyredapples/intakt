@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\KeepProviderKey;
 
 use Intakt\Core\Ai\Contract\ConfiguredKey;
+use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
@@ -26,6 +27,7 @@ final readonly class KeepProviderKey
      * @throws KeyNotRecognised
      * @throws KeyRefusedByProvider
      * @throws KeyNotChecked
+     * @throws KeptProviderKeyNotWritten
      */
     #[NoDiscard('the configured key is what the page shows')]
     public function keep(#[SensitiveParameter] string $key): ConfiguredKey

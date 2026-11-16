@@ -6,7 +6,6 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\KeepProviderKey;
 
 use ArrayObject;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
-use Intakt\Core\Ai\Contract\KeptProviderKey;
 use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
@@ -29,7 +28,6 @@ use Throwable;
 #[CoversClass(KeyNotChecked::class)]
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(KeptProviderKeyFile::class)]
-#[UsesClass(KeptProviderKey::class)]
 #[UsesClass(ConfiguredKey::class)]
 #[UsesClass(KeyKind::class)]
 #[UsesClass(KeyNotRecognised::class)]

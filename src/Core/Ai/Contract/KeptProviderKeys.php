@@ -6,12 +6,15 @@ namespace Intakt\Core\Ai\Contract;
 
 interface KeptProviderKeys
 {
+    /**
+     * @throws KeptProviderKeyNotWritten
+     */
     public function keep(ProviderKey $key): void;
 
     /**
      * @throws KeptProviderKeyUnreadable
      */
-    public function read(): ?KeptProviderKey;
+    public function read(): ?ProviderKey;
 
     /**
      * @throws KeptProviderKeyUnreadable
