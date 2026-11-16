@@ -132,10 +132,11 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     // No stale check, because the status and the comment name the head they judge, so a head that moved on keeps its own verdict.
     public function publishVerdict(string $project, ChangeId $change, PublishedVerdict $verdict): void
     {
-        if (!$this->app->isConfigured()) {
-            return;
-        }
+        $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
+    }
 
+    private function publishAsTheApp(ChangeId $change, PublishedVerdict $verdict): void
+    {
         $address = PullRequestAddress::of($change);
         $comments = $verdict->comments();
         if (array_any($comments, $this->secrets->findsSecretIn(...))) {

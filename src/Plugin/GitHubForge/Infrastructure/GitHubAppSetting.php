@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\GitHubForge\Infrastructure;
 
-use NoDiscard;
+use Closure;
 use Psr\Log\LoggerInterface;
 use stdClass;
 
@@ -21,16 +21,18 @@ final readonly class GitHubAppSetting
         $this->notice = new stdClass();
     }
 
-    #[NoDiscard('a verdict must not reach GitHub without an App')]
-    public function isConfigured(): bool
+    /**
+     * @param Closure(): void $call
+     */
+    public function whenConfigured(Closure $call): void
     {
-        if ('' !== trim($this->appId)) {
-            return true;
+        if ('' === trim($this->appId)) {
+            $this->reportMissingAppOnce();
+
+            return;
         }
 
-        $this->reportMissingAppOnce();
-
-        return false;
+        $call();
     }
 
     private function reportMissingAppOnce(): void

@@ -57,9 +57,8 @@ final class DemoReviewLogTest extends KernelTestCase
      */
     private function drainTheQueue(): array
     {
-        $events = self::getContainer()->get('event_dispatcher');
+        $events = self::getContainer()->get(EventDispatcherInterface::class);
         $bus = self::getContainer()->get('command.bus');
-        assert($events instanceof EventDispatcherInterface && $bus instanceof MessageBusInterface);
         $failures = [];
         $events->addListener(WorkerMessageFailedEvent::class, static function (WorkerMessageFailedEvent $event) use (&$failures): void {
             $failures[] = $event->getThrowable()->getMessage();
@@ -81,9 +80,14 @@ final class DemoReviewLogTest extends KernelTestCase
      */
     private function warningsAndTraces(BufferingLogger $log): array
     {
-        $flagged = array_filter($log->cleanLogs(), static fn (array $record): bool => in_array($record[0], self::WARNING_AND_ABOVE, true) || array_any($record[2], static fn (mixed $value): bool => $value instanceof Throwable));
+        $flagged = [];
+        foreach ($log->cleanLogs() as [$level, $message, $context]) {
+            if (in_array($level, self::WARNING_AND_ABOVE, true) || array_any($context, static fn (mixed $value): bool => $value instanceof Throwable)) {
+                $flagged[] = $level.': '.$message;
+            }
+        }
 
-        return array_values(array_map(static fn (array $record): string => $record[0].': '.$record[1], $flagged));
+        return $flagged;
     }
 
     private function queue(): InMemoryTransport
