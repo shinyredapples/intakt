@@ -553,7 +553,7 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .ls-dl { display: grid; grid-template-columns: minmax(8ch, 1fr) auto; gap: var(--s4) var(--s12); margin: 0; font-size: var(--t15); }
 .ls-dl dt { color: var(--muted); overflow-wrap: anywhere; }
 .ls-dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
-/* Issue 2180 D1: the long cost text goes under its label, so no cell wraps letter by letter. */
+/* A wide `auto` value column (the long cost text) squeezed the label column to one character per line, so each figure goes under its label. */
 .ls-cost { grid-template-columns: 1fr; }
 .ls-cost dt { overflow-wrap: break-word; }
 .ls-cost dd { text-align: left; overflow-wrap: break-word; }
