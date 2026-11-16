@@ -1,7 +1,7 @@
 <h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/intakt-lockup-dark.svg">
-    <img src="docs/assets/intakt-lockup.svg" alt="Intakt" width="300">
+    <img src="docs/assets/intakt-lockup.svg" alt="Intakt" width="220">
   </picture>
 </h1>
 
@@ -11,7 +11,7 @@ PHP 8.5, Symfony AI Â· [Status](#status): what works today and what is planned Â
 
 ## Five-minute start
 
-The demo reviews a sample change with two reviewers; the [timed run](#timed-run) says how long the start and a review take:
+The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)):
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
@@ -19,13 +19,13 @@ cp .env.dist .env.local   # add a provider API key or a Hugging Face token, and 
 docker compose up         # Intakt, its database and a sample repository
 ```
 
-Calls are billed to the key's or token's owner; `HF_TOKEN` alone puts the two reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)). Once the dashboard answers, the start prints the review command between two lines of `=` (it begins with `docker compose exec intakt`), then an MCP line. Leave it running (its log may keep scrolling) and, from a second terminal in the repository folder, take a path:
+Calls are billed to the key's or token's owner; `HF_TOKEN` alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)). Once the dashboard answers, the start prints the review command between two lines of `=`, then an MCP line. Leave it running (its log may keep scrolling) and take a path from a second terminal in this folder:
 
 | Path | Command | What you see |
 | --- | --- | --- |
-| Console | the printed `intakt:review` | the verdict and act list, exit 0, 10 or 11 ([how to read it](docs/user/README.md#reading-a-verdict)) |
-| Dashboard | `http://localhost:7781` | each round live, the judge's call on every finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
-| MCP | the printed `claude mcp add`, then the [`intakt-review` skill](skills/intakt-review/README.md) | say "intakt review the demo": your agent runs the loop, fixes inside the container, reports ([details](docs/user/mcp.md)) |
+| Console | the printed `intakt:review` | verdict and act list, exit 0, 10 or 11 ([read it](docs/user/README.md#reading-a-verdict)) |
+| Dashboard | `http://localhost:7781` | each round live, the judge's call per finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
+| MCP | printed `claude mcp add`, [skill](skills/intakt-review/README.md) | "intakt review the demo": your agent loops, fixes, reports ([details](docs/user/mcp.md)) |
 
 <details>
 <summary>Screenshot: the dashboard's review page for the sample change</summary>
