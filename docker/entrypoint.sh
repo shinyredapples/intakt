@@ -1,7 +1,38 @@
 #!/bin/bash
 set -euo pipefail
 
-# Secrets arrive at run time (-e or --env-file), never in the image; fail here with a clear message instead of in the hub.
+# Each start writes its own draft (mode 0600 from mktemp) and links it into place; the link fails when another start linked first, so starts at once all read the one complete value.
+kept_secret() {
+    local draft
+    if [[ ! -e $1 ]]; then
+        draft=$(mktemp "$1.XXXXXX") || return 1
+        od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$draft" || { rm -f "$draft"; return 1; }
+        ln "$draft" "$1" 2>/dev/null || true
+        rm -f "$draft"
+    fi
+    cat "$1"
+}
+
+# A value set in the environment (-e or .env.local) wins; an empty one is made once and kept next to the project file on the data volume, so the sessions and tokens it signs survive a restart. Assigned apart from the export, because export would hide a failed write.
+export_secret() {
+    local name=$1 file value
+    [[ -z ${!name:-} ]] || return 0
+    if [[ -z ${INTAKT_CONFIG:-} ]]; then
+        echo "intakt: set $name, or set INTAKT_CONFIG so a generated one can be kept next to the project file" >&2
+        exit 1
+    fi
+    file="$(dirname "$INTAKT_CONFIG")/$2"
+    value=$(kept_secret "$file") || value=
+    if [[ ! $value =~ ^[0-9a-f]{64}$ ]]; then
+        echo "intakt: could not make or read $name in $file; set $name or make its folder writable" >&2
+        exit 1
+    fi
+    export "$name=$value"
+}
+
+export_secret APP_SECRET app-secret
+export_secret MERCURE_JWT_SECRET mercure-jwt-secret
+# Fail here with a clear message instead of in the hub.
 : "${APP_SECRET:?set APP_SECRET}"
 : "${MERCURE_JWT_SECRET:?set MERCURE_JWT_SECRET}"
 # The Caddyfile reads MERCURE_JWT_ISSUER without a default, so a missing one is named here instead of ending the web process silently.
@@ -13,6 +44,10 @@ if [[ -n ${HF_TOKEN:-} && -z ${OPENAI_COMPATIBLE_BASE_URL:-} && -z ${OPENAI_COMP
     export OPENAI_COMPATIBLE_API_KEY=$HF_TOKEN
 fi
 
+READY_MARK=var/sample-ready
+mkdir -p var
+rm -f "$READY_MARK"
+
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
 # The cache directory is removed by hand, because cache:clear kept the image's container after the seed; the warmup runs in a new process so it reads the current keys and project file.
@@ -21,23 +56,11 @@ rebuild_container() {
     php bin/console cache:warmup --no-interaction
 }
 
-# Each start writes its own draft (mode 0600 from mktemp) and links it into place; the link fails when another start linked first, so starts at once all read the one complete token.
-owner_token() {
-    local draft
-    if [[ ! -e $1 ]]; then
-        draft=$(mktemp "$1.XXXXXX") || return 1
-        od -An -N32 -tx1 /dev/urandom | tr -d ' \n' > "$draft" || { rm -f "$draft"; return 1; }
-        ln "$draft" "$1" 2>/dev/null || true
-        rm -f "$draft"
-    fi
-    cat "$1"
-}
-
 # Assigned apart from the export, because export would hide a failed write, and a start without the token would leave the printed MCP setup unusable.
 export_owner_token() {
     local file token
     file="$(dirname "$INTAKT_CONFIG")/mcp-owner-token"
-    token=$(owner_token "$file") || token=
+    token=$(kept_secret "$file") || token=
     if [[ ! $token =~ ^[0-9a-f]{64}$ ]]; then
         echo "intakt: could not make or read the MCP owner token in $file; set MCP_OWNER_TOKEN or make its folder writable" >&2
         exit 1
@@ -68,6 +91,8 @@ if [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} ]]; then
     php bin/console intakt:sample:seed "$INTAKT_SAMPLE_REPOSITORY" "$INTAKT_CONFIG"
     rebuild_container
     print_provider_notes_once
+    # Set last, so the health check is green only once the sample is seeded; cleared above on every start, so a restart is not healthy before the seed has run again.
+    touch "$READY_MARK"
 fi
 
 # Validating first prints why FrankenPHP rejects the Caddyfile, which the web process alone would end on without a reason.
@@ -79,7 +104,7 @@ web() {
 
 # Plain php, not frankenphp php-cli, until the SIGTERM probe of plan task T28 passes on FrankenPHP 1.13.4.
 # The limits end a consumer on purpose, so what it leaks is dropped; the loop below starts it again.
-# Quiet, because nothing tells when a consumer has printed its start banner, which then followed the demo's review block; Symfony still prints an error at quiet verbosity.
+# Quiet, because nothing tells when a consumer has printed its start banner, which then followed the dashboard address; Symfony still prints an error at quiet verbosity.
 async() {
     exec php bin/console messenger:consume async --memory-limit="${WORKER_MEMORY_CEILING_MB}M" --time-limit=3600 --quiet
 }
@@ -151,15 +176,15 @@ as_job() {
 }
 
 # Asked from the poll below instead of waited for before it, so ended children still start again while the server comes up.
-# Printed only once the health check and the dashboard answer, because a command copied earlier failed, and last, because the server's start output buried it.
+# Printed only once the health check and the dashboard answer, because an address opened earlier failed, and last, because the server's start output buried it.
 # Two seconds at most per call, because a stuck server would otherwise hold the poll and with it the restart of an ended consumer; the stop does not wait for a call, because each runs as a job.
-review_shown=
-show_sample_review_once() {
-    [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} && -z $review_shown ]] || return 0
+address_shown=
+show_dashboard_address_once() {
+    [[ -n ${INTAKT_SAMPLE_REPOSITORY:-} && -z $address_shown ]] || return 0
     as_job curl --fail --silent --max-time 2 --output /dev/null "http://${CADDY_ADMIN:-localhost:2019}/metrics" || return 0
     as_job curl --fail --silent --max-time 2 --output /dev/null "http://localhost:${DASHBOARD_PORT}/" || return 0
-    review_shown=1
-    as_job php bin/console intakt:sample:show "$INTAKT_SAMPLE_REPOSITORY" || echo "intakt: could not print the review command; run php bin/console intakt:sample:show $INTAKT_SAMPLE_REPOSITORY" >&2
+    address_shown=1
+    echo "intakt: the dashboard is ready at http://localhost:${DASHBOARD_PORT}"
 }
 
 trap 'stop_all 0' TERM INT
@@ -174,5 +199,5 @@ start scheduler_watcher
 while :; do
     sleep 1
     restart_ended
-    show_sample_review_once
+    show_dashboard_address_once
 done

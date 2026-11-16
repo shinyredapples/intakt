@@ -4,7 +4,12 @@ Date: Sun, 15 Nov 2026 02:53:01 +0000
 Subject: [PATCH] [Platform][ClaudeCode] Report cache creation and cache read
  tokens apart
 
-The Claude Code CLI reports cache_creation_input_tokens and cache_read_input_tokens apart, as the Anthropic API does, but the extractor only added them up into cachedTokens and left cacheCreationTokens and cacheReadTokens null. A consumer that prices cache writes and reads differently could not tell them apart. Both are now set, as the Anthropic bridge sets them; cachedTokens keeps the sum.
+The Claude Code CLI reports cache_creation_input_tokens and
+cache_read_input_tokens apart, as the Anthropic API does, but the
+extractor only added them up into cachedTokens and left
+cacheCreationTokens and cacheReadTokens null. A consumer that prices
+cache writes and reads differently could not tell them apart. Both are
+now set, as the Anthropic bridge sets them; cachedTokens keeps the sum.
 ---
  .../Tests/TokenUsageExtractorTest.php         | 23 +++++++++++++++++++
  .../Bridge/ClaudeCode/TokenUsageExtractor.php | 10 ++++----
