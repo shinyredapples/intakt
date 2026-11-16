@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
@@ -24,7 +25,6 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
@@ -47,6 +47,7 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(RoundStart::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(RoundFinding::class)]
+#[UsesClass(ReviewOutcome::class)]
 #[UsesClass(LedgerTokens::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ChangeDecision::class)]
@@ -200,7 +201,7 @@ final class LedgerReviewsTest extends TestCase
         $ledger->answer('r1', 'security', 0);
         $ledger->judgeRound('r1');
 
-        self::assertSame(Decision::Approve, $this->listOf($ledger)[0]->outcome);
+        self::assertSame(ReviewOutcome::Approved, $this->listOf($ledger)[0]->outcome);
     }
 
     public function testAJudgedRoundWithAFailedReviewerIsListedAsTheQuorumDecidesIt(): void
@@ -211,7 +212,7 @@ final class LedgerReviewsTest extends TestCase
         $ledger->failReviewer('r1', 'security', 'timeout');
         $ledger->judgeRound('r1');
 
-        self::assertSame(Decision::Blocked, $this->listOf($ledger)[0]->outcome);
+        self::assertSame(ReviewOutcome::Blocked, $this->listOf($ledger)[0]->outcome);
     }
 
     public function testAJudgedRoundStartedWithoutAQuorumIsListedWithoutAnOutcome(): void
@@ -264,7 +265,7 @@ final class LedgerReviewsTest extends TestCase
 
         $reviews = $this->listOf($ledger);
 
-        self::assertSame([['r2', 2, Decision::Approve, 0], ['r1', 1, Decision::Changes, 1]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->number, $review->outcome, $review->findingCount], $reviews));
+        self::assertSame([['r2', 2, ReviewOutcome::Approved, 0], ['r1', 1, ReviewOutcome::ChangesRequested, 1]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->number, $review->outcome, $review->findingCount], $reviews));
     }
 
     /**

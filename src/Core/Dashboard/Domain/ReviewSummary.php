@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
-use Intakt\Core\Review\Contract\Decision;
 
 final readonly class ReviewSummary
 {
@@ -16,7 +15,7 @@ final readonly class ReviewSummary
     public ?int $number;
     public ReviewState $state;
     public DateTimeImmutable $startedAt;
-    public ?Decision $outcome;
+    public ?ReviewOutcome $outcome;
     public ?int $findingCount;
 
     // The count is null until the judge is done, because a round in progress has no judged findings yet and 0 would read as a clean round.
@@ -29,7 +28,7 @@ final readonly class ReviewSummary
         $this->number = $round->number;
         $this->state = $round->state;
         $this->startedAt = $round->startedAt;
-        $this->outcome = $round->outcome;
+        $this->outcome = ReviewOutcome::of($round);
         $this->findingCount = $round->isJudged() ? count($round->findings) : null;
     }
 }
