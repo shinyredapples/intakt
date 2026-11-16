@@ -38,6 +38,11 @@ final readonly class ReviewerOutcome
         return new self($this->id, $this->role, $this->tier, $at, $model);
     }
 
+    public function outcome(): ?ReviewOutcome
+    {
+        return ReviewOutcome::ofReviewer($this);
+    }
+
     public function answered(string $decision, int $findings, ProjectMode $mode): self
     {
         return clone ($this, ['progress' => ReviewerProgress::Answered, 'decision' => $decision, 'findings' => $findings, 'mode' => $mode]);

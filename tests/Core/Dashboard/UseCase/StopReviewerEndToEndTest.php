@@ -34,8 +34,6 @@ use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
-use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\Clock\MockClock;
 
 // The stop is pressed on the real page while a scripted reviewer works, so the order is forced by the script and nothing is seeded by hand.
 #[Group('persistence')]
@@ -56,7 +54,7 @@ final class StopReviewerEndToEndTest extends WebTestCase
         $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
         $this->browser->disableReboot();
         // The page reads the round's end from the clock, so it must share the fixture's time or the round is long overdue.
-        self::getContainer()->set(ClockInterface::class, new MockClock('2026-10-30 12:00:00', 'UTC'));
+        self::clockAt('2026-10-30 12:00:00 UTC');
         $this->fixture = new RoundFixture(self::getContainer());
     }
 
@@ -93,7 +91,7 @@ final class StopReviewerEndToEndTest extends WebTestCase
         $crawler = $this->browser->request('GET', $page);
 
         self::assertSame('stopped', $crawler->filter('td[id$="-state"]')->text());
-        self::assertSame('blocked', $crawler->filter('table.reviewers tbody tr td')->eq(3)->text());
+        self::assertCount(0, $crawler->filter('td[id$="-state"] .dot'));
         self::assertCount(0, $crawler->filter('form.stop-reviewer'));
     }
 

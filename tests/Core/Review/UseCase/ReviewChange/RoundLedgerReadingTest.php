@@ -11,9 +11,11 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\RoundTokens;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
@@ -39,6 +41,7 @@ use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
 #[UsesClass(ConfiguredPrices::class)]
 #[UsesClass(JudgeDone::class)]
 #[UsesClass(JudgeDoneFinding::class)]
+#[UsesClass(DroppedFinding::class)]
 #[UsesClass(UsageStarted::class)]
 #[UsesClass(UsageSettled::class)]
 #[UsesClass(UsageUnsettled::class)]
@@ -263,6 +266,42 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['act' => ['F2'], 'findings' => [['id' => 'F2', 'severity' => 'P9', 'text' => 'Odd.']]] + $this->judgeDone(self::ROUND));
 
         self::assertSame([], $this->reading()->actIdsOf(self::ROUND));
+    }
+
+    public function testTheDroppedFindingsOfAJudgeDoneRowAreReadWithTheirReasons(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['dropped' => [$this->dropped('F4')]] + $this->judgeDone(self::ROUND));
+
+        self::assertEquals([new DroppedFinding('F4', Severity::P1, '`gone` is not defined.', 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')], $this->reading()->droppedOf(self::ROUND));
+    }
+
+    public function testAJudgeDoneRowWrittenBeforeDropReasonsWereRecordedReadsAsNoDroppedFindingsButKeepsItsActIds(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
+
+        self::assertSame([], $this->reading()->droppedOf(self::ROUND));
+        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+    }
+
+    public function testTheDroppedFindingsOfAnotherRoundAreNotRead(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['dropped' => [$this->dropped('F4')]] + $this->judgeDone(self::OTHER_ROUND));
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
+
+        self::assertSame([], $this->reading()->droppedOf(self::ROUND));
+    }
+
+    public function testARoundTheJudgeHasNotAnsweredHasNoDroppedFindings(): void
+    {
+        self::assertSame([], $this->reading()->droppedOf(self::ROUND));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dropped(string $id): array
+    {
+        return ['id' => $id, 'severity' => 'P1', 'text' => '`gone` is not defined.', 'file' => 'src/A.php', 'line' => 3, 'reason' => 'none of its 1 quoted code fragments is in the change'];
     }
 
     /**
