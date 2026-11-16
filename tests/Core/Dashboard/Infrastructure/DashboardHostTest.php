@@ -51,24 +51,24 @@ final class DashboardHostTest extends TestCase
     #[DataProvider('foreignHosts')]
     public function testAHostThatIsNoLoopbackNameWithTheConfiguredPortDoesNotNameTheDashboard(string $host): void
     {
-        self::assertFalse(new DashboardHost(7780)->isNamedBy(self::requestTo($host)));
+        self::assertFalse(new DashboardHost(7780)->isNamedBy($this->requestTo($host)));
     }
 
     #[DataProvider('loopbackHosts')]
     public function testALoopbackNameWithTheConfiguredPortNamesTheDashboard(string $host): void
     {
-        self::assertTrue(new DashboardHost(7780)->isNamedBy(self::requestTo($host)));
+        self::assertTrue(new DashboardHost(7780)->isNamedBy($this->requestTo($host)));
     }
 
     public function testOnlyTheConfiguredPortNamesTheDashboard(): void
     {
         $dashboard = new DashboardHost(8080);
 
-        self::assertTrue($dashboard->isNamedBy(self::requestTo('127.0.0.1:8080')));
-        self::assertFalse($dashboard->isNamedBy(self::requestTo('127.0.0.1:7780')));
+        self::assertTrue($dashboard->isNamedBy($this->requestTo('127.0.0.1:8080')));
+        self::assertFalse($dashboard->isNamedBy($this->requestTo('127.0.0.1:7780')));
     }
 
-    private static function requestTo(string $host): Request
+    private function requestTo(string $host): Request
     {
         return Request::create('/', server: ['HTTP_HOST' => $host]);
     }
