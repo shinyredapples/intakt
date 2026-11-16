@@ -21,7 +21,8 @@ use Symfony\Component\Filesystem\Filesystem;
 final class HeldCredentialsTest extends TestCase
 {
     private const string NAME = 'INTAKT_TEST_API_KEY';
-    private const string KEPT_KEY = 'sk-ant-'.'abcdefgh12345678';
+    private const string BODY = 'abcdefgh12345678';
+    private const string KEPT_KEY = 'sk-ant-'.self::BODY;
 
     private string $vaultDirectory;
 

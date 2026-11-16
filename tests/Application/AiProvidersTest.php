@@ -27,7 +27,8 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 #[CoversNothing]
 final class AiProvidersTest extends KernelTestCase
 {
-    private const string KEPT_KEY = 'sk-ant-'.'abcdefgh12345678';
+    private const string BODY = 'abcdefgh12345678';
+    private const string KEPT_KEY = 'sk-ant-'.self::BODY;
 
     private const array VARIABLES = [
         'ANTHROPIC_API_KEY',
@@ -222,19 +223,21 @@ final class AiProvidersTest extends KernelTestCase
     public function testTheAnthropicPlatformSendsTheKeptKeyToTheProvider(): void
     {
         $this->keepKey(self::KEPT_KEY);
-        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
         $sent = new ArrayObject();
-        self::getContainer()->set('http_client', new MockHttpClient(static function (string $method, string $url, array $options) use ($sent): MockResponse {
-            $sent->append($options['normalized_headers']['x-api-key'] ?? null);
+        $provider = static function (string $method, string $url, array $options) use ($sent): MockResponse {
+            $headers = $options['normalized_headers'] ?? [];
+            $sent->append(is_array($headers) ? $headers['x-api-key'] ?? null : null);
 
             return new MockResponse(json_encode([
                 'id' => 'msg_test', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-haiku-5-5',
                 'content' => [['type' => 'text', 'text' => 'ok']],
                 'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
             ], JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);
-        }));
+        };
+        self::getContainer()->set('http_client', new MockHttpClient($provider));
 
-        $platform = self::getContainer()->get('ai.platform.anthropic');
+        $platform = $container->get('ai.platform.anthropic');
         self::assertInstanceOf(PlatformInterface::class, $platform);
         $platform->invoke('claude-haiku-5-5', new MessageBag(Message::ofUser('Answer with the single word: ok')))->asText();
 

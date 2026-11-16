@@ -13,8 +13,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
 
-// Symfony's env processor asks its loaders only for a name the environment lacks, so a value in `.env.local` wins and the kept key is used like the same variable.
-// It takes the first loader's non-empty value in priority order, so this one sits below the secrets vault's loader (priority 0) and a vault secret wins too.
+// Symfony's env processor asks its loaders only for a name the environment lacks and takes the first non-empty value in priority order, so below the vault's loader (priority 0) a value in `.env.local` or the vault wins and the kept key is used like the same variable.
 #[AsTaggedItem(priority: self::PRIORITY)]
 final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
 {
