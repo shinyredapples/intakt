@@ -75,6 +75,13 @@ final class ReviewOutcomeTest extends TestCase
         self::assertSame(ReviewOutcome::Failed, ReviewOutcome::of($round));
     }
 
+    public function testARoundStillInReviewWhoseReviewersAllFailedHasNoOutcome(): void
+    {
+        $round = $this->round()->withOutcomes([$this->reviewer('a')->failed('timeout'), $this->reviewer('b')->failed('timeout')]);
+
+        self::assertNull(ReviewOutcome::of($round));
+    }
+
     public function testARoundWithOneFailedReviewerKeepsTheDecision(): void
     {
         $round = $this->judged()->withOutcomes([$this->reviewer('a')->failed('timeout'), $this->reviewer('b')])->decidedAs(Decision::Changes);

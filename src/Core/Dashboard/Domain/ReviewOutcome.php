@@ -22,7 +22,7 @@ enum ReviewOutcome: string
             return RoundEnds::JudgingFailed === $round->ending->end ? self::Failed : self::Blocked;
         }
 
-        if ($round->reviewers > 0 && $round->failedReviewers() === $round->reviewers) {
+        if ($round->isJudged() && $round->reviewers > 0 &&$round->failedReviewers() === $round->reviewers) {
             return self::Failed;
         }
 
