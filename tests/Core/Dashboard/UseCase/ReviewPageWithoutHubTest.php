@@ -126,7 +126,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
 
         self::assertCount(0, $crawler->filter('script[type="importmap"]'));
         self::assertSame('F1', $crawler->filter('.log-summary .ls-findings button')->attr('data-highlight-finding'));
-        self::assertCount(1, $crawler->filter('#round-round-1 td[data-finding="F1"]'));
+        self::assertCount(1, $crawler->filter('#round-round-1 li[data-finding="F1"]'));
     }
 
     public function testTheHighlightScriptThePlainPageImportsIsServedByTheInstall(): void

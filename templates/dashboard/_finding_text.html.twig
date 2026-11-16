@@ -1,0 +1,2 @@
+{#- A finding's text with its backtick spans as code, built from RoundFinding::textSpans() so the reviewer's words stay escaped; or the given words when no text was recorded. -#}
+{%- if finding.text is null %}{{ missing }}{% else %}{% for span in finding.textSpans %}{% if span.code %}<code>{{ span.text }}</code>{% else %}{{ span.text }}{% endif %}{% endfor %}{% endif -%}

@@ -36,6 +36,36 @@ final readonly class RoundFinding
         return [$this->id, ...$this->merged];
     }
 
+    /**
+     * @return list<array{text: string, code: bool}>
+     */
+    public function textSpans(): array
+    {
+        $text = $this->text ?? '';
+        // A span closes on a run of as many backticks as opened it, as in Markdown, so ``a`b`` holds one backtick of code.
+        preg_match_all('/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/s', $text, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        $spans = [];
+        $at = 0;
+        foreach ($matches as [[$whole, $start], , [$code]]) {
+            $spans[] = ['text' => substr($text, $at, $start - $at), 'code' => false];
+            $spans[] = ['text' => trim($code), 'code' => true];
+            $at = $start + strlen($whole);
+        }
+
+        $spans[] = ['text' => substr($text, $at), 'code' => false];
+
+        return array_values(array_filter($spans, static fn (array $span): bool => '' !== $span['text']));
+    }
+
+    public function place(): ?string
+    {
+        if (null === $this->file) {
+            return null;
+        }
+
+        return null === $this->line ? $this->file : $this->file.':'.$this->line;
+    }
+
     public function callInWords(): string
     {
         return $this->call->inWords();

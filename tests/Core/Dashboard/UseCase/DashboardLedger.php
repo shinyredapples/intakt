@@ -109,6 +109,16 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
+    public function judgeToFixAt(string $round, string $text, string $file, int $line): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => ['F1'],
+            'follow_ups' => [],
+            'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => $text, 'merged' => [], 'file' => $file, 'line' => $line]],
+        ]);
+    }
+
     /**
      * @param list<string> $act
      * @param list<string> $followUps

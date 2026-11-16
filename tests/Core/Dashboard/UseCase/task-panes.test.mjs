@@ -7,7 +7,7 @@ const { switchTaskPanes } = await import(new URL('assets/task-panes.js', root));
 const TAB = '.ttabs [data-pane]';
 const FINDING_BUTTON = '[data-highlight-finding]';
 const FINDING_LINK = 'a.sb-finding';
-const TIMELINE_ENTRY = 'td[data-finding]';
+const TIMELINE_ENTRY = 'li[data-finding]';
 
 class FakeTarget extends FakeElement {
     constructor(matches) {
