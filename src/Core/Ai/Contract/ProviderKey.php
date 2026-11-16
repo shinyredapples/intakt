@@ -39,7 +39,7 @@ final readonly class ProviderKey
         return $this->kind;
     }
 
-    // Handed out because the check call must send the key to its provider; the key goes nowhere else.
+    // Handed out because the check call must send the key to its provider and the kept file must hold it; the key goes nowhere else.
     public function secret(): string
     {
         return $this->key->getValue();
