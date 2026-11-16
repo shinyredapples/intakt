@@ -876,7 +876,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->browser->disableReboot();
         $container = self::getContainer();
-        $container->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]], null));
+        $container->set(Prices::class, new ConfiguredPrices(['model-a' => ['input' => 2.0, 'output' => 10.0, 'cache_read' => 0.2, 'cache_write' => 2.5]]));
         $summaries = self::createStub(SessionSummaries::class);
         $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::none(), [], [], [], [], false));
         $container->set(SessionSummaries::class, $summaries);

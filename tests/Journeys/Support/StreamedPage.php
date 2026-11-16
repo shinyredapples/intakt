@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Journeys\Support;
 
+use DOMDocument;
 use DOMNode;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Mercure\Update;
@@ -30,7 +31,7 @@ final readonly class StreamedPage
         foreach (new Crawler($update->getData())->filter('body > turbo-stream')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
             $selector = $stream->attr('targets') ?? '#'.$stream->attr('target');
 
-            // Like Turbo, a stream whose target is absent changes nothing.
+            // Nothing changes when the target is absent, because Turbo drops such a stream.
             foreach ($page->filter($selector) as $target) {
                 $this->apply((string) $stream->attr('action'), $this->templateOf($stream), $target);
             }
@@ -63,7 +64,7 @@ final readonly class StreamedPage
 
     private function updateOf(DOMNode $target, ?DOMNode $template): void
     {
-        while (null !== $target->firstChild) {
+        while ($target->firstChild instanceof DOMNode) {
             $target->removeChild($target->firstChild);
         }
 
@@ -86,7 +87,7 @@ final readonly class StreamedPage
     {
         $document = $target->ownerDocument;
 
-        if (null === $template || null === $document) {
+        if (!$template instanceof DOMNode || !$document instanceof DOMDocument) {
             return [];
         }
 

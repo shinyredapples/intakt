@@ -139,7 +139,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         return $page;
     }
 
-    // The page opened while the round ran, changed only by what the hub was sent, against a new load of the judged round.
+    // Compared with a new load, because a page that missed no update must show the judged round as a reload does.
     private function readTheJudgedContentWithoutAReload(string $round, Crawler $live, Crawler $judged): void
     {
         self::assertSame(self::JUDGED_CALL, $live->filter('#round-'.$round.'-now-judge')->text());

@@ -204,13 +204,13 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     private function publishJudgedState(Uuid $round, RoundProgress $progress): void
     {
         $review = $this->judgedReviewOf($round);
-        $reviewed = null === $review ? null : $this->judgedRoundIn($review, $round);
+        $reviewed = $review instanceof Review ? $this->judgedRoundIn($review, $round) : null;
 
         $this->publish($round, RoundStream::RoundJudged, [
             'round' => $round->toRfc4122(),
             'progress' => $progress,
             'reviewed' => $reviewed,
-            'review' => null === $reviewed ? null : $review,
+            'review' => $reviewed instanceof ReviewedRound ? $review : null,
         ]);
     }
 
