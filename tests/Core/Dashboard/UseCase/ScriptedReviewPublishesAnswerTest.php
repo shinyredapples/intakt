@@ -7,7 +7,11 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReadAnswer;
+use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\SessionSummaries;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\PromptCut;
@@ -26,6 +30,7 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -39,6 +44,22 @@ use Twig\Environment;
 // From the scripted model's answer through LiveProgress to the update that reaches the hub, because that is the whole path the typed answer takes.
 #[Group('persistence')]
 #[CoversClass(MercureRoundUpdates::class)]
+#[UsesClass(ReadAnswer::class)]
+#[UsesClass(ReadFinding::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(VerdictParser::class)]
+#[UsesClass(MercureLiveUpdates::class)]
+#[UsesClass(LiveProgress::class)]
+#[UsesClass(PromptCut::class)]
+#[UsesClass(ReviewerAgent::class)]
+#[UsesClass(ReviewerPrompt::class)]
+#[UsesClass(ReviewerRuns::class)]
+#[UsesClass(ReviewerStopping::class)]
+#[UsesClass(ReviewerToolboxFactory::class)]
+#[UsesClass(StopRequests::class)]
+#[UsesClass(StreamingFallbacks::class)]
 final class ScriptedReviewPublishesAnswerTest extends WebTestCase
 {
     /**
