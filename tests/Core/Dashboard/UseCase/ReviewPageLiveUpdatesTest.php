@@ -492,7 +492,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Failed]));
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['security', 'Kimi K3', 'Failed the model did not answer in time']],array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['security', 'Kimi K3', 'Failed the model did not answer in time']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
     }
 
     public function testDuringALiveRoundThePageListsEachReviewerByRoleAndModelWithItsState(): void
@@ -530,7 +530,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             .$this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
 
         self::assertSame([['role not read', 'model not read', 'answered', 'shown after a reload']], $this->rowsOf($updated));
-        self::assertSame(['A reviewer (role not read): answered'],$updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['A reviewer (role not read): answered'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
         self::assertSame('A reviewer (role not read) live', $updated->filter('#reviewer-round-1-correctness h3')->text());
     }
 
