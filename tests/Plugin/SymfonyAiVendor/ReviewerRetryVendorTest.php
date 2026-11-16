@@ -250,7 +250,7 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
-    // Optionally on accounts, because config/packages/ai.php puts an AccountFailoverPlatform in front of every configured provider and its failover hides the transport error the retry depends on.
+    // Optionally on accounts, because config/packages/ai.php puts an AccountFailoverPlatform in front of every configured provider and its failover can hide a transport error thrown while sending, which the retry depends on.
     private function vendor(Closure $answer, bool $onAccounts = false): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
