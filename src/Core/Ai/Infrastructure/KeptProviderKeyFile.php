@@ -15,7 +15,7 @@ use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 
-// The one key a person typed in the browser lives here, in the data volume, readable by the app user only.
+// The data volume holds the one key a person typed in the browser, because the file is readable by the app user only.
 final readonly class KeptProviderKeyFile implements KeptProviderKeys
 {
     private const string FILE = 'provider-key.json';
@@ -26,7 +26,7 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
     ) {
     }
 
-    // A new file renamed over the path replaces a link instead of following it, and the key is never in a file others can read: tempnam creates it with mode 0600.
+    // A new file renamed over the path replaces a link instead of following it, because a rename never writes through one; the file is 0600 before the key goes in, so others never read it.
     public function keep(ProviderKey $key): void
     {
         $filesystem = new Filesystem();

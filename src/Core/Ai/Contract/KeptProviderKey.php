@@ -7,7 +7,7 @@ namespace Intakt\Core\Ai\Contract;
 use SensitiveParameter;
 use SensitiveParameterValue;
 
-// A key read back from the data volume; like ProviderKey it shows nothing of itself to var_dump or a trace.
+// The key sits in a SensitiveParameterValue because var_dump, print_r and a trace must show an empty object instead of it.
 final readonly class KeptProviderKey
 {
     private const int SHOWN_AT_MOST = 4;
@@ -27,7 +27,7 @@ final readonly class KeptProviderKey
         return $this->kind;
     }
 
-    // Handed out for the one caller that puts the key into a provider variable; it goes nowhere else.
+    // Handed out because the caller that puts the key into a provider variable needs the text; it goes nowhere else.
     public function secret(): string
     {
         return $this->key->getValue();
