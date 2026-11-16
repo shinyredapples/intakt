@@ -65,6 +65,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role));
     }
 
+    public function startReviewerOn(string $round, string $role, string $model): void
+    {
+        $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role) + ['model' => $model]);
+    }
+
     public function answer(string $round, string $role, int $findings): void
     {
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);

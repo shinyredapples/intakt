@@ -52,10 +52,10 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, RoundStream::TextStreamed, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'text' => $text]);
     }
 
-    // Nothing yet, because the review page has no place for a read answer until the round's stream renders one.
     #[Override]
     public function answerRead(Uuid $round, string $reviewer, ReadAnswer $answer): void
     {
+        $this->publish($round, RoundStream::AnswerRead, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'answer' => $answer]);
     }
 
     #[Override]
