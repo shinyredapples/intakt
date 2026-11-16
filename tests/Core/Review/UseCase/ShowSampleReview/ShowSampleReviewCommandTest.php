@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Review\UseCase\SeedSampleProject;
+namespace Intakt\Tests\Core\Review\UseCase\ShowSampleReview;
 
-use Intakt\Core\Review\UseCase\SeedSampleProject\ShowSampleReviewCommand;
+use Intakt\Core\Review\UseCase\ShowSampleReview\ShowSampleReviewCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;

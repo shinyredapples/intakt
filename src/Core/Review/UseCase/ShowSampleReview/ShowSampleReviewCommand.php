@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\UseCase\SeedSampleProject;
+namespace Intakt\Core\Review\UseCase\ShowSampleReview;
 
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
 use SensitiveParameter;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
