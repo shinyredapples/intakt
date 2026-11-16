@@ -219,7 +219,7 @@ final class ReplaysRecordingTest extends TestCase
 
     private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
     {
-        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000aa', $kind, $payload, new DateTimeImmutable(self::START)->modify(sprintf('+%d seconds', $secondsAfterStart)));
+        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000aa', $kind, $payload, new DateTimeImmutable('2026-11-16T09:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
     }
 
     private static function withProject(string $payload, string $project): string
