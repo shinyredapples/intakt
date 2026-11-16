@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUp;
@@ -66,6 +67,7 @@ use Throwable;
 #[CoversClass(ChangeText::class)]
 #[UsesClass(DiffPaths::class)]
 #[UsesClass(JudgedFindings::class)]
+#[UsesClass(DroppedFinding::class)]
 #[UsesClass(RoundJudged::class)]
 #[UsesClass(FollowUp::class)]
 #[UsesClass(Judgement::class)]
@@ -347,6 +349,28 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['F1', 'The command is built from user input.']], $this->idsAndTexts($asked));
     }
 
+    public function testAFindingQuotingANameAbsentFromTheChangeIsStoredWithTheRoundAsDroppedWithItsReason(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame(
+            [['id' => 'F1', 'severity' => 'P1', 'text' => '`grepName` is not defined.', 'file' => 'src/Thing.php', 'line' => 1, 'reason' => 'none of its 1 quoted code fragments is in the change']],
+            $this->judgeDonePayloads()[0]['dropped'],
+        );
+    }
+
+    public function testAFindingWithoutAQuoteAndASymbolAbsentFromTheChangeIsNotStoredAsDropped(): void
+    {
+        $round = $this->roundReporting([new Finding('A', Severity::P1, 'src/Thing.php', 1, 'grepName', 'The command is built from user input.', FixableBy::Builder, false, null, null)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame([], $this->judgeDonePayloads()[0]['dropped']);
+        self::assertSame(['F1'], $this->judgeDonePayloads()[0]['act']);
+    }
+
     public function testADroppedFindingIsNeverMergedWithARealOneAtItsPlace(): void
     {
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
@@ -444,7 +468,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true]), $this->judgeDonePayloads());
     }
 
     /**
