@@ -23,6 +23,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
@@ -95,6 +96,32 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertCount(0, $crawler->filter('.replay-mark'));
+    }
+
+    public function testTheReviewPageOfAProjectFlaggedAsReplayMarksEachRoundHeading(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['Replay', 'Replay'], $crawler->filter('section.round .replay-mark')->each(static fn (Crawler $mark): string => $mark->text()));
+    }
+
+    public function testAMixedReviewMarksOnlyItsReplayRoundAndSaysNothingOfTheVerdictsAtTheTop(): void
+    {
+        $this->storeRoundAs('round-1', ReplayMark::Live);
+        $this->storeRoundAs('round-2', ReplayMark::Replay);
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(
+            [0, 1, 1, 0],
+            [$crawler->filter('#round-round-1 .replay-mark')->count(), $crawler->filter('#round-round-2 .replay-mark')->count(), $crawler->filter('.state-block .sb-head .replay-mark')->count(), $crawler->filter('.page-head .replay-mark')->count()],
+        );
     }
 
     public function testEachRoundListsItsReviewersWithTheirVerdicts(): void

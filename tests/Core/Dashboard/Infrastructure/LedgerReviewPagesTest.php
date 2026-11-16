@@ -134,7 +134,7 @@ final class LedgerReviewPagesTest extends TestCase
 
         $card = $this->pagesOn($ledger, ['alpha'])->board()->cardsIn(BoardColumn::InReview)[0];
 
-        self::assertSame(ReplayMark::Replay, $card->mark);
+        self::assertSame(ReplayMark::Replay, $card->latest()->mark);
     }
 
     public function testACardOfAProjectNeverFlaggedCarriesTheLiveMark(): void
@@ -144,47 +144,57 @@ final class LedgerReviewPagesTest extends TestCase
 
         $card = $this->pagesOn($ledger, ['beta'])->board()->cardsIn(BoardColumn::InReview)[0];
 
-        self::assertSame(ReplayMark::Live, $card->mark);
+        self::assertSame(ReplayMark::Live, $card->latest()->mark);
     }
 
-    public function testTheReviewPageOfARoundCarriesTheReplayMarkOfItsProject(): void
+    public function testEveryRoundUnknownToReviewTakesTheReplayMarkOfItsProject(): void
     {
         $ledger = new DashboardLedger();
         $ledger->startRoundOf('feat/a', 'r1', 1);
         $ledger->judgeRound('r1');
         $ledger->startRoundOf('feat/a', 'r2', 2);
 
-        self::assertSame(ReplayMark::Replay, $this->pagesOn($ledger, ['alpha'])->reviewOf('r1')?->mark);
+        self::assertSame([ReplayMark::Replay, ReplayMark::Replay], $this->marksOf($this->pagesOn($ledger, ['alpha'])->reviewOf('r1')));
     }
 
-    public function testACardWhoseRoundWasStoredLiveStaysLiveAfterItsProjectWasFlagged(): void
+    public function testARoundStoredLiveStaysLiveAfterItsProjectWasFlagged(): void
     {
         $ledger = new DashboardLedger();
         $ledger->startRoundOf('feat/a', 'r1', 1);
 
         $card = $this->pagesOn($ledger, ['alpha'], ['r1' => ReplayMark::Live])->board()->cardsIn(BoardColumn::InReview)[0];
 
-        self::assertSame(ReplayMark::Live, $card->mark);
+        self::assertSame(ReplayMark::Live, $card->latest()->mark);
     }
 
-    public function testAReviewWithALiveRoundBeforeItsReplayRoundsIsLive(): void
+    public function testAReplayRoundOpenedAfterALiveRoundOfTheSameChangeIsMarkedAsAReplay(): void
     {
         $ledger = new DashboardLedger();
         $ledger->startRoundOf('feat/a', 'r1', 1);
         $ledger->judgeRound('r1');
         $ledger->startRoundOf('feat/a', 'r2', 2);
 
-        self::assertSame(ReplayMark::Live, $this->pagesOn($ledger, ['alpha'], ['r1' => ReplayMark::Live, 'r2' => ReplayMark::Replay])->reviewOf('r2')?->mark);
+        $review = $this->pagesOn($ledger, ['alpha'], ['r1' => ReplayMark::Live, 'r2' => ReplayMark::Replay])->reviewOf('r2');
+
+        self::assertSame([[ReplayMark::Live, ReplayMark::Replay], false], [$this->marksOf($review), $review?->everyRoundIsAReplay()]);
     }
 
-    public function testAReviewWhoseRoundsAreAllStoredAsReplayIsAReplay(): void
+    public function testAReviewWhoseRoundsAreAllStoredAsReplayIsAReplayThroughout(): void
     {
         $ledger = new DashboardLedger();
         $ledger->startRoundOf('feat/a', 'r1', 1);
         $ledger->judgeRound('r1');
         $ledger->startRoundOf('feat/a', 'r2', 2);
 
-        self::assertSame(ReplayMark::Replay, $this->pagesOn($ledger, [], ['r1' => ReplayMark::Replay, 'r2' => ReplayMark::Replay])->reviewOf('r1')?->mark);
+        self::assertTrue($this->pagesOn($ledger, [], ['r1' => ReplayMark::Replay, 'r2' => ReplayMark::Replay])->reviewOf('r1')?->everyRoundIsAReplay());
+    }
+
+    /**
+     * @return list<?ReplayMark>
+     */
+    private function marksOf(?Review $review): array
+    {
+        return array_map(static fn (ReviewedRound $round): ?ReplayMark => $round->mark, $review->rounds ?? []);
     }
 
     /**

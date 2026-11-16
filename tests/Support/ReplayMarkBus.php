@@ -21,13 +21,18 @@ final class ReplayMarkBus implements MessageBusInterface
      * @param list<string>              $replays
      * @param array<string, ReplayMark> $stored
      */
-    public function __construct(private array $replays = [], private readonly array $stored = [])
+    public function __construct(private array $replays = [], private array $stored = [])
     {
     }
 
     public function flag(string $project): void
     {
         $this->replays[] = $project;
+    }
+
+    public function store(string $round, ReplayMark $mark): void
+    {
+        $this->stored[$round] = $mark;
     }
 
     public function dispatch(object $message, array $stamps = []): Envelope

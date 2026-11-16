@@ -17,7 +17,6 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
-use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -82,7 +81,7 @@ final readonly class ProjectStatuses
             $round = $card->latest();
             $lane[$card->project][] = [
                 'change' => $card->change,
-                'mark' => $card->mark->value,
+                'mark' => $round->replayMark()->value,
                 'round' => $round->round,
                 'number' => $round->number,
                 'started_at' => $round->startedAt->format(DATE_ATOM),
@@ -140,7 +139,7 @@ final readonly class ProjectStatuses
         $waiting = [];
 
         foreach ($board->cardsIn(BoardColumn::WaitingOnYou) as $card) {
-            $waiting[$card->project][] = ['change' => $card->change, 'mark' => $card->mark->value, 'round' => $card->latest()->round];
+            $waiting[$card->project][] = ['change' => $card->change, 'mark' => $card->latest()->replayMark()->value, 'round' => $card->latest()->round];
         }
 
         return $waiting;
@@ -169,37 +168,26 @@ final readonly class ProjectStatuses
     private function lastOutcomes(Board $board): array
     {
         $judged = $this->judgedRounds($board);
-        usort($judged, static fn (array $one, array $other): int => $other[0]->judgedAt <=> $one[0]->judgedAt);
+        usort($judged, static fn (ReviewedRound $one, ReviewedRound $other): int => $other->judgedAt <=> $one->judgedAt);
         $outcomes = [];
 
-        foreach ($judged as [$round, $mark]) {
+        foreach ($judged as $round) {
             $outcomes[$round->project] ??= [];
 
             if (count($outcomes[$round->project]) < self::LAST_OUTCOMES) {
-                $outcomes[$round->project][] = ['change' => $round->change, 'mark' => $mark->value, 'round' => $round->round, 'number' => $round->number, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
+                $outcomes[$round->project][] = ['change' => $round->change, 'mark' => $round->replayMark()->value, 'round' => $round->round, 'number' => $round->number, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
             }
         }
 
         return $outcomes;
     }
 
-    // Paired with its card's mark, because a round does not carry the mark its review has.
     /**
-     * @return list<array{ReviewedRound, ReplayMark}>
+     * @return list<ReviewedRound>
      */
     private function judgedRounds(Board $board): array
     {
-        $judged = [];
-
-        foreach ($this->cardsOf($board) as $card) {
-            $round = $card->lastJudgedRound();
-
-            if ($round instanceof ReviewedRound) {
-                $judged[] = [$round, $card->mark];
-            }
-        }
-
-        return $judged;
+        return array_values(array_filter(array_map(static fn (Review $card): ?ReviewedRound => $card->lastJudgedRound(), $this->cardsOf($board))));
     }
 
     /**

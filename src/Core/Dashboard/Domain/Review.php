@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use Intakt\Core\Budget\Contract\Cost;
-use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 
 final readonly class Review
@@ -16,16 +15,16 @@ final readonly class Review
     /**
      * @param non-empty-list<ReviewedRound> $rounds
      */
-    public function __construct(public array $rounds, public ReplayMark $mark = ReplayMark::Live)
+    public function __construct(public array $rounds)
     {
         $this->project = $rounds[0]->project;
         $this->change = $rounds[0]->change;
     }
 
-    // A replay shows like a live review, so the pages mark it, because its verdicts were never given on the change.
-    public function isReplay(): bool
+    // Derived from the rounds and never stored, because one live round means some verdict of the change was given on it.
+    public function everyRoundIsAReplay(): bool
     {
-        return ReplayMark::Replay === $this->mark;
+        return array_all($this->rounds, static fn (ReviewedRound $round): bool => $round->isReplay());
     }
 
     public function latest(): ReviewedRound

@@ -8,8 +8,10 @@ use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use LogicException;
 
 final readonly class ReviewedRound
 {
@@ -33,6 +35,9 @@ final readonly class ReviewedRound
     public ?Decision $outcome;
     public ?DateTimeImmutable $judgedAt;
 
+    // Null until the round is read with its review, because the start row does not say whether the round is a replay.
+    public ?ReplayMark $mark;
+
     public function __construct(
         RoundStart $start,
         RoundPlace $place,
@@ -54,6 +59,19 @@ final readonly class ReviewedRound
         $this->cost = Cost::none();
         $this->outcome = null;
         $this->judgedAt = null;
+        $this->mark = null;
+    }
+
+    // A replay shows like a live round, so the pages mark it, because its verdicts were never given on the change.
+    public function isReplay(): bool
+    {
+        return ReplayMark::Replay === $this->mark;
+    }
+
+    // Refused for a round never marked, so the status cannot report an unread round as live.
+    public function replayMark(): ReplayMark
+    {
+        return $this->mark ?? throw new LogicException(sprintf('Round %s was read without its replay mark.', $this->round));
     }
 
     public function isJudged(): bool
@@ -125,5 +143,10 @@ final readonly class ReviewedRound
     public function decidedAs(Decision $outcome): self
     {
         return clone ($this, ['outcome' => $outcome]);
+    }
+
+    public function markedAs(ReplayMark $mark): self
+    {
+        return clone ($this, ['mark' => $mark]);
     }
 }

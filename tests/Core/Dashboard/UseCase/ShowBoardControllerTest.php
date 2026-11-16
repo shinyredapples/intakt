@@ -24,6 +24,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
+use Intakt\Core\Review\Contract\ReplayMark;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Asset\Packages;
@@ -92,6 +93,33 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     {
         $this->flagAsReplay('beta');
         $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $card = $this->browser->request('GET', '/')->filter('article[data-project="alpha"]');
+
+        self::assertSame([1, 0], [$card->count(), $card->filter('.replay-mark')->count()]);
+    }
+
+    public function testTheCardOfAChangeWhoseLatestRoundIsAReplayAfterALiveRoundShowsTheReplayMark(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->storeRoundAs('round-1', ReplayMark::Live);
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->storeRoundAs('round-2', ReplayMark::Replay);
+        $this->ledger->startRoundOf('42', 'round-2', 2);
+
+        $card = $this->browser->request('GET', '/')->filter('article[data-project="alpha"]');
+
+        self::assertSame([1, ['Replay']], [$card->count(), $card->filter('.card .top .replay-mark')->each(static fn (Crawler $mark): string => $mark->text())]);
+    }
+
+    public function testTheCardOfAChangeWhoseLatestRoundIsLiveAfterAReplayRoundShowsNoReplayMark(): void
+    {
+        $this->storeRoundAs('round-1', ReplayMark::Replay);
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->storeRoundAs('round-2', ReplayMark::Live);
+        $this->ledger->startRoundOf('42', 'round-2', 2);
 
         $card = $this->browser->request('GET', '/')->filter('article[data-project="alpha"]');
 

@@ -31,7 +31,7 @@ final class StoredRoundReplayMarksTest extends KernelTestCase
         $round = new RoundFixture($container)->start(2)->id()->toRfc4122();
         $container->get('command.bus')->dispatch(new FlagProjectAsReplay('alpha'));
 
-        self::assertSame(ReplayMark::Live, $container->get(LedgerReviewPages::class)->reviewOf($round)?->mark);
+        self::assertSame(ReplayMark::Live, $container->get(LedgerReviewPages::class)->reviewOf($round)?->latest()->mark);
     }
 
     public function testAReviewOpenedAfterItsProjectWasFlaggedIsAReplayOnTheReviewPage(): void
@@ -41,6 +41,6 @@ final class StoredRoundReplayMarksTest extends KernelTestCase
         $container->get('command.bus')->dispatch(new FlagProjectAsReplay('alpha'));
         $round = $fixture->start(2)->id()->toRfc4122();
 
-        self::assertSame(ReplayMark::Replay, $container->get(LedgerReviewPages::class)->reviewOf($round)?->mark);
+        self::assertSame(ReplayMark::Replay, $container->get(LedgerReviewPages::class)->reviewOf($round)?->latest()->mark);
     }
 }

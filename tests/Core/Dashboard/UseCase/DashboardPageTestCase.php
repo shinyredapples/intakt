@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -35,5 +36,10 @@ abstract class DashboardPageTestCase extends WebTestCase
     protected function flagAsReplay(string $project): void
     {
         $this->replayMarks->flag($project);
+    }
+
+    protected function storeRoundAs(string $round, ReplayMark $mark): void
+    {
+        $this->replayMarks->store($round, $mark);
     }
 }

@@ -101,6 +101,9 @@ final class StatusReadModelTest extends TestCase
     /** @var list<string> */
     private array $replays = [];
 
+    /** @var array<string, ReplayMark> */
+    private array $storedMarks = [];
+
     protected function setUp(): void
     {
         $this->ledger = new DashboardLedger();
@@ -450,6 +453,31 @@ final class StatusReadModelTest extends TestCase
         self::assertSame(['live', ['live'], ['live']], [$alpha['mark'], array_column($alpha['lanes']['review'], 'mark'), array_column($alpha['last_outcomes'], 'mark')]);
     }
 
+    public function testTheReviewLaneTakesTheReplayMarkOfALatestReplayRoundOpenedAfterALiveRound(): void
+    {
+        $this->replays = ['alpha'];
+        $this->storedMarks = ['r1' => ReplayMark::Live, 'r2' => ReplayMark::Replay];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->judgeRound('r1');
+        $this->ledger->startRecordedRoundOf('7', 'r2', 2);
+
+        $alpha = $this->projectOf($this->read(), 'alpha');
+
+        self::assertSame([['r2', 'replay']], array_map(static fn (array $entry): array => [$entry['round'], $entry['mark']], $alpha['lanes']['review']));
+    }
+
+    public function testALastOutcomeTakesTheMarkOfItsJudgedRoundNotOfTheLatestRound(): void
+    {
+        $this->storedMarks = ['r1' => ReplayMark::Live, 'r2' => ReplayMark::Replay];
+        $this->ledger->startRecordedRoundOf('7', 'r1', 1);
+        $this->ledger->judgeRound('r1');
+        $this->ledger->startRecordedRoundOf('7', 'r2', 2);
+
+        $alpha = $this->projectOf($this->read(), 'alpha');
+
+        self::assertSame([['r1', 'live']], array_map(static fn (array $entry): array => [$entry['round'], $entry['mark']], $alpha['last_outcomes']));
+    }
+
     public function testAWatchedProjectFlaggedAsReplayIsMarkedBeforeItsFirstReview(): void
     {
         $this->replays = ['beta'];
@@ -530,7 +558,7 @@ final class StatusReadModelTest extends TestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::none());
         $ledger = $this->readFrom ?? $this->ledger;
-        $marks = new ReplayMarks(new ReplayMarkBus($this->replays));
+        $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
         $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
 

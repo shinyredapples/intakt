@@ -100,7 +100,7 @@ final class LedgerRounds
         $rounds = [$chosen, ...array_values($others)];
         usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
 
-        return new Review(array_map($this->completed(...), $rounds), $this->markOfAll($rounds));
+        return new Review(array_map($this->completed(...), $rounds));
     }
 
     // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review. The ids come from the rounds, not the keys, because PHP turns a key of digits into an integer.
@@ -124,22 +124,7 @@ final class LedgerRounds
         return $reviews;
     }
 
-    /**
-     * @param non-empty-list<ReviewedRound> $rounds
-     */
-    // A review is a replay only when every round of it is, because the page then says none of its verdicts counts, and a round opened before its project was flagged stays live.
-    private function markOfAll(array $rounds): ReplayMark
-    {
-        foreach ($rounds as $round) {
-            if (ReplayMark::Live === $this->markOf($round)) {
-                return ReplayMark::Live;
-            }
-        }
-
-        return ReplayMark::Replay;
-    }
-
-    // Kept per round for one read, because the board and a review page may ask for the same round more than once.
+    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
     private function markOf(ReviewedRound $round): ReplayMark
     {
         return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
@@ -241,7 +226,7 @@ final class LedgerRounds
 
     private function completed(ReviewedRound $round): ReviewedRound
     {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round));
+        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round));
 
         $judged = $this->judged[$round->round] ?? null;
 
