@@ -423,6 +423,29 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame(['Open the review'], $page->filter('main .btn.primary')->each(static fn (Crawler $button): string => $button->text()));
     }
 
+    public function testTheSetupPageShowsTheMascotBesideItsTitleAsADecorativeImageInBothThemes(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+        $images = $page->filter('.page-head img.character');
+
+        self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
+        self::assertSame(1, preg_match('~octopus-conducting-light[^"]*\.webp$~', $images->eq(0)->attr('src') ?? ''));
+        self::assertSame(1, preg_match('~octopus-conducting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
+    }
+
+    public function testAfterAnApprovedFirstReviewTheSetupPageShowsTheBowingOctopus(): void
+    {
+        $this->ledger->startRoundOfQuorum(SampleChange::CHANGE, 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $sources = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('.page-head img.character')->each(static fn (Crawler $image): ?string => $image->attr('src'));
+
+        self::assertSame(1, preg_match('~octopus-bowing-light~', $sources[0] ?? ''));
+        self::assertSame(1, preg_match('~octopus-bowing-dark~', $sources[1] ?? ''));
+    }
+
     public function testARunningFirstReviewIsShownInProgress(): void
     {
         $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);

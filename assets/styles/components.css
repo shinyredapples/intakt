@@ -469,9 +469,13 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
 .page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .page-head .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* The first-run octopus is decorative, so its height is capped whatever size the partial renders. */
+.setup .page-head { align-items: center; }
+.setup .page-head .character { max-height: 200px; width: auto; }
 /* The mock's phone head: a closer gap under the headline, so the board's first lane stays in view. */
 @media (max-width: 760px) {
   .page-head { margin-bottom: var(--s16); }
+  .setup .page-head .character { max-height: 140px; }
   .headline-long { display: none; }
   .headline-short { display: inline; }
 }
