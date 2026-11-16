@@ -79,7 +79,7 @@ final readonly class ReplaysRecording
         $result = $this->ledger->append(new LedgerEvent($event->kind, $this->inTheDemoProject($event->payload, $recording->project)));
 
         if (!$result->succeeded()) {
-            throw ReplayStopped::at($event->kind, $number, count($recording->events), (string) $result->failure);
+            throw ReplayStopped::at($recording, $number, (string) $result->failure);
         }
     }
 
@@ -111,7 +111,8 @@ final readonly class ReplaysRecording
 
     private static function roundOf(string $payload): ?string
     {
-        $round = json_decode($payload, true)['round'] ?? null;
+        $row = json_decode($payload, true);
+        $round = is_array($row) ? ($row['round'] ?? null) : null;
 
         return is_string($round) ? $round : null;
     }
