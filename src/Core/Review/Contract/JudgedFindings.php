@@ -14,18 +14,21 @@ final readonly class JudgedFindings
      * @param list<Finding>  $findings
      * @param list<Finding>  $actList
      * @param list<FollowUp> $followUps
+     * @param list<DroppedFinding> $dropped
      */
     private function __construct(
         public array $findings,
         public array $actList,
         public array $followUps,
+        public array $dropped,
     ) {
     }
 
     /**
-     * @param list<Finding> $findings
+     * @param list<Finding>        $findings
+     * @param list<DroppedFinding> $dropped
      */
-    public static function of(Judgement $judgement, array $findings): self
+    public static function of(Judgement $judgement, array $findings, array $dropped = []): self
     {
         $marks = [];
 
@@ -37,6 +40,6 @@ final readonly class JudgedFindings
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred));
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped);
     }
 }
