@@ -40,7 +40,7 @@ class FakeNode {
             '[data-search-cancel]': this.attributes.has('data-search-cancel'),
             '#search-results a[href]': this.tag === 'a' && this.attributes.has('href'),
             '#search-results [role="option"]': this.attributes.get('role') === 'option',
-            '#search-results .round-id': this.attributes.get('class') === 'round-id',
+            '#search-results .round-id code': this.tag === 'code' && this.parent?.attributes.get('class') === 'round-id',
         };
 
         return matches[selector] ? this : (this.parent?.closest(selector) ?? null);
@@ -559,23 +559,45 @@ test('pressing the mouse on a result keeps the focus in the field, so the arrows
     assert.equal(page.selected().getAttribute('href'), '/reviews/round-1');
 });
 
+// The id's code text inside the round id line of a result, as the template renders it.
+function roundIdOf(page, option) {
+    const line = Object.assign(new FakeNode(page, 'span', { class: 'round-id' }), { parent: option });
+
+    return { line, code: Object.assign(new FakeNode(page, 'code'), { parent: line }) };
+}
+
 test('pressing the mouse on the round id of a result is left to the browser, so its text can be selected', async () => {
     const { page } = await openWithRecent();
-    const roundId = Object.assign(new FakeNode(page, 'span', { class: 'round-id' }), { parent: page.results.options[0] });
 
-    const press = page.mousedown(roundId);
+    const press = page.mousedown(roundIdOf(page, page.results.options[0]).code);
 
     assert.ok(!press.defaultPrevented);
 });
 
 test('clicking the round id of a result neither follows the result nor closes the search', async () => {
     const { page } = await openWithRecent();
-    const roundId = Object.assign(new FakeNode(page, 'span', { class: 'round-id' }), { parent: page.results.options[0] });
 
-    const click = page.click(roundId);
+    const click = page.click(roundIdOf(page, page.results.options[0]).code);
 
     assert.ok(click.defaultPrevented);
     assert.ok(page.isOpen());
+});
+
+test('clicking the round id line of a result beside the id follows the result and closes the search', async () => {
+    const { page } = await openWithRecent();
+
+    const click = page.click(roundIdOf(page, page.results.options[0]).line);
+
+    assert.ok(!click.defaultPrevented);
+    assert.ok(!page.isOpen());
+});
+
+test('pressing the mouse on the round id line of a result beside the id keeps the focus in the field', async () => {
+    const { page } = await openWithRecent();
+
+    const press = page.mousedown(roundIdOf(page, page.results.options[0]).line);
+
+    assert.ok(press.defaultPrevented);
 });
 
 test('clicking a result outside its round id follows it and closes the search', async () => {

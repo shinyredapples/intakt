@@ -8,7 +8,8 @@ const ACTION = '[data-search-action]';
 const CANCEL = '[data-search-cancel]';
 const RESULT_LINK = '#search-results a[href]';
 const RESULT_OPTION = '#search-results [role="option"]';
-const ROUND_ID = '#search-results .round-id';
+// Only the id's own text, so the rest of its line, the label and the space beside it, still opens the review and the whole row stays one target.
+const ROUND_ID = '#search-results .round-id code';
 const FAILED = '<div class="test-result err" role="alert"><p><strong>Search did not answer.</strong> Type again to try once more; nothing was changed.</p></div>';
 
 // One entry per case of Dashboard\Domain\SearchAction; SearchOverlayTest checks that every case has one.
