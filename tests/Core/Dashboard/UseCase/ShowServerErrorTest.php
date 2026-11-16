@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
+use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\UseCase\ShowError\ShowErrorController;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use Intakt\Tests\Support\WebTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -19,6 +22,8 @@ use Twig\Environment;
 
 // Apart from the page tests, because their base class fixes the ledger the kernel serves and a failing one must replace it.
 #[CoversClass(ShowErrorController::class)]
+#[UsesClass(DashboardHost::class)]
+#[UsesClass(FilterProjects::class)]
 final class ShowServerErrorTest extends WebTestCase
 {
     use AssertsLoggedErrors;

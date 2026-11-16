@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
+use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\UseCase\ShowError\ShowErrorController;
 use Intakt\Tests\Core\Dashboard\Infrastructure\DashboardHostTest;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ShowErrorController::class)]
+#[UsesClass(DashboardHost::class)]
+#[UsesClass(FilterProjects::class)]
 final class ShowErrorControllerTest extends DashboardPageTestCase
 {
     use AssertsLoggedErrors;
