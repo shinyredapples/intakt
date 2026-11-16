@@ -137,7 +137,7 @@ final class DemoReviewCommandTest extends TestCase
         $tester = $this->whenTheDemoRuns($this->reviewing(Decision::Approve), ownerToken: 'demo<token>');
 
         self::assertSame(
-            'Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer demo<token>"',
+            'Connect an MCP client: claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header \'Authorization: Bearer demo<token>\'',
             array_last($this->lines($tester)),
         );
     }
