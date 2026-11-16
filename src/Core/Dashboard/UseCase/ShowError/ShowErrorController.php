@@ -67,9 +67,8 @@ final readonly class ShowErrorController
         }
     }
 
+    // The shell's project filter is its only ledger read, and the ledger may be the very thing that failed, so the shell still answers without the projects.
     /**
-     * The shell's project filter is its only ledger read, and the ledger may be the very thing that failed, so the shell still answers without the projects.
-     *
      * @return list<string>
      */
     private function projectNames(): array
