@@ -96,6 +96,12 @@ final class ComponentStylesTest extends WebTestCase
         self::assertMatchesRegularExpression('/background:\s*var\(--selected\)/', $this->rulesOf($this->componentSheet())['.palette .res[aria-selected="true"]'] ?? '');
     }
 
+    public function testEverySearchResultIsATargetAtLeast44PxTallAtEveryWidth(): void
+    {
+        // Only the unindented rule applies at every width; the phone override sits indented inside its media block.
+        self::assertMatchesRegularExpression('/^\.palette \.res \{[^}]*min-height:\s*44px/m', $this->componentSheet());
+    }
+
     public function testTheSearchFieldKeepsTheVisibleFocusOutline(): void
     {
         $rules = $this->rulesOf($this->componentSheet());

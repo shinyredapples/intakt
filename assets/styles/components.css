@@ -419,13 +419,14 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .palette .q input:focus-visible { outline-offset: -2px; }
 .palette .results { max-height: 52vh; overflow: auto; padding: var(--s8); }
 .palette .grp { display: flex; align-items: center; gap: var(--s8); padding: calc(var(--s8) + 2px) calc(var(--s8) + 2px) var(--s4); color: var(--muted); font: 500 var(--t13)/1.3 var(--f-head); }
-.palette .res { display: flex; align-items: center; gap: var(--s12); padding: calc(var(--s8) + 1px) calc(var(--s8) + 2px); border-radius: var(--r-btn); color: var(--ink); text-decoration: none; cursor: pointer; }
+.palette .res { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); min-height: 44px; padding: calc(var(--s8) + 1px) calc(var(--s8) + 2px); border-radius: var(--r-btn); color: var(--ink); text-decoration: none; cursor: pointer; }
 .palette .res:hover { background: var(--tint); }
 .palette .res[aria-selected="true"] { background: var(--selected); }
 /* Long names wrap and never clip mid-word (DESIGN.md, Long titles). */
 .palette .res .lbl { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .palette .res .sub { max-width: 50%; color: var(--muted); font-size: var(--t13); text-align: right; overflow-wrap: anywhere; }
 .palette .res[aria-selected="true"] .sub { color: var(--ink); }
+.palette .res .round-id { flex-basis: 100%; padding: 0; }
 .palette .none { padding: var(--s24) calc(var(--s8) + 2px); color: var(--muted); text-align: center; }
 .palette .none p { margin: 0; }
 .palette .none p + p { margin-top: var(--s4); }
