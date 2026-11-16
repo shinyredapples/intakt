@@ -631,6 +631,7 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 @media (max-width: 760px) {
   .working { margin: var(--s16) 0 var(--s24); }
   .working summary { min-height: 48px; }
+  .working-none { min-height: 48px; }
   .w-dots { display: none; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
 }
