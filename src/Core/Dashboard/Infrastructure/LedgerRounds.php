@@ -177,7 +177,7 @@ final class LedgerRounds
     // A marked id keeps its row without its text, because the judge's call is recorded even where the finding's text is not (rounds judged before it was, or an unreadable entry).
     private function judgedFindings(JudgeDone $judge, array $findings): array
     {
-        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, $finding->merged), $findings);
+        $recorded = array_map(static fn (JudgeDoneFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, $finding->merged, $finding->file, $finding->line), $findings);
 
         return array_map(static fn (RoundFinding $finding): RoundFinding => match (true) {
             in_array($finding->id, $judge->act, true) => $finding->calledBy(JudgeCall::Act),

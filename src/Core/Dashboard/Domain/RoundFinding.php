@@ -16,6 +16,8 @@ final readonly class RoundFinding
         public ?string $severity,
         public ?string $text,
         public array $merged = [],
+        public ?string $file = null,
+        public ?int $line = null,
     ) {
         $this->call = JudgeCall::NotActedOn;
     }
@@ -32,6 +34,11 @@ final readonly class RoundFinding
     public function ids(): array
     {
         return [$this->id, ...$this->merged];
+    }
+
+    public function callInWords(): string
+    {
+        return $this->call->inWords();
     }
 
     public function calledBy(JudgeCall $call): self
