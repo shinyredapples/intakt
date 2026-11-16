@@ -98,7 +98,7 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertSame([['P1', 'F1+F2+F3', 'Text of A.', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
     }
 
-    // A finding quoting a name found nowhere in the change is dropped with its reason; one with no quote and a symbol absent from the change reaches the judge and is judged.
+    // The symbol is place, because only a quote is checked against the change, so a finding with an absent symbol and no quote must reach the judge.
     public function testAFindingQuotingAnAbsentNameShowsItsReasonAndOneWithOnlyAnAbsentSymbolIsJudged(): void
     {
         $dropped = new Finding('A', Severity::P2, 'src/A.php', 9, null, 'Call `ghostName` first.', FixableBy::Builder, false, null, null);

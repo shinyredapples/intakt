@@ -69,7 +69,7 @@ final readonly class RoundPayloads
     /**
      * @return list<DroppedFinding>
      */
-    // Empty for a row written before drop reasons were recorded; an unreadable entry is left out like an unreadable finding.
+    // Empty for a row written before drop reasons were recorded, because it dropped nothing the page could show; an unreadable entry is left out, because one bad entry must not hide the others.
     public function droppedOf(RecordedEvent $recorded): array
     {
         return $this->payloads->entriesOf($recorded, 'dropped', DroppedFinding::class) ?? [];

@@ -29,8 +29,8 @@ use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
-use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\DroppedFinding;
+use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -390,7 +390,8 @@ final class LedgerRoundsTest extends TestCase
             $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], [], [new DroppedFinding('F1', Severity::P2, 'Call `ghost`.', 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')])),
         );
 
-        self::assertEquals([new RoundFinding('F1', 'P2', 'Call `ghost`.', [], 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')], $review?->rounds[0]->dropped);
+        self::assertInstanceOf(Review::class, $review);
+        self::assertEquals([new RoundFinding('F1', 'P2', 'Call `ghost`.', [], 'src/A.php', 3, 'none of its 1 quoted code fragments is in the change')], $review->rounds[0]->dropped);
         self::assertSame([], $review->rounds[0]->findings);
     }
 

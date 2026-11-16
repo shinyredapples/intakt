@@ -116,9 +116,6 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertSame('write()', $crawler->filter('.state-block a.sb-finding code')->text());
     }
 
-    /**
-     * @return list<list<string>>
-     */
     public function testAFindingQuotingANameAbsentFromTheChangeIsShownAsDroppedWithItsReason(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -149,6 +146,9 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('[data-dropped]'));
     }
 
+    /**
+     * @return list<list<string>>
+     */
     private function cardsOf(Crawler $cards): array
     {
         return $cards->each(static fn (Crawler $card): array => [
