@@ -99,7 +99,7 @@ final readonly class ReviewedRound
     // The quorum's own decision in the page's words, apart from the round's outcome, because a round whose reviewers all failed still has a quorum that blocked it.
     public function quorumOutcome(): ?ReviewOutcome
     {
-        return $this->outcome instanceof Decision ? ReviewOutcome::ofDecision($this->outcome) : null;
+        return ReviewOutcome::ofQuorum($this);
     }
 
     public function failedReviewers(): int
