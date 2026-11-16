@@ -98,7 +98,7 @@ final class ComponentStylesTest extends WebTestCase
 
     public function testEverySearchResultIsATargetAtLeast44PxTallAtEveryWidth(): void
     {
-        // Only the unindented rule applies at every width; the phone override sits indented inside its media block.
+        // Anchored to an unindented rule, because the phone override inside its media block would otherwise satisfy it.
         self::assertMatchesRegularExpression('/^\.palette \.res \{[^}]*min-height:\s*44px/m', $this->componentSheet());
     }
 
