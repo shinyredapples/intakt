@@ -470,7 +470,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringStartsWith('1 ', $rows[0][3] ?? '');
     }
 
-    public function testAReviewerThatFailedAfterThePageLoadedShowsTheFailedStateInRedWithItsCause(): void
+    public function testAReviewerThatFailedAfterThePageLoadedShowsTheFailedChipInRedWithItsCauseAsMutedText(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
         $this->ledger->startReviewerOn($id, 'security', 'Kimi K3');
@@ -479,8 +479,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Failed]));
 
         $state = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-reviewer-'.$id.'-security-state');
-        self::assertSame('failed: the model did not answer in time', $state->text());
-        self::assertCount(1, $state->filter('.reviewer-outcome.failed .dot.broken'));
+        self::assertSame(['Failed', 'the model did not answer in time'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
     }
 
     public function testAFailedReviewerTheTableAlreadyListsShowsItsCauseOnceItFails(): void
@@ -493,7 +492,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Failed]));
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
-        self::assertSame([['security', 'Kimi K3', 'failed: the model did not answer in time']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertSame([['security', 'Kimi K3', 'Failed the model did not answer in time']],array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
     }
 
     public function testDuringALiveRoundThePageListsEachReviewerByRoleAndModelWithItsState(): void
@@ -530,8 +529,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])])
             .$this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
 
-        self::assertSame([['role not read', 'model not read', 'verdict', 'shown after a reload']], $this->rowsOf($updated));
-        self::assertSame(['A reviewer (role not read): verdict'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame([['role not read', 'model not read', 'answered', 'shown after a reload']], $this->rowsOf($updated));
+        self::assertSame(['A reviewer (role not read): answered'],$updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
         self::assertSame('A reviewer (role not read) live', $updated->filter('#reviewer-round-1-correctness h3')->text());
     }
 

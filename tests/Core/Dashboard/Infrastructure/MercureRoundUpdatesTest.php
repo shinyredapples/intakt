@@ -260,7 +260,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $data = $this->published[0]->getData();
         $row = 'round-'.self::ROUND.'-reviewer-'.self::REVIEWER;
 
-        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state">stopped</td>', $row, $row), $data);
+        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state"><span class="muted">stopped</span></td>', $row, $row), $data);
         self::assertStringContainsString(sprintf('targets="#%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
     }
 
@@ -483,7 +483,7 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('<span class="muted">answered</span>', $this->published[0]->getData());
         self::assertStringNotContainsString('verdict', $this->published[0]->getData());
         self::assertSame(
-            [['warning', 'The reviewer outcomes were not read for the live update.', ['round' => self::ROUND, 'exception' => $failure]]],
+            [['warning', 'The round was not read for its live reviewer rows.', ['round' => self::ROUND, 'exception' => $failure]]],
             $this->log->cleanLogs(),
         );
     }
