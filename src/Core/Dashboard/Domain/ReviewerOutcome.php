@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 
 // The latest event of a reviewer decides its row, because a reviewer started again after a stopped worker runs anew.
@@ -39,15 +38,9 @@ final readonly class ReviewerOutcome
         return new self($this->id, $this->role, $this->tier, $at, $model);
     }
 
-    // A reviewer still running or stopped has given nothing yet, so it has no outcome; its progress is shown apart from it.
     public function outcome(): ?ReviewOutcome
     {
-        return match ($this->progress) {
-            ReviewerProgress::Answered => null === $this->decision ? null : ReviewOutcome::ofDecision(Decision::from($this->decision)),
-            ReviewerProgress::Failed => ReviewOutcome::Failed,
-            ReviewerProgress::Blocked => ReviewOutcome::Blocked,
-            ReviewerProgress::Running, ReviewerProgress::Stopped => null,
-        };
+        return ReviewOutcome::ofReviewer($this);
     }
 
     public function answered(string $decision, int $findings, ProjectMode $mode): self

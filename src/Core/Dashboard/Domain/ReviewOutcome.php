@@ -29,6 +29,17 @@ enum ReviewOutcome: string
         return null === $round->outcome ? null : self::ofDecision($round->outcome);
     }
 
+    // A reviewer still running or stopped has given nothing yet, so it has no outcome; its progress is shown apart from it.
+    public static function ofReviewer(ReviewerOutcome $reviewer): ?self
+    {
+        return match ($reviewer->progress) {
+            ReviewerProgress::Answered => null === $reviewer->decision ? null : self::ofDecision(Decision::from($reviewer->decision)),
+            ReviewerProgress::Failed => self::Failed,
+            ReviewerProgress::Blocked => self::Blocked,
+            ReviewerProgress::Running, ReviewerProgress::Stopped => null,
+        };
+    }
+
     // A round's quorum and a reviewer's verdict share one mapping, so the summary and the round rows never word the same decision apart.
     public static function ofDecision(Decision $decision): self
     {
