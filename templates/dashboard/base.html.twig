@@ -39,6 +39,7 @@
     ],
     more_items: [],
     current_route: app.current_route,
+    current_section: rail_section ?? null,
 }, with_context = false) }}
 <div class="main">
 {# One listener for the shell topic and the page's own. The cookie it sets also carries listener_grants, the same on every page, because every tab shares it. It sits here, not beside the rail, because any child of the shell takes a cell of its two-column grid. #}
@@ -100,6 +101,12 @@
         const shownFilter = document.querySelector('#projfilter');
         if (!shownFilter) {
             return;
+        }
+        // A project link's breadcrumb and Projects mark name its project, so they go once the filter shows another or all projects, as a reload of the address without the link would show.
+        const trail = document.querySelector('[data-project-trail]');
+        if (trail && trail.dataset.projectTrail !== shownFilter.value) {
+            trail.remove();
+            document.querySelectorAll('[data-section-current]').forEach((mark) => mark.removeAttribute('aria-current'));
         }
         const chosen = phone.matches ? '' : shownFilter.value;
         document.querySelectorAll('[data-project]').forEach((item) => {

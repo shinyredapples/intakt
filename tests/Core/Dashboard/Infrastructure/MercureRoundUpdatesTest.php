@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
@@ -58,6 +59,7 @@ use Twig\TwigFunction;
 // Through the real MercureLiveUpdates over a MockHub, because what callers see is the update that reaches the hub.
 #[CoversClass(MercureRoundUpdates::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(FinishedState::class)]
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(SessionSummary::class)]
@@ -258,7 +260,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $data = $this->published[0]->getData();
         $row = 'round-'.self::ROUND.'-reviewer-'.self::REVIEWER;
 
-        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state">stopped</td>', $row, $row), $data);
+        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state"><span class="muted">stopped</span></td>', $row, $row), $data);
         self::assertStringContainsString(sprintf('targets="#%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
     }
 
@@ -468,6 +470,24 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('<p class="fc-call">Fix now</p>', $judged->getData());
     }
 
+    public function testARoundChangeWhoseRoundCannotBeReadStillPublishesTheReviewerStatesAsProcessTextAndLogsWhy(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException($failure);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false, [self::REVIEWER => FinishedState::Verdict]));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('<span class="muted">answered</span>', $this->published[0]->getData());
+        self::assertStringNotContainsString('verdict', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'The round was not read for its live reviewer rows.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
     public function testAJudgedRoundWhoseFindingsCannotBeReadStillPublishesItsJudgedStateAndLogsWhy(): void
     {
         $failure = new RuntimeException('the ledger is gone');
@@ -484,6 +504,71 @@ final class MercureRoundUpdatesTest extends TestCase
             [['warning', 'The judged round was not read for its live update.', ['round' => self::ROUND, 'exception' => $failure]]],
             $this->log->cleanLogs(),
         );
+    }
+
+    public function testAToolCallWhoseReviewerCannotBeReadStillGoesOutUnnamedAndLogsWhy(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willThrowException($failure);
+        $this->ledger = $ledger;
+
+        $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('A reviewer (role not read)', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'The reviewer was not read for its live update.', ['round' => self::ROUND, 'reviewer' => self::REVIEWER, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
+    public function testAProgressWhoseRoundCannotBeReadStillGoesOutWithTheFinishedReviewerUnnamedAndLogsWhy(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException($failure);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false, [self::REVIEWER => FinishedState::Failed]));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('<td>role not read</td>', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'The round was not read for its live reviewer rows.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
+    public function testAToolCallNamesItsReviewerByTheRoleAndModelOfItsLatestStart(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->startReviewerOn(self::ROUND, 'security', 'GLM 5');
+        $ledger->startReviewerOn(self::ROUND, 'security', 'Kimi K3');
+        $this->ledger = $ledger;
+
+        $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'read_file');
+
+        self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $this->published[0]->getData());
+        self::assertSame([], $this->log->cleanLogs());
+    }
+
+    public function testAReadAnswerAndARetryNameTheirReviewerByTheRoleAndModelOfItsLatestStart(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->startReviewerOn(self::ROUND, 'security', 'Kimi K3');
+        $this->ledger = $ledger;
+        $updates = $this->updates();
+
+        $updates->answerRead(Uuid::fromString(self::ROUND), self::ROUND.'-security', $this->readAnswer('Discount boundary regression'));
+        $updates->reviewerAskedAgain(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'try-2');
+
+        self::assertCount(2, $this->published);
+        foreach ($this->published as $update) {
+            self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $update->getData());
+        }
     }
 
     public function testAJudgedRoundTheLedgerDoesNotHoldPublishesItsJudgedStateWithoutFindings(): void

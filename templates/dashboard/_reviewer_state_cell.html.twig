@@ -1,0 +1,8 @@
+{# Its own partial, because a reviewer's live update replaces this cell with the same markup a reload renders. The outcome chip is the headline; the process state is muted text. #}
+{% set progress = outcome.progress.name %}
+<td id="round-{{ round }}-reviewer-{{ outcome.id }}-state"><span class="reviewer-outcome">
+    {%- if progress == 'Running' %}<span class="dot ok"></span><span class="muted">running</span>
+    {%- elseif progress == 'Stopped' %}<span class="muted">stopped</span>
+    {%- elseif outcome.outcome is null %}<span class="muted">answered</span>
+    {%- else %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome.outcome, on_page: true}, with_context = false) }}{% if outcome.note is not empty %}<span class="muted">{{ outcome.note }}</span>{% endif %}{% endif -%}
+</span>{% if outcome.substitute is not null %}; answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
