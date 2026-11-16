@@ -126,7 +126,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         self::assertSame(
-            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => []], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => []], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => []]],
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => [], 'file' => null, 'line' => null], ['id' => 'F2', 'severity' => 'P2', 'text' => 'Text of B.', 'merged' => [], 'file' => null, 'line' => null], ['id' => 'F3', 'severity' => 'P3', 'text' => 'Text of C.', 'merged' => [], 'file' => null, 'line' => null]],
             $this->judgeDonePayloads()[0]['findings'],
         );
     }
@@ -353,7 +353,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
-        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => []]], $this->judgeDonePayloads()[0]['findings']);
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1]], $this->judgeDonePayloads()[0]['findings']);
     }
 
     public function testARoundWhoseEveryFindingIsDroppedIsJudgedWithoutAskingTheJudge(): void

@@ -327,6 +327,39 @@ final class LedgerRoundsTest extends TestCase
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.')->calledBy(JudgeCall::Act), new RoundFinding('F2', 'P3', 'Later.')->calledBy(JudgeCall::FollowUp)], $review?->rounds[0]->findings);
     }
 
+    public function testAJudgedFindingInTheReadModelNamesItsFileAndLine(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', [], 'src/A.php', 7)])),
+        );
+
+        self::assertSame(['src/A.php', 7], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
+    }
+
+    public function testTheJudgesCallReadsInPlainWordsWithTheDropReason(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], ['F2'], [new JudgeDoneFinding('F1', Severity::P1, 'A.'), new JudgeDoneFinding('F2', Severity::P3, 'B.'), new JudgeDoneFinding('F3', Severity::P3, 'C.')])),
+        );
+
+        self::assertSame(['Fix now', 'Dropped: deferred to a follow-up issue', 'Dropped: rejected or not marked by the judge'], array_map(static fn (RoundFinding $finding): string => $finding->callInWords(), $review?->rounds[0]->findings ?? []));
+    }
+
+    public function testAMarkedOnlyFindingFromAnOldRoundHasNoFileAndNoLine(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [])),
+        );
+
+        self::assertSame([null, null], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
+    }
+
     public function testAnActEntryThatMergesFindingsIsOneRowNamingTheMergedIds(): void
     {
         $review = $this->reviewOf(
