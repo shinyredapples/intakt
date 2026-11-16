@@ -5,6 +5,7 @@
 {% if (reviewed ?? null) is not null %}
 <turbo-stream action="replace" target="round-{{ round }}-verdict"><template>{{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-judged"><template>{{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-now-findings"><template>{{ include('dashboard/_now_findings.html.twig', {round: round, open: reviewed.actFindings, judged: reviewed.round}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-judge"><template><p class="muted" id="round-{{ round }}-now-judge">The judge has judged this round. Its call and the findings to fix are in the round below.</p></template></turbo-stream>
 {% else %}
 {# Without the judged round, because the ledger could not be read when it was published, so the call and the findings come with the next load. #}

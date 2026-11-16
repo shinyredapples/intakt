@@ -83,6 +83,14 @@ final readonly class ReviewedRound
         return $this->ending instanceof RoundEnding;
     }
 
+    /**
+     * @return list<RoundFinding>
+     */
+    public function actFindings(): array
+    {
+        return array_values(array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call));
+    }
+
     public function failedReviewers(): int
     {
         return count(array_filter($this->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Failed === $outcome->progress));
