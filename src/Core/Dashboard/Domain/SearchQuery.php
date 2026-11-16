@@ -26,7 +26,7 @@ final readonly class SearchQuery
 
     public function matches(SearchResult $result): bool
     {
-        $haystack = mb_strtolower(implode(' ', [$result->label, $result->detail, $result->group->value]));
+        $haystack = mb_strtolower(implode(' ', [$result->label, $result->detail, $result->group->value, $result->roundId ?? '']));
 
         return array_all($this->words, static fn (string $word): bool => str_contains($haystack, $word));
     }

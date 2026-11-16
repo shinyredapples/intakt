@@ -31,4 +31,10 @@ final readonly class ReviewSummary
         $this->outcome = ReviewOutcome::of($round);
         $this->findingCount = $round->isJudged() ? count($round->findings) : null;
     }
+
+    // Titled by change and round, because a round id is 36 characters a reader cannot tell apart.
+    public function title(): string
+    {
+        return sprintf('%s, round %s', '' === $this->change ? 'Unnamed change' : $this->change, $this->number ?? 'not numbered');
+    }
 }
