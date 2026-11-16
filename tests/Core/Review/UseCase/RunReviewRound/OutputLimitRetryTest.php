@@ -41,7 +41,6 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;

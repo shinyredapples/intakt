@@ -45,7 +45,6 @@ use Symfony\AI\Platform\Bridge\Anthropic\Claude;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory;
 use Symfony\AI\Platform\Bridge\Anthropic\ModelCatalog;
 use Symfony\AI\Platform\Capability;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
