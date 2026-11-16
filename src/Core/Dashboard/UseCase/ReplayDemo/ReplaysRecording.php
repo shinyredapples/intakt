@@ -68,7 +68,7 @@ final readonly class ReplaysRecording
         $previous = array_first($recording->events)?->recordedAt;
 
         foreach ($recording->events as $number => $event) {
-            $this->clock->sleep(self::secondsBetween($previous, $event->recordedAt) / $factor);
+            $this->clock->sleep($this->secondsBetween($previous, $event->recordedAt) / $factor);
             $this->append($event, $recording, $number);
             $previous = $event->recordedAt;
         }
@@ -76,7 +76,7 @@ final readonly class ReplaysRecording
 
     private function append(RecordedLedgerEvent $event, Recording $recording, int $number): void
     {
-        $result = $this->ledger->append(new LedgerEvent($event->kind, self::inTheDemoProject($event->payload, $recording->project)));
+        $result = $this->ledger->append(new LedgerEvent($event->kind, $this->inTheDemoProject($event->payload, $recording->project)));
 
         if (!$result->succeeded()) {
             throw ReplayStopped::at($event->kind, $number, count($recording->events), (string) $result->failure);
@@ -84,9 +84,9 @@ final readonly class ReplaysRecording
     }
 
     // A row recorded before the one ahead of it follows at once, because the ledger keeps the recorded order.
-    private static function secondsBetween(?DateTimeImmutable $earlier, DateTimeImmutable $later): float
+    private function secondsBetween(?DateTimeImmutable $earlier, DateTimeImmutable $later): float
     {
-        if (null === $earlier) {
+        if (!$earlier instanceof DateTimeImmutable) {
             return 0.0;
         }
 
@@ -96,7 +96,7 @@ final readonly class ReplaysRecording
     }
 
     // Encoded again only when it names the recorded project, with the stored serializer's options, so every other row stays the text the live review stored.
-    private static function inTheDemoProject(string $payload, string $recorded): string
+    private function inTheDemoProject(string $payload, string $recorded): string
     {
         $row = json_decode($payload);
 

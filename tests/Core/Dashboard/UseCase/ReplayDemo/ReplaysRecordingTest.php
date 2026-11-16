@@ -12,7 +12,6 @@ use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
-use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -36,7 +35,7 @@ final class ReplaysRecordingTest extends TestCase
     private const string CALL = '0196a000-0000-7000-8000-0000000000c1';
 
     // Escaped as the stored serializer writes it, so a test sees that the rewritten row keeps the escapes.
-    private const string TASK = '"Fix the cart \\/ caf\\'.'u00e9."';
+    private const string TASK = '"Fix the cart \\/ caf\\u00e9."';
 
     private const string START = '2026-11-16T09:00:00.000000+00:00';
 
@@ -55,7 +54,7 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testReplayingARecordingAppendsTheSameLedgerRowsAsTheRecordedRunInRecordedOrder(): void
     {
-        $recording = self::recordedRun();
+        $recording = $this->recordedRun();
 
         $this->replays()->replay($recording, 1.0);
 
@@ -67,7 +66,7 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testARowThatNamesNoProjectIsAppendedAsItsStoredText(): void
     {
-        $recording = self::recordedRun();
+        $recording = $this->recordedRun();
 
         $this->replays()->replay($recording, 1.0);
 
@@ -77,7 +76,7 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testTheReviewStartedRowNamesTheDemoProjectNotTheRecordedOne(): void
     {
-        $this->replays()->replay(self::recordedRun(), 1.0);
+        $this->replays()->replay($this->recordedRun(), 1.0);
 
         self::assertSame(
             '{"round":"'.self::ROUND.'","project":"demo-replay","reviewers":2,"change":"sample-change","number":1,"task":'.self::TASK.',"repository":"\/app\/var\/data\/sample-repository","base":"main","quorum":{}}',
@@ -87,14 +86,14 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testTheUsageRowOfAModelCallNamesTheDemoProject(): void
     {
-        $this->replays()->replay(self::recordedRun(), 1.0);
+        $this->replays()->replay($this->recordedRun(), 1.0);
 
         self::assertSame(CreateDemoProjectCommand::NAME, json_decode($this->appended()[2]->event->payload, true)['project'] ?? null);
     }
 
     public function testEachRowIsAppendedOnceTheClockHasAdvancedByItsRecordedGapDividedByTheFactor(): void
     {
-        $this->replays()->replay(self::recordedRun(), 4.0);
+        $this->replays()->replay($this->recordedRun(), 4.0);
 
         self::assertSame(
             ['09:00:00.000000', '09:00:02.500000', '09:00:02.750000', '09:00:32.750000', '09:00:32.750000'],
@@ -107,7 +106,7 @@ final class ReplaysRecordingTest extends TestCase
         $this->ledger->failAppend(3);
 
         try {
-            $this->replays()->replay(self::recordedRun(), 2.0);
+            $this->replays()->replay($this->recordedRun(), 2.0);
         } catch (ReplayStopped) {
         }
 
@@ -117,7 +116,7 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testARowRecordedBeforeThePreviousOneIsAppendedWithoutWaiting(): void
     {
-        $this->replays()->replay(self::recording([self::row(LedgerEventKind::ReviewerStarted, '{"round":"r"}', '09:00:10'), self::row(LedgerEventKind::ReviewerStarted, '{"round":"r"}', '09:00:04')]), 1.0);
+        $this->replays()->replay($this->recording([$this->row(LedgerEventKind::ReviewerStarted, '{"round":"r"}', '09:00:10'), $this->row(LedgerEventKind::ReviewerStarted, '{"round":"r"}', '09:00:04')]), 1.0);
 
         self::assertSame(self::START, $this->clock->now()->format('Y-m-d\TH:i:s.uP'));
     }
@@ -127,7 +126,7 @@ final class ReplaysRecordingTest extends TestCase
         $this->ledger->failAppend(2);
 
         try {
-            $this->replays()->replay(self::recordedRun(), 1.0);
+            $this->replays()->replay($this->recordedRun(), 1.0);
             self::fail('The replay went on after a failed append.');
         } catch (ReplayStopped $stopped) {
             self::assertStringContainsString('disk full', $stopped->getMessage());
@@ -138,13 +137,13 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testARecordingWhoseRoundIsAlreadyInTheLedgerIsRefusedBeforeAnyRowIsWritten(): void
     {
-        $this->replays()->replay(self::recordedRun(), 1.0);
+        $this->replays()->replay($this->recordedRun(), 1.0);
 
         $this->expectException(ReplayIsRefused::class);
         $this->expectExceptionMessage(self::ROUND);
 
         try {
-            $this->replays()->replay(self::recordedRun(), 1.0);
+            $this->replays()->replay($this->recordedRun(), 1.0);
         } finally {
             self::assertCount(5, $this->appended());
         }
@@ -152,9 +151,9 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testARecordingOfAnotherRoundIsReplayedBesideAnEarlierReplay(): void
     {
-        $this->replays()->replay(self::recordedRun(), 1.0);
+        $this->replays()->replay($this->recordedRun(), 1.0);
 
-        $this->replays()->replay(self::recording([self::row(LedgerEventKind::ReviewStarted, '{"round":"another-round","project":"sample"}', '09:00:00')]), 1.0);
+        $this->replays()->replay($this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"another-round","project":"sample"}', '09:00:00')]), 1.0);
 
         self::assertCount(6, $this->appended());
     }
@@ -167,7 +166,7 @@ final class ReplaysRecordingTest extends TestCase
         $this->expectException(ReplayIsRefused::class);
 
         try {
-            $this->replays()->replay(self::recordedRun(), 1.0);
+            $this->replays()->replay($this->recordedRun(), 1.0);
         } finally {
             self::assertSame([], $this->appended());
         }
@@ -175,7 +174,7 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testTheReplayLetsTheNextReplayRunOnceItEnds(): void
     {
-        $this->replays()->replay(self::recordedRun(), 1.0);
+        $this->replays()->replay($this->recordedRun(), 1.0);
 
         self::assertTrue(new LockFactory($this->locks)->createLock(ReplaysRecording::LOCK)->acquire());
     }
@@ -194,28 +193,28 @@ final class ReplaysRecordingTest extends TestCase
     }
 
     // Written through the stored serializer and read back from a file, as the record command leaves it, so the rows are the text a live review stores.
-    private static function recordedRun(): Recording
+    private function recordedRun(): Recording
     {
         $format = new RecordingFormat(StoredSerializerFactory::create());
 
-        return $format->read($format->write(self::recording([
-            self::row(LedgerEventKind::ReviewStarted, '{"round":"'.self::ROUND.'","project":"sample","reviewers":2,"change":"sample-change","number":1,"task":'.self::TASK.',"repository":"\/app\/var\/data\/sample-repository","base":"main","quorum":{}}', '09:00:00'),
-            self::row(LedgerEventKind::ReviewerStarted, '{"round":"'.self::ROUND.'","reviewer":"r-1","role":"correctness","tier":"standard"}', '09:00:10'),
-            self::row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"sample","tier":"standard","round":"'.self::ROUND.'","model":"claude-opus-5-5"}', '09:00:11'),
-            self::row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"settled","usages":[{"model":"claude-opus-5-5","total":1.0}]}', '09:02:11'),
-            self::row(LedgerEventKind::VerdictReceived, '{"round":"'.self::ROUND.'","reviewer":"r-1","role":"correctness","tier":"standard","decision":"approve","findings":0}', '09:02:11'),
+        return $format->read($format->write($this->recording([
+            $this->row(LedgerEventKind::ReviewStarted, '{"round":"'.self::ROUND.'","project":"sample","reviewers":2,"change":"sample-change","number":1,"task":'.self::TASK.',"repository":"\/app\/var\/data\/sample-repository","base":"main","quorum":{}}', '09:00:00'),
+            $this->row(LedgerEventKind::ReviewerStarted, '{"round":"'.self::ROUND.'","reviewer":"r-1","role":"correctness","tier":"standard"}', '09:00:10'),
+            $this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"sample","tier":"standard","round":"'.self::ROUND.'","model":"claude-opus-5-5"}', '09:00:11'),
+            $this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"settled","usages":[{"model":"claude-opus-5-5","total":1.0}]}', '09:02:11'),
+            $this->row(LedgerEventKind::VerdictReceived, '{"round":"'.self::ROUND.'","reviewer":"r-1","role":"correctness","tier":"standard","decision":"approve","findings":0}', '09:02:11'),
         ])));
     }
 
     /**
      * @param list<RecordedLedgerEvent> $events
      */
-    private static function recording(array $events): Recording
+    private function recording(array $events): Recording
     {
         return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, []);
     }
 
-    private static function row(LedgerEventKind $kind, string $payload, string $at): RecordedLedgerEvent
+    private function row(LedgerEventKind $kind, string $payload, string $at): RecordedLedgerEvent
     {
         return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000aa', $kind, $payload, new DateTimeImmutable('2026-11-16T'.$at.'+00:00'));
     }
