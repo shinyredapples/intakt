@@ -22,12 +22,19 @@
         {% if review.everyRoundIsAReplay %}
         <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
         {% endif %}
+        {% if review.source is not null %}
+        <p class="task-sentence">{{ review.source.task }}</p>
+        {% else %}
+        <p class="task-sentence muted">Task not recorded.</p>
+        {% endif %}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
+            {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round ' : ' rounds '), include: {template: kind_label, with: {kind: kinds.Counted, at: 'summary-rounds'}}},
+            {icon: 'tokens', text: total.total|number_format(0, '.', ',') ~ ' tokens ', include: {template: kind_label, with: {kind: kinds.Measured, at: 'summary-tokens'}}},
+            {icon: 'wallet', text: 'Cost: ', include: {template: 'dashboard/components/cost.html.twig', with: {cost: review.cost, at: 'summary-cost'}}},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
-        <p class="lead summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }} {{ include(kind_label, {kind: kinds.Counted, at: 'summary-rounds'}, with_context = false) }}, {{ total.total }} tokens {{ include(kind_label, {kind: kinds.Measured, at: 'summary-tokens'}, with_context = false) }} in all. Cost: {{ include('dashboard/components/cost.html.twig', {cost: review.cost, at: 'summary-cost'}, with_context = false) }}.</p>
         {% if not can_start %}
         <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
         {% endif %}
