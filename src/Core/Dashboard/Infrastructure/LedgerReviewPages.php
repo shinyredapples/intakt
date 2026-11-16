@@ -22,6 +22,7 @@ final readonly class LedgerReviewPages
         private ChangeDecision $decision,
         private FailureInWords $failures,
         private RoundEndings $endings,
+        private ReplayMarks $marks,
     ) {
     }
 
@@ -49,7 +50,7 @@ final readonly class LedgerReviewPages
 
     private function rounds(RecordedEvents $events): LedgerRounds
     {
-        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures, $this->endings);
+        $rounds = new LedgerRounds($this->payloads, $this->costs, $this->decision, $this->failures, $this->endings, $this->marks);
 
         foreach ($events as $recorded) {
             $rounds->add($recorded);

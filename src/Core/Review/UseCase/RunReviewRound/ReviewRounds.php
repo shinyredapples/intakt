@@ -10,12 +10,14 @@ use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Domain\ChangeRound;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\UseCase\ReadVerdicts\RoundNotFound;
+use Symfony\Bridge\Doctrine\Types\UuidType;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
@@ -87,6 +89,25 @@ final readonly class ReviewRounds
         $this->entities->clear();
 
         return $this->entities->find(ReviewRound::class, Uuid::fromString($roundId)) ?? throw RoundNotFound::for($roundId);
+    }
+
+    // Read as a column without clearing, because a reviewer's handler asks for it through the board while it still holds its round, and a clear would detach that round.
+    public function replayMarkOf(string $roundId): ReplayMark
+    {
+        if (!Uuid::isValid($roundId)) {
+            throw RoundNotFound::for($roundId);
+        }
+
+        /** @var list<array{replay: bool}> $rows */
+        $rows = $this->entities->createQuery(sprintf('SELECT r.replay FROM %s r WHERE r.id = :id', ReviewRound::class))
+            ->setParameter('id', Uuid::fromString($roundId), UuidType::NAME)
+            ->getArrayResult();
+
+        return match ($rows[0]['replay'] ?? null) {
+            null => throw RoundNotFound::for($roundId),
+            true => ReplayMark::Replay,
+            false => ReplayMark::Live,
+        };
     }
 
     // A forge status belongs to a commit, so only a later round that reviewed the same head speaks for it; a round of another head of the change leaves this head's status to this round.

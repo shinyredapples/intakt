@@ -1,10 +1,11 @@
-{#- ask makes it a needs-you card; emphasis {icon, text, broken?} is the blocker or next step under the title; meta as in meta.html.twig. Without href it is no link, so it takes no hover. -#}
+{#- ask makes it a needs-you card; emphasis {icon, text, broken?} is the blocker or next step under the title; mark is a chip's words beside the project, as Replay; meta as in meta.html.twig. Without href it is no link, so it takes no hover. -#}
 {%- set needs = ask|default(null) is not empty -%}
 {%- set tag = href is defined ? 'a' : 'div' -%}
 <{{ tag }} class="card{% if needs %} needs{% endif %}{% if forced|default(null) %} is-{{ forced }}{% endif %}"{% if href is defined %} href="{{ href }}"{% endif %}>
     <div class="top">
         {%- if needs %}<span class="dot needs"></span>{% endif -%}
         <span class="num" title="#{{ number }}">#{{ number }}</span><span class="pname" title="{{ project }}">{{ project }}</span>
+        {%- if mark|default(null) is not empty %}{{ include('dashboard/components/chip.html.twig', {label: mark, extra: 'replay-mark'}, with_context = false) }}{% endif %}
     </div>
     <div class="title">{{ title }}</div>
     {%- if needs %}
