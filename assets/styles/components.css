@@ -320,16 +320,17 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 }
 @keyframes toast-in-phone { from { opacity: 0; transform: translateY(8px); } }
 
-@media (prefers-reduced-motion: reduce) {
-  .toast { animation: none; }
-  .switch span, .switch span::after, .banner-toggle .chev, details > summary .chev { transition: none; }
-}
-
 /* Every disclosure on the dashboard shows the same turning chevron, so the browser's own marker would be a second sign for one control. */
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary .chev { flex: none; transition: transform .15s; color: var(--muted); }
 details[open] > summary .chev { transform: rotate(180deg); }
+
+/* After the rules it overrides: equal specificity, so only the later declaration wins. */
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+  .switch span, .switch span::after, .banner-toggle .chev, details > summary .chev { transition: none; }
+}
 
 .shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: 100vh; }
 [data-rail="collapsed"] .shell { grid-template-columns: var(--rail-c) minmax(0, 1fr); }

@@ -34,6 +34,20 @@ final class DisclosureStylesTest extends TestCase
         self::assertStringContainsString('details > summary .chev', $block[1] ?? '');
     }
 
+    public function testTheReducedMotionRuleComesLastSoItWinsOverTheSharedTransition(): void
+    {
+        preg_match_all('/([^{}]+)\{([^{}]*)\}/', $this->sheet(), $rules, PREG_SET_ORDER);
+        $transitions = [];
+        foreach ($rules as $rule) {
+            if (\in_array('details > summary .chev', array_map(trim(...), explode(',', $rule[1])), true)
+                && 1 === preg_match('/(?:^|;)\s*transition:\s*([^;]+)/', $rule[2], $value)) {
+                $transitions[] = trim($value[1]);
+            }
+        }
+
+        self::assertSame('none', array_last($transitions));
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
