@@ -7,6 +7,7 @@ namespace Intakt\Tests\Support;
 use Intakt\Tests\Support\Log\AssertsLoggedErrors;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase as SymfonyWebTestCase;
+use Symfony\Component\Clock\ClockInterface;
 
 // A base of its own, because the extension can only warn and #612 (D3) asks that the web test itself fails.
 abstract class WebTestCase extends SymfonyWebTestCase
@@ -20,5 +21,13 @@ abstract class WebTestCase extends SymfonyWebTestCase
         assert($container instanceof TestContainer);
 
         return $container;
+    }
+
+    // Pins the container's clock instead of replacing it, because a clock something already created cannot be set again.
+    protected static function clockAt(string $moment): void
+    {
+        $clock = self::getContainer()->get(ClockInterface::class);
+        assert($clock instanceof PinnableClock);
+        $clock->pinAt($moment);
     }
 }
