@@ -17,7 +17,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 final readonly class ReviewChangeCommand implements SignalableCommandInterface
 {
     // The shell's convention for a process ended by a signal, so a caller sees 130 for Ctrl-C and 143 for SIGTERM.
-    private const int SIGNAL_EXIT_BASE = 128;
+    public const int SIGNAL_EXIT_BASE = 128;
 
     // POSIX numbers rather than SIGINT and SIGTERM, because those constants exist only with pcntl and the command must load without it.
     public const int INTERRUPT = 2;
