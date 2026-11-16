@@ -176,7 +176,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness']));
 
         self::assertSame('stopped', $updated->filter('#round-round-1-reviewer-round-1-correctness-state')->text());
-        self::assertSame('correctness (standard tier, model not recorded): stopped',$updated->filter('.state-block .sb-list li')->text());
+        self::assertSame('correctness (standard tier, model not recorded): stopped', $updated->filter('.state-block .sb-list li')->text());
     }
 
     public function testAVerdictPushedToThePageCountsInTheCurrentStateBlock(): void
@@ -504,7 +504,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking'])
             .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame(['correctness (standard tier, model not recorded): verdict'],$updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['correctness (standard tier, model not recorded): verdict'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testAStreamForARoundWhoseBlockIsNotOnThePageAddsNoRow(): void
