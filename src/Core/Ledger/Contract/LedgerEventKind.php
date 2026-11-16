@@ -40,6 +40,7 @@ enum LedgerEventKind: string
     case ModelChosen = 'model_chosen';
     case PushIntended = 'push_intended';
     case BranchPushed = 'branch_pushed';
+    case PushRefused = 'push_refused';
     case ChangeIntended = 'change_intended';
     case ChangeOpened = 'change_opened';
     case BuildStepEnded = 'build_step_ended';
