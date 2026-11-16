@@ -75,7 +75,6 @@ use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\AI\Platform\TraceablePlatform;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 
 #[CoversClass(ReviewerAgent::class)]

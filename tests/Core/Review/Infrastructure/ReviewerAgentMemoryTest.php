@@ -54,7 +54,6 @@ use Symfony\AI\Store\Indexer\DocumentIndexer;
 use Symfony\AI\Store\Indexer\DocumentProcessor;
 use Symfony\AI\Store\InMemory\Store;
 use Symfony\AI\Store\Retriever;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Uid\UuidV7;
 
 // Runs a whole review through the agent, so what reaches the model is what the platform is really sent, not what the prompt builder returns.

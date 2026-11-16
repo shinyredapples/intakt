@@ -44,7 +44,6 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Result\ToolCall;
 use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
-use Symfony\Component\Clock\MockClock;
 
 // Through a worker and the real reviewer agent, so the stop is proven from the ledger row of the request to the verdict and the ledger row of the stop.
 #[Group('persistence')]
