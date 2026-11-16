@@ -8,7 +8,7 @@ use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Plain code, not a model, decides, because a model checking a reviewer can be steered the same way. Only the names of a quote are looked up, because a reviewer shortens and reformats the code it quotes, and a finding goes only when none of its quotes is in the change, because a real one also quotes code the change lacks, such as its fix.
+// Plain code, not a model, decides, because a model checking a reviewer can be steered the same way. Only the names of a quote are looked up, because a reviewer shortens and reformats the code it quotes, and a finding goes only when none of its quotes is in the change, because a real one also quotes code the change lacks, such as its fix. The symbol is never checked and a finding without a quote goes to the judge, because neither shows code the reviewer claims to have read.
 #[Exclude]
 final readonly class QuotesInChange
 {
@@ -51,16 +51,10 @@ final readonly class QuotesInChange
 
     private function reasonToDrop(Finding $finding, string $changeText): ?string
     {
+        // The symbol is never read: it says where a finding is, like its file and line, and is often free text, so a finding that quotes nothing goes to the judge whatever its symbol.
         $quotes = $this->quotesIn($finding->text);
 
-        // The symbol says where a finding is, like its file and line, so it decides only when the text quotes nothing: a real enclosing function must never keep a finding whose quoted code is absent.
-        if ([] === $quotes) {
-            $symbol = trim($finding->symbol ?? '');
-
-            return !$this->namesCode($symbol) || $this->holds($changeText, $symbol) ? null : sprintf('Its symbol `%s` is not in the change or the files it touches.', $symbol);
-        }
-
-        if (array_any($quotes, fn (string $quote): bool => $this->holds($changeText, $quote))) {
+        if ([] === $quotes || array_any($quotes, fn (string $quote): bool => $this->holds($changeText, $quote))) {
             return null;
         }
 

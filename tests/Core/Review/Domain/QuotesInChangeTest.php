@@ -197,11 +197,25 @@ final class QuotesInChangeTest extends TestCase
         self::assertSame([$finding], $this->checked($finding)->kept);
     }
 
-    public function testASymbolAbsentFromTheChangeDropsAFindingThatQuotesNothing(): void
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function symbolsAbsentFromTheChangeOrFreeText(): iterable
     {
-        $check = $this->checked($this->findingAt('grepName', 'Undefined.'));
+        yield 'an absent name' => ['grepName'];
+        yield 'a name with a note' => ['orderLog (exported function)'];
+        yield 'a sentence' => ['execSync call in orderLog'];
+        yield 'a call with an absent argument' => ['execSync(cmd)'];
+    }
 
-        self::assertEquals([new DroppedFinding('F1', 'Its symbol `grepName` is not in the change or the files it touches.')], $check->dropped);
+    #[DataProvider('symbolsAbsentFromTheChangeOrFreeText')]
+    public function testAFindingWithoutAQuoteIsKeptWhateverItsSymbol(string $symbol): void
+    {
+        $finding = $this->findingAt($symbol, 'Undefined.');
+
+        $check = $this->checked($finding);
+
+        self::assertSame([[$finding], []], [$check->kept, $check->dropped]);
     }
 
     /**
