@@ -151,14 +151,15 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         self::assertSame('2 counted', $this->wordsOf($crawler->filter('#round-round-1 table.reviewers tbody td.num')));
     }
 
-    public function testAReviewerWithoutAnAnswerShowsNoCountAndNoLabel(): void
+    public function testAReviewerWithoutAnAnswerSaysSoWithNoCountAndNoLabel(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('', $crawler->filter('#round-round-1 table.reviewers tbody td.num')->text());
+        $count = $crawler->filter('#round-round-1 table.reviewers tbody td.num');
+        self::assertSame(['no answer yet', 0], [$count->text(), $count->filter('.figure-kind')->count()]);
     }
 
     public function testEachLabelNamesItsSourceInATooltipTiedToIt(): void

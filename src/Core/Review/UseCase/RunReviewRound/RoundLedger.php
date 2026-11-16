@@ -110,6 +110,7 @@ final readonly class RoundLedger
             $act,
             array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
             $this->recordedFindings($judged->findings, $act),
+            $judged->dropped,
         ));
     }
 

@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Closure;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
@@ -28,6 +29,7 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         private LiveUpdates $live,
         private Environment $twig,
         private SessionSummaries $summaries,
+        private LedgerReviewPages $pages,
         private LockFactory $locks,
         private LoggerInterface $logger,
     ) {
@@ -50,10 +52,10 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, RoundStream::TextStreamed, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'text' => $text]);
     }
 
-    // Nothing yet, because the review page has no place for a read answer until the round's stream renders one.
     #[Override]
     public function answerRead(Uuid $round, string $reviewer, ReadAnswer $answer): void
     {
+        $this->publish($round, RoundStream::AnswerRead, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'answer' => $answer]);
     }
 
     #[Override]
@@ -200,7 +202,24 @@ final readonly class MercureRoundUpdates implements RoundUpdates
 
     private function publishJudgedState(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
+        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $this->judgedRoundOf($round)]);
+    }
+
+    // Read as the page reads it, because the live findings must be exactly what a reload shows; null leaves them to that reload.
+    private function judgedRoundOf(Uuid $round): ?ReviewedRound
+    {
+        $id = $round->toRfc4122();
+
+        try {
+            $rounds = $this->pages->reviewOf($id)->rounds ?? [];
+        } catch (Throwable $failure) {
+            // Logged and swallowed, because the judged state must still go out when its findings cannot be read.
+            $this->logger->warning('The judged round was not read for its live update.', ['round' => $id, 'exception' => $failure]);
+
+            return null;
+        }
+
+        return array_find($rounds, static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id && $reviewed->isJudged());
     }
 
     /**
