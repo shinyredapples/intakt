@@ -14,8 +14,16 @@ final readonly class QuotesInChange
     // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet; fences count only at a line start, as in Markdown, so backticks inside a fenced line never close the block, and at any indentation and after any number of blockquote markers, because a fix under a list item or in a quote is indented or marked with it.
     private const string FENCED_BLOCK = '/^[ \t]*(?:>[ \t]*)*((`|~)\2{2,})[^\n]*(?:\n.*?)??(?:\n[ \t]*(?:>[ \t]*)*\1\2*[ \t]*$|\z)/ms';
     private const array LINE_ENDS = ["\r\n", "\r"];
-    // A quote may wrap onto the next line, as in Markdown, but never across a blank line; it neither starts nor ends with white space, so a lone backtick in prose is not paired with a quote's backtick and the prose between them is never read as code.
-    private const string INLINE_QUOTE = '/(?<!`)(`{1,2})(?![`\s])((?:[^`\n]|\n(?![ \t]*\n))+?)(?<!\s)(?<!`)\1(?!`)/';
+    // A quote may wrap onto the next line, as in Markdown, but never across a blank line, because a paragraph ends there.
+    private const string CODE = '(?<code>(?:[^`\n]|\n(?![ \t]*\n))+?)';
+    // Read first, because a quote with no white space at its edges is the surest one: a lone backtick or pair in prose is then not paired with a quote's backticks, so the prose between them is never read as code.
+    private const string INLINE_QUOTE = '/(?<!`)(`{1,2})(?![`\s])'.self::CODE.'(?<!\s)\1(?!`)/';
+    // The white-space rule holds for single-backtick quotes only: a double-backtick quote may be padded, as Markdown asks for code that starts or ends with a backtick; the closing pair is not consumed, so a lone pair before a padded quote does not hide it.
+    private const string PADDED_QUOTE = '/(?<!`)``(?!`)'.self::CODE.'(?=``(?!`))/';
+    // What is left between two runs of backticks is a single-backtick quote with white space at an edge, a quote in longer or unequal runs, or prose between lone backticks, which plain code cannot tell apart, so such a span keeps a finding when it is in the change and never drops one.
+    private const string UNSURE_QUOTE = '/(?<!`)`+'.self::CODE.'(?=`)/';
+    // Put where a sure quote is taken out, so that no later span runs across it.
+    private const string BLANK_LINE = "\n\n";
     private const string NAME = '/[A-Za-z_][A-Za-z0-9_]*/';
     // Left out, because a path or a file name may rightly name a file the change should add.
     private const string PATH = '~^(?:\S*[/\\\\]\S*|[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,4})$~';
@@ -23,35 +31,80 @@ final readonly class QuotesInChange
 
     public function reasonToDrop(Finding $finding, string $change): ?string
     {
-        $quotes = $this->checkedQuotesIn($finding->text);
+        $text = $this->withoutFencedBlocks($finding->text);
+        $rest = (string) preg_replace(self::INLINE_QUOTE, self::BLANK_LINE, $text);
+        $quotes = [...$this->sureQuotesIn($text), ...$this->paddedQuotesIn($rest)];
 
         // Kept when any quote is found, because a quote may rightly name the fix the change still lacks.
-        if ([] === $quotes || array_any($quotes, fn (array $names): bool => $this->isInChange($names, $change))) {
+        if ([] === $quotes || $this->anyIsInChange($quotes, $change) || $this->anyIsInChange($this->unsureQuotesIn($rest), $change)) {
             return null;
         }
 
         return sprintf('none of its %d quoted code fragments is in the change', count($quotes));
     }
 
+    private function withoutFencedBlocks(string $text): string
+    {
+        // One line end for every pattern, because a closing fence before a CRLF or a CR would not be seen and the block would hide every quote after it.
+        return (string) preg_replace(self::FENCED_BLOCK, '', str_replace(self::LINE_ENDS, "\n", $text));
+    }
+
     /**
      * @return list<non-empty-list<string>>
      */
-    private function checkedQuotesIn(string $text): array
+    private function sureQuotesIn(string $text): array
     {
-        // One line end for both patterns, because a closing fence before a CRLF or a CR would not be seen and the block would hide every quote after it.
-        $lines = str_replace(self::LINE_ENDS, "\n", $text);
-        preg_match_all(self::INLINE_QUOTE, (string) preg_replace(self::FENCED_BLOCK, '', $lines), $found);
-        $quotes = [];
+        preg_match_all(self::INLINE_QUOTE, $text, $found);
 
-        foreach ($found[2] as $quote) {
+        return $this->checked($found['code']);
+    }
+
+    /**
+     * @return list<non-empty-list<string>>
+     */
+    private function paddedQuotesIn(string $rest): array
+    {
+        preg_match_all(self::PADDED_QUOTE, $rest, $found);
+
+        return $this->checked($found['code']);
+    }
+
+    /**
+     * @param list<non-empty-list<string>> $quotes
+     */
+    private function anyIsInChange(array $quotes, string $change): bool
+    {
+        return array_any($quotes, fn (array $names): bool => $this->isInChange($names, $change));
+    }
+
+    /**
+     * @return list<non-empty-list<string>>
+     */
+    private function unsureQuotesIn(string $rest): array
+    {
+        preg_match_all(self::UNSURE_QUOTE, $rest, $found);
+
+        return $this->checked($found['code']);
+    }
+
+    /**
+     * @param list<string> $quotes
+     *
+     * @return list<non-empty-list<string>>
+     */
+    private function checked(array $quotes): array
+    {
+        $checked = [];
+
+        foreach ($quotes as $quote) {
             $names = $this->namesIn(trim($quote));
 
             if ([] !== $names) {
-                $quotes[] = $names;
+                $checked[] = $names;
             }
         }
 
-        return $quotes;
+        return $checked;
     }
 
     /**

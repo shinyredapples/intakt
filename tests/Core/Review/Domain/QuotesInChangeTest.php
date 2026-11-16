@@ -289,6 +289,127 @@ final class QuotesInChangeTest extends TestCase
         self::assertNotNull($reason);
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function doubleBacktickQuotesInTheChange(): iterable
+    {
+        yield 'padded on both sides' => ['`` customerName `` reaches it; `grepName` is unrelated.'];
+        yield 'a padded call' => ['`` execSync(cmd) `` runs it; `grepName` is unrelated.'];
+        yield 'padded around a template literal' => ['`` `grep ${customerName}` `` is the command; `grepName` is unrelated.'];
+        yield 'padded after the opening pair only' => ['`` customerName`` reaches it; `grepName` is unrelated.'];
+        yield 'padded before the closing pair only' => ['``customerName `` reaches it; `grepName` is unrelated.'];
+        yield 'padded by line ends' => ["``\ncustomerName\n`` reaches it; `grepName` is unrelated."];
+        yield 'not padded' => ['``customerName`` reaches it; `grepName` is unrelated.'];
+        yield 'padded, after a lone pair' => ['An empty `` literal, then `` customerName `` reaches it; `grepName` is unrelated.'];
+        yield 'not padded, after a lone pair' => ['An empty `` literal, then ``customerName`` reaches it; `grepName` is unrelated.'];
+    }
+
+    #[DataProvider('doubleBacktickQuotesInTheChange')]
+    public function testAFindingWithAPaddedDoubleBacktickQuoteInTheChangeIsKept(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function absentPaddedDoubleBacktickQuotes(): iterable
+    {
+        yield 'padded on both sides' => ['`` grepName `` is not defined.'];
+        yield 'padded by line ends' => ["``\ngrepName\n`` is not defined."];
+        yield 'after a lone pair' => ['An empty `` literal, then `` grepName `` is not defined.'];
+    }
+
+    #[DataProvider('absentPaddedDoubleBacktickQuotes')]
+    public function testAnAbsentPaddedDoubleBacktickQuoteIsDropped(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
+    public function testAPaddedDoubleBacktickQuoteNeverRunsAcrossABlankLine(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding("`` customerName\n\nhere `` and `grepName` is not defined."), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function singleBacktickQuotesInTheChangeWithWhiteSpaceAtAnEdge(): iterable
+    {
+        yield 'padded on both sides' => ['Pass ` customerName ` through `escapeShellArg` first.'];
+        yield 'white space after the opening backtick only' => ['Pass ` customerName` through `escapeShellArg` first.'];
+        yield 'white space before the closing backtick only' => ['Pass `customerName ` through `escapeShellArg` first.'];
+        yield 'padded, after a lone backtick' => ['The ` character: ` customerName ` goes through `escapeShellArg` first.'];
+        yield 'padded by line ends' => ["Pass `\ncustomerName\n` through `escapeShellArg` first."];
+    }
+
+    #[DataProvider('singleBacktickQuotesInTheChangeWithWhiteSpaceAtAnEdge')]
+    public function testAFindingWithASingleBacktickQuoteInTheChangeIsKeptWhenWhiteSpaceIsAtAnEdgeOfTheQuote(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function quotesInTheChangeBetweenOtherBacktickRuns(): iterable
+    {
+        yield 'three backticks within a line' => ['Use ```customerName``` and `grepName`.'];
+        yield 'runs of unequal length' => ['`customerName`` is odd; `grepName` is not defined.'];
+        yield 'a single backtick inside a padded double-backtick quote' => ['`` customerName ` `` is odd; `grepName` is not defined.'];
+    }
+
+    #[DataProvider('quotesInTheChangeBetweenOtherBacktickRuns')]
+    public function testAFindingIsKeptWhenAQuoteInTheChangeSitsBetweenBacktickRunsOfAnotherLength(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function spansThatMayBeProse(): iterable
+    {
+        yield 'prose between two lone backticks' => ['The ` character opens the literal and another ` closes it.'];
+        yield 'an absent padded name' => ['` grepName ` is not defined.'];
+        yield 'three backticks within a line' => ['Use ```escapeShellArg(name)``` instead.'];
+    }
+
+    #[DataProvider('spansThatMayBeProse')]
+    public function testASpanThatMayBeProseBetweenLoneBackticksNeverDropsAFinding(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAnAbsentQuoteIsDroppedBesideProseBetweenTwoLoneBackticksThatIsNotInTheChange(): void
+    {
+        $text = 'The ` character opens it and another ` closes it: `grepName` is not defined.';
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertSame('none of its 1 quoted code fragments is in the change', $reason);
+    }
+
+    public function testProseBetweenTwoQuotesNeverKeepsAFinding(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding('`grepName` or customerName or `escapeShellArg` is not defined.'), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
     private function finding(string $text, ?string $symbol = null): Finding
     {
         return new Finding('F1', Severity::P1, 'src/orders.js', 2, $symbol, $text, FixableBy::Builder, false, null, null);
