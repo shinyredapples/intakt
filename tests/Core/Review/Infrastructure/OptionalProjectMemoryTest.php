@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
+use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
 use Intakt\Core\Memory\Contract\RelevantMemory;
 use Intakt\Core\Platform\Contract\Redaction;
 use Intakt\Core\Platform\Infrastructure\HeldCredentials;
@@ -24,6 +25,7 @@ use Symfony\Component\HttpKernel\Log\Logger;
 #[UsesClass(MemoryQuery::class)]
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(RelevantMemory::class)]
+#[UsesClass(ProjectMemoryNeedsEmbeddingModel::class)]
 #[UsesClass(RedactedJsonFormatter::class)]
 #[UsesClass(Redaction::class)]
 #[UsesClass(HeldCredentials::class)]
@@ -62,10 +64,46 @@ final class OptionalProjectMemoryTest extends TestCase
         self::assertStringContainsString(self::class, $failure['trace']);
     }
 
-    private function failing(): ProjectMemory
+    public function testAMissingEmbeddingModelIsLoggedOnceAtInfoLevelWithoutAStackTraceHoweverManyCallsAreMade(): void
+    {
+        $output = fopen('php://memory', 'w+');
+        self::assertIsResource($output);
+        $logger = new Logger('debug', $output, new RedactedJsonFormatter(new Redaction(), new MockClock(), new HeldCredentials([])));
+        $memory = new OptionalProjectMemory($this->failing(new ProjectMemoryNeedsEmbeddingModel()), $logger);
+
+        $found = [];
+        foreach (range(1, 3) as $ignored) {
+            $found[] = $memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 100))->entries;
+        }
+
+        rewind($output);
+        $lines = array_values(array_filter(explode("\n", (string) stream_get_contents($output)), static fn (string $line): bool => '' !== $line));
+        self::assertCount(1, $lines);
+        /** @var array{level: string, context: array<string, mixed>} $record */
+        $record = json_decode($lines[0], true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame(['info', ['project' => 'alpha']], [$record['level'], $record['context']]);
+        self::assertStringNotContainsString('trace', $lines[0]);
+        self::assertSame([[], [], []], $found);
+    }
+
+    public function testEveryOtherMemoryFailureIsStillLoggedOnEachCall(): void
+    {
+        $output = fopen('php://memory', 'w+');
+        self::assertIsResource($output);
+        $logger = new Logger('debug', $output, new RedactedJsonFormatter(new Redaction(), new MockClock(), new HeldCredentials([])));
+        $memory = new OptionalProjectMemory($this->failing(), $logger);
+
+        $memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+        $memory->relevantTo(new MemoryQuery('alpha', ['a.php'], 100));
+
+        rewind($output);
+        self::assertCount(2, array_filter(explode("\n", (string) stream_get_contents($output)), static fn (string $line): bool => '' !== $line));
+    }
+
+    private function failing(?LogicException $failure = null): ProjectMemory
     {
         $inner = self::createStub(ProjectMemory::class);
-        $inner->method('relevantTo')->willThrowException(new LogicException('the store is not set up'));
+        $inner->method('relevantTo')->willThrowException($failure ?? new LogicException('the store is not set up'));
 
         return $inner;
     }

@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
 use Intakt\Core\Review\Contract\ReviewerFailed;
 use Intakt\Core\Review\Contract\ReviewerStarted;
@@ -46,6 +47,9 @@ final class LedgerRounds
     /** @var array<string, array{findings: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable}> */
     private array $judged = [];
 
+    /** @var array<string, ReplayMark> */
+    private array $roundMarks = [];
+
     private readonly LedgerTokens $tokens;
 
     public function __construct(
@@ -54,6 +58,7 @@ final class LedgerRounds
         private readonly ChangeDecision $decision,
         private readonly FailureInWords $failures,
         private readonly RoundEndings $endings,
+        private readonly ReplayMarks $marks,
     ) {
         $this->tokens = new LedgerTokens();
     }
@@ -117,6 +122,12 @@ final class LedgerRounds
         }
 
         return $reviews;
+    }
+
+    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
+    private function markOf(ReviewedRound $round): ReplayMark
+    {
+        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
     }
 
     private function addUsage(RecordedEvent $recorded): void
@@ -215,7 +226,7 @@ final class LedgerRounds
 
     private function completed(ReviewedRound $round): ReviewedRound
     {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round));
+        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round));
 
         $judged = $this->judged[$round->round] ?? null;
 

@@ -71,6 +71,6 @@ Reviews:
 
 Dashboard:
 - [Dashboard](dashboard.md)
-- [Status read model](status.md): the status JSON per project and its schema, read without the message bus
+- [Status read model](status.md): the status JSON per project and its schema, read with no queued message (only Review's replay-mark queries on the synchronous query bus)
 - [Server status](server-status.md)
 - [Live updates](live-updates.md)
