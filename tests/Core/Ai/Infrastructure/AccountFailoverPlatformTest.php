@@ -461,7 +461,7 @@ final class AccountFailoverPlatformTest extends TestCase
         }
     }
 
-    public function testACallWhoseEveryAccountCannotReachItsEndpointSaysSoWithoutTheTransportText(): void
+    public function testACallWhoseEveryAccountFailsToReachItsEndpointWhileSendingSaysSoWithoutTheTransportText(): void
     {
         $unreachable = static fn (): never => throw new TransportException('Could not resolve host for "https://localhost/?key=secret".');
 
@@ -487,7 +487,23 @@ final class AccountFailoverPlatformTest extends TestCase
         $this->accounts($this->answering($unreachable), $this->answering($broken))->invoke('big', 'Review.');
     }
 
-    public function testACallWhoseFirstAccountCannotReachItsEndpointIsAnsweredByTheNextAccount(): void
+    // The reviewer's probe: the team account cools down as the call starts and is free again when the failure is typed, so it was never sent to and does not hide that the only account tried was unreachable.
+    public function testACallWhoseOnlyTriedAccountFailsToReachItsEndpointSaysSoWhenAnotherAccountFreedUpDuringTheCall(): void
+    {
+        $teamChecks = 0;
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('isCoolingDown')->willReturnCallback(static function (Account $account) use (&$teamChecks): bool {
+            return 'anthropic.team' === $account->key() && 1 === ++$teamChecks;
+        });
+        $unreachable = static fn (): never => throw new TransportException('Could not resolve host: localhost');
+        $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($unreachable), 'team' => $this->answering('second')], $cooldowns, new NativeClock(), new NullLogger());
+
+        $this->expectException(EveryEndpointUnreachable::class);
+
+        $platform->invoke('big', 'Review.');
+    }
+
+    public function testATransportErrorRaisedWhileSendingLeavesTheCallToTheNextAccountLikeAnyFailureWhileSending(): void
     {
         $unreachable = static fn (): never => throw new TransportException('Could not resolve host: localhost');
 

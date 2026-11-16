@@ -43,12 +43,14 @@ final readonly class AccountPlatform implements PlatformInterface
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
         $sentAt = $this->clock->now();
+        $this->failures->tried($this->account);
 
         try {
             $result = $this->platform->invoke($model, $input, $options);
         } catch (Throwable $failure) {
             $this->failed($failure);
 
+            // Only a platform that fails while sending lands here; the HTTP client reports a failed name lookup when the answer is read, which the vendor retries instead.
             if ($failure instanceof TransportExceptionInterface) {
                 $this->failures->unreachable($this->account);
             }

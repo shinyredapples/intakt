@@ -100,14 +100,15 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
-    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it, and one whose free accounts, each of them tried, all failed to reach their endpoint says that, so the review retries it like an unreachable endpoint.
+    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it. The unreachable case is a guard for a platform that fails while sending (the HTTP client reports a failed name lookup only when the answer is read): judged over the accounts this call was sent to, because one whose cooldown ended during the call was never tried, and typed so the vendor retries the reviewer like an unreachable endpoint.
     private function typed(RuntimeException $everyAccountFailed, SendFailures $failures): Throwable
     {
-        $free = $this->freeAccounts($failures);
-        if ([] !== $free) {
-            $tried = array_map(fn (string $name): Account => new Account($this->provider, $name), array_keys($free));
+        if ($failures->isEveryTriedUnreachable()) {
+            return new EveryEndpointUnreachable($this->provider);
+        }
 
-            return $failures->isEveryUnreachable(...$tried) ? new EveryEndpointUnreachable($this->provider) : $everyAccountFailed;
+        if ([] !== $this->freeAccounts($failures)) {
+            return $everyAccountFailed;
         }
 
         return $this->outOfAccounts($failures);

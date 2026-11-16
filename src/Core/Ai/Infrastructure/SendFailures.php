@@ -11,7 +11,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 use Throwable;
 use WeakMap;
 
-// Which account error (a limit, a rejection or a provider error) each account of one call failed with as it was sent or as its answer was read, and which accounts could not reach their endpoint as it was sent, kept by the call because FailoverPlatform's own error names no cause; by class only, because the provider's message can echo a key; excluded from the container because AccountFailoverPlatform builds one per call.
+// Which account error (a limit, a rejection or a provider error) each account of one call failed with as it was sent or as its answer was read, which accounts the call was sent to and which of those could not reach their endpoint as it was sent, kept by the call because FailoverPlatform's own error names no cause; by class only, because the provider's message can echo a key; excluded from the container because AccountFailoverPlatform builds one per call.
 #[Exclude]
 final class SendFailures
 {
@@ -21,9 +21,9 @@ final class SendFailures
     private array $failures = [];
 
     /**
-     * @var array<string, true>
+     * @var array<string, bool> whether each account the call was sent to could not reach its endpoint
      */
-    private array $unreachable = [];
+    private array $tried = [];
 
     /**
      * @var WeakMap<Throwable, array<string, true>>
@@ -57,14 +57,20 @@ final class SendFailures
         return is_a($this->failures[$account->key()] ?? '', AuthenticationException::class, true);
     }
 
+    // Noted as the call goes out, because the accounts free after the call can include one whose cooldown ended during it and that was never sent to.
+    public function tried(Account $account): void
+    {
+        $this->tried[$account->key()] ??= false;
+    }
+
     // Kept apart from the account errors, because a transport error cools no account down.
     public function unreachable(Account $account): void
     {
-        $this->unreachable[$account->key()] = true;
+        $this->tried[$account->key()] = true;
     }
 
-    public function isEveryUnreachable(Account ...$accounts): bool
+    public function isEveryTriedUnreachable(): bool
     {
-        return [] !== $accounts && array_all($accounts, fn (Account $account): bool => isset($this->unreachable[$account->key()]));
+        return [] !== $this->tried && array_all($this->tried, static fn (bool $unreachable): bool => $unreachable);
     }
 }
