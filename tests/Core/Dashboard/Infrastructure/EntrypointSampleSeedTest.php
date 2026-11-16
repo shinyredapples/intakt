@@ -199,66 +199,52 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringNotContainsString('frankenphp run', $this->calls());
     }
 
-    public function testTheReviewCommandIsPrintedOnlyOnceTheServerAnswersItsHealthCheckAndTheDashboard(): void
+    public function testTheDashboardAddressIsPrintedOnlyOnceTheServerAnswersItsHealthCheckAndTheDashboard(): void
     {
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_FAILURES' => '2']);
 
-        $this->waitForTheReviewBlock();
+        $this->waitForTheAddress();
 
         $calls = explode("\n", $this->calls());
-        $shown = array_find_key($calls, static fn (string $call): bool => 'php bin/console intakt:sample:show /data/sample' === $call);
         $asked = array_keys(array_filter($calls, static fn (string $call): bool => str_starts_with($call, 'curl ')));
         self::assertCount(4, $asked, $this->calls());
         self::assertStringEndsWith('http://localhost:2019/metrics', $calls[$asked[2]]);
         self::assertStringEndsWith('http://localhost:7781/', $calls[$asked[3]]);
-        self::assertGreaterThan($asked[3], $shown);
-        self::assertGreaterThan(array_search('frankenphp run --config Caddyfile --adapter caddyfile', $calls, true), $shown);
     }
 
-    public function testTheReviewBlockIsTheLastThingTheStartPrints(): void
+    public function testTheDemoStartPrintsTheDashboardAddressAndNotTheReviewCommand(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheAddress();
+
+        $this->waitForMorePolls();
+
+        self::assertStringContainsString('http://localhost:7781', (string) $this->entrypoint?->getOutput());
+        self::assertStringNotContainsString('intakt:sample:show', $this->calls());
+    }
+
+    public function testTheDashboardAddressIsTheLastThingTheStartPrints(): void
     {
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'CURL_FAILURES' => '1']);
-        $this->waitForTheReviewBlock();
+        $this->waitForTheAddress();
 
         $this->waitForMorePolls();
 
         $output = trim((string) $this->entrypoint?->getOutput());
         self::assertStringContainsString('the server started', $output);
-        self::assertStringEndsWith('the review block', $output);
+        self::assertStringEndsWith('http://localhost:7781', $output);
     }
 
-    public function testAConsumerThatFinishesStartingAfterTheReviewBlockPrintsNothingAfterIt(): void
+    public function testTheDashboardAddressIsPrintedOnceNotOnEveryPoll(): void
     {
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
-        $this->waitForTheReviewBlock();
-
-        $this->waitForMorePolls();
-
-        self::assertStringEndsWith('the review block', trim((string) $this->entrypoint?->getOutput()));
-        self::assertStringNotContainsString('Quit the worker', (string) $this->entrypoint?->getErrorOutput());
-    }
-
-    public function testTheReviewCommandIsPrintedOnceNotOnEveryPoll(): void
-    {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
-        $this->waitForTheReviewBlock();
+        $this->waitForTheAddress();
         $asked = substr_count($this->calls(), "\ncurl ");
 
         $this->waitForMorePolls();
 
-        self::assertSame(1, substr_count($this->calls(), 'intakt:sample:show'));
+        self::assertSame(1, substr_count((string) $this->entrypoint?->getOutput(), 'http://localhost:7781'));
         self::assertSame($asked, substr_count($this->calls(), "\ncurl "));
-    }
-
-    public function testAFailedReviewBlockDoesNotStopTheStart(): void
-    {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SHOW_STATUS' => '1']);
-        $this->waitForTheReviewBlock();
-
-        $this->waitForMorePolls();
-
-        self::assertTrue($this->entrypoint?->isRunning());
-        self::assertStringContainsString('could not print the review command', $this->entrypoint->getErrorOutput());
     }
 
     public function testAStopDuringASlowHealthCheckEndsInsideDockersStopTimeout(): void
@@ -273,19 +259,7 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertLessThan(self::STOP_TIMEOUT_SECONDS, $seconds);
     }
 
-    public function testAStopDuringASlowReviewBlockEndsInsideDockersStopTimeout(): void
-    {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SHOW_SECONDS' => '5', 'CONSUMERS_IGNORE_SIGTERM' => '1']);
-        $this->waitForTheReviewBlock();
-
-        $seconds = $this->secondsToStop();
-
-        self::assertSame(0, $this->entrypoint?->getExitCode(), (string) $this->entrypoint?->getErrorOutput());
-        self::assertStringNotContainsString('the slow show ended', $this->calls(), 'the stop waited for the review block');
-        self::assertLessThan(self::STOP_TIMEOUT_SECONDS, $seconds);
-    }
-
-    public function testWithoutASampleRepositoryTheStartNeverAsksForTheReviewCommand(): void
+    public function testWithoutASampleRepositoryTheStartNeverAsksForTheDashboardAddress(): void
     {
         $this->startEntrypoint([]);
         $this->waitForTheServer();
@@ -293,7 +267,106 @@ final class EntrypointSampleSeedTest extends TestCase
         $this->waitForMorePolls();
 
         self::assertStringNotContainsString('curl ', $this->calls());
-        self::assertStringNotContainsString('intakt:sample:show', $this->calls());
+        self::assertStringNotContainsString('http://localhost:7781', (string) $this->entrypoint?->getOutput());
+    }
+
+    public function testTheSampleIsMarkedReadyOnlyAfterTheSeed(): void
+    {
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SEED_STATUS' => '1']);
+        $this->entrypoint?->wait();
+        self::assertFileDoesNotExist($this->directory.'/var/sample-ready');
+
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        self::assertFileExists($this->directory.'/var/sample-ready');
+    }
+
+    public function testARestartClearsTheReadyMarkBeforeTheSeedRunsAgain(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/var/sample-ready', '');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SEED_STATUS' => '1']);
+
+        $this->entrypoint?->wait();
+
+        self::assertFileDoesNotExist($this->directory.'/var/sample-ready');
+    }
+
+    public function testEmptySecretsAreMadeOnTheFirstStartAndKeptOnTheDataVolume(): void
+    {
+        $this->startEntrypoint(['APP_SECRET' => '', 'MERCURE_JWT_SECRET' => '', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SECRETS_SEEN' => $this->directory.'/secrets']);
+        $this->waitForTheServer();
+
+        $app = trim(new Filesystem()->readFile($this->directory.'/app-secret'));
+        $mercure = trim(new Filesystem()->readFile($this->directory.'/mercure-jwt-secret'));
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $app);
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $mercure);
+        self::assertNotSame($app, $mercure);
+        self::assertSame($app.' '.$mercure, trim(new Filesystem()->readFile($this->directory.'/secrets')));
+        self::assertSame(0600, fileperms($this->directory.'/app-secret') & 0777);
+        self::assertStringNotContainsString($app, $this->entrypoint?->getOutput().$this->entrypoint?->getErrorOutput());
+    }
+
+    public function testARestartOnTheSameDataVolumeReusesTheMadeSecrets(): void
+    {
+        $environment = ['APP_SECRET' => '', 'MERCURE_JWT_SECRET' => '', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SECRETS_SEEN' => $this->directory.'/secrets'];
+        $this->startEntrypoint($environment);
+        $this->waitForTheServer();
+        $this->entrypoint?->stop(15);
+        $first = trim(new Filesystem()->readFile($this->directory.'/secrets'));
+        new Filesystem()->remove($this->callsFile());
+
+        $this->startEntrypoint($environment);
+        $this->waitForTheServer();
+
+        self::assertSame($first, trim(new Filesystem()->readFile($this->directory.'/secrets')));
+    }
+
+    public function testASecretTheOwnerSetWinsAndIsNotWrittenToTheVolume(): void
+    {
+        $this->startEntrypoint(['APP_SECRET' => 'chosen-by-the-owner', 'MERCURE_JWT_SECRET' => '', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'SECRETS_SEEN' => $this->directory.'/secrets']);
+        $this->waitForTheServer();
+
+        self::assertStringStartsWith('chosen-by-the-owner ', trim(new Filesystem()->readFile($this->directory.'/secrets')));
+        self::assertFileDoesNotExist($this->directory.'/app-secret');
+        self::assertFileExists($this->directory.'/mercure-jwt-secret');
+    }
+
+    public function testAnEmptySecretWithoutADataFolderIsNamed(): void
+    {
+        $this->startEntrypoint(['APP_SECRET' => '']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('set APP_SECRET, or set INTAKT_CONFIG', (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    public function testAnEmptySecretThatCannotBeStoredStopsTheStart(): void
+    {
+        $this->startEntrypoint(['APP_SECRET' => '', 'INTAKT_CONFIG' => $this->directory.'/missing/intakt.yaml']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('could not make or read APP_SECRET', (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    public function testTwoFirstStartsAtOnceShareOneMadeSecret(): void
+    {
+        $first = $this->startHeldAtTheToken('1', ['APP_SECRET' => '']);
+        $second = $this->startHeldAtTheToken('2', ['APP_SECRET' => '']);
+        $this->awaitFile($this->directory.'/ready-1');
+        $this->awaitFile($this->directory.'/ready-2');
+
+        new Filesystem()->touch($this->directory.'/go-2');
+        $second->wait();
+        new Filesystem()->touch($this->directory.'/go-1');
+        $first->wait();
+
+        $kept = trim(new Filesystem()->readFile($this->directory.'/app-secret'));
+        self::assertSame($kept.' '.self::SECRET, trim(new Filesystem()->readFile($this->directory.'/secrets-1')), $first->getErrorOutput());
+        self::assertSame($kept.' '.self::SECRET, trim(new Filesystem()->readFile($this->directory.'/secrets-2')), $second->getErrorOutput());
     }
 
     public function testASampleRepositoryWithoutAProjectFileIsRefusedByName(): void
@@ -317,7 +390,10 @@ final class EntrypointSampleSeedTest extends TestCase
     }
 
     // A stand-in od holds each start after the token check until the test lets it go, so the test forces both starts past the check before either writes.
-    private function startHeldAtTheToken(string $start): Process
+    /**
+     * @param array<string, string> $environment
+     */
+    private function startHeldAtTheToken(string $start, array $environment = []): Process
     {
         $held = $this->directory.'/held';
         new Filesystem()->dumpFile($held.'/od', "#!/bin/bash\ntouch \"\$HELD/ready-\$START\"\nfor _ in {1..600}; do [[ -e \$HELD/go-\$START ]] && break; sleep 0.1; done\nprintf '%064d' \"\$START\"\n");
@@ -331,6 +407,8 @@ final class EntrypointSampleSeedTest extends TestCase
             'INTAKT_SAMPLE_REPOSITORY' => '/data/sample',
             'INTAKT_CONFIG' => $this->directory.'/intakt.yaml',
             'SEED_STATUS' => '1',
+            'SECRETS_SEEN' => $this->directory.'/secrets-'.$start,
+            ...$environment,
         ]);
         $process->start();
 
@@ -412,9 +490,9 @@ final class EntrypointSampleSeedTest extends TestCase
         $programs = $this->directory.'/stubs';
         $filesystem = new Filesystem();
         // A consumer started without --quiet prints Symfony's banner (the success line to standard output, the comments to standard error) only once the review block is out (bounded), so the test forces the order a slow consumer start takes; with CONSUMERS_IGNORE_SIGTERM a consumer ignores the stop like one whose worker does not exist yet (upstream/messenger-consume-ignores-early-sigterm), so the stop runs its whole grace period; with SHOW_SECONDS the review block takes that long and notes its end, so the test forces a stop that arrives while it runs.
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && trap '' TERM; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\necho \"php \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *messenger:consume*) [[ \" \$* \" == *' --quiet '* ]] || { for _ in {1..600}; do grep -q intakt:sample:show \"\$CALLS\" && break; sleep 0.1; done; sleep 0.3; echo ' [OK] Consuming messages from transport.'; echo ' // Quit the worker with CONTROL-C.' >&2; }; [[ -n \${CONSUMERS_IGNORE_SIGTERM:-} ]] && trap '' TERM; exec sleep 60 </dev/null >/dev/null 2>&1;; *intakt:sample:seed*) [[ -e var/cache/test/image-container ]] && { echo 'the image container survived until the seed' >&2; exit 3; }; echo \"\$MCP_OWNER_TOKEN \$MCP_OWNER_ACCESS\" > \"\$CALLS.seen\"; echo \"\${OPENAI_COMPATIBLE_BASE_URL:-} \${OPENAI_COMPATIBLE_API_KEY:-}\" > \"\$CALLS.compatible\"; [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; mkdir -p var/cache/test; touch var/cache/test/seeded-container; exit \"\${SEED_STATUS:-0}\";; *intakt:ai:tiers*) exit \"\${TIERS_STATUS:-0}\";; *intakt:sample:show*) [[ -n \${SHOW_SECONDS:-} ]] && { sleep \"\$SHOW_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow show ended' >> \"\$CALLS\"; }; echo 'the review block'; exit \"\${SHOW_STATUS:-0}\";; esac\nexit 0\n");
         // The server notes its run only after the scheduler watcher (bounded): the entrypoint starts them in parallel, so the test forces the order it must survive.
-        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) exit 0;; esac\necho 'the server started'\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
+        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) ;; *) for _ in {1..600}; do grep -q scheduler_watcher \"\$CALLS\" && break; sleep 0.1; done;; esac\necho \"frankenphp \$*\" >> \"\$CALLS\"\ncase \"\$*\" in *validate*) [[ -n \${SECRETS_SEEN:-} ]] && echo \"\$APP_SECRET \$MERCURE_JWT_SECRET\" > \"\$SECRETS_SEEN\"; exit 0;; esac\necho 'the server started'\nexec sleep 60 </dev/null >/dev/null 2>&1\n");
         // The health check answers only once the server runs and after CURL_FAILURES refused calls, so the test forces a start where the server is not up yet; with CURL_SECONDS every call takes that long and notes its end, so the test forces a stop that arrives while one runs.
         $filesystem->dumpFile($programs.'/curl', "#!/bin/bash\necho \"curl \$*\" >> \"\$CALLS\"\n[[ -n \${CURL_SECONDS:-} ]] && { sleep \"\$CURL_SECONDS\" </dev/null >/dev/null 2>&1; echo 'the slow curl ended' >> \"\$CALLS\"; }\ngrep -q '^frankenphp run' \"\$CALLS\" || exit 7\n(( \$(grep -c '^curl ' \"\$CALLS\") > \${CURL_FAILURES:-0} )) || exit 7\nexit 0\n");
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp', $programs.'/curl'], 0755);
@@ -422,9 +500,15 @@ final class EntrypointSampleSeedTest extends TestCase
         return $programs;
     }
 
-    private function waitForTheReviewBlock(): void
+    private function waitForTheAddress(): void
     {
-        $this->waitForTheCall('intakt:sample:show');
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && !str_contains((string) $this->entrypoint?->getOutput(), 'http://localhost:7781')) {
+            usleep(50_000);
+        }
+
+        self::assertStringContainsString('http://localhost:7781', (string) $this->entrypoint?->getOutput(), (string) $this->entrypoint?->getErrorOutput());
     }
 
     private function waitForTheCall(string $call): void
