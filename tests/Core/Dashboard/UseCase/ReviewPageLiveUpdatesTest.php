@@ -18,15 +18,19 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ReadAnswer;
+use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
+use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
@@ -71,6 +75,10 @@ use Twig\Environment;
 #[UsesClass(StoredSessionSummaries::class)]
 #[UsesClass(RoundToolCalls::class)]
 #[UsesClass(ReviewedRepository::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(ReadFinding::class)]
+#[UsesClass(ReadAnswer::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -504,6 +512,22 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $text = $updated->filter('#reviewer-round-1-correctness-text');
         self::assertCount(1, $text->filter('.asked-again'));
         self::assertSame('{"verdict":"appro'.self::ASKED_AGAIN.'{"verdict":"changes"}', $text->text(normalizeWhitespace: false));
+    }
+
+    public function testAReadAnswerReachesTheReviewPageAsItsTypedAnswerAfterTheRetryMarkerAndNeverAsJson(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, 'Boundary', FixableBy::Builder, false, null, null)], [], []));
+
+        $updated = $this->replaced($page, $this->stream('reviewer_asked_again', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'try' => 'try-2'])
+            .$this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+        $text = $updated->filter('#reviewer-round-1-correctness-text');
+        self::assertCount(1, $text->filter('.asked-again'));
+        self::assertSame(['Verdict: changes'], $text->filter('.answer-read')->each(static fn (Crawler $line): string => $line->text()));
+        self::assertSame(['P1 src/Cart.php:12 Boundary'], $text->filter('.answer-finding')->each(static fn (Crawler $line): string => $line->text()));
+        self::assertStringNotContainsString('{"', $text->text());
     }
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
