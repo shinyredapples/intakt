@@ -22,6 +22,18 @@ final readonly class FirstRun
         return [$this->providers->state(), $this->project->state(), $this->firstReview->state(), $this->agent->state()];
     }
 
+    // A step that is not needed is never current, because there is nothing for the reader to do in it.
+    public function current(): ?int
+    {
+        foreach ($this->states() as $index => $state) {
+            if (StepState::Done !== $state && StepState::NotNeeded !== $state) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
     public function done(): int
     {
         return count(array_filter($this->states(), static fn (StepState $state): bool => StepState::Done === $state));

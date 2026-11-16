@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryEndpointUnreachable;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
@@ -99,9 +100,13 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         $this->logger->info('Account {first} of {provider} is cooling down, so the call goes to account {next}.', ['provider' => $this->provider->value, 'first' => $first, 'next' => $next]);
     }
 
-    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it.
+    // FailoverPlatform's own error names no cause, so a provider whose accounts all cooled down during the call says so like one that was out before it. The unreachable case is a guard for a platform that fails while sending (the HTTP client reports a failed name lookup only when the answer is read): judged over the accounts this call was sent to, because one whose cooldown ended during the call was never tried, and typed so the vendor retries the reviewer like an unreachable endpoint.
     private function typed(RuntimeException $everyAccountFailed, SendFailures $failures): Throwable
     {
+        if ($failures->isEveryTriedUnreachable()) {
+            return new EveryEndpointUnreachable($this->provider);
+        }
+
         if ([] !== $this->freeAccounts($failures)) {
             return $everyAccountFailed;
         }
