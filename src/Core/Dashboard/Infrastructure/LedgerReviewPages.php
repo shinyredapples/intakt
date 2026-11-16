@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -36,6 +37,14 @@ final readonly class LedgerReviewPages
     public function firstReview(): ?Review
     {
         return array_first($this->rounds($this->ledger->readInOrder())->reviews());
+    }
+
+    /**
+     * @return list<ReviewedRound>
+     */
+    public function roundsInStartOrder(): array
+    {
+        return $this->rounds($this->ledger->readInOrder())->inStartOrder();
     }
 
     public function board(): Board
