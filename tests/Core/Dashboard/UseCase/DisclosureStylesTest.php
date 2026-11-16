@@ -39,7 +39,7 @@ final class DisclosureStylesTest extends TestCase
         preg_match_all('/([^{}]+)\{([^{}]*)\}/', $this->sheet(), $rules, PREG_SET_ORDER);
         $transitions = [];
         foreach ($rules as $rule) {
-            if (\in_array('details > summary .chev', array_map(trim(...), explode(',', $rule[1])), true)
+            if (in_array('details > summary .chev', array_map(trim(...), explode(',', $rule[1])), true)
                 && 1 === preg_match('/(?:^|;)\s*transition:\s*([^;]+)/', $rule[2], $value)) {
                 $transitions[] = trim($value[1]);
             }
