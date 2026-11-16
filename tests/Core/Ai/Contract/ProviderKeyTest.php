@@ -15,15 +15,10 @@ use Throwable;
 
 #[CoversClass(ProviderKey::class)]
 #[UsesClass(KeyKind::class)]
-#[UsesClass(KeyNotRecognised::class)]
+#[CoversClass(KeyNotRecognised::class)]
 #[UsesClass(ConfiguredKey::class)]
 final class ProviderKeyTest extends TestCase
 {
-    private function body(string $tail = '1234'): string
-    {
-        return str_repeat('0', 24).$tail;
-    }
-
     public function testAnAnthropicKeyIsRecognisedAsAnthropic(): void
     {
         self::assertSame(KeyKind::Anthropic, ProviderKey::recognise('sk-ant-'.$this->body())->kind());
@@ -111,5 +106,10 @@ final class ProviderKeyTest extends TestCase
         }
 
         self::assertStringNotContainsString('tracedvalue', (string) $caught?->getTraceAsString());
+    }
+
+    private function body(string $tail = '1234'): string
+    {
+        return str_repeat('0', 24).$tail;
     }
 }
