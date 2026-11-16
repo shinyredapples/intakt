@@ -18,6 +18,7 @@ final readonly class RoundFinding
         public array $merged = [],
         public ?string $file = null,
         public ?int $line = null,
+        public ?string $droppedBecause = null,
     ) {
         $this->call = JudgeCall::NotActedOn;
     }
