@@ -29,6 +29,10 @@ class FakeElement {
         this.attributes.set(name, String(value));
     }
 
+    removeAttribute(name) {
+        this.attributes.delete(name);
+    }
+
     hasAttribute(name) {
         return this.attributes.has(name);
     }
@@ -187,8 +191,19 @@ export class Browser {
         const more = this.more ? new FakeElement(page) : null;
         const sheet = this.more ? Object.assign(new FakeElement(page), { hidden: true }) : null;
         const sheetLink = new FakeElement(page);
-        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true) };
-        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': rows };
+        // A link to a project the install lists brings the breadcrumb naming it and the Projects item marked current for its section.
+        const linkedProject = new URL(this.address).searchParams.get('project');
+        const trail = this.projects.includes(linkedProject) ? Object.assign(new FakeElement(page), { dataset: { projectTrail: linkedProject } }) : null;
+        const projectsItem = new FakeElement(page);
+        const shownElements = { body, '[data-rail-toggle]': railToggle, '.search-trigger': search, '#projfilter': projectFilter, '[data-more-toggle]': more, '[data-more-sheet]': sheet, '[data-project-trail]': trail, '#col-in-review': new FakeColumn(page, 'col-in-review'), '#col-done': new FakeColumn(page, 'col-done', true) };
+        if (trail) {
+            projectsItem.setAttribute('aria-current', 'page');
+            trail.remove = () => {
+                trail.isConnected = false;
+                delete shownElements['[data-project-trail]'];
+            };
+        }
+        const allShown = { '[data-theme-toggle]': themeToggles, '[data-project]': rows, '[data-section-current]': trail ? [projectsItem] : [] };
 
         show(shownElements, allShown);
         context.location.href = this.address;
@@ -212,6 +227,8 @@ export class Browser {
                 projectFilter.dispatch('change');
             },
             projectFilter,
+            breadcrumbShown: () => trail?.isConnected ?? false,
+            projectsMarked: () => projectsItem.hasAttribute('aria-current'),
             history,
             shownRows: () => rows.filter((row) => !row.hidden).map((row) => row.dataset.project),
             // What a script listening on the document, such as assets/column-more.js, sees of each filter run: the rows it left shown.
