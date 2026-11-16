@@ -808,7 +808,15 @@ It prints the command that reviews the sample change, in the form your shell run
 docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
 ```
 
-The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is set in `.env.local` (then yours is used), keeps it in `/app/var/data/mcp-owner-token` on the volume, and allows write tools for the demo (`MCP_OWNER_ACCESS` defaults to `mcp_tool_write` in the container). The `intakt:sample:show` command above also prints a line to connect an MCP client, after the review command:
+Or let one short command run that same review for you, with the sample's values built in:
+
+```
+docker compose exec intakt php bin/console intakt:demo
+```
+
+It prints what `intakt:review` prints (the outcome, each reviewer, the act list, the tokens and the cost), then the address of this review in the dashboard (`Open the review: http://localhost:7781/reviews/<round id>`) and the line that connects an MCP client (below). It ends with the same exit codes as `intakt:review`: 0 for approve, 10 for changes, 11 for blocked, and 1 when it cannot start, for example `INTAKT_SAMPLE_REPOSITORY is not set` outside the compose demo or a project file without the `sample` project. Use `intakt:review` for your own projects.
+
+The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is set in `.env.local` (then yours is used), keeps it in `/app/var/data/mcp-owner-token` on the volume, and allows write tools for the demo (`MCP_OWNER_ACCESS` defaults to `mcp_tool_write` in the container). The `intakt:sample:show` command above also prints a line to connect an MCP client, after the review command, and so does `intakt:demo` after its review:
 
 ```
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"
@@ -816,7 +824,7 @@ claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header 
 
 Run it, install the [`intakt-review` skill](../../skills/intakt-review/README.md) and say "intakt review the demo": for the sample project the skill uses the values below, and makes its fixes inside the container (a work tree of `sample-change` at `/app/var/data/sample-fixes`, through `docker compose exec intakt`, so run the agent in this folder), because the sample repository lives in the `intakt-data` volume, not on the host. Without the skill, ask your agent to start a review with the values of the review command above: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository` (the default `.` is not the sample) and the text after `--task=` as the task. A start that cannot make or read the token file stops before the seed with `intakt: could not make or read the MCP owner token in /app/var/data/mcp-owner-token`; two starts at once on one volume get the same token.
 
-The token is a secret that sits in the volume and in what `intakt:sample:show` prints; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
+The token is a secret that sits in the volume and in what `intakt:sample:show` and `intakt:demo` print; `docker compose down -v` makes a new one. [Connecting an agent through MCP](mcp.md) says what the client can do.
 
 Later starts keep both as they are once written (the log says `Kept`), also when you add a key. To seed again, for example after adding the second key, remove the volume with `docker compose down -v` (this also removes the database) or delete `/app/var/data/intakt.yaml` in the container and start again. Without any provider key the start goes on: it builds the sample repository, writes no project, warns `Set ANTHROPIC_API_KEY or OPENAI_API_KEY or HF_TOKEN to seed the sample project; the next start with one writes it.`, and still reports healthy once the dashboard answers. Add a key to `.env.local` and start again (`docker compose up -d --wait`) to write the project. An `openai_compatible` endpoint other than the Hugging Face router does not count for the seed, because the seeded models are router models.
 
