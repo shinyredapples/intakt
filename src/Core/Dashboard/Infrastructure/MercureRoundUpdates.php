@@ -208,9 +208,8 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'outcomes' => $this->outcomesOf($reviewed)]);
     }
 
+    // Read as the page reads it, because the live outcome chips must be exactly what a reload shows; empty leaves the cells to their process words.
     /**
-     * Read as the page reads it, because the live outcome chips must be exactly what a reload shows; empty leaves the cells to their process words.
-     *
      * @return array<string, ?ReviewOutcome>
      */
     private function reviewerOutcomesOf(Uuid $round): array
