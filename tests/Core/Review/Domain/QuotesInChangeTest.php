@@ -117,6 +117,68 @@ final class QuotesInChangeTest extends TestCase
         self::assertNotNull($reason);
     }
 
+    public function testAFenceIndentedUnderANumberedListItemIsLeftOut(): void
+    {
+        $text = "1. Shell injection.\n    ```js\n    escapeArgument(`suggestedName`);\n    ```";
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAQuoteAfterAnIndentedClosedFencedBlockIsChecked(): void
+    {
+        $text = "1. Suggested fix:\n\t```js\n\trun(`customerName`);\n\t```\n`grepName` is not defined.";
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function absentQuotesAfterAFenceClosedWithAnotherLineEnd(): iterable
+    {
+        yield 'a backtick fence with CRLF line ends' => ["```js\r\nrun(`customerName`);\r\n```\r\n`grepName` is not defined."];
+        yield 'a tilde fence with CRLF line ends' => ["Fix:\r\n~~~\r\nrun(`customerName`);\r\n~~~\r\n`grepName` is not defined."];
+        yield 'a backtick fence with CR line ends' => ["```js\rrun(`customerName`);\r```\r`grepName` is not defined."];
+        yield 'a CRLF fence at the end, after the quote' => ["`grepName` is not defined.\r\n```js\r\nrun(`customerName`);\r\n```"];
+        yield 'an indented fence with CRLF line ends' => ["1. Fix:\r\n    ```js\r\n    run(`customerName`);\r\n    ```\r\n`grepName` is not defined."];
+    }
+
+    #[DataProvider('absentQuotesAfterAFenceClosedWithAnotherLineEnd')]
+    public function testAnAbsentQuoteAfterAFenceClosedWithACrlfOrCrLineEndIsDropped(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertSame('none of its 1 quoted code fragments is in the change', $reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function quotesInsideAFenceWithAnotherLineEnd(): iterable
+    {
+        yield 'CRLF line ends' => ["Escape the argument:\r\n```js\r\nrun(`grepName`);\r\n```\r\n`customerName` is unescaped."];
+        yield 'CR line ends' => ["Escape the argument:\r```js\rrun(`grepName`);\r```\r`customerName` is unescaped."];
+    }
+
+    #[DataProvider('quotesInsideAFenceWithAnotherLineEnd')]
+    public function testAQuoteInsideAFenceWithCrlfOrCrLineEndsIsNotChecked(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAQuoteOnALineEndingInCrlfIsChecked(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding("The name is wrong.\r\n`grepName` is not defined.\r\n"), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
     /**
      * @return iterable<string, array{string}>
      */

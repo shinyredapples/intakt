@@ -11,8 +11,9 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class QuotesInChange
 {
-    // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet; fences count only at a line start, as in Markdown, so backticks inside a fenced line never close the block.
-    private const string FENCED_BLOCK = '/^ {0,3}((`|~)\2{2,})[^\n]*(?:\n.*?)??(?:\n {0,3}\1\2*[ \t]*$|\z)/ms';
+    // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet; fences count only at a line start, as in Markdown, so backticks inside a fenced line never close the block, and at any indentation, because a fix under a list item is indented with it.
+    private const string FENCED_BLOCK = '/^[ \t]*((`|~)\2{2,})[^\n]*(?:\n.*?)??(?:\n[ \t]*\1\2*[ \t]*$|\z)/ms';
+    private const array LINE_ENDS = ["\r\n", "\r"];
     private const string INLINE_QUOTE = '/(?<!`)(`{1,2})(?!`)([^`\n]+?)(?<!`)\1(?!`)/';
     private const string NAME = '/[A-Za-z_][A-Za-z0-9_]*/';
     // Left out, because a path or a file name may rightly name a file the change should add.
@@ -36,7 +37,9 @@ final readonly class QuotesInChange
      */
     private function checkedQuotesIn(string $text): array
     {
-        preg_match_all(self::INLINE_QUOTE, (string) preg_replace(self::FENCED_BLOCK, '', $text), $found);
+        // One line end for both patterns, because a closing fence before a CRLF or a CR would not be seen and the block would hide every quote after it.
+        $lines = str_replace(self::LINE_ENDS, "\n", $text);
+        preg_match_all(self::INLINE_QUOTE, (string) preg_replace(self::FENCED_BLOCK, '', $lines), $found);
         $quotes = [];
 
         foreach ($found[2] as $quote) {
