@@ -59,7 +59,7 @@ final class BenchReportTest extends TestCase
 
         self::assertSame(
             '  reviewer (standard, model big), measured over 1 rounds: 0 of 0 planted defects found, 0 false alarms, 1 harness failures left out, 110 tokens (100 prompt, 10 completion, 1 calls)',
-            $lines[array_key_last($lines)],
+            array_last($lines),
         );
     }
 
