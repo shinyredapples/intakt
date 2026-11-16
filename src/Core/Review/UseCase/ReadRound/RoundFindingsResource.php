@@ -15,7 +15,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[McpResourceTemplate(
     uriTemplate: 'intakt://rounds/{roundId}/findings',
     name: 'round_findings',
-    description: 'The findings a review round reported, under the ids the judge saw.',
+    description: 'The findings a review round reported, under their ids in the round, also those dropped before the judge.',
     mimeType: 'application/json',
 )]
 #[IsGrantedTool(ToolAccess::Read->value)]

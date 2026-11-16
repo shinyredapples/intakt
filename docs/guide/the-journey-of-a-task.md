@@ -90,7 +90,8 @@ flowchart TD
   pr[Pull request, CI green] --> panel[Each reviewer reads it,<br/>on its own]
   panel --> probes[Planned: reviewers may run small tests<br/>in a sealed sandbox]
   probes --> verdicts[Each returns a verdict:<br/>approve, changes with findings,<br/>or blocked]
-  verdicts --> judge[A quick judge step sorts each finding:<br/>fix now, later, or not needed]
+  verdicts --> quotes[Plain code drops a finding<br/>whose quoted code is not in the change]
+  quotes --> judge[A quick judge step sorts each other finding:<br/>fix now, later, or not needed]
   judge -- something to fix now --> build[Back to the builder]
   judge -- nothing to fix now --> pass[The panel approves]
 ```
