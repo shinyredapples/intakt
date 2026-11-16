@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Infrastructure;
 use Closure;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
@@ -126,7 +127,7 @@ final readonly class ReviewerAgent implements Reviewer
         $stream = new StreamAcceptance();
 
         try {
-            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer));
+            return $this->answerOf($this->runs->reporting($stream->watching($agent->call($conversation, self::STREAMED)), $reviewer), $reviewer);
         } catch (BadRequestException|InvalidRequestException $refused) {
             $this->fellBackUnlessAccepted($stream, $refused, $reviewer);
         }
@@ -145,13 +146,18 @@ final readonly class ReviewerAgent implements Reviewer
 
     private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
     {
-        return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer));
+        return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer), $reviewer);
     }
 
-    private function answerOf(ExecutionInterface $execution): Verdict
+    private function answerOf(ExecutionInterface $execution, ReviewerConversation $reviewer): Verdict
     {
         try {
-            return $this->prompt->verdictIn($execution);
+            return $this->reportedAsRead($this->prompt->verdictIn($execution), $reviewer);
+        } catch (VerdictUnreadable $unreadable) {
+            // Only the marker, because the unread answer is the model's own text; the exception still carries it for debugging.
+            $this->runs->answered($reviewer, ReadAnswer::unreadable());
+
+            throw $unreadable;
         } catch (MaxIterationsExceededException) {
             throw VerdictUnreadable::becauseKeySafe(sprintf('the reviewer was still asking for tools after %d rounds of tool calls.', ReviewerRuns::MAX_ROUNDS));
         } catch (ReviewServerLost) {
@@ -160,5 +166,12 @@ final readonly class ReviewerAgent implements Reviewer
             // Read from the execution, never from the message, so only a run ReviewerStopping cancelled ends as stopped and any other failure stays an error.
             return ExecutionStatus::Cancelled === $execution->getStatus() ? Verdict::reviewerStopped() : throw $failure;
         }
+    }
+
+    private function reportedAsRead(Verdict $verdict, ReviewerConversation $reviewer): Verdict
+    {
+        $this->runs->answered($reviewer, ReadAnswer::of($verdict));
+
+        return $verdict;
     }
 }

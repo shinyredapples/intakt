@@ -70,7 +70,6 @@ use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Lock\LockFactory;
@@ -241,7 +240,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
             ($substituteProvider ?? Provider::OpenAi)->value => fn (): PlatformInterface => $accounts($substituteProvider ?? Provider::OpenAi, $this->recording($substituteProvider ?? Provider::OpenAi, $substitute), $this->cooldowns),
         ]);
         $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates(), new MockClock()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        $reviewer = new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $this->limit, $this->fixture->clock);
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);

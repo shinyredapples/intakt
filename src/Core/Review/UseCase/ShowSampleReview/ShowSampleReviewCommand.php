@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ShowSampleReview;
 
 use Intakt\Core\Mcp\Contract\OwnerClientLine;
+use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
-use SensitiveParameter;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -25,9 +25,7 @@ final readonly class ShowSampleReviewCommand
     public function __construct(
         #[Autowire(env: 'REVIEW_MCP_BASE_URL')]
         private string $baseUrl,
-        #[SensitiveParameter]
-        #[Autowire(env: 'MCP_OWNER_TOKEN')]
-        private string $ownerToken,
+        private OwnerToken $ownerToken,
         #[Autowire(env: 'INTAKT_COMPOSE_SERVICE')]
         private string $composeService,
         #[Autowire(env: 'int:DASHBOARD_PORT')]
@@ -75,11 +73,6 @@ final readonly class ShowSampleReviewCommand
 
     private function printMcpSetup(SymfonyStyle $io): void
     {
-        $client = new OwnerClientLine($this->baseUrl, $this->ownerToken);
-        if (!$client->hasToken()) {
-            return;
-        }
-
-        $io->writeln(OutputFormatter::escape('Connect an MCP client: '.$client->line()));
+        $io->writeln(OutputFormatter::escape(new OwnerClientLine($this->baseUrl, $this->ownerToken->value())->setup()));
     }
 }

@@ -187,7 +187,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['F1', 'P2', 'Text of F1.', JudgeCall::Act->value], ['F2', 'P2', 'Text of F2.', JudgeCall::FollowUp->value], ['F3', 'P2', 'Text of F3.', JudgeCall::NotActedOn->value]],
+            [['F1', 'P2', 'Text of F1.', JudgeCall::Act->inWords()], ['F2', 'P2', 'Text of F2.', JudgeCall::FollowUp->inWords()], ['F3', 'P2', 'Text of F3.', JudgeCall::NotActedOn->inWords()]],
             $this->rowsOf($crawler->filter('#round-round-1 table.findings tbody tr')),
         );
     }
@@ -209,7 +209,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['F1', 'not recorded', 'not recorded', JudgeCall::Act->value], ['F2', 'not recorded', 'not recorded', JudgeCall::FollowUp->value]],
+            [['F1', 'not recorded', 'not recorded', JudgeCall::Act->inWords()], ['F2', 'not recorded', 'not recorded', JudgeCall::FollowUp->inWords()]],
             $this->rowsOf($crawler->filter('#round-round-1 table.findings tbody tr')),
         );
         self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1')->text());
@@ -537,7 +537,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('/reviews/round-1', $crawler->filter('tbody td:first-child a')->attr('href'));
+        self::assertSame('/reviews/round-1', $crawler->filter('.review-row a.review-link')->attr('href'));
     }
 
     public function testTheHeaderShowsTheMetaLineWithProjectChangeAndLatestStart(): void

@@ -171,7 +171,7 @@ final class EntrypointSampleSeedTest extends TestCase
 
     public function testAMissingDataFolderStopsTheStartBeforeTheSeed(): void
     {
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/missing/intakt.yaml']);
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/missing/intakt.yaml', 'MCP_OWNER_KEPT_FILE' => $this->directory.'/missing/mcp-owner-token']);
 
         $this->entrypoint?->wait();
 
@@ -440,6 +440,7 @@ final class EntrypointSampleSeedTest extends TestCase
             'MERCURE_JWT_SECRET' => self::SECRET,
             'MERCURE_JWT_ISSUER' => 'http://localhost',
             'MCP_OWNER_TOKEN' => false,
+            'MCP_OWNER_KEPT_FILE' => $this->directory.'/mcp-owner-token',
             'MCP_OWNER_ACCESS' => false,
             'MESSENGER_CONSUMERS' => '1',
             'WORKER_MEMORY_CEILING_MB' => '256',

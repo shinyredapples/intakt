@@ -15,6 +15,9 @@ final readonly class JudgeDoneFinding
         public string $text,
         // Empty by default, because a judge_done row written before act entries were recorded holds no merged ids.
         public array $merged = [],
+        // Null by default, because a judge_done row written before the place was recorded holds neither.
+        public ?string $file = null,
+        public ?int $line = null,
     ) {
     }
 }

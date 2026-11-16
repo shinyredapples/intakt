@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
+use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\ConflictException;
@@ -63,5 +64,10 @@ final readonly class ReviewerRuns
     public function reporting(ExecutionInterface $execution, ReviewerConversation $reviewer): ExecutionInterface
     {
         return $this->stopping->watching($this->progress->reporting($execution, $reviewer), $reviewer);
+    }
+
+    public function answered(ReviewerConversation $reviewer, ReadAnswer $answer): void
+    {
+        $this->progress->answered($reviewer, $answer);
     }
 }

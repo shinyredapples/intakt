@@ -82,7 +82,7 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertContains('F1+F2 P1 src/A.php:7: Text of A.', $report->asLines($review));
         self::assertSame([['F1', ['F2'], 'P1', 'Text of A.']], $this->jsonEntries($report->asJson($review)));
-        self::assertSame([['F1+F2', 'P1', 'Text of A.', 'act']], $this->pageRows($page));
+        self::assertSame([['F1+F2', 'P1', 'Text of A.', 'Fix now']], $this->pageRows($page));
     }
 
     // The page's entry comes from the judge's ledger record and the act list from the stored round, each merged on its own, so three reports of one place must still give one entry alike.
@@ -95,7 +95,7 @@ final class MergedActEntryPageTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame([['F1+F2+F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [implode('+', [$entry->id, ...$entry->merged]), $entry->severity->value, $entry->text], $act));
-        self::assertSame([['F1+F2+F3', 'P1', 'Text of A.', 'act']], $this->pageRows($page));
+        self::assertSame([['F1+F2+F3', 'P1', 'Text of A.', 'Fix now']], $this->pageRows($page));
     }
 
     /**

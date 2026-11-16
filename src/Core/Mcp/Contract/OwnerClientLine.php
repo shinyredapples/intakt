@@ -23,6 +23,16 @@ final readonly class OwnerClientLine
         return '' !== $this->ownerToken;
     }
 
+    // One place for both commands, because a missing token must give a hint the owner can act on and never a silent start.
+    public function setup(): string
+    {
+        if (!$this->hasToken()) {
+            return 'No MCP owner token found: set MCP_OWNER_TOKEN in .env.local and start again, or read the one the demo keeps in the data volume';
+        }
+
+        return 'Connect an MCP client: '.$this->line();
+    }
+
     // The bearer header only with a token, because the owner server lets a client read without one.
     public function line(): string
     {

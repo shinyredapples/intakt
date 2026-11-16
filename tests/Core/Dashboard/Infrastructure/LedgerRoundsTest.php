@@ -198,6 +198,59 @@ final class LedgerRoundsTest extends TestCase
         self::assertEquals(new DateTimeImmutable('2026-10-28T12:20:00+00:00'), $review?->rounds[0]->outcomes[0]->since);
     }
 
+    public function testAReviewerStartedWithAModelKeepsThatModelAfterItsVerdict(): void
+    {
+        $reviewer = '"round":"r1","reviewer":"x","role":"correctness","tier":"standard"';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.',"model":"standard-model"}'),
+            $this->event(LedgerEventKind::VerdictReceived, '{'.$reviewer.',"decision":"approve","findings":0}'),
+        );
+
+        $outcome = $review?->rounds[0]->outcomes[0];
+
+        self::assertSame([ReviewerProgress::Answered, 'standard-model'], [$outcome?->progress, $outcome?->model]);
+    }
+
+    public function testAReviewerStartRecordedBeforeTheModelWasKeptReadsWithNoModel(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard"}'),
+        );
+
+        $outcome = $review?->rounds[0]->outcomes[0];
+
+        self::assertSame([ReviewerProgress::Running, null], [$outcome?->progress, $outcome?->model]);
+    }
+
+    public function testAReviewerStartedAgainOnAnotherModelShowsTheModelOfItsLatestStart(): void
+    {
+        $reviewer = '"round":"r1","reviewer":"x","role":"correctness","tier":"standard"';
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.',"model":"first-model"}'),
+            $this->event(LedgerEventKind::ReviewerStopped, '{'.$reviewer.'}'),
+            $this->event(LedgerEventKind::ReviewerStarted, '{'.$reviewer.',"model":"second-model"}'),
+        );
+
+        self::assertSame('second-model', $review?->rounds[0]->outcomes[0]->model);
+    }
+
+    public function testAReviewerWithoutARecordedStartHasNoModel(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->event(LedgerEventKind::VerdictReceived, '{"round":"r1","reviewer":"x","role":"correctness","tier":"standard","decision":"approve","findings":0}'),
+        );
+
+        self::assertNull($review?->rounds[0]->outcomes[0]->model);
+    }
+
     #[DataProvider('modes')]
     public function testAVerdictCarriesItsRecordedModeAndReadsAsOrdinaryWithoutOne(string $field, ProjectMode $expected): void
     {
@@ -325,6 +378,39 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.')->calledBy(JudgeCall::Act), new RoundFinding('F2', 'P3', 'Later.')->calledBy(JudgeCall::FollowUp)], $review?->rounds[0]->findings);
+    }
+
+    public function testAJudgedFindingInTheReadModelNamesItsFileAndLine(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [new JudgeDoneFinding('F1', Severity::P1, 'Broken.', [], 'src/A.php', 7)])),
+        );
+
+        self::assertSame(['src/A.php', 7], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
+    }
+
+    public function testTheJudgesCallReadsInPlainWordsWithTheDropReason(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], ['F2'], [new JudgeDoneFinding('F1', Severity::P1, 'A.'), new JudgeDoneFinding('F2', Severity::P3, 'B.'), new JudgeDoneFinding('F3', Severity::P3, 'C.')])),
+        );
+
+        self::assertSame(['Fix now', 'Dropped: deferred to a follow-up issue', 'Dropped: rejected or not marked by the judge'], array_map(static fn (RoundFinding $finding): string => $finding->callInWords(), $review?->rounds[0]->findings ?? []));
+    }
+
+    public function testAMarkedOnlyFindingFromAnOldRoundHasNoFileAndNoLine(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', ['F1'], [], [])),
+        );
+
+        self::assertSame([null, null], [$review?->rounds[0]->findings[0]->file, $review?->rounds[0]->findings[0]->line]);
     }
 
     public function testAnActEntryThatMergesFindingsIsOneRowNamingTheMergedIds(): void
