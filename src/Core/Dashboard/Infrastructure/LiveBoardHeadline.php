@@ -7,18 +7,19 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Domain\Board;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
 use Twig\Environment;
 
-// One worker at a time reads the board and publishes its headline, because two that read and published unordered could leave a line naming a reviewer who already finished.
+// One worker at a time reads the board and publishes its headline and its In review and Done columns, because two that read and published unordered could leave a line naming a reviewer who already finished, or a card in the wrong column.
 final readonly class LiveBoardHeadline
 {
     public const string TEMPLATE = 'dashboard/stream/board_headline.stream.html.twig';
 
-    // One for the install, because every round changes the same line on the same topic.
+    // One for the install, because every round changes the same line and columns on the same topic.
     private const string LOCK = 'dashboard-board-headline';
 
     public function __construct(
@@ -35,7 +36,7 @@ final readonly class LiveBoardHeadline
         try {
             $this->publishedInTurn();
         } catch (Throwable $failure) {
-            // Swallowed after a log, because the line is a view and a round update must never change a verdict or a round.
+            // Swallowed after a log, because the board is a view and a round update must never change a verdict or a round.
             $this->logger->warning('The board headline was not published.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
         }
     }
@@ -53,7 +54,7 @@ final readonly class LiveBoardHeadline
                 $lock->release();
             }
 
-            if ($this->streamOf() === $published) {
+            if ($this->signatureOf($this->pages->board()) === $published) {
                 return;
             }
         }
@@ -61,18 +62,24 @@ final readonly class LiveBoardHeadline
 
     private function publishedOnce(?string $published): string
     {
-        $stream = $this->streamOf();
+        $board = $this->pages->board();
+        $signature = $this->signatureOf($board);
 
-        if ($stream !== $published) {
-            $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $stream));
+        if ($signature !== $published) {
+            $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->streamOf($board)));
         }
 
-        return $stream;
+        return $signature;
     }
 
-    // Compared as the rendered stream, because that is exactly what the page would change to.
-    private function streamOf(): string
+    // The boards are compared, not the rendered streams, because a rendered term carries a fresh random id each time and two renders of one board never match.
+    private function signatureOf(Board $board): string
     {
-        return $this->twig->render(self::TEMPLATE, ['headline' => $this->pages->board()->headline()]);
+        return serialize($board);
+    }
+
+    private function streamOf(Board $board): string
+    {
+        return $this->twig->render(self::TEMPLATE, ['headline' => $board->headline(), 'board' => $board]);
     }
 }

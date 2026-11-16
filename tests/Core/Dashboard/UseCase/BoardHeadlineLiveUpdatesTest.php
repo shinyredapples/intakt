@@ -122,6 +122,43 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('Nothing is running. Nothing needs you.', $updated->filter('#board-headline')->text());
     }
 
+    public function testAStartedRoundsPushPutsItsCardInTheInReviewColumn(): void
+    {
+        $this->browser->request('GET', '/');
+
+        $streams = new Crawler($this->pushedHeadlineAfterAReviewerStarted());
+
+        $column = $streams->filter('turbo-stream[action="replace"][target="col-in-review"] template')->first();
+        self::assertCount(1, $column);
+        self::assertSame('1', trim($column->filter('.col-head .count')->text()));
+        self::assertCount(1, $column->filter('.col-cards > [data-project]'));
+        self::assertStringContainsString('feat/a', $column->filter('.col-cards')->text());
+    }
+
+    public function testAJudgedRoundsPushMovesItsCardFromInReviewToDone(): void
+    {
+        $this->pushedHeadlineAfterAReviewerStarted();
+        $this->ledger->judgeRound(self::ROUND);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $streams = new Crawler($this->lastShellUpdate());
+        $inReview = $streams->filter('turbo-stream[target="col-in-review"] template');
+        $done = $streams->filter('turbo-stream[target="col-done"] template');
+        self::assertCount(0, $inReview->filter('.col-cards > [data-project]'));
+        self::assertCount(1, $done->filter('.col-cards > [data-project]'));
+    }
+
+    public function testThePushedColumnIsTheSameMarkupAsTheColumnOfAPageLoadedAfterIt(): void
+    {
+        $streams = new Crawler($this->pushedHeadlineAfterAReviewerStarted());
+
+        $page = $this->browser->request('GET', '/');
+
+        $pushed = $streams->filter('turbo-stream[target="col-in-review"] template')->first();
+        self::assertSame($this->withoutTipIds($page->filter('#col-in-review')->outerHtml()), $this->withoutTipIds(trim($pushed->html())));
+    }
+
     public function testTheBoardShowsTheCurrentHeadlineWithoutAStreamSourceWhenLiveUpdatesAreOff(): void
     {
         $this->givenLiveUpdatesAreOff();
@@ -161,6 +198,12 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
 
         return $this->lastShellUpdate();
+    }
+
+    // A term's tooltip id is random so that ids stay unique on a page, so two renders of one column differ only there.
+    private function withoutTipIds(string $html): string
+    {
+        return (string) preg_replace('/term-([a-z]+)-\d+/', 'term-$1', $html);
     }
 
     private function roundUpdates(): RoundUpdates

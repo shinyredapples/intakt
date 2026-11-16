@@ -32,6 +32,7 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
@@ -156,7 +157,9 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
 
         self::assertStringContainsString('of &lt;/template&gt;&lt;b&gt;x&lt;/b&gt;.', $this->live->events[0]->turboStream);
-        self::assertSame(1, substr_count($this->live->events[0]->turboStream, '</template>'));
+        $headline = new Crawler($this->live->events[0]->turboStream)->filter('turbo-stream[target="board-headline"]');
+        self::assertCount(1, $headline);
+        self::assertSame(0, $headline->filter('b')->count());
     }
 
     public function testALedgerThatCannotBeReadPublishesNothingAndIsLoggedWithTheRound(): void
@@ -228,6 +231,8 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $stream = $this->live->events[$event]->turboStream;
         self::assertStringStartsWith(self::STREAM_START, $stream);
 
-        return trim(html_entity_decode(strip_tags($stream)));
+        $headline = new Crawler($stream)->filter('turbo-stream[target="board-headline"]');
+
+        return trim(html_entity_decode(strip_tags($headline->html())));
     }
 }
