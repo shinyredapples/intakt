@@ -129,12 +129,32 @@ final readonly class PushScenario
     }
 
     // Git's own verdict on each pushed commit against this one key, because an outside reader sees nothing else.
-    public function signatureMarks(): string
+    public function signatureMarks(?string $remote = null): string
     {
         $signers = $this->folder.'/allowed';
         file_put_contents($signers, 'orchestrator namespaces="git" '.implode(' ', array_slice(explode(' ', (string) file_get_contents($this->key.'.pub')), 0, 2))."\n");
 
-        return $this->run(['-c', 'gpg.format=ssh', '-c', 'gpg.ssh.allowedSignersFile='.$signers, 'log', '--format=%G? %H', 'main..'.self::BRANCH], $this->remote);
+        return $this->run(['-c', 'gpg.format=ssh', '-c', 'gpg.ssh.allowedSignersFile='.$signers, 'log', '--format=%G? %H', 'main..'.self::BRANCH], $remote ?? $this->remote);
+    }
+
+    // A repository as the local git forge serves it, a clone with its work tree on main, because the owner works in it.
+    public function localGitForge(): string
+    {
+        $forge = $this->folder.'/forge';
+        $this->run(['clone', '--quiet', '--single-branch', '--branch', 'main', $this->repository->path, $forge], $this->folder);
+
+        return $forge;
+    }
+
+    // The forge's work tree on the task branch before it exists, because git refuses a push into the branch a work tree has checked out.
+    public function checkOutTheBranchIn(string $forge): void
+    {
+        $this->run(['checkout', '--quiet', '--orphan', self::BRANCH], $forge);
+    }
+
+    public function checkOutMainIn(string $forge): void
+    {
+        $this->run(['checkout', '--quiet', '--force', 'main'], $forge);
     }
 
     // Another writer's commit on the remote branch, because a second builder or a person can leave one there.

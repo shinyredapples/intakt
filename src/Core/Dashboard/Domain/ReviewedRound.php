@@ -83,6 +83,14 @@ final readonly class ReviewedRound
         return $this->ending instanceof RoundEnding;
     }
 
+    /**
+     * @return list<RoundFinding>
+     */
+    public function actFindings(): array
+    {
+        return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
+    }
+
     public function reviewOutcome(): ?ReviewOutcome
     {
         return ReviewOutcome::of($this);
