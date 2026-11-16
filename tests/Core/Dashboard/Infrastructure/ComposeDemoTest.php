@@ -26,6 +26,19 @@ final class ComposeDemoTest extends TestCase
         self::assertContains('.env.local', explode(PHP_EOL, new Filesystem()->readFile(self::ROOT.'/.dockerignore')));
     }
 
+    public function testComposeStartsWithoutAnEnvFile(): void
+    {
+        self::assertSame([false], array_column($this->service()['env_file'], 'required'));
+    }
+
+    public function testComposeDeclaresAHealthCheckThatRunsTheHealthScript(): void
+    {
+        $healthcheck = $this->service()['healthcheck'];
+
+        self::assertSame(['CMD', 'intakt-healthcheck'], $healthcheck['test']);
+        self::assertArrayHasKey('start_interval', $healthcheck);
+    }
+
     public function testTheSeededFilesLiveOnTheDataVolume(): void
     {
         $service = $this->service();
@@ -66,7 +79,7 @@ final class ComposeDemoTest extends TestCase
         preg_match_all('/^: "\$\{(\w+):\?/m', new Filesystem()->readFile(self::ROOT.'/docker/entrypoint.sh'), $required);
         $template = $this->envTemplate();
 
-        // The image sets the issuer, so only the two secrets are the owner's to fill in.
+        // The image sets the issuer, so only the two secrets are the owner's to set, and the entrypoint makes them when empty.
         foreach (array_diff($required[1], ['MERCURE_JWT_ISSUER', 'INTAKT_CONFIG']) as $secret) {
             self::assertArrayHasKey($secret, $template);
             self::assertSame('', $template[$secret]);
@@ -74,11 +87,11 @@ final class ComposeDemoTest extends TestCase
     }
 
     /**
-     * @return array{env_file: list<array{path: string, required: bool}>, environment: array<string, string>, ports: list<string>, volumes: list<string>}
+     * @return array{env_file: list<array{path: string, required: bool}>, healthcheck: array<string, mixed>, environment: array<string, string>, ports: list<string>, volumes: list<string>}
      */
     private function service(): array
     {
-        /** @var array{services: array{intakt: array{env_file: list<array{path: string, required: bool}>, environment: array<string, string>, ports: list<string>, volumes: list<string>}}} $compose */
+        /** @var array{services: array{intakt: array{env_file: list<array{path: string, required: bool}>, healthcheck: array<string, mixed>, environment: array<string, string>, ports: list<string>, volumes: list<string>}}} $compose */
         $compose = Yaml::parseFile(self::ROOT.'/compose.yaml');
 
         return $compose['services']['intakt'];

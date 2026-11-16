@@ -31,29 +31,27 @@ final readonly class SeedSampleProjectCommand
         $lock = $this->locks->createLock('review-sample-seed');
         $lock->acquire(true);
 
-        if (!$this->seedProject($io, $configuration)) {
-            return Command::FAILURE;
-        }
-
+        $this->seedProject($io, $configuration);
         $this->seedRepository($io, $repository);
 
         return Command::SUCCESS;
     }
 
-    private function seedProject(SymfonyStyle $io, string $configuration): bool
+    private function seedProject(SymfonyStyle $io, string $configuration): void
     {
         if ($this->project->isWritten($configuration)) {
             $io->writeln(OutputFormatter::escape(sprintf('Kept the project configuration %s; remove it to seed the sample project again.', $configuration)));
 
-            return true;
+            return;
         }
 
         $providers = $this->project->keyedProviders();
 
+        // A success, so a start without a key still opens the dashboard; the file stays unwritten, so the next start with a key writes it.
         if ([] === $providers) {
-            $io->error(sprintf('Set %s to seed the sample project.', implode(' or ', $this->project->keyVariables())));
+            $io->warning(sprintf('Set %s to seed the sample project; the next start with one writes it.', implode(' or ', $this->project->keyVariables())));
 
-            return false;
+            return;
         }
 
         $this->project->write($configuration, $providers);
@@ -63,8 +61,6 @@ final readonly class SeedSampleProjectCommand
             $configuration,
             implode(' and ', array_map(static fn (Provider $provider): string => $provider->value, $providers)),
         )));
-
-        return true;
     }
 
     private function seedRepository(SymfonyStyle $io, string $repository): void

@@ -27,9 +27,10 @@ final class DockerfileTest extends TestCase
         self::assertMatchesRegularExpression('/^\s+MERCURE_JWT_ISSUER=http:\/\/localhost:7781/m', $this->dockerfile());
     }
 
-    public function testTheImageDeclaresAHealthCheckOnTheMetricsEndpoint(): void
+    public function testTheImageDeclaresAHealthCheckThatRunsTheHealthScript(): void
     {
-        self::assertMatchesRegularExpression('/^HEALTHCHECK.*?\/metrics/ms', $this->dockerfile());
+        self::assertMatchesRegularExpression('/^HEALTHCHECK.*?CMD \["intakt-healthcheck"\]/ms', $this->dockerfile());
+        self::assertStringContainsString('COPY docker/healthcheck.sh /usr/local/bin/intakt-healthcheck', $this->dockerfile());
     }
 
     public function testTheImageSetsHowManyQueueConsumersRun(): void

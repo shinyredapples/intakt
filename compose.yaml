@@ -1,10 +1,10 @@
-# The demo: copy .env.dist to .env.local, fill in one or two provider keys and the two secrets, then run docker compose up.
+# The demo: run docker compose up -d --wait; no file needs editing. Provider keys can be set in .env.local (copy .env.dist), and the secrets are made on the first start unless set there.
 services:
     intakt:
         build: .
         env_file:
             - path: .env.local
-              required: true
+              required: false
         environment:
             # On the data volume, so the seeded project and the sample repository survive a restart and the seed runs once.
             INTAKT_CONFIG: /app/var/data/intakt.yaml
@@ -16,6 +16,14 @@ services:
             - 127.0.0.1:7781:7781
         volumes:
             - intakt-data:/app/var/data
+        healthcheck:
+            # Green only once the dashboard answers and the sample is seeded; the short interval lets docker compose up --wait return soon after.
+            test: ["CMD", "intakt-healthcheck"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+            start_interval: 2s
 
 volumes:
     intakt-data:
