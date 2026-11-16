@@ -47,12 +47,12 @@ final readonly class RoundFinding
         $spans = [];
         $at = 0;
         foreach ($matches as [[$whole, $start], , [$code]]) {
-            array_push($spans, ...self::plainSpans(substr($text, $at, $start - $at)));
+            array_push($spans, ...$this->plainSpans(substr($text, $at, $start - $at)));
             $spans[] = ['text' => trim($code), 'code' => true];
             $at = $start + strlen($whole);
         }
 
-        array_push($spans, ...self::plainSpans(substr($text, $at)));
+        array_push($spans, ...$this->plainSpans(substr($text, $at)));
 
         $joined = [];
         foreach ($spans as $span) {
@@ -75,7 +75,7 @@ final readonly class RoundFinding
     /**
      * @return list<array{text: string, code: bool}>
      */
-    private static function plainSpans(string $text): array
+    private function plainSpans(string $text): array
     {
         // A backtick that closes nothing still means code to the reviewer, so it marks the word after it; with no word after it, it is dropped, so no card shows a literal backtick.
         preg_match_all('/`+([^\s`]*)/', $text, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
