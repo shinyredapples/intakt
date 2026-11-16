@@ -1,0 +1,93 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Dashboard\UseCase;
+
+use Intakt\Core\Dashboard\UseCase\ShowError\ShowErrorController;
+use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Intakt\Tests\Support\Log\AssertsLoggedErrors;
+use Intakt\Tests\Support\WebTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use Psr\Log\LogLevel;
+use RuntimeException;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\DomCrawler\Crawler;
+
+// Apart from the page tests, because their base class fixes the ledger the kernel serves and a failing one must replace it.
+#[CoversClass(ShowErrorController::class)]
+final class ShowServerErrorTest extends WebTestCase
+{
+    use AssertsLoggedErrors;
+
+    private KernelBrowser $browser;
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+    }
+
+    public function testAServerErrorShowsTheShellAndAReferenceTheLogCarriesToo(): void
+    {
+        $this->readsFailOnce();
+
+        $crawler = $this->browser->request('GET', '/');
+
+        self::assertResponseStatusCodeSame(500);
+        self::assertSame('Something went wrong', $crawler->filter('.page-head h1')->text());
+        self::assertSame(1, $crawler->filter('.shell .rail')->count());
+        $reference = $crawler->filter('main code')->text();
+        self::assertMatchesRegularExpression('/^[0-9a-f]{8}$/', $reference);
+        self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $reference));
+        self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the ledger is gone"', RuntimeException::class));
+    }
+
+    public function testAServerErrorPageShowsNeitherTheExceptionMessageNorATrace(): void
+    {
+        $this->readsFailOnce();
+
+        $crawler = $this->browser->request('GET', '/');
+
+        $page = $crawler->html();
+        self::assertStringNotContainsString('the ledger is gone', $page);
+        self::assertStringNotContainsString('RuntimeException', $page);
+        self::assertStringNotContainsString('Stack Trace', $page);
+        $this->takeServerErrorLogs($crawler);
+    }
+
+    public function testAServerErrorWhoseShellCannotBeRenderedStillShowsAReferenceAndALinkToTheBoard(): void
+    {
+        $failing = $this->createStub(Ledger::class);
+        $failing->method('readInOrder')->willThrowException(new RuntimeException('the ledger is gone'));
+        self::getContainer()->set(Ledger::class, $failing);
+
+        $crawler = $this->browser->request('GET', '/');
+
+        self::assertResponseStatusCodeSame(500);
+        self::assertSame('/', $crawler->filter('a')->attr('href'));
+        $reference = $crawler->filter('code')->text();
+        self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $reference));
+        self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the ledger is gone"', RuntimeException::class));
+    }
+
+    private function readsFailOnce(): void
+    {
+        $reads = 0;
+        $ledger = $this->createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturnCallback(static function () use (&$reads): RecordedEvents {
+            if (1 === ++$reads) {
+                throw new RuntimeException('the ledger is gone');
+            }
+
+            return new RecordedEvents([]);
+        });
+        self::getContainer()->set(Ledger::class, $ledger);
+    }
+
+    private function takeServerErrorLogs(Crawler $crawler): void
+    {
+        self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $crawler->filter('main code')->text()));
+        self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the ledger is gone"', RuntimeException::class));
+    }
+}
