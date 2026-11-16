@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
@@ -197,12 +198,48 @@ final readonly class MercureRoundUpdates implements RoundUpdates
 
     private function publishState(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
+        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'outcomes' => $this->reviewerOutcomesOf($round)]);
     }
 
     private function publishJudgedState(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $this->judgedRoundOf($round)]);
+        $reviewed = $this->judgedRoundOf($round);
+
+        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'outcomes' => $this->outcomesOf($reviewed)]);
+    }
+
+    /**
+     * Read as the page reads it, because the live outcome chips must be exactly what a reload shows; empty leaves the cells to their process words.
+     *
+     * @return array<string, ?ReviewOutcome>
+     */
+    private function reviewerOutcomesOf(Uuid $round): array
+    {
+        $id = $round->toRfc4122();
+
+        try {
+            $rounds = $this->pages->reviewOf($id)->rounds ?? [];
+        } catch (Throwable $failure) {
+            $this->logger->warning('The reviewer outcomes were not read for the live update.', ['round' => $id, 'exception' => $failure]);
+
+            return [];
+        }
+
+        return $this->outcomesOf(array_find($rounds, static fn (ReviewedRound $candidate): bool => $candidate->round === $id));
+    }
+
+    /**
+     * @return array<string, ?ReviewOutcome>
+     */
+    private function outcomesOf(?ReviewedRound $reviewed): array
+    {
+        $outcomes = [];
+
+        foreach ($reviewed->outcomes ?? [] as $reviewer) {
+            $outcomes[$reviewer->id] = $reviewer->outcome();
+        }
+
+        return $outcomes;
     }
 
     // Read as the page reads it, because the live findings must be exactly what a reload shows; null leaves them to that reload.

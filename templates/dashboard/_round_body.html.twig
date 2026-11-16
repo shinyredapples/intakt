@@ -27,12 +27,11 @@
                 <td>{{ outcome.role }}</td>
                 {# A start written before Intakt recorded the model has none, so its tier fills the cell instead. #}
                 <td>{{ outcome.model ?? (outcome.tier ~ ' tier, model not recorded') }}</td>
-                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state"><span class="reviewer-outcome{{ progress == 'Failed' ? ' failed' }}">
-                    {%- if progress == 'Running' %}<span class="dot ok"></span>running
-                    {%- elseif progress == 'Answered' %}{{ include('dashboard/components/icon.html.twig', {name: 'check', small: true, extra: 'ok'}, with_context = false) }}{{ outcome.decision }}
-                    {%- elseif progress == 'Failed' %}<span class="dot broken"></span>failed{% if outcome.note is not empty %}: {{ outcome.note }}{% endif %}
-                    {%- elseif progress == 'Blocked' %}blocked{% if outcome.note is not empty %}: {{ outcome.note }}{% endif %}
-                    {%- else %}stopped{% endif -%}
+                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state"><span class="reviewer-outcome">
+                    {%- if progress == 'Running' %}<span class="dot ok"></span><span class="muted">running</span>
+                    {%- elseif progress == 'Stopped' %}<span class="muted">stopped</span>
+                    {%- elseif outcome.outcome is null %}<span class="muted">answered</span>
+                    {%- else %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome.outcome, on_page: true}, with_context = false) }}{% if outcome.note is not empty %}<span class="muted">{{ outcome.note }}</span>{% endif %}{% endif -%}
                 </span>{% if outcome.substitute is not null %}; answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
                 <td class="num">{% if outcome.findings is not null %}{{ outcome.findings }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-reviewer-' ~ outcome.id}, with_context = false) }}{% elseif progress == 'Running' %}no answer yet{% else %}no answer{% endif %}</td>
                 {% if stoppable %}
