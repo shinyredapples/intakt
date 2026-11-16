@@ -1,7 +1,7 @@
 const TAB = '.ttabs [data-pane]';
 const FINDING_BUTTON = '[data-highlight-finding]';
 const FINDING_LINK = 'a.sb-finding';
-const TIMELINE_ENTRY = 'td[data-finding]';
+const TIMELINE_ENTRY = 'li[data-finding]';
 
 // Not a Stimulus controller, because a review page the hub cannot reach loads no import map and a phone could never reach its live log. Listens on the page once.
 export function switchTaskPanes(page) {

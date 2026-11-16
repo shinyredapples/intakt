@@ -93,6 +93,24 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/overflow-x:\s*auto;/', $rules['.table-scroll'] ?? '');
     }
 
+    public function testAJudgedRoundsFindingsAreOneColumnOfCardsWhoseTextWrapsInsteadOfOverflowing(): void
+    {
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/display:\s*grid;/', $rules['.finding-cards'] ?? '');
+        self::assertMatchesRegularExpression('/overflow-wrap:\s*anywhere;/', $rules['.finding-card'] ?? '');
+        self::assertMatchesRegularExpression('/background:\s*var\(--selected\);/', $rules['.finding-card.selected'] ?? '');
+    }
+
+    // Beside the chip the text would lose the chip's width on a 390 px screen, so it goes under it.
+    public function testOnAPhoneAFindingCardsTextTakesTheCardsWholeWidthUnderTheChip(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/^\s*flex-wrap:\s*wrap;\s*$/', $rules['.finding-card'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*flex-basis:\s*100%;\s*$/', $rules['.fc-body'] ?? '');
+    }
+
     public function testTheSummarysCostPutsEachFigureUnderItsLabelInsteadOfBesideIt(): void
     {
         $rules = $this->rulesOf($this->sheet());

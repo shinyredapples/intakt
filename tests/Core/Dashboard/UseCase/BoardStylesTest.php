@@ -155,6 +155,22 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.more-btn[hidden]'] ?? '');
     }
 
+    // The mock's 64 px on the right and 48 px on the left, so the fade matches docs/design/mocks/assets/intakt.css.
+    public function testTheSideOfTheBoardWithHiddenColumnsFadesAsInTheMock(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlock('min-width: 761px'));
+
+        self::assertMatchesRegularExpression('/^\s*-webkit-mask-image:\s*(linear-gradient\(to right, var\(--ink\) calc\(100% - 64px\), transparent\));\s*mask-image:\s*\1;\s*$/', $rules['.board-wrap.more-right .board'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*-webkit-mask-image:\s*(linear-gradient\(to right, transparent, var\(--ink\) 48px, var\(--ink\) calc\(100% - 64px\), transparent\));\s*mask-image:\s*\1;\s*$/', $rules['.board-wrap.more-left.more-right .board'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*-webkit-mask-image:\s*(linear-gradient\(to right, transparent, var\(--ink\) 48px\));\s*mask-image:\s*\1;\s*$/', $rules['.board-wrap.more-left:not(.more-right) .board'] ?? '');
+    }
+
+    // DESIGN.md's phone board snaps column by column, so a fade would hide part of the one column it shows.
+    public function testBelow761WideTheBoardNeverFades(): void
+    {
+        self::assertStringNotContainsString('mask-image', $this->sheetOutside('min-width: 761px'));
+    }
+
     private function sheet(): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
