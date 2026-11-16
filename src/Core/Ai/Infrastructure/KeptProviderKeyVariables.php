@@ -45,10 +45,10 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
             return [];
         }
 
-        return [self::variableOf($key->kind()) => $key->secret()];
+        return [$this->variableOf($key->kind()) => $key->secret()];
     }
 
-    public static function variableOf(KeyKind $kind): string
+    private function variableOf(KeyKind $kind): string
     {
         return match ($kind) {
             KeyKind::Anthropic => Provider::Anthropic->variables()[0],
