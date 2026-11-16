@@ -79,7 +79,7 @@ final class ComposeDemoTest extends TestCase
         preg_match_all('/^: "\$\{(\w+):\?/m', new Filesystem()->readFile(self::ROOT.'/docker/entrypoint.sh'), $required);
         $template = $this->envTemplate();
 
-        // The image sets the issuer, so only the two secrets are the owner's to fill in.
+        // The image sets the issuer, so only the two secrets are the owner's to set, and the entrypoint makes them when empty.
         foreach (array_diff($required[1], ['MERCURE_JWT_ISSUER', 'INTAKT_CONFIG']) as $secret) {
             self::assertArrayHasKey($secret, $template);
             self::assertSame('', $template[$secret]);
