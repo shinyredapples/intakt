@@ -20,8 +20,10 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndings;
 use Intakt\Core\Review\Contract\RoundEnds;
@@ -61,6 +63,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(ReviewSummary::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
+#[UsesClass(ReplayMarks::class)]
 final class ShowReviewControllerTest extends DashboardPageTestCase
 {
     public function testTheReviewPageShowsEveryRoundOfTheChangeInOrder(): void
@@ -73,6 +76,52 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('h1', 'Review of feat/thing in alpha');
         self::assertSame(['Round 1', 'Round 2'], $crawler->filter('section.round h2')->each(static fn (Crawler $title): string => $title->text()));
+    }
+
+    public function testTheReviewPageOfAProjectFlaggedAsReplayShowsTheReplayMark(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame('Replay A recording played back: its verdicts were never given on this change and never count as one.', $crawler->filter('.page-head .replay-mark')->text());
+    }
+
+    public function testTheReviewPageOfALiveProjectShowsNoReplayMark(): void
+    {
+        $this->flagAsReplay('beta');
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(0, $crawler->filter('.replay-mark'));
+    }
+
+    public function testTheReviewPageOfAProjectFlaggedAsReplayMarksEachRoundHeading(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['Replay', 'Replay'], $crawler->filter('section.round .replay-mark')->each(static fn (Crawler $mark): string => $mark->text()));
+    }
+
+    public function testAMixedReviewMarksOnlyItsReplayRoundAndSaysNothingOfTheVerdictsAtTheTop(): void
+    {
+        $this->storeRoundAs('round-1', ReplayMark::Live);
+        $this->storeRoundAs('round-2', ReplayMark::Replay);
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(
+            [0, 1, 1, 0],
+            [$crawler->filter('#round-round-1 .replay-mark')->count(), $crawler->filter('#round-round-2 .replay-mark')->count(), $crawler->filter('.state-block .sb-head .replay-mark')->count(), $crawler->filter('.page-head .replay-mark')->count()],
+        );
     }
 
     public function testEachRoundListsItsReviewersWithTheirVerdicts(): void
