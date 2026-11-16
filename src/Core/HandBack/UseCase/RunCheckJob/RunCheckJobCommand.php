@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
+use Intakt\Core\HandBack\Contract\CheckJob;
+use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\RefusedHandBack;
 use Intakt\Core\Platform\Contract\ReportableFailure;

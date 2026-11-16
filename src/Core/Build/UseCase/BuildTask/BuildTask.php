@@ -40,6 +40,7 @@ final readonly class BuildTask
         private BuildRouting $routing,
         private RunBuildJob $builds,
         private HandBackCheck $handBacks,
+        private PrePushCheck $prePushChecks,
         private Ledger $ledger,
     ) {
     }
@@ -75,7 +76,8 @@ final readonly class BuildTask
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
-                BuildStep::HandBackCheck => $this->checkHandBack($request, $bundle),
+                BuildStep::HandBackCheck => $this->handBacks->failureOf($request, $this->handedBack($bundle)),
+                BuildStep::PrePushCheck => $this->prePushChecks->failureOf($request, $this->handedBack($bundle)),
             };
 
             // A local of this run, never a property, because a worker keeps the service between runs.
@@ -155,10 +157,10 @@ final readonly class BuildTask
         return $outcome->built() ? $outcome : $outcome->verdict->reason();
     }
 
-    private function checkHandBack(BuildTaskRequest $request, ?string $bundle): ?string
+    private function handedBack(?string $bundle): string
     {
-        // Never null, because the check runs only after a build job that built, and such a job always hands back a bundle.
-        return $this->handBacks->failureOf($request, $bundle ?? throw new LogicException('the hand-back check runs only after a build job that handed back a bundle'));
+        // Never null, because the checks run only after a build job that built, and such a job always hands back a bundle.
+        return $bundle ?? throw new LogicException('the checks run only after a build job that handed back a bundle');
     }
 
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
