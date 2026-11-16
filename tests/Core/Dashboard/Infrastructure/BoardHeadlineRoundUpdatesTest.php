@@ -21,6 +21,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
@@ -51,6 +52,7 @@ use Twig\Environment;
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(ReadAnswer::class)]
 final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 {
     private const string ROUND = '0199a5b4-0000-7000-8000-000000000001';
@@ -146,6 +148,14 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $updates->reviewerStopped($round, 'reviewer-1');
 
         self::assertSame(['tool reviewer-1 read_file', 'text reviewer-1 Reading.', 'asked again reviewer-1', 'summary '.self::ROUND, 'stopped reviewer-1'], $this->round->seen);
+        self::assertSame([], $this->live->events);
+    }
+
+    public function testAReadAnswerIsForwardedToTheRoundUpdatesAndPublishesNoHeadline(): void
+    {
+        $this->updates()->answerRead(Uuid::fromString(self::ROUND), 'reviewer-1', ReadAnswer::unreadable());
+
+        self::assertSame(['answer reviewer-1 unreadable'], $this->round->seen);
         self::assertSame([], $this->live->events);
     }
 

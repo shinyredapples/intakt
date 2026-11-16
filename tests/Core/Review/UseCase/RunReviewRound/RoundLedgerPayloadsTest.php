@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\JudgedFinding;
@@ -47,6 +48,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewerStopped::class)]
 #[CoversClass(JudgeDone::class)]
 #[CoversClass(JudgeDoneFinding::class)]
+#[CoversClass(DroppedFinding::class)]
 #[CoversClass(RoundLedger::class)]
 #[UsesClass(OnePerPlace::class)]
 #[UsesClass(JudgedFindings::class)]
@@ -171,7 +173,37 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null}]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null}],"dropped":[]}', $this->written($done));
+    }
+
+    public function testADoneJudgeListsEachDroppedFindingWithItsIdPlaceAndReason(): void
+    {
+        $round = new RoundFixture(self::getContainer())->start(1);
+        $ledger = new InMemoryLedger();
+        $dropped = DroppedFinding::of($this->findingAt('F1', Severity::P1, 7), 'none of its 1 quoted code fragments is in the change');
+
+        $this->roundLedger($ledger)->judgeDone($round, JudgedFindings::of(new Judgement([]), [], [$dropped]));
+
+        self::assertSame(
+            [['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of F1.', 'file' => 'src/A.php', 'line' => 7, 'reason' => 'none of its 1 quoted code fragments is in the change']],
+            $ledger->payloads()[0]['dropped'],
+        );
+    }
+
+    public function testAJudgeRowWithADroppedFindingReadsBackWithItsReason(): void
+    {
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[{"id":"F1","severity":"P1","text":"A bug.","file":"src/A.php","line":7,"reason":"none of its 1 quoted code fragments is in the change"}]}', JudgeDone::class, 'json');
+
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertEquals([new DroppedFinding('F1', Severity::P1, 'A bug.', 'src/A.php', 7, 'none of its 1 quoted code fragments is in the change')], $done->dropped);
+    }
+
+    public function testAJudgeRowWrittenBeforeDropReasonsWereRecordedReadsWithNoDroppedFindings(): void
+    {
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', JudgeDone::class, 'json');
+
+        self::assertInstanceOf(JudgeDone::class, $done);
+        self::assertSame([], $done->dropped);
     }
 
     public function testADoneJudgeRecordsTwoActFindingsAtOnePlaceAsTheActEntryThatNamesTheMergedId(): void
@@ -201,7 +233,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
     {
-        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
     }
 
     public function testTheLedgerSpreadsTheReviewerIdentityBeforeTheEventsOwnKeys(): void

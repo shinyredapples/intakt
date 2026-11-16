@@ -12,16 +12,15 @@ export function highlightFindings(page) {
 
 function highlight(page, id) {
     // The finding sits in the round that judged it, which the summary does not know: the latest round's entry is the one asked about.
-    // A merged act entry names each finding it stands for, so every one of their ids reaches its row.
-    const cell = [...page.querySelectorAll('td[data-finding]')].findLast((candidate) => candidate.getAttribute('data-finding').split(' ').includes(id));
-    const entry = cell?.closest('tr');
+    // A merged act entry names each finding it stands for, so every one of their ids reaches its card.
+    const entry = [...page.querySelectorAll('li[data-finding]')].findLast((candidate) => candidate.getAttribute('data-finding').split(' ').includes(id));
 
     // A finding of a round still running has no timeline entry until the judge marks it.
     if (!entry) {
         return;
     }
 
-    for (const previous of page.querySelectorAll('tr.selected')) {
+    for (const previous of page.querySelectorAll('li.selected')) {
         previous.classList.remove('selected');
         previous.removeAttribute('aria-current');
     }

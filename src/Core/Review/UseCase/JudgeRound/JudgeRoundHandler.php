@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
 use Intakt\Core\Platform\Contract\AsCommandHandler;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
@@ -38,28 +39,42 @@ final readonly class JudgeRoundHandler
             return;
         }
 
-        $findings = $this->quotingTheChange($round, $this->rounds->findingsOf($round));
-        $judged = JudgedFindings::of($this->judgementOf($round, $findings), $findings);
+        [$findings, $dropped] = $this->sortedByQuotes($round, $this->rounds->findingsOf($round));
+        $judged = JudgedFindings::of($this->judgementOf($round, $findings), $findings, $dropped);
         $this->rounds->record($round, $judged);
         $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
     }
 
-    // Before the judge and the act list, so a finding quoting code the change does not hold is neither judged nor merged with a real one at its place.
+    // Before the judge and the act list, so a finding quoting code the change does not hold is neither judged nor merged with a real one at its place; its reason goes with the round.
     /**
      * @param list<Finding> $findings
      *
-     * @return list<Finding>
+     * @return array{list<Finding>, list<DroppedFinding>}
      */
-    private function quotingTheChange(ReviewRound $round, array $findings): array
+    private function sortedByQuotes(ReviewRound $round, array $findings): array
     {
         if ([] === $findings) {
-            return [];
+            return [[], []];
         }
 
         $change = $this->rounds->changeOf($round);
         $quotes = new QuotesInChange();
+        $kept = [];
+        $dropped = [];
 
-        return array_values(array_filter($findings, static fn (Finding $finding): bool => null === $quotes->reasonToDrop($finding, $change)));
+        foreach ($findings as $finding) {
+            $reason = $quotes->reasonToDrop($finding, $change);
+
+            if (null === $reason) {
+                $kept[] = $finding;
+
+                continue;
+            }
+
+            $dropped[] = DroppedFinding::of($finding, $reason);
+        }
+
+        return [$kept, $dropped];
     }
 
     /**

@@ -65,6 +65,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role));
     }
 
+    public function startReviewerOn(string $round, string $role, string $model): void
+    {
+        $this->add(LedgerEventKind::ReviewerStarted, $this->reviewer($round, $role) + ['model' => $model]);
+    }
+
     public function answer(string $round, string $role, int $findings): void
     {
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
@@ -106,6 +111,16 @@ final class DashboardLedger implements Ledger
             'act' => [$entry, $merged],
             'follow_ups' => [],
             'findings' => [['id' => $entry, 'severity' => 'P1', 'text' => 'Text of '.$entry.'.', 'merged' => [$merged]], ['id' => $merged, 'severity' => 'P2', 'text' => 'Text of '.$merged.'.', 'merged' => []]],
+        ]);
+    }
+
+    public function judgeToFixAtLine7OfA(string $round, string $text): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => ['F1'],
+            'follow_ups' => [],
+            'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => $text, 'merged' => [], 'file' => 'src/A.php', 'line' => 7]],
         ]);
     }
 

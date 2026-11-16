@@ -19,20 +19,30 @@
     {% if reviewed.outcomes is not empty or running %}
     <div class="table-scroll" tabindex="0" role="region" aria-label="Reviewers of round {{ reviewed.round }}">
     <table class="ledger reviewers">
-        <thead><tr><th>Role</th><th>Tier</th><th>State</th><th>Verdict</th><th class="num">Findings</th><th>Note</th><th>Stop</th></tr></thead>
+        {# The Stop column shows only while a reviewer of the running round can be stopped, because otherwise it would be empty in every row. #}
+        {% set stoppable = running and reviewed.outcomes|filter(o => o.progress.name == 'Running') is not empty %}
+        <thead><tr><th>Role</th><th>Model</th><th>Outcome</th><th class="num">Findings</th>{% if stoppable %}<th class="stop">Stop</th>{% endif %}</tr></thead>
         <tbody id="round-{{ reviewed.round }}-reviewers">
         {% for outcome in reviewed.outcomes %}
+            {% set progress = outcome.progress.name %}
             <tr>
                 <td>{{ outcome.role }}</td>
-                <td>{{ outcome.tier }}</td>
-                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</td>
-                <td>{{ outcome.decision ?? '' }}</td>
-                <td class="num">{% if outcome.findings is not null %}{{ outcome.findings }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-reviewer-' ~ outcome.id}, with_context = false) }}{% endif %}</td>
-                <td>{{ outcome.note ?? '' }}{% if outcome.note is not empty and outcome.substitute is not null %}; {% endif %}{% if outcome.substitute is not null %}answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
-                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if running and outcome.progress.name == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
+                {# A start written before Intakt recorded the model has none, so its tier fills the cell instead. #}
+                <td>{{ outcome.model ?? (outcome.tier ~ ' tier, model not recorded') }}</td>
+                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-state"><span class="reviewer-outcome{{ progress == 'Failed' ? ' failed' }}">
+                    {%- if progress == 'Running' %}<span class="dot ok"></span>running
+                    {%- elseif progress == 'Answered' %}{{ include('dashboard/components/icon.html.twig', {name: 'check', small: true, extra: 'ok'}, with_context = false) }}{{ outcome.decision }}
+                    {%- elseif progress == 'Failed' %}<span class="dot broken"></span>failed{% if outcome.note is not empty %}: {{ outcome.note }}{% endif %}
+                    {%- elseif progress == 'Blocked' %}blocked{% if outcome.note is not empty %}: {{ outcome.note }}{% endif %}
+                    {%- else %}stopped{% endif -%}
+                </span>{% if outcome.substitute is not null %}; answered by the substitute {{ outcome.substitute }}, a catch-up review is owed{% endif %}</td>
+                <td class="num">{% if outcome.findings is not null %}{{ outcome.findings }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-reviewer-' ~ outcome.id}, with_context = false) }}{% elseif progress == 'Running' %}no answer yet{% else %}no answer{% endif %}</td>
+                {% if stoppable %}
+                <td id="round-{{ reviewed.round }}-reviewer-{{ outcome.id }}-stop">{% if progress == 'Running' %}<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::STOP_REVIEW'), {round: reviewed.round, reviewer: outcome.id}) }}" class="stop-reviewer">
                     <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StopReview\\StopReviewController::TOKEN_ID')) }}">
                     {{ include('dashboard/components/button.html.twig', {kind: 'danger', small: true, type: 'submit', label: 'Stop this reviewer', confirm: 'Click again to stop'}, with_context = false) }}
                 </form>{% endif %}</td>
+                {% endif %}
             </tr>
         {% endfor %}
         </tbody>
@@ -41,32 +51,8 @@
     {% endif %}
 
     <h3>Findings and the judge's call</h3>
-    {% if reviewed.state.name != 'Judged' %}
-    <p class="muted">The judge has not judged this round yet.</p>
-    {% elseif reviewed.findings is empty and reviewed.findingTextRecorded %}
-    <p class="muted">The reviewers reported no findings, so the judge had nothing to mark.</p>
-    {% elseif reviewed.findings is empty %}
-    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
-    {% else %}
-    {% if not reviewed.findingTextRecorded %}
-    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
-    {% endif %}
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Findings of round {{ reviewed.round }}">
-    <table class="ledger findings">
-        <thead><tr><th>Id</th><th>Severity</th><th>Finding</th><th>Judge's call</th></tr></thead>
-        <tbody>
-        {% for finding in reviewed.findings %}
-            <tr>
-                <td class="mono" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">{{ finding.entryId }}</td>
-                <td>{{ finding.severity ?? 'not recorded' }}</td>
-                <td>{{ finding.text ?? 'not recorded' }}</td>
-                <td>{{ finding.callInWords }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
-    {% endif %}
+    {# Its own partial, because the judged round's live update replaces it with the same markup a reload renders. #}
+    {{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}
 
     <h3>Tokens and cost</h3>
     <div class="table-scroll" tabindex="0" role="region" aria-label="Tokens and cost of round {{ reviewed.round }}">

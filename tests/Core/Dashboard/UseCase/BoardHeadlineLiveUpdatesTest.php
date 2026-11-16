@@ -149,6 +149,19 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $done->filter('.col-cards > [data-project]'));
     }
 
+    // The page was loaded while the round ran, so its Done is folded and the layout folds the pushed one again: without a strip it could not be opened.
+    public function testADoneColumnPushedWhenTheLastRunningRoundIsJudgedKeepsItsStrip(): void
+    {
+        $this->pushedHeadlineAfterAReviewerStarted();
+        $this->ledger->judgeRound(self::ROUND);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $done = new Crawler($this->lastShellUpdate())->filter('turbo-stream[target="col-done"] template');
+        self::assertCount(1, $done->filter('button.col-fold[aria-controls="cards-done"]'));
+        self::assertCount(1, $done->filter('.col-head button.col-hide'));
+    }
+
     public function testThePushedColumnIsTheSameMarkupAsTheColumnOfAPageLoadedAfterIt(): void
     {
         $streams = new Crawler($this->pushedHeadlineAfterAReviewerStarted());

@@ -1,0 +1,25 @@
+<div id="round-{{ reviewed.round }}-judged">
+    {% if reviewed.state.name != 'Judged' %}
+    <p class="muted">The judge has not judged this round yet.</p>
+    {% elseif reviewed.findings is empty and reviewed.findingTextRecorded %}
+    <p class="muted">The reviewers reported no findings, so the judge had nothing to mark.</p>
+    {% elseif reviewed.findings is empty %}
+    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
+    {% else %}
+    {% if not reviewed.findingTextRecorded %}
+    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
+    {% endif %}
+    <ul class="finding-cards" aria-label="Findings of round {{ reviewed.round }}">
+        {% for finding in reviewed.findings %}
+        <li class="finding-card" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">
+            <span class="sev">{{ finding.severity ?? 'Severity not recorded' }}</span>
+            <div class="fc-body">
+                <p class="fc-title"><span class="mono fc-id">{{ finding.entryId }}</span> <span class="fc-text">{{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></p>
+                <p class="fc-place{% if finding.place is not null %} mono{% endif %}">{{ finding.place ?? 'File and line not recorded' }}</p>
+                <p class="fc-call">{{ finding.callInWords }}</p>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>

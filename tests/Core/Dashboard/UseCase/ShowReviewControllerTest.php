@@ -131,13 +131,96 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'changes', '2 counted', '', ''], ['security', 'standard', 'failed', '', '', 'The provider is down.', '']],
+            [['correctness', 'standard tier, model not recorded', 'changes', '2 counted'], ['security', 'standard tier, model not recorded', 'failed: The provider is down.', 'no answer']],
             $this->rowsOf($crawler->filter('#round-round-1 table.reviewers tbody tr')),
         );
         self::assertSame(
-            [['correctness', 'standard', 'verdict', 'approve', '0 counted', '', ''], ['security', 'standard', 'verdict', 'approve', '0 counted', 'answered by the substitute openai, a catch-up review is owed', '']],
+            [['correctness', 'standard tier, model not recorded', 'approve', '0 counted'], ['security', 'standard tier, model not recorded', 'approve; answered by the substitute openai, a catch-up review is owed', '0 counted']],
             $this->rowsOf($crawler->filter('#round-round-2 table.reviewers tbody tr')),
         );
+    }
+
+    public function testEachReviewerIsNamedByRoleAndModelWithItsOutcomeAndFindingCount(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+        $this->ledger->startReviewerOn('round-1', 'security', 'model-b');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeFindings('round-1', []);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([['correctness', 'kimi-k3', 'changes', '2 counted'], ['security', 'model-b', 'approve', '0 counted']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+    }
+
+    public function testAJudgedRoundsReviewersTableHasNoEmptyColumn(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('#round-round-1 table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertNotContains('', array_merge(...$this->rowsOf($crawler->filter('table.reviewers tbody tr'))));
+    }
+
+    public function testARoundWhoseReviewersAllFinishedBeforeTheJudgeHasNoStopColumn(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+        $this->ledger->startReviewerOn('round-1', 'security', 'model-b');
+        $this->ledger->answer('round-1', 'correctness', 1);
+        $this->ledger->failReviewer('round-1', 'security', 'The provider is down.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertSame([4, 4], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $row): int => $row->filter('td')->count()));
+    }
+
+    public function testAReviewerStartedBeforeTheModelWasRecordedShowsItsTierInsteadOfAnEmptyModel(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('standard tier, model not recorded', $crawler->filter('table.reviewers tbody td')->eq(1)->text());
+    }
+
+    public function testARunningReviewerShowsAStateDotAndAnAnsweredOneACheck(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+        $this->ledger->startReviewerOn('round-1', 'security', 'model-b');
+        $this->ledger->answer('round-1', 'security', 0);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(
+            [[1, 0, 'running'], [0, 1, 'approve']],
+            $crawler->filter('table.reviewers tbody td[id$="-state"]')->each(static fn (Crawler $cell): array => [$cell->filter('.dot')->count(), $cell->filter('svg.i')->count(), $cell->text()]),
+        );
+    }
+
+    public function testAFailedReviewerShowsItsCauseInRed(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['failed: The provider is down.'], $crawler->filter('#round-round-1 table.reviewers .failed')->each(static fn (Crawler $cause): string => $cause->text()));
+    }
+
+    public function testARunningReviewerHasNoFindingCountYetButSaysSo(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings', 'Stop'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertSame([['correctness', 'kimi-k3', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
     public function testTheReviewPageShowsAVerdictRecordedInTheRemovedShadowModeLikeAnOrdinaryOne(): void
@@ -151,7 +234,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
-        self::assertSame(['approve', 'approve'], [$rows[0][3], $rows[1][3]]);
+        self::assertSame(['approve', 'approve'], [$rows[0][2], $rows[1][2]]);
     }
 
     public function testAFailedReviewerAnsweredByASubstituteShowsBothNotesSeparated(): void
@@ -164,7 +247,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $rows = $this->rowsOf($crawler->filter('table.reviewers tbody tr'));
-        self::assertSame('The provider is down.; answered by the substitute openai, a catch-up review is owed', $rows[0][5]);
+        self::assertSame('failed: The provider is down.; answered by the substitute openai, a catch-up review is owed', $rows[0][2]);
     }
 
     public function testAReviewerStartedAgainAfterAFailureShowsAsRunning(): void
@@ -176,7 +259,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'standard', 'running', '', '', '', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'standard tier, model not recorded', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
         self::assertSelectorTextContains('section.round', '1 of 2 reviewers started.');
     }
 
@@ -187,8 +270,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['F1', 'P2', 'Text of F1.', JudgeCall::Act->inWords()], ['F2', 'P2', 'Text of F2.', JudgeCall::FollowUp->inWords()], ['F3', 'P2', 'Text of F3.', JudgeCall::NotActedOn->inWords()]],
-            $this->rowsOf($crawler->filter('#round-round-1 table.findings tbody tr')),
+            [['P2', 'F1 Text of F1.', 'File and line not recorded', JudgeCall::Act->inWords()], ['P2', 'F2 Text of F2.', 'File and line not recorded', JudgeCall::FollowUp->inWords()], ['P2', 'F3 Text of F3.', 'File and line not recorded', JudgeCall::NotActedOn->inWords()]],
+            $this->cardsOf($crawler->filter('#round-round-1 .finding-card')),
         );
     }
 
@@ -209,8 +292,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['F1', 'not recorded', 'not recorded', JudgeCall::Act->inWords()], ['F2', 'not recorded', 'not recorded', JudgeCall::FollowUp->inWords()]],
-            $this->rowsOf($crawler->filter('#round-round-1 table.findings tbody tr')),
+            [['Severity not recorded', 'F1 Text not recorded.', 'File and line not recorded', JudgeCall::Act->inWords()], ['Severity not recorded', 'F2 Text not recorded.', 'File and line not recorded', JudgeCall::FollowUp->inWords()]],
+            $this->cardsOf($crawler->filter('#round-round-1 .finding-card')),
         );
         self::assertStringNotContainsString('reported no findings', $crawler->filter('#round-round-1')->text());
     }
@@ -340,7 +423,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(2, $crawler->filter('#round-round-1 details.ev[open] table.findings tbody tr'));
+        self::assertCount(2, $crawler->filter('#round-round-1 details.ev[open] .finding-card'));
     }
 
     public function testAJudgedRoundStartsClosedWhileANewerRoundIsStillInReview(): void
@@ -621,7 +704,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $links = $crawler->filter('.state-block a.sb-finding');
         self::assertCount(1, $links);
         self::assertSame('#round-round-1-finding-F1', $links->attr('href'));
-        self::assertCount(1, $crawler->filter('td#round-round-1-finding-F1'));
+        self::assertCount(1, $crawler->filter('li.finding-card#round-round-1-finding-F1'));
     }
 
     public function testAnOpenActEntryThatMergesFindingsNamesTheMergedIdsAndLinksToItsRow(): void
@@ -635,7 +718,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $links = $crawler->filter('.state-block a.sb-finding');
         self::assertSame(['P1F1+F2 Text of F1.'], $links->each(static fn (Crawler $link): string => $link->text()));
         self::assertSame('#round-round-1-finding-F1', $links->attr('href'));
-        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 table.findings td.mono')->each(static fn (Crawler $cell): string => $cell->text()));
+        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 .finding-card .fc-id')->each(static fn (Crawler $id): string => $id->text()));
     }
 
     public function testAReviewWithEveryRoundJudgedShowsNoCurrentStateBlock(): void
@@ -766,6 +849,14 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     private function rowsOf(Crawler $rows): array
     {
         return $rows->each(static fn (Crawler $row): array => $row->filter('td')->each(static fn (Crawler $cell): string => self::wordsOf($cell)));
+    }
+
+    /**
+     * @return list<list<string>>
+     */
+    private function cardsOf(Crawler $cards): array
+    {
+        return $cards->each(static fn (Crawler $card): array => [$card->filter('.sev')->text(), $card->filter('.fc-title')->text(), $card->filter('.fc-place')->text(), $card->filter('.fc-call')->text()]);
     }
 
     // A kind label's tooltip words are inside the label, so they are left out to read the figures as a person sees them.
