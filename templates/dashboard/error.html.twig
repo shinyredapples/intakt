@@ -1,0 +1,16 @@
+{% extends 'dashboard/base.html.twig' %}
+
+{% block title %}{{ status == 404 ? 'Page not found' : 'Something went wrong' }} - Intakt{% endblock %}
+
+{% block body %}
+<div class="page-head">
+    <div>
+        <h1>{{ status == 404 ? 'Page not found' : 'Something went wrong' }}</h1>
+        <p class="lead">{{ message }}</p>
+    </div>
+</div>
+{% if reference %}
+<p class="muted">If you report this, give the reference <code>{{ reference }}</code>.</p>
+{% endif %}
+<p><a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">Back to the board</a></p>
+{% endblock %}

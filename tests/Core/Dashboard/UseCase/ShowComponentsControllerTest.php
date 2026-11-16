@@ -22,6 +22,7 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         yield 'button' => ['.btn.primary'];
         yield 'danger button' => ['.btn.danger[data-arm-confirm]'];
         yield 'chip' => ['.chip'];
+        yield 'approved outcome chip' => ['.chip.approved svg.i'];
         yield 'count' => ['.count.needs'];
         yield 'card' => ['.card'];
         yield 'needs-you card' => ['.card.needs'];
@@ -72,6 +73,20 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         foreach (['light', 'dark'] as $theme) {
             self::assertGreaterThan(0, $page->filter('.spec[data-theme="'.$theme.'"] '.$selector)->count(), $theme.' '.$selector);
+        }
+    }
+
+    public function testTheComponentsPageShowsTheFourOutcomeChipsInBothThemes(): void
+    {
+        $page = $this->browser->request('GET', '/components');
+
+        self::assertResponseIsSuccessful();
+        foreach (['light', 'dark'] as $theme) {
+            self::assertSame(
+                ['Approved', 'Changes requested', 'Blocked', 'Failed'],
+                $page->filter('.spec[data-theme="'.$theme.'"] .outcomes .chip')->each(static fn (Crawler $chip): string => $chip->text()),
+                $theme,
+            );
         }
     }
 
