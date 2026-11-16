@@ -27,7 +27,7 @@ final readonly class ProviderKey
         $key = trim($key);
         $kind = KeyKind::fromForm($key);
 
-        if (null === $kind) {
+        if (!$kind instanceof KeyKind) {
             throw new KeyNotRecognised();
         }
 

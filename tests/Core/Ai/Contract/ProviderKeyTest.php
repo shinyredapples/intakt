@@ -19,41 +19,41 @@ use Throwable;
 #[UsesClass(ConfiguredKey::class)]
 final class ProviderKeyTest extends TestCase
 {
-    private static function body(string $tail = '1234'): string
+    private function body(string $tail = '1234'): string
     {
         return str_repeat('0', 24).$tail;
     }
 
     public function testAnAnthropicKeyIsRecognisedAsAnthropic(): void
     {
-        self::assertSame(KeyKind::Anthropic, ProviderKey::recognise('sk-ant-'.self::body())->kind());
+        self::assertSame(KeyKind::Anthropic, ProviderKey::recognise('sk-ant-'.$this->body())->kind());
     }
 
     public function testAnOpenAiKeyIsRecognisedAsOpenAi(): void
     {
-        self::assertSame(KeyKind::OpenAi, ProviderKey::recognise('sk-'.self::body())->kind());
+        self::assertSame(KeyKind::OpenAi, ProviderKey::recognise('sk-'.$this->body())->kind());
     }
 
     public function testAnOpenAiProjectKeyIsRecognisedAsOpenAi(): void
     {
-        self::assertSame(KeyKind::OpenAi, ProviderKey::recognise('sk-proj-'.self::body())->kind());
+        self::assertSame(KeyKind::OpenAi, ProviderKey::recognise('sk-proj-'.$this->body())->kind());
     }
 
     public function testAHuggingFaceTokenIsRecognisedAsHuggingFace(): void
     {
-        self::assertSame(KeyKind::HuggingFace, ProviderKey::recognise('hf_'.self::body())->kind());
+        self::assertSame(KeyKind::HuggingFace, ProviderKey::recognise('hf_'.$this->body())->kind());
     }
 
     public function testSurroundingWhitespaceIsIgnored(): void
     {
-        self::assertSame(KeyKind::HuggingFace, ProviderKey::recognise("  hf_".self::body()."\n")->kind());
+        self::assertSame(KeyKind::HuggingFace, ProviderKey::recognise('  hf_'.$this->body()."\n")->kind());
     }
 
     public function testAKeyOfAnUnknownFormIsRefused(): void
     {
         $this->expectException(KeyNotRecognised::class);
 
-        ProviderKey::recognise('xx-'.self::body());
+        ProviderKey::recognise('xx-'.$this->body());
     }
 
     public function testAnEmptyKeyIsRefused(): void
@@ -65,7 +65,7 @@ final class ProviderKeyTest extends TestCase
 
     public function testTheRefusalMessageDoesNotContainTheKey(): void
     {
-        $key = 'xx-secretvalue'.self::body();
+        $key = 'xx-secretvalue'.$this->body();
 
         try {
             ProviderKey::recognise($key);
@@ -77,7 +77,7 @@ final class ProviderKeyTest extends TestCase
 
     public function testTheConfiguredStateShowsOnlyTheLastFourCharacters(): void
     {
-        $configured = ProviderKey::recognise('sk-ant-'.self::body())->configured();
+        $configured = ProviderKey::recognise('sk-ant-'.$this->body())->configured();
 
         self::assertEquals(new ConfiguredKey(KeyKind::Anthropic, '1234'), $configured);
     }
@@ -91,12 +91,12 @@ final class ProviderKeyTest extends TestCase
 
     public function testTheKeyDoesNotAppearInVarExportPrintROrVarDumpOutput(): void
     {
-        $key = ProviderKey::recognise('sk-ant-'.self::body('visiblepart'));
+        $key = ProviderKey::recognise('sk-ant-'.$this->body('visiblepart'));
 
         ob_start();
         var_dump($key);
         print_r($key);
-        $output = (string) ob_get_clean().var_export($key, true);
+        $output = ob_get_clean().var_export($key, true);
 
         self::assertStringNotContainsString('visiblepart', $output);
     }
@@ -106,7 +106,7 @@ final class ProviderKeyTest extends TestCase
         $caught = null;
 
         try {
-            ProviderKey::recognise('xx-tracedvalue'.self::body());
+            ProviderKey::recognise('xx-tracedvalue'.$this->body());
         } catch (Throwable $caught) {
         }
 

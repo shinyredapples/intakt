@@ -8,8 +8,8 @@ use SensitiveParameter;
 
 enum KeyKind: string
 {
-    case Anthropic = 'anthropic';
-    case OpenAi = 'openai';
+    case Anthropic = Provider::Anthropic->value;
+    case OpenAi = Provider::OpenAi->value;
     case HuggingFace = 'huggingface';
 
     public static function fromForm(#[SensitiveParameter] string $key): ?self
