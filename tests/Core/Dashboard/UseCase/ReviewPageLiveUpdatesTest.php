@@ -296,6 +296,53 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
     }
 
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheActListTheVerdictAndTheRoundStateOnceTheRoundIsJudged(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->startReviewer($id, 'correctness');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertSame(['No finding is open.', '', '0 of 2 reviewers finished.'], [$page->filter('#round-'.$id.'-now-findings')->text(), $page->filter('#round-'.$id.'-verdict')->text(), $page->filter('#round-'.$id.'-state')->text()]);
+
+        $this->ledger->answer($id, 'security', 2);
+        $this->ledger->answer($id, 'correctness', 0);
+        $this->ledger->judgeFindings($id, ['F1' => 'act', 'F2' => 'defer']);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertSame(
+            [['F1', 'Fix now'], ['F2', 'Dropped: deferred to a follow-up issue']],
+            $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.fc-call')->text()]),
+        );
+        self::assertSame(['#round-'.$id.'-finding-F1'], $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame('P2F1 Text of F1.', $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->text());
+        self::assertSame('Outcome: changes, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
+        self::assertSame('Judged.', $updated->filter('#round-'.$id.'-state')->text());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
+    }
+
+    public function testAJudgedRoundWithoutAFindingToFixEmptiesTheOpenFindingsOfTheCurrentStateBlock(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->judgeFindings($id, ['F1' => 'act']);
+        $next = Uuid::v7();
+        $nextId = $next->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $nextId, 2);
+        $page = $this->browser->request('GET', '/reviews/'.$nextId);
+        self::assertSame(['#round-'.$id.'-finding-F1'], $page->filter('#round-'.$nextId.'-now-findings a.sb-finding')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+
+        $this->ledger->judgeFindings($nextId, ['F9' => 'reject']);
+        $this->publishedUpdates()->roundChanged($next, new RoundProgress(0, 2, true));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertSame('No finding is open.', $updated->filter('#round-'.$nextId.'-now-findings')->text());
+    }
+
     public function testAJudgedRoundWhoseFindingsWereNotRecordedSaysSoInTheLiveUpdateAsOnLoad(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
@@ -320,6 +367,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame('The judge has not judged this round yet.', $updated->filter('#round-round-1-judged')->text());
         self::assertSame('The judge has judged this round. Reload the page to see its call and the findings to fix.', $updated->filter('#round-round-1-now-judge')->text());
+        self::assertCount(0, $updated->filter('#round-round-1-outcome'));
     }
 
     public function testAToolCallPublishedForAReviewerThatStartedAfterThePageLoadedMakesTheStopOfTheRoundAvailable(): void
