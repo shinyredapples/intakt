@@ -22,12 +22,19 @@
         {% if review.everyRoundIsAReplay %}
         <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
         {% endif %}
+        {% if review.source is not null %}
+        <p class="task-sentence">{{ review.source.task }}</p>
+        {% else %}
+        <p class="task-sentence muted">Task not recorded.</p>
+        {% endif %}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
+            {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round ' : ' rounds '), include: {template: kind_label, with: {kind: kinds.Counted, at: 'summary-rounds'}}},
+            {icon: 'tokens', text: total.total|number_format(0, '.', ',') ~ ' tokens ', include: {template: kind_label, with: {kind: kinds.Measured, at: 'summary-tokens'}}},
+            {icon: 'wallet', text: 'Cost: ', include: {template: 'dashboard/components/cost.html.twig', with: {cost: review.cost, at: 'summary-cost'}}},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
-        <p class="lead summary">{{ review.rounds|length }} {{ review.rounds|length == 1 ? 'round' : 'rounds' }} {{ include(kind_label, {kind: kinds.Counted, at: 'summary-rounds'}, with_context = false) }}, {{ total.total }} tokens {{ include(kind_label, {kind: kinds.Measured, at: 'summary-tokens'}, with_context = false) }} in all. Cost: {{ include('dashboard/components/cost.html.twig', {cost: review.cost, at: 'summary-cost'}, with_context = false) }}.</p>
         {% if not can_start %}
         <p class="no-start muted">No button here: the latest round was started before Intakt recorded the repository, base and task it needs to start the next one.</p>
         {% endif %}
@@ -98,7 +105,8 @@
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
 <section class="section round" id="round-{{ reviewed.round }}">
-    <details class="ev">
+    {# Only the newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down. A judged round followed by a round still in review stays closed, because only the newest round opens. #}
+    <details class="ev"{% if loop.last %} open{% endif %}>
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
@@ -107,6 +115,7 @@
             <span class="muted small">{{ reviewed.outcome is not null ? reviewed.outcome.value : 'outcome not recorded' }}, {% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
             {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
             <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
+            {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}
         </summary>
         {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
     </details>

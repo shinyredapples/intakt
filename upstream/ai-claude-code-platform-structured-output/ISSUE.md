@@ -12,7 +12,7 @@ The Claude Code CLI has a structured-output option: `--json-schema <schema>` hol
 
 ### Versions
 
-`symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12, Claude Code CLI 2.1.302. Still the same on `main` (1220483).
+`symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, PHP 8.5.12, Claude Code CLI 2.1.302. Still the same on `main` (999d5fb).
 
 ### How to reproduce
 
@@ -46,8 +46,8 @@ I returned the verdict.
 
 ### Possible solution
 
-`ModelClient` maps `response_format` to `--json-schema` with `json_encode($format['json_schema']['schema'])`; `RawProcessResult::getData()` keeps `structured_output` of the result event, and `ResultConverter` returns it JSON-encoded when present (the streamed path can yield it once the `result` event arrives); `ModelCatalog` adds `Capability::OUTPUT_STRUCTURED`.
+`ModelClient` maps `response_format` to `--json-schema` with `json_encode($format['json_schema']['schema'])`; `ResultConverter` returns the result event's `structured_output` JSON-encoded when present (the streamed path can yield it once the `result` event arrives); `ModelCatalog` adds `Capability::OUTPUT_STRUCTURED`.
 
 ### Additional context
 
-Related, not the same: #2714 (common invocation options through `PlatformOptions`), #2465 (plain JSON-schema results in `asObject()`).
+Related, not the same: #2714 (common invocation options through `PlatformOptions`), #2465 (merged, plain JSON-schema results in `asObject()`). The open #2957 rewrites `ClaudeCode\ModelClient::request()` and, as written, would drop `response_format` instead of passing it on. The CLI takes the `--json-schema` value as a JSON string.

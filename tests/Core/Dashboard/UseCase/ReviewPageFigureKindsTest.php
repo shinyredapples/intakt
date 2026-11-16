@@ -29,7 +29,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('1 round counted, 1300 tokens measured in all.', $this->wordsOf($crawler->filter('p.summary'), before: ' Cost:'));
+        self::assertSame('alphafeat/thing 1 round counted 1,300 tokens measured', $this->wordsOf($crawler->filter('.page-head p.meta'), before: ' Cost:'));
     }
 
     public function testEachTokenCountOfARoundIsMarkedMeasured(): void
@@ -52,7 +52,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0.0050 USD estimated, prices of 2026-11-13.', explode('Cost: ', $this->wordsOf($crawler->filter('p.summary')))[1]);
+        self::assertSame('Cost: 0.0050 USD estimated, prices of 2026-11-13', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
     }
 
     public function testEachRoundsCostIsMarkedEstimatedWithTheDayOfItsPrices(): void
@@ -82,7 +82,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('unknown, no price for model-a', $crawler->filter('#round-round-1 table.tokens tbody td:last-child')->text());
-        self::assertStringEndsWith('Cost: unknown, no price for model-a.', $this->wordsOf($crawler->filter('p.summary')));
+        self::assertSame('Cost: unknown, no price for model-a', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
     }
 
     public function testTheSessionSummaryMarksThisRoundsAndTheReviewsCostEstimated(): void
@@ -167,7 +167,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        $labels = $crawler->filter('p.summary .figure-kind');
+        $labels = $crawler->filter('.page-head p.meta .figure-kind');
         self::assertSame([FigureKind::Counted->source(), FigureKind::Measured->source()], $labels->each(static fn (Crawler $label): string => $label->filter('.figure-kind-tip[role="tooltip"]')->text()));
         self::assertSame(['counted', 'measured'], $labels->each(static fn (Crawler $label): ?string => $label->attr('data-kind')));
         self::assertSame($labels->each(static fn (Crawler $label): ?string => $label->filter('.figure-kind-tip')->attr('id')), $labels->each(static fn (Crawler $label): ?string => $label->attr('aria-describedby')));

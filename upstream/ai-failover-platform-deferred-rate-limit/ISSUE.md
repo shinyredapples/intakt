@@ -1,4 +1,6 @@
-Repository: symfony/ai. Template: Bug Report (label `Bug`). Not posted: the owner approves this text first.
+Posted as symfony/ai#2944 on 2026-11-14.
+
+Repository: symfony/ai. Template: Bug Report (label `Bug`).
 
 Title: [Platform][Failover] A rate limit that surfaces when the result is read never reaches the next platform
 
