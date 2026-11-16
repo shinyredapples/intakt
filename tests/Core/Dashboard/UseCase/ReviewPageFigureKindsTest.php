@@ -139,7 +139,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('outcome not recorded, 2 findings counted', $this->wordsOf($crawler->filter('#round-round-1 details.ev > summary .small')));
+        self::assertSame('outcome not recorded, 2 findings counted', $this->wordsOf($crawler->filter('#round-round-1 details.ev > summary .small')->last()));
     }
 
     public function testEachReviewersFindingCountIsMarkedCounted(): void
