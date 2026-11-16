@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\GlossaryTerm;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -134,6 +135,41 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertSame($class, $badge->attr('class'));
         self::assertSame($word, $badge->text());
         self::assertCount(1, $badge->filter('svg.i'));
+    }
+
+    /**
+     * @return iterable<string, array{ReviewOutcome, string, string}>
+     */
+    public static function outcomes(): iterable
+    {
+        yield 'approved' => [ReviewOutcome::Approved, 'chip strong approved', 'm5 12.5'];
+        yield 'changes requested' => [ReviewOutcome::ChangesRequested, 'chip strong', 'M4 12a8'];
+        yield 'blocked' => [ReviewOutcome::Blocked, 'chip strong', 'rect x="6" y="6"'];
+        yield 'failed' => [ReviewOutcome::Failed, 'chip broken', 'M12 7.5v5.5'];
+    }
+
+    #[DataProvider('outcomes')]
+    public function testEachOutcomeChipShowsItsIconAndWordsGreenOnlyWhenApprovedAndRedOnlyWhenFailed(ReviewOutcome $outcome, string $class, string $drawing): void
+    {
+        $chip = $this->render('outcome_chip', ['outcome' => $outcome])->filter('.chip');
+
+        self::assertSame($class, $chip->attr('class'));
+        self::assertSame($outcome->value, $chip->text());
+        self::assertStringContainsString($drawing, $chip->filter('svg.i.s')->html());
+    }
+
+    public function testAnOutcomeChipOnThePageCarriesTheOnPageClass(): void
+    {
+        $chip = $this->render('outcome_chip', ['outcome' => ReviewOutcome::Blocked, 'on_page' => true])->filter('.chip');
+
+        self::assertSame('chip on-page strong', $chip->attr('class'));
+    }
+
+    public function testAnOutcomeChipRefusesAWordInsteadOfAnOutcome(): void
+    {
+        $this->expectException(RuntimeError::class);
+
+        $this->render('outcome_chip', ['outcome' => 'Judged']);
     }
 
     public function testAReasonBadgeMayNameWhatItWaitsFor(): void
