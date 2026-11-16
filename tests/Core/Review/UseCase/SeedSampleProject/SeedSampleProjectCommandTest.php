@@ -155,9 +155,8 @@ final class SeedSampleProjectCommandTest extends TestCase
     {
         $this->compatibleBaseUrl = 'https://llm.example.test';
 
-        $tester = $this->seed(Provider::OpenAiCompatible);
+        $this->seed(Provider::OpenAiCompatible);
 
-        self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertFileDoesNotExist($this->configuration());
     }
 
@@ -181,14 +180,29 @@ final class SeedSampleProjectCommandTest extends TestCase
         }
     }
 
-    public function testWithoutAKeyNothingIsSeededAndTheKeysAreNamed(): void
+    public function testWithoutAKeyTheProjectIsLeftUnwrittenAndTheKeysAreNamed(): void
     {
         $tester = $this->seed();
 
-        self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('Set ANTHROPIC_API_KEY or OPENAI_API_KEY or HF_TOKEN', $tester->getDisplay());
         self::assertFileDoesNotExist($this->configuration());
-        self::assertDirectoryDoesNotExist($this->repository());
+    }
+
+    public function testWithoutAKeyTheRepositoryIsStillBuiltAndTheSeedSucceeds(): void
+    {
+        $tester = $this->seed();
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode());
+        self::assertDirectoryExists($this->repository().'/.git');
+    }
+
+    public function testAProjectLeftUnwrittenForWantOfAKeyIsWrittenOnceAKeyIsSet(): void
+    {
+        $this->seed();
+
+        $this->seed(Provider::Anthropic);
+
+        self::assertSame(['anthropic'], $this->panelProviders());
     }
 
     public function testTheRepositoryHoldsTheSampleChangeAgainstMain(): void
