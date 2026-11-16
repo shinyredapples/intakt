@@ -334,7 +334,7 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertInstanceOf(JudgeRequest::class, $asked);
         self::assertSame([['F2', 'Text of B.']], $this->idsAndTexts($asked));
         self::assertSame(['F2'], $this->judgeDonePayloads()[0]['act']);
-        self::assertSame([['id' => 'F1', 'reason' => 'It quotes `grepName`, which is in neither the change nor the files it touches.']], $this->judgeDonePayloads()[0]['dropped']);
+        self::assertSame([['id' => 'F1', 'reason' => 'None of its quotes is in the change or the files it touches: `grepName`.']], $this->judgeDonePayloads()[0]['dropped']);
     }
 
     public function testAFindingWhoseQuoteIsInTheChangeReachesTheJudgeUnchanged(): void

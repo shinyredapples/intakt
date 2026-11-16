@@ -32,7 +32,7 @@ final readonly class JudgedRounds
         return RoundState::Judged === $round->state() ? null : $round;
     }
 
-    // Checked before the judge, so a finding that quotes a name the change does not hold is never judged, never on the act list and never merged with a real one.
+    // Checked before the judge, so a finding whose every quote is code the change does not hold is never judged, never on the act list and never merged with a real one.
     public function checkedFindingsOf(ReviewRound $round): QuoteCheck
     {
         return new QuotesInChange()->check($this->findings->reportedIn($round), $this->changeText->of($round->checkoutRoot(), $round->diff()));
