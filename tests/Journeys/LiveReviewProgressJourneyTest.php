@@ -47,6 +47,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $running = $this->step('open the running round', fn (): Crawler => $this->openTheRunningRound($round));
         $updates = $this->step('step the round until the judge has ruled', fn (): array => $this->stepTheRound($round));
         $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
+        $this->step('read the reviewers the updates placed by role and model', fn () => $this->readTheReviewersPlacedLive($round, $updates));
         $this->step('read the board headline pushed once a reviewer started', fn () => $this->readThePushedHeadline($round));
         $this->step('open the judged round', fn () => $this->openTheJudgedRound($round));
         $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
@@ -122,6 +123,30 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function stepTheRound(string $round): array
     {
         return $this->liveRoundDriver()->stepUntilEnded($round);
+    }
+
+    // Read from the placing streams' markup, because the page opened before any reviewer started, so each reviewer it lists live was placed by them.
+    /**
+     * @param list<Update> $updates
+     */
+    private function readTheReviewersPlacedLive(string $round, array $updates): void
+    {
+        $now = [];
+        $table = [];
+
+        foreach ($updates as $update) {
+            preg_match_all('#<li><span><strong>([^<]+)</strong> \(([^)]+)\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">([^<]+)</span>#', $update->getData(), $rows, PREG_SET_ORDER);
+            $now = [...$now, ...array_map(static fn (array $row): array => [$row[1], $row[2], $row[3]], $rows)];
+            preg_match_all('#<template><tr><td>([^<]+)</td>\s*<td>([^<]+)</td>#', $update->getData(), $rows, PREG_SET_ORDER);
+            $table = [...$table, ...array_map(static fn (array $row): array => [$row[1], $row[2]], $rows)];
+        }
+
+        self::assertSame(['correctness', 'security'], array_values(array_unique(array_column($now, 0))));
+        self::assertSame(['verdict'], array_values(array_unique(array_column($now, 2))));
+        self::assertSame(['correctness', 'security'], array_values(array_unique(array_column($table, 0))));
+        // Named by a model, because the sample maps a model to every tier, so neither the fallback for an unread start nor the one for an unrecorded model may show.
+        self::assertSame([], array_filter([...array_column($now, 1), ...array_column($table, 1)], static fn (string $model): bool => str_contains($model, 'not read') || str_contains($model, 'not recorded')));
+        self::assertSame(array_values(array_unique(array_column($now, 1))), array_values(array_unique(array_column($table, 1))));
     }
 
     private function openTheJudgedRound(string $round): void
