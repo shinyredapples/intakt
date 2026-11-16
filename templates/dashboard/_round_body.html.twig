@@ -41,32 +41,8 @@
     {% endif %}
 
     <h3>Findings and the judge's call</h3>
-    {% if reviewed.state.name != 'Judged' %}
-    <p class="muted">The judge has not judged this round yet.</p>
-    {% elseif reviewed.findings is empty and reviewed.findingTextRecorded %}
-    <p class="muted">The reviewers reported no findings, so the judge had nothing to mark.</p>
-    {% elseif reviewed.findings is empty %}
-    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them, and the judge marked none to act on or follow up.</p>
-    {% else %}
-    {% if not reviewed.findingTextRecorded %}
-    <p class="muted">This round's findings were not recorded, because it was judged before Intakt kept them; only the ids the judge marked are shown.</p>
-    {% endif %}
-    <div class="table-scroll" tabindex="0" role="region" aria-label="Findings of round {{ reviewed.round }}">
-    <table class="ledger findings">
-        <thead><tr><th>Id</th><th>Severity</th><th>Finding</th><th>Judge's call</th></tr></thead>
-        <tbody>
-        {% for finding in reviewed.findings %}
-            <tr>
-                <td class="mono" id="round-{{ reviewed.round }}-finding-{{ finding.id }}" data-finding="{{ finding.ids|join(' ') }}">{{ finding.entryId }}</td>
-                <td>{{ finding.severity ?? 'not recorded' }}</td>
-                <td>{{ finding.text ?? 'not recorded' }}</td>
-                <td>{{ finding.callInWords }}</td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-    </div>
-    {% endif %}
+    {# Its own partial, because the judged round's live update replaces it with the same markup a reload renders. #}
+    {{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}
 
     <h3>Tokens and cost</h3>
     <div class="table-scroll" tabindex="0" role="region" aria-label="Tokens and cost of round {{ reviewed.round }}">
