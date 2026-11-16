@@ -109,7 +109,7 @@ class FakeKey {
 }
 
 const group = (...options) => options.map(([label, attributes]) => `<${attributes.includes('href') ? 'a' : 'div'} class="res" role="option" tabindex="-1" aria-selected="false" ${attributes}><span class="lbl">${label}</span></${attributes.includes('href') ? 'a' : 'div'}>`).join('');
-const RECENT = group(['Round round-2', 'href="/reviews/round-2"'], ['Round round-1', 'href="/reviews/round-1"'], ['Switch light or dark theme', 'data-search-action="switch-theme"']);
+const RECENT = group(['sample-change, round 2', 'href="/reviews/round-2"'], ['sample-change, round 1','href="/reviews/round-1"'], ['Switch light or dark theme', 'data-search-action="switch-theme"']);
 const ALPHA = group(['alpha', 'href="/reviews?project=alpha"']);
 const NONE = '<div class="none"><p><strong>No results for “zebra”</strong></p><form method="get" action="/search"><button class="btn secondary sm" type="submit" data-search-action="clear-search">Clear the search</button></form></div>';
 
