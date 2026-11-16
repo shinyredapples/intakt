@@ -35,10 +35,10 @@ final readonly class RoundStatusTool
         return RoundStatus::of($round, $this->droppedOf($round));
     }
 
+    // Only a judged round, because the drops are recorded with the judge's answer.
     /**
      * @return list<DroppedFinding>
      */
-    // Only a judged round, because the drops are recorded with the judge's answer.
     private function droppedOf(ReviewRound $round): array
     {
         if (RoundState::Judged !== $round->state()) {
