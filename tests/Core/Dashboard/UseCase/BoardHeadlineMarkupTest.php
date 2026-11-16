@@ -53,6 +53,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change. Nothing needs you.', $line->text());
         self::assertCount(0, $line->filter('.count'));
+        self::assertSame(['/reviews/round-3'], $line->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
     }
 
     public function testTheLeadLinksToTheReviewOfTheRunningRound(): void
