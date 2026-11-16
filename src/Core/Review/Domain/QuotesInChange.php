@@ -14,7 +14,8 @@ final readonly class QuotesInChange
     // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet; fences count only at a line start, as in Markdown, so backticks inside a fenced line never close the block, and at any indentation and after any number of blockquote markers, because a fix under a list item or in a quote is indented or marked with it.
     private const string FENCED_BLOCK = '/^[ \t]*(?:>[ \t]*)*((`|~)\2{2,})[^\n]*(?:\n.*?)??(?:\n[ \t]*(?:>[ \t]*)*\1\2*[ \t]*$|\z)/ms';
     private const array LINE_ENDS = ["\r\n", "\r"];
-    private const string INLINE_QUOTE = '/(?<!`)(`{1,2})(?!`)([^`\n]+?)(?<!`)\1(?!`)/';
+    // A quote may wrap onto the next line, as in Markdown, but never across a blank line; it neither starts nor ends with white space, so a lone backtick in prose is not paired with a quote's backtick and the prose between them is never read as code.
+    private const string INLINE_QUOTE = '/(?<!`)(`{1,2})(?![`\s])((?:[^`\n]|\n(?![ \t]*\n))+?)(?<!\s)(?<!`)\1(?!`)/';
     private const string NAME = '/[A-Za-z_][A-Za-z0-9_]*/';
     // Left out, because a path or a file name may rightly name a file the change should add.
     private const string PATH = '~^(?:\S*[/\\\\]\S*|[\w.-]+\.[A-Za-z][A-Za-z0-9]{0,4})$~';

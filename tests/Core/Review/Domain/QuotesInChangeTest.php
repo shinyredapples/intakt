@@ -250,6 +250,45 @@ final class QuotesInChangeTest extends TestCase
         self::assertNotNull($reason);
     }
 
+    public function testAFindingWhoseQuotesAreInTheChangeIsKeptWhenOneInlineQuoteWrapsALine(): void
+    {
+        $text = "`orderLog(\ncustomerName)` builds the command; wrap `customerName` in `execSync` escaping.";
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAnAbsentQuoteThatWrapsALineIsDropped(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding("`grepName(\ncustomer)` is not defined."), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
+    public function testAQuoteNeverRunsAcrossABlankLine(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding("Use `customerName\n \nhere` and `grepName` is not defined."), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
+    public function testAFindingWithAPresentQuoteIsKeptAfterALoneBacktick(): void
+    {
+        $text = 'The ` character breaks it: `customerName` reaches `execSync`.';
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testAnAbsentQuoteAfterALoneBacktickIsDropped(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding('The ` character: `grepName` is not defined.'), self::CHANGE);
+
+        self::assertNotNull($reason);
+    }
+
     private function finding(string $text, ?string $symbol = null): Finding
     {
         return new Finding('F1', Severity::P1, 'src/orders.js', 2, $symbol, $text, FixableBy::Builder, false, null, null);
