@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
+namespace Intakt\Core\HandBack\Contract;
 
 // Each reason is fixed text, because the job ran model-written code and only its output directory says what happened.
 enum CheckVerdict: string

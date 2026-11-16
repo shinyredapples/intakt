@@ -12,9 +12,11 @@ use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -36,6 +38,27 @@ final class ReviewTest extends TestCase
         $review = new Review([$this->judged('round-1', 1), $running]);
 
         self::assertSame($running, $review->activeRound());
+    }
+
+    public function testAReviewWhoseRoundsAreAllReplaysIsAReplayThroughout(): void
+    {
+        $review = new Review([$this->round('round-1', 1)->markedAs(ReplayMark::Replay), $this->round('round-2', 2)->markedAs(ReplayMark::Replay)]);
+
+        self::assertTrue($review->everyRoundIsAReplay());
+    }
+
+    public function testAReviewWithOneLiveRoundIsNotAReplayThroughout(): void
+    {
+        $review = new Review([$this->round('round-1', 1)->markedAs(ReplayMark::Live), $this->round('round-2', 2)->markedAs(ReplayMark::Replay)]);
+
+        self::assertSame([false, true], [$review->everyRoundIsAReplay(), $review->latest()->isReplay()]);
+    }
+
+    public function testARoundReadWithoutItsReplayMarkIsRefusedAMark(): void
+    {
+        $this->expectExceptionObject(new LogicException('Round round-1 was read without its replay mark.'));
+
+        $this->round('round-1', 1)->replayMark();
     }
 
     public function testAReviewWhoseLatestRoundIsJudgedHasNoActiveRound(): void

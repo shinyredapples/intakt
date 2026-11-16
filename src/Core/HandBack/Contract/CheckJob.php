@@ -2,9 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
-
-use Intakt\Core\HandBack\Contract\HandBack;
+namespace Intakt\Core\HandBack\Contract;
 
 final readonly class CheckJob
 {
