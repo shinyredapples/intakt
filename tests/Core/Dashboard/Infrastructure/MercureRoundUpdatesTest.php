@@ -506,6 +506,71 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
+    public function testAToolCallWhoseReviewerCannotBeReadStillGoesOutUnnamedAndLogsWhy(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willThrowException($failure);
+        $this->ledger = $ledger;
+
+        $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('A reviewer (role not read)', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'The reviewer was not read for its live update.', ['round' => self::ROUND, 'reviewer' => self::REVIEWER, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
+    public function testAProgressWhoseRoundCannotBeReadStillGoesOutWithTheFinishedReviewerUnnamedAndLogsWhy(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException($failure);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false, [self::REVIEWER => FinishedState::Failed]));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('<td>role not read</td>', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'The round was not read for its live reviewer rows.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
+    public function testAToolCallNamesItsReviewerByTheRoleAndModelOfItsLatestStart(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->startReviewerOn(self::ROUND, 'security', 'GLM 5');
+        $ledger->startReviewerOn(self::ROUND, 'security', 'Kimi K3');
+        $this->ledger = $ledger;
+
+        $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'read_file');
+
+        self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $this->published[0]->getData());
+        self::assertSame([], $this->log->cleanLogs());
+    }
+
+    public function testAReadAnswerAndARetryNameTheirReviewerByTheRoleAndModelOfItsLatestStart(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->startReviewerOn(self::ROUND, 'security', 'Kimi K3');
+        $this->ledger = $ledger;
+        $updates = $this->updates();
+
+        $updates->answerRead(Uuid::fromString(self::ROUND), self::ROUND.'-security', $this->readAnswer('Discount boundary regression'));
+        $updates->reviewerAskedAgain(Uuid::fromString(self::ROUND), self::ROUND.'-security', 'try-2');
+
+        self::assertCount(2, $this->published);
+        foreach ($this->published as $update) {
+            self::assertStringContainsString('<h3>security (Kimi K3) live</h3>', $update->getData());
+        }
+    }
+
     public function testAJudgedRoundTheLedgerDoesNotHoldPublishesItsJudgedStateWithoutFindings(): void
     {
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));

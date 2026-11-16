@@ -1,7 +1,7 @@
-{#- A reviewer's cell content, finished or still running: its outcome chip when the outcome is known, otherwise its process state as muted text, never the bare word "verdict". -#}
-{%- set outcome = (outcomes ?? {})[reviewer] ?? null -%}
-{%- if outcome is not null -%}
-{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}
+{#- A reviewer's state in the "now" block, finished or still running: its outcome chip when its ReviewerOutcome has one, otherwise its process state as muted text, never the bare word "verdict". -#}
+{%- set chip_outcome = (outcome ?? null)?.outcome -%}
+{%- if chip_outcome is not null -%}
+{{ include('dashboard/components/outcome_chip.html.twig', {outcome: chip_outcome, on_page: true}, with_context = false) }}
 {%- else -%}
 <span class="muted">{{ state == 'verdict' ? 'answered' : state }}</span>
 {%- endif -%}
