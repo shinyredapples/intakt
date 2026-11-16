@@ -8,6 +8,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -18,6 +19,7 @@ final readonly class JudgedRounds
         private ReviewRounds $rounds,
         private StoredFindings $findings,
         private RoundLedger $ledger,
+        private ChangeText $change,
     ) {
     }
 
@@ -35,6 +37,11 @@ final readonly class JudgedRounds
     public function findingsOf(ReviewRound $round): array
     {
         return $this->findings->reportedIn($round);
+    }
+
+    public function changeOf(ReviewRound $round): string
+    {
+        return $this->change->of($round->diff(), $round->checkoutRoot());
     }
 
     // Checked again under the round's lock, because another worker may have judged the round while this one waited for the model.

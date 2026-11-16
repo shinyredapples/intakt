@@ -26,6 +26,7 @@
     {{ include(c ~ 'reason_badge.html.twig', {reason: 'overlap'}) }}
     {{ include(c ~ 'reason_badge.html.twig', {reason: 'dependency', label: 'Needs #612'}) }}
     {{ include(c ~ 'reason_badge.html.twig', {reason: 'ci', on_page: true}) }}
+    {% for outcome in enum_cases('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome') %}{{ include(c ~ 'outcome_chip.html.twig', {outcome: outcome}) }}{% endfor %}
     {{ include(c ~ 'count.html.twig', {n: 3}) }}
     {{ include(c ~ 'count.html.twig', {n: 4, needs: true}) }}
     <p>Approve this {{ include(c ~ 'term.html.twig', {term: 'version', words: 'version'}) }}.</p>
