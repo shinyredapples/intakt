@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 use Fiber;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
@@ -30,6 +31,7 @@ use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
 use Twig\Error\LoaderError;
 use Twig\Loader\FilesystemLoader;
+use Twig\TwigFunction;
 
 // Through the real MercureLiveUpdates over a MockHub, because what callers see is the update that reaches the hub.
 #[CoversClass(MercureRoundUpdates::class)]
@@ -39,6 +41,7 @@ use Twig\Loader\FilesystemLoader;
 #[UsesClass(SessionSummary::class)]
 #[UsesClass(ToolCallCount::class)]
 #[UsesClass(Cost::class)]
+#[UsesClass(ComponentOptions::class)]
 final class MercureRoundUpdatesTest extends TestCase
 {
     private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';
@@ -115,6 +118,22 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
 
         self::assertStringContainsString('Judged.', $this->published[0]->getData());
+    }
+
+    public function testAJudgedRoundShowsItsRoundHeadAndNowBoxAsJudged(): void
+    {
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertStringContainsString('target="round-'.self::ROUND.'-head-state"', $this->published[0]->getData());
+        self::assertStringContainsString('<span id="round-'.self::ROUND.'-now-phase">judged</span>', $this->published[0]->getData());
+    }
+
+    public function testARoundInProgressLeavesItsRoundHeadAndNowPhaseAlone(): void
+    {
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false));
+
+        self::assertStringNotContainsString('head-state', $this->published[0]->getData());
+        self::assertStringNotContainsString('now-phase', $this->published[0]->getData());
     }
 
     public function testAReviewerUpdateBringsThePlaceOfAReviewerThePageDoesNotShowYet(): void
@@ -429,9 +448,13 @@ final class MercureRoundUpdatesTest extends TestCase
      */
     private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null, ?PersistingStoreInterface $locks = null): MercureRoundUpdates
     {
+        // Registered because the judged stream renders a component, which asks for its options through this function.
+        $twig = new Environment(new FilesystemLoader(__DIR__.'/../../../../templates'));
+        $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
+
         return new MercureRoundUpdates(
             $this->live($publisher),
-            new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')),
+            $twig,
             $summaries ?? self::createStub(SessionSummaries::class),
             new LockFactory($locks ?? new InMemoryStore()),
             $this->log,
