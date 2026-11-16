@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowError;
 
+use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -24,18 +26,21 @@ final readonly class ShowErrorController
         private Environment $twig,
         private LoggerInterface $logger,
         private FilterProjects $projects,
+        private DashboardHost $dashboard,
     ) {
     }
 
-    public function __invoke(Throwable $exception): Response
+    public function __invoke(Throwable $exception, Request $request): Response
     {
         $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
         $reference = $status >= Response::HTTP_INTERNAL_SERVER_ERROR ? $this->referenceFor($exception) : null;
         $message = $this->messageFor($status);
         // Carried over as the framework's own error page does, so a 405 still names its allowed methods.
         $headers = $exception instanceof HttpExceptionInterface ? $exception->getHeaders() : [];
+        // A missing route fails before RefuseForeignHost has a route to judge, so the shell and its project names are kept from a foreign host here.
+        $page = $this->dashboard->isNamedBy($request) ? $this->render($status, $message, $reference) : $this->plainPage($message, $reference);
 
-        return new Response($this->render($status, $message, $reference), $status, $headers);
+        return new Response($page, $status, $headers);
     }
 
     private function messageFor(int $status): string

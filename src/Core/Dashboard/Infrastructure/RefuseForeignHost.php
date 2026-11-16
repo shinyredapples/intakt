@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,11 +14,8 @@ use Symfony\Component\HttpKernel\Event\RequestEvent;
 #[AsEventListener]
 final readonly class RefuseForeignHost
 {
-    private const array LOOPBACK_NAMES = ['localhost', '127.0.0.1', '[::1]'];
-
     public function __construct(
-        #[Autowire('%env(int:DASHBOARD_PORT)%')]
-        private int $port,
+        private DashboardHost $dashboard,
     ) {
     }
 
@@ -27,7 +23,7 @@ final readonly class RefuseForeignHost
     {
         $request = $event->getRequest();
 
-        if (!$this->isDashboardPage($request) || $this->namesTheDashboard($request)) {
+        if (!$this->isDashboardPage($request) || $this->dashboard->isNamedBy($request)) {
             return;
         }
 
@@ -37,10 +33,5 @@ final readonly class RefuseForeignHost
     private function isDashboardPage(Request $request): bool
     {
         return str_starts_with($request->attributes->getString('_route'), DashboardRoutes::PREFIX);
-    }
-
-    private function namesTheDashboard(Request $request): bool
-    {
-        return in_array($request->getHost(), self::LOOPBACK_NAMES, true) && $this->port === (int) $request->getPort();
     }
 }

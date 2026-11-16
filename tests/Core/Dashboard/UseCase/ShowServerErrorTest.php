@@ -14,6 +14,7 @@ use Psr\Log\LogLevel;
 use RuntimeException;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Twig\Environment;
 
 // Apart from the page tests, because their base class fixes the ledger the kernel serves and a failing one must replace it.
@@ -91,6 +92,18 @@ final class ShowServerErrorTest extends WebTestCase
         self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $reference));
         self::assertLoggedError(LogLevel::WARNING, 'The error page was shown without the dashboard shell.');
         self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the templates are gone"', RuntimeException::class));
+    }
+
+    public function testAnErrorPageForAHostThatDoesNotNameTheDashboardNeverReadsTheLedger(): void
+    {
+        $ledger = $this->createMock(Ledger::class);
+        $ledger->expects(self::never())->method('readInOrder');
+        self::getContainer()->set(Ledger::class, $ledger);
+
+        $this->browser->request('GET', '/does-not-exist', server: ['HTTP_HOST' => 'attacker.example:7780']);
+
+        self::assertResponseStatusCodeSame(404);
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://attacker.example:7780/does-not-exist""', NotFoundHttpException::class));
     }
 
     private function readsFailOnce(): void
