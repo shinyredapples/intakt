@@ -484,3 +484,38 @@ test('a visit tells the page once the new rows are filtered', () => {
 
     assert.deepEqual(seen, [['alpha']]);
 });
+
+test('a pushed column keeps the cards this tab showed with show more', () => {
+    const page = new Browser('light').open();
+    page.column('col-in-review').setAttribute('data-expanded', '');
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.column('col-in-review').hasAttribute('data-expanded'), true);
+});
+
+test('a pushed column this tab never expanded stays limited to its first page', () => {
+    const page = new Browser('light').open();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.column('col-in-review').hasAttribute('data-expanded'), false);
+});
+
+test('a pushed column keeps the fold this tab chose', () => {
+    const page = new Browser('light').open();
+    page.column('col-done').classList.toggle('collapsed', false);
+
+    page.pushColumn('col-done');
+
+    assert.equal(page.column('col-done').classList.contains('collapsed'), false);
+});
+
+test('a pushed column tells the page once its cards are filtered', () => {
+    const page = new Browser('light').open();
+    const seen = page.listenForShownProjects();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(seen.length, 1);
+});

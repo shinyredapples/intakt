@@ -153,11 +153,14 @@
             const replaced = document.getElementById(event.target.getAttribute('target') ?? '');
             if (event.target.getAttribute('action') === 'replace' && replaced?.matches('.board > .col')) {
                 const render = event.detail.render;
-                // The pushed column comes from the server with its start state and every card shown, so the person's own fold and project choice are put back on it.
+                // The pushed column comes from the server with its start state and every card shown, so the person's own fold, Show more and project choice are put back on it; the Show more mark goes back before the filter runs, because assets/column-more.js reads it there.
                 event.detail.render = (stream) => {
                     const collapsed = replaced.classList.contains('collapsed');
+                    const expanded = replaced.hasAttribute('data-expanded');
                     render(stream);
-                    document.getElementById(replaced.id)?.classList.toggle('collapsed', collapsed);
+                    const pushed = document.getElementById(replaced.id);
+                    pushed?.classList.toggle('collapsed', collapsed);
+                    pushed?.toggleAttribute('data-expanded', expanded);
                     showProject();
                 };
                 return;
