@@ -8,10 +8,8 @@
     {% set unfinished = reviewed.state.name != 'Judged' %}
     <p id="round-{{ reviewed.round }}-state">{% if not unfinished %}Judged.{% else %}{{ reviewed.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ reviewed.reviewers }} reviewers finished.{% endif %}</p>
     {% set running = unfinished and not reviewed.hasEnded %}
-    {% if not unfinished %}
-    {% set failed = reviewed.failedReviewers %}
-    <p class="outcome" id="round-{{ reviewed.round }}-outcome">{% if reviewed.outcome is not null %}Outcome: {{ reviewed.outcome.value }}, decided by the quorum policy {{ reviewed.quorum.value }} over all {{ reviewed.reviewers }} reviewers.{% if failed > 0 %} {{ failed }} of {{ reviewed.reviewers }} reviewers failed, and a failed reviewer gives no approval.{% endif %}{% else %}No outcome shown: this round was started before Intakt recorded its quorum policy.{% endif %}</p>
-    {% endif %}
+    {# Its own partial and always rendered, because the judged round's live update replaces it and a page opened before the judging needs the element. #}
+    {{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed}, with_context = false) }}
 
     <h3>Reviewers</h3>
     <p class="muted">{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>

@@ -36,8 +36,6 @@ use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LogLevel;
 use stdClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
-use Symfony\Component\Clock\ClockInterface;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
@@ -595,7 +593,7 @@ final class FirstRunControllerTest extends WebTestCase
         $browser->disableReboot();
         self::getContainer()->set(Ledger::class, $this->ledger);
         // The ledger stamps its rows at one moment, so a round is not overdue and ended by the time the page reads it.
-        self::getContainer()->set(ClockInterface::class, new MockClock($this->now));
+        self::clockAt($this->now);
         // Answered without the database, because the first review step reads the ledger in memory and this test creates no schema.
         self::getContainer()->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
         if ($this->commands instanceof MessageBusInterface) {

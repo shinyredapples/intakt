@@ -65,6 +65,14 @@ final readonly class PushRecords
         $this->append(LedgerEventKind::BranchPushed, $this->keyOf($request, $head));
     }
 
+    /**
+     * @throws BranchNotPushed
+     */
+    public function refuse(BranchPushRequest $request, string $head, string $reason): void
+    {
+        $this->append(LedgerEventKind::PushRefused, [...$this->keyOf($request, $head), 'reason' => $reason]);
+    }
+
     // Without a digest, because the intent only has to come after the last record: it says a write may have happened, not which text it carried.
     /**
      * @throws BranchNotPushed

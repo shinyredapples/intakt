@@ -76,7 +76,7 @@ final readonly class Review
     {
         $judged = $this->lastJudgedRound();
 
-        return $judged instanceof ReviewedRound ? array_values(array_filter($judged->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)) : [];
+        return $judged instanceof ReviewedRound ? $judged->actFindings() : [];
     }
 
     public function tokens(): TokenFigures
