@@ -10,8 +10,12 @@ services:
     Intakt\Plugin\GitHubForge\Contract\IssueReads: '@Intakt\Tests\Core\Build\RecordedIssues'
     Intakt\Tests\Core\Build\ScriptedJobRunner:
         autowire: true
-    # Only the build job's runner, because the review and check jobs keep the container runner their own tests use.
+    # Only the build and check jobs' runner, because the review jobs keep the container runner their own tests use; the check job reads check-result from the same folder.
     Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob:
+        autowire: true
+        arguments:
+            $jobs: '@Intakt\Tests\Core\Build\ScriptedJobRunner'
+    Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob:
         autowire: true
         arguments:
             $jobs: '@Intakt\Tests\Core\Build\ScriptedJobRunner'
