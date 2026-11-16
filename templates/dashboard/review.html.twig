@@ -98,7 +98,7 @@
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
 <section class="section round" id="round-{{ reviewed.round }}">
-    {# Only the newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down. #}
+    {# Only the newest round opens on arrival, because its verdict is what the reader came for and older rounds would push it down. A judged round followed by a round still in review stays closed, because only the newest round opens. #}
     <details class="ev"{% if loop.last %} open{% endif %}>
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
