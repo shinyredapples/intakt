@@ -21,6 +21,8 @@ final readonly class ReviewerConversation
         public ?Uuid $reviewerId = null,
         // Set on a retry, because the live view keeps what the first try streamed under the same reviewer and must show where the retry starts.
         public bool $askedAgain = false,
+        // Set on the retry after a changes answer that named no finding, because a reviewer asked again in the same words tends to answer the same way.
+        public bool $askedToNameFindings = false,
     ) {
     }
 }

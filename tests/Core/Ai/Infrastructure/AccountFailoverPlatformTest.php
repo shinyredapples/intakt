@@ -9,6 +9,7 @@ use Generator;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
+use Intakt\Core\Ai\Contract\EveryEndpointUnreachable;
 use Intakt\Core\Ai\Contract\EveryKeyRejected;
 use Intakt\Core\Ai\Contract\KeyRejected;
 use Intakt\Core\Ai\Contract\Provider;
@@ -49,8 +50,10 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Throwable;
 
 // On the native clock, because the cooldowns are RateLimiter windows, which read the system time themselves.
@@ -64,6 +67,7 @@ use Throwable;
 #[CoversClass(TypedRejectionConverter::class)]
 #[CoversClass(EveryAccountCoolingDown::class)]
 #[CoversClass(EveryKeyRejected::class)]
+#[CoversClass(EveryEndpointUnreachable::class)]
 #[CoversClass(KeyRejected::class)]
 #[UsesClass(AccountCooldownWindows::class)]
 #[UsesClass(Account::class)]
@@ -455,6 +459,57 @@ final class AccountFailoverPlatformTest extends TestCase
         } finally {
             self::assertFalse($this->cooldowns->isCoolingDown($this->account(Account::DEFAULT)));
         }
+    }
+
+    public function testACallWhoseEveryAccountFailsToReachItsEndpointWhileSendingSaysSoWithoutTheTransportText(): void
+    {
+        $unreachable = static fn (): never => throw new TransportException('Could not resolve host for "https://localhost/?key=secret".');
+
+        $failure = null;
+
+        try {
+            $_ = $this->accounts($this->answering($unreachable), $this->answering($unreachable))->invoke('big', 'Review.');
+        } catch (Throwable $thrown) {
+            $failure = $thrown;
+        }
+
+        self::assertInstanceOf(TransportExceptionInterface::class, $failure);
+        self::assertSame([EveryEndpointUnreachable::class, 'Every account of provider "anthropic" could not reach its endpoint.', null], [$failure::class, $failure->getMessage(), $failure->getPrevious()]);
+    }
+
+    public function testACallWithOneAccountUnreachableAndTheOtherFailingOtherwiseKeepsTheFailoverError(): void
+    {
+        $unreachable = static fn (): never => throw new TransportException('Could not resolve host: localhost');
+        $broken = static fn (): never => throw new RuntimeException('bad request');
+
+        $this->expectExceptionObject(new PlatformRuntimeException('All platforms failed.'));
+
+        $this->accounts($this->answering($unreachable), $this->answering($broken))->invoke('big', 'Review.');
+    }
+
+    // The reviewer's probe: the team account cools down as the call starts and is free again when the failure is typed, so it was never sent to and does not hide that the only account tried was unreachable.
+    public function testACallWhoseOnlyTriedAccountFailsToReachItsEndpointSaysSoWhenAnotherAccountFreedUpDuringTheCall(): void
+    {
+        $teamChecks = 0;
+        $cooldowns = self::createStub(AccountCooldowns::class);
+        $cooldowns->method('isCoolingDown')->willReturnCallback(static function (Account $account) use (&$teamChecks): bool {
+            return 'anthropic.team' === $account->key() && 1 === ++$teamChecks;
+        });
+        $unreachable = static fn (): never => throw new TransportException('Could not resolve host: localhost');
+        $platform = new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $this->answering($unreachable), 'team' => $this->answering('second')], $cooldowns, new NativeClock(), new NullLogger());
+
+        $this->expectException(EveryEndpointUnreachable::class);
+
+        $platform->invoke('big', 'Review.');
+    }
+
+    public function testATransportErrorRaisedWhileSendingLeavesTheCallToTheNextAccountLikeAnyFailureWhileSending(): void
+    {
+        $unreachable = static fn (): never => throw new TransportException('Could not resolve host: localhost');
+
+        $answer = $this->accounts($this->answering($unreachable), $this->answering('second'))->invoke('big', 'Review.');
+
+        self::assertSame('second', $answer->asText());
     }
 
     public function testTheModelCatalogIsTheFirstAccounts(): void

@@ -22,6 +22,7 @@ use Symfony\AI\Platform\Result\ResultInterface;
 use Symfony\AI\Platform\Result\StreamResult;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
+use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Throwable;
 
 // Excluded from the container because AccountFailoverPlatform builds one per call around an account's own platform.
@@ -42,11 +43,17 @@ final readonly class AccountPlatform implements PlatformInterface
     public function invoke(string|Model $model, array|string|object $input, array $options = []): DeferredResult
     {
         $sentAt = $this->clock->now();
+        $this->failures->tried($this->account);
 
         try {
             $result = $this->platform->invoke($model, $input, $options);
         } catch (Throwable $failure) {
             $this->failed($failure);
+
+            // A guard for a platform that fails while sending only, because Symfony's HTTP client reports a failed name lookup when the answer is read, which the vendor retries instead.
+            if ($failure instanceof TransportExceptionInterface) {
+                $this->failures->unreachable($this->account);
+            }
 
             if (!$this->coolDownAfter($failure) instanceof Closure) {
                 // The failover gets no logger and chains no cause, so this is the only record of why the call was not sent.
