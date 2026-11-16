@@ -23,7 +23,7 @@ final readonly class OwnerClientLine
         return '' !== $this->ownerToken;
     }
 
-    // What the commands print: the line, or one line that says how to get the token, never silence.
+    // One place for both commands, because a missing token must give a hint the owner can act on and never a silent start.
     public function setup(): string
     {
         if (!$this->hasToken()) {

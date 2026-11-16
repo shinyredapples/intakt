@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\LocalGitForge;
 
-use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Mcp\Contract\OwnerClientLine;
+use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\ChangeReviews;
@@ -147,7 +147,7 @@ final class DemoReviewCommandTest extends TestCase
     {
         $tester = $this->whenTheDemoRuns($this->reviewing(Decision::Approve), ownerToken: '');
 
-        self::assertStringStartsWith('No MCP owner token found: set MCP_OWNER_TOKEN', array_last($this->lines($tester)));
+        self::assertStringStartsWith('No MCP owner token found: set MCP_OWNER_TOKEN', (string) array_last($this->lines($tester)));
     }
 
     #[DataProvider('decisions')]
