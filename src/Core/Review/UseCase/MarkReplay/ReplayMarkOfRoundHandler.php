@@ -18,6 +18,6 @@ final readonly class ReplayMarkOfRoundHandler
 
     public function __invoke(ReplayMarkOfRound $query): ReplayMark
     {
-        return $this->rounds->stored($query->roundId)->replayMark();
+        return $this->rounds->replayMarkOf($query->roundId);
     }
 }
