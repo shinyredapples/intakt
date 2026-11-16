@@ -26,11 +26,16 @@ enum ReviewOutcome: string
             return self::Failed;
         }
 
-        return match ($round->outcome) {
+        return null === $round->outcome ? null : self::ofDecision($round->outcome);
+    }
+
+    // A round's quorum and a reviewer's verdict share one mapping, so the summary and the round rows never word the same decision apart.
+    public static function ofDecision(Decision $decision): self
+    {
+        return match ($decision) {
             Decision::Approve => self::Approved,
             Decision::Changes => self::ChangesRequested,
             Decision::Blocked => self::Blocked,
-            null => null,
         };
     }
 
