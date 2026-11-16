@@ -854,13 +854,13 @@ A recording keeps one real review of a change in one file: its ledger events and
 3. Write the recording: `php bin/console intakt:demo:record sample sample-change sample-review.json` (in the compose demo, prefix `docker compose exec intakt`). It takes every round of that change in that project from the ledger and the captured updates of those rounds, and prints how many of each it wrote.
 4. Set `INTAKT_LIVE_CAPTURE` empty again, since the file keeps growing while it is set.
 
+The command writes nothing and exits 1 when the ledger has no round of that change in that project, when `INTAKT_LIVE_CAPTURE` is empty, when the capture file cannot be read, holds a line that is no captured update (the message names the line) or holds no update of one of those rounds (the message names the round, so a capture started after the first round is refused), or when the recording file cannot be written.
+
 ### The demo project
 
 Recordings will be played back into a project of their own, `demo-replay`, never into the `sample` project or one of yours. Playing back is not built yet; the project already exists on the compose demo, marked as a replay, so every review in it is shown with the **Replay** label and never counts as a verdict. Each start of the compose demo creates it after the seed by running `php bin/console intakt:demo:create`, which prints `The demo project demo-replay is marked as a replay: its reviews never count as a verdict.` Running it again changes nothing.
 
 The command refuses on any install that is not the compose demo, which it recognizes by `INTAKT_COMPOSE_SERVICE` (set only by `compose.yaml`): it prints `The demo project is created only on the compose demo, and INTAKT_COMPOSE_SERVICE is empty on this install.`, marks nothing and exits 1. A container started with `docker run` and a sample repository is not the compose demo either, so its start does not create the project.
-
-The command writes nothing and exits 1 when the ledger has no round of that change in that project, when `INTAKT_LIVE_CAPTURE` is empty, when the capture file cannot be read, holds a line that is no captured update (the message names the line) or holds no update of one of those rounds (the message names the round, so a capture started after the first round is refused), or when the recording file cannot be written.
 
 ## Keeping a copy of a project's repository
 
