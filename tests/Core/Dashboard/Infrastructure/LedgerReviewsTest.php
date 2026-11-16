@@ -8,9 +8,14 @@ use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewState;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
+use Intakt\Core\Dashboard\Domain\RoundFinding;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
+use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -18,10 +23,15 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\ListedReviews;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -29,11 +39,18 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerReviews::class)]
+#[CoversClass(LedgerReviewPages::class)]
+#[CoversClass(LedgerRounds::class)]
 #[CoversClass(RoundPayloads::class)]
 #[CoversClass(LedgerPayloads::class)]
 #[CoversClass(ReviewSummary::class)]
 #[CoversClass(RoundStart::class)]
 #[UsesClass(ReviewedRound::class)]
+#[UsesClass(RoundFinding::class)]
+#[UsesClass(LedgerTokens::class)]
+#[UsesClass(ReplayMarks::class)]
+#[UsesClass(ChangeDecision::class)]
+#[UsesClass(FailureInWords::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(ReviewStarted::class)]
 #[UsesClass(JudgeDone::class)]
@@ -158,6 +175,98 @@ final class LedgerReviewsTest extends TestCase
         self::assertSame(ReviewState::InProgress, $reviews[0]->state);
     }
 
+    public function testAStartedRoundIsListedWithItsChangeAndRoundNumber(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('sample-change', 'r1', 1);
+
+        $reviews = $this->listOf($ledger);
+
+        self::assertSame([['sample-change', 1, null, null]], array_map(static fn (ReviewSummary $review): array => [$review->change, $review->number, $review->outcome, $review->findingCount], $reviews));
+    }
+
+    public function testARoundStartedBeforeTheLedgerNamedItsChangeIsListedWithoutChangeOrNumber(): void
+    {
+        $reviews = $this->reviewsOf($this->event(LedgerEventKind::ReviewStarted, '{"round":"r1","project":"alpha","reviewers":2}'));
+
+        self::assertSame([['', null]], array_map(static fn (ReviewSummary $review): array => [$review->change, $review->number], $reviews));
+    }
+
+    public function testAJudgedRoundIsListedWithTheDecidedOutcome(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOfQuorum('sample-change', 'r1', 'all');
+        $ledger->answer('r1', 'correctness', 0);
+        $ledger->answer('r1', 'security', 0);
+        $ledger->judgeRound('r1');
+
+        self::assertSame(Decision::Approve, $this->listOf($ledger)[0]->outcome);
+    }
+
+    public function testAJudgedRoundWithAFailedReviewerIsListedAsTheQuorumDecidesIt(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOfQuorum('sample-change', 'r1', 'all');
+        $ledger->answer('r1', 'correctness', 0);
+        $ledger->failReviewer('r1', 'security', 'timeout');
+        $ledger->judgeRound('r1');
+
+        self::assertSame(Decision::Blocked, $this->listOf($ledger)[0]->outcome);
+    }
+
+    public function testAJudgedRoundStartedWithoutAQuorumIsListedWithoutAnOutcome(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('sample-change', 'r1', 1);
+        $ledger->judgeRound('r1');
+
+        self::assertSame([ReviewState::Judged, null], [$this->listOf($ledger)[0]->state, $this->listOf($ledger)[0]->outcome]);
+    }
+
+    public function testAJudgedRoundIsListedWithTheCountOfItsJudgedFindings(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('sample-change', 'r1', 1);
+        $ledger->judgeFindings('r1', ['F1' => 'act', 'F2' => 'defer', 'F3' => 'reject']);
+
+        self::assertSame(3, $this->listOf($ledger)[0]->findingCount);
+    }
+
+    public function testAFindingAnActEntryStandsForIsNotCountedTwice(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('sample-change', 'r1', 1);
+        $ledger->judgeOneEntryOf('r1', 'F1', 'F2');
+
+        self::assertSame(1, $this->listOf($ledger)[0]->findingCount);
+    }
+
+    public function testARoundJudgedBeforeFindingTextWasRecordedCountsTheMarkedFindings(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('sample-change', 'r1', 1);
+        $ledger->judgeMarksOnly('r1', ['F1'], ['F2']);
+
+        self::assertSame(2, $this->listOf($ledger)[0]->findingCount);
+    }
+
+    public function testTheSecondRoundOfAChangeIsListedWithItsOwnNumberAndOutcome(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOfQuorum('sample-change', 'r1', 'all');
+        $ledger->answer('r1', 'correctness', 1);
+        $ledger->answer('r1', 'security', 0);
+        $ledger->judgeFindings('r1', ['F1' => 'act']);
+        $ledger->append(new LedgerEvent(LedgerEventKind::ReviewStarted, '{"round":"r2","project":"alpha","reviewers":2,"change":"sample-change","number":2,"quorum":"all"}'));
+        $ledger->answer('r2', 'correctness', 0);
+        $ledger->answer('r2', 'security', 0);
+        $ledger->judgeRound('r2');
+
+        $reviews = $this->listOf($ledger);
+
+        self::assertSame([['r2', 2, Decision::Approve, 0], ['r1', 1, Decision::Changes, 1]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->number, $review->outcome, $review->findingCount], $reviews));
+    }
+
     /**
      * @return list<ReviewSummary>
      */
@@ -166,7 +275,15 @@ final class LedgerReviewsTest extends TestCase
         $ledger = self::createStub(Ledger::class);
         $ledger->method('readInOrder')->willReturn(new RecordedEvents(array_values($events)));
 
-        return new LedgerReviews($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())))->newestFirst();
+        return $this->listOf($ledger);
+    }
+
+    /**
+     * @return list<ReviewSummary>
+     */
+    private function listOf(Ledger $ledger): array
+    {
+        return ListedReviews::on($ledger)->newestFirst();
     }
 
     // Serialized as the writers do, so the reader is shown the row it meets in production.
