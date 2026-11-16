@@ -123,7 +123,7 @@
     {{ include(c ~ 'error_line.html.twig', {failed: "Couldn't connect.", text: 'The vendor said the key is not valid. Nothing was saved.'}) }}
 </div>{% endfor %}</div></section>
 
-<section class="comp-sec" id="c-characters"><h2>Characters</h2><p>Decoration only, always beside the text that names the actor: an empty alt, a fixed size, no motion. A character's own row shows it at 24 and 48 px; the octopus poses are for empty and approved states, one per page.</p>
+<section class="comp-sec" id="c-characters"><h2>Characters</h2><p>Decoration only, always beside the text that names the actor: an empty alt, a fixed size, no motion. Each role is shown at 24 and 48 px; the octopus poses are for empty and approved states, one per page.</p>
 <div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
     <div class="cgrp"><h4>Roles</h4>{% for character in enum_cases('Intakt\\Core\\Dashboard\\Domain\\Character') %}<div class="row-st"><span class="character-row">{{ include(c ~ 'character.html.twig', {character: character, size: 24}) }}{{ include(c ~ 'character.html.twig', {character: character, size: 48}) }}<span>{{ character.label }}: {{ character.description }}</span></span></div>{% endfor %}</div>
     <div class="cgrp"><h4>Octopus</h4><div class="row-st">{% for pose in enum_cases('Intakt\\Core\\Dashboard\\Domain\\MascotPose') %}<span class="character-row">{{ include(c ~ 'character.html.twig', {character: pose, size: 96}) }}<span>{{ pose.value|capitalize }}</span></span>{% endfor %}</div></div>

@@ -354,7 +354,8 @@ details[open] > summary .chev { transform: rotate(180deg); }
 [data-theme="light"] { --character-light: inline-block; --character-dark: none; }
 [data-theme="dark"] { --character-light: none; --character-dark: inline-block; }
 .character { flex: none; vertical-align: middle; object-fit: contain; }
-.character-light { display: var(--character-light, inline-block); }
+/* A 1 px muted ring, because the light drawings have no halo of their own and their edge alone falls under 3:1 on the light surfaces. */
+.character-light { display: var(--character-light, inline-block); filter: drop-shadow(1px 0 0 var(--muted)) drop-shadow(-1px 0 0 var(--muted)) drop-shadow(0 1px 0 var(--muted)) drop-shadow(0 -1px 0 var(--muted)); }
 .character-dark { display: var(--character-dark, none); }
 .character-row { display: flex; align-items: center; gap: var(--s8); }
 [data-rail="collapsed"] .rail .label, [data-rail="collapsed"] .rail .logo-full { display: none; }

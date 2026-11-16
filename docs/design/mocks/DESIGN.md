@@ -122,7 +122,7 @@ Places: a reviewer's row and the judge's row on the review page, the live log an
 - **Theme.** The light and the dark image switch by the nearest `[data-theme]`, like the logo.
 - **Calm.** No animation and no hover effect. One character per row or heading, and one octopus per page (the components page, a catalog for builders, is the exception).
 - **Never** on board cards, table rows, chips, amber-tint surfaces or Waiting on you. The outcome chip and the state dot stay the only carriers of outcome and state.
-- **Contrast.** A character's silhouette is at least 3:1 against `--page`, `--raised` and `--tint` in both themes.
+- **Contrast.** A character's silhouette is at least 3:1 against `--page`, `--raised` and `--tint` in both themes. The dark drawings carry a light halo of their own; the light ones get a 1 px `--muted` ring from the style sheet (5.2:1 or more on those surfaces), because their own edge falls under 3:1.
 
 ## Screenshots
 

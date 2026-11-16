@@ -24,10 +24,18 @@ final class CharacterStylesTest extends TestCase
     {
         $rules = $this->characterRules();
 
-        self::assertSame('display: var(--character-light, inline-block);', trim($rules['.character-light']));
+        self::assertStringStartsWith('display: var(--character-light, inline-block);', trim($rules['.character-light']));
         self::assertSame('display: var(--character-dark, none);', trim($rules['.character-dark']));
         self::assertStringContainsString('--character-light: none; --character-dark: inline-block;', $this->rules()['[data-theme="dark"]'] ?? '');
         self::assertStringContainsString('--character-light: inline-block; --character-dark: none;', $this->rules()['[data-theme="light"]'] ?? '');
+    }
+
+    public function testALightCharacterIsRingedInMutedOnEverySideSoItsSilhouetteStandsOutFromTheLightSurfaces(): void
+    {
+        preg_match_all('/drop-shadow\(([^()]*\([^()]*\))\)/', $this->characterRules()['.character-light'] ?? '', $shadows);
+
+        self::assertSame(['1px 0 0 var(--muted)', '-1px 0 0 var(--muted)', '0 1px 0 var(--muted)', '0 -1px 0 var(--muted)'], $shadows[1]);
+        self::assertStringNotContainsString('filter', $this->characterRules()['.character-dark']);
     }
 
     /**
