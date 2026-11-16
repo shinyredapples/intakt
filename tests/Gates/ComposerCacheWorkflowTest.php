@@ -75,7 +75,7 @@ final class ComposerCacheWorkflowTest extends SandboxTestCase
         self::assertContains($sandbox->root.'/temp/composer-cache:/composer-cache:ro', $arguments);
         self::assertContains('COMPOSER_CACHE_READ_ONLY=1', $arguments);
         self::assertContains('COMPOSER_CACHE_DIR=/composer-cache', $arguments);
-        self::assertSame('0755', $this->mode($sandbox));
+        self::assertSame(0o755, $this->mode($sandbox));
     }
 
     public function testAPushToMainGetsComposersCacheWritableByTheContainersUser(): void
@@ -88,7 +88,7 @@ final class ComposerCacheWorkflowTest extends SandboxTestCase
         $arguments = $this->dockerArguments($sandbox);
         self::assertContains($sandbox->root.'/temp/composer-cache:/composer-cache', $arguments);
         self::assertContains('COMPOSER_CACHE_READ_ONLY=0', $arguments);
-        self::assertSame('0777', $this->mode($sandbox));
+        self::assertSame(0o777, $this->mode($sandbox));
     }
 
     private function runGates(Sandbox $sandbox, string $event, string $ref): ProcessResult
@@ -108,11 +108,11 @@ final class ComposerCacheWorkflowTest extends SandboxTestCase
         return explode("\n", trim((string) file_get_contents($sandbox->root.'/calls')));
     }
 
-    private function mode(Sandbox $sandbox): string
+    private function mode(Sandbox $sandbox): int
     {
         clearstatcache();
 
-        return substr(sprintf('%o', fileperms($sandbox->root.'/temp/composer-cache')), -4);
+        return fileperms($sandbox->root.'/temp/composer-cache') & 0o777;
     }
 
     /**
