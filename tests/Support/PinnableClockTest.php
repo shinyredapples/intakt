@@ -7,8 +7,8 @@ namespace Intakt\Tests\Support;
 use Intakt\Tests\Support\Log\LogRecords;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\Clock;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Clock\NativeClock;
 use Symfony\Component\Process\Process;
 
