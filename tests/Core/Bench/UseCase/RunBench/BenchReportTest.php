@@ -51,6 +51,18 @@ final class BenchReportTest extends TestCase
         self::assertSame('  clean run 1: reviewer (standard, model big) false alarm F1 without a place, cause reviewer', $lines[1]);
     }
 
+    public function testAHarnessFailureIsLeftOutOfTheDefectCountsButItsTokensAreTotaled(): void
+    {
+        $failed = new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(false, [], [], [], [], 'tool failed'), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, ['big']);
+
+        $lines = new BenchReport()->linesOf([new RepeatedChange('example', [new BenchReview('example', Decision::Blocked, [$failed], [])])]);
+
+        self::assertSame(
+            '  reviewer (standard, model big), measured over 1 rounds: 0 of 0 planted defects found, 0 false alarms, 1 harness failures left out, 110 tokens (100 prompt, 10 completion, 1 calls)',
+            $lines[array_key_last($lines)],
+        );
+    }
+
     /**
      * @return list<string>
      */
