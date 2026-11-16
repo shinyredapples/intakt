@@ -10,7 +10,7 @@
         "change": {"type": "string"},
         "round": {"type": "string", "minLength": 1},
         "number": {"type": ["integer", "null"]},
-        "mark": {"description": "live, or replay for a recording played back, whose verdicts were never given on the change.", "enum": ["live", "replay"]}
+        "mark": {"description": "live, or replay for a recording played back, whose verdicts were never given on the change. On a project, the project's own flag; on an entry, the mark of the round it names (the latest round for a review lane or waiting entry, the last judged round for an outcome), never one mark for the whole review.", "enum": ["live", "replay"]}
     },
     "properties": {
         "generated_at": {"$ref": "#/definitions/moment"},
