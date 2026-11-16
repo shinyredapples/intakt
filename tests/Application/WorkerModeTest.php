@@ -6,14 +6,18 @@ namespace Intakt\Tests\Application;
 
 use Closure;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Infrastructure\ReviewerAgent;
+use Intakt\Core\Review\Infrastructure\ReviewerMcpToolboxFactory;
 use Intakt\Core\Review\Infrastructure\ReviewerRuns;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Server\Infrastructure\ProcessSettings;
 use Intakt\Kernel;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\ReplayMarkBus;
 use NoDiscard;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -163,6 +167,8 @@ final class WorkerModeTest extends TestCase
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $container->set(Ledger::class, $ledger);
         $container->set('command.bus', new StartedRoundBus());
+        // Answered without the database, because the review page reads the ledger in memory and another test may be emptying the database.
+        $container->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
         $first = $this->browserOn($kernel);
         $second = $this->browserOn($kernel);
 
@@ -235,6 +241,27 @@ final class WorkerModeTest extends TestCase
         self::assertSame('mcp-owner', $this->nextRequestSees($kernel)->user);
     }
 
+    public function testShuttingTheKernelDownResetsTheServicesItBuilt(): void
+    {
+        $kernel = $this->bootedKernel(new Kernel('test', true));
+        $this->browserOn($kernel)->request('POST', '/mcp/owner', server: ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
+        $tokens = $this->container($kernel)->get('security.token_storage');
+        self::assertNotNull($tokens->getToken());
+
+        $kernel->shutdown();
+
+        self::assertNull($tokens->getToken());
+    }
+
+    public function testTheReviewerDoesNotBuildItsToolboxFactoryBeforeItReviews(): void
+    {
+        $kernel = $this->bootedKernel(new Kernel('test', true));
+        $container = $this->container($kernel);
+
+        self::assertInstanceOf(ReviewerAgent::class, $container->get(ReviewerAgent::class));
+        self::assertFalse($container->initialized(ReviewerMcpToolboxFactory::class));
+    }
+
     public function testAFlashMessageIsShownOnlyOnceToTheBrowserThatCausedIt(): void
     {
         $kernel = $this->bootedKernel(new Kernel('test', true));
@@ -243,6 +270,7 @@ final class WorkerModeTest extends TestCase
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $container->set(Ledger::class, $ledger);
         $container->set('command.bus', new StartedRoundBus());
+        $container->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
         $browser = $this->browserOn($kernel);
 
         $this->startRoundAs($browser);

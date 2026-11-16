@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Infrastructure\BoardHeadlineRoundUpdates;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LiveBoardHeadline;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
@@ -26,6 +27,7 @@ use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -41,6 +43,7 @@ use Twig\Environment;
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(LedgerRounds::class)]
 #[UsesClass(RoundPayloads::class)]
+#[UsesClass(ReplayMarks::class)]
 #[UsesClass(LedgerPayloads::class)]
 #[UsesClass(Board::class)]
 #[UsesClass(Headline::class)]
@@ -80,7 +83,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $this->updates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
 
         self::assertSame([DashboardTopics::SHELL], array_map(static fn (LiveEvent $event): string => $event->topic, $this->live->events));
-        self::assertSame('The Code reviewers are reviewing change feat/a of alpha. Nothing needs you.', $this->headlineIn(0));
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.', $this->headlineIn(0));
     }
 
     public function testThePublishedHeadlineUpdatesTheBoardHeadlineTarget(): void
@@ -182,7 +185,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         new BoardHeadlineRoundUpdates($this->round, $this->headline($this->ledger, $live))->reviewerStarted(Uuid::fromString(self::ROUND), 'reviewer-1');
 
         self::assertCount(2, $this->live->events);
-        self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. Nothing needs you.', $this->headlineIn(1));
+        self::assertSame('The Code reviewers are reviewing change feat/a of alpha and change feat/b of alpha. The Code reviewers are reviewing 2 changes. Nothing needs you.', $this->headlineIn(1));
     }
 
     private function updates(): BoardHeadlineRoundUpdates
@@ -203,7 +206,7 @@ final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
 
-        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings());
+        return new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     /**

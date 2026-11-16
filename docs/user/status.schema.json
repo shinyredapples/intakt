@@ -9,7 +9,8 @@
         "moment": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}$"},
         "change": {"type": "string"},
         "round": {"type": "string", "minLength": 1},
-        "number": {"type": ["integer", "null"]}
+        "number": {"type": ["integer", "null"]},
+        "mark": {"description": "live, or replay for a recording played back, whose verdicts were never given on the change. On a project, the project's own flag; on an entry, the mark of the round it names (the latest round for a review lane or waiting entry, the last judged round for an outcome), never one mark for the whole review.", "enum": ["live", "replay"]}
     },
     "properties": {
         "generated_at": {"$ref": "#/definitions/moment"},
@@ -36,9 +37,10 @@
             "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["name", "lanes", "guard_decisions", "waiting_for_owner", "needs_you", "last_outcomes"],
+                "required": ["name", "mark", "lanes", "guard_decisions", "waiting_for_owner", "needs_you", "last_outcomes"],
                 "properties": {
                     "name": {"type": "string", "minLength": 1},
+                    "mark": {"$ref": "#/definitions/mark"},
                     "lanes": {
                         "type": "object",
                         "additionalProperties": false,
@@ -50,9 +52,10 @@
                                 "items": {
                                     "type": "object",
                                     "additionalProperties": false,
-                                    "required": ["change", "round", "number", "started_at", "reviewers", "steps"],
+                                    "required": ["change", "mark", "round", "number", "started_at", "reviewers", "steps"],
                                     "properties": {
                                         "change": {"$ref": "#/definitions/change"},
+                                        "mark": {"$ref": "#/definitions/mark"},
                                         "round": {"$ref": "#/definitions/round"},
                                         "number": {"$ref": "#/definitions/number"},
                                         "started_at": {"$ref": "#/definitions/moment"},
@@ -83,7 +86,7 @@
                                     "required": ["task", "step", "outcome", "failure", "ended_at"],
                                     "properties": {
                                         "task": {"type": "string", "minLength": 1},
-                                        "step": {"enum": ["task", "mirror", "clone", "build_job"]},
+                                        "step": {"enum": ["task", "mirror", "clone", "build_job", "hand_back_check", "pre_push_check"]},
                                         "outcome": {"enum": ["passed", "failed"]},
                                         "failure": {"type": ["string", "null"]},
                                         "ended_at": {"$ref": "#/definitions/moment"}
@@ -114,9 +117,10 @@
                         "items": {
                             "type": "object",
                             "additionalProperties": false,
-                            "required": ["change", "round"],
+                            "required": ["change", "mark", "round"],
                             "properties": {
                                 "change": {"$ref": "#/definitions/change"},
+                                "mark": {"$ref": "#/definitions/mark"},
                                 "round": {"$ref": "#/definitions/round"}
                             }
                         }
@@ -142,9 +146,10 @@
                         "items": {
                             "type": "object",
                             "additionalProperties": false,
-                            "required": ["change", "round", "number", "decision", "judged_at"],
+                            "required": ["change", "mark", "round", "number", "decision", "judged_at"],
                             "properties": {
                                 "change": {"$ref": "#/definitions/change"},
+                                "mark": {"$ref": "#/definitions/mark"},
                                 "round": {"$ref": "#/definitions/round"},
                                 "number": {"$ref": "#/definitions/number"},
                                 "decision": {"enum": ["approve", "changes", "blocked", null]},

@@ -13,9 +13,15 @@
 {% set can_start = review.source is not null and review.nextNumber is not null %}
 {% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
 {% set kind_label = 'dashboard/components/figure_kind.html.twig' %}
+{% set chip = 'dashboard/components/chip.html.twig' %}
+{# Each round carries its own mark, because a replay round can follow a live round of the same change. #}
+{% set replay_chip = {label: 'Replay', on_page: true, extra: 'replay-mark'} %}
 <div class="page-head">
     <div>
         <h1>Review of {{ review.change ?: 'round ' ~ round }} in {{ review.project }}</h1>
+        {% if review.everyRoundIsAReplay %}
+        <p class="replay-mark">{{ include(chip, {label: 'Replay', on_page: true}, with_context = false) }} A recording played back: its verdicts were never given on this change and never count as one.</p>
+        {% endif %}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
@@ -50,7 +56,7 @@
 {% if active is not null %}
 <section class="state-block" aria-labelledby="state-block-title">
     <div class="sb-head">
-        <h2 id="state-block-title">Now: round {{ active.number ?? '(number not recorded)' }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>    </div>
+        <h2 id="state-block-title">Now: round {{ active.number ?? '(number not recorded)' }} <span id="round-{{ active.round }}-now-phase">in review</span></h2>{% if active.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}    </div>
     <div class="sb-grid">
         <div>
             <h3>Reviewers</h3>
@@ -95,6 +101,7 @@
     <details class="ev">
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+            {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
             {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
             {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. That count stays unlabeled: it counts marks, not findings, and no figure is added here. #}
             <span class="muted small">{{ reviewed.outcome is not null ? reviewed.outcome.value : 'outcome not recorded' }}, {% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
@@ -108,6 +115,7 @@
 <section class="section round" id="round-{{ reviewed.round }}">
     <div class="round-head">
         <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
+        {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
         {{ include('dashboard/_round_state.html.twig', {state: reviewed.state, ending: reviewed.ending}, with_context = false) }}
     </div>
     {% if reviewed.ending is not null %}
