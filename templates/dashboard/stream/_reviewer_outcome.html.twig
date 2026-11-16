@@ -1,4 +1,4 @@
-{#- A finished reviewer's cell content: its outcome chip when the outcome is known, otherwise its process state as muted text, never the bare word "verdict". -#}
+{#- A reviewer's cell content, finished or still running: its outcome chip when the outcome is known, otherwise its process state as muted text, never the bare word "verdict". -#}
 {%- set outcome = (outcomes ?? {})[reviewer] ?? null -%}
 {%- if outcome is not null -%}
 {{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}
