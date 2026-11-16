@@ -147,10 +147,12 @@ final class PushToTheLocalGitForgeTest extends TestCase
         $this->scenario->checkOutTheBranchIn($this->forge);
         $this->scenario->ledger->accepts = 1;
 
-        $this->expectException(BranchNotPushed::class);
-        $this->expectExceptionMessage('push_refused');
-
-        (void) $this->scenario->push()->push($this->request());
+        try {
+            (void) $this->scenario->push()->push($this->request());
+            self::fail('The push must stop when the ledger refuses the record of the refusal.');
+        } catch (BranchNotPushed $refused) {
+            self::assertStringContainsString('push_refused', $refused->getMessage());
+        }
     }
 
     private function request(): BranchPushRequest
