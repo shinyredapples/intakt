@@ -34,11 +34,11 @@ final readonly class OwnerClientLine
     // The owner pastes the line into a shell, so a value the shell would expand is single-quoted; a plain value keeps the familiar form.
     private function shellWord(string $value): string
     {
-        if (1 === preg_match('#^[A-Za-z0-9:/._%@+=-]+$#', $value)) {
+        if (1 === preg_match('#^[A-Za-z0-9:/._%@+=-]+\z#', $value)) {
             return $value;
         }
 
-        if (1 === preg_match('#^Authorization: Bearer [A-Za-z0-9._~+/=-]+$#', $value)) {
+        if (1 === preg_match('#^Authorization: Bearer [A-Za-z0-9._~+/=-]+\z#', $value)) {
             return '"'.$value.'"';
         }
 
