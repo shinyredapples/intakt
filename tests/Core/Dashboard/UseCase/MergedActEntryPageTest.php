@@ -82,7 +82,7 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertContains('F1+F2 P1 src/A.php:7: Text of A.', $report->asLines($review));
         self::assertSame([['F1', ['F2'], 'P1', 'Text of A.']], $this->jsonEntries($report->asJson($review)));
-        self::assertSame([['P1', 'F1+F2', 'Text of A.', 'Fix now']], $this->pageRows($page));
+        self::assertSame([['P1', 'F1+F2', 'Text of A.', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
     }
 
     // The page's entry comes from the judge's ledger record and the act list from the stored round, each merged on its own, so three reports of one place must still give one entry alike.
@@ -95,7 +95,21 @@ final class MergedActEntryPageTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertSame([['F1+F2+F3', 'P1', 'Text of A.']], array_map(static fn (Finding $entry): array => [implode('+', [$entry->id, ...$entry->merged]), $entry->severity->value, $entry->text], $act));
-        self::assertSame([['P1', 'F1+F2+F3', 'Text of A.', 'Fix now']], $this->pageRows($page));
+        self::assertSame([['P1', 'F1+F2+F3', 'Text of A.', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
+    }
+
+    // A finding quoting a name found nowhere in the change is dropped with its reason; one with no quote and a symbol absent from the change reaches the judge and is judged.
+    public function testAFindingQuotingAnAbsentNameShowsItsReasonAndOneWithOnlyAnAbsentSymbolIsJudged(): void
+    {
+        $dropped = new Finding('A', Severity::P2, 'src/A.php', 9, null, 'Call `ghostName` first.', FixableBy::Builder, false, null, null);
+        $judged = new Finding('B', Severity::P1, 'src/B.php', 12, 'ghostSymbol', 'Take the lock first.', FixableBy::Builder, false, null, null);
+        $review = $this->reviewed([$dropped, $judged]);
+
+        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
+
+        self::assertResponseIsSuccessful();
+        self::assertSame([['P1', 'F2', 'Take the lock first.', 'Fix now']], $this->pageRows($page->filter('.finding-card:not([data-dropped])')));
+        self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->pageRows($page->filter('[data-dropped]')));
     }
 
     /**
@@ -192,8 +206,8 @@ final class MergedActEntryPageTest extends WebTestCase
     /**
      * @return list<list<string>>
      */
-    private function pageRows(Crawler $page): array
+    private function pageRows(Crawler $cards): array
     {
-        return $page->filter('.finding-card')->each(static fn (Crawler $card): array => $card->filter('.fc-id, .sev, .fc-text, .fc-call')->each(static fn (Crawler $part): string => $part->text()));
+        return $cards->each(static fn (Crawler $card): array => $card->filter('.fc-id, .sev, .fc-text, .fc-call')->each(static fn (Crawler $part): string => $part->text()));
     }
 }
