@@ -780,13 +780,13 @@ The first start seeds the demo, in the volume:
 - the sample repository at `/app/var/data/sample-repository`, with the branch `sample-change` to review against `main`;
 - the project `sample` in `/app/var/data/intakt.yaml`, with a panel of two reviewers (`correctness` and `security`) that must both approve. With one Anthropic or OpenAI key, both reviewers use that provider; with both keys, `correctness` uses Anthropic and `security` uses OpenAI. With `HF_TOKEN` beside one or both keys, `security` moves to Hugging Face, so the two reviewers use two providers; with `HF_TOKEN` alone, see [Running the demo on a Hugging Face token](#running-the-demo-on-a-hugging-face-token).
 
-The log then shows the command that reviews the sample change, in the form your shell runs from the repository folder (it runs the console inside the container). Leave `docker compose up` running, open a second terminal in the repository folder and run the command there as printed; the log in the first terminal keeps scrolling:
+Once the server answers its health check and the dashboard answers, every start ends its log with a block between two lines of `=`: the dashboard's address (`Open the dashboard: http://localhost:7781`) and the command that reviews the sample change, in the form your shell runs from the repository folder (it runs the console inside the container). The command works as soon as it appears. Leave `docker compose up` running, open a second terminal in the repository folder and run the command there as printed; the request log in the first terminal may keep scrolling:
 
 ```
 docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
 ```
 
-The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is set in `.env.local` (then yours is used), keeps it in `/app/var/data/mcp-owner-token` on the volume, and allows write tools for the demo (`MCP_OWNER_ACCESS` defaults to `mcp_tool_write` in the container). The log prints, after the review command, a line to connect an MCP client:
+The first start also makes the owner's MCP token, unless `MCP_OWNER_TOKEN` is set in `.env.local` (then yours is used), keeps it in `/app/var/data/mcp-owner-token` on the volume, and allows write tools for the demo (`MCP_OWNER_ACCESS` defaults to `mcp_tool_write` in the container). The same block prints, after the review command, a line to connect an MCP client:
 
 ```
 claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"
