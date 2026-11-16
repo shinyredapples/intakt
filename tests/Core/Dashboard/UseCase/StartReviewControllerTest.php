@@ -54,9 +54,9 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->disableReboot();
     }
 
-    public function testTheButtonStartsTheNextRoundOfTheListedChangeAndRedirectsBackWithTheRoundId(): void
+    public function testTheButtonStartsTheNextRoundOfTheListedChangeAndRedirectsBack(): void
     {
-        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->givenAJudgedRound();
         $commands = $this->commandBus();
         $commands->expects(self::once())->method('dispatch')
             ->with(self::equalTo(new StartReview('alpha', 'Add the thing.', new RequestedRound('feat/thing', 2, new ChangeSource('/repos/alpha', 'main')))))
@@ -66,18 +66,42 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
         self::assertResponseStatusCodeSame(303);
         self::assertResponseRedirects('/reviews/round-1');
-        $this->browser->followRedirect();
-        self::assertSelectorTextContains('.flash-success', 'Started round round-2.');
+    }
+
+    public function testAStartedRoundIsAnnouncedInAToastByItsNumberAndNotByItsId(): void
+    {
+        $this->givenAJudgedRound();
+        $this->commandBus()->expects(self::once())->method('dispatch')
+            ->willReturn(new Envelope(new stdClass(), [new HandledStamp('0198a0b2-3c4d-7e5f-8a9b-0c1d2e3f4a5b', 'handler')]));
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+        $page = $this->browser->followRedirect();
+
+        self::assertSame('Started round 2.', $page->filter('.toast[role=status] span')->text());
+        self::assertCount(0, $page->filter('.flash'));
+        self::assertStringNotContainsString('0198a0b2-3c4d-7e5f-8a9b-0c1d2e3f4a5b', (string) $this->browser->getResponse()->getContent());
     }
 
     public function testTheButtonCarriesTheNumberAfterTheLatestRoundThePageShows(): void
     {
-        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->givenAJudgedRound();
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->judgeRound('round-2');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('3', $crawler->filter('form.start-review input[name=number]')->attr('value'));
+        self::assertSame('Start round 3', trim($crawler->filter('form.start-review button')->text()));
+    }
+
+    public function testARoundStillInReviewOffersNoStart(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('form.start-review'));
+        self::assertCount(1, $crawler->filter('form.stop-round'));
     }
 
     // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.
@@ -130,7 +154,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
     public function testARoundThatIsNotNextRedirectsBackWithAnErrorLineAndNoTrace(): void
     {
-        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->givenAJudgedRound();
         $refusal = RoundNotNext::for(2, 3);
         $commands = $this->commandBus();
         $commands->expects(self::once())->method('dispatch')->willThrowException(new HandlerFailedException(new Envelope(new stdClass()), [$refusal]));
@@ -140,6 +164,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertResponseStatusCodeSame(303);
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-error', 'Round 2 was asked for');
+        self::assertSelectorNotExists('.toast');
         self::assertStringNotContainsString('Stack trace', (string) $this->browser->getResponse()->getContent());
     }
 
@@ -166,7 +191,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
     public function testThePageThatHoldsTheButtonStillRendersFromTheLedgerAlone(): void
     {
-        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->givenAJudgedRound();
         $this->commandBus()->expects(self::never())->method('dispatch');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
@@ -180,6 +205,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     public function testAPageWhoseRoundRecordedNoRepositoryShowsNoButtonAndSaysWhy(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
@@ -187,14 +213,32 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('.no-start', 'started before Intakt recorded');
     }
 
+    // Stop is the one action then, so a line about a missing start button would describe a choice the page does not offer.
+    public function testARunningRoundWithoutARecordedRepositoryLeavesOutTheLineAboutTheStartButton(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSelectorNotExists('.no-start');
+        self::assertSelectorExists('form.stop-round');
+    }
+
     public function testOnlyTheLatestRoundDecidesWhetherTheButtonShows(): void
     {
-        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->givenAJudgedRound();
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->judgeRound('round-2');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertCount(0, $crawler->filter('form.start-review'));
+    }
+
+    private function givenAJudgedRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
     }
 
     private function commandBus(): MessageBusInterface&MockObject
@@ -209,6 +253,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
     private function token(string $round = 'round-1'): string
     {
         $this->ledger->startRecordedRoundOf('feat/token-page', $round.'-token', 1);
+        $this->ledger->judgeRound($round.'-token');
 
         return $this->browser->request('GET', '/reviews/'.$round.'-token')->filter('form.start-review input[name=_token]')->attr('value') ?? '';
     }

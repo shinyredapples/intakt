@@ -47,7 +47,7 @@ final class ShellWithoutHubTest extends DashboardPageTestCase
     public function testThePlainPageKeepsTheFlashLineAndLogsAWarning(): void
     {
         $session = new Session(new MockArraySessionStorage());
-        $session->getFlashBag()->add('success', 'Started round round-2.');
+        $session->getFlashBag()->add('success', 'Asked 2 running reviewers to stop.');
         $request = Request::create('/projects');
         $request->setSession($session);
         $requests = self::getContainer()->get(RequestStack::class);
@@ -59,7 +59,7 @@ final class ShellWithoutHubTest extends DashboardPageTestCase
 
         $page = new Crawler(new LivePageRendering($twig, $log)->render($request, 'dashboard/projects.html.twig', ['projects' => []]));
 
-        self::assertSame('Started round round-2.', $page->filter('.flash-success')->text());
+        self::assertSame('Asked 2 running reviewers to stop.', $page->filter('.flash-success')->text());
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(['warning'], array_column($log->cleanLogs(), 0));
     }

@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
+use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -57,14 +62,39 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertSelectorExists('main.content.roomy');
     }
 
-    public function testStopAndTheStartOfTheNextRoundSitInTheTaskActions(): void
+    // One action at a time (D4 of #2247), because Stop and a start beside it asked the owner to choose between two things at once.
+    public function testARunningRoundOffersOnlyStopInTheTaskActions(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'correctness');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['round-round-1-now-stop', 'start-review'], $crawler->filter('.page-head .task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
+        self::assertSame(['round-round-1-now-stop'], $crawler->filter('.page-head .task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
+        self::assertSame(['Stop'], $crawler->filter('.page-head .task-actions button')->each(static fn (Crawler $button): string => $button->text()));
+    }
+
+    public function testAJudgedRoundOffersOnlyTheStartOfTheNextRoundByItsNumber(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->judgeRound('round-2');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['start-review'], $crawler->filter('.page-head .task-actions > *')->each(static fn (Crawler $child): string => (string) $child->attr('class')));
+        self::assertSame(['Start round 3'], $crawler->filter('.page-head .task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
+    }
+
+    public function testARoundThatEndedWithoutACallOffersTheStartOfTheNextRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::NoOutcomeInTime, RoundEndReasons::NO_OUTCOME_IN_TIME)));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Start round 2'], $crawler->filter('.page-head .task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
     }
 
     // Left out rather than disabled, because Continue and Send back wait for T59 (D4 of #1794).

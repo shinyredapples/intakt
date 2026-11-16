@@ -503,7 +503,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(0, $page->filter('form.start-first-review'));
     }
 
-    public function testTheStartButtonStartsTheSampleChangeAndComesBackWithTheRoundId(): void
+    public function testTheStartButtonStartsTheSampleChangeAndComesBackWithAToastOfItsNumber(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $commands = $this->commandBus();
@@ -517,7 +517,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(303);
         self::assertResponseRedirects('/setup');
         $this->browser()->followRedirect();
-        self::assertSelectorTextContains('.flash-success', 'Started round round-1.');
+        self::assertSelectorTextContains('.toast', 'Started round 1.');
     }
 
     public function testASecondPressComesBackWithTheRefusalAndNoTrace(): void

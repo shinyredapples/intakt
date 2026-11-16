@@ -62,6 +62,10 @@
 {% for line in app.flashes('error') %}
 <p class="flash flash-error">{{ line }}</p>
 {% endfor %}
+{# Laid over the page, so a notice does not push it down; its controller hides it on a page that loads the import map. #}
+{% for line in app.flashes('toast') %}
+{{ include('dashboard/components/toast.html.twig', {message: line}, with_context = false) }}
+{% endfor %}
 {% block body %}{% endblock %}
 </main>
 </div>

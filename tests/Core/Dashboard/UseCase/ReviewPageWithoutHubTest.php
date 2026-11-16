@@ -184,15 +184,15 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertStringContainsString('export function markBoardEdges(page, view)', $this->browser->getInternalResponse()->getContent());
     }
 
-    public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void
+    public function testThePlainPageStillShowsTheLineTheStopButtonLeftAndLogsAWarning(): void
     {
         $this->givenARunningRound();
         $log = new BufferingLogger();
-        $request = $this->requestWithTheLine('Started round round-2.');
+        $request = $this->requestWithTheLine('Asked 2 running reviewers to stop.');
 
         $page = new Crawler((string) $this->controller($log)($request, 'round-1')->getContent());
 
-        self::assertSame('Started round round-2.', $page->filter('.flash-success')->text());
+        self::assertSame('Asked 2 running reviewers to stop.', $page->filter('.flash-success')->text());
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(['warning'], array_column($log->cleanLogs(), 0));
     }

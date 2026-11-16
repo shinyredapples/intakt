@@ -165,6 +165,7 @@ final class WorkerModeTest extends TestCase
         $container = $this->container($kernel);
         $ledger = new DashboardLedger();
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->judgeRound('round-1');
         $container->set(Ledger::class, $ledger);
         $container->set('command.bus', new StartedRoundBus());
         // Answered without the database, because the review page reads the ledger in memory and another test may be emptying the database.
@@ -176,8 +177,8 @@ final class WorkerModeTest extends TestCase
         $otherPage = $second->request('GET', '/reviews/round-1');
         $ownPage = $first->request('GET', '/reviews/round-1');
 
-        self::assertCount(0, $otherPage->filter('.flash-success'));
-        self::assertSame('Started round round-2.', trim($ownPage->filter('.flash-success')->text()));
+        self::assertCount(0, $otherPage->filter('.toast'));
+        self::assertSame('Started round 2.', trim($ownPage->filter('.toast')->text()));
     }
 
     #[DataProvider('runnerModes')]
@@ -268,6 +269,7 @@ final class WorkerModeTest extends TestCase
         $container = $this->container($kernel);
         $ledger = new DashboardLedger();
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $ledger->judgeRound('round-1');
         $container->set(Ledger::class, $ledger);
         $container->set('command.bus', new StartedRoundBus());
         $container->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
@@ -277,8 +279,8 @@ final class WorkerModeTest extends TestCase
         $shown = $browser->request('GET', '/reviews/round-1');
         $again = $browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(1, $shown->filter('.flash-success'));
-        self::assertCount(0, $again->filter('.flash-success'));
+        self::assertCount(1, $shown->filter('.toast'));
+        self::assertCount(0, $again->filter('.toast'));
     }
 
     // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request. A kernel cloned per request boots afresh first.
