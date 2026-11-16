@@ -61,21 +61,21 @@ What the journeys cover and how to run one: [Checking the whole product](docs/gu
 
 ### Review bench
 
-The review bench measures how well the panel finds defects: it reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask; nothing in `bin/check` or CI runs it. With the demo running, this reproduces the result below:
+The review bench measures how well the panel finds defects: it reviews eight small changes of the sample shop, five with one planted defect each and three without any, and counts what each reviewer caught, missed and raised in error. **It calls your paid models**, so it runs only when you ask; nothing in `bin/check` or CI runs it. With the demo running, this runs the bench that gave the result below:
 
 ```
 docker compose exec intakt php bin/console intakt:bench --project=sample --repeat=3
 ```
 
-**No result has been measured yet.** The table gets its figures from the first real run's result file; until then it holds none.
-
 | Reviewer | Defects found (measured) | False alarms (measured) | Tokens per change (measured) |
 | --- | --- | --- | --- |
-| Panel (`correctness` and `security`) | not measured yet | not measured yet | not measured yet |
-| `correctness` alone | not measured yet | not measured yet | not measured yet |
-| `security` alone | not measured yet | not measured yet | not measured yet |
+| Panel (`correctness` and `security`) | 11 of 15 | 2 | about 6,800 |
+| `correctness` alone | 10 of 15 (1 harness failure left out, on a change without a defect) | 2 | about 2,460 |
+| `security` alone | 8 of 15 | 0 | about 4,350 |
 
-Date of the run: not measured yet. Models: not measured yet. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
+Only one change (`tax-helper`) got the same outcome in all three runs; the other seven varied between repeats, so a single run's result for one change is partly luck, and your own run will not match these figures exactly.
+
+Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctness` (tier strong) `moonshotai/Kimi-K3:deepinfra`, `security` (tier standard) `openai/gpt-oss-120b:novita`. Command: `intakt:bench --project=sample --repeat=3`, as above. What a run costs and how to read these figures: [the review bench](docs/user/README.md#the-review-bench) in the user guide.
 
 ## The first release: the review loop
 
