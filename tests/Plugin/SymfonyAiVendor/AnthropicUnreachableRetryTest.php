@@ -93,7 +93,7 @@ final class AnthropicUnreachableRetryTest extends KernelTestCase
     private const string NOW = '2026-11-16 12:00:00.000 UTC';
 
     /**
-     * @var list<bool> whether each request the bridge sent asked for a stream
+     * @var list<bool>
      */
     private array $streamed = [];
 
@@ -128,13 +128,13 @@ final class AnthropicUnreachableRetryTest extends KernelTestCase
         self::assertSame([true, false], $this->streamed);
     }
 
-    // As Symfony's client reports a failed lookup: the request is sent and its response fails when read.
+    // Failed when read, because Symfony's client reports a failed lookup there and not when the request is sent.
     private function unreachable(): MockResponse
     {
         return new MockResponse('', ['error' => 'Could not resolve host: api.anthropic.com']);
     }
 
-    // Without its end the stream is cut, which the bridge reports as an incomplete stream.
+    // Optionally cut before its end, because the bridge reports a stream without message_stop as incomplete and the vendor then asks without a stream.
     private function namedFinding(bool $withEnd): MockResponse
     {
         $usage = ['input_tokens' => 150, 'output_tokens' => 40];
@@ -179,7 +179,7 @@ final class AnthropicUnreachableRetryTest extends KernelTestCase
     private function vendor(Closure $first, Closure $second): SymfonyAiVendor
     {
         $http = new MockHttpClient(function (string $method, string $url, array $options) use ($first, $second): MockResponse {
-            $this->streamed[] = str_contains((string) $options['body'], '"stream":true');
+            $this->streamed[] = is_string($options['body']) && str_contains($options['body'], '"stream":true');
 
             return 1 === count($this->streamed) ? $first() : $second();
         });

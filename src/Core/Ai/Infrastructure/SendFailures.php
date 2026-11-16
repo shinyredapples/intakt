@@ -21,9 +21,14 @@ final class SendFailures
     private array $failures = [];
 
     /**
-     * @var array<string, bool> whether each account the call was sent to could not reach its endpoint
+     * @var array<string, true>
      */
     private array $tried = [];
+
+    /**
+     * @var array<string, true>
+     */
+    private array $unreachable = [];
 
     /**
      * @var WeakMap<Throwable, array<string, true>>
@@ -60,17 +65,17 @@ final class SendFailures
     // Noted as the call goes out, because the accounts free after the call can include one whose cooldown ended during it and that was never sent to.
     public function tried(Account $account): void
     {
-        $this->tried[$account->key()] ??= false;
+        $this->tried[$account->key()] = true;
     }
 
     // Kept apart from the account errors, because a transport error cools no account down.
     public function unreachable(Account $account): void
     {
-        $this->tried[$account->key()] = true;
+        $this->unreachable[$account->key()] = true;
     }
 
     public function isEveryTriedUnreachable(): bool
     {
-        return [] !== $this->tried && array_all($this->tried, static fn (bool $unreachable): bool => $unreachable);
+        return [] !== $this->tried && [] === array_diff_key($this->tried, $this->unreachable);
     }
 }

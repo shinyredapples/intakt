@@ -50,7 +50,7 @@ final readonly class AccountPlatform implements PlatformInterface
         } catch (Throwable $failure) {
             $this->failed($failure);
 
-            // Only a platform that fails while sending lands here; the HTTP client reports a failed name lookup when the answer is read, which the vendor retries instead.
+            // A guard for a platform that fails while sending only, because Symfony's HTTP client reports a failed name lookup when the answer is read, which the vendor retries instead.
             if ($failure instanceof TransportExceptionInterface) {
                 $this->failures->unreachable($this->account);
             }
