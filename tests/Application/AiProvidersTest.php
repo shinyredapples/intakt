@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use ArrayObject;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\RebuiltContainer;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use ReflectionMethod;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
 #[CoversNothing]
@@ -38,9 +45,6 @@ final class AiProvidersTest extends KernelTestCase
 
     private CompiledContainers $containers;
 
-    /** @var array{string, string|false|null}|null */
-    private ?array $keptFile = null;
-
     public static function tearDownAfterClass(): void
     {
         self::compiledContainers()->remove();
@@ -51,13 +55,15 @@ final class AiProvidersTest extends KernelTestCase
     {
         $this->containers = self::compiledContainers();
 
-        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET'] as $name) {
+        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET', 'INTAKT_PROVIDER_KEY_DIR'] as $name) {
             $this->saved[$name] = [
                 'server' => $_SERVER[$name] ?? null,
                 'env' => $_ENV[$name] ?? null,
                 'process' => getenv($name),
             ];
         }
+
+        $_SERVER['INTAKT_PROVIDER_KEY_DIR'] = $this->keptKeyDirectory();
     }
 
     protected function tearDown(): void
@@ -75,11 +81,9 @@ final class AiProvidersTest extends KernelTestCase
             }
         }
 
-        $this->restoreKeptFile();
-
         parent::tearDown();
         $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove($this->vaultDirectory());
+        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
     }
 
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
@@ -200,6 +204,41 @@ final class AiProvidersTest extends KernelTestCase
         $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
 
         self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testASecretInTheVaultWinsOverTheKeptKey(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        $this->keepKey(self::KEPT_KEY);
+
+        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame('value-from-the-vault', $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testTheAnthropicPlatformSendsTheKeptKeyToTheProvider(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+        $sent = new ArrayObject();
+        self::getContainer()->set('http_client', new MockHttpClient(static function (string $method, string $url, array $options) use ($sent): MockResponse {
+            $sent->append($options['normalized_headers']['x-api-key'] ?? null);
+
+            return new MockResponse(json_encode([
+                'id' => 'msg_test', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-haiku-5-5',
+                'content' => [['type' => 'text', 'text' => 'ok']],
+                'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+            ], JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);
+        }));
+
+        $platform = self::getContainer()->get('ai.platform.anthropic');
+        self::assertInstanceOf(PlatformInterface::class, $platform);
+        $platform->invoke('claude-haiku-5-5', new MessageBag(Message::ofUser('Answer with the single word: ok')))->asText();
+
+        self::assertSame([['x-api-key: '.self::KEPT_KEY]], $sent->getArrayCopy());
     }
 
     public function testAKeyStoredOnlyInTheSecretsVaultEnablesItsProvider(): void
@@ -366,7 +405,7 @@ final class AiProvidersTest extends KernelTestCase
             $vault[basename($file)] = file_get_contents($file);
         }
 
-        $kept = self::createKernel()->getProjectDir().'/var/data/provider-key.json';
+        $kept = $this->keptKeyDirectory().'/provider-key.json';
 
         return [$variables, $vault, is_file($kept) ? file_get_contents($kept) : null];
     }
@@ -380,23 +419,15 @@ final class AiProvidersTest extends KernelTestCase
         return new ReflectionMethod($container, 'getEnv')->invoke($container, $name);
     }
 
-    private function restoreKeptFile(): void
-    {
-        if (null === $this->keptFile) {
-            return;
-        }
-
-        [$file, $before] = $this->keptFile;
-        is_string($before) ? new Filesystem()->dumpFile($file, $before) : new Filesystem()->remove($file);
-        $this->keptFile = null;
-    }
-
-    // The test writes the real data volume file because the build reads it there, so tearDown puts the earlier content back.
     private function keepKey(string $key): void
     {
-        $file = self::createKernel()->getProjectDir().'/var/data/provider-key.json';
-        $this->keptFile ??= [$file, is_file($file) ? file_get_contents($file) : null];
-        new Filesystem()->dumpFile($file, json_encode(['kind' => 'anthropic', 'key' => $key], JSON_THROW_ON_ERROR));
+        new KeptProviderKeyFile($this->keptKeyDirectory())->keep(ProviderKey::recognise($key));
+    }
+
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    private function keptKeyDirectory(): string
+    {
+        return sys_get_temp_dir().'/ai-providers-test-kept-key';
     }
 
     private function vaultDirectory(): string

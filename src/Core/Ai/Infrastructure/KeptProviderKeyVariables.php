@@ -10,11 +10,16 @@ use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
 
 // Symfony's env processor asks its loaders only for a name the environment lacks, so a value in `.env.local` wins and the kept key is used like the same variable.
+// It takes the first loader's non-empty value in priority order, so this one sits below the secrets vault's loader (priority 0) and a vault secret wins too.
+#[AsTaggedItem(priority: self::PRIORITY)]
 final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
 {
+    public const int PRIORITY = -100;
+
     private const string HUGGING_FACE_VARIABLE = 'HF_TOKEN';
 
     public function __construct(

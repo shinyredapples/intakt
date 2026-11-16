@@ -85,8 +85,12 @@ return static function (ContainerConfigurator $container): void {
         }
     };
 
-    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack.
-    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile(dirname(__DIR__, 2).'/var/data'))->loadEnvVars();
+    // A variable of its own so a test keeps its key outside the install's data volume, where the file is the live key.
+    $keptKeyDirectory = $environmentValue('INTAKT_PROVIDER_KEY_DIR') ?? dirname(__DIR__, 2).'/var/data';
+    $container->parameters()->set(AiServices::KEPT_KEY_DIRECTORY, $keptKeyDirectory);
+
+    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory))->loadEnvVars();
 
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
     $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($vaultValue($name) ?? '') || '' !== ($keptValues[$name] ?? '');
