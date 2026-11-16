@@ -76,7 +76,7 @@
 
     <h2>Search</h2>
     <div class="palette static"><div class="results">
-        {{ include(c ~ 'search_group.html.twig', {id: 'gallery-search', icon: 'pr', label: 'Reviews', results: [{label: 'Round round-1', detail: 'alpha, judged', href: '#', selected: true}, {label: 'Switch light or dark theme', detail: 'All projects', action: constant('Intakt\\Core\\Dashboard\\Domain\\SearchAction::SwitchTheme')}]}) }}
+        {{ include(c ~ 'search_group.html.twig', {id: 'gallery-search', icon: 'pr', label: 'Reviews', results: [{label: 'sample-change, round 1', detail: 'alpha, judged', href: '#', roundId: 'round-1', selected: true}, {label: 'Switch light or dark theme', detail: 'All projects', action: constant('Intakt\\Core\\Dashboard\\Domain\\SearchAction::SwitchTheme')}]}) }}
         {{ include(c ~ 'search_none.html.twig', {query: 'zebra', suggestion: 'Try a page such as Reviews or Projects.', recovery: constant('Intakt\\Core\\Dashboard\\Domain\\SearchAction::ClearSearch')}) }}
     </div></div>
 

@@ -61,6 +61,13 @@ final class SearchQueryTest extends TestCase
         self::assertTrue(new SearchQuery('ALPHA projects rounds')->matches($result));
     }
 
+    public function testAReviewResultMatchesByItsRoundIdThoughTheIdIsNoPartOfItsTitle(): void
+    {
+        $result = new SearchResult(SearchGroup::Reviews, 'sample-change, round 2', 'alpha, judged', '/reviews/7f3c', roundId: '7f3c');
+
+        self::assertTrue(new SearchQuery('7F3C')->matches($result));
+    }
+
     public function testAResultDoesNotMatchWhenOneWordIsMissing(): void
     {
         $result = new SearchResult(SearchGroup::Projects, 'alpha', 'Project, 2 review rounds');
