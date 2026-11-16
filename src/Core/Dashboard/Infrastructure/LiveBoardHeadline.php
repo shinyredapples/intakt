@@ -54,24 +54,30 @@ final readonly class LiveBoardHeadline
                 $lock->release();
             }
 
-            if ($this->pages->board() == $published) {
+            if ($this->signatureOf($this->pages->board()) === $published) {
                 return;
             }
         }
     }
 
-    private function publishedOnce(?Board $published): Board
+    private function publishedOnce(?string $published): string
     {
         $board = $this->pages->board();
+        $signature = $this->signatureOf($board);
 
-        if ($board != $published) {
+        if ($signature !== $published) {
             $this->updates->publish(new LiveEvent(DashboardTopics::SHELL, $this->streamOf($board)));
         }
 
-        return $board;
+        return $signature;
     }
 
     // The boards are compared, not the rendered streams, because a rendered term carries a fresh random id each time and two renders of one board never match.
+    private function signatureOf(Board $board): string
+    {
+        return serialize($board);
+    }
+
     private function streamOf(Board $board): string
     {
         return $this->twig->render(self::TEMPLATE, ['headline' => $board->headline(), 'board' => $board]);
