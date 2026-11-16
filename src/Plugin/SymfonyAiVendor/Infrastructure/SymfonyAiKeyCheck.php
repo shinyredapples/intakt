@@ -85,7 +85,7 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
     private function answerTokens(KeyKind $kind): int
     {
         return match ($kind) {
-            // OpenAI's Responses API refuses a max_output_tokens below 16.
+            // 16 because OpenAI's Responses API refuses a smaller max_output_tokens with a 400, which would leave every key not checked.
             KeyKind::OpenAi => 16,
             KeyKind::Anthropic, KeyKind::HuggingFace => 1,
         };

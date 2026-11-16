@@ -73,13 +73,13 @@ final class SymfonyAiKeyCheckTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, string, string, int, array<string, mixed>}>
+     * @return iterable<string, array{string, array<string, int|string>, array<string, mixed>}>
      */
     public static function requests(): iterable
     {
-        yield 'anthropic' => ['sk-ant-'.self::BODY, 'claude-haiku-5-5', 'max_tokens', 1, self::ANTHROPIC_ANSWER];
-        yield 'openai' => ['sk-'.self::BODY, 'gpt-4.1-nano', 'max_output_tokens', 16, self::OPENAI_ANSWER];
-        yield 'hugging face' => ['hf_'.self::BODY, 'meta-llama/Llama-3.2-1B-Instruct', 'max_tokens', 1, self::CHAT_COMPLETION_ANSWER];
+        yield 'anthropic' => ['sk-ant-'.self::BODY, ['model' => 'claude-haiku-5-5', 'max_tokens' => 1], self::ANTHROPIC_ANSWER];
+        yield 'openai' => ['sk-'.self::BODY, ['model' => 'gpt-4.1-nano', 'max_output_tokens' => 16], self::OPENAI_ANSWER];
+        yield 'hugging face' => ['hf_'.self::BODY, ['model' => 'meta-llama/Llama-3.2-1B-Instruct', 'max_tokens' => 1], self::CHAT_COMPLETION_ANSWER];
     }
 
     /**
@@ -88,26 +88,23 @@ final class SymfonyAiKeyCheckTest extends TestCase
     #[DataProvider('endpoints')]
     public function testEachKindIsCheckedWithOneCallToItsOwnProvider(string $key, string $url, array $answer): void
     {
-        $calls = new ArrayObject();
+        $calls = $this->callsMadeFor($key, $answer);
 
-        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
-
-        self::assertSame([['POST', $url]], array_map(static fn (array $call): array => [$call[0], $call[1]], $calls->getArrayCopy()));
+        self::assertSame([['POST', $url]], array_map(static fn (array $call): array => [$call[0], $call[1]], $calls));
     }
 
     /**
-     * @param array<string, mixed> $answer
+     * @param array<string, int|string> $expected
+     * @param array<string, mixed>      $answer
      */
     #[DataProvider('requests')]
-    public function testEachKindAsksTheCheapestModelForTheShortestAnswerItsProviderAllows(string $key, string $model, string $capField, int $cap, array $answer): void
+    public function testEachKindAsksTheCheapestModelForTheShortestAnswerItsProviderAllows(string $key, array $expected, array $answer): void
     {
-        $calls = new ArrayObject();
+        $calls = $this->callsMadeFor($key, $answer);
 
-        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
-
+        self::assertCount(1, $calls);
         $request = $calls[0][2];
-        self::assertSame($model, $request['model']);
-        self::assertSame($cap, $request[$capField]);
+        self::assertSame($expected, array_map(static fn (string $field): mixed => $request[$field] ?? null, array_combine(array_keys($expected), array_keys($expected))));
     }
 
     /**
@@ -162,13 +159,31 @@ final class SymfonyAiKeyCheckTest extends TestCase
     }
 
     /**
-     * @param ArrayObject<int, array{string, string, array<string, mixed>}> $calls
-     * @param Closure(array<string, mixed>): MockResponse                   $answer
+     * @param array<string, mixed> $answer
+     *
+     * @return list<array{string, string, array<mixed>}>
+     */
+    private function callsMadeFor(string $key, array $answer): array
+    {
+        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
+        $calls = new ArrayObject();
+
+        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
+
+        return array_values($calls->getArrayCopy());
+    }
+
+    /**
+     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
+     * @param Closure(array<mixed>): MockResponse                   $answer
      */
     private function check(string $key, ArrayObject $calls, Closure $answer): KeyCheckOutcome
     {
         $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
-            $request = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);
+            $body = $options['body'] ?? null;
+            self::assertIsString($body);
+            $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($request);
             $calls->append([$method, $url, $request]);
 
             return $answer($request);
