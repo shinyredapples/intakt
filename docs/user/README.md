@@ -2,6 +2,8 @@
 
 For owners who run Intakt. Each feature gets a page here, written in the same change as the feature: what it does, how to set it up, and what to do when it goes wrong.
 
+Intakt runs on PHP 8.5.12 or later and Symfony 8.2, which is a beta until 8.2.0 is released: an install holds Symfony 8.2.0-BETA2, locked before it was 3 days old by the owner's one-time exception ([The release cooldown for dependencies](#the-release-cooldown-for-dependencies)).
+
 The path from a clone to a first verdict, in order:
 
 1. **Set up:** `cp .env.dist .env.local`, set a provider key (or a Hugging Face token, `HF_TOKEN`) and the two secrets, and run `docker compose up` ([the demo](#the-demo-with-docker-compose)). Without Docker: `composer install`, `php bin/console doctrine:migrations:migrate`, and the keys as described in [Configuring providers and API keys](#configuring-providers-and-api-keys).
