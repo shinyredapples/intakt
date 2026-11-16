@@ -1,6 +1,6 @@
 # [Claude Code] A response format never reaches the CLI's `--json-schema` option
 
-Filed as symfony/ai#2962 on 2026-11-16. Versions: `symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, `symfony/process` v8.1.10, PHP 8.5.12, Claude Code CLI 2.1.302.
+Filed as symfony/ai#2962 on 2026-11-16. Versions: `symfony/ai-claude-code-platform` v1.0.0-BETA1, `symfony/ai-platform` v1.0.0-BETA1, `symfony/process` v8.1.10, PHP 8.5.12, Claude Code CLI 2.1.322 (the warning line was observed with it; 2.1.302 was the first trial).
 
 ## What happens
 
