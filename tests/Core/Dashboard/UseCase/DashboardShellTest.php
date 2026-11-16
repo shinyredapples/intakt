@@ -77,6 +77,24 @@ final class DashboardShellTest extends DashboardPageTestCase
         self::assertCount(0, $page->filter('.rail [aria-current]'));
     }
 
+    public function testTheRailMarksOnlyTheProjectsItemCurrentOnAReviewPage(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['projects'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+    }
+
+    public function testTheRailMarksOnlyTheProjectsItemCurrentOnAProjectsReviewList(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $page = $this->browser->request('GET', '/reviews?project=alpha');
+
+        self::assertSame(['projects'], $page->filter('.rail [aria-current="page"]')->each(static fn (Crawler $item): string => (string) $item->attr('data-k')));
+    }
+
     public function testACollapsedRailStillNamesEachItem(): void
     {
         $item = $this->browser->request('GET', '/reviews')->filter('.rail a.nav[data-k="projects"]');

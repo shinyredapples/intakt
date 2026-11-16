@@ -1,0 +1,8 @@
+{#- crumbs: list of {label, href?}; the last is the page itself, so it carries no link and is the current page. -#}
+<nav class="crumbs" aria-label="Breadcrumb">
+    <ol>
+        {%- for crumb in crumbs %}
+        <li>{% if loop.last %}<span aria-current="page">{{ crumb.label }}</span>{% else %}<a href="{{ crumb.href }}">{{ crumb.label }}</a>{% endif %}</li>
+        {%- endfor %}
+    </ol>
+</nav>

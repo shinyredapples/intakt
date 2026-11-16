@@ -39,6 +39,7 @@
     ],
     more_items: [],
     current_route: app.current_route,
+    current_section: rail_section ?? null,
 }, with_context = false) }}
 <div class="main">
 {# One listener for the shell topic and the page's own. The cookie it sets also carries listener_grants, the same on every page, because every tab shares it. It sits here, not beside the rail, because any child of the shell takes a cell of its two-column grid. #}

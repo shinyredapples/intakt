@@ -4,7 +4,15 @@
 
 {% block content_width %} roomy{% endblock %}
 
+{# Every review belongs to a project, so the rail keeps Projects current (decision D3 of #2184). #}
+{% set rail_section = 'projects' %}
+
 {% block body %}
+{{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
+    {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
+    {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
+    {label: review.change ?: 'round ' ~ round},
+]}, with_context = false) }}
 {% set total = review.tokens %}
 {% set latest = review.rounds|last %}
 {% set active = review.activeRound %}
