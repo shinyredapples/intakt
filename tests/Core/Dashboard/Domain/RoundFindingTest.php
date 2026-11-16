@@ -49,7 +49,7 @@ final class RoundFindingTest extends TestCase
 
     public function testAFindingsPlaceReadsFileColonLine(): void
     {
-        self::assertSame('src/A.php:7', new RoundFinding('F1', 'P1', 'A.', file: 'src/A.php', line: 7)->place());
+        self::assertSame('src/A.php:7', new RoundFinding('F1', 'P1', 'A.', [], 'src/A.php', 7)->place());
     }
 
     public function testAFindingWithAFileButNoLineNamesTheFileAlone(): void

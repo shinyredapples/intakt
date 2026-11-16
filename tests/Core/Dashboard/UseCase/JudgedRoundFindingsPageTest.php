@@ -22,17 +22,17 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
     public function testAJudgedFindingIsACardWithItsSeverityChipFileAndLineAndTheCallInWords(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeToFixAt('round-1', 'Take the lock first.', 'src/A.php', 7);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Take the lock first.');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['P1', 'F1', 'Take the lock first.', 'src/A.php:7', 'Fix now']], self::cardsOf($crawler->filter('#round-round-1 ul.finding-cards > li.finding-card')));
+        self::assertSame([['P1', 'F1', 'Take the lock first.', 'src/A.php:7', 'Fix now']], $this->cardsOf($crawler->filter('#round-round-1 ul.finding-cards > li.finding-card')));
     }
 
     public function testAFindingsCodeSpansAreCodeAndNoLiteralBacktickIsLeft(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeToFixAt('round-1', 'Call `Lock::acquire()` before <b>`write()`</b>.', 'src/A.php', 7);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Call `Lock::acquire()` before <b>`write()`</b>.');
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
@@ -85,7 +85,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
     public function testTheOpenFindingInTheNowBlockShowsItsCodeSpansAsCode(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeToFixAt('round-1', 'Call `write()`.', 'src/A.php', 7);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'Call `write()`.');
         $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
@@ -97,7 +97,7 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
     /**
      * @return list<list<string>>
      */
-    private static function cardsOf(Crawler $cards): array
+    private function cardsOf(Crawler $cards): array
     {
         return $cards->each(static fn (Crawler $card): array => [
             $card->filter('.sev')->text(),
