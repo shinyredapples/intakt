@@ -30,6 +30,13 @@ final readonly class CheckedReports
 
     private const string LEADING_DATE = '/^(?<date>\d{4}-\d{2}-\d{2})\b/';
 
+    private const string PULL_REQUESTS_LINE = '/^- \*\*Pull requests and commits:\*\*[ \t]*(?<rest>\S.*)$/m';
+
+    // Read as the start of the text, like READY, because only a line that found nothing must carry the date of the search.
+    private const string NONE_FOUND = '/^[`*_\s]*none found\b/i';
+
+    private const string ANY_DATE = '/\b(?<date>\d{4}-\d{2}-\d{2})\b/';
+
     public function __construct(
         private FencedCodeBlocks $codeBlocks,
         private ClockInterface $clock,
@@ -94,7 +101,8 @@ final readonly class CheckedReports
             return 'has a ready to file status outside the top-level lines of its Upstream status section: write the status as a list item in the Upstream status section';
         }
 
-        $finding = $this->isReady(array_last($statuses) ?? '') ? $this->checkFinding(implode("\n", $section)) : null;
+        $text = implode("\n", $section);
+        $finding = $this->isReady(array_last($statuses) ?? '') ? $this->checkFinding($text) ?? $this->pullRequestsFinding($text) : null;
 
         return null === $finding ? null : 'is ready to file '.$finding;
     }
@@ -179,5 +187,28 @@ final readonly class CheckedReports
         return $age->invert > 0 && $age->days > self::MAX_CHECK_AGE_DAYS
             ? 'but its "Checked" line is older than '.self::MAX_CHECK_AGE_DAYS.' days ('.$match['date'].'): check it against upstream again before posting'
             : null;
+    }
+
+    // Upstream often fixes a bug in a pull request with no issue, or only in a commit, so a ready report names what that search found.
+    private function pullRequestsFinding(string $report): ?string
+    {
+        if (1 !== preg_match(self::PULL_REQUESTS_LINE, $report, $match)) {
+            return 'but has no "Pull requests and commits" line (the pull requests and commits the check found, or "none found" with the date of the check)';
+        }
+
+        if (1 !== preg_match(self::NONE_FOUND, $match['rest'])) {
+            return null;
+        }
+
+        return 1 === preg_match(self::ANY_DATE, $match['rest'], $match) && $this->isDate($match['date'])
+            ? null
+            : 'but its "Pull requests and commits" line says "none found" without the date of the check as YYYY-MM-DD';
+    }
+
+    private function isDate(string $date): bool
+    {
+        $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
+
+        return false !== $parsed && $parsed->format('Y-m-d') === $date;
     }
 }
