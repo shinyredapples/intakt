@@ -35,15 +35,14 @@ final readonly class ReviewedRound
     public ?Decision $outcome;
     public ?DateTimeImmutable $judgedAt;
 
-    // Null until the round is read with its review, because the start row does not say whether the round is a replay.
-    public ?ReplayMark $mark;
-
+    // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay.
     public function __construct(
         RoundStart $start,
         RoundPlace $place,
         public DateTimeImmutable $startedAt,
         public ?QuorumPolicy $quorum,
         public ?RoundEnding $ending = null,
+        public ?ReplayMark $mark = null,
     ) {
         $this->round = $start->round;
         $this->project = $start->project;
@@ -59,7 +58,6 @@ final readonly class ReviewedRound
         $this->cost = Cost::none();
         $this->outcome = null;
         $this->judgedAt = null;
-        $this->mark = null;
     }
 
     // A replay shows like a live round, so the pages mark it, because its verdicts were never given on the change.
