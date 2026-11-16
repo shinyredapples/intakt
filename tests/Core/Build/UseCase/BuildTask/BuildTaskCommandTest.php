@@ -166,7 +166,7 @@ final class BuildTaskCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString("pre_push_check passed\ntitle Task 7", $tester->getDisplay());
-        self::assertStringContainsString('push failed: the remote refused the push of feat/task',$tester->getDisplay());
+        self::assertStringContainsString('push failed: the remote refused the push of feat/task', $tester->getDisplay());
         self::assertSame(['passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
     }
 

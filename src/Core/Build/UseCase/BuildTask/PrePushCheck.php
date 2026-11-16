@@ -31,7 +31,7 @@ final readonly class PrePushCheck
     // Fixed text for each way the check fails, never its log, because the log holds what model-written code printed.
     public function failureOf(BuildTaskRequest $request, string $bundle): ?string
     {
-        return $this->files->check($request, $bundle,fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack));
+        return $this->files->check($request, $bundle, fn (HandBack $handBack): ?string => $this->failureIn($request, $handBack));
     }
 
     private function failureIn(BuildTaskRequest $request, HandBack $handBack): ?string
