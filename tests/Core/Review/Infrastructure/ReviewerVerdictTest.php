@@ -127,9 +127,11 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private UuidV7 $conversation;
 
-    private ?UuidV7 $round;
+    private UuidV7 $round;
 
-    // Streamed before the first tool call of the script, like a reviewer that says what it reads next.
+    private bool $inARound = true;
+
+    // Streamed before the first tool call of the script, because a reviewer often says what it reads next and the live view shows that narration.
     /**
      * @var list<string>
      */
@@ -313,7 +315,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
     public function testAReviewOutsideARoundPublishesNoAnswer(): void
     {
-        $this->round = null;
+        $this->inARound = false;
 
         $this->review('Add a cart.', [], self::APPROVE);
 
@@ -920,7 +922,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         // Collected in finally, so a case whose answer is refused can still count the calls and tool calls it made.
         try {
-            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->round)), $platform, 'reviewer-model');
+            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->inARound ? $this->round : null)), $platform, 'reviewer-model');
         } finally {
             $collector = new DataCollector($platform instanceof TraceablePlatform ? [$platform] : [], [$toolbox], [$toolbox], [], [], []);
             $collector->lateCollect();
@@ -981,7 +983,6 @@ final class ReviewerVerdictTest extends WebTestCase
         })());
     }
 
-    // In the form RecordedRoundUpdates records, under this review's reviewer.
     private function seen(string $kind, string $what): string
     {
         return sprintf('%s %s %s', $kind, $this->conversation->toRfc4122(), $what);

@@ -58,7 +58,7 @@ final class RecordedRoundUpdates implements RoundUpdates
     {
         $this->answers[] = $answer;
         $findings = array_map(static fn (ReadFinding $finding): string => sprintf(' [%s %s:%s %s]', $finding->severity->value, $finding->file ?? '-', $finding->line ?? '-', $finding->title), $answer->findings);
-        $this->seen[] = sprintf('answer %s %s%s', $reviewer, $answer->verdict?->value ?? 'unreadable', implode('', $findings));
+        $this->seen[] = sprintf('answer %s %s%s', $reviewer, $answer->verdict->value ?? 'unreadable', implode('', $findings));
     }
 
     #[Override]
