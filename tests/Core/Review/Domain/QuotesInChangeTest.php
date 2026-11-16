@@ -138,6 +138,43 @@ final class QuotesInChangeTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
+    public static function blockquotedFences(): iterable
+    {
+        yield 'a blockquote' => ["Suggested fix:\n> ```js\n> escapeArgument(`suggestedName`);\n> ```"];
+        yield 'a nested blockquote' => ["Suggested fix:\n> > ```js\n> > escapeArgument(`suggestedName`);\n> > ```"];
+        yield 'markers without spaces' => ["Suggested fix:\n>>```js\n>>escapeArgument(`suggestedName`);\n>>```"];
+        yield 'a tab after the marker' => ["Suggested fix:\n>\t~~~\n>\tescapeArgument(`suggestedName`);\n>\t~~~"];
+        yield 'an indented blockquote with CRLF line ends' => ["1. Fix:\r\n   > ```js\r\n   > escapeArgument(`suggestedName`);\r\n   > ```"];
+    }
+
+    #[DataProvider('blockquotedFences')]
+    public function testAFindingWhoseOnlyQuoteIsInsideABlockquotedFenceIsKept(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function absentQuotesAfterAClosedBlockquotedFence(): iterable
+    {
+        yield 'a blockquote' => ["> ```js\n> run(`customerName`);\n> ```\n`grepName` is not defined."];
+        yield 'a nested blockquote' => ["> > ~~~\n> > run(`customerName`);\n> > ~~~\n`grepName` is not defined."];
+    }
+
+    #[DataProvider('absentQuotesAfterAClosedBlockquotedFence')]
+    public function testAnAbsentQuoteAfterAClosedBlockquotedFenceIsDropped(string $text): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertSame('none of its 1 quoted code fragments is in the change', $reason);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
     public static function absentQuotesAfterAFenceClosedWithAnotherLineEnd(): iterable
     {
         yield 'a backtick fence with CRLF line ends' => ["```js\r\nrun(`customerName`);\r\n```\r\n`grepName` is not defined."];
