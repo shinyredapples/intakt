@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\Fence;
@@ -50,6 +51,7 @@ use Twig\Environment;
 #[UsesClass(Finding::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(VerdictParser::class)]
+#[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveProgress::class)]
 #[UsesClass(PromptCut::class)]
@@ -97,7 +99,7 @@ final class ScriptedReviewPublishesAnswerTest extends WebTestCase
 
             return 'id-'.count($this->published);
         });
-        $updates = new MercureRoundUpdates(new MercureLiveUpdates($hub, new NullLogger()), self::getContainer()->get(Environment::class), self::createStub(SessionSummaries::class), new LockFactory(new InMemoryStore()), new NullLogger());
+        $updates = new MercureRoundUpdates(new MercureLiveUpdates($hub, new NullLogger()), self::getContainer()->get(Environment::class), self::createStub(SessionSummaries::class), self::getContainer()->get(LedgerReviewPages::class), new LockFactory(new InMemoryStore()), new NullLogger());
         $platform = MockPlatformFactory::createPlatform(static fn (): string => $answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress($updates), new ReviewerStopping(new StopRequests($fixture->ledger(), $fixture->ledgerPayloads())));
         $vendor = new AgentVendor(new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), $runs), $platform);
