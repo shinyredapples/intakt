@@ -11,6 +11,7 @@ use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\RebuiltContainer;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use ReflectionMethod;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
@@ -19,6 +20,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversNothing]
 final class AiProvidersTest extends KernelTestCase
 {
+    private const string KEPT_KEY = 'sk-ant-'.'abcdefgh12345678';
+
     private const array VARIABLES = [
         'ANTHROPIC_API_KEY',
         'OPENAI_API_KEY',
@@ -34,6 +37,9 @@ final class AiProvidersTest extends KernelTestCase
     private array $saved = [];
 
     private CompiledContainers $containers;
+
+    /** @var array{string, string|false|null}|null */
+    private ?array $keptFile = null;
 
     public static function tearDownAfterClass(): void
     {
@@ -68,6 +74,8 @@ final class AiProvidersTest extends KernelTestCase
                 putenv($name.'='.$before['process']);
             }
         }
+
+        $this->restoreKeptFile();
 
         parent::tearDown();
         $this->containers->restoreTheSharedCache();
@@ -164,6 +172,34 @@ final class AiProvidersTest extends KernelTestCase
         $container = $this->bootWith(array_diff_key($this->allSet(), ['OPENAI_API_KEY' => true]), keep: ['OPENAI_API_KEY']);
 
         self::assertTrue($container->has('ai.platform.openai'));
+    }
+
+    public function testAKeptKeyEnablesItsProviderWhenTheEnvironmentHasNone(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
+    }
+
+    public function testAValueInTheEnvironmentWinsOverTheKeptKey(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+
+        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => 'value-from-the-environment']);
+
+        self::assertSame('value-from-the-environment', $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testAKeptKeyIsTheVariableWhenTheEnvironmentHasNone(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+
+        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
     }
 
     public function testAKeyStoredOnlyInTheSecretsVaultEnablesItsProvider(): void
@@ -330,7 +366,37 @@ final class AiProvidersTest extends KernelTestCase
             $vault[basename($file)] = file_get_contents($file);
         }
 
-        return [$variables, $vault];
+        $kept = self::createKernel()->getProjectDir().'/var/data/provider-key.json';
+
+        return [$variables, $vault, is_file($kept) ? file_get_contents($kept) : null];
+    }
+
+    // Reflection, because the container resolves a variable only for a service argument and its method for that is protected.
+    private function resolvedVariable(string $name): mixed
+    {
+        $container = self::$kernel?->getContainer();
+        self::assertNotNull($container);
+
+        return new ReflectionMethod($container, 'getEnv')->invoke($container, $name);
+    }
+
+    private function restoreKeptFile(): void
+    {
+        if (null === $this->keptFile) {
+            return;
+        }
+
+        [$file, $before] = $this->keptFile;
+        is_string($before) ? new Filesystem()->dumpFile($file, $before) : new Filesystem()->remove($file);
+        $this->keptFile = null;
+    }
+
+    // The test writes the real data volume file because the build reads it there, so tearDown puts the earlier content back.
+    private function keepKey(string $key): void
+    {
+        $file = self::createKernel()->getProjectDir().'/var/data/provider-key.json';
+        $this->keptFile ??= [$file, is_file($file) ? file_get_contents($file) : null];
+        new Filesystem()->dumpFile($file, json_encode(['kind' => 'anthropic', 'key' => $key], JSON_THROW_ON_ERROR));
     }
 
     private function vaultDirectory(): string

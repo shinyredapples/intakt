@@ -14,6 +14,8 @@ use Intakt\Core\Ai\Infrastructure\CodexPlatformFactory;
 use Intakt\Core\Ai\Infrastructure\CodexSettings;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyVariables;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
@@ -53,7 +55,7 @@ use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
 
-// Same sources as Symfony's env processor: the environment, then the secrets vault. Presence is decided at build time because an unset env reference fails when the service is built.
+// Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
     $environmentValue = static function (string $name): ?string {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
@@ -83,8 +85,11 @@ return static function (ContainerConfigurator $container): void {
         }
     };
 
+    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack.
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile(dirname(__DIR__, 2).'/var/data'))->loadEnvVars();
+
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
-    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($vaultValue($name) ?? '');
+    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($vaultValue($name) ?? '') || '' !== ($keptValues[$name] ?? '');
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';
