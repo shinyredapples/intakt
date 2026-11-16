@@ -7,10 +7,9 @@
   </picture>
 </p>
 
-Intakt reviews a change on your repository: a panel of AI reviewers and a judge review it and give one verdict with an act list, on a dashboard and over MCP. PHP 8.5, Symfony AI. [Status](#status) says what works today and what is planned.
+Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge checks every finding against the task before it reaches the act list. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
 
-- **Why it is different:** the reviewers run on models of different makers and return structured verdicts, with findings that keep their ids across rounds, so reviewers cannot move the goalposts.
-- **What you get:** one verdict (approve, changes or blocked) and the judge's act list of what to fix now, live on the dashboard, from the console, or from your own agent through the MCP server.
+PHP 8.5, Symfony AI. [Status](#status) says what works today and what is planned.
 
 ![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
 
@@ -26,17 +25,17 @@ cp .env.dist .env.local   # add a provider API key or a Hugging Face token, and 
 docker compose up         # Intakt, its database and a sample repository
 ```
 
-The demo needs one provider key or one Hugging Face token, and its calls are billed to the key's or the token's owner. No Anthropic or OpenAI key? Set `HF_TOKEN` instead: create a fine-grained Hugging Face token with only "Make calls to Inference Providers". Alone it puts the two reviewers on models of two different makers, `moonshotai/Kimi-K3:deepinfra` and `openai/gpt-oss-120b:novita`; beside `ANTHROPIC_API_KEY`, `correctness` stays on Anthropic and `security` runs on Hugging Face. The base URL is `https://router.huggingface.co`, without `/v1`, and each model names its router provider, because some router providers refuse tools together with structured output ([details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+The calls are billed to the key's or the token's owner. Without an Anthropic or OpenAI key, a Hugging Face token (`HF_TOKEN`) alone puts the two reviewers on models of two different makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
-The panel's reviewers should run on models of different makers. Two makers through one Hugging Face token satisfy that; two separate providers (for example Anthropic and Hugging Face) are the stronger setup, because one token is one outage, one rate limit and one bill.
+The first start ends by printing the review command and, after it, an MCP line. Leave `docker compose up` running (its log keeps scrolling) and take any of three paths from a second terminal in the repository folder:
 
-The first start ends by printing the review command (it begins with `docker compose exec intakt`). Leave `docker compose up` running, open a second terminal in the repository folder and run the command there as printed; the server log in the first terminal keeps scrolling after it, which is expected. Open the dashboard at `http://localhost:7781` ([details](docs/user/README.md#the-demo-with-docker-compose)). The command exits with 0 (approve), 10 (changes) or 11 (blocked); [Reading a verdict](docs/user/README.md#reading-a-verdict) explains what it prints. To let your own agent start reviews, copy the line the first start prints after the review command (it holds the MCP address and a token made for you) and run it:
+| Path | Command | What you see |
+| --- | --- | --- |
+| Console | the printed `docker compose exec intakt php bin/console intakt:review sample-change ...` | the verdict and the act list; exit 0 (approve), 10 (changes) or 11 (blocked) ([Reading a verdict](docs/user/README.md#reading-a-verdict)) |
+| Dashboard | open `http://localhost:7781` | each round live, with the judge's call on every finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
+| MCP | the printed `claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the printed token>"` | your agent starts a review (`start_review`) with the printed command's values and reads the act list ([details](docs/user/mcp.md)) |
 
-```
-claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the printed token>"
-```
-
-Then ask the agent to start a review with the values of the printed review command: project `sample`, change `sample-change`, base `main`, repository `/app/var/data/sample-repository`, and the text after `--task=` as the task ([details](docs/user/mcp.md)); how a review runs inside is drawn in [the review flow](docs/architecture/review-flow.md). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words.
+The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words; [the review flow](docs/architecture/review-flow.md) draws how a review runs inside.
 
 ### Timed run
 
