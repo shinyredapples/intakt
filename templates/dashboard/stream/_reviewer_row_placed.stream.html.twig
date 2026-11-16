@@ -1,5 +1,8 @@
 {# Matches no element once the table lists the reviewer, so a reviewer that started after the page loaded gets a row and a known row keeps its role and model; its stop cell stays empty, because a stream cannot carry this session's token. #}
 {# One stream per table shape, because the page shows the Stop column only while a reviewer can be stopped and a row needs one cell per column. #}
 {% for table, stop in {'table.reviewers:has(th.stop)': true, 'table.reviewers:not(:has(th.stop))': false} %}
-<turbo-stream action="append" targets="{{ table }} > #round-{{ round }}-reviewers:not(:has(#round-{{ round }}-reviewer-{{ reviewer }}-state))"><template><tr><td>{{ reviewer }}</td><td>started after this page loaded</td><td id="round-{{ round }}-reviewer-{{ reviewer }}-state">{{ state }}</td><td class="num">shown after a reload</td>{% if stop %}<td id="round-{{ round }}-reviewer-{{ reviewer }}-stop"></td>{% endif %}</tr></template></turbo-stream>
+<turbo-stream action="append" targets="{{ table }} > #round-{{ round }}-reviewers:not(:has(#round-{{ round }}-reviewer-{{ reviewer }}-state))"><template><tr>
+{%- if outcome is not null %}{{ include('dashboard/_reviewer_cells.html.twig', {round: round, outcome: outcome}, with_context = false) }}
+{%- else %}{# Without the reviewer's start, because the ledger could not be read when it was published, so its name and findings come with the next load. #}<td>role not read</td><td>model not read</td><td id="round-{{ round }}-reviewer-{{ reviewer }}-state">{{ state }}</td><td class="num">shown after a reload</td>{% endif -%}
+{% if stop %}<td id="round-{{ round }}-reviewer-{{ reviewer }}-stop"></td>{% endif %}</tr></template></turbo-stream>
 {% endfor %}
