@@ -7,6 +7,8 @@ namespace Intakt\Plugin\GitHubForge\Infrastructure;
 use Closure;
 use Psr\Log\LoggerInterface;
 use stdClass;
+use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\Messenger\Event\WorkerStartedEvent;
 
 // An install without an App (the demo) publishes nothing to GitHub, because its outputs are the review page and MCP, so a missing App is a fact to report once, not a failure to retry.
 final readonly class GitHubAppSetting
@@ -19,6 +21,15 @@ final readonly class GitHubAppSetting
         private LoggerInterface $logger,
     ) {
         $this->notice = new stdClass();
+    }
+
+    // At the worker's start too, because a project in live mode (the demo) never reaches the forge, and the notice belongs to every start without an App.
+    #[AsEventListener]
+    public function onWorkerStarted(WorkerStartedEvent $event): void
+    {
+        if ('' === trim($this->appId)) {
+            $this->reportMissingAppOnce();
+        }
     }
 
     /**

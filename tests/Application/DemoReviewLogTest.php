@@ -8,17 +8,17 @@ use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\VerdictPerRole;
 use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\Log\LogRecords;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
-use Symfony\Component\ErrorHandler\BufferingLogger;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerRunningEvent;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\Messenger\Worker;
-use Throwable;
 
-// Covers nothing because what is proven is the wiring: the application's queue, bus and handlers on the shipped settings, where the demo sets no GitHub App.
+// Covers nothing because what is proven is the wiring: the application's logger, queue, bus and handlers on the shipped settings, where the demo sets no GitHub App.
 #[Group('persistence')]
 #[CoversNothing]
 final class DemoReviewLogTest extends KernelTestCase
@@ -27,12 +27,27 @@ final class DemoReviewLogTest extends KernelTestCase
 
     public function testADemoReviewWithoutAGitHubAppLeavesNoFailureAndNoTraceInTheLog(): void
     {
+        $failures = $this->runADemoReview();
+
+        self::assertSame([], $failures);
+        self::assertSame([], $this->warningsAndTraces());
+    }
+
+    public function testADemoReviewWithoutAGitHubAppSaysOnceThatNothingIsPublishedToGitHub(): void
+    {
+        $this->runADemoReview();
+
+        self::assertCount(1, array_filter($this->log(), static fn (array $record): bool => 'info' === $record['level'] && str_starts_with($record['message'], 'No GitHub App is configured')));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function runADemoReview(): array
+    {
         $this->judgeADemoRound();
 
-        $worker = $this->drainTheQueue();
-
-        self::assertSame([], $worker['failures']);
-        self::assertSame([], $this->warningsAndTraces($worker['log']));
+        return $this->drainTheQueue();
     }
 
     // Live like the demo's project, on a local branch like its sample change, so nothing but the publication's wiring decides what the worker logs.
@@ -51,8 +66,9 @@ final class DemoReviewLogTest extends KernelTestCase
         self::assertNotSame([], $this->queue()->getSent());
     }
 
+    // The application's logger for the worker too, as messenger:consume has it, so the run's records hold the whole review's log.
     /**
-     * @return array{failures: list<string>, log: BufferingLogger}
+     * @return list<string>
      */
     private function drainTheQueue(): array
     {
@@ -67,28 +83,36 @@ final class DemoReviewLogTest extends KernelTestCase
                 $event->getWorker()->stop();
             }
         });
-        $log = new BufferingLogger();
 
-        new Worker(['async' => $this->queue()], $bus, $events, $log)->run(['sleep' => 0]);
+        new Worker(['async' => $this->queue()], $bus, $events, self::getContainer()->get(LoggerInterface::class))->run(['sleep' => 0]);
 
-        return ['failures' => $failures, 'log' => $log];
+        return $failures;
     }
 
     /**
      * @return list<string>
      */
-    private function warningsAndTraces(BufferingLogger $log): array
+    private function warningsAndTraces(): array
     {
-        /** @var list<array{string, string, array<mixed>}> $records */
-        $records = $log->cleanLogs();
         $flagged = [];
-        foreach ($records as [$level, $message, $context]) {
-            if (in_array($level, self::WARNING_AND_ABOVE, true) || array_any($context, static fn (mixed $value): bool => $value instanceof Throwable)) {
-                $flagged[] = $level.': '.$message;
+        foreach ($this->log() as $record) {
+            if (in_array($record['level'], self::WARNING_AND_ABOVE, true) || isset($record['traced'])) {
+                $flagged[] = $record['level'].': '.$record['message'];
             }
         }
 
         return $flagged;
+    }
+
+    /**
+     * @return list<array{level: string, message: string, traced?: true}>
+     */
+    private function log(): array
+    {
+        $records = LogRecords::ofThisRun();
+        self::assertNotNull($records, 'No test log records: run the tests with the UnassertedErrorLogExtension.');
+
+        return $records->all();
     }
 
     private function queue(): InMemoryTransport
