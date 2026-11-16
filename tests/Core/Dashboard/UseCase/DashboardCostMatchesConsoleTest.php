@@ -61,7 +61,7 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/'.self::ROUND);
 
         self::assertSame('0.0050 USD estimated, prices of 2026-11-13', $console);
-        self::assertStringEndsWith('Cost: '.$console.'.', $this->wordsOf($crawler->filter('p.summary')));
+        self::assertSame('Cost: '.$console, $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
         self::assertSame($console, $this->wordsOf($crawler->filter('table.tokens tbody td:last-child')));
     }
 
@@ -73,7 +73,7 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
         $this->browser->request('GET', '/reviews/'.self::ROUND);
 
         self::assertSame('unknown, no price for model-a', $console);
-        self::assertSelectorTextContains('p.summary', 'Cost: '.$console.'.');
+        self::assertSelectorTextContains('.page-head p.meta', 'Cost: '.$console);
         self::assertSelectorTextContains('table.tokens tbody td:last-child', $console);
     }
 
