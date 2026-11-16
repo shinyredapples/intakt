@@ -6,7 +6,7 @@ namespace Intakt\Core\Ai\Contract;
 
 use RuntimeException;
 
-// The message is fixed and no previous exception is kept: the failed write's arguments hold the key.
+// The message is fixed and no previous exception is kept, because the failed write's arguments hold the key.
 final class KeptProviderKeyNotWritten extends RuntimeException
 {
     public function __construct()

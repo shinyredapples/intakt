@@ -34,7 +34,7 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
         $filesystem = new Filesystem();
         $written = null;
 
-        // A failure is replaced, not wrapped: the failed call's arguments in its trace hold the key.
+        // A failure is replaced, not wrapped, because the failed call's arguments in its trace hold the key.
         try {
             $filesystem->mkdir($this->directory, 0o700);
             $written = $filesystem->tempnam($this->directory, '.'.self::FILE.'.');
