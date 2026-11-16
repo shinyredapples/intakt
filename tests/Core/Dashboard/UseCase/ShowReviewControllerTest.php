@@ -164,6 +164,20 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertNotContains('', array_merge(...$this->rowsOf($crawler->filter('table.reviewers tbody tr'))));
     }
 
+    public function testARoundWhoseReviewersAllFinishedBeforeTheJudgeHasNoStopColumn(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'kimi-k3');
+        $this->ledger->startReviewerOn('round-1', 'security', 'model-b');
+        $this->ledger->answer('round-1', 'correctness', 1);
+        $this->ledger->failReviewer('round-1', 'security', 'The provider is down.');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertSame([4, 4], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $row): int => $row->filter('td')->count()));
+    }
+
     public function testAReviewerStartedBeforeTheModelWasRecordedShowsItsTierInsteadOfAnEmptyModel(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
