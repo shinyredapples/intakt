@@ -14,6 +14,8 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ReadAnswer;
+use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
@@ -37,6 +39,7 @@ use Intakt\Core\Review\Infrastructure\ReviewerStopping;
 use Intakt\Core\Review\Infrastructure\ReviewerToolboxFactory;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\Infrastructure\StreamAcceptance;
+use Intakt\Core\Review\Infrastructure\StreamedTextBatch;
 use Intakt\Core\Review\Infrastructure\StreamingFallbacks;
 use Intakt\Core\Review\Infrastructure\StrictVerdictConverter;
 use Intakt\Core\Review\Infrastructure\StrictVerdictStreamListener;
@@ -100,6 +103,9 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(Checkout::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Finding::class)]
+#[UsesClass(ReadAnswer::class)]
+#[UsesClass(ReadFinding::class)]
+#[CoversClass(StreamedTextBatch::class)]
 #[UsesClass(FindingLedger::class)]
 #[UsesClass(TrackedFinding::class)]
 #[UsesClass(VerdictParser::class)]
@@ -122,7 +128,13 @@ final class ReviewerVerdictTest extends WebTestCase
 
     private UuidV7 $conversation;
 
-    private UuidV7 $round;
+    private ?UuidV7 $round;
+
+    // Streamed before the first tool call of the script, like a reviewer that says what it reads next.
+    /**
+     * @var list<string>
+     */
+    private array $narration = [];
 
     private ModelCatalogInterface $catalog;
 
@@ -162,18 +174,19 @@ final class ReviewerVerdictTest extends WebTestCase
         parent::tearDown();
     }
 
-    public function testAProviderThatStreamsOnlyWhenAskedPublishesTheTextAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
+    public function testAProviderThatStreamsOnlyWhenAskedPublishesTheReadAnswerAndGivesTheVerdictOfTheSameAnswerUnstreamed(): void
     {
         $this->catalog = new FallbackModelCatalog();
         $reads = [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])];
 
         $streamed = $this->review('Add a cart.', $reads, self::APPROVE);
-        $published = implode('', array_map(static fn (string $update): string => explode(' ', $update, 3)[2], array_filter($this->updates->seen, static fn (string $update): bool => str_starts_with($update, 'text '))));
+        $published = $this->updates->seen;
+        $reviewer = $this->conversation->toRfc4122();
         $this->catalog = new UnstreamedModelCatalog();
         $this->conversation = new UuidV7();
         $unstreamed = $this->review('Add a cart.', $reads, self::APPROVE);
 
-        self::assertSame(self::APPROVE, $published);
+        self::assertSame(['tool '.$reviewer.' read_file', 'answer '.$reviewer.' approve'], $published);
         self::assertEquals($unstreamed, $streamed, json_encode($streamed->findings, JSON_THROW_ON_ERROR));
         self::assertSame(Decision::Approve, $streamed->verdict);
         self::assertSame([], $this->ledger->kinds());
@@ -188,7 +201,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         self::assertSame(Decision::Approve, $verdict->verdict);
         self::assertCount(1, $this->sent);
-        self::assertSame([], $this->updates->seen);
+        self::assertSame([$this->seen('answer', 'approve')], $this->updates->seen);
         self::assertEquals([LedgerEventKind::StreamingFellBack], $this->ledger->kinds());
         self::assertSame([['round' => $this->round->toRfc4122(), 'reviewer' => $this->conversation->toRfc4122()]], $this->ledger->payloads());
     }
@@ -242,14 +255,70 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        self::assertSame([sprintf('tool %s read_file', $this->conversation->toRfc4122())], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
-    public function testStreamedTextOfTheReviewerIsPublishedInTheOrderItArrived(): void
+    public function testTheStreamedNarrationBeforeAToolCallIsPublishedBeforeTheCallInTheOrderItArrived(): void
     {
-        $this->review('Add a cart.', [], $this->streamed('{"verdict":"approve",', '"findings":[],"resolved":[],"follow_ups":[]}'));
+        $this->catalog = new FallbackModelCatalog();
+        $this->narration = ['I read ', 'the cart first.'];
 
-        self::assertSame([sprintf('text %s {"verdict":"approve",', $this->conversation->toRfc4122()), sprintf('text %s "findings":[],"resolved":[],"follow_ups":[]}', $this->conversation->toRfc4122())], $this->updates->seen);
+        $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
+
+        self::assertSame([$this->seen('text', 'I read the cart first.'), $this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+    }
+
+    public function testAReviewersStructuredAnswerIsPublishedAsTheTypedAnswerAndItsJsonIsNeverStreamedAsText(): void
+    {
+        $this->open = [$this->openFinding('F1'), $this->openFinding('F2')];
+        $answer = VerdictDocument::fromTheDesign()->withFinding('file', 'src/Cart.php')->withFinding('text', "The discount ends one day early.\nThe boundary is exclusive.")->json();
+
+        $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], $this->streamed(...str_split($answer, 40)));
+
+        self::assertEquals([ReadAnswer::of($verdict)], $this->updates->answers);
+        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'changes [P1 src/Cart.php:12 The discount ends one day early.]')], $this->updates->seen);
+        self::assertStringNotContainsString('"verdict"', implode("\n", $this->updates->seen));
+    }
+
+    public function testAnUnreadableStreamedAnswerPublishesOnlyTheMarkerAndStillFailsTheReviewWithItsReason(): void
+    {
+        $refused = $this->refused('Add a cart.', [], $this->streamed('{"verdict":"approve","findings":[],', '"resolved":[],"follow_ups":[],"trust_me":true}'));
+
+        self::assertSame([$this->seen('answer', 'unreadable')], $this->updates->seen);
+        self::assertEquals([ReadAnswer::unreadable()], $this->updates->answers);
+        self::assertStringContainsString('trust_me', $refused->getMessage());
+    }
+
+    public function testAnUnreadableAnswerInOnePiecePublishesOnlyTheMarker(): void
+    {
+        $this->refused('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], 'Looks good to me.');
+
+        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'unreadable')], $this->updates->seen);
+    }
+
+    public function testAStreamCutOffMidAnswerPublishesNeitherItsTextNorAnAnswer(): void
+    {
+        $cutOff = new StreamResult((static function (): Generator {
+            yield new TextDelta('{"verdict":"approve",');
+
+            throw new IncompleteStreamException('The stream ended before its last event.');
+        })());
+
+        try {
+            $this->review('Add a cart.', [], $cutOff);
+            self::fail('A cut-off stream gave a verdict.');
+        } catch (IncompleteStreamException) {
+            self::assertSame([], $this->updates->seen);
+        }
+    }
+
+    public function testAReviewOutsideARoundPublishesNoAnswer(): void
+    {
+        $this->round = null;
+
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        self::assertSame([], $this->updates->answers);
     }
 
     public function testAStreamedVerdictKeepsTheApprovalTheModelAnswered(): void
@@ -332,11 +401,11 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->review('Add a cart.', [], $this->streamed('Looks good ', 'to me.'));
     }
 
-    public function testTheTextIsNotPublishedWhenTheModelAnswersInOnePiece(): void
+    public function testOnlyTheReadAnswerIsPublishedWhenTheModelAnswersInOnePiece(): void
     {
         $this->review('Add a cart.', [], self::APPROVE);
 
-        self::assertSame([], $this->updates->seen);
+        self::assertSame([$this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testTheFirstRoundPromptHasNoOpenFindingsMessage(): void
@@ -848,7 +917,7 @@ final class ReviewerVerdictTest extends WebTestCase
         // Traced only when the call is not streamed, because the tracing platform wraps a stream in a result without the listeners that assemble the verdict.
         $platform = $this->catalog instanceof UnstreamedModelCatalog ? new TraceablePlatform($mock) : $mock;
         $toolbox = new TraceableToolbox(new ReviewerToolboxFactory()->inCheckout($this->fixture->checkout));
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates, new MockClock()), new ReviewerStopping(new StopRequests($this->ledger, new LedgerPayloads(StoredSerializerFactory::create())))));
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), static fn (): TraceableToolbox => $toolbox, new ReviewerRuns($this->conversations, new StreamingFallbacks($this->ledger, new NullLogger()), new LiveProgress($this->updates), new ReviewerStopping(new StopRequests($this->ledger, new LedgerPayloads(StoredSerializerFactory::create())))));
 
         // Collected in finally, so a case whose answer is refused can still count the calls and tool calls it made.
         try {
@@ -887,7 +956,14 @@ final class ReviewerVerdictTest extends WebTestCase
         }
 
         if ($result instanceof ToolCallResult) {
-            return new StreamResult((static function () use ($result): Generator {
+            $narration = $this->narration;
+            $this->narration = [];
+
+            return new StreamResult((static function () use ($result, $narration): Generator {
+                foreach ($narration as $part) {
+                    yield new TextDelta($part);
+                }
+
                 yield new ToolCallComplete($result->getContent());
             })());
         }
@@ -904,6 +980,12 @@ final class ReviewerVerdictTest extends WebTestCase
                 yield new TextDelta($part);
             }
         })());
+    }
+
+    // In the form RecordedRoundUpdates records, under this review's reviewer.
+    private function seen(string $kind, string $what): string
+    {
+        return sprintf('%s %s %s', $kind, $this->conversation->toRfc4122(), $what);
     }
 
     private function openFinding(string $id, ?string $symbol = null): Finding
