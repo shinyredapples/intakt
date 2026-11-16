@@ -90,7 +90,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     {
         $calls = new ArrayObject();
 
-        (void) $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
+        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
 
         self::assertSame([['POST', $url]], array_map(static fn (array $call): array => [$call[0], $call[1]], $calls->getArrayCopy()));
     }
@@ -103,7 +103,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     {
         $calls = new ArrayObject();
 
-        (void) $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
+        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
 
         $request = $calls[0][2];
         self::assertSame($model, $request['model']);
@@ -158,17 +158,17 @@ final class SymfonyAiKeyCheckTest extends TestCase
      */
     private static function answer(int $status, array $body): MockResponse
     {
-        return new MockResponse(json_encode($body, \JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
+        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
     }
 
     /**
      * @param ArrayObject<int, array{string, string, array<string, mixed>}> $calls
-     * @param Closure(array<string, mixed>): MockResponse                  $answer
+     * @param Closure(array<string, mixed>): MockResponse                   $answer
      */
     private function check(string $key, ArrayObject $calls, Closure $answer): KeyCheckOutcome
     {
         $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
-            $request = json_decode($options['body'], true, flags: \JSON_THROW_ON_ERROR);
+            $request = json_decode($options['body'], true, flags: JSON_THROW_ON_ERROR);
             $calls->append([$method, $url, $request]);
 
             return $answer($request);

@@ -36,7 +36,7 @@ final class KeepProviderKeyTest extends TestCase
 
     public function testARecognisedKeyTheProviderAcceptsIsKeptAsConfiguredWithItsLastCharactersOnly(): void
     {
-        $configured = $this->useCase(new ArrayObject(), self::answer(200, [
+        $configured = $this->useCase(new ArrayObject(), $this->answer(200, [
             'id' => 'msg_test', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-haiku-5-5',
             'content' => [['type' => 'text', 'text' => 'ok']],
             'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
@@ -50,7 +50,7 @@ final class KeepProviderKeyTest extends TestCase
     {
         $this->expectException(KeyRefusedByProvider::class);
 
-        (void) $this->useCase(new ArrayObject(), self::answer(401, ['error' => ['message' => 'Invalid credentials']]))->keep('hf_'.self::BODY);
+        (void) $this->useCase(new ArrayObject(), $this->answer(401, ['error' => ['message' => 'Invalid credentials']]))->keep('hf_'.self::BODY);
     }
 
     public function testAKeyTheCheckCouldNotReachThrowsKeyNotChecked(): void
@@ -65,7 +65,7 @@ final class KeepProviderKeyTest extends TestCase
         $calls = new ArrayObject();
 
         try {
-            (void) $this->useCase($calls, self::answer(200, []))->keep('not a key');
+            (void) $this->useCase($calls, $this->answer(200, []))->keep('not a key');
             self::fail('The key should not be recognised.');
         } catch (KeyNotRecognised) {
             self::assertCount(0, $calls);
@@ -77,7 +77,7 @@ final class KeepProviderKeyTest extends TestCase
         $key = 'sk-ant-'.self::BODY;
 
         try {
-            (void) $this->useCase(new ArrayObject(), self::answer(401, ['type' => 'error', 'error' => ['type' => 'authentication_error', 'message' => 'invalid x-api-key '.$key]]))->keep($key);
+            (void) $this->useCase(new ArrayObject(), $this->answer(401, ['type' => 'error', 'error' => ['type' => 'authentication_error', 'message' => 'invalid x-api-key '.$key]]))->keep($key);
             self::fail('The provider should refuse the key.');
         } catch (KeyRefusedByProvider $refused) {
             self::assertStringNotContainsString($key, (string) $refused);
@@ -101,9 +101,9 @@ final class KeepProviderKeyTest extends TestCase
     /**
      * @param array<string, mixed> $body
      */
-    private static function answer(int $status, array $body): MockResponse
+    private function answer(int $status, array $body): MockResponse
     {
-        return new MockResponse(json_encode($body, \JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
+        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
     }
 
     /**
