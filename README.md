@@ -9,11 +9,7 @@
 
 Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge checks every finding against the task before it reaches the act list. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
 
-PHP 8.5, Symfony AI. [Status](#status) says what works today and what is planned.
-
-![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
-
-[Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
+PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
 ## Five-minute start
 
@@ -31,9 +27,16 @@ The first start ends by printing the review command and, after it, an MCP line. 
 
 | Path | Command | What you see |
 | --- | --- | --- |
-| Console | the printed `docker compose exec intakt php bin/console intakt:review sample-change ...` | the verdict and the act list; exit 0 (approve), 10 (changes) or 11 (blocked) ([Reading a verdict](docs/user/README.md#reading-a-verdict)) |
+| Console | the printed `intakt:review sample-change ...` command | the verdict and the act list; exit 0, 10 or 11 ([Reading a verdict](docs/user/README.md#reading-a-verdict)) |
 | Dashboard | open `http://localhost:7781` | each round live, with the judge's call on every finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
-| MCP | the printed `claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the printed token>"` | your agent starts a review (`start_review`) with the printed command's values and reads the act list ([details](docs/user/mcp.md)) |
+| MCP | the printed `claude mcp add ...` line | your agent starts a review (`start_review`) and reads the act list ([details](docs/user/mcp.md)) |
+
+<details>
+<summary>Screenshot: the dashboard's review page for the sample change</summary>
+
+![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
+
+</details>
 
 The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words; [the review flow](docs/architecture/review-flow.md) draws how a review runs inside.
 
