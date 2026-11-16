@@ -1,0 +1,3 @@
+{% set acting = reviewed is null ? [] : reviewed.findings|filter(f => f.call.name == 'Act') %}
+{% set later = reviewed is null ? [] : reviewed.findings|filter(f => f.call.name == 'FollowUp') %}
+<p class="muted" id="round-{{ at }}-now-judge">{% if reviewed is null or reviewed.state.name != 'Judged' %}The judge has not judged this round yet.{% else %}The judge has judged this round: {{ acting|length }} to fix now, {{ later|length }} deferred to a follow-up, {{ reviewed.findings|length - acting|length - later|length }} dropped.{% endif %}</p>

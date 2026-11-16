@@ -2,5 +2,12 @@
 {{ include('dashboard/stream/round_changed.stream.html.twig') }}
 <turbo-stream action="replace" target="round-{{ round }}-head-state"><template><span id="round-{{ round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: constant('Intakt\\Core\\Dashboard\\Domain\\ReviewState::Judged')}, with_context = false) }}</span></template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">judged</span></template></turbo-stream>
-{# The stream carries no findings, so the judge's call itself is read from the ledger on the next load. #}
+{% if judged is not null %}
+<turbo-stream action="replace" target="round-{{ round }}-now-judge"><template>{{ include('dashboard/_now_judge.html.twig', {at: round, reviewed: judged}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-now-open"><template>{{ include('dashboard/_now_open_findings.html.twig', {at: round, open: review.openFindings, judged: judged}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-outcome"><template>{{ include('dashboard/_round_outcome.html.twig', {reviewed: judged}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-judgment"><template>{{ include('dashboard/_judged_round.html.twig', {reviewed: judged}, with_context = false) }}</template></turbo-stream>
+{% else %}
+{# The judged round could not be read from the ledger, so the judge's call is read on the next load. #}
 <turbo-stream action="replace" target="round-{{ round }}-now-judge"><template><p class="muted" id="round-{{ round }}-now-judge">The judge has judged this round. Reload the page to see its call and the findings to fix.</p></template></turbo-stream>
+{% endif %}

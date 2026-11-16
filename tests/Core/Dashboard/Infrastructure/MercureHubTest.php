@@ -11,6 +11,8 @@ use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Tests\Support\WorkerPorts;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\ListedReviews;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -117,6 +119,7 @@ final class MercureHubTest extends TestCase
             self::createStub(SessionSummaries::class),
             new LockFactory(new InMemoryStore()),
             $logger,
+            ListedReviews::pagesOn(new DashboardLedger()),
         );
     }
 

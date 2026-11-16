@@ -78,17 +78,11 @@
         </div>
         <div>
             <h3>Open findings</h3>
-            {% if open is empty %}
-            <p class="muted">No finding is open.</p>
-            {% else %}
-            {% for finding in open %}
-            <a class="sb-finding" href="#round-{{ judged.round }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span><span class="mono">{{ finding.entryId }}</span> {{ finding.text ?? 'Text not recorded.' }}</span></a>
-            {% endfor %}
-            {% endif %}
+            {{ include('dashboard/_now_open_findings.html.twig', {at: active.round, open: open, judged: judged}, with_context = false) }}
         </div>
         <div>
             <h3>The judge's call</h3>
-            <p class="muted" id="round-{{ active.round }}-now-judge">The judge has not judged this round yet.</p>
+            {{ include('dashboard/_now_judge.html.twig', {at: active.round, reviewed: active}, with_context = false) }}
         </div>
     </div>
 </section>

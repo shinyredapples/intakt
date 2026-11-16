@@ -10,10 +10,13 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\SessionSummaries;
 use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\ToolCallCount;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\ListedReviews;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -172,7 +175,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig = self::createStub(Environment::class);
         $twig->method('render')->willThrowException($failure);
 
-        new MercureRoundUpdates($this->live(), $twig, self::createStub(SessionSummaries::class), new LockFactory(new InMemoryStore()), $this->log)->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
+        new MercureRoundUpdates($this->live(), $twig, self::createStub(SessionSummaries::class), new LockFactory(new InMemoryStore()), $this->log, ListedReviews::pagesOn(new DashboardLedger()))->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
 
         self::assertSame(
             [['warning', 'A live round update was not rendered.', ['round' => self::ROUND, 'stream' => 'tool_called', 'exception' => $failure]]],
@@ -366,6 +369,37 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertSame([], $this->published);
     }
 
+    public function testAJudgedRoundsPublishedUpdateCarriesItsFindingsReadFromTheLedger(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $ledger->judgeFindings(self::ROUND, ['F1' => 'act']);
+
+        $this->updates(null, null, null, $ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertStringContainsString('target="round-'.self::ROUND.'-judgment"', $this->published[0]->getData());
+        self::assertStringContainsString('Text of F1.', $this->published[0]->getData());
+        self::assertStringContainsString('Fix now', $this->published[0]->getData());
+        self::assertStringContainsString('target="round-'.self::ROUND.'-now-open"', $this->published[0]->getData());
+        self::assertStringContainsString('target="round-'.self::ROUND.'-outcome"', $this->published[0]->getData());
+    }
+
+    public function testAJudgedRoundWhoseReviewCannotBeReadStillPublishesItsJudgedStateAndLogsAWarning(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException($failure);
+
+        $this->updates(null, null, null, $ledger)->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('Reload the page to see its call', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'A judged round could not be read for its live update.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
     public function testAJudgedRoundWhoseSummaryCannotBeComputedStillPublishesItsJudgedState(): void
     {
         $failure = new RuntimeException('the store is gone');
@@ -446,7 +480,7 @@ final class MercureRoundUpdatesTest extends TestCase
     /**
      * @param (callable(Update): string)|null $publisher
      */
-    private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null, ?PersistingStoreInterface $locks = null): MercureRoundUpdates
+    private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null, ?PersistingStoreInterface $locks = null, ?Ledger $ledger = null): MercureRoundUpdates
     {
         // Registered because the judged stream renders a component, which asks for its options through this function.
         $twig = new Environment(new FilesystemLoader(__DIR__.'/../../../../templates'));
@@ -458,6 +492,7 @@ final class MercureRoundUpdatesTest extends TestCase
             $summaries ?? self::createStub(SessionSummaries::class),
             new LockFactory($locks ?? new InMemoryStore()),
             $this->log,
+            ListedReviews::pagesOn($ledger ?? new DashboardLedger()),
         );
     }
 

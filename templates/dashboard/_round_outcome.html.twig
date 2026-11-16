@@ -1,0 +1,3 @@
+{# Always on the page, hidden until the round is judged, because the judged stream replaces it by id. #}
+{% set failed = reviewed.failedReviewers %}
+<p class="outcome" id="round-{{ reviewed.round }}-outcome"{% if reviewed.state.name != 'Judged' %} hidden{% endif %}>{% if reviewed.state.name != 'Judged' %}{% elseif reviewed.outcome is not null %}Outcome: {{ reviewed.outcome.value }}, decided by the quorum policy {{ reviewed.quorum.value }} over all {{ reviewed.reviewers }} reviewers.{% if failed > 0 %} {{ failed }} of {{ reviewed.reviewers }} reviewers failed, and a failed reviewer gives no approval.{% endif %}{% else %}No outcome shown: this round was started before Intakt recorded its quorum policy.{% endif %}</p>
