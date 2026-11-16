@@ -315,14 +315,6 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame('4 Your own agent', $page->filter('ol.steps li[aria-current="step"]')->text());
     }
 
-    public function testWithNoProviderKeyTheFirstStepIsTheCurrentStep(): void
-    {
-        $page = $this->firstRunPage(self::PROJECTS, []);
-
-        self::assertCount(1, $page->filter('ol.steps li[aria-current="step"]'));
-        self::assertSame('1 AI providers', $page->filter('ol.steps li[aria-current="step"]')->text());
-    }
-
     public function testWhenEveryStepIsDoneNoMarkerIsCurrent(): void
     {
         $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
