@@ -304,7 +304,7 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertNotSame($app, $mercure);
         self::assertSame($app.' '.$mercure, trim(new Filesystem()->readFile($this->directory.'/secrets')));
         self::assertSame(0600, fileperms($this->directory.'/app-secret') & 0777);
-        self::assertStringNotContainsString($app, (string) $this->entrypoint?->getOutput().$this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString($app, $this->entrypoint?->getOutput().$this->entrypoint?->getErrorOutput());
     }
 
     public function testARestartOnTheSameDataVolumeReusesTheMadeSecrets(): void
