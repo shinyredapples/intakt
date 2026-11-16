@@ -39,6 +39,7 @@ use Intakt\Kernel;
 use Intakt\Tests\Core\Mcp\Contract\McpServerClient;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Override;
+use Intakt\Core\Review\Contract\ReadFinding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -74,6 +75,10 @@ use Twig\Environment;
 #[UsesClass(StoredSessionSummaries::class)]
 #[UsesClass(RoundToolCalls::class)]
 #[UsesClass(ReviewedRepository::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(ReadFinding::class)]
+#[UsesClass(ReadAnswer::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;

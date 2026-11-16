@@ -20,6 +20,7 @@ use Intakt\Core\Review\Contract\SessionSummary;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\ReadFinding;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -48,6 +49,10 @@ use Twig\TwigFunction;
 #[UsesClass(ToolCallCount::class)]
 #[UsesClass(Cost::class)]
 #[UsesClass(ComponentOptions::class)]
+#[UsesClass(Finding::class)]
+#[UsesClass(Verdict::class)]
+#[UsesClass(ReadFinding::class)]
+#[UsesClass(ReadAnswer::class)]
 final class MercureRoundUpdatesTest extends TestCase
 {
     private const string ROUND = '01a19a97-48cf-70f1-bdae-965425786c46';

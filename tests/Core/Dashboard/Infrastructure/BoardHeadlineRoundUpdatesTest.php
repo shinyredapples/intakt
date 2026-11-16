@@ -52,6 +52,7 @@ use Twig\Environment;
 #[UsesClass(WhoIsWorking::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(ReadAnswer::class)]
 final class BoardHeadlineRoundUpdatesTest extends KernelTestCase
 {
     private const string ROUND = '0199a5b4-0000-7000-8000-000000000001';
