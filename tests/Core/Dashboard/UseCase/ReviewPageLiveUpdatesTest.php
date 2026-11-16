@@ -153,7 +153,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $streams = $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness'])
-            .$this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped]),]);
+            .$this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true, ['round-1-correctness' => FinishedState::Stopped])]);
 
         foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target')) as $target) {
             self::assertCount(1, $page->filter('#'.$target), $target);
