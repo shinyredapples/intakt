@@ -9,7 +9,7 @@ use Intakt\Core\Budget\Contract\SharedHold;
 use Intakt\Core\Dashboard\Infrastructure\MessageQueues;
 use Symfony\Component\Clock\ClockInterface;
 
-// Read from the database alone and never through the message bus, so a stopped consumer still yields a status; the document follows docs/user/status.schema.json.
+// Read from the database alone and never through a queued message (the replay marks are queries answered in this process), so a stopped consumer still yields a status; the document follows docs/user/status.schema.json.
 final readonly class StatusReadModel
 {
     public function __construct(

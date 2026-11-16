@@ -14,6 +14,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerBuildSteps;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerWaitingHeads;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Watcher\Contract\WatcherServices;
@@ -34,6 +35,7 @@ final readonly class ProjectStatuses
         private LedgerWaitingHeads $waitingHeads,
         private LedgerBuildSteps $buildSteps,
         private Redactor $redactor,
+        private ReplayMarks $marks,
         #[Autowire(param: WatcherServices::PROJECTS)]
         private array $watched,
     ) {
@@ -57,8 +59,9 @@ final readonly class ProjectStatuses
             'last_outcomes' => $this->lastOutcomes($board),
         ];
 
-        return array_map(static fn (string $name): array => [
+        return array_map(fn (string $name): array => [
             'name' => $name,
+            'mark' => $this->marks->ofProject($name)->value,
             'lanes' => ['review' => $sections['review_lane'][$name] ?? [], 'build' => $sections['build_lane'][$name] ?? []],
             'guard_decisions' => $sections['guard_decisions'][$name] ?? [],
             'waiting_for_owner' => $sections['waiting_for_owner'][$name] ?? [],
@@ -78,6 +81,7 @@ final readonly class ProjectStatuses
             $round = $card->latest();
             $lane[$card->project][] = [
                 'change' => $card->change,
+                'mark' => $round->replayMark()->value,
                 'round' => $round->round,
                 'number' => $round->number,
                 'started_at' => $round->startedAt->format(DATE_ATOM),
@@ -135,7 +139,7 @@ final readonly class ProjectStatuses
         $waiting = [];
 
         foreach ($board->cardsIn(BoardColumn::WaitingOnYou) as $card) {
-            $waiting[$card->project][] = ['change' => $card->change, 'round' => $card->latest()->round];
+            $waiting[$card->project][] = ['change' => $card->change, 'mark' => $card->latest()->replayMark()->value, 'round' => $card->latest()->round];
         }
 
         return $waiting;
@@ -163,7 +167,7 @@ final readonly class ProjectStatuses
      */
     private function lastOutcomes(Board $board): array
     {
-        $judged = array_filter(array_map(static fn (Review $card): ?ReviewedRound => $card->lastJudgedRound(), $this->cardsOf($board)));
+        $judged = $this->judgedRounds($board);
         usort($judged, static fn (ReviewedRound $one, ReviewedRound $other): int => $other->judgedAt <=> $one->judgedAt);
         $outcomes = [];
 
@@ -171,11 +175,19 @@ final readonly class ProjectStatuses
             $outcomes[$round->project] ??= [];
 
             if (count($outcomes[$round->project]) < self::LAST_OUTCOMES) {
-                $outcomes[$round->project][] = ['change' => $round->change, 'round' => $round->round, 'number' => $round->number, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
+                $outcomes[$round->project][] = ['change' => $round->change, 'mark' => $round->replayMark()->value, 'round' => $round->round, 'number' => $round->number, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
             }
         }
 
         return $outcomes;
+    }
+
+    /**
+     * @return list<ReviewedRound>
+     */
+    private function judgedRounds(Board $board): array
+    {
+        return array_values(array_filter(array_map(static fn (Review $card): ?ReviewedRound => $card->lastJudgedRound(), $this->cardsOf($board))));
     }
 
     /**
