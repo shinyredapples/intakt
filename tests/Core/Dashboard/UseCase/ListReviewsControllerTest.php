@@ -13,9 +13,15 @@ use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundEndReasons;
+use Intakt\Tests\Support\FixedRoundEndings;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
+use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ListReviewsController::class)]
@@ -92,6 +98,28 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews');
 
         self::assertSame('Approved', $crawler->filter('.review-facts .chip.approved')->text());
+    }
+
+    public function testARoundThatEndedWithoutAnOutcomeInTimeShowsTheBlockedChipAndNoFindingCount(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+        self::getContainer()->get(ClockInterface::class)->sleep(3 * 3600 + 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Blocked', $crawler->filter('.review-facts .chip')->first()->text());
+        self::assertCount(0, $crawler->filter('.review-facts .findings'));
+    }
+
+    public function testARoundWhoseJudgingFailedShowsTheFailedChipAndNoFindingCount(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+        self::getContainer()->set(RoundEndings::class, new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, RoundEndReasons::JUDGING_FAILED)));
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('Failed', $crawler->filter('.review-facts .chip')->first()->text());
+        self::assertCount(0, $crawler->filter('.review-facts .findings'));
     }
 
     public function testAJudgedRoundShowsHowManyFindingsTheJudgeKept(): void
