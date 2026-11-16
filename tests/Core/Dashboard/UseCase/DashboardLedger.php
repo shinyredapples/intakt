@@ -124,6 +124,17 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
+    public function judgeWithOnlyADroppedFinding(string $round, string $text, string $reason): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => [],
+            'follow_ups' => [],
+            'findings' => [],
+            'dropped' => [['id' => 'F1', 'severity' => 'P2', 'text' => $text, 'file' => 'src/A.php', 'line' => 3, 'reason' => $reason]],
+        ]);
+    }
+
     /**
      * @param list<string> $act
      * @param list<string> $followUps
