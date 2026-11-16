@@ -1,8 +1,8 @@
-Comment for symfony/ai#2617 ([Agent] Expose each round's token usage as it happens, not only on a final result). Not posted: the owner approves this text first.
+Comment for symfony/ai#2617 ([Agent] Expose each round's token usage as it happens, not only on a final result). Posted 2026-11-14.
 
 ---
 
-One more case this could cover: a streamed round that fails mid-stream. With a tool round (110 tokens) and then a round that streams its usage (120 tokens) and some text before `IncompleteStreamException`, `Execution::getMetadata()` holds no `token_usage` on `main` (e2b5e84) and 110 tokens at this head (4584b49): the cut round never reaches its `ModelResult`, although its `StreamResult` kept the 120 tokens through its `ErrorEvent`. Without the cut, both give 230 once.
+One more case this could cover: a streamed round that fails mid-stream. With a tool round (110 tokens) and then a round that streams its usage (120 tokens) and some text before `IncompleteStreamException`, `Execution::getMetadata()` holds no `token_usage` on `main` (c4cb5da) and 110 tokens at this head (4584b49): the cut round never reaches its `ModelResult`, although its `StreamResult` kept the 120 tokens through its `ErrorEvent`. Without the cut, both give 230 once.
 
 ```php
 $calls = 0;
