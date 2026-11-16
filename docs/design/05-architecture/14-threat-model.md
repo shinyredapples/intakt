@@ -111,6 +111,7 @@ Before a key typed in the browser is kept, plain code checks it with one call to
 - **Input:** the prompt is a constant of Intakt's own (`Answer with the single word: ok`), sent to the cheapest model of the key's kind with the smallest answer cap its provider accepts; the call has no tools.
 - **Credential:** the key goes only to the provider its form names (Anthropic, OpenAI, or Hugging Face's router), in that provider's own header, through the bridge of that kind; `ProviderKey::secret()` is read for this call only.
 - **Output:** the answer is dropped unread beyond its success; only an authentication failure counts as a refusal, and any other failure leaves the key not checked, so a provider's text cannot mark a key good or bad.
+- **Storage:** an accepted key is kept in the data volume in a file only the app user can read (`KeptProviderKeyFile`); it never reaches a log, an exception message or the browser, which gets the kind and at most its last four characters.
 - **Failures:** a provider's error text can echo the request, the key included, so it is never kept: the outcome is an enum, and the exceptions `KeepProviderKey` throws have fixed messages and no previous exception.
 
 ## External dependencies
