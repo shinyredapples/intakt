@@ -307,6 +307,14 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame('3 First review', $page->filter('ol.steps li[aria-current="step"]')->text());
     }
 
+    public function testAStepThatIsNotNeededIsPassedOverForTheCurrentStep(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame(['done', 'done', 'not-needed', 'missing current'], $page->filter('ol.steps li')->each(static fn (Crawler $marker): string => (string) $marker->attr('class')));
+        self::assertSame('4 Your own agent', $page->filter('ol.steps li[aria-current="step"]')->text());
+    }
+
     public function testWhenEveryStepIsDoneNoMarkerIsCurrent(): void
     {
         $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
