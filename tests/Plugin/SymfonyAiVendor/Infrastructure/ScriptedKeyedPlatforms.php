@@ -28,7 +28,7 @@ final readonly class ScriptedKeyedPlatforms implements KeyedPlatforms
     public function platformFor(ProviderKey $key): PlatformInterface
     {
         return MockPlatformFactory::createPlatform(function (Model $model, array|string|object $input, array $options): ResultInterface|string {
-            /** @var array<string, mixed> $options */
+            /* @var array<string, mixed> $options */
             $this->calls->append([$model->getName(), $options]);
 
             return ($this->answer)();
