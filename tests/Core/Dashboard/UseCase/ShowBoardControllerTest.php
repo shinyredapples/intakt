@@ -76,7 +76,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $lead = $this->browser->request('GET', '/')->filter('.page-head .lead');
 
         self::assertSame('The Code reviewers are reviewing change 42 of alpha. The Code reviewers are reviewing 1 change. Nothing needs you.', $lead->text());
-        self::assertCount(0, $lead->filter('a'));
+        self::assertSame(['/reviews/round-1'], $lead->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
     }
 
     public function testACardOfAProjectFlaggedAsReplayShowsTheReplayMarkOnTheBoard(): void

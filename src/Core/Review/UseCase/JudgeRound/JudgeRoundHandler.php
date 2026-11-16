@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\RoundJudged;
+use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
@@ -37,10 +38,28 @@ final readonly class JudgeRoundHandler
             return;
         }
 
-        $findings = $this->rounds->findingsOf($round);
+        $findings = $this->quotingTheChange($round, $this->rounds->findingsOf($round));
         $judged = JudgedFindings::of($this->judgementOf($round, $findings), $findings);
         $this->rounds->record($round, $judged);
         $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
+    }
+
+    // Before the judge and the act list, so a finding quoting code the change does not hold is neither judged nor merged with a real one at its place.
+    /**
+     * @param list<Finding> $findings
+     *
+     * @return list<Finding>
+     */
+    private function quotingTheChange(ReviewRound $round, array $findings): array
+    {
+        if ([] === $findings) {
+            return [];
+        }
+
+        $change = $this->rounds->changeOf($round);
+        $quotes = new QuotesInChange();
+
+        return array_values(array_filter($findings, static fn (Finding $finding): bool => null === $quotes->reasonToDrop($finding, $change)));
     }
 
     /**
