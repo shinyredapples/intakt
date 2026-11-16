@@ -1,6 +1,6 @@
-From 172116a2d289402a3a0814477dd0d9c26d8741dc Mon Sep 17 00:00:00 2001
-From: Intakt Builder <builder@localhost>
-Date: Sun, 15 Nov 2026 02:53:01 +0000
+From 5c30e1c4 Mon Sep 17 00:00:00 2001
+From: haraldpdl <haraldpdl@users.noreply.github.com>
+Date: Mon, 16 Nov 2026
 Subject: [PATCH] [Platform][ClaudeCode] Report cache creation and cache read
  tokens apart
 
