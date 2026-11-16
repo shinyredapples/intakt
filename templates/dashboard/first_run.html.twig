@@ -2,6 +2,8 @@
 
 {% block title %}Set up - Intakt{% endblock %}
 
+{% block content_width %} wide{% endblock %}
+
 {% block body %}
 {%- set titles = ['AI providers', 'A project', 'First review', 'Your own agent'] -%}
 {%- set states = first_run.states -%}
@@ -14,7 +16,11 @@
     </div>
     <ol class="steps" aria-label="Setup progress">
         {%- for title in titles %}
+        {%- if loop.index0 === first_run.current %}
+        <li class="{{ states[loop.index0].value }} current" aria-current="step">{{ loop.index }} {{ title }}</li>
+        {%- else %}
         <li class="{{ states[loop.index0].value }}">{{ loop.index }} {{ title }}</li>
+        {%- endif %}
         {%- endfor %}
     </ol>
     <p class="step-count">{{ first_run.done }} of {{ first_run.needed }} steps done</p>
@@ -61,9 +67,11 @@
         <h2 id="step-first-review-h">3 {{ titles[2] }} {{ _self.state(step.state) }}</h2>
         <p class="lead">{{ step.sentence }}</p>
         {%- if step.round is not null %}
-        <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: step.round}) }}">Open the review</a>
+        <div class="step-nav">
+            <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: step.round}) }}">Open the review</a>
+        </div>
         {%- elseif step.sampleCanStart %}
-        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review">
+        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_FIRST_REVIEW')) }}" class="start-first-review step-nav">
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartFirstReviewController::TOKEN_ID')) }}">
             {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the first review'}, with_context = false) }}
         </form>

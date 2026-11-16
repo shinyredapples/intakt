@@ -26,7 +26,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
-// Covers nothing because what is proven is the demo's chain: the token docker/entrypoint.sh makes, the line the seed prints with it, and an MCP client that connects with that line's token.
+// Covers nothing because what is proven is the demo's chain: the token docker/entrypoint.sh makes, the line the start prints with it once the server answers, and an MCP client that connects with that line's token.
 #[Group('persistence')]
 #[CoversNothing]
 final class DemoOwnerTokenSdkClientTest extends KernelTestCase
@@ -110,10 +110,12 @@ final class DemoOwnerTokenSdkClientTest extends KernelTestCase
 
         $seed = new CommandTester(new Application($kernel)->find('intakt:sample:seed'));
         $seed->execute(['repository' => $this->directory.'/sample-repository', 'configuration' => $this->directory.'/intakt.yaml']);
+        $show = new CommandTester(new Application($kernel)->find('intakt:sample:show'));
+        $show->execute(['repository' => $this->directory.'/sample-repository']);
 
-        preg_match('/^Connect an MCP client: .* --header "Authorization: Bearer (\S+)"$/m', $seed->getDisplay(), $line);
+        preg_match('/^Connect an MCP client: .* --header "Authorization: Bearer (\S+)"$/m', $show->getDisplay(), $line);
 
-        return $line[1] ?? self::fail('The seed printed no MCP setup: '.$seed->getDisplay());
+        return $line[1] ?? self::fail('The start printed no MCP setup: '.$show->getDisplay());
     }
 
     private function connectedWith(string $bearer): Client

@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
+use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 
 // A reviewer's failure is stored as an exception class, because a provider's message can echo a key, or as words already key-safe, which pass through; a user reads words, never a class name.
@@ -15,6 +16,7 @@ final readonly class FailureInWords
         MaxOutputTokensException::class => 'stopped at its output limit',
         ProviderRejectedTheKey::class => 'the provider rejected the key',
         ProviderFailedTransiently::class => 'the provider kept failing',
+        ProviderUnreachable::class => 'the model endpoint could not be reached',
         VerdictUnreadable::class => VerdictUnreadable::IN_WORDS,
         ChangesWithoutFindings::class => 'asked for changes without naming a finding',
     ];

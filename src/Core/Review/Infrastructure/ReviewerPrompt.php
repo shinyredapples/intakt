@@ -47,6 +47,8 @@ final readonly class ReviewerPrompt
         Every finding names the file and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing that must change.
         TEXT;
 
+    public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review asked for changes without naming a finding. Name every finding that must change, each with its file, line and rule, or answer approve.';
+
     public function __construct(
         private Fence $fence,
         private PromptCut $cut,
@@ -74,6 +76,11 @@ final readonly class ReviewerPrompt
         // After the task and the diff, so the cached prefix of the first round stays the same.
         if ([] !== $brief->open) {
             $messages[] = Message::ofUser("The open findings of earlier rounds:\n\n".$this->fence->wrap(UntrustedSource::EarlierFindings, $this->listOf($brief->open)));
+        }
+
+        // Last and unfenced, because it is Intakt's own text about the answer it refused, never input from the change.
+        if ($conversation->askedToNameFindings) {
+            $messages[] = Message::ofUser(self::NAME_FINDINGS_OR_APPROVE);
         }
 
         return MessageBag::forId($conversation->id, ...$messages);
