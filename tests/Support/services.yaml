@@ -1,8 +1,10 @@
 services:
-    # A clock the tests move, because replacing the framework's clock with set() throws once anything has created it.
-    clock:
-        class: Symfony\Component\Clock\MockClock
-        public: true
+    # A clock the tests pin, because replacing the framework's clock with set() throws once anything has created it; outside a PHPUnit run the real clock stays.
+    intakt.test.pinnable_clock:
+        class: Symfony\Component\Clock\ClockInterface
+        decorates: clock
+        factory: ['Intakt\Tests\Support\PinnableClockFactory', 'create']
+        arguments: ['@.inner']
 
     # Records into the PHPUnit run's file instead of the logger's stderr; outside a PHPUnit run the redacted JSON logger stays, so an instance keeps its server log.
     intakt.test.recording_logger:

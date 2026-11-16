@@ -23,10 +23,11 @@ abstract class WebTestCase extends SymfonyWebTestCase
         return $container;
     }
 
-    // Moves the container's clock instead of replacing it, because a clock something already created cannot be set again.
+    // Pins the container's clock instead of replacing it, because a clock something already created cannot be set again.
     protected static function clockAt(string $moment): void
     {
         $clock = self::getContainer()->get(ClockInterface::class);
-        $clock->modify($moment);
+        assert($clock instanceof PinnableClock);
+        $clock->pinAt($moment);
     }
 }

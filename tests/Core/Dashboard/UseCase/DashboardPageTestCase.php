@@ -22,6 +22,12 @@ abstract class DashboardPageTestCase extends WebTestCase
     protected function setUp(): void
     {
         $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->serveFromMemory();
+    }
+
+    // Apart from the client, so a test can create the clock first and prove this setup still sets the moment.
+    protected function serveFromMemory(): void
+    {
         $this->ledger = new DashboardLedger();
         self::getContainer()->set(Ledger::class, $this->ledger);
         // The ledger stamps its rows at one moment, so a round only counts as overdue in the tests that move the clock on.
