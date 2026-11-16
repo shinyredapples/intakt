@@ -361,6 +361,21 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => 'The `new` line runs a shell.', 'merged' => []]], $done['findings']);
     }
 
+    public function testAFindingQuotingAnAbsentNameIsDroppedAlthoughItsSymbolIsInTheChange(): void
+    {
+        $invented = new Finding('A', Severity::P1, 'src/Thing.php', 1, 'Thing', '`grepName` is not defined.', FixableBy::Builder, false, null, null);
+        $round = $this->roundReporting([$invented, $this->quoting('B', Severity::P2, 'The `new` line runs a shell.')]);
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertSame([['F2', 'The `new` line runs a shell.']], $this->idsAndTexts($asked));
+        self::assertSame(['F2'], $this->judgeDonePayloads()[0]['act']);
+        self::assertSame([['id' => 'F1', 'reason' => 'None of its quotes is in the change or the files it touches: `grepName`.']], $this->judgeDonePayloads()[0]['dropped']);
+    }
+
     public function testARoundWhoseEveryFindingIsDroppedIsJudgedWithoutAskingTheJudge(): void
     {
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.')]);

@@ -26,6 +26,9 @@ final class QuotesInChangeTest extends TestCase
         +export function orderLog(customerName) {
         +  return execSync('grep ' + customerName + ' orders.log').toString();
         -const legacyName = 1;
+        -  if (!customerName) {
+        -    throw fallbackError;
+        -  }
         +const limit = 100;
         +class Order { total() { return Shop\Money.zero; } }
         DIFF;
@@ -80,7 +83,7 @@ final class QuotesInChangeTest extends TestCase
 
     public function testAFindingThatOnlyQuotesSignsIsLeftToTheJudge(): void
     {
-        $finding = new Finding('F1', Severity::P1, 'src/report.js', 2, '...', 'A `;` is missing.', FixableBy::Builder, false, null, null);
+        $finding = $this->findingAt('...', 'A `;` is missing.');
 
         self::assertSame([$finding], $this->checked($finding)->kept);
     }
@@ -88,17 +91,58 @@ final class QuotesInChangeTest extends TestCase
     /**
      * @return iterable<string, array{string}>
      */
-    public static function fragmentsTheChangeDoesNotHold(): iterable
+    public static function quotesWithoutAName(): iterable
     {
-        yield 'names of the change joined into a call it never makes' => ['`customerName.execSync()` throws.'];
-        yield 'a comparison without names' => ['The limit is `>= 10`.'];
-        yield 'a number that only starts a number of the change' => ['The limit `10` is too low.'];
+        yield 'a comparison with a number' => ['The limit is `>= 10`.'];
+        yield 'a number the change does not hold' => ['The limit `10` is too low.'];
+        yield 'a number with a unit' => ['The margin `10px` is too small.'];
     }
 
-    #[DataProvider('fragmentsTheChangeDoesNotHold')]
-    public function testAFragmentTheChangeDoesNotHoldAsAWholeDropsTheFinding(string $text): void
+    #[DataProvider('quotesWithoutAName')]
+    public function testAFindingThatOnlyQuotesNumbersAndSignsIsLeftToTheJudge(string $text): void
     {
-        self::assertSame('F1', $this->checked($this->finding('F1', $text))->dropped[0]->id ?? null);
+        $finding = $this->finding('F1', $text);
+
+        self::assertSame([$finding], $this->checked($finding)->kept);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function realFindingsThatShortenOrReformatCodeOfTheChange(): iterable
+    {
+        yield 'only the abbreviated call' => ['`execSync(...)` runs a shell with the customer name.'];
+        yield 'abbreviated concatenation' => ['`execSync(\'grep \' + customerName + ...)` reaches a shell.'];
+        yield 'double quotes instead of single' => ['`execSync("grep " + customerName)` reaches a shell.'];
+        yield 'a fragment cut before the closing parenthesis' => ['`execSync(\'grep \' + customerName)` reaches a shell.'];
+        yield 'names of the change in an order it never spells' => ['`customerName.execSync()` throws.'];
+    }
+
+    #[DataProvider('realFindingsThatShortenOrReformatCodeOfTheChange')]
+    public function testAFindingThatShortensOrReformatsCodeOfTheChangeIsKept(string $text): void
+    {
+        $finding = $this->finding('F1', $text);
+
+        self::assertSame([[$finding], []], [$this->checked($finding)->kept, $this->checked($finding)->dropped]);
+    }
+
+    public function testACorrectQuoteOfRemovedCodeThatSpansLinesIsKept(): void
+    {
+        $finding = $this->finding('F1', 'Removing `if (!customerName) { throw fallbackError; }` lets an empty name through.');
+
+        self::assertSame([$finding], $this->checked($finding)->kept);
+    }
+
+    public function testAQuoteWithANameAbsentFromTheChangeIsNotInItAlthoughItsOtherNamesAre(): void
+    {
+        $check = $this->checked($this->finding('F1', '`grepName(customerName)` is not defined.'));
+
+        self::assertEquals([new DroppedFinding('F1', 'None of its quotes is in the change or the files it touches: `grepName(customerName)`.')], $check->dropped);
+    }
+
+    public function testANameSpelledInAnotherCaseIsNotInTheChange(): void
+    {
+        self::assertCount(1, $this->checked($this->finding('F1', '`customername` is unused.'))->dropped);
     }
 
     public function testAFragmentSpacedOtherwiseThanInTheChangeIsInIt(): void
@@ -127,16 +171,54 @@ final class QuotesInChangeTest extends TestCase
         self::assertCount(1, $this->checked($this->finding('F1', '`Order::grepName()` is undefined.'))->dropped);
     }
 
-    public function testASymbolAbsentFromTheChangeDropsTheFinding(): void
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function inventedFindingsAtARealSymbol(): iterable
     {
-        $finding = new Finding('F1', Severity::P1, 'src/report.js', 2, 'grepName', 'Undefined.', FixableBy::Builder, false, null, null);
-
-        self::assertEquals([new DroppedFinding('F1', 'None of its quotes is in the change or the files it touches: `grepName`.')], $this->checked($finding)->dropped);
+        yield 'the enclosing function' => ['orderLog', '`grepName` is not defined.'];
+        yield 'the enclosing function with parentheses' => ['orderLog()', '`grepName` is not defined in this function.'];
+        yield 'a member of the change' => ['Order::total', 'The call to `grepName` fails.'];
     }
 
-    public function testASymbolInTheChangeKeepsTheFinding(): void
+    #[DataProvider('inventedFindingsAtARealSymbol')]
+    public function testASymbolInTheChangeNeverKeepsAFindingWhoseQuotedNameIsAbsent(string $symbol, string $text): void
     {
-        $finding = new Finding('F1', Severity::P1, 'src/report.js', 2, 'orderLog()', 'Runs a shell.', FixableBy::Builder, false, null, null);
+        $check = $this->checked($this->findingAt($symbol, $text));
+
+        self::assertSame([], $check->kept);
+        self::assertEquals([new DroppedFinding('F1', 'None of its quotes is in the change or the files it touches: `grepName`.')], $check->dropped);
+    }
+
+    public function testASymbolAbsentFromTheChangeDoesNotDropAFindingWhoseQuoteIsInTheChange(): void
+    {
+        $finding = $this->findingAt('grepName', '`customerName` reaches a shell.');
+
+        self::assertSame([$finding], $this->checked($finding)->kept);
+    }
+
+    public function testASymbolAbsentFromTheChangeDropsAFindingThatQuotesNothing(): void
+    {
+        $check = $this->checked($this->findingAt('grepName', 'Undefined.'));
+
+        self::assertEquals([new DroppedFinding('F1', 'Its symbol `grepName` is not in the change or the files it touches.')], $check->dropped);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function symbolsLeftToTheJudge(): iterable
+    {
+        yield 'a call of the change' => ['orderLog()'];
+        yield 'a member of the change' => ['Order::total'];
+        yield 'a path' => ['src/missing.js'];
+        yield 'signs only' => ['...'];
+    }
+
+    #[DataProvider('symbolsLeftToTheJudge')]
+    public function testASymbolInTheChangeOrOneThatNamesNoCodeKeepsAFindingThatQuotesNothing(string $symbol): void
+    {
+        $finding = $this->findingAt($symbol, 'Runs a shell.');
 
         self::assertSame([$finding], $this->checked($finding)->kept);
     }
@@ -194,5 +276,10 @@ final class QuotesInChangeTest extends TestCase
     private function finding(string $id, string $text): Finding
     {
         return new Finding($id, Severity::P1, 'src/report.js', 2, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    private function findingAt(string $symbol, string $text): Finding
+    {
+        return new Finding('F1', Severity::P1, 'src/report.js', 2, $symbol, $text, FixableBy::Builder, false, null, null);
     }
 }
