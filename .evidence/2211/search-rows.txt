@@ -1,0 +1,17 @@
+Search overlay on /reviews, query "sample", one seeded review_started event (project sample, change sample-change, number 2),
+dashboard served with php -S localhost:7780, measured in headless Chromium (Playwright) with getBoundingClientRect on each #search-results a.res.
+
+1440x900:
+  a.res "sample-change, round 2"  height 62.6 px  width 622 px  href /reviews/019a8b7c-0b7e-7c1a-9c6b-2f1d0a9e8b7c
+  a.res "sample"                  height 44 px    width 622 px  href /reviews?project=sample
+390x844:
+  a.res "sample-change, round 2"  height 87.3 px  width 374 px  href /reviews/019a8b7c-0b7e-7c1a-9c6b-2f1d0a9e8b7c
+  a.res "sample"                  height 52 px    width 374 px  href /reviews?project=sample
+
+bin/ui-check (search page, light and dark):
+search light 1440: axe critical 0, serious 0, moderate 0, minor 0
+search light 1920: axe critical 0, serious 0, moderate 0, minor 0
+search light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+search dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+search dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+search dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
