@@ -6,8 +6,8 @@ namespace Intakt\Tests\Core\Review\UseCase\ReadRound;
 
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Review\Contract\Decision;
-use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\DroppedFinding;
+use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\JudgedFinding;
