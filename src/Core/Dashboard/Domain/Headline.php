@@ -48,6 +48,12 @@ final readonly class Headline
         return 'The '.self::REVIEWERS.' are reviewing '.$running.' '.(1 === $running ? 'change' : 'changes').'.';
     }
 
+    // The first lane's round, because the opening names that lane's change first, so the lead opens the review it names (#2207, D1).
+    public function runningRound(): ?string
+    {
+        return array_first($this->working->lanes())?->roundId;
+    }
+
     public function waitingCount(): int
     {
         return count($this->waiting);

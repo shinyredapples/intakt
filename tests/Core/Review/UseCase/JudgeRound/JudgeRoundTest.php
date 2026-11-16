@@ -19,9 +19,12 @@ use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingLedger;
+use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
+use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeLimited;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
@@ -59,6 +62,9 @@ use Throwable;
 #[CoversClass(StoredFindings::class)]
 #[CoversClass(FindingLedger::class)]
 #[CoversClass(RoundTransition::class)]
+#[CoversClass(QuotesInChange::class)]
+#[CoversClass(ChangeText::class)]
+#[UsesClass(DiffPaths::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(RoundJudged::class)]
 #[UsesClass(FollowUp::class)]
@@ -315,6 +321,52 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
+    public function testAFindingQuotingANameAbsentFromTheChangeNeverReachesTheJudge(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertSame([['F2', '`old` is still read.']], $this->idsAndTexts($asked));
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F2'], 'follow_ups' => []]], $this->judgeCalls());
+    }
+
+    public function testAFindingWithoutAQuoteAndASymbolAbsentFromTheChangeReachesTheJudge(): void
+    {
+        $finding = new Finding('A', Severity::P1, 'src/Thing.php', 1, 'grepName', 'The command is built from user input.', FixableBy::Builder, false, null, null);
+        $round = $this->roundReporting([$finding]);
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        $asked = $judge->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertSame([['F1', 'The command is built from user input.']], $this->idsAndTexts($asked));
+    }
+
+    public function testADroppedFindingIsNeverMergedWithARealOneAtItsPlace(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->quoting('B', Severity::P2, '`old` is still read.')]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => []]], $this->judgeDonePayloads()[0]['findings']);
+    }
+
+    public function testARoundWhoseEveryFindingIsDroppedIsJudgedWithoutAskingTheJudge(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.')]);
+        $judge = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($judge)($this->judgingOf($round));
+
+        self::assertSame(0, $judge->calls);
+        self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => [], 'follow_ups' => []]], $this->judgeCalls());
+    }
+
     /**
      * @return iterable<string, array{Throwable}>
      */
@@ -363,6 +415,23 @@ final class JudgeRoundTest extends KernelTestCase
         }
 
         return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): ReviewRound
+    {
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+
+        return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    // At one place, so a finding that is dropped would otherwise be merged with the other.
+    private function quoting(string $id, Severity $severity, string $text): Finding
+    {
+        return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
     }
 
     private function judgingOf(ReviewRound $round): JudgeRound

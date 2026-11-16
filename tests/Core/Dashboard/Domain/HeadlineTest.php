@@ -220,6 +220,23 @@ final class HeadlineTest extends TestCase
         self::assertSame('The Code reviewers are reviewing round legacy-round-a of sample.', $headline->opening());
     }
 
+    public function testTheRunningRoundIsTheRoundOfTheChangeTheOpeningNamesFirst(): void
+    {
+        $headline = $this->headline([$this->running('sample', '3'), $this->running('sample', '5')], []);
+
+        self::assertSame('r-sample-3', $headline->runningRound());
+    }
+
+    public function testABoardWithNothingRunningHasNoRunningRound(): void
+    {
+        self::assertNull(new Headline(new WhoIsWorking([]), [], 1)->runningRound());
+    }
+
+    public function testARoundFromBeforeTheLedgerNamedItsChangeIsStillTheRunningRound(): void
+    {
+        self::assertSame('legacy-round-a', $this->headline([$this->unnamed('legacy-round-a')], [])->runningRound());
+    }
+
     /**
      * @param list<Review> $running
      * @param list<Review> $waiting
