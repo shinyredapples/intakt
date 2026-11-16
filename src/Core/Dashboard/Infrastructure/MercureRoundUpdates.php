@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
@@ -43,25 +44,25 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     #[Override]
     public function toolCalled(Uuid $round, string $reviewer, string $tool): void
     {
-        $this->publish($round, RoundStream::ToolCalled, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'tool' => $tool]);
+        $this->publish($round, RoundStream::ToolCalled, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->startedReviewerOf($round, $reviewer), 'tool' => $tool]);
     }
 
     #[Override]
     public function textStreamed(Uuid $round, string $reviewer, string $text): void
     {
-        $this->publish($round, RoundStream::TextStreamed, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'text' => $text]);
+        $this->publish($round, RoundStream::TextStreamed, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->startedReviewerOf($round, $reviewer), 'text' => $text]);
     }
 
     #[Override]
     public function answerRead(Uuid $round, string $reviewer, ReadAnswer $answer): void
     {
-        $this->publish($round, RoundStream::AnswerRead, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'answer' => $answer]);
+        $this->publish($round, RoundStream::AnswerRead, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->startedReviewerOf($round, $reviewer), 'answer' => $answer]);
     }
 
     #[Override]
     public function reviewerAskedAgain(Uuid $round, string $reviewer, string $try): void
     {
-        $this->publish($round, RoundStream::ReviewerAskedAgain, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'try' => $try]);
+        $this->publish($round, RoundStream::ReviewerAskedAgain, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->startedReviewerOf($round, $reviewer), 'try' => $try]);
     }
 
     #[Override]
@@ -87,7 +88,15 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     #[Override]
     public function reviewerStopped(Uuid $round, string $reviewer): void
     {
-        $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer]);
+        $this->publish($round, RoundStream::ReviewerStopped, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->stoppedReviewerOf($round, $reviewer)]);
+    }
+
+    // Read from the whole round, because a reviewer can be stopped after it answered and its row must keep the verdict and findings a reload shows; a stop is rare, unlike streamed text. Marked stopped here too, because this stream announces the stop whatever the read saw.
+    private function stoppedReviewerOf(Uuid $round, string $reviewer): ?ReviewerOutcome
+    {
+        $recorded = array_find($this->outcomesOf($round), static fn (ReviewerOutcome $outcome): bool => $outcome->id === $reviewer);
+
+        return ($recorded ?? $this->startedReviewerOf($round, $reviewer))?->stopped();
     }
 
     // Nothing on the round's topic, because the review page places a reviewer from its first tool call or text (stream/_reviewer_placed).
@@ -197,29 +206,62 @@ final readonly class MercureRoundUpdates implements RoundUpdates
 
     private function publishState(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress]);
+        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'outcomes' => $this->outcomesOf($round)]);
     }
 
     private function publishJudgedState(Uuid $round, RoundProgress $progress): void
     {
-        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $this->judgedRoundOf($round)]);
+        $reviewed = $this->judgedRoundOf($round);
+
+        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'outcomes' => $reviewed->outcomes ?? []]);
     }
 
     // Read as the page reads it, because the live findings must be exactly what a reload shows; null leaves them to that reload.
     private function judgedRoundOf(Uuid $round): ?ReviewedRound
     {
-        $id = $round->toRfc4122();
-
         try {
-            $rounds = $this->pages->reviewOf($id)->rounds ?? [];
+            $reviewed = $this->roundOf($round->toRfc4122());
         } catch (Throwable $failure) {
             // Logged and swallowed, because the judged state must still go out when its findings cannot be read.
-            $this->logger->warning('The judged round was not read for its live update.', ['round' => $id, 'exception' => $failure]);
+            $this->logger->warning('The judged round was not read for its live update.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
 
             return null;
         }
 
-        return array_find($rounds, static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id && $reviewed->isJudged());
+        return true === $reviewed?->isJudged() ? $reviewed : null;
+    }
+
+    // Read as the page reads it, because a reviewer placed by a finish must show the role, model, outcome and findings a reload shows.
+    /**
+     * @return list<ReviewerOutcome>
+     */
+    private function outcomesOf(Uuid $round): array
+    {
+        try {
+            return $this->roundOf($round->toRfc4122())->outcomes ?? [];
+        } catch (Throwable $failure) {
+            // Logged and swallowed, because the progress must still go out when its reviewers cannot be named.
+            $this->logger->warning('The round was not read for its live reviewer rows.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+
+            return [];
+        }
+    }
+
+    private function roundOf(string $id): ?ReviewedRound
+    {
+        return array_find($this->pages->reviewOf($id)->rounds ?? [], static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id);
+    }
+
+    // Null leaves the reviewer unnamed until a reload, because a live update must go out even when the ledger cannot be read.
+    private function startedReviewerOf(Uuid $round, string $reviewer): ?ReviewerOutcome
+    {
+        try {
+            return $this->pages->startedReviewerOf($round->toRfc4122(), $reviewer);
+        } catch (Throwable $failure) {
+            $this->logger->warning('The reviewer was not read for its live update.', ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'exception' => $failure]);
+
+            return null;
+        }
     }
 
     /**
