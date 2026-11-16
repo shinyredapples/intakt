@@ -17,7 +17,10 @@ final class UpstreamFixPatchTest extends TestCase
      */
     public static function patches(): iterable
     {
-        foreach (glob(dirname(__DIR__, 2).'/upstream/*/fix.patch') ?: [] as $patch) {
+        $patches = glob(dirname(__DIR__, 2).'/upstream/*/fix.patch');
+        self::assertIsArray($patches);
+
+        foreach ($patches as $patch) {
             yield basename(dirname($patch)) => [$patch];
         }
     }
@@ -27,7 +30,9 @@ final class UpstreamFixPatchTest extends TestCase
     {
         $contents = file_get_contents($patch);
         self::assertIsString($contents);
-        self::assertSame(1, preg_match('/^Date: (.+)$/m', $contents, $date));
+        if (1 !== preg_match('/^Date: (.+)$/m', $contents, $date)) {
+            self::fail('The patch has no Date header.');
+        }
 
         $process = new Process(
             ['git', '-c', 'user.name=Check', '-c', 'user.email=check@example.invalid', 'var', 'GIT_AUTHOR_IDENT'],
