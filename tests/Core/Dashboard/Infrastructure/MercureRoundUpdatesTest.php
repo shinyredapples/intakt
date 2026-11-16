@@ -448,7 +448,7 @@ final class MercureRoundUpdatesTest extends TestCase
      */
     private function updates(?callable $publisher = null, ?SessionSummaries $summaries = null, ?PersistingStoreInterface $locks = null): MercureRoundUpdates
     {
-        // The judged stream renders a component, which asks for its options through this function.
+        // Registered because the judged stream renders a component, which asks for its options through this function.
         $twig = new Environment(new FilesystemLoader(__DIR__.'/../../../../templates'));
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
 
