@@ -6,8 +6,8 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
-use PHPUnit\Framework\Attributes\CoversClass;
 use Intakt\Tests\Support\KernelTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Twig\Environment;
 
 #[CoversClass(Board::class)]
