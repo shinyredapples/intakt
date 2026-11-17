@@ -88,6 +88,34 @@ final class JudgeAgentTest extends KernelTestCase
         self::assertEquals([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)], $judgement->marks);
     }
 
+    public function testAnAnswerNamingAnotherGivenFindingAsTheSameCauseKeepsTheLink(): void
+    {
+        $judgement = $this->judge(['F1' => Severity::P1, 'F4' => Severity::P2], '{"marks":[{"id":"F1","mark":"act","same_cause_as":null},{"id":"F4","mark":"act","same_cause_as":"F1"}]}');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F4', Mark::Act, 'F1')], $judgement->marks);
+    }
+
+    public function testAnAnswerNamingAnIdThatWasNotGivenAsTheSameCauseMakesEveryBlockingFindingAct(): void
+    {
+        $judgement = $this->judge(['F1' => Severity::P2, 'F2' => Severity::P3], '{"marks":[{"id":"F1","mark":"act","same_cause_as":"F9"},{"id":"F2","mark":"reject"}]}');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+    }
+
+    public function testAnAnswerNamingAFindingAsItsOwnCauseMakesEveryBlockingFindingAct(): void
+    {
+        $judgement = $this->judge(['F1' => Severity::P2, 'F2' => Severity::P3], '{"marks":[{"id":"F1","mark":"act","same_cause_as":"F1"},{"id":"F2","mark":"reject"}]}');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+    }
+
+    public function testThePromptAsksForTheSameCauseOnlyBetweenGivenFindings(): void
+    {
+        $this->judge(['F1' => Severity::P1], '{"marks":[{"id":"F1","mark":"act"}]}');
+
+        self::assertStringContainsString('same_cause_as', $this->sent[0]);
+    }
+
     public function testASteeredJudgeCanOnlyMarkTheFindingsItWasGiven(): void
     {
         $steered = ['F1' => Severity::P1];

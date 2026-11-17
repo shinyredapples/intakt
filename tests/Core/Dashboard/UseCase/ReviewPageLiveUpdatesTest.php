@@ -381,6 +381,41 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $updated->filter('section.round'.$link->attr('href')));
     }
 
+    public function testAPageOpenedBeforeTheRoundStartsShowsOneNumberPerFindingWithTheMergedIdsAsSecondaryTextOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedAsOneEntryPerCause($round);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(
+            [['F1', 'P1', 'Also reported as F4'], ['F2', 'P2', 'Also reported as F3']],
+            $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-merged')->text()]),
+        );
+    }
+
+    public function testAPageOpenedBeforeTheRoundStartsListsOneNumberPerFindingToFixInTheNowBoxOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedAsOneEntryPerCause($round);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(['P1F1 Text of F1.', 'P2F2 Text of F2.'], $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->each(static fn (Crawler $link): string => $link->text()));
+        self::assertSame('2 findings to fix', $updated->filter('#round-'.$id.'-now-judge .now-to-fix')->text());
+    }
+
+    public function testAJudgedRoundOfOneEntryPerCausePushedToAPageOpenedBeforeItStartsShowsTheFindingsAsAReloadDoes(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedAsOneEntryPerCause($round);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertSame($reloaded->filter('#round-'.$id.'-judged')->html(), $updated->filter('#round-'.$id.'-judged')->html());
+    }
+
     public function testAJudgedRoundWithNothingToFixStatesItsCallAndNoFindingToFixInTheNowBox(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
@@ -1163,14 +1198,26 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
      */
     private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
     {
+        $this->givenEveryReviewerAnswered($round, count($marks));
+        $this->ledger->judgeFindings($round->toRfc4122(), $marks);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+    }
+
+    private function givenTheRoundIsJudgedAsOneEntryPerCause(Uuid $round): void
+    {
+        $this->givenEveryReviewerAnswered($round, 2);
+        $this->ledger->judgeOneEntryPerCause($round->toRfc4122());
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+    }
+
+    private function givenEveryReviewerAnswered(Uuid $round, int $findings): void
+    {
         $id = $round->toRfc4122();
         $this->ledger->startReviewer($id, 'security');
         $this->ledger->startReviewer($id, 'correctness');
         $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
-        $this->ledger->answer($id, 'security', count($marks));
-        $this->ledger->answer($id, 'correctness', count($marks));
-        $this->ledger->judgeFindings($id, $marks);
-        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+        $this->ledger->answer($id, 'security', $findings);
+        $this->ledger->answer($id, 'correctness', $findings);
     }
 
     /**

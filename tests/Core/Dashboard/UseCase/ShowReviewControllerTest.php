@@ -850,7 +850,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         self::assertCount(1, $crawler->filter('li.finding-card#round-round-1-finding-F1'));
     }
 
-    public function testAnOpenActEntryThatMergesFindingsNamesTheMergedIdsAndLinksToItsRow(): void
+    public function testAnOpenActEntryThatMergesFindingsShowsOneNumberNamesTheMergedIdsAsSecondaryTextAndLinksToItsRow(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->judgeOneEntryOf('round-1', 'F1', 'F2');
@@ -859,9 +859,10 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         $links = $crawler->filter('.state-block a.sb-finding');
-        self::assertSame(['P1F1+F2 Text of F1.'], $links->each(static fn (Crawler $link): string => $link->text()));
+        self::assertSame(['P1F1 Text of F1.'], $links->each(static fn (Crawler $link): string => $link->text()));
         self::assertSame('#round-round-1-finding-F1', $links->attr('href'));
-        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 .finding-card .fc-id')->each(static fn (Crawler $id): string => $id->text()));
+        self::assertSame(['F1'], $crawler->filter('#round-round-1 .finding-card .fc-id')->each(static fn (Crawler $id): string => $id->text()));
+        self::assertSame(['Also reported as F2'], $crawler->filter('#round-round-1 .finding-card .fc-merged')->each(static fn (Crawler $merged): string => $merged->text()));
     }
 
     public function testAReviewWithEveryRoundJudgedShowsNoCurrentStateBlock(): void

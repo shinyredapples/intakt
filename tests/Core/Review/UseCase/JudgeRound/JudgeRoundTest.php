@@ -20,12 +20,14 @@ use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeLimited;
@@ -67,6 +69,8 @@ use Throwable;
 #[CoversClass(QuotesInChange::class)]
 #[CoversClass(ChangeText::class)]
 #[UsesClass(DiffPaths::class)]
+#[CoversClass(CausesInOneHunk::class)]
+#[CoversClass(DiffHunks::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(RoundJudged::class)]
@@ -393,6 +397,59 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1]], $this->judgeDonePayloads()[0]['findings']);
     }
 
+    public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame(['F2' => 'F1'], $payload['same_cause']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5]], $payload['findings']);
+    }
+
+    public function testTwoFindingsInOneHunkWithDifferentCausesAreRecordedAsTwoEntries(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame([], $payload['same_cause']);
+        self::assertSame($this->twoSeparateEntries(5), $payload['findings']);
+    }
+
+    public function testALinkBetweenFindingsOutsideOneHunkOfTheChangeIsNotRecorded(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 12)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame([], $payload['same_cause']);
+        self::assertSame($this->twoSeparateEntries(12), $payload['findings']);
+    }
+
+    public function testTheLinkThatWouldStretchAChainFurtherThanFiveLinesIsNotAppliedToTheRecordedEntries(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 1), $this->atLine('B', Severity::P2, 5), $this->atLine('C', Severity::P2, 9)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1'), new JudgedFinding('F3', Mark::Act, 'F2')])))($this->judgingOf($round));
+
+        $findings = $this->judgeDonePayloads()[0]['findings'];
+        self::assertIsArray($findings);
+        self::assertSame([['F1', 'F2', 'F3'], ['Text of A.', 'Text of B.', 'Text of C.'], [['F2'], [], []]], [array_column($findings, 'id'), array_column($findings, 'text'), array_column($findings, 'merged')]);
+    }
+
+    public function testALinkToAFindingDroppedBeforeTheJudgeIsNotRecorded(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->atLine('B', Severity::P2, 3)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
+
+        self::assertSame([], $this->judgeDonePayloads()[0]['same_cause']);
+    }
+
     public function testARoundWhoseEveryFindingIsDroppedIsJudgedWithoutAskingTheJudge(): void
     {
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.')]);
@@ -471,6 +528,22 @@ final class JudgeRoundTest extends KernelTestCase
         return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
     }
 
+    private function atLine(string $id, Severity $severity, int $line): Finding
+    {
+        return new Finding($id, $severity, 'src/Thing.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function twoSeparateEntries(int $lineOfB): array
+    {
+        return [
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB],
+        ];
+    }
+
     private function judgingOf(ReviewRound $round): JudgeRound
     {
         return new JudgeRound($round->id()->toRfc4122());
@@ -481,7 +554,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true]), $this->judgeDonePayloads());
     }
 
     /**

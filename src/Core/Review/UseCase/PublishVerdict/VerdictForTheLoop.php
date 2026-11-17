@@ -114,8 +114,8 @@ final readonly class VerdictForTheLoop
      */
     private function actListOf(ReviewRound $round): array
     {
-        $act = $this->ledger->actIdsOf($round->id()->toRfc4122());
+        $id = $round->id()->toRfc4122();
 
-        return $this->findings->actListOf($round, $act);
+        return $this->findings->actListOf($round, $this->ledger->actIdsOf($id), $this->ledger->sameCauseOf($id));
     }
 }
