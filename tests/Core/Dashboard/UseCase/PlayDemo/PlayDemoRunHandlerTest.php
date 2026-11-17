@@ -115,6 +115,15 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertLoggedError('error', 'The demo run was not played.');
     }
 
+    public function testAQueuedPlayOnAnInstallWhoseRecordingSettingWasClearedAppendsNothingAndIsLoggedAsAnError(): void
+    {
+        $this->handler('')();
+
+        self::assertSame([], $this->rows());
+        self::assertSame([], $this->updates->events);
+        self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
     public function testAMissingRecordingIsLoggedAsAnErrorAndAppendsNothing(): void
     {
         $this->handler($this->directory.'/missing.json')();

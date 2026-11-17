@@ -36,7 +36,6 @@ final readonly class DemoRuns
         };
     }
 
-    // Sent to a queue worker, because a replay sleeps at the recorded pace for minutes and must never hold a web worker.
     /**
      * @return array{string, string}
      */
@@ -48,6 +47,7 @@ final readonly class DemoRuns
             return [self::FLASH_ERROR, $readiness->sentence()];
         }
 
+        // Sent to a queue worker, because a replay sleeps at the recorded pace for minutes and must never hold a web worker.
         $this->commands->dispatch(new PlayDemoRun());
 
         return [self::FLASH_SUCCESS, 'The demo run is starting: the caption at the bottom of each page names the stage it is in.'];

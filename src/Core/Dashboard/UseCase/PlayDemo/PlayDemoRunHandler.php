@@ -42,6 +42,13 @@ final readonly class PlayDemoRunHandler
             return;
         }
 
+        // Checked before reading, because the setting can be cleared after the message was queued and an empty path is no file.
+        if ('' === $this->recording) {
+            $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'reason' => DemoReadiness::NoRecording->sentence()]);
+
+            return;
+        }
+
         try {
             $this->replays->replay($this->format->read($this->filesystem->readFile($this->recording)), self::FACTOR);
         } catch (IOException|RecordingIsMalformed|ReplayIsRefused|ReplayStopped $failure) {
