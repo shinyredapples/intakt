@@ -22,6 +22,8 @@ use Throwable;
  */
 final readonly class StatefulServiceResetRule implements Rule
 {
+    public const string KEPT_FOR_THE_PROCESS = 'Intakt\Core\Platform\Contract\KeptForTheProcess';
+
     public function __construct(private ContainerRegistration $registration)
     {
     }
@@ -74,7 +76,13 @@ final readonly class StatefulServiceResetRule implements Rule
         $declared = array_map($this->declaredProperties(...), [$class, ...$class->getParents()]);
 
         // a virtual property has no backing store, so it holds no state to carry into the next request
-        return array_values(array_filter(array_merge(...$declared), fn (ReflectionProperty $property): bool => !$property->isReadOnly() && !$property->isVirtual() && $this->isDeclaredInTheRegisteredResource($property)));
+        return array_values(array_filter(array_merge(...$declared), fn (ReflectionProperty $property): bool => !$property->isReadOnly() && !$property->isVirtual() && !$this->isKeptForTheProcess($property) && $this->isDeclaredInTheRegisteredResource($property)));
+    }
+
+    private function isKeptForTheProcess(ReflectionProperty $property): bool
+    {
+        // state meant to outlive every reset carries a marker a reviewer sees on the property, instead of hiding in an object behind a readonly one
+        return [] !== $property->getAttributes(self::KEPT_FOR_THE_PROCESS);
     }
 
     private function isDeclaredInTheRegisteredResource(ReflectionProperty $property): bool
@@ -100,7 +108,7 @@ final readonly class StatefulServiceResetRule implements Rule
         $origin = $property->getBetterReflection()->getDeclaringClass();
         $ownLine = $origin->getName() === $class->getName() ? $property->getBetterReflection()->getStartLine() : null;
         $name = null === $ownLine ? sprintf('%s::$%s', $origin->getShortName(), $property->getName()) : '$'.$property->getName();
-        $message = sprintf('Service property %s is not readonly and the class does not implement ResetInterface: make the property readonly or implement reset() so Symfony clears it between requests and messages.', $name);
+        $message = sprintf('Service property %s is not readonly and the class does not implement ResetInterface: make the property readonly or implement reset() so Symfony clears it between requests and messages, or mark state meant to last the whole process with #[KeptForTheProcess].', $name);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.statefulService')->line($ownLine ?? $classLine)->build();
     }
