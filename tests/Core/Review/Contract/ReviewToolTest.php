@@ -31,7 +31,9 @@ final class ReviewToolTest extends TestCase
         yield 'a file read' => [ReviewTool::ReadFile, ['path' => 'src/discount.js'], 'read src/discount.js'];
         yield 'a directory listed' => [ReviewTool::ListDirectory, ['path' => 'src/'], 'listed src/'];
         yield 'the root listed' => [ReviewTool::ListDirectory, ['path' => '.'], 'listed the repository root'];
-        yield 'the root listed by default' => [ReviewTool::ListDirectory, [], 'listed the repository root'];
+        yield 'the root listed with a trailing slash' => [ReviewTool::ListDirectory, ['path' => './'], 'listed the repository root'];
+        yield 'a search of the whole head with a trailing slash' => [ReviewTool::SearchFiles, ['text' => 'discount', 'path' => './'], 'searched for "discount"'];
+        yield 'the root listed by default' =>[ReviewTool::ListDirectory, [], 'listed the repository root'];
         yield 'a search in a directory' => [ReviewTool::SearchFiles, ['text' => 'discount', 'path' => 'src'], 'searched for "discount" in src'];
         yield 'a search of the whole head' => [ReviewTool::SearchFiles, ['text' => 'discount', 'path' => '.'], 'searched for "discount"'];
         yield 'a search by default of the whole head' => [ReviewTool::SearchFiles, ['text' => 'discount'], 'searched for "discount"'];

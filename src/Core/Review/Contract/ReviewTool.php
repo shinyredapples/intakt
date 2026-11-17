@@ -23,9 +23,15 @@ enum ReviewTool: string
 
         return match ($this) {
             self::ReadFile => null === $path ? 'read a file' : 'read '.$path,
-            self::ListDirectory => null === $path || self::ROOT === $path ? 'listed the repository root' : 'listed '.$path,
+            self::ListDirectory => self::isRoot($path) ? 'listed the repository root' : 'listed '.$path,
             self::SearchFiles => self::searchInWords(self::textOf($arguments['text'] ?? null), $path),
         };
+    }
+
+    // A model writes the root as `.` or `./` alike, and both mean the whole head.
+    private static function isRoot(?string $path): bool
+    {
+        return null === $path || self::ROOT === rtrim($path, '/');
     }
 
     public function kindInWords(): string
@@ -41,7 +47,7 @@ enum ReviewTool: string
     {
         $searched = null === $text ? 'searched the files' : sprintf('searched for "%s"', $text);
 
-        return null === $path || self::ROOT === $path ? $searched : $searched.' in '.$path;
+        return self::isRoot($path) ? $searched : $searched.' in '.$path;
     }
 
     private static function textOf(mixed $argument): ?string
