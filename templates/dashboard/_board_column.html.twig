@@ -1,5 +1,8 @@
-{# One board column, shared by the page and by the columns LiveBoardHeadline pushes, so a pushed column never differs from one on a page loaded after it. #}
+{# One board column, shared by the page and by the columns LiveBoardHeadline pushes, so a pushed column shows the cards of a page loaded after it, except that it carries only the first limit of them, across every project even under the project filter, and a link to the board for the rest. #}
 {% set cards = board.cardsIn(column) %}
+{# A pushed column carries at most limit cards, because it goes to every page on the shell topic and Done grows with the install's history; a load of the board shows the rest. #}
+{% set left_out = pushed|default(false) ? max(0, cards|length - limit) : 0 %}
+{% set cards = cards|slice(0, cards|length - left_out) %}
 {% set needs = column == constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::WaitingOnYou') %}
 {# A column that can fold always carries its strip and Hide, even when it starts open, because the layout puts this tab's own fold back on a pushed column and a folded column needs its strip to open again. #}
 {% set folds = column.startsCollapsed %}
@@ -20,5 +23,6 @@
         {{ include('dashboard/components/column_empty.html.twig', board.firstDay ? {text: column.firstDayLine} : (needs ? {text: 'Nothing needs you'} : {}), with_context = false) }}
     {% endfor %}
     {% if crowded %}<button type="button" class="btn secondary sm more-btn">Show {{ cards|length - limit }} more</button>{% endif %}
+    {% if left_out > 0 %}<a class="btn secondary sm more-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">Show {{ left_out }} more</a>{% endif %}
     </div>
 </section>
