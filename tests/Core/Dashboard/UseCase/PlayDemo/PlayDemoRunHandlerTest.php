@@ -90,7 +90,7 @@ final class PlayDemoRunHandlerTest extends TestCase
         $this->handler($this->recordingFile())();
 
         self::assertStringContainsString('"replay_factor":4.0', $this->rows()[0]->event->payload);
-        self::assertEquals(new DateTimeImmutable(self::START)->modify('+30 seconds'), $this->clock->now());
+        self::assertEquals(new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify('+30 seconds'), $this->clock->now());
     }
 
     public function testEachReplayedRowPublishesTheCaptionOfItsStageOnTheShellTopic(): void
@@ -145,7 +145,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
         $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->ledger, $this->updates, $marks, $composeService));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
 
         return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording);
     }
@@ -153,7 +153,7 @@ final class PlayDemoRunHandlerTest extends TestCase
     private function recordingFile(): string
     {
         $file = $this->directory.'/recording.json';
-        new Filesystem()->dumpFile($file, $this->format()->write(new Recording(new DateTimeImmutable(self::START), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', [
+        new Filesystem()->dumpFile($file, $this->format()->write(new Recording(new DateTimeImmutable('2026-11-16T08:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', [
             $this->row(LedgerEventKind::ReviewStarted, '{"round":"round-1","project":"sample","reviewers":1,"change":"sample-change","number":1}', 0),
             $this->row(LedgerEventKind::ReviewerStarted, '{"round":"round-1","reviewer":"r-1","role":"correctness","tier":"standard"}', 20),
             $this->row(LedgerEventKind::VerdictReceived, '{"round":"round-1","reviewer":"r-1","role":"correctness","tier":"standard","decision":"changes","findings":1}', 80),
@@ -165,7 +165,7 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
     {
-        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a'.$secondsAfterStart, $kind, $payload, new DateTimeImmutable(self::START)->modify(sprintf('+%d seconds', $secondsAfterStart)));
+        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a'.$secondsAfterStart, $kind, $payload, new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
     }
 
     private function format(): RecordingFormat
@@ -185,6 +185,6 @@ final class PlayDemoRunHandlerTest extends TestCase
     {
         self::assertSame(1, preg_match('/data-stage="([a-z-]+)"/', $stream, $match));
 
-        return TourStage::from($match[1]);
+        return TourStage::from($match[1] ?? self::fail('The stream names no stage.'));
     }
 }

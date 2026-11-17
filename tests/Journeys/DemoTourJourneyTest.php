@@ -20,7 +20,6 @@ use Symfony\Component\Filesystem\Filesystem;
 #[Group('journeys')]
 final class DemoTourJourneyTest extends JourneyTestCase
 {
-    private const string START = '2026-11-16T08:00:00+00:00';
     private const string CHANGE = 'sample-change';
     private const string FIRST = 'demo-tour-round-1';
     private const string SECOND = 'demo-tour-round-2';
@@ -104,7 +103,7 @@ final class DemoTourJourneyTest extends JourneyTestCase
         return ['INTAKT_COMPOSE_SERVICE' => 'intakt', 'INTAKT_DEMO_RECORDING' => $this->recording()];
     }
 
-    // Two rounds of one change, the second closing the first one's finding, written as intakt:demo:record writes them.
+    // Written through RecordingFormat, because the page plays only a file intakt:demo:record could have written; the second round closes the first one's finding.
     private function recording(): string
     {
         if ('' !== $this->directory) {
@@ -112,7 +111,7 @@ final class DemoTourJourneyTest extends JourneyTestCase
         }
 
         $this->directory = sys_get_temp_dir().'/intakt-journey-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->directory.'/recording.json', new RecordingFormat(StoredSerializerFactory::create())->write(new Recording(new DateTimeImmutable(self::START), 'dev-main', ['claude-opus-5-5'], 'sample', self::CHANGE, [
+        new Filesystem()->dumpFile($this->directory.'/recording.json', new RecordingFormat(StoredSerializerFactory::create())->write(new Recording(new DateTimeImmutable('2026-11-16T08:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', self::CHANGE, [
             $this->row(LedgerEventKind::ReviewStarted, ['round' => self::FIRST, 'project' => 'sample', 'reviewers' => 2, 'change' => self::CHANGE, 'number' => 1], 0),
             $this->row(LedgerEventKind::ReviewerStarted, ['round' => self::FIRST, 'reviewer' => 'r1-correctness', 'role' => 'correctness', 'tier' => 'standard'], 1),
             $this->row(LedgerEventKind::ReviewerStarted, ['round' => self::FIRST, 'reviewer' => 'r1-security', 'role' => 'security', 'tier' => 'standard'], 1),
@@ -135,6 +134,6 @@ final class DemoTourJourneyTest extends JourneyTestCase
      */
     private function row(LedgerEventKind $kind, array $payload, int $secondsAfterStart): RecordedLedgerEvent
     {
-        return new RecordedLedgerEvent(sprintf('0196a000-0000-7000-8000-%012d', random_int(0, 999_999_999_999)), $kind, json_encode($payload, JSON_THROW_ON_ERROR), new DateTimeImmutable(self::START)->modify(sprintf('+%d seconds', $secondsAfterStart)));
+        return new RecordedLedgerEvent(sprintf('0196a000-0000-7000-8000-%012d', random_int(0, 999_999_999_999)), $kind, json_encode($payload, JSON_THROW_ON_ERROR), new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
     }
 }

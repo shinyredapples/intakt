@@ -27,12 +27,12 @@ use Symfony\Component\Routing\RouteCollection;
 use Twig\Environment;
 use Twig\Loader\FilesystemLoader;
 
-// The caption publisher a replay calls, read from the replay's own ledger and marks; outside the compose demo, as the replay tests run, it publishes nothing.
+// Built on the replay's own ledger and marks, because the caption reads the rows the replay appends.
 final class TourCaptionsOn
 {
-    public static function captions(Ledger $ledger, LiveUpdates $updates, ReplayMarks $marks, string $composeService = ''): TourCaptionUpdates
+    public static function captions(LiveUpdates $updates, DemoTour $tour): TourCaptionUpdates
     {
-        return new TourCaptionUpdates(self::tour($ledger, $marks, $composeService), self::twig(), $updates);
+        return new TourCaptionUpdates($tour, self::twig(), $updates);
     }
 
     public static function tour(Ledger $ledger, ReplayMarks $marks, string $composeService): DemoTour
