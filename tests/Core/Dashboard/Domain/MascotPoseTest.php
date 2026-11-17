@@ -32,6 +32,18 @@ final class MascotPoseTest extends TestCase
         }
     }
 
+    #[DataProvider('poses')]
+    public function testEachPoseHasASquareImageOnDiskForEachSizeTheDashboardShowsAndItsDouble(MascotPose $pose): void
+    {
+        foreach (['light', 'dark'] as $theme) {
+            foreach ([96, 144, 192, 288] as $px) {
+                $file = sprintf('%soctopus-%s-%s-%d.webp', self::MASCOT, $pose->value, $theme, $px);
+                self::assertFileExists($file);
+                self::assertSame([$px, $px], array_slice(getimagesize($file) ?: [], 0, 2));
+            }
+        }
+    }
+
     public function testThePosesAreWaitingConductingAndBowing(): void
     {
         self::assertSame(['waiting', 'conducting', 'bowing'], array_column(MascotPose::cases(), 'value'));

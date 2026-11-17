@@ -26,6 +26,14 @@ final class EmptyTemplateTest extends KernelTestCase
         self::assertSame(1, preg_match('~octopus-waiting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
     }
 
+    public function testAnEmptyStatesOctopusOffersIts144And288PxFilesAs1xAnd2x(): void
+    {
+        $images = $this->rendered([...self::STATE, 'pose' => MascotPose::Waiting])->filter('.empty > img.character');
+
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-waiting-light-144-[\w-]+\.webp 1x, /assets/images/mascot/octopus-waiting-light-288-[\w-]+\.webp 2x$#', (string) $images->first()->attr('srcset'));
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-waiting-dark-144-[\w-]+\.webp 1x, /assets/images/mascot/octopus-waiting-dark-288-[\w-]+\.webp 2x$#', (string) $images->last()->attr('srcset'));
+    }
+
     public function testAnEmptyStateWithAPoseKeepsItsTitleTextAndOneAction(): void
     {
         $plain = $this->rendered(self::STATE)->filter('.empty');
