@@ -356,6 +356,67 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
     }
 
+    public function testARoundUpdatePushedToAPageOpenedBeforeAnyReviewerStartedCountsTheStartedReviewers(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        self::assertSame('0 of 2 reviewers started.', $page->filter('#round-'.$id.'-started')->text());
+        $this->ledger->startReviewer($id, 'correctness');
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->answer($id, 'correctness', 0);
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict], 2));
+
+        self::assertSame('2 of 2 reviewers started.', $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-started')->text());
+    }
+
+    // Decision D1 of #2341: the Reviewers section and the Now box agree after the judge's call, as the README's demo shows it.
+    public function testAPageOpenedBeforeItsRoundStartsShowsAgreeingCountsAfterTheJudgesCallWithoutAReload(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->startReviewer($id, 'correctness');
+        $this->ledger->answer($id, 'security', 2);
+        $this->ledger->answer($id, 'correctness', 0);
+        $this->ledger->judgeFindings($id, ['F1' => 'act', 'F2' => 'defer']);
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true, [$id.'-security' => FinishedState::Verdict, $id.'-correctness' => FinishedState::Verdict], 2));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(
+            ['2 of 2 reviewers started.', '2 of 2 reviewers finished.', 'Judged.'],
+            [$updated->filter('#round-'.$id.'-started')->text(), $updated->filter('#round-'.$id.'-now-progress')->text(), $updated->filter('#round-'.$id.'-state')->text()],
+        );
+        self::assertSame($this->browser->request('GET', '/reviews/'.$id)->filter('#round-'.$id.'-started')->text(), $updated->filter('#round-'.$id.'-started')->text());
+    }
+
+    public function testEveryCountOfAPageOpenedBeforeItsRoundStartsMovesWithEachRoundUpdate(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $updates = [
+            new RoundProgress(0, 2, false, [], 1),
+            new RoundProgress(0, 2, false, [], 2),
+            new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict], 2),
+            new RoundProgress(2, 2, false, ['round-1-correctness' => FinishedState::Verdict, 'round-1-security' => FinishedState::Failed], 2),
+        ];
+
+        $seen = [];
+        foreach ($updates as $progress) {
+            $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => $progress]));
+            $seen[] = [$updated->filter('#round-round-1-started')->text(), $updated->filter('#round-round-1-now-progress')->text(), $updated->filter('#round-round-1-state')->text()];
+        }
+
+        self::assertSame([
+            ['1 of 2 reviewers started.', '0 of 2 reviewers finished.', '0 of 2 reviewers finished.'],
+            ['2 of 2 reviewers started.', '0 of 2 reviewers finished.', '0 of 2 reviewers finished.'],
+            ['2 of 2 reviewers started.', '1 of 2 reviewers finished.', '1 of 2 reviewers finished.'],
+            ['2 of 2 reviewers started.', '2 of 2 reviewers finished.', '2 of 2 reviewers finished.'],
+        ], $seen);
+    }
+
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheRoundsTokensAndCostTableAsAReloadDoesOnceTheRoundIsJudged(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
