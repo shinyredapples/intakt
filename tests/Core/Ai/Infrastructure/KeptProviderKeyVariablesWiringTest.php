@@ -14,7 +14,7 @@ use ReflectionProperty;
 #[UsesClass(FixedEnvVars::class)]
 final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
 {
-    // Read through reflection because the loaders are private; the test container adds an empty env loader, because the framework drops its vault loader where no vault directory exists.
+    // Read through reflection because the loaders are private; the test container adds an empty env loader, because the framework drops its vault loader where no config/secrets/ folder exists, and keeps it where another test left one.
     public function testTheKeptKeyIsHandedEveryOtherEnvLoaderButItself(): void
     {
         $container = self::getContainer();
@@ -24,6 +24,11 @@ final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
         $others = new ReflectionProperty(KeptProviderKeyVariables::class, 'otherLoaders')->getValue($kept);
         self::assertIsIterable($others);
 
-        self::assertSame([$container->get('intakt.test.empty_env_var_loader')], [...$others]);
+        $expected = [$container->get('intakt.test.empty_env_var_loader')];
+        if ($container->has('secrets.env_var_loader')) {
+            $expected[] = $container->get('secrets.env_var_loader');
+        }
+
+        self::assertEqualsCanonicalizing(array_map(spl_object_id(...), $expected), array_map(spl_object_id(...), [...$others]));
     }
 }
