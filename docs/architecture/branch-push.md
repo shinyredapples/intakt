@@ -27,7 +27,7 @@ The message of the Process exception is never used and the exception is never ch
 
 ## Tests with the local git forge
 
-`PushToTheLocalGitForgeTest` pushes to a repository as the local git forge serves it (a clone with its work tree on main) and reads the result back through `LocalGitForge`: a branch that passes is pushed and every commit verifies against the orchestrator's key; a forge whose work tree has the task branch checked out refuses the push, which returns `RefusedPush`, records `push_refused` after `push_intended`, asks the forge for no pull request, and is pushed by the next call once the forge's work tree is back on main; a ledger that refuses `push_refused` stops the push with `BranchNotPushed`.
+`PushToTheLocalGitForgeTest` pushes to a repository as the local git forge serves it (a clone with its work tree on main) and reads the result back through `LocalGitForge`: a branch that passes is pushed and every commit verifies against the orchestrator's key; a forge whose work tree has the task branch checked out refuses the push, which returns `RefusedPush`, records `push_refused` after `push_intended`, asks the forge for no pull request, and is pushed by the next call once the forge's work tree is back on main; a forge whose `pre-receive` hook refuses the push and prints the forge's path gives `RefusedPush` with the same fixed reason, which never carries the hook's output; a ledger that refuses `push_refused` stops the push with `BranchNotPushed`.
 
 ## The pull request
 

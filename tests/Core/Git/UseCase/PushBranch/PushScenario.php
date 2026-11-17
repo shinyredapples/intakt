@@ -152,6 +152,14 @@ final readonly class PushScenario
         $this->run(['checkout', '--quiet', '--orphan', self::BRANCH], $forge);
     }
 
+    // A hook that names the forge's path in its refusal, because a forge's own error output must never reach the recorded reason.
+    public function refuseWithAHookIn(string $forge): void
+    {
+        $hook = $forge.'/.git/hooks/pre-receive';
+        new Filesystem()->dumpFile($hook, "#!/bin/sh\necho \"refused by the forge at {$forge}\" >&2\nexit 1\n");
+        chmod($hook, 0o755);
+    }
+
     public function checkOutMainIn(string $forge): void
     {
         $this->run(['checkout', '--quiet', '--force', 'main'], $forge);
