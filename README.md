@@ -9,8 +9,8 @@ Intakt gives you one verdict on a change that you can trust: a panel of reviewer
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark.webp">
-    <img src="docs/assets/team-light.webp" alt="The Intakt octopus with its baton, then the eight roles from left to right: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer" width="760" height="113">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark-760.webp 1x, docs/assets/team-dark.webp 2x">
+    <img src="docs/assets/team-light-760.webp" srcset="docs/assets/team-light-760.webp 1x, docs/assets/team-light.webp 2x" alt="The Intakt octopus with its baton, then the eight roles from left to right: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer" width="760" height="113">
   </picture>
 </p>
 

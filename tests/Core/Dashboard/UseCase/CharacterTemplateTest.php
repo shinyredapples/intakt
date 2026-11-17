@@ -70,6 +70,15 @@ final class CharacterTemplateTest extends KernelTestCase
         self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-bowing-dark-[\w-]+\.webp$#', (string) $images->last()->attr('src'));
     }
 
+    public function testA72PxOctopusOffersIts72PxFileAs1xAndItsFullFileAs2x(): void
+    {
+        $images = $this->rendered(MascotPose::Bowing, 72)->filter('img');
+
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-bowing-light-72-[\w-]+\.webp$#', (string) $images->first()->attr('src'));
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-bowing-light-72-[\w-]+\.webp 1x, /assets/images/mascot/octopus-bowing-light-[^0-9][\w-]*\.webp 2x$#', (string) $images->first()->attr('srcset'));
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-bowing-dark-72-[\w-]+\.webp 1x, /assets/images/mascot/octopus-bowing-dark-[^0-9][\w-]*\.webp 2x$#', (string) $images->last()->attr('srcset'));
+    }
+
     public function testAnEmptyStateWithAPoseShowsThatOctopusAt144PxAboveItsUnchangedText(): void
     {
         $empty = new Crawler($this->twig()->render('dashboard/components/empty.html.twig', ['title' => 'No reviews yet', 'text' => 'No review has started yet.', 'pose' => MascotPose::Waiting]));

@@ -13,7 +13,11 @@
         <p class="lead" id="board-headline">{{ include('dashboard/_board_headline.html.twig', {headline: board.headline}, with_context = false) }}</p>
     </div>
     <div class="actions">
+        {% if board.isEmpty %}
+        <a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Set up Intakt</a>
+        {% else %}
         <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
+        {% endif %}
     </div>
 </div>
 {% for main in failing_mains %}

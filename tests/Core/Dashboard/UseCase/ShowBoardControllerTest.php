@@ -516,7 +516,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame(['144', '144'], $images->each(static fn (Crawler $image): ?string => $image->attr('width')));
         self::assertStringContainsString('/images/mascot/octopus-waiting-light', (string) $images->first()->attr('src'));
         self::assertSame(['Board', 'Nothing is running yet. Start the first review.'], [$head->filter('h1')->text(), $head->filter('.lead')->text()]);
-        self::assertSame(['Open the review list'], $head->filter('a')->each(static fn (Crawler $a): string => $a->text()));
+    }
+
+    public function testAnEmptyBoardOffersTheFirstRunPageAsItsOnlyAction(): void
+    {
+        $links = $this->browser->request('GET', '/')->filter('.page-head a');
+
+        self::assertSame([['/setup', 'Set up Intakt']], $links->each(static fn (Crawler $a): array => [$a->attr('href'), $a->text()]));
     }
 
     public function testABoardWithAReviewShowsNoOctopus(): void
@@ -574,8 +580,10 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(0, $page->filter('.working-none'));
     }
 
-    public function testTheBoardLinksToTheReviewListBehindIt(): void
+    public function testABoardWithAReviewLinksToTheReviewListBehindIt(): void
     {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
         $link = $this->browser->request('GET', '/')->filter('.page-head .actions a');
 
         self::assertSame('/reviews', $link->attr('href'));
