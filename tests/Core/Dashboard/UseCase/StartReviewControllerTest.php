@@ -55,7 +55,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->disableReboot();
     }
 
-    public function testTheButtonStartsTheNextRoundOfTheListedChangeAndRedirectsBackWithTheRoundId(): void
+    public function testTheButtonStartsTheNextRoundOfTheListedChangeAndRedirectsBackWithAToastNamingItsNumber(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $commands = $this->commandBus();
@@ -68,7 +68,29 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertResponseStatusCodeSame(303);
         self::assertResponseRedirects('/reviews/round-1');
         $this->browser->followRedirect();
-        self::assertSelectorTextContains('.flash-success', 'Started round round-2.');
+        self::assertSelectorTextSame('.toast', 'Started round 2.');
+    }
+
+    public function testTheStartToastCarriesNoRoundId(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass(), [new HandledStamp('0193a7c2-5d1e-7a3b-9c4f-2e8d6b1a0f37', 'handler')]));
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+        $crawler = $this->browser->followRedirect();
+
+        self::assertStringNotContainsString('0193a7c2-5d1e-7a3b-9c4f-2e8d6b1a0f37', $crawler->filter('.toast')->outerHtml());
+    }
+
+    public function testStartingARoundAddsNoLineAboveThePage(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-2', 'handler')]));
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+        $this->browser->followRedirect();
+
+        self::assertSelectorNotExists('.flash');
     }
 
     public function testTheButtonCarriesTheNumberAfterTheLatestRoundThePageShows(): void
@@ -208,6 +230,17 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->browser->followRedirect();
         self::assertSelectorTextContains('.flash-error', 'Round 2 was asked for');
         self::assertStringNotContainsString('Stack trace', (string) $this->browser->getResponse()->getContent());
+    }
+
+    public function testARefusedStartShowsNoToast(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(new HandlerFailedException(new Envelope(new stdClass()), [RoundNotNext::for(2, 3)]));
+
+        $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+        $this->browser->followRedirect();
+
+        self::assertSelectorNotExists('.toast');
     }
 
     public function testARoundWithoutARecordedRepositoryCannotBeStarted(): void
