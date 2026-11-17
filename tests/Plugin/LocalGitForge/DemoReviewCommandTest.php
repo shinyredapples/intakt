@@ -56,6 +56,7 @@ use Symfony\Component\Routing\RouteCollection;
 
 #[CoversClass(DemoReviewCommand::class)]
 #[CoversClass(OwnerClientLine::class)]
+#[UsesClass(OwnerToken::class)]
 #[UsesClass(ReviewExit::class)]
 #[UsesClass(ReviewReport::class)]
 #[UsesClass(LocalGitForge::class)]

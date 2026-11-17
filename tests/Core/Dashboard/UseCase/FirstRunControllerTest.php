@@ -378,6 +378,14 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame('3 First review', $page->filter('ol.steps li[aria-current="step"]')->text());
     }
 
+    public function testWithNoKeyTheProviderStepIsTheCurrentStep(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertCount(1, $page->filter('ol.steps li[aria-current="step"]'));
+        self::assertSame('1 AI providers', $page->filter('ol.steps li[aria-current="step"]')->text());
+    }
+
     public function testAStepThatIsNotNeededIsPassedOverForTheCurrentStep(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
@@ -610,7 +618,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(303);
         self::assertResponseRedirects('/setup');
         $this->browser()->followRedirect();
-        self::assertSelectorTextContains('.flash-success', 'Started round round-1.');
+        self::assertSelectorTextSame('.toast', 'Started round 1.');
     }
 
     public function testASecondPressComesBackWithTheRefusalAndNoTrace(): void

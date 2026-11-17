@@ -13,7 +13,7 @@ use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\FailureInWords;
 
-// Built by hand because these tests read the review list without the container; the list shows no cost, ending or replay mark, so every round is unpriced, unended and live.
+// Built by hand because these tests read the review list without the container; the list shows no cost, ending or replay mark, so every round is unpriced, unended (FixedRoundEndings gives no ending by default) and live.
 final class ListedReviews
 {
     public static function on(Ledger $ledger): LedgerReviews
