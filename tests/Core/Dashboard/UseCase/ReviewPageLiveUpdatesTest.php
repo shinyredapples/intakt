@@ -356,6 +356,25 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
     }
 
+    public function testAPageOpenedBeforeTheRoundIsApprovedShowsTheBowingOctopusAsAReloadDoesOnceItIsApproved(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertCount(0, $page->filter('img[src*="octopus"]'));
+
+        $this->ledger->answer($id, 'security', 0);
+        $this->ledger->answer($id, 'correctness', 0);
+        $this->ledger->judgeRound($id);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertCount(2, $updated->filter('#round-'.$id.'-verdict img[src*="octopus-bowing"]'));
+        self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->html(), $updated->filter('#round-'.$id.'-verdict')->html());
+    }
+
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheRoundsTokensAndCostTableAsAReloadDoesOnceTheRoundIsJudged(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();

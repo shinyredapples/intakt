@@ -29,6 +29,11 @@ final readonly class Board
         return array_values(array_filter($this->cards, static fn (Review $card): bool => $card->column() === $column));
     }
 
+    public function isEmpty(): bool
+    {
+        return [] === $this->cards;
+    }
+
     // From the cards in their order, so the newest review's reviewers come first.
     public function whoIsWorking(): WhoIsWorking
     {

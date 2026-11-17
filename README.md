@@ -7,6 +7,15 @@
 
 Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge checks every finding against the task before it reaches the act list. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/team-dark.webp">
+    <img src="docs/assets/team-light.webp" alt="The Intakt octopus with its baton, then the eight roles from left to right: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer" width="760" height="113">
+  </picture>
+</p>
+
+The team, left to right after the octopus: Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer, Maintainer.
+
 PHP 8.5, Symfony AI · [Status](#status): what works today and what is planned · [Guides](docs/guide/README.md) · [Showcase](docs/showcase/README.md) · [Releases](https://github.com/shinyredapples/intakt/releases)
 
 ## Five-minute start

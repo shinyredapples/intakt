@@ -42,6 +42,16 @@ final class BoardTest extends TestCase
         self::assertSame(['Waiting on you', 'Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'In review', 'Merging', 'Done'], $names);
     }
 
+    public function testABoardWithoutAReviewIsEmpty(): void
+    {
+        self::assertTrue(new Board([])->isEmpty());
+    }
+
+    public function testABoardWithAReviewIsNotEmpty(): void
+    {
+        self::assertFalse(new Board([new Review([$this->round('r1', 'feat/a', 1)])])->isEmpty());
+    }
+
     public function testAReviewWhoseLatestRoundRunsIsACardInInReview(): void
     {
         $board = new Board([new Review([$this->round('r1', 'feat/a', 1)])]);

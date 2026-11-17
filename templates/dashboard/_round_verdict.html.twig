@@ -1,6 +1,10 @@
 <div id="round-{{ reviewed.round }}-verdict">
 {% if reviewed.state.name == 'Judged' %}
 {% set failed = reviewed.failedReviewers %}
+{#- Only the newest round bows, because DESIGN.md allows one octopus per page; the chip and these words stay the only carriers of the outcome. -#}
+{% set bows = newest and reviewed.reviewOutcome is same as(constant('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome::Approved')) %}
+{% if bows %}<div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\MascotPose::Bowing'), size: 72}, with_context = false) }}{% endif %}
 <p class="outcome" id="round-{{ reviewed.round }}-outcome">{% if reviewed.quorumOutcome is not null %}Outcome: {{ reviewed.quorumOutcome.value }}, decided by the quorum policy {{ reviewed.quorum.value }} over all {{ reviewed.reviewers }} reviewers.{% if failed > 0 %} {{ failed }} of {{ reviewed.reviewers }} reviewers failed, and a failed reviewer gives no approval.{% endif %}{% else %}No outcome shown: this round was started before Intakt recorded its quorum policy.{% endif %}</p>
+{% if bows %}</div>{% endif %}
 {% endif %}
 </div>

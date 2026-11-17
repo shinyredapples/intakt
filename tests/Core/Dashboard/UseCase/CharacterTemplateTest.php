@@ -70,11 +70,35 @@ final class CharacterTemplateTest extends KernelTestCase
         self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-bowing-dark-[\w-]+\.webp$#', (string) $images->last()->attr('src'));
     }
 
+    public function testAnEmptyStateWithAPoseShowsThatOctopusAt144PxAboveItsUnchangedText(): void
+    {
+        $empty = new Crawler($this->twig()->render('dashboard/components/empty.html.twig', ['title' => 'No reviews yet', 'text' => 'No review has started yet.', 'pose' => MascotPose::Waiting]));
+        $images = $empty->filter('.empty > img.character');
+
+        self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
+        self::assertSame(['144', '144'], $images->each(static fn (Crawler $image): ?string => $image->attr('width')));
+        self::assertSame(['144', '144'], $images->each(static fn (Crawler $image): ?string => $image->attr('height')));
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-waiting-light-[\w-]+\.webp$#', (string) $images->first()->attr('src'));
+        self::assertSame(['No reviews yet', 'No review has started yet.'], [$empty->filter('.empty h2')->text(), $empty->filter('.empty p')->text()]);
+    }
+
+    public function testAnEmptyStateWithoutAPoseRendersAsBefore(): void
+    {
+        $html = $this->twig()->render('dashboard/components/empty.html.twig', ['title' => 'Nothing found', 'text' => 'Try another word.']);
+
+        self::assertSame('<div class="empty"><h2>Nothing found</h2><p class="muted">Try another word.</p></div>'."\n", $html);
+    }
+
     private function rendered(Character|MascotPose $character, int $size): Crawler
+    {
+        return new Crawler($this->twig()->render('dashboard/components/character.html.twig', ['character' => $character, 'size' => $size]));
+    }
+
+    private function twig(): Environment
     {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return new Crawler($twig->render('dashboard/components/character.html.twig', ['character' => $character, 'size' => $size]));
+        return $twig;
     }
 }

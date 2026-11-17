@@ -22,6 +22,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ListReviewsController::class)]
@@ -86,6 +87,24 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews');
 
         self::assertSame('Review rounds', $crawler->filter('ol.review-rows')->attr('aria-label'));
+    }
+
+    public function testAnEmptyReviewListShowsTheWaitingOctopusAboveItsUnchangedText(): void
+    {
+        $empty = $this->browser->request('GET', '/reviews')->filter('.empty');
+
+        self::assertSame(['', ''], $empty->filter('img.character')->each(static fn (Crawler $image): ?string => $image->attr('alt')));
+        self::assertStringContainsString('/images/mascot/octopus-waiting-light', (string) $empty->filter('img.character')->first()->attr('src'));
+        self::assertSame(['No reviews yet', 'No review has started yet.'], [$empty->filter('h2')->text(), $empty->filter('p')->text()]);
+    }
+
+    public function testAReviewListWithARoundShowsNoOctopus(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertCount(0, $crawler->filter('img[src*="octopus"]'));
     }
 
     public function testAJudgedRoundShowsItsOutcomeChip(): void

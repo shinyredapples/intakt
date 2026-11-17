@@ -185,6 +185,41 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         );
     }
 
+    public function testAnApprovedNewestRoundShowsTheBowingOctopusBesideItsUnchangedOutcome(): void
+    {
+        $this->givenAnApprovedRound('round-1');
+
+        $verdict = $this->browser->request('GET', '/reviews/round-1')->filter('#round-round-1-verdict');
+        $images = $verdict->filter('.character-row > img.character');
+
+        self::assertSame([['', '72', '72'], ['', '72', '72']], $images->each(static fn (Crawler $image): array => [(string) $image->attr('alt'), (string) $image->attr('width'), (string) $image->attr('height')]));
+        self::assertStringContainsString('/images/mascot/octopus-bowing-light', (string) $images->first()->attr('src'));
+        self::assertSame('Outcome: Approved, decided by the quorum policy all over all 2 reviewers.', $verdict->filter('.character-row > p.outcome')->text());
+    }
+
+    public function testAnApprovedRoundFollowedByANewerRoundShowsNoOctopus(): void
+    {
+        $this->givenAnApprovedRound('round-1');
+        $this->ledger->startRoundOf('sample-change', 'round-2', 2);
+
+        $page = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(0, $page->filter('img[src*="octopus"]'));
+        self::assertSame('Outcome: Approved, decided by the quorum policy all over all 2 reviewers.', $page->filter('#round-round-1-outcome')->text());
+    }
+
+    public function testANewestRoundThatAskedForChangesShowsNoOctopus(): void
+    {
+        $this->ledger->startRoundOfQuorum('sample-change', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act']);
+
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $page->filter('img[src*="octopus"]'));
+    }
+
     public function testEachReviewerIsNamedByRoleAndModelWithItsOutcomeAndFindingCount(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -971,6 +1006,14 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $wrappers = $crawler->filter('.table-scroll');
         self::assertGreaterThan(0, $wrappers->count());
         self::assertCount($wrappers->count(), $crawler->filter('.table-scroll[tabindex="0"][role="region"][aria-label]:not([aria-label=""])'));
+    }
+
+    private function givenAnApprovedRound(string $round): void
+    {
+        $this->ledger->startRoundOfQuorum('sample-change', $round, 'all');
+        $this->ledger->answer($round, 'correctness', 0);
+        $this->ledger->answer($round, 'security', 0);
+        $this->ledger->judgeRound($round);
     }
 
     private function givenACompletedTwoRoundReview(): void

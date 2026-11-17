@@ -490,6 +490,44 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringStartsWith('correctness', $lanes->filter('.who')->text());
     }
 
+    public function testEachLaneShowsA24PxMeerkatBetweenItsLiveDotAndItsUnchangedRoleAndTier(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $who = $this->browser->request('GET', '/')->filter('.working .lane .who');
+
+        self::assertSame(['span', 'img', 'img', 'span'], $who->children()->each(static fn (Crawler $child): string => $child->nodeName()));
+        self::assertSame('dot ok', $who->children()->first()->attr('class'));
+        $who->filter('img')->each(static function (Crawler $image): void {
+            self::assertSame(['', '24', '24', 'lazy'], [$image->attr('alt'), $image->attr('width'), $image->attr('height'), $image->attr('loading')]);
+            self::assertStringContainsString('/images/roles/code_reviewer-', (string) $image->attr('src'));
+        });
+        self::assertMatchesRegularExpression('/^correctness, [^,]+since \d\d:\d\d UTC$/', $who->text());
+    }
+
+    public function testAFreshInstallsBoardShowsTheWaitingOctopusBesideItsUnchangedLead(): void
+    {
+        $head = $this->browser->request('GET', '/')->filter('.page-head');
+        $images = $head->filter('img.character');
+
+        self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
+        self::assertSame(['144', '144'], $images->each(static fn (Crawler $image): ?string => $image->attr('height')));
+        self::assertSame(['144', '144'], $images->each(static fn (Crawler $image): ?string => $image->attr('width')));
+        self::assertStringContainsString('/images/mascot/octopus-waiting-light', (string) $images->first()->attr('src'));
+        self::assertSame(['Board', 'Nothing is running yet. Start the first review.'], [$head->filter('h1')->text(), $head->filter('.lead')->text()]);
+        self::assertSame(['Open the review list'], $head->filter('a')->each(static fn (Crawler $a): string => $a->text()));
+    }
+
+    public function testABoardWithAReviewShowsNoOctopus(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('img[src*="octopus"]'));
+    }
+
     public function testAReviewerThatHasAnsweredIsNoLane(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
