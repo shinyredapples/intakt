@@ -355,6 +355,57 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
     }
 
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheRoundsTokensAndCostTableAsAReloadDoesOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringContainsString('1200', $reloaded->filter('#round-'.$id.'-tokens')->text());
+        self::assertSame($reloaded->filter('#round-'.$id.'-tokens')->outerHtml(), $updated->filter('#round-'.$id.'-tokens')->outerHtml());
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheHeadersTokensAndCostTotalsAsAReloadDoesOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('1,200 tokens', $reloaded->filter('#review-summary-tokens')->text());
+        self::assertSame($reloaded->filter('#review-summary-tokens')->outerHtml(), $updated->filter('#review-summary-tokens')->outerHtml());
+        self::assertSame($reloaded->filter('#review-summary-cost')->outerHtml(), $updated->filter('#review-summary-cost')->outerHtml());
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheReviewSoFarCostAsTheReloadedHeaderOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+        $before = $page->filter('#round-'.$id.'-review-cost')->text();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertNotSame($before, $updated->filter('#round-'.$id.'-review-cost')->text());
+        self::assertSame($reloaded->filter('#review-summary-cost')->text(), $updated->filter('#round-'.$id.'-review-cost')->text());
+    }
+
+    public function testEveryTargetOfAJudgedRoundsUpdateIsOnThePageOpenedBeforeIt(): void
+    {
+        [$round, , $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $targets = new Crawler($this->publishedStreams())->filter('turbo-stream[action="replace"][target]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
+        self::assertContains('review-summary-tokens', $targets);
+        foreach ($targets as $target) {
+            self::assertCount(1, $page->filter('#'.$target), $target);
+        }
+    }
+
     public function testAJudgedRoundWithoutAFindingToFixEmptiesTheOpenFindingsOfTheCurrentStateBlock(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
@@ -892,6 +943,29 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', $id, 1);
 
         return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeTheJudgeSpentTokens(): array
+    {
+        $this->browser->disableReboot();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+        $this->givenTheHubRecordsWhatIsPublished();
+        $round = Uuid::v7();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->startReviewer($id, 'security');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+
+        $this->ledger->answer($id, 'security', 0);
+        $this->ledger->useTokens($id, 1000, 200);
+        $this->ledger->judgeFindings($id, []);
+
+        return [$round, $id, $page];
     }
 
     private function publishedStreams(): string

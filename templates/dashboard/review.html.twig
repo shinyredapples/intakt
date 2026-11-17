@@ -13,7 +13,7 @@
     {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
     {label: review.change ?: 'round ' ~ round},
 ]}, with_context = false) }}
-{% set total = review.tokens %}
+{% import 'dashboard/_review_summary.html.twig' as totals %}
 {% set latest = review.rounds|last %}
 {% set active = review.activeRound %}
 {% set judged = review.lastJudgedRound %}
@@ -39,8 +39,8 @@
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
             {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round ' : ' rounds '), include: {template: kind_label, with: {kind: kinds.Counted, at: 'summary-rounds'}}},
-            {icon: 'tokens', text: total.total|number_format(0, '.', ',') ~ ' tokens ', include: {template: kind_label, with: {kind: kinds.Measured, at: 'summary-tokens'}}},
-            {icon: 'wallet', text: 'Cost: ', include: {template: 'dashboard/components/cost.html.twig', with: {cost: review.cost, at: 'summary-cost'}}},
+            {icon: 'tokens', markup: totals.tokens(review)},
+            {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
         {% if not can_start %}

@@ -511,6 +511,11 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .review-link:hover .review-title { text-decoration: underline; }
 .review-title { flex: 1 1 16rem; font: 600 var(--t15)/1.3 var(--f-head); overflow-wrap: anywhere; }
 .review-facts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s4) var(--s12); color: var(--muted); font-size: var(--t13); }
+/* An outcome leading a row or a card is its headline, so it takes the title's type and a taller chip rather than the muted 13 px of a fact. */
+.review-outcome .chip, .card .outcome .chip { height: 28px; font: 600 var(--t15)/1 var(--f-head); }
+.card .outcome { margin-bottom: var(--s4); }
+/* A board card is narrower than "Changes requested" in the headline type, so its chip wraps inside the card rather than overflowing it. */
+.card .outcome .chip { max-width: 100%; height: auto; min-height: 28px; padding-block: var(--s4); line-height: 1.2; white-space: normal; }
 .round-id { margin: 0; padding: 0 var(--s4) var(--s8); color: var(--muted); font-size: var(--t13); }
 .round-id code { font-family: var(--f-mono); overflow-wrap: anywhere; user-select: all; }
 .round-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8) var(--s12); margin-bottom: var(--s8); }
