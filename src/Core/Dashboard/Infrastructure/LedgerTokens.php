@@ -44,6 +44,17 @@ final class LedgerTokens
         return $sum;
     }
 
+    // The ids come from the values' keys turned back into text, because PHP turns a key of digits into an integer.
+    /**
+     * @param list<string> $rounds
+     *
+     * @return list<string>
+     */
+    public function callsOf(array $rounds): array
+    {
+        return array_map(strval(...), array_keys(array_filter($this->roundOfCall, static fn (string $round): bool => in_array($round, $rounds, true))));
+    }
+
     private function tieToRound(UsageStarted $started): void
     {
         if (null !== $started->round) {

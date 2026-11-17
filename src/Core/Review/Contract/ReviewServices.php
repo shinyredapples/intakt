@@ -12,4 +12,6 @@ final readonly class ReviewServices
     public const string MCP_URL = 'intakt.review.mcp_url';
 
     public const string JOB_IMAGES = 'intakt.review.job_images';
+
+    public const string PROJECT_FILE = 'intakt.review.project_file';
 }

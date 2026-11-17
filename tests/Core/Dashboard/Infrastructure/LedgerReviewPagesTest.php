@@ -16,6 +16,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ChangeDecision;
@@ -24,6 +25,7 @@ use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundCosts;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Core\Dashboard\UseCase\ReviewBoundLedger;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -60,6 +62,46 @@ final class LedgerReviewPagesTest extends TestCase
         $cards = $this->pagesOn($ledger)->board()->cardsIn(BoardColumn::InReview);
 
         self::assertSame([['r1', 'r2']], array_map(static fn (Review $card): array => array_map(static fn (ReviewedRound $round): string => $round->round, $card->rounds), $cards));
+    }
+
+    public function testAReviewIsReadFromItsStartsAndTheRowsThatNameItsRoundsOrTheirCalls(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/b', 'other', 1);
+        $ledger->startReviewer('other', 'security');
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->startReviewer('r1', 'correctness');
+        $ledger->answer('r1', 'correctness', 0);
+        $ledger->useTokens('r1', 1000, 200);
+        $ledger->judgeFindings('r1', []);
+        $ledger->startRoundOf('feat/a', 'r2', 2);
+
+        $review = $this->pagesOn(new ReviewBoundLedger($ledger))->reviewOf('r2');
+
+        self::assertNotNull($review);
+        self::assertSame(['r1', 'r2'], array_map(static fn (ReviewedRound $round): string => $round->round, $review->rounds));
+        self::assertSame(1200, $review->rounds[0]->tokens->total());
+        self::assertCount(1, $review->rounds[0]->outcomes);
+        self::assertTrue($review->rounds[0]->isJudged());
+    }
+
+    public function testATokenRowNamingBothItsRoundAndItsCallIsCountedOnce(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->useTokensSettledNamingTheRound('r1', 1000, 200);
+
+        $review = $this->pagesOn(new ReviewBoundLedger($ledger))->reviewOf('r1');
+
+        self::assertSame(1200, $review?->rounds[0]->tokens->total());
+    }
+
+    public function testAReviewOfARoundTheLedgerNeverStartedIsNotRead(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+
+        self::assertNull($this->pagesOn(new ReviewBoundLedger($ledger))->reviewOf('r9'));
     }
 
     public function testAJudgedRoundOfTheLedgerIsACardInDone(): void
@@ -201,7 +243,7 @@ final class LedgerReviewPagesTest extends TestCase
      * @param list<string>              $replays
      * @param array<string, ReplayMark> $stored
      */
-    private function pagesOn(DashboardLedger $ledger, array $replays = [], array $stored = []): LedgerReviewPages
+    private function pagesOn(Ledger $ledger, array $replays = [], array $stored = []): LedgerReviewPages
     {
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));

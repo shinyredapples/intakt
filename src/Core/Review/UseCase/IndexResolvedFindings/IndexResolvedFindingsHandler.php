@@ -6,11 +6,14 @@ namespace Intakt\Core\Review\UseCase\IndexResolvedFindings;
 
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryIndex;
+use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Psr\Log\LoggerInterface;
 
 // Indexing the same entry twice keeps one copy, so a redelivered message does no harm.
 #[AsCommandHandler]
@@ -20,6 +23,7 @@ final readonly class IndexResolvedFindingsHandler
         private ReviewRounds $rounds,
         private StoredFindings $findings,
         private MemoryIndex $memory,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -27,6 +31,16 @@ final readonly class IndexResolvedFindingsHandler
     {
         $round = $this->rounds->stored($command->roundId);
 
+        try {
+            $this->indexResolvedFindingsOf($round);
+        } catch (ProjectMemoryNeedsEmbeddingModel $missing) {
+            // Done instead of retried, because nothing is broken: a retry would fail the same way and end in the failure transport with a trace.
+            $this->logger->info($missing->getMessage(), ['project' => $round->project()]);
+        }
+    }
+
+    private function indexResolvedFindingsOf(ReviewRound $round): void
+    {
         foreach ($this->findings->resolvedBy($round) as $finding) {
             $this->memory->index($this->entryOf($round->project(), $finding));
         }

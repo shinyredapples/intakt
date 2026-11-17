@@ -48,6 +48,15 @@ final class RecordingLedger implements Ledger
     }
 
     /**
+     * @param list<string> $texts
+     */
+    #[Override]
+    public function readMentioning(array $texts): RecordedEvents
+    {
+        return $this->recorded(array_values(array_filter($this->events, static fn (LedgerEvent $event): bool => array_any($texts, static fn (string $text): bool => str_contains($event->payload, $text)))));
+    }
+
+    /**
      * @return list<LedgerEventKind>
      */
     public function kinds(): array

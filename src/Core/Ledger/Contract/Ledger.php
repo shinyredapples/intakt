@@ -14,4 +14,10 @@ interface Ledger
     public function readInOrder(): RecordedEvents;
 
     public function readOfKind(LedgerEventKind $kind): RecordedEvents;
+
+    // Matched on the stored payload text, so a caller gets every event that names one of the texts and must still decode and check each one; no text reads nothing.
+    /**
+     * @param list<string> $texts
+     */
+    public function readMentioning(array $texts): RecordedEvents;
 }

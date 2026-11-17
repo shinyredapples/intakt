@@ -35,6 +35,14 @@ final class DashboardLedger implements Ledger
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
 
+    /**
+     * @param list<string> $texts
+     */
+    public function readMentioning(array $texts): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any($texts, static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
+    }
+
     public function startRound(string $round, string $project): void
     {
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 2]);
@@ -197,6 +205,14 @@ final class DashboardLedger implements Ledger
         $call = Uuid::v7()->toRfc4122();
         $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => $model]);
         $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'usages' => [['model' => $model] + $usage]]);
+    }
+
+    // The settled row's text names the round too, as a finding's text may, so a read by the round's id and one by the call's id both find it.
+    public function useTokensSettledNamingTheRound(string $round, int $prompt, int $completion): void
+    {
+        $call = Uuid::v7()->toRfc4122();
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'round' => $round, 'model' => 'model-a']);
+        $this->add(LedgerEventKind::UsageRecorded, ['call' => $call, 'phase' => 'settled', 'note' => 'for '.$round, 'usages' => [['model' => 'model-a', 'prompt' => $prompt, 'completion' => $completion, 'total' => $prompt + $completion]]]);
     }
 
     public function failHead(string $project, string $change, int $failures): void
