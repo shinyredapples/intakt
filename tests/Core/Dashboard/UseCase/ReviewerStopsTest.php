@@ -80,7 +80,15 @@ final class ReviewerStopsTest extends TestCase
         $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $ledger->append(new LedgerEvent(LedgerEventKind::ReviewerStarted, '{"round":"round-1","reviewer":"round-1-security","role":"security","tier":"mighty"}'));
 
-        self::assertNull($this->stopsOn($ledger)->requestStopOfRound('round-1'));
+        self::assertSame(['error', 'No reviewer runs in this round right now, so nothing was stopped.'], $this->stopsOn($ledger)->requestStopOfRound('round-1'));
+    }
+
+    public function testAnUnknownRoundHasNoRoundToStop(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+
+        self::assertNull($this->stopsOn($ledger)->requestStopOfRound('round-9'));
     }
 
     private function stopsOn(Ledger $ledger): ReviewerStops
