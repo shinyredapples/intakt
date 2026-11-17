@@ -7,7 +7,6 @@ namespace Intakt\Tests\Application;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 
-// Because the team picture is the first thing a visitor sees, and a wrong source or a missing size breaks the page.
 #[CoversNothing]
 final class ReadmeTeamPictureTest extends TestCase
 {
@@ -17,16 +16,30 @@ final class ReadmeTeamPictureTest extends TestCase
     {
         $picture = $this->picture();
 
-        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark\.webp 2x">/', $picture));
+        self::assertSame(1, preg_match('/<source media="\(prefers-color-scheme: dark\)" srcset="docs\/assets\/team-dark-1x\.webp 1x, docs\/assets\/team-dark\.webp 2x" width="760" height="116">/', $picture));
         self::assertFileExists($this->root().'/docs/assets/team-dark.webp');
+        self::assertFileExists($this->root().'/docs/assets/team-dark-1x.webp');
+    }
+
+    public function testTheTeamPictureDimensionsMatchTheImageFilesTheyDescribe(): void
+    {
+        foreach (['light' => 113, 'dark' => 116] as $theme => $height) {
+            $oneX = getimagesize($this->root().'/docs/assets/team-'.$theme.'-1x.webp');
+            $twoX = getimagesize($this->root().'/docs/assets/team-'.$theme.'.webp');
+
+            self::assertSame([760, $height], [$oneX[0], $oneX[1]]);
+            self::assertSame($height, (int) round($twoX[1] * 760 / $twoX[0]));
+            self::assertGreaterThanOrEqual(1520, $twoX[0]);
+        }
     }
 
     public function testTheTeamPictureServesTheLightImageOtherwise(): void
     {
         $picture = $this->picture();
 
-        self::assertSame(1, preg_match('/<img src="docs\/assets\/team-light\.webp" srcset="docs\/assets\/team-light\.webp 2x"/', $picture));
+        self::assertSame(1, preg_match('/<img src="docs\/assets\/team-light-1x\.webp" srcset="docs\/assets\/team-light-1x\.webp 1x, docs\/assets\/team-light\.webp 2x"/', $picture));
         self::assertFileExists($this->root().'/docs/assets/team-light.webp');
+        self::assertFileExists($this->root().'/docs/assets/team-light-1x.webp');
     }
 
     public function testTheTeamPictureAltNamesTheOctopusAndAllEightRoles(): void
