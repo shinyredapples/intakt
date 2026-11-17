@@ -52,21 +52,20 @@ jobs:
           path: ${{ runner.temp }}/composer-cache
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
           restore-keys: composer-${{ runner.os }}-
-      # The analysers' result caches (INTAKT_GATES_CACHE), so a run analyses only what changed. Only a push to main saves
-      # them, under a key with its commit; a pull request restores main's latest and never saves.
+      # The analysers' result caches (INTAKT_GATES_CACHE), so a run analyses only what changed. The key hashes composer.lock
+      # and everything under config/gates/, Intakt's fixers included, since PHP CS Fixer's own cache signature ignores
+      # their code. Only a push to main saves them, under a key with its commit; every run restores main's latest.
       - name: Name the gates cache
         id: gates-cache-name
         env:
-          CONFIG_HASH: ${{ hashFiles('composer.lock', 'config/gates/*') }}
+          CONFIG_HASH: ${{ hashFiles('composer.lock', 'config/gates/**') }}
         run: echo "name=gates-$RUNNER_OS-$GITHUB_REF_NAME-$CONFIG_HASH-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
       - name: Restore the gates cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/gates-cache
           key: ${{ steps.gates-cache-name.outputs.name }}
-          restore-keys: |
-            gates-${{ runner.os }}-${{ github.ref_name }}-${{ hashFiles('composer.lock', 'config/gates/*') }}-
-            gates-${{ runner.os }}-main-${{ hashFiles('composer.lock', 'config/gates/*') }}-
+          restore-keys: gates-${{ runner.os }}-main-${{ hashFiles('composer.lock', 'config/gates/**') }}-
       # The gate tests run processes in a new user namespace and mount a fresh /proc there. The seccomp profile is
       # Docker's default plus unshare (only together with a new user namespace) and mount. systempaths=unconfined is
       # needed because the kernel refuses a new /proc in a user namespace while Docker's masks cover parts of the old

@@ -14,25 +14,39 @@ final class GatesCacheWorkflowTest extends TestCase
 {
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/ci.yml';
 
-    public function testTheCheckJobRestoresTheGatesCacheWithMainsLatestAsTheFallback(): void
+    public function testTheCheckJobRestoresTheGatesCacheWithOnlyMainsLatestAsTheFallback(): void
     {
         $restore = $this->step('Restore the gates cache');
 
         self::assertStringStartsWith('actions/cache/restore@', $restore['uses'] ?? '');
         self::assertSame('${{ runner.temp }}/gates-cache', $restore['with']['path'] ?? null);
         self::assertSame('${{ steps.gates-cache-name.outputs.name }}', $restore['with']['key'] ?? null);
-        self::assertStringContainsString('${{ github.ref_name }}', $restore['with']['restore-keys'] ?? '');
-        self::assertStringContainsString('gates-${{ runner.os }}-main-', $restore['with']['restore-keys'] ?? '');
+        // Because a pull request's own ref names no saved entry: only main's runs save.
+        self::assertSame('gates-${{ runner.os }}-main-${{ hashFiles(\'composer.lock\', \'config/gates/**\') }}-', $restore['with']['restore-keys'] ?? null);
     }
 
-    public function testTheGatesCacheKeyHashesTheLockAndTheGatesConfiguration(): void
+    public function testTheGatesCacheKeyHashesTheLockAndEverythingUnderTheGatesConfiguration(): void
     {
         $name = $this->step('Name the gates cache');
 
-        foreach (['composer.lock', 'config/gates/*'] as $file) {
-            self::assertStringContainsString("'".$file."'", $name['env']['CONFIG_HASH'] ?? '');
-        }
+        self::assertSame('${{ hashFiles(\'composer.lock\', \'config/gates/**\') }}', $name['env']['CONFIG_HASH'] ?? null);
         self::assertStringContainsString('$GITHUB_REF_NAME-$CONFIG_HASH-$GITHUB_SHA', $name['run'] ?? '');
+    }
+
+    // Because PHP CS Fixer's own cache signature ignores the code of Intakt's fixers, a key that missed them would let a changed fixer skip files.
+    public function testTheGatesCacheKeyCoversTheSourcesUnderConfigGatesSrc(): void
+    {
+        $pattern = 'config/gates/**';
+        $sources = glob(__DIR__.'/../../config/gates/src/PhpCsFixer/*.php');
+
+        self::assertIsArray($sources);
+        self::assertNotSame([], $sources);
+        self::assertStringContainsString("'".$pattern."'", $this->step('Name the gates cache')['env']['CONFIG_HASH'] ?? '');
+        self::assertStringContainsString("'".$pattern."'", $this->step('Restore the gates cache')['with']['restore-keys'] ?? '');
+
+        foreach ($sources as $source) {
+            self::assertTrue(fnmatch($pattern, 'config/gates/src/PhpCsFixer/'.basename($source)), $source);
+        }
     }
 
     public function testOnlyAPushToMainSavesTheGatesCache(): void
