@@ -268,14 +268,42 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $updated->filter('form.stop-round'));
     }
 
-    public function testTheStopOfTheRoundGoesAwayOnceEveryReviewerFinished(): void
+    // The judge still works, so the round is in review and Stop stays the one action (decision D4 of #2369).
+    public function testTheStopOfTheRoundStaysOnceEveryReviewerFinishedUntilTheRoundIsJudged(): void
     {
         $this->givenARunningRound();
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, false, ['round-1-correctness' => FinishedState::Stopped])]));
 
+        self::assertCount(1, $updated->filter('#round-round-1-now-stop > form.stop-round'));
+    }
+
+    // The judge has not called yet, so the round still runs and the next one cannot start.
+    public function testTheStartOfTheNextRoundStaysHiddenOnceEveryReviewerFinishedButTheRoundIsNotJudged(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        self::assertCount(1, $page->filter('.task-actions:has(.now-runs) > form.start-review'));
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertCount(1, $updated->filter('form.stop-round'));
+        self::assertCount(1, $updated->filter('.task-actions:has(.now-runs) > form.start-review'));
+    }
+
+    public function testAJudgedRoundPushedToThePageOffersTheStartOfTheNextRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, true)]));
+
+        self::assertCount(0, $updated->filter('.now-runs'));
         self::assertCount(0, $updated->filter('form.stop-round'));
+        self::assertSame('Start round 2', trim($updated->filter('.task-actions > form.start-review button')->text()));
     }
 
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheJudgesCallAndTheFindingsOnceTheRoundIsJudged(): void
@@ -425,22 +453,21 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $updated->filter('#round-round-1-outcome'));
     }
 
-    public function testAToolCallPublishedForAReviewerThatStartedAfterThePageLoadedMakesTheStopOfTheRoundAvailable(): void
+    public function testAToolCallPublishedForAReviewerThatStartedAfterThePageLoadedKeepsTheStopOfTheRound(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
         $this->ledger->startRoundOf('feat/thing', $round->toRfc4122(), 1);
         $page = $this->browser->request('GET', '/reviews/'.$round->toRfc4122());
-        self::assertCount(1, $page->filter('.now-stop-idle + form.stop-round'));
         $this->ledger->startReviewer($round->toRfc4122(), 'security');
 
         $this->publishedUpdates()->toolCalled($round, $round->toRfc4122().'-security', 'read_file');
 
         $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
-        self::assertCount(0, $updated->filter('.now-stop-idle'));
         self::assertSame('Stop', $updated->filter('.page-head form.stop-round button')->text());
     }
 
-    public function testAStopPublishedThroughTheHubShowsTheReviewerStoppedAndTakesTheStopOfTheRoundAway(): void
+    // The round waits for the judge, so its Stop stays until the judged round's update (decision D4 of #2369).
+    public function testAStopPublishedThroughTheHubShowsTheReviewerStoppedAndKeepsTheStopOfTheUnjudgedRound(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
         $id = $round->toRfc4122();
@@ -455,7 +482,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([['review/rounds/'.$id], ['review/rounds/'.$id]], array_map(static fn (Update $update): array => $update->getTopics(), $this->published));
         $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
         self::assertSame('stopped', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-security-state')->text());
-        self::assertCount(0, $updated->filter('form.stop-round'));
+        self::assertCount(1, $updated->filter('form.stop-round'));
     }
 
     public function testAReviewerThatAnswersAfterThePageLoadedShowsItsOutcomeChipNeverTheWordVerdict(): void

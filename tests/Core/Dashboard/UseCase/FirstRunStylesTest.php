@@ -60,6 +60,23 @@ final class FirstRunStylesTest extends TestCase
         self::assertSame([24, 48], [$content[0] + $column[0], $content[2] + $column[2]]);
     }
 
+    public function testTheSetupMascotIsAtMost200PxHighOnDesktop(): void
+    {
+        self::assertMatchesRegularExpression('/max-height:\s*200px;/', $this->rule('.setup .page-head .character', $this->desktopRules()));
+    }
+
+    public function testOnAPhoneTheSetupMascotIsAtMost140PxHigh(): void
+    {
+        self::assertMatchesRegularExpression('/max-height:\s*140px;/', $this->rule('.setup .page-head .character', $this->phoneBlock()));
+    }
+
+    public function testTheSetupHeadKeepsTheMascotBesideTheTitleOnAPhone(): void
+    {
+        self::assertMatchesRegularExpression('/flex-wrap:\s*nowrap;/', $this->rule('.setup .page-head', $this->desktopRules()));
+        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $this->rule('.setup .page-head > div', $this->desktopRules()));
+        self::assertMatchesRegularExpression('/min-width:\s*0;/', $this->rule('.setup .page-head > div', $this->desktopRules()));
+    }
+
     private function zIndex(string $selector): int
     {
         return 1 === preg_match('/z-index:\s*(\d+);/', $this->rule($selector, $this->phoneBlock()), $found) ? (int) $found[1] : self::fail($selector);

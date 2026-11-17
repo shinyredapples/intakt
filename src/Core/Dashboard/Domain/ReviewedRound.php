@@ -38,7 +38,7 @@ final readonly class ReviewedRound
     public ?Decision $outcome;
     public ?DateTimeImmutable $judgedAt;
 
-    // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay.
+    // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay; the speed factor is null for every round but a demo replay that stored one.
     public function __construct(
         RoundStart $start,
         RoundPlace $place,
@@ -46,6 +46,7 @@ final readonly class ReviewedRound
         public ?QuorumPolicy $quorum,
         public ?RoundEnding $ending = null,
         public ?ReplayMark $mark = null,
+        public ?float $speedFactor = null,
     ) {
         $this->round = $start->round;
         $this->project = $start->project;

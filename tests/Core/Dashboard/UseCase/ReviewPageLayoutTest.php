@@ -67,7 +67,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['round-round-1-now-stop', 'start-review'], $crawler->filter('.page-head .task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
+        self::assertSame(['round-round-1-now-runs', 'round-round-1-now-stop', 'start-review'], $crawler->filter('.page-head .task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
     }
 
     // Left out rather than disabled, because Continue and Send back wait for T59 (D4 of #1794).

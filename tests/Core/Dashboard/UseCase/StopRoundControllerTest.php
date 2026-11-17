@@ -81,24 +81,23 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         self::assertSame('/reviews/round-2/stop', $crawler->filter('form.stop-round')->attr('action'));
     }
 
-    public function testARoundWithNoRunningReviewerHoldsTheStopFormBehindTheIdleMarker(): void
+    public function testARoundBeforeItsFirstReviewerStartsShowsTheStopForm(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'security');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('/reviews/round-1/stop', $crawler->filter('#round-round-1-now-stop > form.stop-round')->attr('action'));
+    }
+
+    public function testARoundWhoseReviewersFinishedButIsNotJudgedShowsTheStopForm(): void
+    {
+        $this->runningRound();
         $this->ledger->answer('round-1', 'security', 0);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(1, $crawler->filter('#round-round-1-now-stop #round-round-1-now-stop-idle.now-stop-idle + form.stop-round'));
-    }
-
-    public function testARunningReviewerLeavesNoIdleMarkerBeforeTheStopForm(): void
-    {
-        $this->runningRound();
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        self::assertCount(0, $crawler->filter('.now-stop-idle'));
+        self::assertSame('/reviews/round-1/stop', $crawler->filter('#round-round-1-now-stop > form.stop-round')->attr('action'));
     }
 
     public function testAJudgedRoundShowsNoStopForm(): void
@@ -175,15 +174,26 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         self::assertSame([], $this->requested());
     }
 
-    public function testARoundWithNoRunningReviewerRecordsNothing(): void
+    public function testAPressWhileNoReviewerRunsRecordsNothingAndSaysSo(): void
     {
         $this->runningRound();
         $this->ledger->answer('round-1', 'security', 0);
 
         $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $this->token()]);
 
-        self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer in this unjudged round."', NotFoundHttpException::class));
+        self::assertResponseRedirects('/reviews/round-1', 303);
+        self::assertSame([], $this->requested());
+        $this->browser->followRedirect();
+        self::assertSelectorTextContains('.flash-error', 'No reviewer runs in this round right now, so nothing was stopped.');
+    }
+
+    public function testAPressBeforeTheFirstReviewerStartsRecordsNothing(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+
+        $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $this->token()]);
+
+        self::assertResponseRedirects('/reviews/round-1', 303);
         self::assertSame([], $this->requested());
     }
 
@@ -195,7 +205,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-1/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer in this unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no unjudged round with this id."', NotFoundHttpException::class));
         self::assertSame([], $this->requested());
     }
 
@@ -206,7 +216,7 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->browser->request('POST', '/reviews/round-9/stop', ['_token' => $this->token()]);
 
         self::assertResponseStatusCodeSame(404);
-        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no running reviewer in this unjudged round."', NotFoundHttpException::class));
+        self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The ledger shows no unjudged round with this id."', NotFoundHttpException::class));
         self::assertSame([], $this->requested());
     }
 

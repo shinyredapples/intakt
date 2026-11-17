@@ -55,6 +55,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => $number, 'repository' => '/repos/alpha', 'base' => 'main', 'task' => 'Add the thing.']);
     }
 
+    public function startReplayedRoundOf(string $change, string $round, float|string $factor): void
+    {
+        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => 1, 'replay_factor' => $factor]);
+    }
+
     public function startRoundOfQuorum(string $change, string $round, string $quorum): void
     {
         $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => 'alpha', 'reviewers' => 2, 'change' => $change, 'number' => 1, 'quorum' => $quorum]);

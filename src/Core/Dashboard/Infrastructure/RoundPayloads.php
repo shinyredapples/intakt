@@ -122,6 +122,7 @@ final readonly class RoundPayloads
             new RoundPlace($started->change, $number, $this->sourceOf($started)),
             $recorded->recordedAt,
             $started->quorum,
+            speedFactor: $this->payloads->of($recorded, ReplayedStart::class)?->factor(),
         );
     }
 
