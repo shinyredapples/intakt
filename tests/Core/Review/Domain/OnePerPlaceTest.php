@@ -120,30 +120,9 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame([['F1', ['F2']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged], $act));
     }
 
-    public function testFindingsOfOneCauseAtTheEdgeOfTheLineRangeGiveOneEntry(): void
+    public function testTwoActFindingsWithoutALinkAtDifferentLinesStaySeparate(): void
     {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7 + OnePerPlace::SAME_CAUSE_LINES)], ['F1', 'F2'], ['F2' => 'F1']);
-
-        self::assertSame(['F1'], array_column($act, 'id'));
-    }
-
-    public function testFindingsOfOneCauseFartherApartThanTheLineRangeStaySeparate(): void
-    {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 8 + OnePerPlace::SAME_CAUSE_LINES)], ['F1', 'F2'], ['F2' => 'F1']);
-
-        self::assertSame(['F1', 'F2'], array_column($act, 'id'));
-    }
-
-    public function testFindingsOfOneCauseInDifferentFilesStaySeparate(): void
-    {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/B.php', 7)], ['F1', 'F2'], ['F2' => 'F1']);
-
-        self::assertSame(['F1', 'F2'], array_column($act, 'id'));
-    }
-
-    public function testFindingsOfOneCauseWithoutALineStaySeparate(): void
-    {
-        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', null)], ['F1', 'F2'], ['F2' => 'F1']);
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 8)], ['F1', 'F2'], ['F3' => 'F1']);
 
         self::assertSame(['F1', 'F2'], array_column($act, 'id'));
     }

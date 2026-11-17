@@ -65,6 +65,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(ReviewChange::class)]
 final class MergedActEntryPageTest extends WebTestCase
 {
+    private const string DISCOUNT_DIFF = "diff --git a/src/discount.js b/src/discount.js\n@@ -10,6 +10,6 @@\n-  if (total >= 100) {\n+  if (total > 100) {\n@@ -40,3 +40,3 @@\n-old\n+new\n";
+
     private KernelBrowser $browser;
 
     private RoundFixture $fixture;
@@ -89,14 +91,14 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertSame([['P1', 'F1', 'Text of A.', 'Also reported as F2', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
     }
 
-    // One change flagged at two nearby lines differs in place, so only the judge's link makes it one entry (decision D3 of #2334).
-    public function testTwoReviewersReportingOneCauseAtNearbyLinesShowOneEntryWithTheHigherSeverityInTheConsoleTheJsonAndOnThePage(): void
+    // One change flagged at two lines of one hunk differs in place, so only the judge's link makes it one entry (decision D3 of #2334).
+    public function testTwoReviewersReportingOneCauseInOneHunkShowOneEntryWithTheHigherSeverityInTheConsoleTheJsonAndOnThePage(): void
     {
         $first = new Finding('A', Severity::P1, 'src/discount.js', 12, null, 'The discount now starts above 100.', FixableBy::Builder, false, null, null);
         $second = new Finding('B', Severity::P2, 'src/discount.js', 14, null, 'An order of exactly 100 lost its discount.', FixableBy::Builder, false, null, null);
         $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')]);
 
-        $review = $this->reviewed([$second, $first], $judgement);
+        $review = $this->reviewed([$second, $first], $judgement, self::DISCOUNT_DIFF);
         $report = new ReviewReport($this->serializer());
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
 
@@ -106,12 +108,12 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertSame([['P1', 'F1', 'An order of exactly 100 lost its discount.', 'Also reported as F2', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
     }
 
-    public function testTwoFindingsTheJudgeLinksFartherApartThanTheLineRangeStayTwoEntries(): void
+    public function testTwoFindingsTheJudgeLinksInTwoHunksStayTwoEntries(): void
     {
         $first = new Finding('A', Severity::P1, 'src/discount.js', 12, null, 'Text of A.', FixableBy::Builder, false, null, null);
-        $second = new Finding('B', Severity::P2, 'src/discount.js', 13 + OnePerPlace::SAME_CAUSE_LINES, null, 'Text of B.', FixableBy::Builder, false, null, null);
+        $second = new Finding('B', Severity::P2, 'src/discount.js', 41, null, 'Text of B.', FixableBy::Builder, false, null, null);
 
-        $review = $this->reviewed([$first, $second], new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')]));
+        $review = $this->reviewed([$first, $second], new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')]), self::DISCOUNT_DIFF);
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
 
         self::assertSame([['P1', 'F1', 'Text of A.', 'Fix now'], ['P2', 'F2', 'Text of B.', 'Fix now']], $this->pageRows($page->filter('.finding-card')));
@@ -147,7 +149,7 @@ final class MergedActEntryPageTest extends WebTestCase
     /**
      * @param non-empty-list<Finding> $findings
      */
-    private function reviewed(array $findings, ?Judgement $judgement = null): ChangeReview
+    private function reviewed(array $findings, ?Judgement $judgement = null, string $diff = RoundFixture::DIFF): ChangeReview
     {
         $fixture = $this->fixture;
         $verdicts = [];
@@ -183,7 +185,7 @@ final class MergedActEntryPageTest extends WebTestCase
             $fixture->noFailedJudgings(),
         );
 
-        return $reviewChange->review($this->request(count($findings)), new IgnoredProgress());
+        return $reviewChange->review($this->request(count($findings), $diff), new IgnoredProgress());
     }
 
     /**
@@ -207,7 +209,7 @@ final class MergedActEntryPageTest extends WebTestCase
         return $serializer;
     }
 
-    private function request(int $reviewers): ChangeReviewRequest
+    private function request(int $reviewers, string $diff): ChangeReviewRequest
     {
         $members = array_map(
             static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
@@ -215,7 +217,7 @@ final class MergedActEntryPageTest extends WebTestCase
         );
         $panel = new Panel($members, QuorumPolicy::All);
 
-        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, $diff, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
     }
 
     /**

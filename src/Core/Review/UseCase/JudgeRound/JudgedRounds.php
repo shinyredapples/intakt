@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -20,7 +21,16 @@ final readonly class JudgedRounds
         private StoredFindings $findings,
         private RoundLedger $ledger,
         private ChangeText $change,
+        private DiffHunks $hunks,
     ) {
+    }
+
+    /**
+     * @return list<array{string, int, int}>
+     */
+    public function hunksOf(ReviewRound $round): array
+    {
+        return $this->hunks->in($round->diff());
     }
 
     // Null for a round judged already, so a redelivered message asks the model nothing.

@@ -27,7 +27,7 @@ final readonly class JudgePrompt
 
         Mark every finding you were given, once, with exactly the id you were given, and mark no other id. When unsure, choose act.
 
-        Two findings have the same cause when they report one change in the same file at nearby lines (for example the same comparison flagged by two reviewers). Give the later of them same_cause_as with the id of the earlier one; give every other finding same_cause_as null. A finding is never its own cause.
+        Two findings have the same cause when they report one change in the same file and the same part of the diff (for example the same comparison flagged by two reviewers). Give the later of them same_cause_as with the id of the earlier one; give every other finding same_cause_as null. A finding is never its own cause.
         TEXT;
 
     public function __construct(private Fence $fence)

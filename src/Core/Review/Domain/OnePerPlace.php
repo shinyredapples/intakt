@@ -8,14 +8,11 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// The act list keeps one entry per place and per cause, so two reviewers flagging one place, or one change at nearby lines, send the builder one fix; a rule, not a service.
+// The act list keeps one entry per place and per cause, so two reviewers flagging one place, or one change in one hunk, send the builder one fix; a rule, not a service.
 #[Exclude]
 final readonly class OnePerPlace
 {
-    // The judge names a cause, but plain code merges only nearby lines of one file, so a steered judge cannot fold a defect elsewhere into another entry.
-    public const int SAME_CAUSE_LINES = 10;
-
-    // The reported findings come in panel order, because the first reviewer's text is the one kept; only act ids count, so a P3 the judge marked otherwise never joins an act entry (a P1 or P2 is always an act id).
+    // The links are the judge's as CausesInOneHunk kept them, so only findings in one hunk of one file are linked. The reported findings come in panel order, because the first reviewer's text is the one kept; only act ids count, so a P3 the judge marked otherwise never joins an act entry (a P1 or P2 is always an act id).
     /**
      * @param list<Finding>         $reported
      * @param list<string>          $actIds
@@ -70,21 +67,12 @@ final readonly class OnePerPlace
     {
         foreach ($seen as [$at, $earlier]) {
             $linked = ($sameCause[$finding->id] ?? null) === $earlier->id || ($sameCause[$earlier->id] ?? null) === $finding->id;
-            if ($linked && $this->nearby($earlier, $finding)) {
+            if ($linked) {
                 return $at;
             }
         }
 
         return null;
-    }
-
-    private function nearby(Finding $one, Finding $other): bool
-    {
-        if (null === $one->file || null === $one->line || null === $other->line || $one->file !== $other->file) {
-            return false;
-        }
-
-        return abs($one->line - $other->line) <= self::SAME_CAUSE_LINES;
     }
 
     private function merged(Finding $entry, Finding $finding): Finding

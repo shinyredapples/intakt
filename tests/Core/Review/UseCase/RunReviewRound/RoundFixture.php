@@ -39,6 +39,7 @@ use Intakt\Core\Review\Domain\ReviewTarget;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings;
@@ -86,7 +87,7 @@ use Symfony\Component\Workflow\WorkflowInterface;
 final readonly class RoundFixture
 {
     public const string TASK = 'Add the thing.';
-    public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n-old\n+new\n";
+    public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n@@ -1,9 +1,9 @@\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
     public const string MODEL = 'standard-model';
 
@@ -228,7 +229,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths())), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths())), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

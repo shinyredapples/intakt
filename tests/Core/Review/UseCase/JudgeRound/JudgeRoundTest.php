@@ -20,12 +20,14 @@ use Intakt\Core\Review\Contract\RoundJudged;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\FindingLedger;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Infrastructure\ChangeText;
+use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeLimited;
@@ -67,6 +69,8 @@ use Throwable;
 #[CoversClass(QuotesInChange::class)]
 #[CoversClass(ChangeText::class)]
 #[UsesClass(DiffPaths::class)]
+#[CoversClass(CausesInOneHunk::class)]
+#[CoversClass(DiffHunks::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(DroppedFinding::class)]
 #[UsesClass(RoundJudged::class)]
@@ -402,6 +406,28 @@ final class JudgeRoundTest extends KernelTestCase
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame(['F2' => 'F1'], $payload['same_cause']);
         self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5]], $payload['findings']);
+    }
+
+    public function testTwoFindingsInOneHunkWithDifferentCausesAreRecordedAsTwoEntries(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act)])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame([], $payload['same_cause']);
+        self::assertSame([['F1', 'P2', []], ['F2', 'P1', []]], array_map(static fn (array $finding): array => [$finding['id'], $finding['severity'], $finding['merged']], $payload['findings']));
+    }
+
+    public function testALinkBetweenFindingsOutsideOneHunkOfTheChangeIsNotRecorded(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 12)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame([], $payload['same_cause']);
+        self::assertSame([['F1', 'P2', []], ['F2', 'P1', []]], array_map(static fn (array $finding): array => [$finding['id'], $finding['severity'], $finding['merged']], $payload['findings']));
     }
 
     public function testALinkToAFindingDroppedBeforeTheJudgeIsNotRecorded(): void
