@@ -23,7 +23,7 @@ final readonly class BenchReviewerResult
         public RunVerdict $verdict,
         public RoundTokens $tokens,
         public ?int $milliseconds,
-        public array $models = [],
+        public array $models,
     ) {
     }
 

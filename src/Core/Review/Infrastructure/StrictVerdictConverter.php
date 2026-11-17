@@ -193,7 +193,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
 
             return $verdict;
         } catch (TypeError $error) {
-            // The serializer passes an object on as a list of findings: upstream/serializer-object-collection-accepts-any-object
+            // Kept so a constructor's type error still fails the mapping, because serializers before 8.2.0-BETA2 passed an object on as a list of findings: upstream/serializer-object-collection-accepts-any-object
             throw new UnexpectedValueException($error->getMessage(), $error->getCode(), $error);
         }
     }

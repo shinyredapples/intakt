@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\ComponentOptions;
+use Intakt\Core\Dashboard\Infrastructure\FindingSpans;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
@@ -686,6 +687,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
         // Registered because a placed reviewer row shows a character, whose images the asset mapper names in the app.
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
+        // Registered because a judged finding's text shows its backtick spans as code.
+        $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
 
         return new MercureRoundUpdates(
             $this->live($publisher),

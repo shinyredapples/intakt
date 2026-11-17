@@ -25,6 +25,7 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunController;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunSteps;
+use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartAnswer;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartFirstReviewController;
@@ -73,6 +74,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(StartAnswer::class)]
 #[CoversClass(DemoChoices::class)]
 #[CoversClass(SampleChangeSource::class)]
+#[UsesClass(DemoReadiness::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ConfiguredTierResolver::class)]
@@ -93,6 +95,7 @@ final class FirstRunControllerTest extends WebTestCase
     private const array VARIABLES = [
         'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'INTAKT_CONFIG',
         'MCP_OWNER_TOKEN', 'MCP_OWNER_ACCESS', 'INTAKT_COMPOSE_SERVICE', 'INTAKT_SAMPLE_REPOSITORY', 'INTAKT_PROVIDER_KEY_DIR',
+        'INTAKT_DEMO_RECORDING',
     ];
 
     private const string SAMPLE_REPOSITORY = '/repos/sample';
@@ -155,6 +158,7 @@ final class FirstRunControllerTest extends WebTestCase
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = '';
         $_SERVER['MCP_OWNER_TOKEN'] = '';
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = '';
+        $_SERVER['INTAKT_DEMO_RECORDING'] = '';
         $this->ledger = new DashboardLedger();
     }
 
@@ -745,7 +749,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(0, $page->filter('#demo-choices'));
     }
 
-    public function testTheRecordedReviewChoiceSaysItArrivesWithTheDemoTourAndShowsNoCommand(): void
+    public function testWithoutARecordingTheRecordedReviewChoiceSaysWhyAndOffersNoButton(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
@@ -753,8 +757,22 @@ final class FirstRunControllerTest extends WebTestCase
         $page = $this->firstRunPage(self::PROJECTS, []);
 
         self::assertSame('Watch a recorded real review now', $page->filter('#choice-recorded h3')->text());
-        self::assertSame('The recorded review, which needs no key, arrives with the demo tour.', $page->filter('#choice-recorded .recorded-when')->text());
+        self::assertSame(DemoReadiness::NoRecording->sentence(), $page->filter('#choice-recorded .recorded-when')->text());
+        self::assertCount(0, $page->filter('form.play-demo'));
         self::assertCount(0, $page->filter('#choice-recorded pre, #choice-recorded code'));
+    }
+
+    public function testWithARecordingTheRecordedReviewChoiceHoldsThePlayTheDemoRunButton(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+        $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
+        $_SERVER['INTAKT_DEMO_RECORDING'] = $this->file;
+
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame(DemoReadiness::Ready->sentence(), $page->filter('#choice-recorded .recorded-when')->text());
+        self::assertSame('Play the demo run', $page->filter('#choice-recorded form.play-demo .btn.secondary')->text());
+        self::assertCount(1, $page->filter('form.play-demo'));
     }
 
     public function testWithoutAKeyTheDemoReviewChoiceSaysToPasteOneAndRestart(): void
