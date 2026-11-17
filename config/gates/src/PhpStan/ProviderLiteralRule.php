@@ -25,8 +25,8 @@ final readonly class ProviderLiteralRule implements Rule
     // only src/, because tests pin provider answers with real ids, and the demo data file config/sample-project.yaml is where the sample project's ids belong
     private const string CHECKED = '/src/';
 
-    // the model families a tier names today, matched only where an id starts, so a provider label or a Provider value such as claude_code stays allowed
-    private const string MODEL_ID = '~(?<![\w-])(?:claude-(?:opus|sonnet|haiku|instant|\d)|(?:chat)?gpt-(?:\d|oss|image)|o\d(?:-mini|-pro)?(?![\w-])|gemini-\d|kimi-k\d|llama-?\d|deepseek-[rv]\d|qwen\d|mistral-(?:large|medium|small))[\w.:-]*~i';
+    // the model families a tier names today, matched only where an id starts, so a provider label or a Provider value such as claude_code stays allowed; an o-series id ends after its known variants and date, so a word such as o3-compatible stays allowed
+    private const string MODEL_ID = '~(?<![\w-])(?:claude-(?:opus|sonnet|haiku|instant|\d)|(?:chat)?gpt-(?:\d|oss|image)|o\d(?:-(?:mini|pro|preview|deep-research|\d{4}-\d{2}-\d{2}))*(?![\w-])|gemini-\d|kimi-k\d|llama-?\d|deepseek-[rv]\d|qwen\d|mistral-(?:large|medium|small))[\w.:-]*~i';
 
     // the domains of the model providers and of the coding agents Intakt runs, with any subdomain, so a host counts on its own and inside a URL
     private const string PROVIDER_HOST = '~(?<![\w.-])(?:[\w-]+\.)*(?:anthropic\.com|claude\.ai|claude\.com|openai\.com|chatgpt\.com|huggingface\.co)(?![\w-]|\.[\w-])~i';
