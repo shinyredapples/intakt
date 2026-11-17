@@ -107,6 +107,15 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         self::assertSame('Cost: unknown, no price for model-a', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
     }
 
+    public function testATokensTableWhoseCostIsUnknownLeavesItsCostHeadUnlabeled(): void
+    {
+        $this->givenAJudgedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Cost', 0], [$crawler->filter('#round-round-1 table.tokens thead th')->last()->text(), $crawler->filter('#round-round-1 table.tokens .figure-kind')->count()]);
+    }
+
     public function testTheTokensTableMarksOnlyItsCostColumnEstimatedOnceInItsHead(): void
     {
         $this->givenPricesOf('2026-11-13');
