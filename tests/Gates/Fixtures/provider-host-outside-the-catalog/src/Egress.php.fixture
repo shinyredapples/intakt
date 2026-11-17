@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Egress
+{
+    private const string VENDOR_HOST = 'api.anthropic.com';
+
+    public function host(): string
+    {
+        return self::VENDOR_HOST;
+    }
+}

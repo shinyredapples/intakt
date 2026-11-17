@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class ReviewerChoice
+{
+    private const string MODEL = 'claude-sonnet-5-5';
+
+    public function model(): string
+    {
+        return self::MODEL;
+    }
+}

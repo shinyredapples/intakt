@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Tests;
+
+final class ReviewerChoiceTest
+{
+    public function model(): string
+    {
+        return 'claude-sonnet-5-5 on https://api.anthropic.com';
+    }
+}
