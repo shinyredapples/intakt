@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ai\Contract\ConfiguredKey;
+use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
+use Intakt\Core\Ai\Contract\KeyKind;
+use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Core\Dashboard\Domain\AgentStep;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
@@ -30,11 +35,6 @@ use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
-use Intakt\Core\Ai\Contract\ConfiguredKey;
-use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
-use Intakt\Core\Ai\Contract\KeyKind;
-use Intakt\Core\Ai\Contract\ProviderKey;
-use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;

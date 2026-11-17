@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use Intakt\Core\Ai\Contract\ConfiguredKey;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
+#[Exclude]
 final readonly class ProviderStep
 {
     /**
