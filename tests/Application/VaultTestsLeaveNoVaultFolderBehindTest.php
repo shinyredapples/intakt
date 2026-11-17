@@ -25,7 +25,7 @@ final class VaultTestsLeaveNoVaultFolderBehindTest extends TestCase
         new Filesystem()->remove($this->scratch);
     }
 
-    // The order the tests gate's worker produced when it ordered by recorded durations.
+    // Forces the order a check that sorts by recorded durations put in one worker, because that order failed on main (#2434).
     public function testTheKeptKeyWiringTestPassesRightAfterTheAiProvidersTestInOneProcess(): void
     {
         $root = dirname(__DIR__, 2);
