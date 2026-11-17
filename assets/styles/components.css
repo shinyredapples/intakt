@@ -492,6 +492,9 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 @media (max-width: 760px) {
   .page-head { margin-bottom: var(--s16); }
   .setup .page-head .character { max-height: 140px; }
+  /* The empty board's octopus would otherwise take a row of its own above the title and push the first lane out of view. */
+  .page-head > .character { max-height: 96px; width: auto; }
+  .page-head > .character + div { flex: 1 1 0; }
   .headline-long { display: none; }
   .headline-short { display: inline; }
 }
