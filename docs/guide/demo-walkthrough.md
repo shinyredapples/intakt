@@ -32,6 +32,26 @@ flowchart LR
 
 A replay shows a review that already happened, without calling any AI, so it needs no key. The easiest way is the dashboard's `/demo` page (`http://localhost:7781/demo`): its **Play the demo run** button plays the recording that `INTAKT_DEMO_RECORDING` names (set it in `.env.local`; no recording ships with Intakt yet) four times as fast as it happened. While it plays, a caption bar at the bottom of every page says which of seven stages the review is in, from the change arriving, through the reviewers' findings and the judge's list of what to fix, to the second round that closes those findings, with a link to the review. You can pause the caption or close it for the rest of the browser tab. The first-run page (`/setup`) offers the same button in its **Watch a recorded real review now** choice. From the console, `docker compose exec intakt php bin/console intakt:demo:replay <recording> --factor=10` plays a recording into the `demo-replay` project, the **replay project** each start sets up, and the open dashboard shows it arriving at the recorded pace (here ten times as fast). Use it when a live review would take too long or you have no key at hand. To clear the replays away, `docker compose exec intakt php bin/console intakt:demo:remove` deletes the replay project and everything played into it, and nothing else; the next start (or `intakt:demo:create`) sets up an empty one again, and until then a replay is refused.
 
+### Recording a review of your own
+
+A recording is made from a live review, in three steps:
+
+1. Before the review, set `INTAKT_LIVE_CAPTURE` to the name of a file. While the review runs, every live update the dashboard shows is also written to that file.
+2. After the review, `docker compose exec intakt php bin/console intakt:demo:record <project> <change> <recording>` reads that file and the project's ledger and writes one recording file holding the review's events and its live updates.
+3. Play the recording back as described above, with `intakt:demo:replay` or the `/demo` page.
+
+```mermaid
+flowchart LR
+  a[Live review] --> b[Capture file]
+  a --> c[Ledger]
+  b --> d[intakt:demo:record]
+  c --> d
+  d --> e[Recording file]
+  e --> f[intakt:demo:replay]
+  f --> g[demo-replay project]
+  g --> h[Dashboard, labeled Replay]
+```
+
 Its reviews never count. The reviewers in a recording judged some change at another time, not the change on the card, so their verdicts say nothing about it. That is why every replayed round carries a **Replay** label in the dashboard, and its decision is always blocked, with the reason that a replay never counts as a verdict.
 
 ## What to point out in a demo
