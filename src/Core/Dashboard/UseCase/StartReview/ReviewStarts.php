@@ -15,11 +15,10 @@ use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
-use Symfony\Component\Messenger\Stamp\HandledStamp;
 
 final readonly class ReviewStarts
 {
-    private const string FLASH_SUCCESS = 'success';
+    private const string FLASH_TOAST = 'toast';
     private const string FLASH_ERROR = 'error';
 
     public function __construct(
@@ -74,13 +73,14 @@ final readonly class ReviewStarts
     private function started(StartReview $command): array
     {
         try {
-            $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
+            $this->commands->dispatch($command);
         } catch (HandlerFailedException $failed) {
             $reportable = array_first($failed->getWrappedExceptions(ReportableFailure::class, true));
 
             return [self::FLASH_ERROR, $reportable?->getMessage() ?? 'The review could not be started.'];
         }
 
-        return [self::FLASH_SUCCESS, 'Started round '.(is_string($handled?->getResult()) ? $handled->getResult() : '').'.'];
+        // Named by the number the round was asked to get and not by its id, because a person reads the number and the id only pushed the page around (#2370, D4).
+        return [self::FLASH_TOAST, sprintf('Started round %d.', $command->round->number)];
     }
 }

@@ -13,7 +13,7 @@ use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\SampleChange;
-use LogicException;
+use Intakt\Core\Review\Contract\SampleProjectData;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Yaml\Yaml;
@@ -27,38 +27,14 @@ final readonly class SampleProject
     // Named instead of the openai_compatible variables, because the entrypoint sets those from this token with the router as the base URL.
     public const string HUGGING_FACE_TOKEN = 'HF_TOKEN';
 
-    // Without /v1, because the generic bridge appends /v1/chat/completions itself.
-    public const string HUGGING_FACE_ROUTER = 'https://router.huggingface.co';
-
     // The providers one key enables, in the order the panel takes them (openai_compatible through the Hugging Face token); the others need a subscription login the demo does not ask for.
     private const array PROVIDERS = [Provider::Anthropic, Provider::OpenAi, Provider::OpenAiCompatible];
-
-    // The router models name their router provider, because the router's default provider may refuse tools together with structured output.
-    private const array MODELS = [
-        Provider::Anthropic->value => ['strong' => 'claude-opus-5-5', 'standard' => 'claude-sonnet-5-5', 'light' => 'claude-haiku-5-5'],
-        Provider::OpenAi->value => ['strong' => 'gpt-5', 'standard' => 'gpt-5-mini', 'light' => 'gpt-5-nano'],
-        Provider::OpenAiCompatible->value => ['strong' => 'moonshotai/Kimi-K3:deepinfra', 'standard' => 'moonshotai/Kimi-K3:deepinfra', 'light' => 'moonshotai/Kimi-K3:deepinfra'],
-    ];
-
-    // Another maker's model for the second reviewer when the router carries the whole panel, so the panel still has two makers.
-    private const string ROUTER_SECOND_MAKER = 'openai/gpt-oss-120b:novita';
-
-    // List prices read on 2026-11-13 in US dollars per million tokens, so the demo's first review shows a cost; the owner can change them in the seeded file.
-    private const array PRICES = [
-        'claude-opus-5-5' => ['input' => 5, 'output' => 25, 'cache_read' => 0.5, 'cache_write' => 6.25],
-        'claude-sonnet-5-5' => ['input' => 3, 'output' => 15, 'cache_read' => 0.3, 'cache_write' => 3.75],
-        'claude-haiku-5-5' => ['input' => 1, 'output' => 5, 'cache_read' => 0.1, 'cache_write' => 1.25],
-        'gpt-5' => ['input' => 1.25, 'output' => 10, 'cache_read' => 0.125],
-        'gpt-5-mini' => ['input' => 0.25, 'output' => 2, 'cache_read' => 0.025],
-        'gpt-5-nano' => ['input' => 0.05, 'output' => 0.4, 'cache_read' => 0.005],
-        'moonshotai/Kimi-K3:deepinfra' => ['input' => 0.6, 'output' => 2.5],
-        self::ROUTER_SECOND_MAKER => ['input' => 0.15, 'output' => 0.6],
-    ];
 
     public function __construct(
         private EnabledAccounts $accounts,
         #[Autowire(env: 'default::OPENAI_COMPATIBLE_BASE_URL')]
         private ?string $compatibleBaseUrl,
+        private SampleProjectData $data = new SampleProjectData(),
         private Filesystem $filesystem = new Filesystem(),
     ) {
     }
@@ -102,7 +78,7 @@ final readonly class SampleProject
             return false;
         }
 
-        return Provider::OpenAiCompatible !== $provider || self::HUGGING_FACE_ROUTER === $this->compatibleBaseUrl;
+        return Provider::OpenAiCompatible !== $provider || $this->data->routerUrl()->toRawString() === $this->compatibleBaseUrl;
     }
 
     /**
@@ -113,10 +89,11 @@ final readonly class SampleProject
         $tiers = $this->tierProviders($providers);
         $models = $this->models($tiers);
         $project = ['tiers' => $models, 'review' => $this->review($this->panel($tiers))];
+        $priceDate = $this->data->priceDate();
 
         return '# Written once by intakt:sample:seed; edit it and start again to change the sample project.'.PHP_EOL
-            .'# The prices are list prices read on 2026-11-13, in US dollars per million tokens.'.PHP_EOL
-            .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['price_date' => '2026-11-13', 'prices' => $this->prices($models)]], 6, 4);
+            .'# The prices are list prices read on '.$priceDate.', in US dollars per million tokens.'.PHP_EOL
+            .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['price_date' => $priceDate, 'prices' => $this->prices($models)]], 6, 4);
     }
 
     /**
@@ -157,10 +134,10 @@ final readonly class SampleProject
         $provider = $tiers[$tier];
 
         if (Tier::Standard->value === $tier && Provider::OpenAiCompatible === $provider && $tiers[Tier::Strong->value] === $provider) {
-            return self::ROUTER_SECOND_MAKER;
+            return $this->data->secondMaker();
         }
 
-        return self::MODELS[$provider->value][$tier] ?? throw new LogicException(sprintf('The sample project has no %s model on %s.', $tier, $provider->value));
+        return $this->data->model($provider, Tier::from($tier));
     }
 
     /**
@@ -208,7 +185,7 @@ final readonly class SampleProject
     {
         $prices = [];
         foreach ($models as $tier) {
-            $prices[$tier['model']] = self::PRICES[$tier['model']] ?? throw new LogicException(sprintf('The sample project has no price for %s.', $tier['model']));
+            $prices[$tier['model']] = $this->data->price($tier['model']);
         }
 
         return $prices;

@@ -44,10 +44,10 @@ final class ShellWithoutHubTest extends DashboardPageTestCase
         self::assertGreaterThan(0, $crawler->filter('main.content [data-project="alpha"]')->count());
     }
 
-    public function testThePlainPageKeepsTheFlashLineAndLogsAWarning(): void
+    public function testThePlainPageKeepsTheToastAndLogsAWarning(): void
     {
         $session = new Session(new MockArraySessionStorage());
-        $session->getFlashBag()->add('success', 'Started round round-2.');
+        $session->getFlashBag()->add('toast', 'Started round 2.');
         $request = Request::create('/projects');
         $request->setSession($session);
         $requests = self::getContainer()->get(RequestStack::class);
@@ -59,7 +59,8 @@ final class ShellWithoutHubTest extends DashboardPageTestCase
 
         $page = new Crawler(new LivePageRendering($twig, $log)->render($request, 'dashboard/projects.html.twig', ['projects' => []]));
 
-        self::assertSame('Started round round-2.', $page->filter('.flash-success')->text());
+        self::assertCount(1, $page->filter('.toast'));
+        self::assertSame('Started round 2.', $page->filter('.toast')->text());
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(['warning'], array_column($log->cleanLogs(), 0));
     }

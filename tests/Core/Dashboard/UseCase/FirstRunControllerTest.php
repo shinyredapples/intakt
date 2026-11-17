@@ -617,7 +617,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(303);
         self::assertResponseRedirects('/setup');
         $this->browser()->followRedirect();
-        self::assertSelectorTextContains('.flash-success', 'Started round round-1.');
+        self::assertSelectorTextSame('.toast', 'Started round 1.');
     }
 
     public function testASecondPressComesBackWithTheRefusalAndNoTrace(): void

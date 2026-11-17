@@ -184,15 +184,15 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertStringContainsString('export function markBoardEdges(page, view)', $this->browser->getInternalResponse()->getContent());
     }
 
-    public function testThePlainPageStillShowsTheLineTheStartButtonLeftAndLogsAWarning(): void
+    public function testThePlainPageStillShowsTheToastTheStartButtonLeftAndLogsAWarning(): void
     {
         $this->givenARunningRound();
         $log = new BufferingLogger();
-        $request = $this->requestWithTheLine('Started round round-2.');
+        $request = $this->requestWithTheToast('Started round 2.');
 
         $page = new Crawler((string) $this->controller($log)($request, 'round-1')->getContent());
 
-        self::assertSame('Started round round-2.', $page->filter('.flash-success')->text());
+        self::assertSame('Started round 2.', $page->filter('.toast')->text());
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(['warning'], array_column($log->cleanLogs(), 0));
     }
@@ -203,10 +203,10 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         $this->ledger->startReviewer('round-1', 'correctness');
     }
 
-    private function requestWithTheLine(string $line): Request
+    private function requestWithTheToast(string $line): Request
     {
         $session = new Session(new MockArraySessionStorage());
-        $session->getFlashBag()->add('success', $line);
+        $session->getFlashBag()->add('toast', $line);
         $request = Request::create('/reviews/round-1');
         $request->setSession($session);
         $requests = self::getContainer()->get(RequestStack::class);
