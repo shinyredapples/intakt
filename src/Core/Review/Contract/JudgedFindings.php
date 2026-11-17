@@ -11,10 +11,10 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class JudgedFindings
 {
     /**
-     * @param list<Finding>        $findings
-     * @param list<Finding>        $actList
-     * @param list<FollowUp>       $followUps
-     * @param list<DroppedFinding> $dropped
+     * @param list<Finding>         $findings
+     * @param list<Finding>         $actList
+     * @param list<FollowUp>        $followUps
+     * @param list<DroppedFinding>  $dropped
      * @param array<string, string> $sameCause
      */
     private function __construct(

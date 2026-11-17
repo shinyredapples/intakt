@@ -156,7 +156,7 @@ final class MergedActEntryPageTest extends WebTestCase
         }
 
         $vendor = new VerdictPerRole($verdicts);
-        $judge = null === $judgement ? $vendor : new ScriptedJudgement($judgement);
+        $judge = $judgement instanceof Judgement ? new ScriptedJudgement($judgement) : $vendor;
         $delivered = 0;
         $work = static function () use ($fixture, $vendor, $judge, &$delivered): void {
             foreach (array_slice($fixture->bus->messages, $delivered) as $message) {
