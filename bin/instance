@@ -47,6 +47,7 @@ final class Instance
     private const array INHERITED_VARIABLES = ['PATH', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'TZ', 'TMPDIR'];
     private const int BOOT_SECONDS = 30;
     private const int STOP_SECONDS = 5;
+    private const string BUILT_IN_SERVER_LINE = '/^\[[^\]]+\] (?:PHP \S+ Development Server \(.*\) started|\S+:\d+ (?:Accepted|Closing|\[\d{3}\]: .*))$/';
     // Keeps boot, command and stop together well inside the build loop's 120 seconds per call.
     public const int COMMAND_SECONDS = 60;
     private const int COMMAND_TIMED_OUT = 124;
@@ -269,8 +270,25 @@ final class Instance
             }
         }
 
+        if ([] === $lines) {
+            return 'the server log is empty';
+        }
+
         // A process the system stops, as PHP's own "Out of memory" exit does, names no error, so its last words are the reason.
-        return null === array_last($lines) ? 'the server log is empty' : mb_substr(array_last($lines), 0, 500);
+        $lastWords = array_last($this->withoutServerBookkeeping($lines));
+
+        return null === $lastWords ? 'the server log names no reason' : mb_substr($lastWords, 0, 500);
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function withoutServerBookkeeping(array $lines): array
+    {
+        // The built-in server logs its start and every request, so its last line would only restate the status code.
+        return array_values(array_filter($lines, static fn (string $line): bool => 1 !== preg_match(self::BUILT_IN_SERVER_LINE, $line)));
     }
 
     private function readLog(): string

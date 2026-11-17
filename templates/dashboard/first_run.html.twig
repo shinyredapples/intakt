@@ -9,6 +9,7 @@
 {%- set states = first_run.states -%}
 <div class="setup">
     <div class="page-head">
+        {{ include('dashboard/components/character.html.twig', {character: first_run.firstReview.mascot, size: 200}, with_context = false) }}
         <div>
             <h1>Set up Intakt</h1>
             <p class="lead">What this install has set up and what is still missing, read from the running install.</p>
@@ -29,6 +30,14 @@
     <section class="step" id="step-providers" data-state="{{ step.state.value }}" aria-labelledby="step-providers-h">
         <h2 id="step-providers-h">1 {{ titles[0] }} {{ _self.state(step.state) }}</h2>
         <p class="lead">{{ step.sentence }}</p>
+        {%- if step.offersKeyForm %}
+        <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::KEEP_PROVIDER_KEY')) }}" class="keep-provider-key step-nav">
+            <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::TOKEN_ID')) }}">
+            <label for="provider-key">An Anthropic key, an OpenAI key or a Hugging Face token</label>
+            <input type="password" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" autocomplete="off" required>
+            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Keep the key'}, with_context = false) }}
+        </form>
+        {%- endif %}
         {%- if step.keyless is not empty %}
         <ul class="keyless">
             {%- for message in step.keyless %}
