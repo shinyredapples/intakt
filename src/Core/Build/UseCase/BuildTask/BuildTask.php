@@ -70,9 +70,7 @@ final readonly class BuildTask
      */
     private function runSteps(BuildTaskRequest $request, ListedIssue $task): BuildTaskOutcome
     {
-        $bundle = null;
-        $text = null;
-        $accepted = null;
+        $results = [];
 
         foreach (BuildStep::cases() as $step) {
             $result = match ($step) {
@@ -81,21 +79,13 @@ final readonly class BuildTask
                 BuildStep::Mirror => $this->updateMirror($request),
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
-                BuildStep::HandBackCheck => $this->handBacks->check($request, $this->handedBack($bundle)),
-                BuildStep::PrePushCheck => $this->prePushChecks->failureOf($request, $this->handedBack($bundle)),
-                BuildStep::Push => $this->push($request, $accepted, $text),
+                BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
+                BuildStep::PrePushCheck => $this->prePushChecks->failureOf($request, $this->bundleIn($results)),
+                BuildStep::Push => $this->push($request, $results),
             };
 
-            // Locals of this run, never properties, because a worker keeps the service between runs.
-            if ($result instanceof BuildJobOutcome) {
-                $bundle = $result->bundle;
-                $text = $result->pullRequestText;
-            }
-
-            if ($result instanceof AcceptedHandBack) {
-                $accepted = $result;
-            }
-
+            // A local of this run, never a property, because a worker keeps the service between runs.
+            $results[$step->value] = $result;
             $failure = $this->failureIn($result);
 
             $this->record($request, $step, $failure);
@@ -168,15 +158,34 @@ final readonly class BuildTask
         return $outcome->built() ? $outcome : $outcome->verdict->reason();
     }
 
-    private function handedBack(?string $bundle): string
+    /**
+     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     */
+    private function bundleIn(array $results): string
     {
         // Never null, because the checks run only after a build job that built, and such a job always hands back a bundle.
-        return $bundle ?? throw new LogicException('the checks run only after a build job that handed back a bundle');
+        return $this->builtIn($results)->bundle ?? throw new LogicException('the checks run only after a build job that handed back a bundle');
     }
 
-    private function push(BuildTaskRequest $request, ?AcceptedHandBack $accepted, ?string $text): ?string
+    /**
+     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     */
+    private function builtIn(array $results): BuildJobOutcome
     {
-        // Never null, because the push runs only after a hand-back check that accepted the head, and a build job that built always hands back its text.
+        $built = $results[BuildStep::BuildJob->value] ?? null;
+
+        return $built instanceof BuildJobOutcome ? $built : throw new LogicException('the checks and the push run only after a build job that built');
+    }
+
+    /**
+     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     */
+    private function push(BuildTaskRequest $request, array $results): ?string
+    {
+        $accepted = $results[BuildStep::HandBackCheck->value] ?? null;
+        $text = $this->builtIn($results)->pullRequestText;
+
+        // Never otherwise, because the push runs only after a hand-back check that accepted the head, and a build job that built always hands back its text.
         if (!$accepted instanceof AcceptedHandBack || null === $text) {
             throw new LogicException('the push runs only after an accepted hand-back of a build job that handed back its text');
         }

@@ -277,7 +277,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame(['task', 'mirror', 'clone', 'build_job', 'hand_back_check', 'pre_push_check', 'push'], array_column($this->stepsIn($ledger), 'step'));
         self::assertSame(array_fill(0, 7, 'passed'), array_column($this->stepsIn($ledger), 'outcome'));
         self::assertSame('7', $ledger->payloads()[0]['task']);
-        self::assertNull(array_last($this->stepsIn($ledger))['failure']);
+        self::assertNull($this->stepsIn($ledger)[6]['failure']);
         self::assertSame([LedgerEventKind::PushIntended, LedgerEventKind::BranchPushed, LedgerEventKind::ChangeIntended, LedgerEventKind::ChangeOpened, LedgerEventKind::BuildStepEnded], array_slice($ledger->kinds(), 6));
         self::assertFileExists($this->clone.'/a.txt');
         self::assertStringEqualsFile($this->clone.'/b.txt', 'two');
@@ -308,7 +308,7 @@ final class BuildTaskTest extends TestCase
 
         self::assertSame(BuildStep::Push, $outcome->last);
         self::assertSame('the pull request text has no title on its first line', $outcome->failure);
-        self::assertSame('the pull request text has no title on its first line', array_last($this->stepsIn($ledger))['failure']);
+        self::assertSame('the pull request text has no title on its first line', $this->stepsIn($ledger)[6]['failure']);
         self::assertNull($this->remoteTip());
         self::assertSame(0, $this->changes->calls);
     }
@@ -325,7 +325,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame('the remote refused the push of feat/task (git push exited with 1)', $outcome->failure);
         self::assertSame([BuildStep::Task, BuildStep::Mirror, BuildStep::Clone, BuildStep::BuildJob, BuildStep::HandBackCheck, BuildStep::PrePushCheck], $outcome->passedSteps());
         self::assertSame(['passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'failed'], array_column($this->stepsIn($ledger), 'outcome'));
-        self::assertSame(['push', 'the remote refused the push of feat/task (git push exited with 1)'], [array_last($this->stepsIn($ledger))['step'], array_last($this->stepsIn($ledger))['failure']]);
+        self::assertSame(['push', 'the remote refused the push of feat/task (git push exited with 1)'], [$this->stepsIn($ledger)[6]['step'], $this->stepsIn($ledger)[6]['failure']]);
         self::assertContains(LedgerEventKind::PushRefused, $ledger->kinds());
         self::assertSame(LedgerEventKind::BuildStepEnded, array_last($ledger->kinds()));
         self::assertNull($this->remoteTip());
