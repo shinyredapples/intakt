@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\IndexResolvedFindings;
 
 use Intakt\Core\Memory\Contract\MemoryEntry;
+use Intakt\Core\Memory\Contract\MemoryIndex;
 use Intakt\Core\Memory\Contract\MemoryQuery;
+use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
 use Intakt\Core\Memory\Contract\RelevantMemory;
 use Intakt\Core\Memory\Infrastructure\MemoryDocuments;
 use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
@@ -32,6 +34,7 @@ use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use RuntimeException;
 use stdClass;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\Result\VectorResult;
@@ -45,6 +48,7 @@ use Symfony\AI\Store\Retriever;
 use Symfony\Component\Workflow\Event\CompletedEvent;
 use Symfony\Component\Workflow\Marking;
 use Symfony\Component\Workflow\Transition;
+use Throwable;
 
 #[Group('persistence')]
 #[CoversClass(IndexResolvedFindingsHandler::class)]
@@ -64,6 +68,7 @@ use Symfony\Component\Workflow\Transition;
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
 #[UsesClass(RelevantMemory::class)]
+#[UsesClass(ProjectMemoryNeedsEmbeddingModel::class)]
 final class IndexResolvedFindingsTest extends KernelTestCase
 {
     private const string CHANGE = 'feat/thing';
@@ -178,6 +183,27 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         self::assertSame([], $this->remembered(['src/A.php']));
     }
 
+    public function testWithoutAnEmbeddingModelTheIndexingIsDoneWithOneInfoLineAndNoTrace(): void
+    {
+        $this->roundReporting([$this->finding('a')]);
+        $second = $this->roundResolving(['F1']);
+        $this->fixture->log->cleanLogs();
+
+        $this->fixture->indexing($this->indexFailingWith(new ProjectMemoryNeedsEmbeddingModel()))(new IndexResolvedFindings($second));
+
+        self::assertSame([['info', new ProjectMemoryNeedsEmbeddingModel()->getMessage(), ['project' => 'alpha']]], $this->fixture->log->cleanLogs());
+    }
+
+    public function testAnyOtherIndexingFailureIsThrownSoTheMessageIsRetried(): void
+    {
+        $this->roundReporting([$this->finding('a')]);
+        $second = $this->roundResolving(['F1']);
+
+        $this->expectExceptionObject(new RuntimeException('The store is down.'));
+
+        $this->fixture->indexing($this->indexFailingWith(new RuntimeException('The store is down.')))(new IndexResolvedFindings($second));
+    }
+
     public function testACompletedRoundQueuesItsIndexingOnce(): void
     {
         $id = $this->roundReporting([$this->finding('a')]);
@@ -257,6 +283,14 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     private function remembered(array $files): array
     {
         return $this->memory->relevantTo(new MemoryQuery('alpha', $files, 100000))->entries;
+    }
+
+    private function indexFailingWith(Throwable $failure): MemoryIndex
+    {
+        $index = self::createStub(MemoryIndex::class);
+        $index->method('index')->willThrowException($failure);
+
+        return $index;
     }
 
     private function finding(string $id, bool $repeat = false): Finding
