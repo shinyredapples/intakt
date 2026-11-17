@@ -15,6 +15,7 @@ use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\RebuiltContainer;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
 use ReflectionMethod;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
@@ -25,7 +26,9 @@ use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
+// Serial because its vaults create config/secrets/, which the workers share, and a container another worker compiles meanwhile keeps the vault loader for good.
 #[CoversNothing]
+#[Group('serial')]
 final class AiProvidersTest extends KernelTestCase
 {
     private const string BODY = 'abcdefgh12345678';
