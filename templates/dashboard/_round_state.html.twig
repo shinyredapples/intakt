@@ -1,9 +1,10 @@
-{#- A round's state as a chip: a check once judged, a green live dot while it runs, a warning once it ended without the judge's call. The state- class names it for checks of the page. -#}
-{%- set judged = state.name == 'Judged' -%}
-{%- if ending is defined and ending is not null -%}
-{{ include('dashboard/components/chip.html.twig', {dot: 'needs', label: 'Blocked', on_page: true, extra: 'state-blocked'}, with_context = false) }}
+{#- A round's state. An outcome (ReviewOutcome) is the headline as its chip; the process state (in progress, judged) is secondary: plain muted text on the review page, a chip without an icon on the reviews list, because the check mark is Approved's alone. -#}
+{%- if outcome is defined and outcome is not null -%}
+{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}
+{%- elseif plain is defined and plain -%}
+<span class="muted small state-{{ state.name == 'Judged' ? 'judged' : 'running' }}">{{ state.value|capitalize }}</span>
 {%- else -%}
-{{ include('dashboard/components/chip.html.twig', judged
-    ? {icon: 'check', label: state.value|capitalize, on_page: true, extra: 'state-judged'}
+{{ include('dashboard/components/chip.html.twig', state.name == 'Judged'
+    ? {label: state.value|capitalize, on_page: true, extra: 'state-judged'}
     : {dot: 'ok', label: state.value|capitalize, on_page: true, extra: 'state-running'}, with_context = false) }}
 {%- endif -%}

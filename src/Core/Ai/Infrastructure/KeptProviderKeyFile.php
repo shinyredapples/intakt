@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeys;
@@ -23,7 +24,7 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
     private const string FILE = 'provider-key.json';
 
     public function __construct(
-        #[Autowire('%kernel.project_dir%/var/data')]
+        #[Autowire(param: AiServices::KEPT_KEY_DIRECTORY)]
         private string $directory,
     ) {
     }
