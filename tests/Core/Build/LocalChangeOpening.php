@@ -1,0 +1,18 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Build;
+
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeOpening;
+use Intakt\Plugin\Forge\Contract\ProposedChange;
+
+// Answers the branch's own name as the change, so the evidence of intakt:build:task pushes to a local git remote without GitHub; GitHubChangeOpener opens the pull request of an installed instance.
+final readonly class LocalChangeOpening implements ChangeOpening
+{
+    public function openOrUpdate(ProposedChange $change): ChangeId
+    {
+        return new ChangeId(sprintf('%s:%s', $change->project, $change->branch));
+    }
+}

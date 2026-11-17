@@ -8,6 +8,7 @@ use Intakt\Core\Git\Contract\BranchHead;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
+use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\HandBack;
 use Intakt\Core\HandBack\Contract\HandBackChecks;
 use Intakt\Core\HandBack\Contract\HandBackNotChecked;
@@ -27,13 +28,13 @@ final readonly class HandBackCheck
     ) {
     }
 
-    // The refusal's fixed text or the failure's message, never anything of the bundle, because what the build handed back is untrusted.
-    public function failureOf(BuildTaskRequest $request, string $bundle): ?string
+    // The accepted hand-back for the push, otherwise the refusal's fixed text or the failure's message, never anything of the bundle, because what the build handed back is untrusted.
+    public function check(BuildTaskRequest $request, string $bundle): AcceptedHandBack|string
     {
-        return $this->files->failureOf($request, $bundle, fn (HandBack $handBack): ?string => $this->refusalOf($request, $handBack));
+        return $this->files->check($request, $bundle, fn (HandBack $handBack): AcceptedHandBack|string => $this->acceptedOf($request, $handBack));
     }
 
-    private function refusalOf(BuildTaskRequest $request, HandBack $handBack): ?string
+    private function acceptedOf(BuildTaskRequest $request, HandBack $handBack): AcceptedHandBack|string
     {
         try {
             $result = $this->checks->check($handBack);
@@ -50,7 +51,7 @@ final readonly class HandBackCheck
             return $failure->getMessage();
         }
 
-        return null;
+        return $result;
     }
 
     private function stoppedBy(ExceptionInterface $stopped): string
