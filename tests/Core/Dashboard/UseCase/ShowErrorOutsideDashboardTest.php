@@ -54,9 +54,14 @@ final class ShowErrorOutsideDashboardTest extends WebTestCase
     {
         // Taking every record marks the kernel's own critical line as asserted too; the reference is random, so only the wording before it is compared.
         $messages = array_column(LogRecords::ofThisRun()?->takeErrors() ?? [], 'message');
-        $lines = array_filter(array_map(static fn (string $message): ?string => preg_match('/^(.+), reference [0-9a-f]{8}\.$/', $message, $match) ? $match[1] : null, $messages));
+        $lines = [];
+        foreach ($messages as $message) {
+            if (1 === preg_match('/^(.+), reference [0-9a-f]{8}\.$/', $message, $match)) {
+                $lines[] = $match[1];
+            }
+        }
 
-        return array_values($lines);
+        return $lines;
     }
 
     // The failure is thrown once routing has named the route, so the kernel's error path runs as it does for a failing MCP or dashboard controller.
