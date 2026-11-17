@@ -1,6 +1,6 @@
 # [Config] A NaN value skips type checks, range checks and validation closures
 
-Draft, not posted. Versions: `symfony/config` v8.1.5, PHP 8.5.12. Affected: 6.4 through 8.2.0-BETA1 (7.4.22, 8.1.11). Target branch: 6.4 (7.4 once 6.4 stops taking bug fixes at the end of November 2026).
+Fixed by symfony/symfony#67911 (merged 2026-11-06). Versions: `symfony/config` v8.1.5, PHP 8.5.12. Affected: 6.4 through 8.2.0-BETA1 (7.4.22, 8.1.11). Target branch: 6.4 (7.4 once 6.4 stops taking bug fixes at the end of November 2026).
 
 ## What happens
 
@@ -33,4 +33,4 @@ Checked on 2026-11-02, refreshed on 2026-11-06 against 6.4, 7.4, 8.1 and 8.2 (8.
 - **Pull requests and commits:** fixed upstream by #67911 (merged 2026-11-06, bug fix `[Config] Do not treat NAN as a placeholder`), commit d2f88e779b on 6.4, merged up into 7.4, 8.1 and 8.2 (checked 2026-11-15 at `symfony/symfony` 8.2 979969dc83). It guards the four `resolvePlaceholderValue()` comparisons in `BaseNode` with `\is_string()`, the fix this report proposes, and makes `NumericNode` reject NAN against a minimum or maximum. Also merged the same day: #67927 (`EnumNode` messages for INF and NAN). Pull requests searched, open, merged and closed, with `is:pr Config NAN` and `is:pr NAN placeholder`; commits from `git log origin/<branch> -- src/Symfony/Component/Config/Definition/BaseNode.php` on 6.4, 7.4, 8.1 and 8.2.
 - **Decision:** `fixed upstream` (v8.2.0-BETA2).
 - **Owner review (2026-11-03, symfony/symfony 6.4 to 8.2):** an issue. The fix looks small: guard the four `resolvePlaceholderValue()` comparisons in `BaseNode` with `\is_string($value)`. "min()/max() refuse it" is dropped (only a `validate()` closure catches a NaN after the fix). The owner session expected a misleading "A dynamic value is not compatible" error from the root when the NaN has non-NaN siblings; that does not reproduce on v8.1.5 or 8.2.x-dev (0d10198cc52a) with scalar, prototyped or nested array siblings, in one config or two (scratch scripts, 2026-11-03): the NaN passes silently in every case, so the issue says that. `reproduce.php` also fails with `symfony/config` v6.4.49 and v7.4.22.
-- **Status:** `fixed upstream` (v8.2.0-BETA2): nothing to file; `ISSUE.md` is no longer needed.
+- **Status:** `fixed upstream` (v8.2.0-BETA2): nothing to file; `ISSUE.md` was removed.
