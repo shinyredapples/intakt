@@ -29,6 +29,8 @@ final class CheckedReportsTest extends SandboxTestCase
 
     private const string NO_PULL_REQUESTS_LINE = 'upstream/a-bug/REPORT.md is ready to file but has no "Pull requests and commits" line (the pull requests and commits the check found, or "none found" with the date of the check)';
 
+    private const string NAMES_NOTHING = 'upstream/a-bug/REPORT.md is ready to file but its "Pull requests and commits" line names no pull request (#n), URL or commit hash and no date of the check as YYYY-MM-DD';
+
     public function testAReadyToFileReportCheckedFourteenDaysAgoPasses(): void
     {
         self::assertSame([], $this->findingsOf("- **Checked:** 2026-10-24 against main.\n".self::PULL_REQUESTS."- **Status:** `ready to file`\n"));
@@ -51,16 +53,12 @@ final class CheckedReportsTest extends SandboxTestCase
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundWithoutADateIsAFinding(): void
     {
-        $findings = $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** `None found`.\n- **Status:** `ready to file`\n");
-
-        self::assertSame(['upstream/a-bug/REPORT.md is ready to file but its "Pull requests and commits" line says "none found" without the date of the check as YYYY-MM-DD'], $findings);
+        self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** `None found`.\n- **Status:** `ready to file`\n"));
     }
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundInUnderscoreEmphasisWithoutADateIsAFinding(): void
     {
-        $findings = $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** _none found_.\n- **Status:** `ready to file`\n");
-
-        self::assertSame(['upstream/a-bug/REPORT.md is ready to file but its "Pull requests and commits" line says "none found" without the date of the check as YYYY-MM-DD'], $findings);
+        self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** _none found_.\n- **Status:** `ready to file`\n"));
     }
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundInUnderscoreEmphasisWithADatePasses(): void
@@ -68,16 +66,40 @@ final class CheckedReportsTest extends SandboxTestCase
         self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** __none found__ (checked 2026-11-07).\n- **Status:** `ready to file`\n"));
     }
 
-    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineNamesAWordStartingWithNoneFoundNeedsNoDate(): void
-    {
-        self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** none foundry commits, see pull request 12.\n- **Status:** `ready to file`\n"));
-    }
-
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundWithAnImpossibleDateIsAFinding(): void
     {
-        $findings = $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** none found (checked 2026-02-30).\n- **Status:** `ready to file`\n");
+        self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** none found (checked 2026-02-30).\n- **Status:** `ready to file`\n"));
+    }
 
-        self::assertStringContainsString('says "none found" without the date of the check', implode("\n", $findings));
+    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineNamesNothingElseThanAWordIsAFinding(): void
+    {
+        foreach (['none', '-', '``', 'No pull requests or commits found.', 'none foundry commits, see pull request 12.'] as $rest) {
+            self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
+        }
+    }
+
+    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineNamesAReferenceNeedsNoDate(): void
+    {
+        foreach (['fixed by symfony/ai#2889.', 'see https://github.com/symfony/ai/pull/2889', 'only in commit a1c443fe.', 'only in commit `1220483ebd24`.'] as $rest) {
+            self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
+        }
+    }
+
+    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineNamesAWordOrNumberThatOnlyLooksLikeAReferenceIsAFinding(): void
+    {
+        foreach (['none in issue #, see facade.', 'none in 1234567 lines.', 'none, see deadbeef-cafe.'] as $rest) {
+            self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
+        }
+    }
+
+    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineHoldsOnlyADatedNotePasses(): void
+    {
+        self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** searched on 2026-11-07, nothing touches this path.\n- **Status:** `ready to file`\n"));
+    }
+
+    public function testAReadyToFileReportWhoseCheckedLineStartsWithAnImpossibleDateIsAFinding(): void
+    {
+        self::assertSame(['upstream/a-bug/REPORT.md is ready to file but its "Checked" line does not start with a date as YYYY-MM-DD'], $this->findingsOf("- **Checked:** 2026-02-30 against main.\n".self::PULL_REQUESTS."- **Status:** `ready to file`\n"));
     }
 
     public function testAPullRequestsAndCommitsLineInAnotherSectionDoesNotSatisfyAReadyReport(): void

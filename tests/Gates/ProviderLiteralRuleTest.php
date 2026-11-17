@@ -69,6 +69,20 @@ final class ProviderLiteralRuleTest extends PhpStanRuleTestCase
         self::assertStringNotContainsString('src/Reasoning.php:30', $findings);
     }
 
+    public function testEmbeddingCodexAndDeepSeekModelIdsFailStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsOf('model-ids-of-more-families');
+
+        foreach ([15 => 'text-embedding-3-small', 16 => 'codex-mini-latest', 17 => 'deepseek-chat', 18 => 'deepseek-reasoner', 19 => 'deepseek-coder', 20 => 'text-embedding-ada-002'] as $line => $id) {
+            self::assertStringContainsString(sprintf("src/Families.php:%d intakt.providerLiteral '%s' names a model", $line, $id), $findings);
+        }
+    }
+
+    public function testReasoningSeriesWordsInProsePassStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('reasoning-series-words-in-prose');
+    }
+
     public function testProviderHostsAreFoundAtTheirBoundariesOnly(): void
     {
         $findings = $this->ruleFindingsOf('provider-hosts-at-their-boundaries');
