@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use NoDiscard;
@@ -27,6 +28,7 @@ final readonly class KeepProviderKey
      * @throws KeyNotRecognised
      * @throws KeyRefusedByProvider
      * @throws KeyNotChecked
+     * @throws ProviderKeyAlreadyKept
      * @throws KeptProviderKeyNotWritten
      */
     #[NoDiscard('the configured key is what the page shows')]

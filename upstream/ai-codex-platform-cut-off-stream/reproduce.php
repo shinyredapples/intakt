@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Symfony\AI\Platform\Bridge\Codex\RawProcessResult;
 use Symfony\AI\Platform\Bridge\Codex\ResultConverter;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
+use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
 use Symfony\Component\Process\Process;
 
@@ -28,6 +29,12 @@ try {
     $failed = true;
 } catch (IncompleteStreamException) {
     echo 'not streamed: IncompleteStreamException', PHP_EOL;
+} catch (RuntimeException $exception) {
+    // symfony/ai#2889 refuses the unstreamed turn with a plain RuntimeException; only its message tells it from any other failure.
+    if (!str_contains($exception->getMessage(), 'turn.completed')) {
+        throw $exception;
+    }
+    echo 'not streamed: RuntimeException: ', $exception->getMessage(), PHP_EOL;
 }
 
 try {
