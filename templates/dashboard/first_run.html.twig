@@ -15,6 +15,14 @@
             <p class="lead">What this install has set up and what is still missing, read from the running install.</p>
         </div>
     </div>
+    {%- if demo_ready %}
+    {#- A secondary button, because the page's one primary action stays the next setup step. -#}
+    <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo step-nav">
+        <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
+        <p>No provider key yet? Watch a recorded review run instead, with a caption that names each stage.</p>
+        {{ include('dashboard/components/button.html.twig', {kind: 'secondary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
+    </form>
+    {%- endif %}
     <ol class="steps" aria-label="Setup progress">
         {%- for title in titles %}
         {%- if loop.index0 === first_run.current %}

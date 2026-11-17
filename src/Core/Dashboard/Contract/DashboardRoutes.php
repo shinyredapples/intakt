@@ -21,4 +21,6 @@ final readonly class DashboardRoutes
     public const string STOP_REVIEW = self::PREFIX.'stop_review';
     public const string STOP_ROUND = self::PREFIX.'stop_round';
     public const string SHOW_TASK = self::PREFIX.'show_task';
+    public const string SHOW_DEMO = self::PREFIX.'show_demo';
+    public const string PLAY_DEMO = self::PREFIX.'play_demo';
 }

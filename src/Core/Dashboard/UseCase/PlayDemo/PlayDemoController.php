@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Core\Dashboard\UseCase\PlayDemo;
+
+use Intakt\Core\Dashboard\Contract\DashboardRoutes;
+use Intakt\Core\Dashboard\Infrastructure\FormPress;
+use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+
+// Limit: the owner session of the dashboard design does not exist yet, so the Host check and the CSRF token are all that guard this route.
+final readonly class PlayDemoController
+{
+    public const string TOKEN_ID = 'dashboard_play_demo';
+
+    public function __construct(
+        private DemoRuns $runs,
+        private FormPress $press,
+        private UrlGeneratorInterface $urls,
+    ) {
+    }
+
+    #[Route('/demo', name: DashboardRoutes::PLAY_DEMO, methods: ['POST'])]
+    public function __invoke(Request $request): Response
+    {
+        $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so the demo run was not started.');
+        $this->press->flash($request, $this->runs->play());
+
+        return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_DEMO), Response::HTTP_SEE_OTHER);
+    }
+}

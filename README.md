@@ -11,6 +11,8 @@ PHP 8.5, Symfony AI Â· [Status](#status): what works today and what is planned Â
 
 ## Five-minute start
 
+**No provider key?** Take the tour first: start the demo below with no key in `.env.local`, open `http://localhost:7781/demo` and press **Play the demo run**. It plays a recorded review onto the dashboard without calling any model, with a caption at the bottom of every page that names each stage, from the change arriving to the act list of round 1 and the closed findings of round 2. It needs a recording: none ships with Intakt yet, so set `INTAKT_DEMO_RECORDING` in `.env.local` to one written by `intakt:demo:record` ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
+
 The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)):
 
 ```
