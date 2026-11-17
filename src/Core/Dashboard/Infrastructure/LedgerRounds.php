@@ -234,7 +234,7 @@ final class LedgerRounds
     {
         return match (true) {
             $row instanceof ReviewerStarted => $outcome->restarted($at, $row->model),
-            $row instanceof VerdictReceived => $outcome->answered($row->decision->value, $row->findings, $row->mode),
+            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode),
             $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
             $row instanceof ReviewerStopped => $outcome->stopped(),
@@ -278,10 +278,10 @@ final class LedgerRounds
     // A reviewer without a verdict votes as blocked, as in the Review module, so a failed or unstarted reviewer never helps a quorum.
     private static function voteOf(ReviewerOutcome $outcome): Decision
     {
-        if (null === $outcome->decision || ReviewerProgress::Answered !== $outcome->progress) {
+        if (ReviewerProgress::Answered !== $outcome->progress) {
             return Decision::Blocked;
         }
 
-        return Decision::from($outcome->decision);
+        return $outcome->decision ?? Decision::Blocked;
     }
 }

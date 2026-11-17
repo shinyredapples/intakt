@@ -159,7 +159,7 @@ final class LedgerRoundsTest extends TestCase
 
         $outcome = $review?->rounds[0]->outcomes[0];
 
-        self::assertSame([ReviewerProgress::Stopped, 'blocked', 1], [$outcome?->progress, $outcome?->decision, $outcome?->findings]);
+        self::assertSame([ReviewerProgress::Stopped, Decision::Blocked, 1], [$outcome?->progress, $outcome?->decision, $outcome?->findings]);
     }
 
     public function testAReviewerStartedAgainAfterAStopRunsAnew(): void
@@ -346,7 +346,7 @@ final class LedgerRoundsTest extends TestCase
 
         $outcome = $review?->rounds[0]->outcomes[0];
 
-        self::assertSame([ReviewerProgress::Answered, 'changes', 2, ProjectMode::ReviewerForLoop], [$outcome?->progress, $outcome?->decision, $outcome?->findings, $outcome?->mode]);
+        self::assertSame([ReviewerProgress::Answered, Decision::Changes, 2, ProjectMode::ReviewerForLoop], [$outcome?->progress, $outcome?->decision, $outcome?->findings, $outcome?->mode]);
     }
 
     public function testACatchUpInTodaysFormatNamesTheSubstituteProvider(): void

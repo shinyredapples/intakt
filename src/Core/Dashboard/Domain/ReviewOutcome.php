@@ -19,7 +19,11 @@ enum ReviewOutcome: string
     public static function of(ReviewedRound $round): ?self
     {
         if ($round->ending instanceof RoundEnding) {
-            return RoundEnds::JudgingFailed === $round->ending->end ? self::Failed : self::Blocked;
+            $ended = self::ofEnding($round->ending);
+
+            if ($ended instanceof self) {
+                return $ended;
+            }
         }
 
         if ($round->isJudged() && $round->reviewers > 0 && $round->failedReviewers() === $round->reviewers) {
@@ -27,6 +31,16 @@ enum ReviewOutcome: string
         }
 
         return self::ofQuorum($round);
+    }
+
+    // A judged ending carries no outcome of its own, so the round falls back to its reviewers and quorum.
+    private static function ofEnding(RoundEnding $ending): ?self
+    {
+        return match ($ending->end) {
+            RoundEnds::JudgingFailed => self::Failed,
+            RoundEnds::NoOutcomeInTime => self::Blocked,
+            RoundEnds::Judged => null,
+        };
     }
 
     public static function ofQuorum(ReviewedRound $round): ?self
@@ -38,7 +52,7 @@ enum ReviewOutcome: string
     public static function ofReviewer(ReviewerOutcome $reviewer): ?self
     {
         return match ($reviewer->progress) {
-            ReviewerProgress::Answered => null === $reviewer->decision ? null : self::ofDecision(Decision::from($reviewer->decision)),
+            ReviewerProgress::Answered => null === $reviewer->decision ? null : self::ofDecision($reviewer->decision),
             ReviewerProgress::Failed => self::Failed,
             ReviewerProgress::Blocked => self::Blocked,
             ReviewerProgress::Running, ReviewerProgress::Stopped => null,

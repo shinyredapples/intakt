@@ -14,6 +14,7 @@ use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
@@ -58,7 +59,7 @@ final class WhoIsWorkingTest extends TestCase
      */
     public static function finished(): iterable
     {
-        yield 'answered' => [static fn (ReviewerOutcome $outcome): ReviewerOutcome => $outcome->answered('approve', 0, ProjectMode::Live)];
+        yield 'answered' => [static fn (ReviewerOutcome $outcome): ReviewerOutcome => $outcome->answered(Decision::Approve, 0, ProjectMode::Live)];
         yield 'failed' => [static fn (ReviewerOutcome $outcome): ReviewerOutcome => $outcome->failed('Timed out.')];
         yield 'blocked' => [static fn (ReviewerOutcome $outcome): ReviewerOutcome => $outcome->blocked('No access.')];
         yield 'stopped' => [static fn (ReviewerOutcome $outcome): ReviewerOutcome => $outcome->stopped()];
