@@ -32,7 +32,7 @@ final readonly class ReviewerStops
     #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOf(string $round, string $reviewer): ?array
     {
-        if (!in_array($reviewer, $this->runningReviewersOf($round), true)) {
+        if (!in_array($reviewer, $this->runningReviewersOf($round) ?? [], true)) {
             return null;
         }
 
@@ -44,14 +44,19 @@ final readonly class ReviewerStops
     /**
      * @return array{string, string}|null
      */
-    // Null when the ledger shows no running reviewer in this unjudged round, so the caller answers that nothing could be stopped.
+    // Null when the ledger shows no unjudged round with this id, so the caller answers that there is no such round to stop.
     #[NoDiscard('the flash line is the only report of the press')]
     public function requestStopOfRound(string $round): ?array
     {
         $running = $this->runningReviewersOf($round);
 
-        if ([] === $running) {
+        if (null === $running) {
             return null;
+        }
+
+        // An error line rather than a 404, because the page offers Stop for the whole round in review (also before the first reviewer starts and while the judge works) and a stop request can only reach a reviewer that started.
+        if ([] === $running) {
+            return [self::FLASH_ERROR, 'No reviewer runs in this round right now, so nothing was stopped.'];
         }
 
         // Every request is tried, so one refused append does not leave the other reviewers running.
@@ -63,14 +68,15 @@ final readonly class ReviewerStops
     }
 
     /**
-     * @return list<string>
+     * @return list<string>|null
      */
-    private function runningReviewersOf(string $round): array
+    // Null when the round is unknown or judged, so nothing in it can be stopped any more.
+    private function runningReviewersOf(string $round): ?array
     {
         $reviewed = array_find($this->reviews->reviewOf($round)->rounds ?? [], static fn (ReviewedRound $candidate): bool => $candidate->round === $round);
 
         if (!$reviewed instanceof ReviewedRound || ReviewState::Judged === $reviewed->state) {
-            return [];
+            return null;
         }
 
         $running = array_filter($reviewed->outcomes, static fn (ReviewerOutcome $outcome): bool => ReviewerProgress::Running === $outcome->progress);
