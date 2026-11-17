@@ -14,8 +14,7 @@ use ReflectionProperty;
 #[UsesClass(FixedEnvVars::class)]
 final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
 {
-    // Read through reflection because the loaders are private; the test container adds an empty env loader, because the framework drops its vault loader where no vault directory exists.
-    // Other tests leave config/secrets/ behind, and the framework then keeps its vault loader in a container compiled afterwards, so it is expected exactly when the container has it.
+    // Read through reflection because the loaders are private; the test container adds an empty env loader, and the framework's vault loader is there only when config/secrets/ existed at compile time, which other tests leave behind.
     public function testTheKeptKeyIsHandedEveryOtherEnvLoaderButItself(): void
     {
         $container = self::getContainer();
