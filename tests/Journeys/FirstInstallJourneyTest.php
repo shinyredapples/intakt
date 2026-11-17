@@ -102,7 +102,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         $page = $browser->request('GET', self::FIRST_RUN);
         $page = $browser->submit($page->selectButton('Start the first review')->form());
 
-        self::assertStringStartsWith('Started round ', $page->filter('.flash-success')->text());
+        self::assertSame('Started round 1.', $page->filter('.toast')->text());
 
         $link = $page->filter('#step-first-review a.btn.primary');
         self::assertSame('Open the review', $link->text());
