@@ -47,7 +47,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Semaphore\SemaphoreFactory;
 use Symfony\Component\Semaphore\Store\LockStore;
 
-// Two reviewers, as the sample's correctness and security team, answering in the order the round delivers them.
+// Two reviewers, because the sample's first review runs a team of two (correctness and security); the answers follow the order the round delivers them.
 #[Group('persistence')]
 #[CoversClass(SymfonyAiVendor::class)]
 #[CoversClass(Verdict::class)]
