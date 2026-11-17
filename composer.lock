@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "092d0451bd31662520769c09857dadc4",
+    "content-hash": "d4ea3cbf3512d0767d582103eb30ee7d",
     "packages": [
         {
             "name": "composer/semver",
@@ -3667,7 +3667,8 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-10-26T14:03:07+00:00"
+            "time": "2026-10-26T14:03:07+00:00",
+            "published-time": "2026-10-26T14:08:59+00:00"
         },
         {
             "name": "symfony/ai-platform",
@@ -14586,6 +14587,7 @@
         "symfony/ai-mate": 10,
         "symfony/ai-mcp-tool": 10,
         "symfony/ai-open-ai-platform": 10,
+        "symfony/ai-open-responses-platform": 10,
         "symfony/ai-platform": 10,
         "symfony/ai-sqlite-store": 10,
         "symfony/ai-store": 10,

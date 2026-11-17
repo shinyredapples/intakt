@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * @phpstan-type Step array{id?: string, if?: string, run?: string}
+ * @phpstan-type Step array{id?: string, if?: string, env?: array<string, string>, run?: string}
  * @phpstan-type Job array{runs-on?: string, steps?: list<Step>}
  */
 #[CoversNothing]
@@ -25,6 +25,25 @@ final class ArmImageWorkflowTest extends TestCase
     public function testItsRunnerComesFromCiArmRunsOnWithGitHubsArm64RunnerAsDefault(): void
     {
         self::assertSame("\${{ fromJSON(vars.CI_ARM_RUNS_ON || '\"ubuntu-24.04-arm\"') }}", $this->job()['runs-on'] ?? null);
+    }
+
+    public function testItLogsInToDockerHubBeforeItPullsTheBaseImages(): void
+    {
+        $commands = ['.github/ci/docker-hub-login.sh', 'docker build', 'docker/smoke-test.sh', 'verify-first-start.sh'];
+        $runs = array_column($this->job()['steps'] ?? [], 'run');
+
+        self::assertCount(count($commands), $runs);
+        foreach ($commands as $index => $command) {
+            self::assertStringContainsString($command, $runs[$index]);
+        }
+    }
+
+    public function testTheDockerHubLoginGetsOnlyTheUsernameAndTokenSecrets(): void
+    {
+        self::assertSame(
+            ['DOCKERHUB_USERNAME' => '${{ secrets.DOCKERHUB_USERNAME }}', 'DOCKERHUB_TOKEN' => '${{ secrets.DOCKERHUB_TOKEN }}'],
+            $this->stepRunning('.github/ci/docker-hub-login.sh')['env'] ?? null,
+        );
     }
 
     public function testItBuildsTheImageAsTheImageJobDoesAndPrintsTheBuildSeconds(): void

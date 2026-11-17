@@ -22,6 +22,7 @@ use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\ReviewTerms;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\VerdictIdentity;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -79,6 +80,24 @@ final class BenchChangeCheckoutTest extends TestCase
         self::assertTrue($change->files->holdsRangeOf($change->expectations->defects[0]));
     }
 
+    public function testADotfileOfTheChangeGetsItsLineCountLikeTheCheckoutCopiesIt(): void
+    {
+        $fixtures = $this->directory.'-fixtures';
+        $filesystem = new Filesystem();
+        $filesystem->mirror(self::FIXTURES, $fixtures);
+        $filesystem->dumpFile($fixtures.'/bench/free-shipping/tree/.hidden', "one\ntwo\nthree\n");
+
+        try {
+            $files = $this->checkout($fixtures)->open('free-shipping', 'alpha', $this->directory)->files;
+        } finally {
+            $filesystem->remove($fixtures);
+        }
+
+        self::assertFileExists($this->directory.'/.hidden');
+        self::assertTrue($files->holdsRangeOf(new PlantedDefect('hidden', '.hidden', 3, 3, 'x', Severity::P2)));
+        self::assertFalse($files->holdsRangeOf(new PlantedDefect('hidden', '.hidden', 3, 4, 'x', Severity::P2)));
+    }
+
     public function testTwoOpeningsOfOneChangeNameTheirRoundsApart(): void
     {
         $first = $this->checkout()->open('free-shipping', 'alpha', $this->directory);
@@ -109,12 +128,12 @@ final class BenchChangeCheckoutTest extends TestCase
         return ['missing' => ['no-such-change'], 'parent folder' => ['../base'], 'empty' => ['']];
     }
 
-    private function checkout(): BenchChangeCheckout
+    private function checkout(string $fixtures = self::FIXTURES): BenchChangeCheckout
     {
         $panel = new Panel([new PanelReviewer(new ReviewerRole('role', 'Look.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1)], QuorumPolicy::All);
         $panels = self::createStub(Panels::class);
         $panels->method('panelForChange')->willReturn($panel);
 
-        return new BenchChangeCheckout($panels, self::FIXTURES);
+        return new BenchChangeCheckout($panels, $fixtures);
     }
 }

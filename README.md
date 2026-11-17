@@ -24,7 +24,7 @@ Calls are billed to the key's or token's owner; `HF_TOKEN` alone puts the review
 | Path | Command | What you see |
 | --- | --- | --- |
 | Console | the `intakt:review` that `intakt:sample:show` prints | verdict and act list, exit 0, 10 or 11 ([read it](docs/user/README.md#reading-a-verdict)) |
-| Dashboard | `http://localhost:7781` | each round live, the judge's call per finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
+| Dashboard | `http://localhost:7781`, then **Set up Intakt** (the first-run page, `/setup`) and its **Start the first review** | what is set up, then each round live, the judge's call per finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
 | MCP | the `claude mcp add` it prints, [skill](skills/intakt-review/README.md) | "intakt review the demo": your agent loops, fixes, reports ([details](docs/user/mcp.md)) |
 
 <details>

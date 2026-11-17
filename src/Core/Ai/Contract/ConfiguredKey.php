@@ -14,7 +14,7 @@ final readonly class ConfiguredKey
 
     // The limit is enforced here too, so a caller that passes a whole key still never exposes more than four characters.
     public function __construct(
-        public KeyKind $kind,
+        public string $provider,
         #[SensitiveParameter]
         string $lastCharacters,
     ) {

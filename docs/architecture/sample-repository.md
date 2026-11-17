@@ -9,7 +9,7 @@
 
 `expectations.json` is a list of planted defects: `id`, `file`, `lines` (`from` and `to`, inclusive, 1-based), `description` and `severity` (`P1`, `P2` or `P3`, what the defect deserves). Five changes plant one defect each (an acceptance item not met, an error path never handled, input that runs commands, an off-by-one boundary, docs that state what the code does not do); three plant none (`[]`), so false alarms are measured. `Expectations::fromJson` refuses with `InvalidExpectations` a file whose top level is not a JSON list (an object such as `{}` too), an entry that is not an object, a missing or reversed range, an unknown severity and an `id` listed twice. The test checks that every planted line is a `+` line of the change's diff (unchanged context lines do not count); `ScriptedBenchRunTest` classifies every bench change with scripted reviewer findings and checks the figures.
 
-Matching and counting are plain code in `src/Core/Bench/` (`Domain/`, with the results in `Contract/`) and never ask a model:
+Matching and counting are plain code in `src/Core/Bench/` (`Domain/`, with the figures, verdict and failure cause too; the results other modules may read are in `Contract/`) and never ask a model:
 
 - `DefectMatcher`: a finding matches a defect when it names the same file and a line inside the range. A finding without a file or line never matches, and there is no tolerance for a nearby line.
 - `RunClassifier`: unmatched findings on a defect-free change are false alarms. Unmatched findings on a change with defects are listed in the verdict, not counted.
@@ -34,7 +34,7 @@ The provenance is the Intakt version, a hash of each prompt and a hash of the be
 
 `BenchReport` builds the printed report in three blocks, the failure causes first, because a figure read without the causes of its failed runs misleads:
 
-A reviewer is named `<role> (<tier>, model <model>)` (`BenchReviewerResult::name()`), `models <a> and <b>` when its calls ran on more than one, `model not recorded` when none named one.
+A reviewer is named `<role> (<tier>, model <model>)` (`BenchReviewerResult::name()`), `models <a> and <b>` when its calls ran on more than one, `model not recorded` when none named one. In the totals, a reviewer with no recorded model (one that failed before any call) joins the line of its role and tier when that pair has exactly one model line; otherwise it keeps its own `model not recorded` line.
 
 1. `failure causes:`, one line per missed defect (`<change> run <i>: <reviewer> missed <id>, cause reviewer` or `bench`), one line per false alarm on a defect-free change (`... false alarm <finding id> at <file>:<line>, cause reviewer`, `at <file>` without a line, `without a place` without a file; always `reviewer`, because the classifier counts a false alarm only on a change that plants no defect) and one line per harness failure with its reason (`... harness failure, left out of the figures: <reason>`), or `none`.
 2. `figures:`, per run of each change one line (`<change> run <i> of <n>: decision <decision>, measured <n> act list findings`) and per reviewer one line (`<reviewer>, measured: <n> caught, <n> missed, <n> false alarms, <n> prompt tokens, <n> completion tokens, <n> calls, <n> ms` or `no end`, ending in `, harness failure` for a failed run), then the agreement of the change (`<change>: runs agree`, `runs disagree` or `runs not comparable`, `measured over <k> compared of <n> runs`).

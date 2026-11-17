@@ -6,9 +6,12 @@ namespace Intakt\Tests\Core\Platform\Infrastructure;
 
 use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
-use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Platform\Infrastructure\HeldCredentials;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -17,7 +20,10 @@ use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(HeldCredentials::class)]
 #[UsesClass(ProviderKey::class)]
-#[UsesClass(KeyKind::class)]
+#[UsesClass(SymfonyAiProviderCatalog::class)]
+#[UsesClass(AnthropicDescriptor::class)]
+#[UsesClass(OpenAiDescriptor::class)]
+#[UsesClass(HuggingFaceDescriptor::class)]
 final class HeldCredentialsTest extends TestCase
 {
     private const string NAME = 'INTAKT_TEST_API_KEY';
@@ -103,7 +109,7 @@ final class HeldCredentialsTest extends TestCase
     public function testAKeyKeptFromTheBrowserIsHeld(): void
     {
         $kept = self::createStub(KeptProviderKeys::class);
-        $kept->method('read')->willReturn(ProviderKey::recognise(self::KEPT_KEY));
+        $kept->method('read')->willReturn(ProviderKey::recognise(self::KEPT_KEY, new SymfonyAiProviderCatalog()));
 
         self::assertSame([self::KEPT_KEY], new HeldCredentials([self::NAME], null, $kept)->values());
     }

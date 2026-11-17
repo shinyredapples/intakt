@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Intakt\Core\Bench\UseCase\RunBench;
 
 use Closure;
-use Intakt\Core\Bench\Contract\BenchFigures;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
-use Intakt\Core\Bench\Contract\FailureCause;
 use Intakt\Core\Bench\Contract\RepeatedChange;
-use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Core\Bench\Domain\BenchFigures;
+use Intakt\Core\Bench\Domain\FailureCause;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Review\Contract\Finding;
 
 // The causes come before any figure, because a figure read without its failed runs' causes misleads.
@@ -135,9 +135,10 @@ final readonly class BenchReport
      */
     private function totals(array $changes): array
     {
+        $results = $this->everyReviewerResult($changes);
         $byReviewer = [];
-        foreach ($this->everyReviewerResult($changes) as $reviewer) {
-            $byReviewer[$reviewer->name()][] = $reviewer;
+        foreach ($results as $reviewer) {
+            $byReviewer[$this->totalsName($reviewer, $results)][] = $reviewer;
         }
 
         return array_map(
@@ -145,6 +146,26 @@ final readonly class BenchReport
             array_keys($byReviewer),
             $byReviewer,
         );
+    }
+
+    // A reviewer that failed before any call recorded a model joins the one model line of its role and tier, so its harness failure is not apart from the rest.
+    /**
+     * @param list<BenchReviewerResult> $results
+     */
+    private function totalsName(BenchReviewerResult $reviewer, array $results): string
+    {
+        if ([] !== $reviewer->models) {
+            return $reviewer->name();
+        }
+
+        $names = [];
+        foreach ($results as $other) {
+            if ([] !== $other->models && $other->role === $reviewer->role && $other->tier === $reviewer->tier) {
+                $names[$other->name()] = true;
+            }
+        }
+
+        return 1 === count($names) ? array_key_first($names) : $reviewer->name();
     }
 
     /**

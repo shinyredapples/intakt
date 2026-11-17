@@ -30,7 +30,7 @@ flowchart LR
 
 ## Playing back a recorded review
 
-A replay shows a review that already happened, without calling any AI: `docker compose exec intakt php bin/console intakt:demo:replay <recording> --factor=10` plays a recording into the `demo-replay` project, the **replay project** each start sets up, and the open dashboard shows it arriving at the recorded pace (here ten times as fast). Use it when a live review would take too long or you have no key at hand.
+A replay shows a review that already happened, without calling any AI: `docker compose exec intakt php bin/console intakt:demo:replay <recording> --factor=10` plays a recording into the `demo-replay` project, the **replay project** each start sets up, and the open dashboard shows it arriving at the recorded pace (here ten times as fast). Use it when a live review would take too long or you have no key at hand. To clear the replays away, `docker compose exec intakt php bin/console intakt:demo:remove` deletes the replay project and everything played into it, and nothing else; the next start (or `intakt:demo:create`) sets up an empty one again, and until then a replay is refused.
 
 Its reviews never count. The reviewers in a recording judged some change at another time, not the change on the card, so their verdicts say nothing about it. That is why every replayed round carries a **Replay** label in the dashboard, and its decision is always blocked, with the reason that a replay never counts as a verdict.
 
