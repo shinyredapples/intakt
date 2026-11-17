@@ -33,11 +33,21 @@ final class FirstReviewStepTest extends TestCase
         self::assertSame(MascotPose::Conducting, new FirstReviewStep(new Review([$this->round()]), true)->mascot());
     }
 
-    public function testTheFirstRunShowsTheConductingOctopusWhenTheFirstReviewWasSentBack(): void
+    public function testTheFirstRunShowsTheConductingOctopusWhenTheFirstReviewWasSentBackForChanges(): void
     {
-        foreach ([Decision::Changes, Decision::Blocked] as $decision) {
-            self::assertSame(MascotPose::Conducting, new FirstReviewStep(new Review([$this->round()->decidedAs($decision)]), true)->mascot());
-        }
+        self::assertSame(MascotPose::Conducting, new FirstReviewStep(new Review([$this->round()->decidedAs(Decision::Changes)]), true)->mascot());
+    }
+
+    public function testTheFirstRunShowsTheConductingOctopusWhenTheFirstReviewWasBlocked(): void
+    {
+        self::assertSame(MascotPose::Conducting, new FirstReviewStep(new Review([$this->round()->decidedAs(Decision::Blocked)]), true)->mascot());
+    }
+
+    public function testTheFirstRunShowsTheConductingOctopusWhileNoRoundOfTheFirstReviewIsApproved(): void
+    {
+        $review = new Review([$this->round()->decidedAs(Decision::Changes), $this->round(2)->decidedAs(Decision::Blocked), $this->round(3)]);
+
+        self::assertSame(MascotPose::Conducting, new FirstReviewStep($review, true)->mascot());
     }
 
     public function testTheFirstRunShowsTheBowingOctopusOnceTheFirstReviewIsApproved(): void
@@ -45,8 +55,29 @@ final class FirstReviewStepTest extends TestCase
         self::assertSame(MascotPose::Bowing, new FirstReviewStep(new Review([$this->round()->decidedAs(Decision::Approve)]), true)->mascot());
     }
 
-    private function round(): ReviewedRound
+    public function testTheFirstRunKeepsTheBowingOctopusWhileARoundAfterTheApprovalRuns(): void
     {
-        return new ReviewedRound(new RoundStart('round-1', 'alpha', 2), new RoundPlace('feat/thing', 1), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
+        $review = new Review([$this->round()->decidedAs(Decision::Approve), $this->round(2)]);
+
+        self::assertSame(MascotPose::Bowing, new FirstReviewStep($review, true)->mascot());
+    }
+
+    public function testTheFirstRunKeepsTheBowingOctopusWhenARoundAfterTheApprovalIsSentBack(): void
+    {
+        $review = new Review([$this->round()->decidedAs(Decision::Approve), $this->round(2)->decidedAs(Decision::Changes)]);
+
+        self::assertSame(MascotPose::Bowing, new FirstReviewStep($review, true)->mascot());
+    }
+
+    public function testTheFirstRunShowsTheBowingOctopusWhenARoundAfterASentBackOneIsApproved(): void
+    {
+        $review = new Review([$this->round()->decidedAs(Decision::Changes), $this->round(2)->decidedAs(Decision::Approve)]);
+
+        self::assertSame(MascotPose::Bowing, new FirstReviewStep($review, true)->mascot());
+    }
+
+    private function round(int $number = 1): ReviewedRound
+    {
+        return new ReviewedRound(new RoundStart('round-'.$number, 'alpha', 2), new RoundPlace('feat/thing', $number), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
     }
 }
