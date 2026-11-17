@@ -1,4 +1,4 @@
-{#- One group of search results under its heading, each result an option of the overlay's list box. A result with href opens it; one with action carries the action the overlay's script runs. A review result passes roundId, shown as a small selectable detail under its title, never as a button, since a control inside a link or option is invalid; assets/search.js leaves a press on the id's code text to the browser's selection and keeps a click on that text from following the link, while the rest of the row, the id's line included, opens the review. selected marks the option the arrows are on, which only the components page passes. Options are no tab stops, because the arrows move between them while the focus stays in the field. -#}
+{#- One group of search results under its heading, each result an option of the overlay's list box. A result with href opens it; one with action carries the action the overlay's script runs. A review result passes roundId, shown as a small selectable detail under its title, never as a button, since a control inside a link or option is invalid; assets/search.js leaves a press on the id's code text to the browser's selection and keeps a click on that text from following the link, while the rest of the row, the id's line included, opens the review. A review result that has an outcome leads its row with the outcome chip, so the process state in the detail stays secondary. selected marks the option the arrows are on, which only the components page passes. Options are no tab stops, because the arrows move between them while the focus stays in the field. -#}
 <div role="group" aria-labelledby="{{ id }}">
 <div class="grp" id="{{ id }}">{{ include('dashboard/components/icon.html.twig', {name: icon}, with_context = false) }}{{ label }}</div>
 {% for result in results %}
@@ -6,8 +6,9 @@
 {%- set action = result.action ?? null -%}
 {%- set selected = (result.selected ?? false) ? 'true' : 'false' -%}
 {%- set round_id = result.roundId ?? null -%}
+{%- set outcome = result.outcome ?? null -%}
 {% if href is not null %}
-<a class="res" role="option" tabindex="-1" aria-selected="{{ selected }}" href="{{ href }}"><span class="lbl">{{ result.label }}</span><span class="sub">{{ result.detail }}</span>{% if round_id is not null %}<span class="round-id">Round id <code>{{ round_id }}</code></span>{% endif %}</a>
+<a class="res" role="option" tabindex="-1" aria-selected="{{ selected }}" href="{{ href }}">{% if outcome is not null %}<span class="res-outcome">{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome}, with_context = false) }}</span>{% endif %}<span class="lbl">{{ result.label }}</span><span class="sub">{{ result.detail }}</span>{% if round_id is not null %}<span class="round-id">Round id <code>{{ round_id }}</code></span>{% endif %}</a>
 {% else %}
 <div class="res" role="option" tabindex="-1" aria-selected="{{ selected }}"{% if action is not null %} data-search-action="{{ action.value }}"{% endif %}><span class="lbl">{{ result.label }}</span><span class="sub">{{ result.detail }}</span></div>
 {% endif %}

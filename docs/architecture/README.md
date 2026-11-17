@@ -29,7 +29,7 @@ Running Intakt:
 - [Instance and probes](instance-and-probes.md)
 - [Container image](container-image.md)
 - [The demo with docker compose](demo-with-docker-compose.md)
-- [The demo recording](demo-recording.md): `intakt:demo:record` writes the ledger events and the captured live updates of a change's review rounds into one file, with the date, the models and the Intakt version, and `intakt:demo:replay` writes its ledger events into the demo project at the recorded pace
+- [The demo recording](demo-recording.md): `intakt:demo:record` writes the ledger events and the captured live updates of a change's review rounds into one file, with the date, the models and the Intakt version, and `intakt:demo:replay` writes its ledger events into the demo project and publishes its live updates at the recorded pace
 - [Persistence](persistence.md)
 - [Job containers](job-containers.md): a fresh container per job through the Docker Engine API, the egress allowlist through a per-job proxy, the start check and its reduced mode, the memory-kill cause, and the cleanup after a crash
 - [Job images](job-images.md): a project's job image from its devcontainer, its Dockerfile or one generated from `composer.json`, and the probe that checks its PHP and extensions
