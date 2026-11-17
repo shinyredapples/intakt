@@ -128,6 +128,18 @@ test('after a resume a new stage replaces the caption again', () => {
     assert.deepEqual(rendered, [stream]);
 });
 
+test('a new pause forgets a stage held back by an earlier page', () => {
+    const { caption, page } = captionOnAPage();
+    page.click(caption.pause);
+    const older = page.stream('tour-caption');
+    page.caption = new FakeCaption();
+
+    page.click(page.caption.pause);
+    page.click(page.caption.pause);
+
+    assert.deepEqual(older.rendered, []);
+});
+
 test('a paused caption holds back no update of another target', () => {
     const { caption, page } = captionOnAPage();
     page.click(caption.pause);

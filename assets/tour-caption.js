@@ -10,7 +10,9 @@ export function captionTour(page, storage) {
     page.addEventListener('click', (event) => {
         const pause = event.target?.closest?.(PAUSE);
         if (pause) {
-            held = togglePause(pause, held);
+            togglePause(pause, held);
+            // A pause starts empty, because a stage held on an earlier page would bring back an older stage on resume.
+            held = null;
             return;
         }
         if (event.target?.closest?.(CLOSE)) {
@@ -35,8 +37,6 @@ function togglePause(pause, held) {
     if (!paused && held) {
         held.render(held.stream);
     }
-
-    return paused ? held : null;
 }
 
 function isPaused(page) {
