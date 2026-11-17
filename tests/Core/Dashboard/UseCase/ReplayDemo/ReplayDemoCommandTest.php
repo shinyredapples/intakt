@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
@@ -38,13 +40,19 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(RecordedLedgerEvent::class)]
 #[UsesClass(RecordingFormat::class)]
 #[UsesClass(RecordingIsMalformed::class)]
+#[UsesClass(CapturedUpdate::class)]
+#[UsesClass(LiveEvent::class)]
 final class ReplayDemoCommandTest extends TestCase
 {
+    private const string STREAM = '<turbo-stream action="replace" target="round-state"><template>r-1 started</template></turbo-stream>';
+
     private string $directory;
 
     private MockClock $clock;
 
     private ClockedLedger $ledger;
+
+    private ClockedLiveUpdates $updates;
 
     private RecordingFormat $format;
 
@@ -54,6 +62,7 @@ final class ReplayDemoCommandTest extends TestCase
         new Filesystem()->mkdir($this->directory);
         $this->clock = new MockClock('2026-11-16T09:00:00+00:00');
         $this->ledger = new ClockedLedger($this->clock);
+        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
         $this->format = new RecordingFormat(StoredSerializerFactory::create());
     }
 
@@ -71,6 +80,7 @@ final class ReplayDemoCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('only on the compose demo', $tester->getDisplay());
         self::assertSame(0, $this->appendedRows());
+        self::assertSame([], $this->updates->published());
     }
 
     public function testOnTheComposeDemoTheRecordedRowsAreReplayedIntoTheDemoProject(): void
@@ -81,7 +91,14 @@ final class ReplayDemoCommandTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
         self::assertSame(2, $this->appendedRows());
-        self::assertStringContainsString('Replayed 2 ledger events of change sample-change into the demo project demo-replay, 1 times as fast as recorded.', $this->flat($tester));
+        self::assertStringContainsString('Replayed 2 ledger events and 1 live updates of change sample-change into the demo project demo-replay, 1 times as fast as recorded.', $this->flat($tester));
+    }
+
+    public function testOnTheComposeDemoTheCapturedUpdatesArePublished(): void
+    {
+        $this->tester('intakt')->execute(['recording' => $this->recordingFile()]);
+
+        self::assertSame([['review/rounds/round-1', self::STREAM]], array_map(static fn (array $published): array => [$published['topic'], $published['stream']], $this->updates->published()));
     }
 
     public function testTheFactorShortensTheWaitBetweenRows(): void
@@ -187,7 +204,7 @@ final class ReplayDemoCommandTest extends TestCase
     private function tester(string $composeService): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ReplayDemoCommand(new ReplaysRecording($this->ledger, $this->clock, new LockFactory(new InMemoryStore())), $this->format, new Filesystem(), $composeService));
+        $application->addCommand(new ReplayDemoCommand(new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore())), $this->format, new Filesystem(), $composeService));
 
         return new CommandTester($application->find('intakt:demo:replay'));
     }
@@ -205,7 +222,7 @@ final class ReplayDemoCommandTest extends TestCase
                 new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a1', LedgerEventKind::ReviewStarted, '{"round":"round-1","project":"sample","reviewers":1}', new DateTimeImmutable('2026-11-16T08:00:00+00:00')),
                 new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a2', LedgerEventKind::ReviewerStarted, '{"round":"round-1","reviewer":"r-1"}', new DateTimeImmutable('2026-11-16T08:00:40+00:00')),
             ],
-            [],
+            [new CapturedUpdate(new DateTimeImmutable('2026-11-16T08:00:40+00:00'), 'review/rounds/round-1', self::STREAM)],
         )));
 
         return $file;
