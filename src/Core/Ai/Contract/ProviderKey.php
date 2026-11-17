@@ -59,10 +59,20 @@ final readonly class ProviderKey
 
     public function configured(): ConfiguredKey
     {
+        return new ConfiguredKey($this->provider, $this->lastCharacters());
+    }
+
+    private function lastCharacters(): string
+    {
         $key = $this->key->getValue();
         // A quarter of the key at most, so a short key never shows more than a small part of itself.
         $shown = min(self::SHOWN_AT_MOST, intdiv(strlen($key), 4));
 
-        return new ConfiguredKey($this->provider, substr($key, -$shown));
+        // Checked apart because substr($key, -0) returns the whole key instead of none of it.
+        if (0 === $shown) {
+            return '';
+        }
+
+        return substr($key, -$shown);
     }
 }
