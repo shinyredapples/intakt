@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\SampleProjectData;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
@@ -36,6 +37,7 @@ use Uri\Rfc3986\Uri;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(TierNotMapped::class)]
+#[UsesClass(SampleProjectData::class)]
 final class SymfonyAiKeyCheckTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
@@ -153,6 +155,13 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $urls = array_column($calls->getArrayCopy(), 1);
         self::assertCount(1, $urls);
         self::assertStringStartsWith('https://gateway.example/v1/', $urls[0]);
+    }
+
+    public function testTheHuggingFaceKeyIsCheckedAtTheRouterUrlOfTheSampleProjectDataFile(): void
+    {
+        $calls = $this->callsMadeFor('hf_'.self::BODY, self::CHAT_COMPLETION_ANSWER);
+
+        self::assertSame([new SampleProjectData()->routerUrl()->toRawString().'/v1/chat/completions'], array_column($calls, 1));
     }
 
     public function testACheckModelInTheDescriptorOverridesTheLightTier(): void

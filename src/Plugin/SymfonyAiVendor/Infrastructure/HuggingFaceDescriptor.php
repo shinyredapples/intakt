@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Review\Contract\SampleProjectData;
 use SensitiveParameter;
 use Symfony\AI\Platform\Bridge\Generic\CompletionsModel;
 use Symfony\AI\Platform\Bridge\Generic\Factory;
@@ -36,14 +37,14 @@ final readonly class HuggingFaceDescriptor implements SymfonyAiProvider
     }
 
     public function __construct(
-        private Uri $baseUrl = new Uri('https://router.huggingface.co'),
+        private ?Uri $baseUrl = null,
     ) {
     }
 
-    // Without /v1, because the generic bridge appends /v1/chat/completions itself.
+    // The sample project's router URL unless one is given, so the key check calls the router the image points openai_compatible at.
     public function baseUrl(): Uri
     {
-        return $this->baseUrl;
+        return $this->baseUrl ?? new SampleProjectData()->routerUrl();
     }
 
     // The OpenAI compatible endpoint, because the image points it at the router when HF_TOKEN is set, so the router models are mapped there.
