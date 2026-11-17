@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ShowError;
 
+use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\DashboardHost;
 use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\ErrorHandler\ErrorRenderer\ErrorRendererInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
@@ -14,7 +17,7 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 use Twig\Environment;
 
-// Wired as `framework.error_controller`, so every uncaught exception answers in the dashboard's shell instead of the framework's stock page.
+// Wired as `framework.error_controller`, so every uncaught exception answers in the dashboard's shell instead of the framework's stock page; a route outside the dashboard gets the framework's answer in the requested format.
 #[AsController]
 final readonly class ShowErrorController
 {
@@ -27,20 +30,46 @@ final readonly class ShowErrorController
         private LoggerInterface $logger,
         private FilterProjects $projects,
         private DashboardHost $dashboard,
+        #[Autowire(service: 'error_renderer')]
+        private ErrorRendererInterface $errorRenderer,
     ) {
     }
 
     public function __invoke(Throwable $exception, Request $request): Response
     {
         $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
-        $reference = $status >= Response::HTTP_INTERNAL_SERVER_ERROR ? $this->referenceFor($exception) : null;
-        $message = $this->messageFor($status);
+        $outside = $this->isOutsideDashboard($request);
+        $reference = $status >= Response::HTTP_INTERNAL_SERVER_ERROR ? $this->referenceFor($exception, $outside) : null;
         // Carried over as the framework's own error page does, so a 405 still names its allowed methods.
         $headers = $exception instanceof HttpExceptionInterface ? $exception->getHeaders() : [];
+
+        if ($outside) {
+            return $this->plainAnswer($exception, $status, $headers);
+        }
+
+        $message = $this->messageFor($status);
         // A missing route fails before RefuseForeignHost has a route to judge, so the shell and its project names are kept from a foreign host here.
         $page = $this->dashboard->isNamedBy($request) ? $this->render($status, $message, $reference) : $this->plainPage($message, $reference);
 
         return new Response($page, $status, $headers);
+    }
+
+    // A request that matched no route (a 404 or a 405) stays on the dashboard's pages, because it has no route name to judge.
+    private function isOutsideDashboard(Request $request): bool
+    {
+        $route = $request->attributes->get('_route');
+
+        return is_string($route) && !str_starts_with($route, DashboardRoutes::PREFIX);
+    }
+
+    /**
+     * @param array<string, string|list<string>> $headers
+     */
+    private function plainAnswer(Throwable $exception, int $status, array $headers): Response
+    {
+        $rendered = $this->errorRenderer->render($exception);
+
+        return new Response($rendered->getAsString(), $status, [...$rendered->getHeaders(), ...$headers]);
     }
 
     private function messageFor(int $status): string
@@ -53,10 +82,10 @@ final readonly class ShowErrorController
     }
 
     // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
-    private function referenceFor(Throwable $exception): string
+    private function referenceFor(Throwable $exception, bool $outside): string
     {
         $reference = bin2hex(random_bytes(4));
-        $this->logger->error('A dashboard page failed, reference {reference}.', ['reference' => $reference, 'exception' => $exception]);
+        $this->logger->error($outside ? 'A request failed, reference {reference}.' : 'A dashboard page failed, reference {reference}.', ['reference' => $reference, 'exception' => $exception]);
 
         return $reference;
     }
