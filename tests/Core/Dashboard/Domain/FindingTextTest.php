@@ -108,6 +108,16 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
     }
 
+    public function testADunderNameLosesItsMarksAsMarkdownRendersIt(): void
+    {
+        self::assertSame([['text' => 'init.py', 'code' => false]], new FindingText('__init__.py')->spans());
+    }
+
+    public function testEmphasisRunningOverALineBreakLosesItsMarks(): void
+    {
+        self::assertSame([['text' => "multi\nline", 'code' => false]], new FindingText("**multi\nline**")->spans());
+    }
+
     public function testMarksThatCloseNothingAreLeftAsWritten(): void
     {
         $written = 'An unclosed **mark, a spaced ** pair ** and inside**words.';
