@@ -96,9 +96,12 @@ final class FirstInstallJourneyTest extends JourneyTestCase
     }
 
     // Through the journey's own kernel, because only it has the sample repository the start button needs; it writes to the instance's ledger, so the instance shows the round.
+    // The container is rebuilt first, because the sample repository is read when the container is built.
     private function startTheFirstReview(): string
     {
-        $browser = $this->dashboardWith([...$this->environment(), 'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample']);
+        $environment = [...$this->environment(), 'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample'];
+        $this->rebuildContainer($environment);
+        $browser = $this->dashboardWith($environment);
         $page = $browser->request('GET', self::FIRST_RUN);
         $page = $browser->submit($page->selectButton('Start the first review')->form());
 
