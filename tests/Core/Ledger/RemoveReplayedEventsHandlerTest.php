@@ -113,7 +113,7 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
      */
     private function storedPayloads(): array
     {
-        /** @var list<string> */
+        /* @var list<string> */
         return $this->manager->getConnection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position');
     }
 
