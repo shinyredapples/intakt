@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewerState;
@@ -164,7 +165,7 @@ final class RunReviewRoundTest extends KernelTestCase
     public function testAReviewerWhoseStreamWasCutMidAnswerIsStoredAsABlockedVerdictWithTheCutAsItsReasonAndNeverApproves(): void
     {
         $round = $this->fixture->start(1);
-        $cut = new ScriptedVendor(verdict: Verdict::incompleteStream('The stream ended before its terminal event.'));
+        $cut = new ScriptedVendor(verdict: Verdict::incompleteStream('The stream ended before its terminal event.', new Evidence('the call to anthropic, model big', 'cut by: platform')));
 
         $this->fixture->deliver($this->fixture->bus->messages[0], $cut);
 

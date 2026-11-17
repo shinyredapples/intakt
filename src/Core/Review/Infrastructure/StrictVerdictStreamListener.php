@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
+use Intakt\Core\Review\Contract\StreamCutBy;
 use Intakt\Core\Review\Contract\Verdict;
 use Override;
-use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Result\Stream\AbstractStreamListener;
 use Symfony\AI\Platform\Result\Stream\CompleteEvent;
 use Symfony\AI\Platform\Result\Stream\Delta\TextDelta;
@@ -29,6 +29,7 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
      */
     public function __construct(
         private readonly Closure $verdictFrom,
+        private readonly StreamTally $tally,
     ) {
     }
 
@@ -56,7 +57,7 @@ final class StrictVerdictStreamListener extends AbstractStreamListener
 
         // Raised as a cut-off, because a stream the provider did not report as cut off can still end before or inside its document, and no or half a verdict is no verdict.
         if ($this->unfinished()) {
-            throw new IncompleteStreamException('The reviewer stream ended before its answer was complete.');
+            throw $this->tally->cut(StreamCutBy::UnfinishedAnswer, 'The reviewer stream ended before its answer was complete.');
         }
 
         ($this->verdictFrom)($this->answer);
