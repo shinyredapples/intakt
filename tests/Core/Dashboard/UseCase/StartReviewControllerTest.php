@@ -25,6 +25,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LogLevel;
 use stdClass;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -78,6 +79,72 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame('3', $crawler->filter('form.start-review input[name=number]')->attr('value'));
+    }
+
+    public function testTheButtonIsLabeledWithTheNumberOfTheRoundItStarts(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Start round 3', trim($crawler->filter('form.start-review button[type=submit]')->text()));
+    }
+
+    // The start form is rendered for the stream's sake, and the in-review marker hides it, so only Stop shows.
+    public function testARoundWithARunningReviewerOffersOnlyStop(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'security');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $this->assertOnlyStopIsOffered($crawler);
+    }
+
+    // Before its first reviewer starts the round is in review already, so Stop is offered and the start of the next round stays hidden.
+    public function testARoundInReviewWithoutARunningReviewerOffersOnlyStop(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $this->assertOnlyStopIsOffered($crawler);
+    }
+
+    // Every reviewer finished but the judge has not called yet, so the round still runs.
+    public function testARoundWhoseReviewersFinishedButIsNotJudgedOffersOnlyStop(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'security');
+        $this->ledger->answer('round-1', 'security', 0);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $this->assertOnlyStopIsOffered($crawler);
+    }
+
+    public function testAJudgedReviewOffersOnlyTheStartOfTheNextRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'security');
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.now-runs'));
+        self::assertCount(0, $crawler->filter('form.stop-round'));
+        self::assertSame(['Start round 2'], $crawler->filter('.task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
+    }
+
+    // The start form stays rendered for the judged round's stream, so the in-review marker is what keeps it from showing beside Stop.
+    private function assertOnlyStopIsOffered(Crawler $crawler): void
+    {
+        self::assertSame(['round-round-1-now-runs', 'round-round-1-now-stop', 'start-review'], $crawler->filter('.task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
+        self::assertSame(['stop-round'], $crawler->filter('#round-round-1-now-stop > *')->each(static fn (Crawler $child): string => (string) $child->attr('class')));
+        self::assertSame('Stop', trim($crawler->filter('form.stop-round button')->text()));
+        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
     }
 
     // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.

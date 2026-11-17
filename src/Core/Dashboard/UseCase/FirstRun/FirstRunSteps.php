@@ -6,6 +6,8 @@ namespace Intakt\Core\Dashboard\UseCase\FirstRun;
 
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
+use Intakt\Core\Ai\Contract\KeptProviderKeys;
+use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
@@ -39,6 +41,7 @@ final readonly class FirstRunSteps
     public function __construct(
         private TierResolver $tiers,
         private EnabledAccounts $accounts,
+        private KeptProviderKeys $keptKeys,
         private Panels $panels,
         private LedgerReviewPages $reviews,
         private SampleChangeSource $sample,
@@ -71,11 +74,22 @@ final readonly class FirstRunSteps
     {
         $keyed = array_filter(Provider::cases(), fn (Provider $provider): bool => [] !== $this->accounts->of($provider));
 
+        $kept = null;
+        $unreadable = false;
+
+        try {
+            $kept = $this->keptKeys->configured();
+        } catch (KeptProviderKeyUnreadable) {
+            $unreadable = true;
+        }
+
         return new ProviderStep(
             array_values(array_map(static fn (Provider $provider): string => $provider->value, $keyed)),
             array_values($this->disabledProviders),
             $firstProject,
             null === $firstProject ? [] : $this->tiersOf($firstProject),
+            $kept,
+            $unreadable,
         );
     }
 
