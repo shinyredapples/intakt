@@ -59,7 +59,7 @@ final readonly class LeftUndoneTokens
         $id = $this->code[$index][0]->id ?? null;
 
         // Because PhpToken::is() compares a string kind with the text, so string content that is only "(" would match too; a one-character token's id is its byte.
-        return null !== $id && in_array($id < 256 ? chr($id) : $id, (array) $kinds, true);
+        return null !== $id && in_array(0 <= $id && $id < 256 ? chr($id) : $id, (array) $kinds, true);
     }
 
     public function text(int $index): string
