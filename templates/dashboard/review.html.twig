@@ -114,6 +114,7 @@
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
+            {% if reviewed.speedFactor is not null %}<span class="muted small replay-factor">Played {{ reviewed.speedFactor }} times as fast as recorded</span>{% endif %}
             {% set outcome = reviewed.reviewOutcome %}
             {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}{% endif %}
             {# Plain muted text, because the outcome is the headline and the process state only says where the round stands. #}
@@ -132,6 +133,7 @@
     <div class="round-head">
         <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
         {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
+        {% if reviewed.speedFactor is not null %}<span class="muted small replay-factor">Played {{ reviewed.speedFactor }} times as fast as recorded</span>{% endif %}
         <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, outcome: reviewed.reviewOutcome, plain: true}, with_context = false) }}</span>
     </div>
     {% if reviewed.ending is not null %}

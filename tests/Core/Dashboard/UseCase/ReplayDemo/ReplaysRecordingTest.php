@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
@@ -165,8 +166,35 @@ final class ReplaysRecordingTest extends TestCase
         $this->replays()->replay($recording, 1.0);
 
         self::assertSame(
-            array_map(static fn (RecordedLedgerEvent $event): array => [$event->kind, self::withProject($event->payload, CreateDemoProjectCommand::NAME)], $recording->events),
+            array_map(static fn (RecordedLedgerEvent $event): array => [$event->kind, self::withFactor(self::withProject($event->payload, CreateDemoProjectCommand::NAME), $event->kind, '1.0')], $recording->events),
             array_map(static fn (RecordedEvent $row): array => [$row->event->kind, $row->event->payload], $this->appended()),
+        );
+    }
+
+    public function testTheReplayedReviewStartedRowCarriesTheReplaysFactor(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 2.5);
+
+        $started = json_decode($this->appended()[0]->event->payload, true);
+
+        self::assertIsArray($started);
+        self::assertSame(2.5, $started[ReplayedStart::KEY] ?? null);
+    }
+
+    public function testAWholeFactorIsStoredAsAFloat(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 4.0);
+
+        self::assertStringEndsWith(',"replay_factor":4.0}', $this->appended()[0]->event->payload);
+    }
+
+    public function testOnlyTheReviewStartedRowCarriesTheFactor(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 4.0);
+
+        self::assertSame(
+            [LedgerEventKind::ReviewStarted],
+            array_values(array_map(static fn (RecordedEvent $row): LedgerEventKind => $row->event->kind, array_filter($this->appended(), static fn (RecordedEvent $row): bool => str_contains($row->event->payload, ReplayedStart::KEY)))),
         );
     }
 
@@ -185,7 +213,7 @@ final class ReplaysRecordingTest extends TestCase
         $this->replays()->replay($this->recordedRun(), 1.0);
 
         self::assertSame(
-            '{"round":"'.self::ROUND.'","project":"demo-replay","reviewers":2,"change":"sample-change","number":1,"task":'.self::TASK.',"repository":"\/app\/var\/data\/sample-repository","base":"main","quorum":{}}',
+            '{"round":"'.self::ROUND.'","project":"demo-replay","reviewers":2,"change":"sample-change","number":1,"task":'.self::TASK.',"repository":"\/app\/var\/data\/sample-repository","base":"main","quorum":{},"replay_factor":1.0}',
             $this->appended()[0]->event->payload,
         );
     }
@@ -358,5 +386,10 @@ final class ReplaysRecordingTest extends TestCase
     private static function withProject(string $payload, string $project): string
     {
         return str_replace('"project":"sample"', '"project":"'.$project.'"', $payload);
+    }
+
+    private static function withFactor(string $payload, LedgerEventKind $kind, string $factor): string
+    {
+        return LedgerEventKind::ReviewStarted === $kind ? substr($payload, 0, -1).',"replay_factor":'.$factor.'}' : $payload;
     }
 }
