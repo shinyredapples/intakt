@@ -174,7 +174,7 @@ final readonly class CheckedReports
 
         $date = $this->dateOf($match['date']);
 
-        if (null === $date) {
+        if (!$date instanceof DateTimeImmutable) {
             return 'but its "Checked" line does not start with a date as YYYY-MM-DD';
         }
 
@@ -200,7 +200,7 @@ final readonly class CheckedReports
             return null;
         }
 
-        return 1 === preg_match(self::ANY_DATE, $match['rest'], $match) && null !== $this->dateOf($match['date'])
+        return 1 === preg_match(self::ANY_DATE, $match['rest'], $match) && $this->dateOf($match['date']) instanceof DateTimeImmutable
             ? null
             : 'but its "Pull requests and commits" line names no pull request (#n), URL or commit hash and no date of the check as YYYY-MM-DD';
     }
