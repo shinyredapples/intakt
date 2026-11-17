@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Bench\Contract;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Review\Contract\RoundTokens;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 

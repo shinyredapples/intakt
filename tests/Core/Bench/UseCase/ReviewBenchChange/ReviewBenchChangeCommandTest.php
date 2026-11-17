@@ -9,7 +9,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Bench\Contract\BenchProvenance;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
-use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Bench\Domain\BenchChange;
 use Intakt\Core\Bench\Domain\ChangeFiles;
 use Intakt\Core\Bench\Domain\DefectMatcher;

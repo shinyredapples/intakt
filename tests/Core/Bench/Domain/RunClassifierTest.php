@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Bench\Domain;
 
-use Intakt\Core\Bench\Contract\FailureCause;
-use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Core\Bench\Domain\FailureCause;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Bench\Domain\ChangeFiles;
 use Intakt\Core\Bench\Domain\DefectMatcher;
 use Intakt\Core\Bench\Domain\Expectations;

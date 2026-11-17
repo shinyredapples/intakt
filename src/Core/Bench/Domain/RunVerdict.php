@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Bench\Contract;
+namespace Intakt\Core\Bench\Domain;
 
 use Intakt\Core\Review\Contract\Finding;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;

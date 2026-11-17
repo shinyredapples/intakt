@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Bench\UseCase\RunBench;
 
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Bench\Contract\BenchFigures;
+use Intakt\Core\Bench\Domain\BenchFigures;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
 use Intakt\Core\Bench\Contract\RepeatedChange;
-use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Bench\UseCase\RunBench\BenchReport;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
@@ -61,6 +61,35 @@ final class BenchReportTest extends TestCase
             '  reviewer (standard, model big), measured over 1 rounds: 0 of 0 planted defects found, 0 false alarms, 1 harness failures left out, 110 tokens (100 prompt, 10 completion, 1 calls)',
             array_last($lines),
         );
+    }
+
+    public function testAReviewerThatFailsBeforeAnyCallJoinsItsRoleAndTiersModelLineInTheTotals(): void
+    {
+        $lines = $this->totalsOf([['big'], []]);
+
+        self::assertCount(1, $lines);
+        self::assertStringStartsWith('  reviewer (standard, model big), measured over 2 rounds', $lines[0]);
+    }
+
+    public function testAReviewerWithNoRecordedModelKeepsItsOwnTotalsLineWhenItsRoleAndTierRanOnSeveralModels(): void
+    {
+        $lines = $this->totalsOf([['big'], ['small'], []]);
+
+        self::assertCount(3, $lines);
+        self::assertStringStartsWith('  reviewer (standard, model not recorded), measured over 1 rounds', $lines[2]);
+    }
+
+    /**
+     * @param list<list<string>> $models
+     *
+     * @return list<string>
+     */
+    private function totalsOf(array $models): array
+    {
+        $results = array_map(static fn (array $named): BenchReviewerResult => new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(false, [], [], [], [], null), new RoundTokens(1, 10, 0, 0, 0, 2, 12), 1, $named), $models);
+        $lines = new BenchReport()->linesOf([new RepeatedChange('example', [new BenchReview('example', Decision::Approve, $results, [])])]);
+
+        return array_slice($lines, array_search('totals per reviewer and model over every run:', $lines, true) + 1);
     }
 
     /**

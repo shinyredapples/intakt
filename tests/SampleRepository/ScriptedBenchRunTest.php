@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\SampleRepository;
 
-use Intakt\Core\Bench\Contract\BenchFigures;
-use Intakt\Core\Bench\Contract\FailureCause;
-use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Core\Bench\Domain\BenchFigures;
+use Intakt\Core\Bench\Domain\FailureCause;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Bench\Domain\ChangeFiles;
 use Intakt\Core\Bench\Domain\DefectMatcher;
 use Intakt\Core\Bench\Domain\Expectations;

@@ -6,11 +6,11 @@ namespace Intakt\Tests\Core\Bench\UseCase\RunBench;
 
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\Tier;
-use Intakt\Core\Bench\Contract\BenchFigures;
+use Intakt\Core\Bench\Domain\BenchFigures;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
 use Intakt\Core\Bench\Contract\RepeatedChange;
-use Intakt\Core\Bench\Contract\RunVerdict;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Bench\Domain\BenchChange;
 use Intakt\Core\Bench\Domain\ChangeFiles;
 use Intakt\Core\Bench\Domain\DefectMatcher;
