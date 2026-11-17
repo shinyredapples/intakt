@@ -650,6 +650,8 @@ final class MercureRoundUpdatesTest extends TestCase
         // Registered because the judged stream renders a component, which asks for its options through this function.
         $twig = new Environment(new FilesystemLoader(__DIR__.'/../../../../templates'));
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
+        // Registered because a placed reviewer row shows a character, whose images the asset mapper names in the app.
+        $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
 
         return new MercureRoundUpdates(
             $this->live($publisher),
