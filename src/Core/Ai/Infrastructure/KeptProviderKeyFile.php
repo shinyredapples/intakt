@@ -72,7 +72,7 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
             return;
         }
 
-        if (is_link($this->file()) || file_exists($this->file())) {
+        if (file_exists($this->file())) {
             throw new ProviderKeyAlreadyKept();
         }
 
