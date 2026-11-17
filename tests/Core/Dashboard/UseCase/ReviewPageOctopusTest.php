@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\RoundProgress;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Symfony\Component\DomCrawler\Crawler;
+use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
 final class ReviewPageOctopusTest extends DashboardPageTestCase
@@ -102,6 +105,26 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
     {
         $this->givenARoundJudged(1, 0);
         $this->givenARoundJudged(2, 1);
+
+        self::assertCount(0, $this->browser->request('GET', '/reviews/round-2')->filter('img[src*="/mascot/"]'));
+    }
+
+    public function testAnOlderRoundsApprovalArrivingLiveAfterANewerRoundShowsNoOctopusAsAFreshLoad(): void
+    {
+        $this->givenARoundJudged(1, 0);
+        $this->givenARoundJudged(2, 0);
+        self::assertCount(0, $this->browser->request('GET', '/reviews/round-2')->filter('#round-round-1-verdict img'));
+        $review = self::getContainer()->get(LedgerReviewPages::class)->reviewOf('round-1');
+
+        $stream = self::getContainer()->get(Environment::class)->render('dashboard/stream/round_judged.stream.html.twig', ['round' => 'round-1', 'reviewed' => $review?->rounds[0], 'review' => $review, 'progress' => new RoundProgress(2, 2, true)]);
+
+        self::assertCount(0, new Crawler($stream)->filter('turbo-stream[target="round-round-1-verdict"] template img'));
+    }
+
+    public function testANewerRoundStillInReviewLeavesTheOlderApprovedRoundWithoutAnOctopus(): void
+    {
+        $this->givenARoundJudged(1, 0);
+        $this->ledger->startRoundOfQuorumAll('feat/thing', 'round-2', 2);
 
         self::assertCount(0, $this->browser->request('GET', '/reviews/round-2')->filter('img[src*="/mascot/"]'));
     }
