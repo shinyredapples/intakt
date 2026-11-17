@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\Infrastructure;
 use Closure;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Review\Contract\ReadAnswer;
@@ -211,16 +212,17 @@ final readonly class MercureRoundUpdates implements RoundUpdates
 
     private function publishJudgedState(Uuid $round, RoundProgress $progress): void
     {
-        $reviewed = $this->judgedRoundOf($round);
+        $review = $this->reviewOfJudged($round);
+        $reviewed = $this->roundIn($review, $round->toRfc4122());
 
-        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'outcomes' => $reviewed->outcomes ?? []]);
+        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'review' => $review, 'outcomes' => $reviewed->outcomes ?? []]);
     }
 
-    // Read as the page reads it, because the live findings must be exactly what a reload shows; null leaves them to that reload.
-    private function judgedRoundOf(Uuid $round): ?ReviewedRound
+    // Read as the page reads it, because the live findings, tokens and totals must be exactly what a reload shows; null leaves them to that reload.
+    private function reviewOfJudged(Uuid $round): ?Review
     {
         try {
-            $reviewed = $this->roundOf($round->toRfc4122());
+            $review = $this->pages->reviewOf($round->toRfc4122());
         } catch (Throwable $failure) {
             // Logged and swallowed, because the judged state must still go out when its findings cannot be read.
             $this->logger->warning('The judged round was not read for its live update.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
@@ -228,7 +230,7 @@ final readonly class MercureRoundUpdates implements RoundUpdates
             return null;
         }
 
-        return true === $reviewed?->isJudged() ? $reviewed : null;
+        return true === $this->roundIn($review, $round->toRfc4122())?->isJudged() ? $review : null;
     }
 
     // Read as the page reads it, because a reviewer placed by a finish must show the role, model, outcome and findings a reload shows.
@@ -249,7 +251,12 @@ final readonly class MercureRoundUpdates implements RoundUpdates
 
     private function roundOf(string $id): ?ReviewedRound
     {
-        return array_find($this->pages->reviewOf($id)->rounds ?? [], static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id);
+        return $this->roundIn($this->pages->reviewOf($id), $id);
+    }
+
+    private function roundIn(?Review $review, string $id): ?ReviewedRound
+    {
+        return array_find($review->rounds ?? [], static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id);
     }
 
     // Null leaves the reviewer unnamed until a reload, because a live update must go out even when the ledger cannot be read.

@@ -74,12 +74,12 @@
     {% set review = row.review %}
     <li class="review-row" data-project="{{ review.project }}">
         <a class="review-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: review.round}) }}">
+            {# The outcome leads the row, because it is what the reader scans the list for; the process state stays among the facts (decision D1 of #2186). #}
+            {% if review.outcome is not null %}<span class="review-outcome">{{ include('dashboard/components/outcome_chip.html.twig', {outcome: review.outcome, on_page: true}, with_context = false) }}</span>{% endif %}
             <span class="review-title">{{ row.title }}</span>
             <span class="review-facts">
                 <span class="pname">{{ review.project }}</span>
-                {{ review.outcome is not null
-                    ? include('dashboard/components/outcome_chip.html.twig', {outcome: review.outcome, on_page: true}, with_context = false)
-                    : include('dashboard/_round_state.html.twig', {state: review.state}, with_context = false) }}
+                {% if review.outcome is null %}{{ include('dashboard/_round_state.html.twig', {state: review.state}, with_context = false) }}{% endif %}
                 {% if review.findingCount is not null %}<span class="findings">{{ review.findingCount }} {{ review.findingCount == 1 ? 'finding' : 'findings' }}</span>{% endif %}
                 <span class="reviewers">{{ review.reviewers }} {{ review.reviewers == 1 ? 'reviewer' : 'reviewers' }}</span>
                 <time datetime="{{ review.startedAt|date('c', 'UTC') }}" title="{{ review.startedAt|date('Y-m-d H:i:s', 'UTC') }} UTC">{{ row.startedAgo }}</time>

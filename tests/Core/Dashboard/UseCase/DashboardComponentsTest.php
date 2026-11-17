@@ -269,6 +269,23 @@ final class DashboardComponentsTest extends KernelTestCase
         self::assertNull($at->attr('data-connection-target'));
     }
 
+    public function testACardGivenAnOutcomeShowsItsChipOnItsOwnLineBetweenTheTopLineAndTheTitle(): void
+    {
+        $card = $this->render('card', [...$this->card(), 'outcome' => ReviewOutcome::ChangesRequested])->filter('a.card');
+
+        $outcome = $card->filter('.top + .outcome');
+        self::assertSame('Changes requested', $outcome->filter('.chip')->text());
+        self::assertSame('chip strong', $outcome->filter('.chip')->attr('class'));
+        self::assertCount(1, $card->filter('.outcome + .title'));
+    }
+
+    public function testACardWithoutAnOutcomeHasNoOutcomeLine(): void
+    {
+        $card = $this->render('card', [...$this->card(), 'outcome' => null])->filter('a.card');
+
+        self::assertCount(0, $card->filter('.outcome'));
+    }
+
     public function testACardsEmphasisLineSitsRightUnderTheTitle(): void
     {
         $card = $this->render('card', [...$this->card(), 'emphasis' => ['icon' => 'link', 'text' => 'Needs #612 merged first']])->filter('a.card');

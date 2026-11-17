@@ -26,6 +26,20 @@ final class ReviewListStylesTest extends TestCase
         self::assertMatchesRegularExpression('/user-select:\s*all/', $this->rule('.round-id code'));
     }
 
+    public function testTheOutcomeChipLeadingARowOrACardIsSetInTheTitlesFifteenHeadlineType(): void
+    {
+        self::assertMatchesRegularExpression('/font:\s*600 var\(--t15\)\/1 var\(--f-head\)/', $this->rule('.review-outcome .chip, .card .outcome .chip'));
+    }
+
+    public function testTheOutcomeChipOfANarrowBoardCardWrapsInsideTheCardInsteadOfOverflowingIt(): void
+    {
+        $rule = $this->rule('.card .outcome .chip');
+
+        self::assertMatchesRegularExpression('/white-space:\s*normal/', $rule);
+        self::assertMatchesRegularExpression('/max-width:\s*100%/', $rule);
+        self::assertMatchesRegularExpression('/height:\s*auto/', $rule);
+    }
+
     private function rule(string $selector): string
     {
         $sheet = file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
