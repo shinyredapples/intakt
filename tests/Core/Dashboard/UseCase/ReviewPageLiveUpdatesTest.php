@@ -326,7 +326,17 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertStringStartsWith('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
+        self::assertSame('outcome not recorded, 1 finding to fix. See each finding in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
+    }
+
+    public function testTheNowBoxOpensWithTheJudgesCallInsteadOfPointingToTheRoundBelow(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(ReviewOutcome::ChangesRequested->value.', 2 findings to fix.', $updated->filter('#round-'.$id.'-now-judge p')->first()->text());
     }
 
     public function testAPageOpenedBeforeTheRoundStartsStatesTheJudgesCallInTheNowBoxOnceTheRoundIsJudged(): void
@@ -424,7 +434,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame(
-            'The judge has judged this round. Its call and the findings to fix are in the round below. '.ReviewOutcome::Approved->value.', 0 findings to fix',
+            ReviewOutcome::Approved->value.', 0 findings to fix. See each finding in the round below.',
             $updated->filter('#round-'.$id.'-now-judge')->text(),
         );
     }
@@ -437,7 +447,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame('outcome not recorded, 1 finding to fix', $updated->filter('#round-'.$id.'-now-judge .now-call')->text());
+        self::assertSame('outcome not recorded, 1 finding to fix.', $updated->filter('#round-'.$id.'-now-judge .now-call')->text());
     }
 
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheActListTheVerdictAndTheRoundStateOnceTheRoundIsJudged(): void
