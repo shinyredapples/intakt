@@ -69,6 +69,13 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(LedgerEvent::class)]
 final class LedgerReviewsTest extends TestCase
 {
+    private DashboardLedger $ledger;
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+    }
+
     public function testEventsOfKindsTheDashboardDoesNotReadAreIgnored(): void
     {
         $reviews = $this->reviewsOf(
@@ -278,27 +285,25 @@ final class LedgerReviewsTest extends TestCase
 
     public function testTheReviewListNeverAsksForARoundsCostOrReplayMark(): void
     {
-        $ledger = new DashboardLedger();
-        $ledger->startRoundOf('sample-change', 'r1', 1);
-        $ledger->startRoundOf('other-change', 'r2', 1);
-        $ledger->judgeRound('r1');
+        $this->ledger->startRoundOf('sample-change', 'r1', 1);
+        $this->ledger->startRoundOf('other-change', 'r2', 1);
+        $this->ledger->judgeRound('r1');
         $costs = $this->createMock(RoundCosts::class);
         $costs->expects($this->never())->method('costOf');
         $queries = $this->createMock(MessageBusInterface::class);
         $queries->expects($this->never())->method('dispatch');
 
-        $reviews = $this->listWith($ledger, $costs, $queries, new FixedRoundEndings());
+        $reviews = $this->listWith($costs, $queries, new FixedRoundEndings());
 
         self::assertCount(2, $reviews);
     }
 
     public function testAnUnjudgedRoundThatEndedIsListedWithTheOutcomeItsReviewPageShows(): void
     {
-        $ledger = new DashboardLedger();
-        $ledger->startRoundOf('sample-change', 'r1', 1);
+        $this->ledger->startRoundOf('sample-change', 'r1', 1);
         $endings = new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, 'The judge could not decide.'));
 
-        $reviews = $this->listWith($ledger, new UnpricedRoundCosts(), new ReplayMarkBus(), $endings);
+        $reviews = $this->listWith(new UnpricedRoundCosts(), new ReplayMarkBus(), $endings);
 
         self::assertSame([ReviewState::InProgress, ReviewOutcome::Failed], [$reviews[0]->state, $reviews[0]->outcome]);
     }
@@ -306,9 +311,9 @@ final class LedgerReviewsTest extends TestCase
     /**
      * @return list<ReviewSummary>
      */
-    private function listWith(Ledger $ledger, RoundCosts $costs, MessageBusInterface $queries, RoundEndings $endings): array
+    private function listWith(RoundCosts $costs, MessageBusInterface $queries, RoundEndings $endings): array
     {
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
+        $pages = new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
 
         return new LedgerReviews($pages)->newestFirst();
     }
