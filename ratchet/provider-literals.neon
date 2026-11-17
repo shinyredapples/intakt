@@ -1,0 +1,24 @@
+# Cleanup issue: #2328
+# The provider hosts the Claude Code and Codex adapters still name in Core, which decision D4 of the cleanup issue moves; delete an entry in the change that moves its host.
+parameters:
+	ignoreErrors:
+		-
+			rawMessage: '''auth.openai.com'' names a provider host: name it in a provider descriptor of the catalog, not in code.'
+			identifier: intakt.providerLiteral
+			count: 1
+			path: ../src/Core/Ai/Infrastructure/CodexTokenRefresh.php
+		-
+			rawMessage: '''api.anthropic.com'' names a provider host: name it in a provider descriptor of the catalog, not in code.'
+			identifier: intakt.providerLiteral
+			count: 1
+			path: ../src/Core/Build/UseCase/RunBuildJob/RunBuildJob.php
+		-
+			rawMessage: '''api.anthropic.com'' names a provider host: name it in a provider descriptor of the catalog, not in code.'
+			identifier: intakt.providerLiteral
+			count: 1
+			path: ../src/Core/Review/Infrastructure/ReviewJob.php
+		-
+			rawMessage: '''chatgpt.com'' names a provider host: name it in a provider descriptor of the catalog, not in code.'
+			identifier: intakt.providerLiteral
+			count: 1
+			path: ../src/Core/Review/Infrastructure/ReviewJob.php

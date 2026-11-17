@@ -15,6 +15,7 @@ use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
 use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\Stamp\HandledStamp;
 
 final readonly class ReviewStarts
 {
@@ -29,10 +30,7 @@ final readonly class ReviewStarts
     }
 
     // Null when this install has no sample change, so the caller answers that nothing could be started; the number is always 1, so a second press is refused as not next.
-    /**
-     * @return array{string, string}|null
-     */
-    public function startSampleChange(): ?array
+    public function startSampleChange(): ?StartAnswer
     {
         $source = $this->sample->source();
 
@@ -43,11 +41,8 @@ final readonly class ReviewStarts
         return $this->started(new StartReview(SampleChange::PROJECT, SampleChange::TASK, new RequestedRound(SampleChange::CHANGE, 1, $source)));
     }
 
-    /**
-     * @return array{string, string}|null
-     */
     // Null when the ledger holds no source to start from, so the caller answers that nothing could be started.
-    public function startNextOf(string $round, int $number): ?array
+    public function startNextOf(string $round, int $number): ?StartAnswer
     {
         $review = $this->reviews->reviewOf($round);
         $source = $review?->source();
@@ -67,20 +62,20 @@ final readonly class ReviewStarts
         return new StartReview($review->project, $source->task, $round);
     }
 
-    /**
-     * @return array{string, string}
-     */
-    private function started(StartReview $command): array
+    private function started(StartReview $command): StartAnswer
     {
         try {
-            $this->commands->dispatch($command);
+            $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
         } catch (HandlerFailedException $failed) {
             $reportable = array_first($failed->getWrappedExceptions(ReportableFailure::class, true));
 
-            return [self::FLASH_ERROR, $reportable?->getMessage() ?? 'The review could not be started.'];
+            return new StartAnswer([self::FLASH_ERROR, $reportable?->getMessage() ?? 'The review could not be started.']);
         }
 
+        $round = $handled?->getResult();
+        $round = is_string($round) && '' !== $round ? $round : null;
+
         // Named by the number the round was asked to get and not by its id, because a person reads the number and the id only pushed the page around (#2370, D4).
-        return [self::FLASH_TOAST, sprintf('Started round %d.', $command->round->number)];
+        return new StartAnswer([self::FLASH_TOAST, sprintf('Started round %d.', $command->round->number)], $round);
     }
 }

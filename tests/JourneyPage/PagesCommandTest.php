@@ -14,6 +14,7 @@ final class PagesCommandTest extends TestCase
 {
     private const string BIN = __DIR__.'/../../bin';
     private const string FIXTURES = __DIR__.'/Fixtures';
+    private const string JOURNEY_PAGE = __DIR__.'/../../docs/journey.md';
     private const array DRAWINGS = ['tokens-by-lane', 'tokens-by-account', 'tokens-per-merge', 'issues-per-day', 'open-issues', 'timeline'];
 
     private string $root = '';
@@ -69,6 +70,18 @@ final class PagesCommandTest extends TestCase
         $this->runPages();
 
         self::assertStringNotContainsString('](journey/', $this->site('journey/index.md'));
+    }
+
+    public function testTheRepositorysJourneyPageLinksNothingUnderJourneyButTheDrawingsThePagesSiteHolds(): void
+    {
+        preg_match_all('/\]\(journey\/([^)\s]*)/', (string) file_get_contents(self::JOURNEY_PAGE), $links);
+
+        self::assertNotSame([], $links[1]);
+
+        foreach ($links[1] as $target) {
+            self::assertMatchesRegularExpression('/^[^\/]+\.svg$/', $target, 'bin/pages copies only docs/journey/*.svg beside the page, so journey/'.$target.' would not resolve on the site');
+            self::assertContains(basename($target, '.svg'), self::DRAWINGS, 'the site holds no drawing journey/'.$target);
+        }
     }
 
     public function testTheTimelineImageTakesThePlaceOfTheMermaidBlockThatPagesCannotRender(): void

@@ -21,6 +21,11 @@ final readonly class Board
         $this->cards = $reviews;
     }
 
+    public function hasNoReview(): bool
+    {
+        return [] === $this->cards;
+    }
+
     /**
      * @return list<Review>
      */

@@ -224,7 +224,8 @@ final class RatchetListsGateTest extends SandboxTestCase
         self::assertTrue($sandbox->check('--only=ratchet', '--base=main')->passed('ratchet'));
     }
 
-    public function testTheIncludesOfThisRepositoryHoldNoRatchetListToday(): void
+    // the note of a tree without git comes only after the includes were read and named a list, so it shows that the provider literal list is found
+    public function testTheIncludesOfThisRepositoryNameARatchetListToday(): void
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('config/gates/phpstan.neon', (string) file_get_contents(dirname(__DIR__, 2).'/config/gates/phpstan.neon'));
@@ -232,7 +233,7 @@ final class RatchetListsGateTest extends SandboxTestCase
         $run = $sandbox->check('--only=ratchet');
 
         self::assertTrue($run->passed('ratchet'), $run->output());
-        self::assertSame('no ratchet lists', $run->noteOf('ratchet'));
+        self::assertSame('skipped, no git history in this tree', $run->noteOf('ratchet'));
     }
 
     public function testAnIncludeOutsideTheRepositoryFails(): void

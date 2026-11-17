@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Labels
+{
+    /**
+     * @return list<string>
+     */
+    public function all(): array
+    {
+        return [
+            'Anthropic',
+            'OpenAI',
+            'Hugging Face',
+            'anthropic',
+            'openai_compatible',
+            'claude_code',
+            'claude-code',
+            'codex',
+            'gpt',
+            'ANTHROPIC_API_KEY',
+            'proto3',
+            'demo3',
+            'To use Codex with your ChatGPT plan',
+            'notanthropic.com',
+            'openai.com.example.org',
+            'https://example.org/openai.company',
+            'docker.io/library/php:8.5',
+        ];
+    }
+}

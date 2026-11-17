@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Sample\Contract\SymfonyAiProvider;
+
+final readonly class AnthropicDescriptor implements SymfonyAiProvider
+{
+    public function __construct(
+        private string $baseUrl = 'https://api.anthropic.com',
+    ) {
+    }
+
+    public function checkModel(): string
+    {
+        return 'claude-haiku-5-5';
+    }
+
+    public function baseUrl(): string
+    {
+        return $this->baseUrl;
+    }
+
+    public function strongModel(): string
+    {
+        return new class {
+            public function id(): string
+            {
+                return 'claude-opus-5-5';
+            }
+        }->id();
+    }
+}

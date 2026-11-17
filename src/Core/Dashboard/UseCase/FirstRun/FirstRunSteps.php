@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Dashboard\Domain\AgentStep;
+use Intakt\Core\Dashboard\Domain\DemoChoices;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
 use Intakt\Core\Dashboard\Domain\PanelOfProject;
@@ -64,13 +65,26 @@ final readonly class FirstRunSteps
     public function firstRun(): FirstRun
     {
         $projects = $this->tiers->projects();
+        $providers = $this->providers(array_first($projects));
+        $firstReview = new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource);
 
         return new FirstRun(
-            $this->providers(array_first($projects)),
+            $providers,
             new ProjectStep(array_map($this->panelOf(...), $projects)),
-            new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource),
+            $firstReview,
             $this->agent(),
+            $this->choices($providers, $firstReview),
         );
+    }
+
+    // Only on a demo install, because without the sample there is no demo review to run and no replay project to play one into.
+    private function choices(ProviderStep $providers, FirstReviewStep $firstReview): ?DemoChoices
+    {
+        if (!$this->sample->hasRepository()) {
+            return null;
+        }
+
+        return new DemoChoices($providers, $firstReview);
     }
 
     private function providers(?string $firstProject): ProviderStep
