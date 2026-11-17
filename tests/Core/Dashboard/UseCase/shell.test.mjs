@@ -543,6 +543,25 @@ test('a pushed column this tab never expanded stays limited to its first page', 
     assert.equal(page.column('col-in-review').hasAttribute('data-expanded'), false);
 });
 
+test('a card focused inside a column keeps focus when the column is pushed', () => {
+    const page = new Browser('light').open();
+    page.column('col-in-review').cards[0].focus();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.focusedLink(), '/reviews/round-1');
+    assert.equal(page.column('col-in-review').cards.includes(page.focused()), true);
+});
+
+test('a pushed column leaves focus alone when it was outside the column', () => {
+    const page = new Browser('light').open();
+    page.railToggle.focus();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.focusedLink(), null);
+});
+
 test('a pushed column keeps the fold this tab chose', () => {
     const page = new Browser('light').open();
     page.column('col-done').classList.toggle('collapsed', false);

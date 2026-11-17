@@ -168,12 +168,17 @@
                 event.detail.render = (stream) => {
                     const collapsed = replaced.classList.contains('collapsed');
                     const expanded = replaced.hasAttribute('data-expanded');
+                    // A replaced column is new markup, so a card the person had focused is found again by its link; without this the keyboard falls back to the page start at every push.
+                    const focusedLink = replaced.contains(document.activeElement) ? document.activeElement.getAttribute('href') : null;
                     render(stream);
                     const pushed = document.getElementById(replaced.id);
                     pushed?.classList.toggle('collapsed', collapsed);
                     pushed?.querySelector('.col-fold')?.setAttribute('aria-expanded', String(!collapsed));
                     pushed?.toggleAttribute('data-expanded', expanded);
                     showProject();
+                    if (focusedLink !== null) {
+                        [...(pushed?.querySelectorAll('a[href]') ?? [])].find((link) => link.getAttribute('href') === focusedLink)?.focus({ preventScroll: true });
+                    }
                 };
                 return;
             }

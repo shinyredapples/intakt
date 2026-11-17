@@ -80,6 +80,8 @@ class FakeSelect extends FakeElement {
 class FakeColumn extends FakeElement {
     constructor(page, id, collapsed = false) {
         super(page, '', { '.col-fold': new FakeElement(page) });
+        this.cards = [Object.assign(new FakeElement(page), { id: `${id}-card` })];
+        this.cards[0].setAttribute('href', '/reviews/round-1');
         this.children['.col-fold'].setAttribute('aria-expanded', !collapsed);
         this.id = id;
         this.classes = new Set(['col', ...(collapsed ? ['collapsed'] : [])]);
@@ -91,6 +93,14 @@ class FakeColumn extends FakeElement {
 
     matches(selector) {
         return selector === '.board > .col';
+    }
+
+    contains(element) {
+        return this.cards.includes(element);
+    }
+
+    querySelectorAll(selector) {
+        return selector === 'a[href]' ? this.cards : [];
     }
 }
 
@@ -141,6 +151,9 @@ export class Browser {
         let shownAll = {};
         const document = {
             documentElement: root,
+            get activeElement() {
+                return page.focused;
+            },
             body: null,
             addEventListener: (type, listener) => documentListeners.set(type, [...(documentListeners.get(type) ?? []), listener]),
             dispatchEvent: (event) => (documentListeners.get(event.type) ?? []).forEach((listener) => listener(event)),
@@ -275,6 +288,8 @@ export class Browser {
                 event.detail.render(stream);
             },
             column: (id) => shownElements[`#${id}`],
+            focused: () => page.focused,
+            focusedLink: () => page.focused?.getAttribute('href') ?? null,
             // What Turbo does with a replace stream for a board column: put the server's column, in its start state, where the shown one was.
             pushColumn: (id, collapsed = id === 'col-done') => {
                 const stream = new FakeElement(page);
