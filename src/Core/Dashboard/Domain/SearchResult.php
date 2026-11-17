@@ -12,6 +12,8 @@ final readonly class SearchResult
         public string $detail,
         public ?string $href = null,
         public ?SearchAction $action = null,
+        public ?string $roundId = null,
+        public ?ReviewOutcome $outcome = null,
     ) {
     }
 

@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -79,6 +80,7 @@ use Twig\Environment;
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReadFinding::class)]
 #[UsesClass(ReadAnswer::class)]
+#[UsesClass(Character::class)]
 final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
@@ -176,7 +178,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness']));
 
         self::assertSame('stopped', $updated->filter('#round-round-1-reviewer-round-1-correctness-state')->text());
-        self::assertSame('correctness (standard): stopped', $updated->filter('.state-block .sb-list li')->text());
+        self::assertSame('correctness (standard tier, model not recorded): stopped', $updated->filter('.state-block .sb-list li')->text());
     }
 
     public function testAVerdictPushedToThePageCountsInTheCurrentStateBlock(): void
@@ -199,8 +201,8 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
         self::assertSame('1 of 2 reviewers finished.', $updated->filter('#round-round-1-now-progress')->text());
-        self::assertSame('verdict', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
-        self::assertSame('verdict', $updated->filter('#round-round-1-reviewer-round-1-correctness-state')->text());
+        self::assertSame('answered', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertSame('answered', $updated->filter('#round-round-1-reviewer-round-1-correctness-state')->text());
         self::assertCount(0, $updated->filter('#round-round-1-reviewer-round-1-correctness-stop form'));
     }
 
@@ -231,12 +233,13 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     {
         $this->givenARunningRound();
         $page = $this->browser->request('GET', '/reviews/round-1');
-        self::assertCount(1, $page->filter('#round-round-1-head-state .chip.state-running'));
+        self::assertCount(1, $page->filter('#round-round-1-head-state .muted.state-running'));
 
         $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
 
-        self::assertSame('Judged', $updated->filter('#round-round-1-head-state .chip.state-judged')->text());
-        self::assertCount(0, $updated->filter('.round-head .chip.state-running'));
+        self::assertSame('Judged', $updated->filter('#round-round-1-head-state .muted.state-judged')->text());
+        self::assertCount(0, $updated->filter('#round-round-1-head-state .chip'));
+        self::assertCount(0, $updated->filter('.round-head .state-running'));
         self::assertSame('judged', $updated->filter('#round-round-1-now-phase')->text());
         self::assertSame('Judged.', $updated->filter('#round-round-1-state')->text());
     }
@@ -296,6 +299,105 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
     }
 
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheActListTheVerdictAndTheRoundStateOnceTheRoundIsJudged(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->startReviewer($id, 'correctness');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertSame(['No finding is open.', '', '0 of 2 reviewers finished.'], [$page->filter('#round-'.$id.'-now-findings')->text(), $page->filter('#round-'.$id.'-verdict')->text(), $page->filter('#round-'.$id.'-state')->text()]);
+
+        $this->ledger->answer($id, 'security', 2);
+        $this->ledger->answer($id, 'correctness', 0);
+        $this->ledger->judgeFindings($id, ['F1' => 'act', 'F2' => 'defer']);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertSame(
+            [['F1', 'Fix now'], ['F2', 'Dropped: deferred to a follow-up issue']],
+            $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.fc-call')->text()]),
+        );
+        self::assertSame(['#round-'.$id.'-finding-F1'], $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+        self::assertSame('P2F1 Text of F1.', $updated->filter('#round-'.$id.'-now-findings a.sb-finding')->text());
+        self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $updated->filter('#round-'.$id.'-outcome')->text());
+        self::assertSame('Judged.', $updated->filter('#round-'.$id.'-state')->text());
+        self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-head-state .chip')->text());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheRoundsTokensAndCostTableAsAReloadDoesOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringContainsString('1200', $reloaded->filter('#round-'.$id.'-tokens')->text());
+        self::assertSame($reloaded->filter('#round-'.$id.'-tokens')->outerHtml(), $updated->filter('#round-'.$id.'-tokens')->outerHtml());
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheHeadersTokensAndCostTotalsAsAReloadDoesOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertStringStartsWith('1,200 tokens', $reloaded->filter('#review-summary-tokens')->text());
+        self::assertSame($reloaded->filter('#review-summary-tokens')->outerHtml(), $updated->filter('#review-summary-tokens')->outerHtml());
+        self::assertSame($reloaded->filter('#review-summary-cost')->outerHtml(), $updated->filter('#review-summary-cost')->outerHtml());
+    }
+
+    public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheReviewSoFarCostAsTheReloadedHeaderOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+        $before = $page->filter('#round-'.$id.'-review-cost')->text();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $reloaded = $this->browser->request('GET', '/reviews/'.$id);
+        self::assertNotSame($before, $updated->filter('#round-'.$id.'-review-cost')->text());
+        self::assertSame($reloaded->filter('#review-summary-cost')->text(), $updated->filter('#round-'.$id.'-review-cost')->text());
+    }
+
+    public function testEveryTargetOfAJudgedRoundsUpdateIsOnThePageOpenedBeforeIt(): void
+    {
+        [$round, , $page] = $this->givenAPageLoadedBeforeTheJudgeSpentTokens();
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 1, true));
+
+        $targets = new Crawler($this->publishedStreams())->filter('turbo-stream[action="replace"][target]')->each(static fn (Crawler $stream): string => (string) $stream->attr('target'));
+        self::assertContains('review-summary-tokens', $targets);
+        foreach ($targets as $target) {
+            self::assertCount(1, $page->filter('#'.$target), $target);
+        }
+    }
+
+    public function testAJudgedRoundWithoutAFindingToFixEmptiesTheOpenFindingsOfTheCurrentStateBlock(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->judgeFindings($id, ['F1' => 'act']);
+        $next = Uuid::v7();
+        $nextId = $next->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $nextId, 2);
+        $page = $this->browser->request('GET', '/reviews/'.$nextId);
+        self::assertSame(['#round-'.$id.'-finding-F1'], $page->filter('#round-'.$nextId.'-now-findings a.sb-finding')->each(static fn (Crawler $link): string => (string) $link->attr('href')));
+
+        $this->ledger->judgeFindings($nextId, ['F9' => 'reject']);
+        $this->publishedUpdates()->roundChanged($next, new RoundProgress(0, 2, true));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+        self::assertSame('No finding is open.', $updated->filter('#round-'.$nextId.'-now-findings')->text());
+    }
+
     public function testAJudgedRoundWhoseFindingsWereNotRecordedSaysSoInTheLiveUpdateAsOnLoad(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
@@ -320,6 +422,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         self::assertSame('The judge has not judged this round yet.', $updated->filter('#round-round-1-judged')->text());
         self::assertSame('The judge has judged this round. Reload the page to see its call and the findings to fix.', $updated->filter('#round-round-1-now-judge')->text());
+        self::assertCount(0, $updated->filter('#round-round-1-outcome'));
     }
 
     public function testAToolCallPublishedForAReviewerThatStartedAfterThePageLoadedMakesTheStopOfTheRoundAvailable(): void
@@ -355,6 +458,23 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $updated->filter('form.stop-round'));
     }
 
+    public function testAReviewerThatAnswersAfterThePageLoadedShowsItsOutcomeChipNeverTheWordVerdict(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->startReviewer($id, 'correctness');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        $this->ledger->answer($id, 'correctness', 2);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
+
+        $updated = $this->replaced($page, implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published)));
+
+        self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-reviewer-'.$id.'-correctness-state .chip')->text());
+        self::assertSame('Changes requested', $updated->filter('#round-'.$id.'-now-reviewer-'.$id.'-correctness-state .chip')->text());
+        self::assertStringNotContainsString('verdict', $updated->filter('#round-'.$id.'-reviewers')->text());
+    }
+
     public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheCurrentStateBlock(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -362,28 +482,109 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame('verdict', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
+        self::assertSame('answered', $updated->filter('#round-round-1-now-reviewer-round-1-correctness-state')->text());
         self::assertCount(0, $updated->filter('#round-round-1-now-none'));
     }
 
-    public function testAReviewerThatFinishesAfterThePageLoadedWithoutItGetsARowInTheReviewersTable(): void
+    public function testAReviewerThatFinishesAfterThePageLoadedGetsARowWithItsRoleModelOutcomeAndFindings(): void
     {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $page = $this->browser->request('GET', '/reviews/round-1');
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->answer($id, 'correctness', 2);
 
-        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
 
-        self::assertSame([['round-1-correctness', 'started after this page loaded', 'verdict', 'shown after a reload']], $this->rowsOf($updated));
+        $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
+        self::assertSame([['correctness', 'Kimi K3', 'Changes requested']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertStringStartsWith('2 ', $rows[0][3] ?? '');
     }
 
-    public function testAReviewerStoppedAfterThePageLoadedWithoutItGetsAStoppedRowInTheReviewersTable(): void
+    public function testAReviewerStoppedAfterThePageLoadedGetsARowWithItsRoleAndTheStoppedState(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewer($id, 'correctness');
+
+        $this->publishedUpdates()->reviewerStopped($round, $id.'-correctness');
+
+        self::assertSame([['correctness', 'standard tier, model not recorded', 'stopped', 'no answer']], $this->rowsOf($this->replaced($page, $this->publishedStreams())));
+    }
+
+    public function testAReviewerStoppedAfterItAnsweredGetsARowWithItsRecordedOutcomeAndFindings(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->answer($id, 'correctness', 1);
+        $this->ledger->stopReviewer($id, 'correctness');
+
+        $this->publishedUpdates()->reviewerStopped($round, $id.'-correctness');
+
+        $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
+        self::assertSame([['correctness', 'Kimi K3', 'stopped']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+        self::assertStringStartsWith('1 ', $rows[0][3] ?? '');
+    }
+
+    public function testAReviewerThatFailedAfterThePageLoadedShowsTheFailedChipInRedWithItsCauseAsMutedText(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'security', 'Kimi K3');
+        $this->ledger->failReviewer($id, 'security', 'the model did not answer in time');
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Failed]));
+
+        $state = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-reviewer-'.$id.'-security-state');
+        self::assertSame(['Failed', 'the model did not answer in time'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
+    }
+
+    public function testAFailedReviewerTheTableAlreadyListsShowsItsCauseOnceItFails(): void
+    {
+        [$round, $id] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'security', 'Kimi K3');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+        $this->ledger->failReviewer($id, 'security', 'the model did not answer in time');
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-security' => FinishedState::Failed]));
+
+        $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
+        self::assertSame([['security', 'Kimi K3', 'Failed the model did not answer in time']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
+    }
+
+    public function testDuringALiveRoundThePageListsEachReviewerByRoleAndModelWithItsState(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->startReviewerOn($id, 'security', 'GLM 5');
+
+        $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
+        $this->publishedUpdates()->toolCalled($round, $id.'-security', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(['correctness (Kimi K3): running', 'security (GLM 5): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['correctness (Kimi K3) live', 'security (GLM 5) live'], $updated->filter('#round-'.$id.'-live .live h3')->each(static fn (Crawler $h3): string => $h3->text()));
+        self::assertStringNotContainsString($id.'-correctness (', $updated->html());
+    }
+
+    public function testAReviewerPlacedLiveFromAStartWithoutARecordedModelIsNamedByItsTierLikeTheTable(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewer($id, 'correctness');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-correctness', 'read_file');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('correctness (standard tier, model not recorded) live', $updated->filter('#reviewer-'.$id.'-correctness h3')->text());
+    }
+
+    public function testAReviewerPlacedWhileItsStartCannotBeReadIsLeftUnnamedUntilAReload(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $updated = $this->replaced($page, $this->stream('reviewer_stopped', ['round' => 'round-1', 'reviewer' => 'round-1-correctness']));
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])])
+            .$this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
 
-        self::assertSame([['round-1-correctness', 'started after this page loaded', 'stopped', 'shown after a reload']], $this->rowsOf($updated));
+        self::assertSame([['role not read', 'model not read', 'answered', 'shown after a reload']], $this->rowsOf($updated));
+        self::assertSame(['A reviewer (role not read): answered'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame('A reviewer (role not read) live', $updated->filter('#reviewer-round-1-correctness h3')->text());
     }
 
     public function testAReviewerThatFinishesAfterThePageLoadedFillsAsManyCellsAsATableWithoutAStopColumnHasHeaders(): void
@@ -415,17 +616,67 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame([['correctness', 'standard tier, model not recorded', 'verdict', 'no answer yet', '']], $this->rowsOf($updated));
+        self::assertSame([['correctness', 'standard tier, model not recorded', 'answered', 'no answer yet', '']], $this->rowsOf($updated));
     }
 
-    public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowInTheCurrentStateBlock(): void
+    public function testAReviewerThatStartsAfterThePageLoadedGetsARunningRowWithItsRoleAndModelInTheCurrentStateBlock(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+
+        $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
+
+        self::assertSame(['correctness (Kimi K3): running'], $this->replaced($page, $this->publishedStreams())->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+    }
+
+    public function testAReviewerRowPlacedByAStreamShowsExactlyOneCodeReviewerHeadOf24Pixels(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+
+        $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
+
+        $row = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-now-reviewers li');
+        self::assertCount(1, $row);
+        self::assertSame(['', ''], $row->children('img.character')->each(static fn (Crawler $img): ?string => $img->attr('alt')));
+        self::assertSame([['24', '24'], ['24', '24']], $row->children('img.character')->each(static fn (Crawler $img): array => [$img->attr('width'), $img->attr('height')]));
+        self::assertCount(2, $row->filter('img[src*="code_reviewer-"]'));
+    }
+
+    public function testAReviewerRowPlacedByAStreamIsTheRowThePageRendersOnLoad(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->answer($id, 'correctness', 1);
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Verdict]));
+
+        $placed = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-now-reviewers li')->outerHtml();
+        $loaded = $this->browser->request('GET', '/reviews/'.$id)->filter('#round-'.$id.'-now-reviewers li')->outerHtml();
+        self::assertSame($loaded, $placed);
+    }
+
+    public function testAReviewerRowPlacedWhileItsStartCannotBeReadKeepsItsFallbackTextAndOneHead(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']));
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
 
-        self::assertSame(['round-1-correctness (started after this page loaded): running'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        $row = $updated->filter('#round-round-1-now-reviewers li');
+        self::assertSame('A reviewer (role not read): running', $row->text());
+        self::assertCount(2, $row->children('img.character'));
+    }
+
+    public function testTheOwlBesideTheJudgesCallSurvivesTheJudgedUpdate(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertCount(2, $updated->filter('#round-round-1-now-judge')->ancestors()->first()->filter('img[src*="judge-"][width="48"]'));
+        self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
     }
 
     public function testAReviewerThePageAlreadyListsKeepsItsOneRowWhenItFinishes(): void
@@ -436,7 +687,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking'])
             .$this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])]));
 
-        self::assertSame(['correctness (standard): verdict'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
+        self::assertSame(['correctness (standard tier, model not recorded): answered'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
     }
 
     public function testAStreamForARoundWhoseBlockIsNotOnThePageAddsNoRow(): void
@@ -528,6 +779,30 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['Verdict: changes'], $text->filter('.answer-read')->each(static fn (Crawler $line): string => $line->text()));
         self::assertSame(['P1 src/Cart.php:12 Boundary'], $text->filter('.answer-finding')->each(static fn (Crawler $line): string => $line->text()));
         self::assertStringNotContainsString('{"', $text->text());
+    }
+
+    public function testAnUnreadableAnswerReachesTheReviewPageAsOneCouldNotBeReadLineAndNoRawText(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => ReadAnswer::unreadable()]));
+
+        $text = $updated->filter('#reviewer-round-1-correctness-text');
+        self::assertSame(['The answer could not be read.'], $text->children()->each(static fn (Crawler $line): string => $line->text()));
+        self::assertCount(1, $text->filter('.answer-unreadable'));
+        self::assertStringNotContainsString('{', $text->text());
+    }
+
+    public function testAFindingWithoutAFileReachesTheReviewPageAsItsSeverityAndTitleOnly(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, 'Missing changelog', FixableBy::Builder, false, null, null)], [], []));
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+        self::assertSame(['P2 Missing changelog'], $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->each(static fn (Crawler $line): string => $line->text()));
     }
 
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
@@ -627,7 +902,48 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
 
-        return $twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $name), $context);
+        // Unread unless a test gives them, as MercureRoundUpdates sends them when the ledger cannot be read.
+        return $twig->render(sprintf('dashboard/stream/%s.stream.html.twig', $name), $context + ['outcome' => null, 'outcomes' => []]);
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeAnyReviewerStarted(): array
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+
+        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeTheJudgeSpentTokens(): array
+    {
+        $this->browser->disableReboot();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn(new SessionSummary([], Cost::inUsd(0.1), [], [], [], [], false));
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+        $this->givenTheHubRecordsWhatIsPublished();
+        $round = Uuid::v7();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+        $this->ledger->startReviewer($id, 'security');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+
+        $this->ledger->answer($id, 'security', 0);
+        $this->ledger->useTokens($id, 1000, 200);
+        $this->ledger->judgeFindings($id, []);
+
+        return [$round, $id, $page];
+    }
+
+    private function publishedStreams(): string
+    {
+        return implode('', array_map(static fn (Update $update): string => $update->getData(), $this->published));
     }
 
     /**

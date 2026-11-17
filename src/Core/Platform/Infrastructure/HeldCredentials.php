@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Platform\Infrastructure;
 
+use Intakt\Core\Ai\Contract\KeptProviderKeys;
+use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use RuntimeException;
 use SodiumException;
 use Symfony\Bundle\FrameworkBundle\Secrets\AbstractVault;
 
-// Read when asked, so no secret enters the compiled container, from the sources Symfony's env processor reads: the environment, then the secrets vault.
+// Read when asked, so no secret enters the compiled container, from the sources Symfony's env processor reads: the environment, then the secrets vault, then the key kept from the browser.
 final readonly class HeldCredentials
 {
     /**
@@ -17,6 +19,7 @@ final readonly class HeldCredentials
     public function __construct(
         private array $names,
         private ?AbstractVault $vault = null,
+        private ?KeptProviderKeys $kept = null,
     ) {
     }
 
@@ -25,7 +28,7 @@ final readonly class HeldCredentials
      */
     public function values(): array
     {
-        $values = [...$this->environmentValues(), ...$this->vaultValues()];
+        $values = [...$this->environmentValues(), ...$this->vaultValues(), $this->keptValue()];
 
         return array_values(array_unique(array_filter($values, static fn (mixed $value): bool => is_string($value) && '' !== $value)));
     }
@@ -56,6 +59,16 @@ final readonly class HeldCredentials
         $names = array_map(strval(...), array_keys($this->vault?->list() ?? []));
 
         return array_values(array_map($this->revealed(...), array_filter($names, $this->isHeld(...))));
+    }
+
+    // The logger must still write when the file is unusable.
+    private function keptValue(): ?string
+    {
+        try {
+            return $this->kept?->read()?->secret();
+        } catch (KeptProviderKeyUnreadable) {
+            return null;
+        }
     }
 
     // A wrong decryption key returns null but a key of the wrong length, or none, throws; the logger must still write, and the secret's shape is still redacted.

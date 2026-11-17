@@ -75,6 +75,11 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
     }
 
+    public function stopReviewer(string $round, string $role): void
+    {
+        $this->add(LedgerEventKind::ReviewerStopped, $this->reviewer($round, $role));
+    }
+
     public function answerInShadow(string $round, string $role): void
     {
         $this->add(LedgerEventKind::VerdictReceived, $this->reviewer($round, $role) + ['decision' => 'approve', 'findings' => 0, 'mode' => 'shadow']);
@@ -121,6 +126,17 @@ final class DashboardLedger implements Ledger
             'act' => ['F1'],
             'follow_ups' => [],
             'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => $text, 'merged' => [], 'file' => 'src/A.php', 'line' => 7]],
+        ]);
+    }
+
+    public function judgeWithOnlyADroppedFinding(string $round, string $text, string $reason): void
+    {
+        $this->add(LedgerEventKind::JudgeDone, [
+            'round' => $round,
+            'act' => [],
+            'follow_ups' => [],
+            'findings' => [],
+            'dropped' => [['id' => 'F1', 'severity' => 'P2', 'text' => $text, 'file' => 'src/A.php', 'line' => 3, 'reason' => $reason]],
         ]);
     }
 

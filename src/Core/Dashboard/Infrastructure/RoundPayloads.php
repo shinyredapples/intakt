@@ -12,6 +12,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\CatchUpOwed;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewerBlocked;
@@ -31,7 +32,7 @@ final readonly class RoundPayloads
     private const array UNNAMED_START = ['change' => '', 'task' => ''];
 
     private const array UNMARKED_VERDICT = ['mode' => ProjectMode::Live];
-    private const array UNRECORDED_FINDINGS = ['findings' => []];
+    private const array UNRECORDED_FINDINGS = ['findings' => [], 'dropped' => []];
 
     public function __construct(private LedgerPayloads $payloads)
     {
@@ -63,6 +64,15 @@ final readonly class RoundPayloads
     public function judgedFindingsOf(RecordedEvent $recorded): ?array
     {
         return $this->payloads->entriesOf($recorded, 'findings', JudgeDoneFinding::class);
+    }
+
+    /**
+     * @return list<DroppedFinding>
+     */
+    // Empty for a row written before drop reasons were recorded, because it dropped nothing the page could show; an unreadable entry is left out, because one bad entry must not hide the others.
+    public function droppedOf(RecordedEvent $recorded): array
+    {
+        return $this->payloads->entriesOf($recorded, 'dropped', DroppedFinding::class) ?? [];
     }
 
     public function reviewerRowOf(RecordedEvent $recorded): ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerBlocked|ReviewerStopped|CatchUpOwed|null

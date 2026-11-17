@@ -13,4 +13,5 @@ enum BuildStep: string
     case BuildJob = 'build_job';
     case HandBackCheck = 'hand_back_check';
     case PrePushCheck = 'pre_push_check';
+    case Push = 'push';
 }

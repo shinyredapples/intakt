@@ -14,6 +14,8 @@ use Intakt\Core\Ai\Infrastructure\CodexPlatformFactory;
 use Intakt\Core\Ai\Infrastructure\CodexSettings;
 use Intakt\Core\Ai\Infrastructure\IsolatedClaudeCodeCli;
 use Intakt\Core\Ai\Infrastructure\IsolatedCodexCli;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyVariables;
 use Intakt\Core\Ai\Infrastructure\ProjectModelCatalog;
 use Intakt\Core\Ai\Infrastructure\ProjectsConfiguration;
 use Intakt\Core\Ai\UseCase\ProbeCodexLogin\ProbeCodexLoginCommand;
@@ -53,7 +55,7 @@ use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Yaml\Yaml;
 
-// Same sources as Symfony's env processor: the environment, then the secrets vault. Presence is decided at build time because an unset env reference fails when the service is built.
+// Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
 return static function (ContainerConfigurator $container): void {
     $environmentValue = static function (string $name): ?string {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
@@ -70,7 +72,8 @@ return static function (ContainerConfigurator $container): void {
     // Names only, since decrypting every entry up front would let an unrelated secret abort the boot; the framework's env loader reveals one name at a time too.
     $vaultNames = $vault->list();
 
-    $vaultValue = static function (string $name) use ($vault, $vaultNames): ?string {
+    // False for a listed secret whose reveal throws, apart from null for one the vault lacks or cannot open, because the vault's loader throws the same way at run time before any later loader is asked.
+    $vaultValue = static function (string $name) use ($vault, $vaultNames): string|false|null {
         if (!array_key_exists($name, $vaultNames)) {
             return null;
         }
@@ -78,13 +81,32 @@ return static function (ContainerConfigurator $container): void {
         try {
             return $vault->reveal($name);
         } catch (SodiumException|RuntimeException) {
-            // A decryption key of the wrong length, or no key at all, throws where a wrong key only returns null; either way the secret is unusable, so it counts as missing.
-            return null;
+            // A decryption key of the wrong length, or no key at all, throws where a wrong key only returns null; either way the secret is unusable, so it never counts as set.
+            return false;
         }
     };
 
+    // A variable of its own so a test keeps its key outside the install's data volume, where the file is the live key.
+    $keptKeyDirectory = $environmentValue('INTAKT_PROVIDER_KEY_DIR') ?? dirname(__DIR__, 2).'/var/data';
+    $container->parameters()->set(AiServices::KEPT_KEY_DIRECTORY, $keptKeyDirectory);
+
+    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory))->loadEnvVars();
+
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
-    $isSet = static fn (string $name): bool => null !== $environmentValue($name) || '' !== ($vaultValue($name) ?? '');
+    $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {
+        if (null !== $environmentValue($name)) {
+            return true;
+        }
+
+        $fromVault = $vaultValue($name);
+        // The kept key must not enable the provider here: resolving the variable would throw in the vault's loader before the kept key is reached.
+        if (false === $fromVault) {
+            return false;
+        }
+
+        return '' !== ($fromVault ?? '') || '' !== ($keptValues[$name] ?? '');
+    };
 
     // Projects are the owner's data per install, so their file stays out of git; a missing file means no projects rather than a failed boot.
     $projectsFile = $environmentValue('INTAKT_CONFIG') ?? __DIR__.'/../intakt.yaml';

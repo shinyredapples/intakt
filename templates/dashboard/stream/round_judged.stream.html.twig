@@ -1,10 +1,19 @@
 {# The state of the round first, so the finished count, the reviewer rows and the stop already read as judged; the judged parts follow. #}
 {{ include('dashboard/stream/round_changed.stream.html.twig') }}
-<turbo-stream action="replace" target="round-{{ round }}-head-state"><template><span id="round-{{ round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: constant('Intakt\\Core\\Dashboard\\Domain\\ReviewState::Judged')}, with_context = false) }}</span></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-head-state"><template><span id="round-{{ round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: constant('Intakt\\Core\\Dashboard\\Domain\\ReviewState::Judged'), outcome: (reviewed ?? null)?.reviewOutcome, plain: true}, with_context = false) }}</span></template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-phase"><template><span id="round-{{ round }}-now-phase">judged</span></template></turbo-stream>
 {% if (reviewed ?? null) is not null %}
+<turbo-stream action="replace" target="round-{{ round }}-verdict"><template>{{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-judged"><template>{{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-now-findings"><template>{{ include('dashboard/_now_findings.html.twig', {round: round, open: reviewed.actFindings, judged: reviewed.round}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-judge"><template><p class="muted" id="round-{{ round }}-now-judge">The judge has judged this round. Its call and the findings to fix are in the round below.</p></template></turbo-stream>
+{# The judge's own tokens and cost are settled now, so the round's table, the header's totals and the summary's review-wide cost move with it. #}
+{% import 'dashboard/_review_summary.html.twig' as totals %}
+{% import 'dashboard/_session_summary_parts.html.twig' as part %}
+<turbo-stream action="replace" target="round-{{ round }}-tokens"><template>{{ include('dashboard/_round_tokens.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="review-summary-tokens"><template>{{ totals.tokens(review) }}</template></turbo-stream>
+<turbo-stream action="replace" target="review-summary-cost"><template>{{ totals.cost(review) }}</template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-review-cost"><template>{{ part.review_cost(round, review.cost) }}</template></turbo-stream>
 {% else %}
 {# Without the judged round, because the ledger could not be read when it was published, so the call and the findings come with the next load. #}
 <turbo-stream action="replace" target="round-{{ round }}-now-judge"><template><p class="muted" id="round-{{ round }}-now-judge">The judge has judged this round. Reload the page to see its call and the findings to fix.</p></template></turbo-stream>

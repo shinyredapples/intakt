@@ -29,9 +29,13 @@ final readonly class HandBackFile
     }
 
     /**
-     * @param Closure(HandBack): ?string $check
+     * @template T
+     *
+     * @param Closure(HandBack): T $check
+     *
+     * @return T|string
      */
-    public function failureOf(BuildTaskRequest $request, string $bundle, Closure $check): ?string
+    public function check(BuildTaskRequest $request, string $bundle, Closure $check): mixed
     {
         try {
             return $this->checkedIn($request, $bundle, $check);
@@ -42,9 +46,13 @@ final readonly class HandBackFile
     }
 
     /**
-     * @param Closure(HandBack): ?string $check
+     * @template T
+     *
+     * @param Closure(HandBack): T $check
+     *
+     * @return T
      */
-    private function checkedIn(BuildTaskRequest $request, string $bundle, Closure $check): ?string
+    private function checkedIn(BuildTaskRequest $request, string $bundle, Closure $check): mixed
     {
         $this->filesystem->mkdir($this->bundleFolder, 0o700);
         $file = $this->filesystem->tempnam($this->bundleFolder, 'handback-', '.bundle');

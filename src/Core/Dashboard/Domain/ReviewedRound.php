@@ -28,6 +28,9 @@ final readonly class ReviewedRound
     /** @var list<RoundFinding> */
     public array $findings;
 
+    /** @var list<RoundFinding> */
+    public array $dropped;
+
     public bool $findingTextRecorded;
     public ReviewState $state;
     public TokenFigures $tokens;
@@ -52,6 +55,7 @@ final readonly class ReviewedRound
         $this->source = $place->source;
         $this->outcomes = [];
         $this->findings = [];
+        $this->dropped = [];
         $this->findingTextRecorded = true;
         $this->state = ReviewState::InProgress;
         $this->tokens = TokenFigures::none();
@@ -83,9 +87,23 @@ final readonly class ReviewedRound
         return $this->ending instanceof RoundEnding;
     }
 
+    /**
+     * @return list<RoundFinding>
+     */
+    public function actFindings(): array
+    {
+        return [...array_filter($this->findings, static fn (RoundFinding $finding): bool => JudgeCall::Act === $finding->call)];
+    }
+
     public function reviewOutcome(): ?ReviewOutcome
     {
         return ReviewOutcome::of($this);
+    }
+
+    // The quorum's own decision in the page's words, apart from the round's outcome, because a round whose reviewers all failed still has a quorum that blocked it.
+    public function quorumOutcome(): ?ReviewOutcome
+    {
+        return ReviewOutcome::ofQuorum($this);
     }
 
     public function failedReviewers(): int
@@ -126,6 +144,14 @@ final readonly class ReviewedRound
     public function judgedFromMarksOnly(array $marked, DateTimeImmutable $judgedAt): self
     {
         return clone ($this->judgedWith($marked, $judgedAt), ['findingTextRecorded' => false]);
+    }
+
+    /**
+     * @param list<RoundFinding> $dropped
+     */
+    public function withDropped(array $dropped): self
+    {
+        return clone ($this, ['dropped' => $dropped]);
     }
 
     public function withTokens(TokenFigures $tokens): self

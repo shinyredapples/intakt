@@ -4,8 +4,16 @@
 
 {% block content_width %} roomy{% endblock %}
 
+{# Every review belongs to a project, so the rail keeps Projects current (decision D3 of #2184). #}
+{% set rail_section = 'projects' %}
+
 {% block body %}
-{% set total = review.tokens %}
+{{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
+    {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
+    {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
+    {label: review.change ?: 'round ' ~ round},
+]}, with_context = false) }}
+{% import 'dashboard/_review_summary.html.twig' as totals %}
 {% set latest = review.rounds|last %}
 {% set active = review.activeRound %}
 {% set judged = review.lastJudgedRound %}
@@ -31,8 +39,8 @@
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
             {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round ' : ' rounds '), include: {template: kind_label, with: {kind: kinds.Counted, at: 'summary-rounds'}}},
-            {icon: 'tokens', text: total.total|number_format(0, '.', ',') ~ ' tokens ', include: {template: kind_label, with: {kind: kinds.Measured, at: 'summary-tokens'}}},
-            {icon: 'wallet', text: 'Cost: ', include: {template: 'dashboard/components/cost.html.twig', with: {cost: review.cost, at: 'summary-cost'}}},
+            {icon: 'tokens', markup: totals.tokens(review)},
+            {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
         ]}, with_context = false) }}
         {% if not can_start %}
@@ -70,7 +78,7 @@
             <p class="muted" id="round-{{ active.round }}-now-progress">{{ active.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ active.reviewers }} reviewers finished.</p>
             <ul class="sb-list" id="round-{{ active.round }}-now-reviewers">
                 {% for outcome in active.outcomes %}
-                <li><span><strong>{{ outcome.role }}</strong> ({{ outcome.tier }}): <span id="round-{{ active.round }}-now-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</span>{% if outcome.decision is not null %}, {{ outcome.decision }}{% endif %}</span></li>
+                {{ include('dashboard/_now_reviewer.html.twig', {round: active.round, reviewer: outcome.id, outcome: outcome, state: outcome.progress.value}, with_context = false) }}
                 {% else %}
                 <li class="muted" id="round-{{ active.round }}-now-none">No reviewer has started yet.</li>
                 {% endfor %}
@@ -78,16 +86,12 @@
         </div>
         <div>
             <h3>Open findings</h3>
-            {% if open is empty %}
-            <p class="muted">No finding is open.</p>
-            {% else %}
-            {% for finding in open %}
-            <a class="sb-finding" href="#round-{{ judged.round }}-finding-{{ finding.id }}"><span class="sev">{{ finding.severity ?? '?' }}</span><span><span class="mono">{{ finding.entryId }}</span> {{ include('dashboard/_finding_text.html.twig', {finding: finding, missing: 'Text not recorded.'}, with_context = false) }}</span></a>
-            {% endfor %}
-            {% endif %}
+            {# Its own partial, because the judged round's live update replaces it with that round's findings to fix. #}
+            {{ include('dashboard/_now_findings.html.twig', {round: active.round, open: open, judged: judged.round ?? null}, with_context = false) }}
         </div>
         <div>
-            <h3>The judge's call</h3>
+            {# The owl sits beside the heading, outside the judge element, because the judged round's live update replaces that element. #}
+            <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 48}, with_context = false) }}<h3>The judge's call</h3></div>
             <p class="muted" id="round-{{ active.round }}-now-judge">The judge has not judged this round yet.</p>
         </div>
     </div>
@@ -110,9 +114,12 @@
         <summary class="ev-head">
             <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
             {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
-            {{ include('dashboard/_round_state.html.twig', {state: reviewed.state}, with_context = false) }}
+            {% set outcome = reviewed.reviewOutcome %}
+            {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}{% endif %}
+            {# Plain muted text, because the outcome is the headline and the process state only says where the round stands. #}
+            <span class="muted small state-judged">{{ reviewed.state.value|capitalize }}</span>
             {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. That count stays unlabeled: it counts marks, not findings, and no figure is added here. #}
-            <span class="muted small">{{ reviewed.outcome is not null ? reviewed.outcome.value : 'outcome not recorded' }}, {% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
+            <span class="muted small">{% if outcome is null %}outcome not recorded, {% endif %}{% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
             {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
             <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
             {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}
@@ -125,10 +132,10 @@
     <div class="round-head">
         <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
         {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
-        <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, ending: reviewed.ending}, with_context = false) }}</span>
+        <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, outcome: reviewed.reviewOutcome, plain: true}, with_context = false) }}</span>
     </div>
     {% if reviewed.ending is not null %}
-    <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">Blocked: {{ reviewed.ending.reason }}</p>
+    <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">{{ reviewed.reviewOutcome.value }}: {{ reviewed.ending.reason }}</p>
     {% endif %}
     {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
 </section>
@@ -143,7 +150,7 @@
     <p class="muted log-empty">Each reviewer's tool calls and text appear here as it works.</p>
     <div class="live-reviewers" id="round-{{ active.round }}-live">
     {% for outcome in active.outcomes %}
-        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.tier ~ ')'}) }}
+        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.modelInWords ~ ')'}) }}
     {% endfor %}
     </div>
     </div>

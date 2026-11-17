@@ -12,7 +12,7 @@
     <div class="actions"><button class="btn secondary sm" type="button" data-theme-toggle>Switch theme</button></div>
 </div>
 <nav class="comp-nav" aria-label="Sections">
-    <a href="#c-buttons">Buttons</a><a href="#c-chips">Chips and badges</a><a href="#c-cards">Cards</a><a href="#c-rows">List rows</a><a href="#c-settings">Setting rows</a><a href="#c-inputs">Inputs</a><a href="#c-bars">Bars</a><a href="#c-banners">Banners</a><a href="#c-tabs">Tabs</a><a href="#c-search">Search</a><a href="#c-toast">Toasts</a><a href="#c-empty">Empty, loading, error</a>
+    <a href="#c-buttons">Buttons</a><a href="#c-chips">Chips and badges</a><a href="#c-cards">Cards</a><a href="#c-rows">List rows</a><a href="#c-settings">Setting rows</a><a href="#c-inputs">Inputs</a><a href="#c-bars">Bars</a><a href="#c-banners">Banners</a><a href="#c-tabs">Tabs</a><a href="#c-search">Search</a><a href="#c-toast">Toasts</a><a href="#c-empty">Empty, loading, error</a><a href="#c-characters">Characters</a>
 </nav>
 
 <section class="comp-sec" id="c-buttons"><h2>Buttons</h2><p>Primary for the main action, secondary for others, quiet for links, danger arms on first click, needs (amber) only for the one action a waiting item asks for.</p>
@@ -103,7 +103,7 @@
     {# Shown in place: the overlay of the top bar is the same panel over the scrim. #}
     <div class="palette static"><div class="q">{{ include(c ~ 'icon.html.twig', {name: 'search'}) }}<input type="text" value="alpha" aria-label="Search, {{ theme }}" readonly><kbd>Esc</kbd></div>
     <div class="results" role="listbox" aria-label="Results, {{ theme }}">
-        {{ include(c ~ 'search_group.html.twig', {id: 'search-reviews-' ~ theme, icon: 'pr', label: 'Reviews', results: [{label: 'Round round-12', detail: 'alpha, in progress', href: '#', selected: true}, {label: 'Round round-11', detail: 'alpha, judged', href: '#'}]}) }}
+        {{ include(c ~ 'search_group.html.twig', {id: 'search-reviews-' ~ theme, icon: 'pr', label: 'Reviews', results: [{label: 'sample-change, round 2', detail: 'alpha, in progress', href: '#', roundId: 'round-12', selected: true}, {label: 'sample-change, round 1', detail: 'alpha, judged', href: '#', roundId: 'round-11'}]}) }}
         {{ include(c ~ 'search_group.html.twig', {id: 'search-projects-' ~ theme, icon: 'projects', label: 'Projects', results: [{label: 'alpha', detail: 'Project, 2 review rounds', href: '#'}]}) }}
     </div></div>
     <div class="palette static"><div class="results">{{ include(c ~ 'search_none.html.twig', {query: 'zebra', suggestion: 'Try a project such as alpha, a round id, or a page such as Reviews.', recovery: constant('Intakt\\Core\\Dashboard\\Domain\\SearchAction::ClearSearch')}) }}</div></div>
@@ -121,5 +121,11 @@
     {{ include(c ~ 'empty.html.twig', {title: 'Nothing needs you', text: 'Intakt keeps building. When it needs a decision, it shows up here and on your phone.'}) }}
     <div class="cards-row">{{ include(c ~ 'skeleton.html.twig') }}{{ include(c ~ 'column_empty.html.twig') }}</div>
     {{ include(c ~ 'error_line.html.twig', {failed: "Couldn't connect.", text: 'The vendor said the key is not valid. Nothing was saved.'}) }}
+</div>{% endfor %}</div></section>
+
+<section class="comp-sec" id="c-characters"><h2>Characters</h2><p>Decoration only, always beside the text that names the actor: an empty alt, a fixed size, no motion. Each role is shown at 24 and 48 px; the octopus poses are for empty and approved states, one per page.</p>
+<div class="spec-cols">{% for theme in themes %}<div class="spec" data-theme="{{ theme }}"><h3>{{ theme|capitalize }}</h3>
+    <div class="cgrp"><h4>Roles</h4>{% for character in enum_cases('Intakt\\Core\\Dashboard\\Domain\\Character') %}<div class="row-st"><span class="character-row">{{ include(c ~ 'character.html.twig', {character: character, size: 24}) }}{{ include(c ~ 'character.html.twig', {character: character, size: 48}) }}<span>{{ character.label }}: {{ character.description }}</span></span></div>{% endfor %}</div>
+    <div class="cgrp"><h4>Octopus</h4><div class="row-st">{% for pose in enum_cases('Intakt\\Core\\Dashboard\\Domain\\MascotPose') %}<span class="character-row">{{ include(c ~ 'character.html.twig', {character: pose, size: 96}) }}<span>{{ pose.value|capitalize }}</span></span>{% endfor %}</div></div>
 </div>{% endfor %}</div></section>
 {% endblock %}

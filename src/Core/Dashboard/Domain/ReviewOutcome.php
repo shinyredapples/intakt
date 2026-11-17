@@ -26,6 +26,11 @@ enum ReviewOutcome: string
             return self::Failed;
         }
 
+        return self::ofQuorum($round);
+    }
+
+    public static function ofQuorum(ReviewedRound $round): ?self
+    {
         return $round->outcome instanceof Decision ? self::ofDecision($round->outcome) : null;
     }
 

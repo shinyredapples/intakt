@@ -66,10 +66,10 @@ final class FailedReviewerPageTest extends WebTestCase
         $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
 
         self::assertResponseIsSuccessful();
-        self::assertSame([['role-1', 'standard-model', 'failed: stopped at its output limit'], ['role-2', 'standard-model', 'approve']], $this->reviewerRows($page));
-        self::assertSame(['failed: stopped at its output limit'], $page->filter('table.reviewers .failed')->each(static fn (Crawler $cause): string => $cause->text()));
+        self::assertSame([['role-1', 'standard-model', 'Failed stopped at its output limit'], ['role-2', 'standard-model', 'Approved']], $this->reviewerRows($page));
+        self::assertSame(['stopped at its output limit'], $page->filter('table.reviewers .reviewer-outcome .muted')->each(static fn (Crawler $cause): string => $cause->text()));
         self::assertSame(
-            'Outcome: '.$review->decision->value.', decided by the quorum policy all over all 2 reviewers. 1 of 2 reviewers failed, and a failed reviewer gives no approval.',
+            'Outcome: Blocked, decided by the quorum policy all over all 2 reviewers. 1 of 2 reviewers failed, and a failed reviewer gives no approval.',
             $page->filter('#round-'.$review->roundId.'-outcome')->text(),
         );
         self::assertSame('blocked', $review->decision->value);

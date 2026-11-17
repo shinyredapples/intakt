@@ -4,16 +4,25 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Platform\Infrastructure;
 
+use Intakt\Core\Ai\Contract\KeptProviderKeys;
+use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
+use Intakt\Core\Ai\Contract\KeyKind;
+use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Platform\Infrastructure\HeldCredentials;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(HeldCredentials::class)]
+#[UsesClass(ProviderKey::class)]
+#[UsesClass(KeyKind::class)]
 final class HeldCredentialsTest extends TestCase
 {
     private const string NAME = 'INTAKT_TEST_API_KEY';
+    private const string BODY = 'abcdefgh12345678';
+    private const string KEPT_KEY = 'sk-ant-'.self::BODY;
 
     private string $vaultDirectory;
 
@@ -89,6 +98,22 @@ final class HeldCredentialsTest extends TestCase
         $this->vaultHolding([self::NAME => 'vault-credential-canary']);
 
         self::assertSame([], new HeldCredentials([self::NAME], new SodiumVault($this->vaultDirectory, 'too-short'))->values());
+    }
+
+    public function testAKeyKeptFromTheBrowserIsHeld(): void
+    {
+        $kept = self::createStub(KeptProviderKeys::class);
+        $kept->method('read')->willReturn(ProviderKey::recognise(self::KEPT_KEY));
+
+        self::assertSame([self::KEPT_KEY], new HeldCredentials([self::NAME], null, $kept)->values());
+    }
+
+    public function testAKeptFileThatCannotBeReadHoldsNothingInsteadOfFailing(): void
+    {
+        $kept = self::createStub(KeptProviderKeys::class);
+        $kept->method('read')->willThrowException(new KeptProviderKeyUnreadable());
+
+        self::assertSame([], new HeldCredentials([self::NAME], null, $kept)->values());
     }
 
     /**

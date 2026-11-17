@@ -105,6 +105,15 @@ Once a review round completes, a worker indexes the findings it resolved into pr
 - **Proposed checks:** when the index shows a finding kind recurring, plain code files a task proposing a check ([Reviews](07-reviews.md)); no model decides to file it. The example findings it quotes are reviewer text, so they go inside an `<!-- external -->` block, redacted and scanned before the task is filed, and every role reads them as it reads the review in a task filed from a catch-up review. The task is built only once a person with write access labels it.
 - **No OpenAI account:** nothing is sent; the indexing message fails with the reason and stays in the failure transport.
 
+## Checking a provider key
+
+Before a key typed in the browser is kept, plain code checks it with one call to its provider (`SymfonyAiKeyCheck`). This is not a model role: no untrusted text goes in and nothing that comes out decides more than accepted, refused or not checked.
+- **Input:** the prompt is a constant of Intakt's own (`Answer with the single word: ok`), sent to the cheapest model of the key's kind with the smallest answer cap its provider accepts; the call has no tools.
+- **Credential:** the key goes only to the provider its form names (Anthropic, OpenAI, or Hugging Face's router), in that provider's own header, through the bridge of that kind; `ProviderKey::secret()` is read for this call and, once the key is accepted, to write the kept file.
+- **Output:** the answer is dropped unread beyond its success; only an authentication failure counts as a refusal, and any other failure leaves the key not checked, so a provider's text cannot mark a key good or bad.
+- **Storage:** an accepted key is kept in the data volume in a file only the app user can read (`KeptProviderKeyFile`); it never reaches a log, an exception message or trace, or the browser, which gets the kind and at most its last four characters. The file is read back as outside input: a key without the form of its stored kind is refused, not shown.
+- **Failures:** a provider's error text can echo the request, the key included, so it is never kept: the outcome is an enum, and the exceptions `KeepProviderKey` throws have fixed messages and no previous exception.
+
 ## External dependencies
 
 A project can connect its jobs to an external dependency: an instance that is already running, such as a staging backend or a shared dev server ([New and existing projects](12-new-and-existing-projects.md#dependent-services-and-projects)). Intakt adds its address to the job's egress allowlist and injects its credentials into the job types the owner allows: check and review jobs by default, build jobs only on the owner's opt-in. This is the one path where model-written code acts on something outside its container before any review:

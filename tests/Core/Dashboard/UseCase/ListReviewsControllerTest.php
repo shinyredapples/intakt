@@ -97,7 +97,43 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('Approved', $crawler->filter('.review-facts .chip.approved')->text());
+        self::assertSame('Approved', $crawler->filter('.review-outcome .chip.approved')->text());
+    }
+
+    public function testARoundThatAskedForChangesLeadsItsRowWithTheChangesRequestedChipAndItsIcon(): void
+    {
+        $this->ledger->startRoundOfQuorum('sample-change', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $lead = $this->browser->request('GET', '/reviews')->filter('.review-link > *')->first();
+
+        self::assertSame('review-outcome', $lead->attr('class'));
+        self::assertSame('Changes requested', $lead->filter('.chip')->text());
+        self::assertCount(1, $lead->filter('.chip svg.i'));
+    }
+
+    public function testAnOutcomeIsNotRepeatedAmongTheFactsOfItsRow(): void
+    {
+        $this->ledger->startRoundOfQuorum('sample-change', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertCount(0, $crawler->filter('.review-facts .chip'));
+    }
+
+    public function testARoundWithoutAnOutcomeLeadsWithItsTitleAndKeepsItsStateAmongTheFacts(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $crawler = $this->browser->request('GET', '/reviews');
+
+        self::assertSame('review-title', $crawler->filter('.review-link > *')->first()->attr('class'));
+        self::assertCount(0, $crawler->filter('.review-outcome'));
     }
 
     public function testARoundThatEndedWithoutAnOutcomeInTimeShowsTheBlockedChipAndNoFindingCount(): void
@@ -107,7 +143,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('Blocked', $crawler->filter('.review-facts .chip')->first()->text());
+        self::assertSame('Blocked', $crawler->filter('.review-outcome .chip')->text());
         self::assertCount(0, $crawler->filter('.review-facts .findings'));
     }
 
@@ -118,7 +154,7 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews');
 
-        self::assertSame('Failed', $crawler->filter('.review-facts .chip')->first()->text());
+        self::assertSame('Failed', $crawler->filter('.review-outcome .chip')->text());
         self::assertCount(0, $crawler->filter('.review-facts .findings'));
     }
 
