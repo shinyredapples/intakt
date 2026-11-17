@@ -434,6 +434,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($reloaded->filter('#round-'.$id.'-verdict')->text(), $updated->filter('#round-'.$id.'-verdict')->text());
     }
 
+    public function testARoundApprovedWhileThePageIsOpenShowsTheSameBowingOctopusAsANewLoad(): void
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+        $page = $this->browser->request('GET', '/reviews/'.$id);
+
+        $this->givenTheRoundIsJudgedWith($round, []);
+
+        $updated = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-verdict');
+        self::assertCount(2, $updated->filter('img.character[src*="/mascot/octopus-bowing-light-72-"], img.character[src*="/mascot/octopus-bowing-dark-72-"]'));
+        self::assertSame($this->browser->request('GET', '/reviews/'.$id)->filter('#round-'.$id.'-verdict')->outerHtml(), $updated->outerHtml());
+    }
+
     public function testARoundUpdatePushedToAPageOpenedBeforeAnyReviewerStartedCountsTheStartedReviewers(): void
     {
         [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();

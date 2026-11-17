@@ -78,6 +78,15 @@ final class CharacterTemplateTest extends KernelTestCase
         self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-conducting-dark-96-[\w-]+\.webp 1x, /assets/images/mascot/octopus-conducting-dark-192-[\w-]+\.webp 2x$#', (string) $images->last()->attr('srcset'));
     }
 
+    public function testA72PxBowingOctopusOffersIts72And144PxFilesAs1xAnd2x(): void
+    {
+        $images = $this->rendered(MascotPose::Bowing, 72)->filter('img');
+
+        self::assertSame(['72', '72'], [$images->first()->attr('width'), $images->first()->attr('height')]);
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-bowing-light-72-[\w-]+\.webp 1x, /assets/images/mascot/octopus-bowing-light-144-[\w-]+\.webp 2x$#', (string) $images->first()->attr('srcset'));
+        self::assertMatchesRegularExpression('#^/assets/images/mascot/octopus-bowing-dark-72-[\w-]+\.webp 1x, /assets/images/mascot/octopus-bowing-dark-144-[\w-]+\.webp 2x$#', (string) $images->last()->attr('srcset'));
+    }
+
     private function rendered(Character|MascotPose $character, int $size): Crawler
     {
         $twig = self::getContainer()->get(Environment::class);
