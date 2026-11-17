@@ -45,9 +45,9 @@ final readonly class LedgerReviewPages
     /**
      * @return list<ReviewedRound>
      */
-    public function roundsInStartOrder(): array
+    public function listedRoundsInStartOrder(): array
     {
-        return $this->rounds($this->ledger->readInOrder())->inStartOrder();
+        return $this->rounds($this->ledger->readInOrder())->listedInStartOrder();
     }
 
     // Read from the starts alone, because a live update goes out for each streamed text and must not read the whole ledger; the latest start wins, as on the page, and null means the reviewer has not started in that round.

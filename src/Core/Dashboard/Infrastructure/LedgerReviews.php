@@ -20,6 +20,6 @@ final readonly class LedgerReviews
      */
     public function newestFirst(): array
     {
-        return array_reverse(array_map(static fn (ReviewedRound $round): ReviewSummary => new ReviewSummary($round), $this->pages->roundsInStartOrder()));
+        return array_reverse(array_map(static fn (ReviewedRound $round): ReviewSummary => new ReviewSummary($round), $this->pages->listedRoundsInStartOrder()));
     }
 }

@@ -125,13 +125,13 @@ final class LedgerRounds
         return $reviews;
     }
 
-    // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round.
+    // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round; without cost, tokens or replay mark, because the list shows none of them and each costs a query per round.
     /**
      * @return list<ReviewedRound>
      */
-    public function inStartOrder(): array
+    public function listedInStartOrder(): array
     {
-        return array_map($this->completed(...), array_values($this->started));
+        return array_map($this->decidedAsOnThePage(...), array_values($this->started));
     }
 
     // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
@@ -244,7 +244,13 @@ final class LedgerRounds
 
     private function completed(ReviewedRound $round): ReviewedRound
     {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round));
+        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
+    }
+
+    // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.
+    private function decidedAsOnThePage(ReviewedRound $round): ReviewedRound
+    {
+        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []));
 
         $judged = $this->judged[$round->round] ?? null;
 
