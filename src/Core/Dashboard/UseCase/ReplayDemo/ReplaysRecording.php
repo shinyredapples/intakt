@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
@@ -16,6 +17,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\ReplayMark;
 use stdClass;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Lock\LockFactory;
@@ -30,6 +32,7 @@ final readonly class ReplaysRecording
         private LiveUpdates $updates,
         private ClockInterface $clock,
         private LockFactory $locks,
+        private ReplayMarks $marks,
     ) {
     }
 
@@ -47,11 +50,20 @@ final readonly class ReplaysRecording
         }
 
         try {
+            $this->refuseADemoProjectThatIsNoReplay();
             $this->refuseUpdatesWithoutTopic($recording);
             $this->refuseRoundsTheLedgerHolds($recording);
             $this->playAtTheRecordedPace($recording, $factor);
         } finally {
             $lock->release();
+        }
+    }
+
+    // Under the lock intakt:demo:remove also takes, because rows replayed after a removal took the flag away would read as a live review.
+    private function refuseADemoProjectThatIsNoReplay(): void
+    {
+        if (ReplayMark::Replay !== $this->marks->ofProject(CreateDemoProjectCommand::NAME)) {
+            throw ReplayIsRefused::becauseTheDemoProjectIsNoReplay(CreateDemoProjectCommand::NAME);
         }
     }
 

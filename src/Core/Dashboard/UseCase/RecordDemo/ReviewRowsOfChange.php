@@ -23,7 +23,7 @@ final readonly class ReviewRowsOfChange
     public function of(string $project, string $change): ?ReviewRows
     {
         $rows = iterator_to_array($this->ledger->readInOrder(), false);
-        $starts = $this->startsOf($rows, $project, $change);
+        $starts = $this->startsOf($rows, static fn (ReviewedRound $start): bool => $project === $start->project && $change === $start->change);
 
         if ([] === $starts) {
             return null;
@@ -35,29 +35,54 @@ final readonly class ReviewRowsOfChange
         return new ReviewRows(
             $starts[0]->startedAt,
             $rounds,
-            array_values(array_filter($rows, fn (RecordedEvent $row): bool => $this->belongs($row, $rounds, array_keys($calls)))),
+            $this->rowsOf($rows, $rounds, array_keys($calls)),
             array_values(array_unique(array_filter($calls, static fn (?string $model): bool => null !== $model && '' !== $model))),
         );
     }
 
+    // The rows of every change of the project, for removing a replayed project as a whole.
     /**
-     * @param list<RecordedEvent> $rows
+     * @return list<RecordedEvent>
+     */
+    public function ofProject(string $project): array
+    {
+        $rows = iterator_to_array($this->ledger->readInOrder(), false);
+        $rounds = array_map(static fn (ReviewedRound $start): string => $start->round, $this->startsOf($rows, static fn (ReviewedRound $start): bool => $project === $start->project));
+
+        return $this->rowsOf($rows, $rounds, array_keys($this->callsIn($rows, $rounds)));
+    }
+
+    /**
+     * @param list<RecordedEvent>           $rows
+     * @param callable(ReviewedRound): bool $wanted
      *
      * @return list<ReviewedRound>
      */
-    private function startsOf(array $rows, string $project, string $change): array
+    private function startsOf(array $rows, callable $wanted): array
     {
         $starts = [];
 
         foreach ($rows as $row) {
             $started = LedgerEventKind::ReviewStarted === $row->event->kind ? $this->payloads->startOf($row) : null;
 
-            if ($started instanceof ReviewedRound && $project === $started->project && $change === $started->change) {
+            if ($started instanceof ReviewedRound && $wanted($started)) {
                 $starts[] = $started;
             }
         }
 
         return $starts;
+    }
+
+    /**
+     * @param list<RecordedEvent> $rows
+     * @param list<string>        $rounds
+     * @param list<int|string>    $calls
+     *
+     * @return list<RecordedEvent>
+     */
+    private function rowsOf(array $rows, array $rounds, array $calls): array
+    {
+        return array_values(array_filter($rows, fn (RecordedEvent $row): bool => $this->belongs($row, $rounds, $calls)));
     }
 
     /**

@@ -13,6 +13,11 @@ final class ReplayIsRefused extends RuntimeException
         return new self('Another replay is running; start this one when it has ended.');
     }
 
+    public static function becauseTheDemoProjectIsNoReplay(string $project): self
+    {
+        return new self(sprintf('The demo project %s is not marked as a replay, so nothing is replayed; create it with intakt:demo:create first.', $project));
+    }
+
     public static function becauseAnUpdateHasNoTopic(int $number): self
     {
         return new self(sprintf('Captured update %d of this recording has no topic, so nothing is replayed.', $number + 1));
