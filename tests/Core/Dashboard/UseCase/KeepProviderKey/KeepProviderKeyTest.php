@@ -152,7 +152,7 @@ final class KeepProviderKeyTest extends TestCase
     {
         $file = new KeptProviderKeyFile($this->directory);
         $first = 'sk-ant-'.self::BODY;
-        // The other request passed the "none configured" guard too and finishes while this one waits on its provider check.
+        // Forces the order of a race, because the other request passed the "none configured" guard too and finishes while this one waits on its provider check.
         $check = self::createStub(KeyCheck::class);
         $check->method('check')->willReturnCallback(static function () use ($file, $first): KeyCheckOutcome {
             $file->keep(ProviderKey::recognise($first));
