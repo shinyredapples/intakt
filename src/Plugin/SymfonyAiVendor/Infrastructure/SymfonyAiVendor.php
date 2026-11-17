@@ -234,7 +234,7 @@ final readonly class SymfonyAiVendor implements Vendor
     // Refused after the usage is settled, because the call itself finished and was paid for.
     private function namingAFinding(Verdict $verdict): Verdict
     {
-        return $verdict->asksForChangesWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
+        return $verdict->withholdsApprovalWithoutFinding() ?throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
     }
 
     // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.

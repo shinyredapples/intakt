@@ -45,7 +45,7 @@ final class FailureInWordsTest extends TestCase
 
     public function testAChangesVerdictWithoutFindingsIsToldInPlainWords(): void
     {
-        self::assertSame('asked for changes without naming a finding', new FailureInWords()->of(ChangesWithoutFindings::class));
+        self::assertSame('gave no approval without naming a finding', new FailureInWords()->of(ChangesWithoutFindings::class));
     }
 
     public function testAnUnknownFailureClassIsToldInGenericWordsWithoutTheClassName(): void

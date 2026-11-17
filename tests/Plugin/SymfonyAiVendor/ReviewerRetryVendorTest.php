@@ -191,8 +191,50 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
 
         self::assertInstanceOf(ChangesWithoutFindings::class, $failure);
-        self::assertSame('asked for changes without naming a finding', new FailureInWords()->of($failure::class));
+        self::assertSame('gave no approval without naming a finding', new FailureInWords()->of($failure::class));
         self::assertCount(2, $this->askedToNameFindings);
+    }
+
+    public function testARecordedVerdictOnlyAnswerIsAskedAgainWithTheExpectedFindingShapeAndTheNamedFindingCounts(): void
+    {
+        $verdict = $this->vendor($this->answering($this->recordedVerdictOnly(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Changes, 1], [$verdict->verdict, count($verdict->findings)]);
+        self::assertSame([false, true], $this->askedToNameFindings);
+        self::assertStringContainsString(ReviewerPrompt::EXAMPLE_FINDING, ReviewerPrompt::NAME_FINDINGS_OR_APPROVE);
+    }
+
+    public function testTheExampleFindingOfTheRequestToNameFindingsIsReadAsAFinding(): void
+    {
+        $verdict = $this->vendor($this->answering($this->recordedVerdictOnly(...), $this->exampleFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(['F1', 'src/Cart.php', 12], [$verdict->findings[0]->id, $verdict->findings[0]->file, $verdict->findings[0]->line]);
+    }
+
+    public function testABlockedAnswerWithoutAFindingIsAskedOnceMoreToNameItsFindingsOrApprove(): void
+    {
+        $verdict = $this->vendor($this->answering($this->blockedWithoutFindings(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Changes, 1], [$verdict->verdict, count($verdict->findings)]);
+        self::assertSame([false, true], $this->askedToNameFindings);
+    }
+
+    public function testASecondBlockedAnswerWithoutAFindingFailsTheReviewerWithTheSameCauseAsAChangesAnswer(): void
+    {
+        $vendor = $this->vendor($this->answering($this->changesWithoutFindings(...), $this->blockedWithoutFindings(...)));
+
+        $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertInstanceOf(ChangesWithoutFindings::class, $failure);
+        self::assertSame('gave no approval without naming a finding', new FailureInWords()->of($failure::class));
+    }
+
+    public function testAnApprovalWithoutAFindingIsNotAskedAgain(): void
+    {
+        $verdict = $this->vendor($this->answering($this->approvalWithoutFindings(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+        self::assertSame([false], $this->askedToNameFindings);
     }
 
     /**
@@ -214,7 +256,7 @@ final class ReviewerRetryVendorTest extends KernelTestCase
      */
     private function asksToNameFindings(array|string|object $input): bool
     {
-        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), ReviewerPrompt::NAME_FINDINGS_OR_APPROVE);
+        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
     }
 
     private function unreachable(): never
@@ -225,6 +267,27 @@ final class ReviewerRetryVendorTest extends KernelTestCase
     private function changesWithoutFindings(): TextResult
     {
         return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->with('findings', [])->json());
+    }
+
+    // The answer the default correctness model gave on both tries of a first review: a verdict line and no finding.
+    private function recordedVerdictOnly(): TextResult
+    {
+        return new TextResult('{"verdict":"changes","findings":[],"resolved":[],"follow_ups":[]}');
+    }
+
+    private function blockedWithoutFindings(): TextResult
+    {
+        return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->with('findings', [])->json());
+    }
+
+    private function approvalWithoutFindings(): TextResult
+    {
+        return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('resolved', [])->with('findings', [])->json());
+    }
+
+    private function exampleFinding(): TextResult
+    {
+        return new TextResult('{"verdict":"changes","findings":['.ReviewerPrompt::EXAMPLE_FINDING.'],"resolved":[],"follow_ups":[]}');
     }
 
     private function namedFinding(): TextResult
