@@ -152,6 +152,15 @@ abstract class JourneyTestCase extends TestCase
         return $this->watcherStartOn(fn (array $arguments, array $variables, int $seconds): string => $this->console($arguments, [...$environment, ...$variables, self::QUEUE_VARIABLE => self::SHARED_QUEUE], $seconds));
     }
 
+    // A worker of its own on the shared queue, because a message the journey's dashboard kernel queues runs in a queue worker, never in the request.
+    /**
+     * @param array<string,string> $environment
+     */
+    final protected function runOneQueuedMessage(array $environment, int $seconds): string
+    {
+        return $this->console(['messenger:consume', 'async', '--limit=1', '--time-limit='.$seconds], [...$environment, self::QUEUE_VARIABLE => self::SHARED_QUEUE]);
+    }
+
     // Because the provider keys and the projects count only in a container built after they are set, as the container entrypoint does.
     /**
      * @param array<string,string> $environment
