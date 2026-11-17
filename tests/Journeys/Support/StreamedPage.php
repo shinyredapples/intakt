@@ -35,6 +35,13 @@ final readonly class StreamedPage
     {
         $action = (string) $stream->attr('action');
 
+        // Turbo does nothing for a remove whose target is gone, and each reviewer's placement removes the line for no reviewer again.
+        if ('remove' === $action) {
+            $this->remove($this->matching($stream, $page));
+
+            return;
+        }
+
         foreach ($this->targetsOf($stream, $page, $position) as $target) {
             $content = $this->contentFor($stream, $target);
 
@@ -42,7 +49,6 @@ final readonly class StreamedPage
                 'replace' => $this->replace($target, $content),
                 'update' => $this->update($target, $content),
                 'append' => $this->append($target, $content),
-                'remove' => $target->parentNode?->removeChild($target),
                 default => throw new AssertionFailedError(sprintf('update %d has the action "%s", which the streamed page does not apply', $position, $action)),
             };
         }
@@ -54,15 +60,35 @@ final readonly class StreamedPage
     private function targetsOf(Crawler $stream, Crawler $page, int $position): array
     {
         $target = (string) $stream->attr('target');
+        $found = $this->matching($stream, $page);
 
-        // A targets selector may rightly match nothing, as Turbo then drops the stream, but a single target must be on the page.
-        if ('' === $target) {
-            return array_values(iterator_to_array($page->filter((string) $stream->attr('targets')), false));
+        // A targets selector may rightly match nothing, as Turbo then drops the stream, but content for a single target must find it on the page.
+        if ('' === $target || [] !== $found) {
+            return $found;
         }
 
-        $found = array_values(iterator_to_array($page->filterXPath('//*[@id='.Crawler::xpathLiteral($target).']'), false));
+        throw new AssertionFailedError(sprintf('update %d targets "%s", which names no element on the page', $position, $target));
+    }
 
-        return [] !== $found ? $found : throw new AssertionFailedError(sprintf('update %d targets "%s", which names no element on the page', $position, $target));
+    /**
+     * @return list<DOMNode>
+     */
+    private function matching(Crawler $stream, Crawler $page): array
+    {
+        $target = (string) $stream->attr('target');
+        $elements = '' === $target ? $page->filter((string) $stream->attr('targets')) : $page->filterXPath('//*[@id='.Crawler::xpathLiteral($target).']');
+
+        return iterator_to_array($elements, false);
+    }
+
+    /**
+     * @param list<DOMNode> $targets
+     */
+    private function remove(array $targets): void
+    {
+        foreach ($targets as $target) {
+            $target->parentNode?->removeChild($target);
+        }
     }
 
     /**
@@ -74,7 +100,7 @@ final readonly class StreamedPage
         $template = new Crawler('<template>'.$stream->filter('template')->html('').'</template>')->filter('template')->getNode(0);
         $document = $target->ownerDocument ?? throw new AssertionFailedError('the streamed page has no document');
 
-        return array_map(static fn (DOMNode $node): DOMNode => $document->importNode($node, true), iterator_to_array($template?->childNodes ?? [], false));
+        return array_map(static fn (DOMNode $node): DOMNode => $document->importNode($node, true), iterator_to_array($template->childNodes ?? [], false));
     }
 
     /**

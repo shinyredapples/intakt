@@ -69,6 +69,16 @@ final class StreamedPageTest extends TestCase
         self::assertCount(0, $page->filter('#round-round-1-activity'));
     }
 
+    public function testARemoveWhoseTargetAnEarlierUpdateRemovedChangesNothing(): void
+    {
+        $remove = $this->stream('remove', 'target="round-round-1-activity"', '');
+
+        $page = new StreamedPage()->after(self::ROUND, [$this->update($remove), $this->update($remove)], $this->page());
+
+        self::assertCount(1, $page->filter('#round-round-1-state'));
+        self::assertCount(0, $page->filter('#round-round-1-activity'));
+    }
+
     public function testStreamsOfAnUpdateApplyInOrderSoALaterOneSeesWhatAnEarlierOnePlaced(): void
     {
         $page = $this->streamed(
@@ -98,7 +108,7 @@ final class StreamedPageTest extends TestCase
     public function testAStreamWhoseTargetIsNotOnThePageFailsWithTheTargetNamed(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('update 1 targets "round-round-1-verdict", which names no element on the page');
+        $this->expectExceptionMessageMatches('/^'.preg_quote('update 1 targets "round-round-1-verdict", which names no element on the page', '/').'$/');
 
         $this->streamed($this->stream('replace', 'target="round-round-1-verdict"', '<div id="round-round-1-verdict"></div>'));
     }
@@ -106,7 +116,7 @@ final class StreamedPageTest extends TestCase
     public function testAStreamWithAnActionThePageDoesNotApplyFailsWithTheActionNamed(): void
     {
         $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessage('update 1 has the action "refresh", which the streamed page does not apply');
+        $this->expectExceptionMessageMatches('/^'.preg_quote('update 1 has the action "refresh", which the streamed page does not apply', '/').'$/');
 
         $this->streamed($this->stream('refresh', 'target="round-round-1-state"', ''));
     }
