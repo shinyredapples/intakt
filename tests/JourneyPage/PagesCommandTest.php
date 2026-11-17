@@ -80,6 +80,7 @@ final class PagesCommandTest extends TestCase
 
         foreach ($links[1] as $target) {
             self::assertMatchesRegularExpression('/^[^\/]+\.svg$/', $target, 'bin/pages copies only docs/journey/*.svg beside the page, so journey/'.$target.' would not resolve on the site');
+            self::assertContains(basename($target, '.svg'), self::DRAWINGS, 'the site holds no drawing journey/'.$target);
         }
     }
 
