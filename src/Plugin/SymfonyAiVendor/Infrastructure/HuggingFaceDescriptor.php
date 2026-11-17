@@ -35,13 +35,13 @@ final readonly class HuggingFaceDescriptor implements SymfonyAiProvider
         return '/^hf_[A-Za-z0-9]{8,}$/D';
     }
 
-    // No /v1, because the generic bridge appends /v1/chat/completions.
+    // Without /v1, because the generic bridge appends /v1/chat/completions itself.
     public function baseUrl(): Uri
     {
         return new Uri('https://router.huggingface.co');
     }
 
-    // Its router models are mapped on the OpenAI compatible endpoint, which the image points at the router when HF_TOKEN is set.
+    // The OpenAI compatible endpoint, because the image points it at the router when HF_TOKEN is set, so the router models are mapped there.
     public function tierProvider(): Provider
     {
         return Provider::OpenAiCompatible;

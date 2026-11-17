@@ -6,7 +6,7 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
 
-// The one list of providers a key can belong to: adding one is a descriptor class and an entry here.
+// One list, so adding a provider a key can belong to is a descriptor class and an entry here, with no edit in Core.
 final readonly class SymfonyAiProviderCatalog implements ProviderCatalog
 {
     /**

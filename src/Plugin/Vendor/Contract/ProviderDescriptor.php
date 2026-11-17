@@ -19,7 +19,7 @@ interface ProviderDescriptor
 
     // The first one holds the provider's key, so a kept key is served as that variable.
     /**
-     * @return non-empty-list<non-empty-string>
+     * @return list<string>
      */
     public function variables(): array;
 

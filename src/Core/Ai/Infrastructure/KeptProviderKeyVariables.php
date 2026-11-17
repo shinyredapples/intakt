@@ -8,7 +8,6 @@ use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
-use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
@@ -44,12 +43,12 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
             return [];
         }
 
-        $provider = $this->providers->descriptor($key->provider());
+        $variable = array_first($this->providers->descriptor($key->provider())?->variables() ?? []);
 
-        if (!$provider instanceof ProviderDescriptor) {
+        if (null === $variable) {
             return [];
         }
 
-        return [$provider->variables()[0] => $key->secret()];
+        return [$variable => $key->secret()];
     }
 }

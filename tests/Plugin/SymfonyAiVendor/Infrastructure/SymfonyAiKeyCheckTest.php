@@ -126,22 +126,16 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
     public function testACheckModelInTheDescriptorOverridesTheLightTier(): void
     {
-        $calls = new ArrayObject();
         $providers = new SymfonyAiProviderCatalog([new NamedCheckModel(new AnthropicDescriptor(), 'named-check-model')]);
 
-        $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), $providers);
-
-        self::assertSame('named-check-model', $calls[0][2]['model'] ?? null);
+        self::assertSame('named-check-model', $this->modelAsked($providers, $this->tiers()));
     }
 
     public function testTheFirstProjectWithItsLightTierOnTheProviderGivesTheModel(): void
     {
         $tiers = $this->tiers(['other' => Provider::OpenAi, 'first' => Provider::Anthropic, 'second' => Provider::Anthropic]);
-        $calls = new ArrayObject();
 
-        $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), tiers: $tiers);
-
-        self::assertSame('light-first', $calls[0][2]['model'] ?? null);
+        self::assertSame('light-first', $this->modelAsked(new SymfonyAiProviderCatalog(), $tiers));
     }
 
     public function testAProjectWhoseLightTierCannotBeReadIsSkipped(): void
@@ -150,18 +144,16 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $tiers->method('projects')->willReturn(['broken', 'mapped']);
         $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => 'broken' === $project
             ? throw new TierNotMapped($project, Tier::Light) : new ResolvedModel(Provider::Anthropic, 'light-mapped'));
-        $calls = new ArrayObject();
 
-        $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), tiers: $tiers);
-
-        self::assertSame('light-mapped', $calls[0][2]['model'] ?? null);
+        self::assertSame('light-mapped', $this->modelAsked(new SymfonyAiProviderCatalog(), $tiers));
     }
 
     public function testWithoutALightTierOnTheProviderTheKeyIsNotCheckedAndNoCallIsMade(): void
     {
         $calls = new ArrayObject();
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), new SymfonyAiProviderCatalog(), $this->tiers(['other' => Provider::OpenAi]));
 
-        $outcome = $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), tiers: $this->tiers(['other' => Provider::OpenAi]));
+        $outcome = $check->check(ProviderKey::recognise('sk-ant-'.self::BODY, new SymfonyAiProviderCatalog()));
 
         self::assertSame([KeyCheckOutcome::NotChecked, 0], [$outcome, count($calls)]);
     }
@@ -169,14 +161,9 @@ final class SymfonyAiKeyCheckTest extends TestCase
     public function testAKeyOfAProviderTheCatalogDoesNotListIsNotCheckedAndNoCallIsMade(): void
     {
         $calls = new ArrayObject();
-        $key = ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog());
-        $http = new MockHttpClient(static function () use ($calls): MockResponse {
-            $calls->append([]);
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::CHAT_COMPLETION_ANSWER)), new SymfonyAiProviderCatalog([new AnthropicDescriptor()]), $this->tiers());
 
-            return self::answer(200, self::CHAT_COMPLETION_ANSWER);
-        });
-
-        $outcome = new SymfonyAiKeyCheck($http, new SymfonyAiProviderCatalog([new AnthropicDescriptor()]), $this->tiers())->check($key);
+        $outcome = $check->check(ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog()));
 
         self::assertSame([KeyCheckOutcome::NotChecked, 0], [$outcome, count($calls)]);
     }
@@ -232,8 +219,9 @@ final class SymfonyAiKeyCheckTest extends TestCase
         return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
     }
 
+    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
     /**
-     * @param array<string, Provider>|null $lightTiers project name to the provider of its light tier, whose model is "light-<project>"
+     * @param array<string, Provider>|null $lightTiers
      */
     private function tiers(?array $lightTiers = null): TierResolver
     {
@@ -260,13 +248,35 @@ final class SymfonyAiKeyCheckTest extends TestCase
         return array_values($calls->getArrayCopy());
     }
 
+    private function modelAsked(SymfonyAiProviderCatalog $providers, TierResolver $tiers): mixed
+    {
+        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
+        $calls = new ArrayObject();
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), $providers, $tiers);
+
+        $check->check(ProviderKey::recognise('sk-ant-'.self::BODY, $providers));
+
+        return array_first($calls->getArrayCopy())[2]['model'] ?? null;
+    }
+
     /**
      * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
      * @param Closure(array<mixed>): MockResponse                   $answer
      */
-    private function check(string $key, ArrayObject $calls, Closure $answer, SymfonyAiProviderCatalog $providers = new SymfonyAiProviderCatalog(), ?TierResolver $tiers = null): KeyCheckOutcome
+    private function check(string $key, ArrayObject $calls, Closure $answer): KeyCheckOutcome
     {
-        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
+        $providers = new SymfonyAiProviderCatalog();
+
+        return new SymfonyAiKeyCheck($this->http($calls, $answer), $providers, $this->tiers())->check(ProviderKey::recognise($key, $providers));
+    }
+
+    /**
+     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
+     * @param Closure(array<mixed>): MockResponse                   $answer
+     */
+    private function http(ArrayObject $calls, Closure $answer): MockHttpClient
+    {
+        return new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
             $body = $options['body'] ?? null;
             self::assertIsString($body);
             $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
@@ -275,7 +285,5 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
             return $answer($request);
         });
-
-        return new SymfonyAiKeyCheck($http, $providers, $tiers ?? $this->tiers())->check(ProviderKey::recognise($key, $providers));
     }
 }
