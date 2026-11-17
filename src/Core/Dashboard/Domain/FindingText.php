@@ -4,9 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// One home for reading a reviewer's backtick spans, so a finding looks the same on every card and list that shows it.
+// One home for reading a reviewer's backtick spans and emphasis marks, so a finding looks the same on every card, list and log line that shows it.
 final readonly class FindingText
 {
+    // An opening mark follows a space, a bracket or a quote and a closing one precedes a space or punctuation, so snake_case names, arithmetic and globs keep their marks.
+    private const string OPENS = '(?<=^|[\s(\[{"\'])';
+
+    private const string CLOSES = '(?=$|[\s.,;:!?)\]}"\'])';
+
+    // Plain spans never hold a backtick, so a backtick stands in for each code span while the marks around it are paired.
+    private const string CODE = '`';
+
     public function __construct(
         private string $text,
     ) {
@@ -16,6 +24,14 @@ final readonly class FindingText
      * @return list<array{text: string, code: bool}>
      */
     public function spans(): array
+    {
+        return $this->joined($this->withoutEmphasis($this->codeAndPlainSpans()));
+    }
+
+    /**
+     * @return list<array{text: string, code: bool}>
+     */
+    private function codeAndPlainSpans(): array
     {
         // A span closes on a run of as many backticks as opened it, as in Markdown, so ``a`b`` holds one backtick of code.
         preg_match_all('/(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)/s', $this->text, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
@@ -29,22 +45,7 @@ final readonly class FindingText
 
         array_push($spans, ...$this->plainSpans(substr($this->text, $at)));
 
-        $joined = [];
-        foreach ($spans as $span) {
-            if ('' === $span['text']) {
-                continue;
-            }
-
-            $last = array_key_last($joined);
-            if (null !== $last && !$span['code'] && !$joined[$last]['code']) {
-                $joined[$last]['text'] .= $span['text'];
-                continue;
-            }
-
-            $joined[] = $span;
-        }
-
-        return $joined;
+        return $spans;
     }
 
     /**
@@ -65,5 +66,53 @@ final readonly class FindingText
         $spans[] = ['text' => substr($text, $at), 'code' => false];
 
         return $spans;
+    }
+
+    /**
+     * @param list<array{text: string, code: bool}> $spans
+     *
+     * @return list<array{text: string, code: bool}>
+     */
+    private function withoutEmphasis(array $spans): array
+    {
+        $codes = array_values(array_filter($spans, static fn (array $span): bool => $span['code']));
+        $marked = implode('', array_map(static fn (array $span): string => $span['code'] ? self::CODE : $span['text'], $spans));
+        $strong = preg_replace('/'.self::OPENS.'(\*\*|__)(?=\S)(.+?)(?<=\S)\1'.self::CLOSES.'/u', '$2', $marked) ?? $marked;
+        $plain = preg_replace('/'.self::OPENS.'([*_])(?=[^\s*_])(.+?)(?<=[^\s*_])\1'.self::CLOSES.'/u', '$2', $strong) ?? $strong;
+
+        $result = [];
+        foreach (explode(self::CODE, $plain) as $index => $text) {
+            $result[] = ['text' => $text, 'code' => false];
+            if (isset($codes[$index])) {
+                $result[] = $codes[$index];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<array{text: string, code: bool}> $spans
+     *
+     * @return list<array{text: string, code: bool}>
+     */
+    private function joined(array $spans): array
+    {
+        $joined = [];
+        foreach ($spans as $span) {
+            if ('' === $span['text']) {
+                continue;
+            }
+
+            $last = array_key_last($joined);
+            if (null !== $last && !$span['code'] && !$joined[$last]['code']) {
+                $joined[$last]['text'] .= $span['text'];
+                continue;
+            }
+
+            $joined[] = $span;
+        }
+
+        return $joined;
     }
 }

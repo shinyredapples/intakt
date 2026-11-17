@@ -42,6 +42,18 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertStringNotContainsString('`', $crawler->filter('#round-round-1 .finding-cards')->text());
     }
 
+    public function testAFindingsCardAndTheNowBlockShowItsEmphasisWithoutTheMarks(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'the amount is **greater than** 100, not *why*');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame('F1 the amount is greater than 100, not why', $crawler->filter('#round-round-1 .finding-card .fc-title')->text());
+        self::assertSame('P1F1 the amount is greater than 100, not why', $crawler->filter('.state-block a.sb-finding')->text());
+    }
+
     public function testAnUnmatchedBacktickLeavesNoLiteralBacktickInACard(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);

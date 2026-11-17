@@ -56,6 +56,65 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => 'See ', 'code' => false], ['text' => 'a', 'code' => true], ['text' => ' here.', 'code' => false]], $text->spans());
     }
 
+    public function testDoubleAsterisksAroundWordsAreShownWithoutTheMarks(): void
+    {
+        $text = new FindingText('the amount is **greater than** 100');
+
+        self::assertSame([['text' => 'the amount is greater than 100', 'code' => false]], $text->spans());
+    }
+
+    public function testSingleAsterisksAroundWordsAreShownWithoutTheMarks(): void
+    {
+        $text = new FindingText('states *what* should happen, not *why*.');
+
+        self::assertSame([['text' => 'states what should happen, not why.', 'code' => false]], $text->spans());
+    }
+
+    public function testUnderscoreEmphasisIsShownWithoutTheMarks(): void
+    {
+        $text = new FindingText('say _why_ and __not how__');
+
+        self::assertSame([['text' => 'say why and not how', 'code' => false]], $text->spans());
+    }
+
+    public function testTripleAsterisksAroundWordsAreShownWithoutTheMarks(): void
+    {
+        $text = new FindingText('(***never***)');
+
+        self::assertSame([['text' => '(never)', 'code' => false]], $text->spans());
+    }
+
+    public function testEmphasisAroundACodeSpanIsDroppedAndTheCodeKept(): void
+    {
+        $text = new FindingText('**`write()`** is never called');
+
+        self::assertSame([['text' => 'write()', 'code' => true], ['text' => ' is never called', 'code' => false]], $text->spans());
+    }
+
+    public function testEmphasisMarksInsideACodeSpanAreKept(): void
+    {
+        $text = new FindingText('Match `src/**/*.php` and `*a*`.');
+
+        self::assertSame(
+            [['text' => 'Match ', 'code' => false], ['text' => 'src/**/*.php', 'code' => true], ['text' => ' and ', 'code' => false], ['text' => '*a*', 'code' => true], ['text' => '.', 'code' => false]],
+            $text->spans(),
+        );
+    }
+
+    public function testMarksInsideWordsArithmeticAndPathsAreLeftAsWritten(): void
+    {
+        $written = 'Keep max_retry_count and __construct, 2 * 3 * 4, a*b*c, a lone * here and src/**/x/**/y.';
+
+        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+    }
+
+    public function testMarksThatCloseNothingAreLeftAsWritten(): void
+    {
+        $written = 'An unclosed **mark, a spaced ** pair ** and inside**words.';
+
+        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+    }
+
     public function testAnEmptyTextHasNoSpans(): void
     {
         self::assertSame([], new FindingText('')->spans());
