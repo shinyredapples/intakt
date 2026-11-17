@@ -1,6 +1,6 @@
 ## The demo recording
 
-Issue #2056 (part 1 of #1944). A recording is one file that holds the ledger events and the live dashboard updates of one real review of a change, with the moment the review started, the models it called and the Intakt version that wrote it. The demo project it is replayed into exists on the compose demo, and the replay writes its ledger events there and publishes its live updates through the dashboard's publisher (both below); the `/demo` page is a later part and not built. The flag that marks a project and its rounds as a replay is stored by the Review module ([Review flow](review-flow.md#a-replay)).
+Issue #2056 (part 1 of #1944). A recording is one file that holds the ledger events and the live dashboard updates of one real review of a change, with the moment the review started, the models it called and the Intakt version that wrote it. The demo project it is replayed into exists on the compose demo, `intakt:demo:remove` removes it with the replayed rows (below), and the replay writes its ledger events there and publishes its live updates through the dashboard's publisher (both below); the `/demo` page is a later part and not built. The flag that marks a project and its rounds as a replay is stored by the Review module ([Review flow](review-flow.md#a-replay)).
 
 ### Capturing the live updates
 
