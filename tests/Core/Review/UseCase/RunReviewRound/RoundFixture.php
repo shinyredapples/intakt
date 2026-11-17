@@ -251,7 +251,7 @@ final readonly class RoundFixture
 
     public function indexing(MemoryIndex $memory): IndexResolvedFindingsHandler
     {
-        return new IndexResolvedFindingsHandler($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $memory);
+        return new IndexResolvedFindingsHandler($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $memory, $this->log);
     }
 
     /**
