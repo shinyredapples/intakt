@@ -22,7 +22,6 @@ use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
-use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayDemoCommand;
 use Intakt\Core\Mcp\Contract\McpRoutes;
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Intakt\Core\Review\Contract\ChangeDescription;
@@ -85,10 +84,7 @@ final readonly class FirstRunSteps
             return null;
         }
 
-        // Only in the compose demo, because the replay refuses everywhere else.
-        $replayCommand = '' === $this->composeService ? null : sprintf('docker compose exec %s php bin/console %s <recording> --factor=10', $this->composeService, ReplayDemoCommand::NAME);
-
-        return new DemoChoices($providers, $firstReview, $replayCommand);
+        return new DemoChoices($providers, $firstReview);
     }
 
     private function providers(?string $firstProject): ProviderStep

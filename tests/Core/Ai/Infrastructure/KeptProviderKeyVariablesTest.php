@@ -35,6 +35,14 @@ use Symfony\Component\String\LazyString;
 final class KeptProviderKeyVariablesTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
+    private const array COMPATIBLE = ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'];
+
+    protected function tearDown(): void
+    {
+        foreach (self::COMPATIBLE as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
+        }
+    }
 
     public function testAKeptAnthropicKeyLoadsAsItsProviderVariable(): void
     {
@@ -48,15 +56,6 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $key = 'sk-'.self::BODY;
 
         self::assertSame(['OPENAI_API_KEY' => $key], $this->variablesOf($key));
-    }
-
-    private const array COMPATIBLE = ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'];
-
-    protected function tearDown(): void
-    {
-        foreach (self::COMPATIBLE as $name) {
-            unset($_SERVER[$name], $_ENV[$name]);
-        }
     }
 
     public function testAKeptHuggingFaceTokenLoadsAsHfTokenAndAsTheRouterOnTheOpenAiCompatibleEndpoint(): void

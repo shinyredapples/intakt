@@ -17,11 +17,9 @@ use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 
 // Only on the compose demo, because the demo project exists only there and a replay must never write rows into an owner's real install.
-#[AsCommand(name: self::NAME, description: 'Replay a recording\'s ledger events and live updates into the demo project at the recorded pace, sped up by a factor; only on the compose demo')]
+#[AsCommand(name: 'intakt:demo:replay', description: 'Replay a recording\'s ledger events and live updates into the demo project at the recorded pace, sped up by a factor; only on the compose demo')]
 final readonly class ReplayDemoCommand
 {
-    public const string NAME = 'intakt:demo:replay';
-
     public function __construct(
         private ReplaysRecording $replays,
         private RecordingFormat $format,

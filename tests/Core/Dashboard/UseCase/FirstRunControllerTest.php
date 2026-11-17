@@ -730,25 +730,16 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(0, $page->filter('#demo-choices'));
     }
 
-    public function testInTheComposeDemoTheRecordedReviewNamesTheReplayCommand(): void
+    public function testTheRecordedReviewChoiceSaysItArrivesWithTheDemoTourAndShowsNoCommand(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
 
         $page = $this->firstRunPage(self::PROJECTS, []);
 
-        self::assertSame('docker compose exec intakt php bin/console intakt:demo:replay <recording> --factor=10', $page->filter('#choice-recorded .replay-command')->text());
-        self::assertCount(0, $page->filter('#choice-recorded .replay-where'));
-    }
-
-    public function testOutsideTheComposeDemoTheRecordedReviewSaysWhereAReplayRuns(): void
-    {
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
-
-        $page = $this->firstRunPage(self::PROJECTS, []);
-
-        self::assertSame('A replay runs only on the compose demo.', $page->filter('#choice-recorded .replay-where')->text());
-        self::assertCount(0, $page->filter('#choice-recorded .replay-command'));
+        self::assertSame('Watch a recorded real review now', $page->filter('#choice-recorded h3')->text());
+        self::assertSame('The recorded review, which needs no key, arrives with the demo tour.', $page->filter('#choice-recorded .recorded-when')->text());
+        self::assertCount(0, $page->filter('#choice-recorded pre, #choice-recorded code'));
     }
 
     public function testWithoutAKeyTheDemoReviewChoiceSaysToPasteOneAndRestart(): void

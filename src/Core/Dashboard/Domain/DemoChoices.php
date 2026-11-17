@@ -13,7 +13,6 @@ final readonly class DemoChoices
     public function __construct(
         private ProviderStep $providers,
         private FirstReviewStep $firstReview,
-        public ?string $replayCommand,
     ) {
     }
 

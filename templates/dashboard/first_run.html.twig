@@ -32,12 +32,7 @@
         <h2 id="demo-choices-h">Two ways to see a review</h2>
         <div class="choice" id="choice-recorded">
             <h3>Watch a recorded real review now</h3>
-            <p>No key is needed: a replay plays a recording of a real review into the {{ constant('Intakt\\Core\\Dashboard\\UseCase\\CreateDemoProject\\CreateDemoProjectCommand::NAME') }} project at the recorded pace, and its verdict never counts.</p>
-            {%- if choices.replayCommand is not null %}
-            <pre class="command"><code class="replay-command">{{ choices.replayCommand }}</code></pre>
-            {%- else %}
-            <p class="replay-where">A replay runs only on the compose demo.</p>
-            {%- endif %}
+            <p class="recorded-when">The recorded review, which needs no key, arrives with the demo tour.</p>
         </div>
         <div class="choice" id="choice-live">
             <h3>Paste one provider key or Hugging Face token and run the demo review</h3>
