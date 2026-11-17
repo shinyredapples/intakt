@@ -59,6 +59,7 @@ final class ShellWithoutHubTest extends DashboardPageTestCase
 
         $page = new Crawler(new LivePageRendering($twig, $log)->render($request, 'dashboard/projects.html.twig', ['projects' => []]));
 
+        self::assertCount(1, $page->filter('.toast'));
         self::assertSame('Started round 2.', $page->filter('.toast')->text());
         self::assertCount(0, $page->filter('turbo-mercure-stream-source'));
         self::assertSame(['warning'], array_column($log->cleanLogs(), 0));
