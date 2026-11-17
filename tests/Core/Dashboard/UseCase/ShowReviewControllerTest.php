@@ -176,11 +176,11 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            [['correctness', 'standard tier, model not recorded', 'Changes requested', '2 counted'], ['security', 'standard tier, model not recorded', 'Failed The provider is down.', 'no answer']],
+            [['correctness', 'standard tier, model not recorded', 'Changes requested', '2'], ['security', 'standard tier, model not recorded', 'Failed The provider is down.', 'no answer']],
             $this->rowsOf($crawler->filter('#round-round-1 table.reviewers tbody tr')),
         );
         self::assertSame(
-            [['correctness', 'standard tier, model not recorded', 'Approved', '0 counted'], ['security', 'standard tier, model not recorded', 'Approved ; answered by the substitute openai, a catch-up review is owed', '0 counted']],
+            [['correctness', 'standard tier, model not recorded', 'Approved', '0'], ['security', 'standard tier, model not recorded', 'Approved ; answered by the substitute openai, a catch-up review is owed', '0']],
             $this->rowsOf($crawler->filter('#round-round-2 table.reviewers tbody tr')),
         );
     }
@@ -196,7 +196,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['correctness', 'kimi-k3', 'Changes requested', '2 counted'], ['security', 'model-b', 'Approved', '0 counted']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
+        self::assertSame([['correctness', 'kimi-k3', 'Changes requested', '2'], ['security', 'model-b', 'Approved', '0']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
     public function testAJudgedRoundsReviewersTableHasNoEmptyColumn(): void
@@ -205,7 +205,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('#round-round-1 table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('#round-round-1 table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
         self::assertNotContains('', array_merge(...$this->rowsOf($crawler->filter('table.reviewers tbody tr'))));
     }
 
@@ -219,7 +219,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings counted'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
         self::assertSame([4, 4], $crawler->filter('table.reviewers tbody tr')->each(static fn (Crawler $row): int => $row->filter('td')->count()));
     }
 
@@ -277,7 +277,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Role', 'Model', 'Outcome', 'Findings', 'Stop'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => $header->text()));
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings counted', 'Stop'], $crawler->filter('table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
         self::assertSame([['correctness', 'kimi-k3', 'running', 'no answer yet', 'Stop this reviewer']], $this->rowsOf($crawler->filter('table.reviewers tbody tr')));
     }
 
@@ -569,9 +569,9 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['1500 measured', '0 measured', '0 measured', '0 measured', '500 measured', '2000 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
-        self::assertSame([['700 measured', '0 measured', '0 measured', '0 measured', '100 measured', '800 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
-        self::assertSame('alphafeat/thing 2 rounds counted 2,800 tokens measured Cost: unknown, no price for model-a Latest round started 2026-10-28 12:00:00 UTC', self::wordsOf($crawler->filter('.page-head p.meta')));
+        self::assertSame([['1500', '0', '0', '0', '500', '2000', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr')));
+        self::assertSame([['700', '0', '0', '0', '100', '800', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr')));
+        self::assertSame('alphafeat/thing 2 rounds 2,800 tokens Cost: unknown, no price for model-a Latest round started 2026-10-28 12:00:00 UTC', self::wordsOf($crawler->filter('.page-head p.meta')));
     }
 
     public function testEachRoundShowsItsCostAtTheConfiguredPriceAndTheReviewTheSumOfThem(): void
@@ -581,8 +581,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0.0080 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
-        self::assertSame('0.0024 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
+        self::assertSame('0.0080 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
+        self::assertSame('0.0024 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-2 table.tokens tbody tr'))[0][6]);
         self::assertStringContainsString('Cost: 0.0104 USD estimated, price date unknown', self::wordsOf($crawler->filter('.page-head p.meta')));
     }
 
@@ -608,7 +608,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0.0050 USD estimated, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
+        self::assertSame('0.0050 USD, price date unknown', $this->rowsOf($crawler->filter('#round-round-1 table.tokens tbody tr'))[0][6]);
         self::assertSelectorTextContains('.page-head p.meta', 'Cost: unknown, no price for model-b');
     }
 
@@ -619,7 +619,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['39504 measured', '38000 measured', '1500 measured', '0 measured', '700 measured', '40204 measured', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['39504', '38000', '1500', '0', '700', '40204', 'unknown, no price for model-a']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testTokensOfACallStartedForAnotherRoundAreNotCounted(): void
@@ -629,7 +629,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame([['0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0 measured', '0.0000 USD estimated, price date unknown']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
+        self::assertSame([['0', '0', '0', '0', '0', '0', '0.0000 USD, price date unknown']], $this->rowsOf($crawler->filter('table.tokens tbody tr')));
     }
 
     public function testARoundStartedWithoutAChangeNameIsAReviewOfItsOwn(): void
@@ -689,7 +689,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['alpha', 'feat/thing', '2 rounds counted', '2,800 tokens measured', 'Latest round started 2026-10-28 12:00:00 UTC'], array_values(array_filter($crawler->filter('.page-head p.meta > span')->each(static fn (Crawler $fact): string => self::wordsOf($fact)), static fn (string $fact): bool => !str_starts_with($fact, 'Cost:'))));
+        self::assertSame(['alpha', 'feat/thing', '2 rounds', '2,800 tokens', 'Latest round started 2026-10-28 12:00:00 UTC'], array_values(array_filter($crawler->filter('.page-head p.meta > span')->each(static fn (Crawler $fact): string => self::wordsOf($fact)), static fn (string $fact): bool => !str_starts_with($fact, 'Cost:'))));
     }
 
     public function testACompletedRoundFoldsToOneLineWithOutcomeFindingCountAndTimeSpan(): void
@@ -698,8 +698,8 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings counted', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
-        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings counted', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
+        self::assertSame(['Round 1', 'Judged', 'outcome not recorded, 3 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Round 2', 'Judged', 'outcome not recorded, 0 findings', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-2 details.ev > summary')));
         self::assertSelectorNotExists('#round-round-1 details[open]');
     }
 
@@ -739,7 +739,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Round 1', 'Changes requested', 'Judged', '1 finding counted', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
+        self::assertSame(['Round 1', 'Changes requested', 'Judged', '1 finding', '12:00 to 12:00 UTC', ''], $this->partsOf($crawler->filter('#round-round-1 details.ev > summary')));
     }
 
     public function testTheChangesRequestedChipCarriesItsOwnIcon(): void

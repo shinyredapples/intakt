@@ -697,7 +697,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
         self::assertSame([['correctness', 'Kimi K3', 'Changes requested']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
-        self::assertStringStartsWith('2 ', $rows[0][3] ?? '');
+        self::assertSame('2', $rows[0][3] ?? '');
     }
 
     public function testAReviewerStoppedAfterThePageLoadedGetsARowWithItsRoleAndTheStoppedState(): void
@@ -721,7 +721,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $rows = $this->rowsOf($this->replaced($page, $this->publishedStreams()));
         self::assertSame([['correctness', 'Kimi K3', 'stopped']], array_map(static fn (array $row): array => array_slice($row, 0, 3), $rows));
-        self::assertStringStartsWith('1 ', $rows[0][3] ?? '');
+        self::assertSame('1', $rows[0][3] ?? '');
     }
 
     public function testAReviewerThatFailedAfterThePageLoadedShowsTheFailedChipInRedWithItsCauseAsMutedText(): void
@@ -1100,7 +1100,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->stream('summary_changed', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9), [], [], [], [], false)]));
 
-        self::assertStringStartsWith('0.9000 USD estimated', $updated->filter('.ls-cost dd')->first()->text());
+        self::assertStringStartsWith('0.9000 USD,', $updated->filter('.ls-cost dd')->first()->text());
         self::assertSame($before, $updated->filter('.ls-cost dd')->eq(1)->text());
     }
 

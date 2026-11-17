@@ -56,7 +56,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame([['This round', '0.6100 USD estimated, price date unknown'], ['Review so far', 'unknown, no price for model-a']], $this->pairsOf($crawler->filter('.log-summary .ls-cost')));
+        self::assertSame([['This round', '0.6100 USD, price date unknown'], ['Review so far', 'unknown, no price for model-a']], $this->pairsOf($crawler->filter('.log-summary .ls-cost')));
     }
 
     public function testTheSummaryListsEachFileReadOnceInMonospace(): void
