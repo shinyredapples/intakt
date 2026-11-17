@@ -69,7 +69,7 @@ final readonly class ReviewedRound
     // A replay shows like a live round, so the pages mark it, because its verdicts were never given on the change.
     public function isReplay(): bool
     {
-        return self::isReplayMarked($this);
+        return $this->isReplayMarked($this);
     }
 
     // Refused for a round never marked, so the status cannot report an unread round as live.
@@ -182,7 +182,7 @@ final readonly class ReviewedRound
     }
 
     // Read through a round rather than `$this`, because PHPStan keeps the constructor's null for `$this->mark` although `markedAs()` sets it (upstream/phpstan-clone-with-readonly-constructor-type).
-    private static function isReplayMarked(self $round): bool
+    private function isReplayMarked(self $round): bool
     {
         return ReplayMark::Replay === $round->mark;
     }

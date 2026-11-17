@@ -18,7 +18,7 @@ No error: on PHP 8.5 `clone with` can give a readonly property another value, so
 
 ## Effect in Intakt
 
-`src/Core/Dashboard/Domain/ReviewedRound.php` sets its replay mark to `null` in the constructor and marks a round only through `markedAs()` (cleanup #2417, item 1 of #2173). Its `isReplay()` reads the mark through a private static `isReplayMarked(self $round)`, since PHPStan narrows only `$this->mark`, not the property of another instance. Once this passes, `isReplay()` compares `$this->mark` directly and the helper goes.
+`src/Core/Dashboard/Domain/ReviewedRound.php` sets its replay mark to `null` in the constructor and marks a round only through `markedAs()` (cleanup #2417, item 1 of #2173). Its `isReplay()` reads the mark through a private `isReplayMarked(self $round)`, given `$this`, since PHPStan narrows only `$this->mark`, not the property of another instance. Once this passes, `isReplay()` compares `$this->mark` directly and the helper goes.
 
 ## Upstream status
 
