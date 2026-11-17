@@ -182,7 +182,7 @@ final class KeptProviderKeyVariablesTest extends TestCase
         return new KeptProviderKeyVariables($keys, $providers, otherLoaders: $otherLoaders);
     }
 
-    // The processor reads a plain string variable itself and calls this only for a prefix it chains.
+    // Returns nothing because the processor reads a plain string variable itself and calls this only for a prefix it chains.
     private function unused(): null
     {
         return null;
@@ -195,7 +195,7 @@ final class KeptProviderKeyVariablesTest extends TestCase
     {
         $vault = new FixedEnvVars($secrets);
 
-        // In the env processor's order: the vault's loader first, then the kept key's, which the container hands the vault's loader too.
+        // The vault's loader comes first because the container ranks it above the kept key's, and the kept key gets it too, as the container hands it every other loader.
         return new EnvVarProcessor(new Container(), new ArrayIterator([$vault, $this->loaderOf('hf_'.self::BODY, [$vault])]));
     }
 }

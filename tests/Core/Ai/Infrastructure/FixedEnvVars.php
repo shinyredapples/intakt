@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Stringable;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
 
-// Stands in for the secrets vault's loader, which serves its entries the same way, some as lazy strings revealed only when read.
+// A fixed list, because the vault's own loader needs an encrypted vault directory, and it may hold lazy strings since the vault reveals each secret only when it is read.
 final readonly class FixedEnvVars implements EnvVarLoaderInterface
 {
     /**
