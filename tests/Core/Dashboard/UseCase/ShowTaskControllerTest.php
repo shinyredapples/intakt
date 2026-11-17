@@ -91,6 +91,40 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
         self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Passed', 'Hand back check Passed', 'Pre push check Failed', 'Push Not reached'], $this->stepHeads($page));
     }
 
+    public function testATaskThatStoppedAtThePushShowsThePushStepFailedWithItsReason(): void
+    {
+        $this->passStepsBeforeThePush();
+        $this->ledger->failBuildStep('42', 'push', 'the remote refused the push of task-42 (git push exited with 1)');
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Stopped at push: the remote refused the push of task-42 (git push exited with 1)', $page->filter('#task-where')->text());
+        self::assertSame(['Task Passed', 'Mirror Passed', 'Clone Passed', 'Build job Passed', 'Hand back check Passed', 'Pre push check Passed', 'Push Failed'], $this->stepHeads($page));
+        self::assertSame('the remote refused the push of task-42 (git push exited with 1)', $page->filter('#step-push .step-failure')->text());
+    }
+
+    public function testATaskWhosePrePushCheckPassedSaysThePushIsNotReachedYet(): void
+    {
+        $this->passStepsBeforeThePush();
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('Last recorded step: pre_push_check passed.', $page->filter('#task-where')->text());
+        self::assertSame('Push Not reached', $this->stepHeads($page)[6]);
+    }
+
+    public function testACredentialInAPushFailureIsRedacted(): void
+    {
+        $token = 'ghp_'.str_repeat('b2', 18);
+        $this->passStepsBeforeThePush();
+        $this->ledger->failBuildStep('42', 'push', 'the forge refused the write for token '.$token);
+
+        $page = $this->browser->request('GET', '/tasks/alpha/42');
+
+        self::assertSame('the forge refused the write for token [redacted]', $page->filter('#step-push .step-failure')->text());
+        self::assertStringNotContainsString($token, (string) $this->browser->getResponse()->getContent());
+    }
+
     public function testATaskWhoseBuildJobStepPassedSaysTheBuildJobIsTheLastRecordedStep(): void
     {
         $this->ledger->passBuildStep('alpha', '42', 'task');
@@ -241,5 +275,12 @@ final class ShowTaskControllerTest extends DashboardPageTestCase
     private function stepHeads(Crawler $page): array
     {
         return $page->filter('section.build-step .round-head')->each(static fn (Crawler $head): string => $head->text());
+    }
+
+    private function passStepsBeforeThePush(): void
+    {
+        foreach (['task', 'mirror', 'clone', 'build_job', 'hand_back_check', 'pre_push_check'] as $step) {
+            $this->ledger->passBuildStep('alpha', '42', $step);
+        }
     }
 }

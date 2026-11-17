@@ -6,6 +6,7 @@
         number: unnamed ? latest.round : review.change,
         project: review.project,
         mark: review.latest.isReplay ? 'Replay' : null,
+        outcome: latest.reviewOutcome,
         title: 'Review of ' ~ (unnamed ? 'round ' ~ latest.round : review.change),
         href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: latest.round}),
         meta: [

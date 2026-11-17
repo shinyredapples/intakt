@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Dashboard\Domain\ProjectSummary;
 use Intakt\Core\Dashboard\Domain\ResultGroup;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\ReviewSummary;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\SearchAction;
@@ -33,6 +34,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(LedgerReviews::class)]
 #[UsesClass(ProjectSummary::class)]
 #[UsesClass(ReviewSummary::class)]
+#[UsesClass(ReviewOutcome::class)]
 #[UsesClass(RoundStart::class)]
 final class SearchControllerTest extends DashboardPageTestCase
 {
@@ -78,6 +80,60 @@ final class SearchControllerTest extends DashboardPageTestCase
         $row = $this->rowsOf($crawler, 'Reviews');
         self::assertSame('sample-change, round 2', $row->filter('.lbl')->text());
         self::assertSame('alpha, judged', $row->filter('.sub')->text());
+    }
+
+    public function testAJudgedReviewResultLeadsWithItsChangesRequestedChipBeforeItsTitle(): void
+    {
+        $this->ledger->startRoundOfQuorum('sample-change', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 2);
+        $this->ledger->judgeRound('round-1');
+
+        $row = $this->rowsOf($this->browser->request('GET', '/search?q=round-1'), 'Reviews');
+
+        self::assertSame('Changes requested', $row->filter('.res-outcome .chip')->text());
+        self::assertSame('res-outcome', $row->children()->first()->attr('class'));
+        self::assertCount(1, $row->filter('.res-outcome .chip svg'));
+        self::assertSame('alpha, judged', $row->filter('.sub')->text());
+    }
+
+    public function testOnlyAnApprovedReviewResultShowsTheApprovedChip(): void
+    {
+        $this->ledger->startRoundOfQuorum('good-change', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOfQuorum('bad-change', 'round-2', 'all');
+        $this->ledger->answer('round-2', 'correctness', 0);
+        $this->ledger->answer('round-2', 'security', 1);
+        $this->ledger->judgeRound('round-2');
+
+        $crawler = $this->browser->request('GET', '/search?q=change');
+
+        self::assertCount(1, $this->rowsOf($crawler, 'Reviews')->filter('.chip.approved'));
+        self::assertCount(2, $this->rowsOf($crawler, 'Reviews')->filter('.chip'));
+    }
+
+    public function testAReviewStillInReviewShowsNoOutcomeChipAndKeepsItsStateAsSecondaryText(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'round-1', 1);
+
+        $row = $this->rowsOf($this->browser->request('GET', '/search?q=sample'), 'Reviews');
+
+        self::assertCount(0, $row->filter('.chip'));
+        self::assertSame('alpha, in progress', $row->filter('.sub')->text());
+    }
+
+    public function testNoResultShowsTheBareWordsChangesVerdictOrActAsItsOutcome(): void
+    {
+        $this->ledger->startRoundOfQuorum('sample-change', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 0);
+        $this->ledger->answer('round-1', 'security', 2);
+        $this->ledger->judgeRound('round-1');
+
+        $row = $this->rowsOf($this->browser->request('GET', '/search?q=round-1'), 'Reviews');
+
+        self::assertDoesNotMatchRegularExpression('/\b(changes|verdict|act)\b(?! requested)/i', $row->text());
     }
 
     public function testTheWholeReviewRowIsTheLinkToItsPage(): void
