@@ -2,7 +2,8 @@
 {%- set mascot = character in enum_cases('Intakt\\Core\\Dashboard\\Domain\\MascotPose') -%}
 {%- for theme in ['light', 'dark'] -%}
 {%- if mascot -%}
-<img class="character character-{{ theme }}" src="{{ asset('images/mascot/octopus-' ~ character.value ~ '-' ~ theme ~ '.webp') }}" alt="" width="{{ size }}" height="{{ size }}" loading="lazy">
+{%- set file = 'images/mascot/octopus-' ~ character.value ~ '-' ~ theme ~ '-' -%}
+<img class="character character-{{ theme }}" src="{{ asset(file ~ size ~ '.webp') }}" srcset="{{ asset(file ~ size ~ '.webp') }} 1x, {{ asset(file ~ size * 2 ~ '.webp') }} 2x" alt="" width="{{ size }}" height="{{ size }}" loading="lazy">
 {%- else -%}
 {%- set file = 'images/roles/' ~ character.value ~ '-' ~ theme ~ '-' -%}
 <img class="character character-{{ theme }}" src="{{ asset(file ~ character.imageWidth(size, 2) ~ '.webp') }}" srcset="{{ asset(file ~ character.imageWidth(size, 2) ~ '.webp') }} 1x, {{ asset(file ~ character.imageWidth(size, 4) ~ '.webp') }} 2x" alt="" width="{{ size }}" height="{{ size }}" loading="lazy">

@@ -72,6 +72,36 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
     }
 
+    public function testAFreshInstallsBoardShowsTheWaitingOctopusBesideItsOneSetUpLink(): void
+    {
+        $head = $this->browser->request('GET', '/')->filter('.page-head');
+        $images = $head->filter('img.character');
+
+        self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
+        self::assertSame([['144', '144', null], ['144', '144', null]], $images->each(static fn (Crawler $image): array => [$image->attr('width'), $image->attr('height'), $image->attr('role')]));
+        self::assertSame(1, preg_match('~octopus-waiting-light[^"]*\.webp$~', $images->eq(0)->attr('src') ?? ''));
+        self::assertSame(1, preg_match('~octopus-waiting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
+        self::assertSame(['Set up Intakt'], $head->filter('.btn.primary')->each(static fn (Crawler $link): string => $link->text()));
+    }
+
+    public function testAFreshInstallsBoardShowsOneOctopusOnly(): void
+    {
+        self::assertSame(2, $this->browser->request('GET', '/')->filter('img[src*="octopus-"]')->count());
+    }
+
+    public function testAFreshInstallsBoardCanBeScrolledFromTheKeyboardThoughItHasNoCards(): void
+    {
+        self::assertSame('0', $this->browser->request('GET', '/')->filter('.board')->attr('tabindex'));
+    }
+
+    public function testABoardAfterAReviewShowsNoOctopus(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        self::assertSame(0, $this->browser->request('GET', '/')->filter('img[src*="octopus-"]')->count());
+    }
+
     public function testADemoInstallWithoutAReviewOpensOnTheFirstRunPage(): void
     {
         $this->onADemoInstall();

@@ -172,6 +172,28 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($this->withoutTipIds($page->filter('#col-in-review')->outerHtml()), $this->withoutTipIds(trim($pushed->html())));
     }
 
+    public function testTheFirstReviewPushedToAFreshBoardTakesTheWaitingOctopusAway(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(2, $page->filter('.page-head img[src*="octopus-waiting-"]'));
+
+        $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
+
+        self::assertCount(1, $updated->filter('#col-in-review .col-cards > [data-project]'));
+        self::assertCount(0, $updated->filter('img[src*="octopus-"]'));
+    }
+
+    public function testABoardPushedBeforeAnyReviewKeepsTheWaitingOctopusAsAPageLoadedAfterIt(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $pushed = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][target="board-octopus"] template');
+
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(1, $pushed);
+        self::assertSame($page->filter('#board-octopus')->outerHtml(), trim($pushed->html()));
+    }
+
     public function testTheBoardShowsTheCurrentHeadlineWithoutAStreamSourceWhenLiveUpdatesAreOff(): void
     {
         $this->givenLiveUpdatesAreOff();
@@ -260,6 +282,31 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
             foreach ($template->childNodes as $child) {
                 $target->appendChild($document->importNode($child, true));
+            }
+        }
+
+        return $page;
+    }
+
+    // Like Turbo's replace: the template's nodes take the target's place, so an empty template takes the target away.
+    private function replaced(Crawler $page, string $streams): Crawler
+    {
+        foreach (new Crawler($streams)->filter('turbo-stream[action="replace"]')->each(static fn (Crawler $stream): Crawler => $stream) as $stream) {
+            $template = $stream->filter('template')->getNode(0);
+            self::assertNotNull($template);
+
+            foreach ($page->filter('[id="'.$stream->attr('target').'"]')->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
+                self::assertNotNull($target);
+                $parent = $target->parentNode;
+                $document = $target->ownerDocument;
+                self::assertNotNull($parent);
+                self::assertNotNull($document);
+
+                foreach ($template->childNodes as $child) {
+                    $parent->insertBefore($document->importNode($child, true), $target);
+                }
+
+                $parent->removeChild($target);
             }
         }
 
