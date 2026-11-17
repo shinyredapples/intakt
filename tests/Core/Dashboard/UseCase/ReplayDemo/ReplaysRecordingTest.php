@@ -16,6 +16,7 @@ use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\ReplayMark;
@@ -327,6 +328,20 @@ final class ReplaysRecordingTest extends TestCase
         }
 
         self::assertCount(5, $this->appended());
+    }
+
+    public function testARecordingWhoseModelCallIsAlreadyInTheLedgerIsRefusedBeforeAnyRowIsWritten(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"other","tier":"standard","round":"live-round"}'));
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('A recording whose model call the ledger holds was replayed.');
+        } catch (ReplayIsRefused $refused) {
+            self::assertStringContainsString(self::CALL, $refused->getMessage());
+        }
+
+        self::assertCount(1, $this->appended());
     }
 
     public function testARecordingOfAnotherRoundIsReplayedBesideAnEarlierReplay(): void

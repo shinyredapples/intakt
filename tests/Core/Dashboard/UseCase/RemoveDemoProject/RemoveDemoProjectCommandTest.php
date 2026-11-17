@@ -95,6 +95,17 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertSame(ReplayMark::Replay, $this->markOf('other-replay'));
     }
 
+    public function testTheCommandKeepsAnotherProjectsRowThatNamesADemoCallUnderItsOwnRound(): void
+    {
+        $this->givenTheDemoProjectWithAReplayedReview();
+        $live = ['call' => 'demo-call', 'phase' => 'started', 'project' => SampleChange::PROJECT, 'tier' => 'standard', 'round' => 'live-round'];
+        $this->append(LedgerEventKind::UsageRecorded, $live);
+
+        $this->removal('intakt');
+
+        self::assertSame([json_encode($live, JSON_THROW_ON_ERROR)], array_map(static fn (RecordedEvent $row): string => $row->event->payload, iterator_to_array($this->ledger()->readInOrder(), false)));
+    }
+
     public function testTheCommandIsRefusedOutsideTheComposeDemoAndRemovesNothing(): void
     {
         $this->givenTheDemoProjectWithAReplayedReview();

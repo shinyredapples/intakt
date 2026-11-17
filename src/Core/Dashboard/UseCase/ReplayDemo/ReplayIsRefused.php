@@ -27,4 +27,9 @@ final class ReplayIsRefused extends RuntimeException
     {
         return new self(sprintf('The ledger already holds review round %s of this recording, so it is not replayed again.', $round));
     }
+
+    public static function becauseTheLedgerHoldsCall(string $call): self
+    {
+        return new self(sprintf('The ledger already holds model call %s of this recording, so it is not replayed.', $call));
+    }
 }

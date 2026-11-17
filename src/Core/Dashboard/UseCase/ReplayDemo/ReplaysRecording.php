@@ -53,6 +53,7 @@ final readonly class ReplaysRecording
             $this->refuseADemoProjectThatIsNoReplay();
             $this->refuseUpdatesWithoutTopic($recording);
             $this->refuseRoundsTheLedgerHolds($recording);
+            $this->refuseCallsTheLedgerHolds($recording);
             $this->playAtTheRecordedPace($recording, $factor);
         } finally {
             $lock->release();
@@ -87,6 +88,20 @@ final readonly class ReplaysRecording
 
             if (null !== $round && in_array($round, $held, true)) {
                 throw ReplayIsRefused::becauseTheLedgerHolds($round);
+            }
+        }
+    }
+
+    // A call's settled usage names only the call, so a replayed call ID the ledger already holds would make another project's usage count as the demo's and go with it on removal.
+    private function refuseCallsTheLedgerHolds(Recording $recording): void
+    {
+        $held = array_map(static fn (RecordedEvent $row): ?string => self::callOf($row->event->payload), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::UsageRecorded), false));
+
+        foreach ($recording->events as $event) {
+            $call = LedgerEventKind::UsageRecorded === $event->kind ? self::callOf($event->payload) : null;
+
+            if (null !== $call && in_array($call, $held, true)) {
+                throw ReplayIsRefused::becauseTheLedgerHoldsCall($call);
             }
         }
     }
@@ -171,9 +186,19 @@ final readonly class ReplaysRecording
 
     private static function roundOf(string $payload): ?string
     {
-        $row = json_decode($payload, true);
-        $round = is_array($row) ? ($row['round'] ?? null) : null;
+        return self::stringOf($payload, 'round');
+    }
 
-        return is_string($round) ? $round : null;
+    private static function callOf(string $payload): ?string
+    {
+        return self::stringOf($payload, 'call');
+    }
+
+    private static function stringOf(string $payload, string $key): ?string
+    {
+        $row = json_decode($payload, true);
+        $value = is_array($row) ? ($row[$key] ?? null) : null;
+
+        return is_string($value) ? $value : null;
     }
 }

@@ -11,7 +11,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 
-// A row belongs to the review when it names one of its rounds, or one of the model calls made in them, because a call's settled usage names only the call.
+// A row belongs to the review when it names one of its rounds, or names no round and one of the model calls made in them, because a call's settled usage names only the call.
 final readonly class ReviewRowsOfChange
 {
     public function __construct(
@@ -118,6 +118,11 @@ final readonly class ReviewRowsOfChange
             return false;
         }
 
-        return in_array($payload['round'] ?? null, $rounds, true) || in_array($payload['call'] ?? null, $calls, true);
+        // A row that names a round is judged by it alone, because a call ID of the review reused under another project's round must not take that row along.
+        if (array_key_exists('round', $payload)) {
+            return in_array($payload['round'], $rounds, true);
+        }
+
+        return in_array($payload['call'] ?? null, $calls, true);
     }
 }
