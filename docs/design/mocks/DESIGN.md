@@ -114,11 +114,11 @@ Each role has one character, drawn in a light and a dark version:
 | Code reviewer (every panel reviewer, whatever its lens) | `CodeReviewer` (`code_reviewer`) | Meerkat with a magnifying glass |
 | Judge | `Judge` (`judge`) | Owl with a gavel |
 
-The octopus has three poses (`MascotPose`): `waiting`, `conducting`, `bowing`, for empty and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}.webp` for a pose. Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
+The octopus has three poses (`MascotPose`): `waiting`, `conducting`, `bowing`, for empty and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
 
 Places: a reviewer's row and the judge's row on the review page, the live log and the round heading (24 or 48 px), and an octopus pose on an empty or approved state.
 
-- **Decoration only.** Every image has `alt=""`, no `role`, a fixed `width` and `height` (no layout shift), a 1x/2x `srcset` (24 px: the 48 and 96 files; 48 px: 96 and 192) and `loading="lazy"`. The text beside it names the actor; no text is removed or shortened for a character.
+- **Decoration only.** Every image has `alt=""`, no `role`, a fixed `width` and `height` (no layout shift), a 1x/2x `srcset` (24 px: the 48 and 96 files; 48 px: 96 and 192; an octopus at 96 px: 96 and 192; at 144 px: 144 and 288) and `loading="lazy"`. The text beside it names the actor; no text is removed or shortened for a character.
 - **Theme.** The light and the dark image switch by the nearest `[data-theme]`, like the logo.
 - **Calm.** No animation and no hover effect. One character per row or heading, and one octopus per page (the components page, a catalog for builders, is the exception).
 - **Never** on board cards, table rows, chips, amber-tint surfaces or Waiting on you. The outcome chip and the state dot stay the only carriers of outcome and state.

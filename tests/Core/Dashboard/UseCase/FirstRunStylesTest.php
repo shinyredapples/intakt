@@ -60,9 +60,9 @@ final class FirstRunStylesTest extends TestCase
         self::assertSame([24, 48], [$content[0] + $column[0], $content[2] + $column[2]]);
     }
 
-    public function testTheSetupMascotIsAtMost200PxHighOnDesktop(): void
+    public function testTheSetupMascotIsAtMost144PxHighOnDesktop(): void
     {
-        self::assertMatchesRegularExpression('/max-height:\s*200px;/', $this->rule('.setup .page-head .character', $this->desktopRules()));
+        self::assertMatchesRegularExpression('/max-height:\s*144px;/', $this->rule('.setup .page-head .character', $this->desktopRules()));
     }
 
     public function testOnAPhoneTheSetupMascotIsAtMost140PxHigh(): void
