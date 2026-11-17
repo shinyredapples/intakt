@@ -134,6 +134,13 @@ final class ReviewPageOctopusTest extends DashboardPageTestCase
         self::assertCount(0, new Crawler($stream)->filter('turbo-stream[target="round-round-1-verdict"] template img'));
     }
 
+    public function testAJudgedRoundStreamedWithoutItsReviewShowsNoOctopus(): void
+    {
+        $stream = self::getContainer()->get(Environment::class)->render('dashboard/stream/round_judged.stream.html.twig', ['round' => 'round-1', 'reviewed' => null, 'review' => null, 'progress' => new RoundProgress(2, 2, true)]);
+
+        self::assertCount(0, new Crawler($stream)->filter('img'));
+    }
+
     public function testANewerRoundStillInReviewLeavesTheOlderApprovedRoundWithoutAnOctopus(): void
     {
         $this->givenARoundJudged(1, 0);
