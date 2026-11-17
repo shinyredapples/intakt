@@ -81,8 +81,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         return $round;
     }
 
-    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened.
-    // Past the idle lines, because the progress published at the round's start pushes the headline before any reviewer started.
+    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened; past the idle lines, because the progress published at the round's start pushes the headline before any reviewer started.
     private function readThePushedHeadline(string $round): void
     {
         $lines = $this->pushedHeadlines();
