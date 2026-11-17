@@ -634,6 +634,8 @@ details.ev > summary time { margin-left: auto; color: var(--muted); font-size: v
 .ls-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s4); font-size: var(--t15); }
 .ls-list li { display: flex; align-items: baseline; gap: var(--s8); min-width: 0; }
 .ls-list .mono { overflow-wrap: anywhere; }
+/* A long finding text squeezed the id to one character per line, so the id column keeps a floor and the text column shrinks instead. */
+.ls-findings .mono { flex: none; min-width: 4ch; white-space: nowrap; }
 .ls-text { min-width: 0; overflow-wrap: anywhere; }
 .ls-list .r { margin-left: auto; color: var(--muted); white-space: nowrap; }
 @media (max-width: 1100px) {
