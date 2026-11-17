@@ -173,7 +173,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function readTheJudgedContentWithoutAReload(string $round, Crawler $live, Crawler $judged): void
     {
         self::assertStringContainsString(self::ENDED_TEXT, $live->filter('#round-'.$round.'-state')->text());
-        self::assertSame(self::JUDGED_HERE, $live->filter('#round-'.$round.'-now-judge')->text());
+        self::assertSame(self::JUDGED_HERE, $live->filter('#round-'.$round.'-now-judge p.muted')->text());
+        self::assertSame($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text(), $live->filter('#round-'.$round.'-now-judge .now-outcome')->text());
+        self::assertStringStartsWith($live->filter('#round-'.$round.'-now-findings a.sb-finding')->count().' ', $live->filter('#round-'.$round.'-now-judge .now-to-fix')->text());
         self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
         self::assertSame([self::ALL_STARTED, self::ALL_FINISHED], [$live->filter('#round-'.$round.'-started')->text(), $live->filter('#round-'.$round.'-now-progress')->text()]);
 
