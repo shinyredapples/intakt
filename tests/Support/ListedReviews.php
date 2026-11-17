@@ -18,6 +18,6 @@ final class ListedReviews
 {
     public static function on(Ledger $ledger): LedgerReviews
     {
-        return new LedgerReviews(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())));
+        return new LedgerReviews(new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(ending: null),new ReplayMarks(new ReplayMarkBus())));
     }
 }

@@ -378,6 +378,14 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame('3 First review', $page->filter('ol.steps li[aria-current="step"]')->text());
     }
 
+    public function testWithNoKeyTheProviderStepIsTheCurrentStep(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertCount(1, $page->filter('ol.steps li[aria-current="step"]'));
+        self::assertSame('1 AI providers', $page->filter('ol.steps li[aria-current="step"]')->text());
+    }
+
     public function testAStepThatIsNotNeededIsPassedOverForTheCurrentStep(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);

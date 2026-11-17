@@ -551,7 +551,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertCount(4, $crawler->filter('.page-head p.meta > span svg.i'));
+        self::assertSame(['rounds', 'tokens', 'wallet', 'clock'], $crawler->filter('.page-head p.meta > span svg.i')->each($this->iconName(...)));
     }
 
     public function testEachRoundNamesItsIdAndStartOnItsMetaLine(): void
@@ -1008,6 +1008,14 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
     private function cardsOf(Crawler $cards): array
     {
         return $cards->each(static fn (Crawler $card): array => [$card->filter('.sev')->text(), $card->filter('.fc-title')->text(), $card->filter('.fc-place')->text(), $card->filter('.fc-call')->text()]);
+    }
+
+    // An icon carries no name, so it is told apart by a shape only it draws.
+    private function iconName(Crawler $icon): string
+    {
+        $shapes = ['rounds' => 'path[d="M20 4v5h-5"]', 'tokens' => 'ellipse', 'wallet' => 'circle[r="1.2"]', 'clock' => 'path[d="M12 7.5V12l3 2"]'];
+
+        return (string) array_find_key($shapes, static fn (string $shape): bool => 1 === $icon->filter($shape)->count());
     }
 
     // A kind label's tooltip words are inside the label, so they are left out to read the figures as a person sees them.
