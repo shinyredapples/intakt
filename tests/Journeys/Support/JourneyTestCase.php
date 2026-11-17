@@ -12,6 +12,7 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\BrowserKit\HttpBrowser;
 use Symfony\Component\Clock\MonotonicClock;
 use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\DomCrawler\Form;
 use Symfony\Component\Dotenv\Dotenv;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\Mercure\Update;
@@ -22,6 +23,7 @@ use Symfony\Component\Process\Process;
 abstract class JourneyTestCase extends TestCase
 {
     private const string ADDRESS_VARIABLE = 'INTAKT_INSTANCE_URL';
+    private const string ADMIN_ADDRESS_VARIABLE = 'INTAKT_INSTANCE_ADMIN_URL';
     private const string ROOT = __DIR__.'/../../..';
     // The instance runs in the test environment, so it reads the same file.
     private const string TEST_SETTINGS = '.env.test';
@@ -68,6 +70,64 @@ abstract class JourneyTestCase extends TestCase
         self::assertSame(200, $this->browser->getResponse()->getStatusCode(), 'GET '.$path.' did not answer 200');
 
         return $crawler;
+    }
+
+    // As a restart of Intakt does: a worker keeps the container it booted with, so it is restarted through FrankenPHP's admin API; the built-in server boots a kernel per request and needs nothing.
+    final protected function restartTheDashboard(): void
+    {
+        $admin = getenv(self::ADMIN_ADDRESS_VARIABLE);
+
+        if (!is_string($admin) || '' === $admin) {
+            return;
+        }
+
+        $response = HttpClient::create()->request('POST', $admin.'/frankenphp/workers/restart');
+
+        self::assertSame(200, $response->getStatusCode(), 'the dashboard worker was not restarted: '.$response->getContent(false));
+    }
+
+    // The redirects below are read, not followed, because BrowserKit would send the target's own host name, which the dashboard refuses; the journey visits the path they return.
+    final protected function redirectOf(string $path): string
+    {
+        $this->browser->followRedirects(false);
+
+        try {
+            $this->browser->request('GET', $this->address().$path, server: ['HTTP_HOST' => 'localhost:'.$this->dashboardPort()]);
+        } finally {
+            $this->browser->followRedirects(true);
+        }
+
+        $response = $this->browser->getResponse();
+        $location = $response->getHeader('Location');
+        self::assertContains($response->getStatusCode(), [302, 303], 'GET '.$path.' did not redirect but answered '.$response->getStatusCode());
+
+        return is_string($location) && '' !== $location ? $location : self::fail('GET '.$path.' redirected without a Location');
+    }
+
+    // Sent with the HTTP client and the browser's cookies, because HttpBrowser refuses any request body without symfony/mime, which Intakt does not need.
+    final protected function redirectOfSubmit(Form $form): string
+    {
+        $uri = $form->getUri();
+        $cookies = $this->browser->getCookieJar();
+        $sent = [];
+        foreach (array_filter($cookies->allRawValues($uri), is_string(...)) as $name => $value) {
+            $sent[] = $name.'='.$value;
+        }
+        $what = $form->getMethod().' '.$uri;
+        $response = HttpClient::create()->request($form->getMethod(), $uri, [
+            'headers' => [
+                'Host' => 'localhost:'.$this->dashboardPort(),
+                'Content-Type' => 'application/x-www-form-urlencoded',
+                'Cookie' => implode('; ', $sent),
+            ],
+            'body' => http_build_query($form->getPhpValues()),
+            'max_redirects' => 0,
+        ]);
+        $headers = $response->getHeaders(false);
+        $cookies->updateFromSetCookie($headers['set-cookie'] ?? [], $uri);
+        self::assertContains($response->getStatusCode(), [302, 303], $what.' did not redirect but answered '.$response->getStatusCode());
+
+        return $headers['location'][0] ?? self::fail($what.' redirected without a Location');
     }
 
     /**

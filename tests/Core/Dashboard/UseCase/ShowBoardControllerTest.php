@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
@@ -24,6 +25,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\RefuseForeignHost;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\ShowBoard\ShowBoardController;
 use Intakt\Core\Review\Contract\ReplayMark;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -52,6 +54,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(FailingMain::class)]
 #[UsesClass(HeadFault::class)]
 #[UsesClass(ReplayMarks::class)]
+#[UsesClass(SampleChangeSource::class)]
 final class ShowBoardControllerTest extends DashboardPageTestCase
 {
     public function testTheRootAddressShowsTheBoard(): void
@@ -67,6 +70,26 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
+    }
+
+    public function testADemoInstallWithoutAReviewOpensOnTheFirstRunPage(): void
+    {
+        $this->onADemoInstall();
+
+        $this->browser->request('GET', '/');
+
+        self::assertResponseRedirects('/setup', Response::HTTP_SEE_OTHER);
+    }
+
+    public function testADemoInstallWithAReviewOpensOnTheBoard(): void
+    {
+        $this->onADemoInstall();
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertResponseIsSuccessful();
+        self::assertSame('Board', $page->filter('.page-head h1')->text());
     }
 
     public function testABoardDuringAReviewOpensWithTheCodeReviewersAndTheirChange(): void
@@ -701,6 +724,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
     private function column(Crawler $page, string $name): Crawler
     {
         return $page->filter('.board > section.col')->reduce(static fn (Crawler $column): bool => $column->filter('.col-head h3')->text() === $name);
+    }
+
+    // Replaced in the container, because the repository is read when the container is built and these tests share one built without it.
+    private function onADemoInstall(): void
+    {
+        $container = self::getContainer();
+        $container->set(SampleChangeSource::class, new SampleChangeSource($container->get(TierResolver::class), '/repos/sample'));
     }
 
     private function startRoundsOf(int $changes): void
