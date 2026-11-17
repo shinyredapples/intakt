@@ -6,7 +6,6 @@ namespace Intakt\Core\Dashboard\UseCase\FirstRun;
 
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
-use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoReadiness;
 use Intakt\Core\Dashboard\UseCase\PlayDemo\DemoRuns;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,7 +25,7 @@ final readonly class FirstRunController
     {
         return new Response($this->pages->render($request, 'dashboard/first_run.html.twig', [
             'first_run' => $this->steps->firstRun(),
-            'demo_ready' => DemoReadiness::Ready === $this->demo->readiness(),
+            'demo' => $this->demo->readiness(),
         ]));
     }
 }

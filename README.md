@@ -29,7 +29,7 @@ git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
-Then open http://localhost:7781. A new install opens on the first-run page with two choices: **watch a recorded real review now**, with no key (the page says it arrives with the demo tour; it cannot be played yet), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+Then open http://localhost:7781. A new install opens on the first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above once a recording is installed; until then the page says why it cannot play), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
 From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)).
 

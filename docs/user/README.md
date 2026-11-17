@@ -815,7 +815,7 @@ The first start seeds the demo, in the volume:
 
 Open `http://localhost:7781`. While no review has run yet, `/` sends you to the first-run page (`http://localhost:7781/setup`), which says what is set up and what is missing and, above its four steps, offers two ways to see a review:
 
-- **Watch a recorded real review now**: no key is needed. The page says that the recorded review arrives with the demo tour; it offers no way to play one yet.
+- **Watch a recorded real review now**: no key is needed. When the demo run can be played, this choice holds the **Play the demo run** button (see [Playing the demo run in the dashboard](#playing-the-demo-run-in-the-dashboard)); otherwise it says in one line why not, for example that no demo recording is installed.
 - **Paste one provider key or Hugging Face token and run the demo review**: paste the key or token in step 1 and keep it, restart Intakt (`docker compose restart intakt`) so the sample project gets its reviewers, then press **Start the first review** in step 3. It reviews the sample change, the same review as `intakt:demo` below, and opens its live review page, where each reviewer and then the verdict appear as they come in. The line under this choice always says what is left to do.
 
 Once a review has run, `/` opens the board, and the Projects page's **Set up Intakt** button leads to the first-run page. Connecting a repository, creating the GitHub App and adding an account in the browser are not on the page yet: they are done in configuration today (`config/intakt.yaml` or the file `INTAKT_CONFIG` names, `.env.local`, and [Intakt's GitHub App](#intakts-github-app)).
@@ -898,7 +898,7 @@ The dashboard's `/demo` page (`http://localhost:7781/demo`) plays a recording wi
 - On an install that is not the compose demo: `The demo run plays only on the compose demo, and INTAKT_COMPOSE_SERVICE is empty on this install.`
 - With `INTAKT_DEMO_RECORDING` empty or naming no file: `No demo recording is installed: set INTAKT_DEMO_RECORDING to a file written by intakt:demo:record.`
 - Once a demo run is in the ledger: `The demo run is in the ledger. To play it again, remove it with intakt:demo:remove and start the compose demo again.`
-- Otherwise it offers **Play the demo run**. The first-run page (`/setup`) offers the same button, below its title, while the run can be played.
+- Otherwise it offers **Play the demo run**. The first-run page (`/setup`) offers the same button while the run can be played, in its **Watch a recorded real review now** choice (below its title on an install without that choice).
 
 The button plays the recording four times as fast as recorded, as `intakt:demo:replay --factor=4` would, in a queue worker, so the page answers at once with `The demo run is starting: the caption at the bottom of each page names the stage it is in.` A recording that cannot be read or is refused (see the replay's refusals above) plays nothing, and the worker logs `The demo run was not played.` with the reason. The worker checks the compose demo again before it plays, so a press queued before the install stopped being the compose demo plays nothing either. Two quick presses can queue the run twice: the first plays it and the second is refused as a second playback, so that log line after a double click is harmless.
 
