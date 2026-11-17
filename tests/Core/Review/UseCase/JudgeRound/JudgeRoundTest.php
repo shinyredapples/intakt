@@ -416,7 +416,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame([], $payload['same_cause']);
-        self::assertSame([['F1', 'P2', []], ['F2', 'P1', []]], array_map(static fn (array $finding): array => [$finding['id'], $finding['severity'], $finding['merged']], $payload['findings']));
+        self::assertSame($this->twoSeparateEntries(5), $payload['findings']);
     }
 
     public function testALinkBetweenFindingsOutsideOneHunkOfTheChangeIsNotRecorded(): void
@@ -427,7 +427,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $payload = $this->judgeDonePayloads()[0];
         self::assertSame([], $payload['same_cause']);
-        self::assertSame([['F1', 'P2', []], ['F2', 'P1', []]], array_map(static fn (array $finding): array => [$finding['id'], $finding['severity'], $finding['merged']], $payload['findings']));
+        self::assertSame($this->twoSeparateEntries(12), $payload['findings']);
     }
 
     public function testALinkToAFindingDroppedBeforeTheJudgeIsNotRecorded(): void
@@ -520,6 +520,17 @@ final class JudgeRoundTest extends KernelTestCase
     private function atLine(string $id, Severity $severity, int $line): Finding
     {
         return new Finding($id, $severity, 'src/Thing.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function twoSeparateEntries(int $lineOfB): array
+    {
+        return [
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB],
+        ];
     }
 
     private function judgingOf(ReviewRound $round): JudgeRound
