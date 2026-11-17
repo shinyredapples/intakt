@@ -1,0 +1,14 @@
+{#- Nothing outside the compose demo; an empty element before a demo run, so the live update that starts the tour has a target. assets/tour-caption.js pauses and closes it. -#}
+{%- if caption is not null %}
+{%- if caption.stage is null %}
+<div id="tour-caption" hidden></div>
+{%- else %}
+<aside id="tour-caption" class="tour-caption" aria-label="Demo tour" data-stage="{{ caption.stage.value }}">
+    <span class="tour-count">Stage {{ caption.stage.number }} of {{ caption.stage.count }}</span>
+    <p class="tour-line">{{ caption.stage.sentence }}</p>
+    <a class="tour-review" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_REVIEW'), {round: caption.round}) }}">Open the review</a>
+    <button type="button" class="btn quiet sm" data-tour-pause aria-pressed="false">Pause</button>
+    <button type="button" class="btn quiet sm" data-tour-close>Close</button>
+</aside>
+{%- endif %}
+{%- endif %}

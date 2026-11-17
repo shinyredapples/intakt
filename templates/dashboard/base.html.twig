@@ -4,18 +4,23 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Intakt{% endblock %}</title>
-    {# Runs before the first paint, so a stored or system dark theme never flashes light and a collapsed rail never flashes open; the shell script at the end of the body stores the keys it reads. #}
+    {# Runs before the first paint, so a stored or system dark theme never flashes light, a collapsed rail never flashes open and a closed demo caption never flashes; the shell script at the end of the body and assets/tour-caption.js store the keys it reads. #}
     <script>(() => {
         const root = document.documentElement;
         let theme = null;
         let rail = null;
+        let tour = null;
         try {
             theme = localStorage.getItem('intakt-theme');
             rail = localStorage.getItem('intakt-rail');
+            tour = sessionStorage.getItem('intakt-tour');
         } catch {}
         root.dataset.theme = theme === 'light' || theme === 'dark' ? theme : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
         if (rail === 'collapsed') {
             root.dataset.rail = 'collapsed';
+        }
+        if (tour === 'closed') {
+            root.dataset.tour = 'closed';
         }
     })();</script>
     <link rel="icon" type="image/png" href="{{ asset('images/favicon-32.png') }}">
@@ -25,8 +30,8 @@
     <link rel="stylesheet" href="{{ asset('styles/components.css') }}">
     {# Only a page the hub can reach is told to listen; the plain page shows the ledger's state either way. #}
     {% block importmap %}{% if live|default(false) %}{{ importmap('app') }}{% endif %}{% endblock %}
-    {# Imported by their own address, not through the import map, so a danger button asks first, the search opens, the review page switches panes, a finding id highlights its entry, a collapsed board column, a crowded one and a phone banner open, and the board's hidden side fades, also on a page without one. After the import map, which a browser ignores once a module has started to load. The edges are marked after the fold, so a click that opens a column is measured open. #}
-    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; import { offerSearch } from '{{ asset('search.js') }}'; import { switchTaskPanes } from '{{ asset('task-panes.js') }}'; import { highlightFindings } from '{{ asset('finding-highlight.js') }}'; import { foldColumns } from '{{ asset('column-fold.js') }}'; import { showMoreCards } from '{{ asset('column-more.js') }}'; import { toggleBanners } from '{{ asset('banner-toggle.js') }}'; import { markBoardEdges } from '{{ asset('board-edge.js') }}'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document); highlightFindings(document); foldColumns(document); showMoreCards(document); toggleBanners(document); markBoardEdges(document, window);</script>
+    {# Imported by their own address, not through the import map, so a danger button asks first, the search opens, the review page switches panes, a finding id highlights its entry, a collapsed board column, a crowded one and a phone banner open, and the board's hidden side fades and the demo caption pauses and closes, also on a page without one. After the import map, which a browser ignores once a module has started to load. The edges are marked after the fold, so a click that opens a column is measured open. #}
+    <script type="module">import { holdBackDangerButtons } from '{{ asset('arm.js') }}'; import { offerSearch } from '{{ asset('search.js') }}'; import { switchTaskPanes } from '{{ asset('task-panes.js') }}'; import { highlightFindings } from '{{ asset('finding-highlight.js') }}'; import { foldColumns } from '{{ asset('column-fold.js') }}'; import { showMoreCards } from '{{ asset('column-more.js') }}'; import { toggleBanners } from '{{ asset('banner-toggle.js') }}'; import { markBoardEdges } from '{{ asset('board-edge.js') }}'; import { captionTour } from '{{ asset('tour-caption.js') }}'; holdBackDangerButtons(document); offerSearch(document); switchTaskPanes(document); highlightFindings(document); foldColumns(document); showMoreCards(document); toggleBanners(document); markBoardEdges(document, window); captionTour(document, sessionStorage);</script>
 </head>
 <body>
 {# The connection controller runs only on a page that loads the import map, which is also the only kind of page with a live connection. #}
@@ -68,6 +73,8 @@
 {% endfor %}
 {% block body %}{% endblock %}
 </main>
+{# After the content and sticky at the bottom, so the caption takes its own room below the page and never covers its end; the error page leaves it out, because a failing ledger must not take that page down too. #}
+{% block tour %}{{ include('dashboard/_tour_caption.html.twig', {caption: demo_tour()}, with_context = false) }}{% endblock %}
 </div>
 </div>
 {# Outside the shell, because any child of it takes a cell of its grid, and because the search script makes the shell inert while this is open. assets/search.js opens it and fills the list box with the results fragment of the search route. #}
@@ -168,12 +175,21 @@
                 event.detail.render = (stream) => {
                     const collapsed = replaced.classList.contains('collapsed');
                     const expanded = replaced.hasAttribute('data-expanded');
+                    // A replaced column is new markup, so a card the person had focused is found again by its link, and a glossary term inside it by its place among the card's focusable terms (their ids are random per render); without this the keyboard falls back to the page start at every push.
+                    const focused = replaced.contains(document.activeElement) ? document.activeElement : null;
+                    const focusedCard = focused?.closest('a[href]') ?? null;
+                    const focusedLink = focusedCard?.getAttribute('href') ?? null;
+                    const focusedTerm = focusedCard !== null && focused !== focusedCard ? [...focusedCard.querySelectorAll('[tabindex]')].indexOf(focused) : -1;
                     render(stream);
                     const pushed = document.getElementById(replaced.id);
                     pushed?.classList.toggle('collapsed', collapsed);
                     pushed?.querySelector('.col-fold')?.setAttribute('aria-expanded', String(!collapsed));
                     pushed?.toggleAttribute('data-expanded', expanded);
                     showProject();
+                    if (focusedLink !== null) {
+                        const card = [...(pushed?.querySelectorAll('a[href]') ?? [])].find((link) => link.getAttribute('href') === focusedLink);
+                        (focusedTerm < 0 ? card : card?.querySelectorAll('[tabindex]')[focusedTerm])?.focus({ preventScroll: true });
+                    }
                 };
                 return;
             }

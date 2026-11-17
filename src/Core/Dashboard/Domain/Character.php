@@ -10,6 +10,16 @@ enum Character: string
     case CodeReviewer = 'code_reviewer';
     case Judge = 'judge';
 
+    // The files hold 1x and 2x of the sizes the pages show (24 and 48 px), so any other size would name a file that does not exist.
+    public function imageWidth(int $size, int $density): int
+    {
+        if (!in_array($size, [24, 48], true)) {
+            throw CharacterSizeHasNoImage::for($this, $size);
+        }
+
+        return $size * $density;
+    }
+
     public function label(): string
     {
         return match ($this) {

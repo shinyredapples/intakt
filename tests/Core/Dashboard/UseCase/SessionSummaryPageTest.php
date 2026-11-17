@@ -158,6 +158,16 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('.log-summary b, .log-summary script'));
     }
 
+    public function testABacktickSpanInAFindingOfTheSummaryShowsAsCode(): void
+    {
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [$this->finding('F1', Severity::P2, 'Call `Lock::acquire()` first.')], [], [], false));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['Lock::acquire()'], $crawler->filter('.ls-findings .ls-text code')->each(static fn (Crawler $code): string => $code->text()));
+        self::assertStringNotContainsString('`', $crawler->filter('.ls-findings')->text());
+    }
+
     public function testAFindingMergedIntoAnActEntryReachesThatEntryFromItsHighlightButton(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -180,6 +190,13 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertMatchesRegularExpression('/\.log \{[^}]*display: flex; flex-direction: column;[^}]*overflow: hidden;/', $sheet);
         self::assertMatchesRegularExpression('/\.log-main \{[^}]*flex: 1 1 auto; min-height: 0; overflow: auto;/', $sheet);
         self::assertMatchesRegularExpression('/\.log-summary \{[^}]*flex: none;/', $sheet);
+    }
+
+    public function testTheStylesheetKeepsEachFindingIdOnOneLineBesideALongFindingText(): void
+    {
+        $sheet = (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
+
+        self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none; min-width: 4ch;[^}]*white-space: nowrap;/', $sheet);
     }
 
     private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
