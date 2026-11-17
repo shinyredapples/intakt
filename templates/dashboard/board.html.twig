@@ -6,8 +6,7 @@
 
 {% block body %}
 <div class="page-head">
-    {# The empty board's octopus sits in the head beside its one Set up Intakt link, because the board has no empty block of its own and a second one would add a second title and action (#2067). #}
-    {% if board.firstDay %}{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}{% endif %}
+    {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
     <div>
         <h1>Board</h1>
         {# The id is the target of the pushed headline (LiveBoardHeadline), which updates only the words inside, so the line rendered here stays when live updates are off. #}

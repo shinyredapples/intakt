@@ -64,8 +64,8 @@ final class BoardStylesTest extends TestCase
         preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
         $rules = $this->rulesOf(implode("\n", $blocks[1]));
 
-        self::assertMatchesRegularExpression('/max-height:\s*96px;\s*width:\s*auto;/', $rules['.page-head > .character'] ?? '');
-        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.page-head > .character + div'] ?? '');
+        self::assertMatchesRegularExpression('/max-height:\s*96px;\s*width:\s*auto;/', $rules['.page-head > .head-character > .character'] ?? '');
+        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.page-head > .head-character + div'] ?? '');
     }
 
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void
