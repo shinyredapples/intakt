@@ -52,7 +52,7 @@ enum ReviewOutcome: string
     public static function ofReviewer(ReviewerOutcome $reviewer): ?self
     {
         return match ($reviewer->progress) {
-            ReviewerProgress::Answered => null === $reviewer->decision ? null : self::ofDecision($reviewer->decision),
+            ReviewerProgress::Answered => $reviewer->decision instanceof Decision ? self::ofDecision($reviewer->decision) : null,
             ReviewerProgress::Failed => self::Failed,
             ReviewerProgress::Blocked => self::Blocked,
             ReviewerProgress::Running, ReviewerProgress::Stopped => null,

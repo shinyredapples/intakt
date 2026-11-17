@@ -65,7 +65,7 @@ final class ReviewedRoundTest extends TestCase
         self::assertSame(ReplayMark::Replay, $marked->replayMark());
     }
 
-    private function round():ReviewedRound
+    private function round(): ReviewedRound
     {
         return new ReviewedRound(new RoundStart('r-1', 'alpha', 2), new RoundPlace('feat/thing', 7), new DateTimeImmutable('2026-10-28T11:00:00+00:00'), null);
     }
