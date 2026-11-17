@@ -11,7 +11,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversNothing]
 final class ReadmeTeamPictureTest extends TestCase
 {
-    private const ROLES = ['Tech lead', 'Developer', 'Code reviewer', 'Judge', 'Security engineer', 'Designer', 'AI engineer', 'Maintainer'];
+    private const array ROLES = ['Tech lead', 'Developer', 'Code reviewer', 'Judge', 'Security engineer', 'Designer', 'AI engineer', 'Maintainer'];
 
     public function testTheTeamPictureServesTheDarkImageForADarkColorScheme(): void
     {
