@@ -23,26 +23,63 @@ use Twig\Environment;
 #[UsesClass(SessionSummary::class)]
 final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 {
-    public function testTheSummaryMarksTheRoundCountCountedAndTheTokenTotalMeasured(): void
+    public function testAReviewOfThreeJudgedRoundsCarriesOneLabelInTheSummaryAndOnePerTableOfTheNewestRound(): void
+    {
+        $this->givenPricesOf('2026-11-13');
+        $this->givenAJudgedRound();
+        $this->givenAJudgedRound('round-2', 2);
+        $this->givenAJudgedRound('round-3', 3);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-3');
+
+        self::assertSame(
+            ['kind-summary-cost', 'kind-round-round-3-findings', 'kind-round-round-3-cost'],
+            $crawler->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('aria-describedby')),
+        );
+    }
+
+    public function testTheTablesOfAnOlderRoundCarryNoLabel(): void
+    {
+        $this->givenPricesOf('2026-11-13');
+        $this->givenAJudgedRound();
+        $this->givenAJudgedRound('round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['Findings', 'Cost', 0], [
+            $crawler->filter('#round-round-1 table.reviewers thead th.num')->text(),
+            $crawler->filter('#round-round-1 table.tokens thead th')->last()->text(),
+            $crawler->filter('#round-round-1 .figure-kind')->count(),
+        ]);
+    }
+
+    public function testTheSummaryLeavesTheRoundCountAndTheTokenTotalUnlabeled(): void
     {
         $this->givenAJudgedRound();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('alphafeat/thing 1 round counted 1,300 tokens measured', $this->wordsOf($crawler->filter('.page-head p.meta'), before: ' Cost:'));
+        self::assertSame('alphafeat/thing 1 round 1,300 tokens', $this->wordsOf($crawler->filter('.page-head p.meta'), before: ' Cost:'));
     }
 
-    public function testEachTokenCountOfARoundIsMarkedMeasured(): void
+    public function testTheSummaryCarriesOneLabelTheEstimateOfTheReviewsCost(): void
+    {
+        $this->givenPricesOf('2026-11-13');
+        $this->givenAJudgedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['estimated'], $crawler->filter('.page-head p.meta .figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind')));
+    }
+
+    public function testNoTokenCountOfARoundCarriesALabel(): void
     {
         $this->givenAJudgedRound();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         $tokens = $crawler->filter('#round-round-1 table.tokens tbody td.num');
-        self::assertSame(
-            ['1000 measured', '0 measured', '0 measured', '0 measured', '300 measured', '1300 measured'],
-            $tokens->each(fn (Crawler $cell): string => $this->wordsOf($cell)),
-        );
+        self::assertSame(['1000', '0', '0', '0', '300', '1300'], $tokens->each(static fn (Crawler $cell): string => $cell->html()));
     }
 
     public function testTheReviewCostIsMarkedEstimatedWithTheDayOfItsPrices(): void
@@ -55,14 +92,15 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         self::assertSame('Cost: 0.0050 USD estimated, prices of 2026-11-13', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
     }
 
-    public function testEachRoundsCostIsMarkedEstimatedWithTheDayOfItsPrices(): void
+    public function testARoundsCostKeepsTheDayOfItsPricesAndLeavesItsLabelToTheColumnHead(): void
     {
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0.0050 USD estimated, prices of 2026-11-13', $this->wordsOf($crawler->filter('#round-round-1 table.tokens tbody td:last-child')));
+        $cost = $crawler->filter('#round-round-1 table.tokens tbody td:last-child');
+        self::assertSame(['0.0050 USD, prices of 2026-11-13', 0], [$cost->text(), $cost->filter('.figure-kind')->count()]);
     }
 
     public function testACostWithoutAPriceDateSaysTheDateIsUnknown(): void
@@ -72,7 +110,7 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('0.0050 USD estimated, price date unknown', $this->wordsOf($crawler->filter('#round-round-1 table.tokens tbody td:last-child')));
+        self::assertSame('0.0050 USD, price date unknown', $crawler->filter('#round-round-1 table.tokens tbody td:last-child')->text());
     }
 
     public function testAnUnknownCostCarriesNoLabelAndNoPriceDate(): void
@@ -85,7 +123,28 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         self::assertSame('Cost: unknown, no price for model-a', $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
     }
 
-    public function testTheSessionSummaryMarksThisRoundsAndTheReviewsCostEstimated(): void
+    public function testATokensTableWhoseCostIsUnknownLeavesItsCostHeadUnlabeled(): void
+    {
+        $this->givenAJudgedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Cost', 0], [$crawler->filter('#round-round-1 table.tokens thead th')->last()->text(), $crawler->filter('#round-round-1 table.tokens .figure-kind')->count()]);
+    }
+
+    public function testTheTokensTableMarksOnlyItsCostColumnEstimatedOnceInItsHead(): void
+    {
+        $this->givenPricesOf('2026-11-13');
+        $this->givenAJudgedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $kinds = $crawler->filter('#round-round-1 table.tokens th')->each(static fn (Crawler $head): array => $head->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind')));
+        self::assertSame([[], [], [], [], [], [], ['estimated']], $kinds);
+        self::assertSame(1, $crawler->filter('#round-round-1 table.tokens .figure-kind')->count());
+    }
+
+    public function testTheSessionSummaryShowsThisRoundsAndTheReviewsCostWithoutALabel(): void
     {
         $this->givenPricesOf('2026-11-13');
         $this->givenARunningRoundWhoseSessionCosts(Cost::inUsd(0.1, '2026-11-13'));
@@ -93,12 +152,12 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
         self::assertSame(
-            ['0.1000 USD estimated, prices of 2026-11-13', '0.0050 USD estimated, prices of 2026-11-13'],
-            $crawler->filter('.ls-cost dd')->each(fn (Crawler $cost): string => $this->wordsOf($cost)),
+            [['0.1000 USD, prices of 2026-11-13', 0], ['0.0050 USD, prices of 2026-11-13', 0]],
+            $crawler->filter('.ls-cost dd')->each(static fn (Crawler $cost): array => [$cost->text(), $cost->filter('.figure-kind')->count()]),
         );
     }
 
-    public function testAStreamedRoundCostKeepsItsEstimatedLabelAndPriceDate(): void
+    public function testAStreamedRoundCostKeepsItsPriceDateWithoutALabel(): void
     {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
@@ -106,49 +165,39 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         $stream = $twig->render('dashboard/stream/summary_changed.stream.html.twig', ['round' => 'round-1', 'summary' => new SessionSummary([], Cost::inUsd(0.9, '2026-11-13'), [], [], [], [], false)]);
 
         $cost = new Crawler($stream)->filter('turbo-stream[target="round-round-1-summary-cost"]');
-        self::assertSame('0.9000 USD estimated, prices of 2026-11-13', $this->wordsOf(new Crawler($cost->filter('template')->html())));
+        self::assertSame('0.9000 USD, prices of 2026-11-13', new Crawler($cost->filter('template')->html())->text());
     }
 
-    public function testRoundTokensAndCostStaySideBySideAndNeverAddUp(): void
-    {
-        $this->givenPricesOf('2026-11-13');
-        $this->givenAJudgedRound();
-
-        $crawler = $this->browser->request('GET', '/reviews/round-1');
-
-        $kinds = $crawler->filter('#round-round-1 table.tokens tbody td')->each(static fn (Crawler $cell): array => $cell->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind')));
-        self::assertSame([['measured'], ['measured'], ['measured'], ['measured'], ['measured'], ['measured'], ['estimated']], $kinds);
-    }
-
-    public function testTheEstimatedLabelNamesThePriceListAndEveryTooltipOnThePageHasItsOwnId(): void
+    public function testEveryTooltipOnThePageHasItsOwnId(): void
     {
         $this->givenPricesOf('2026-11-13');
         $this->givenARunningRoundWhoseSessionCosts(Cost::inUsd(0.1, '2026-11-13'));
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        $estimated = $crawler->filter('.figure-kind[data-kind="estimated"]');
-        self::assertSame(array_fill(0, 4, FigureKind::Estimated->source()), $estimated->each(static fn (Crawler $label): string => $label->filter('.figure-kind-tip')->text()));
         $ids = $crawler->filter('[id]')->each(static fn (Crawler $node): string => (string) $node->attr('id'));
         self::assertSame(array_values(array_unique($ids)), $ids);
     }
 
-    public function testTheFindingCountOfAFoldedRoundIsMarkedCounted(): void
+    public function testTheFindingCountOfAFoldedRoundCarriesNoLabel(): void
     {
         $this->givenAJudgedRound();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('outcome not recorded, 2 findings counted', $this->wordsOf($crawler->filter('#round-round-1 details.ev > summary .small')->last()));
+        $count = $crawler->filter('#round-round-1 details.ev > summary .small')->last();
+        self::assertSame(['outcome not recorded, 2 findings', 0], [$count->text(), $count->filter('.figure-kind')->count()]);
     }
 
-    public function testEachReviewersFindingCountIsMarkedCounted(): void
+    public function testTheReviewersTableMarksItsFindingsColumnCountedOnceInItsHead(): void
     {
         $this->givenAJudgedRound();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame('2 counted', $this->wordsOf($crawler->filter('#round-round-1 table.reviewers tbody td.num')));
+        $head = $crawler->filter('#round-round-1 table.reviewers thead th.num');
+        self::assertSame(['Findings counted', ['counted']], [$this->wordsOf($head), $head->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind'))]);
+        self::assertSame(['2', 0], [$crawler->filter('#round-round-1 table.reviewers tbody td.num')->text(), $crawler->filter('#round-round-1 table.reviewers tbody .figure-kind')->count()]);
     }
 
     public function testAReviewerWithoutAnAnswerSaysSoWithNoCountAndNoLabel(): void
@@ -164,25 +213,38 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
     public function testEachLabelNamesItsSourceInATooltipTiedToIt(): void
     {
+        $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        $labels = $crawler->filter('.page-head p.meta .figure-kind');
-        self::assertSame([FigureKind::Counted->source(), FigureKind::Measured->source()], $labels->each(static fn (Crawler $label): string => $label->filter('.figure-kind-tip[role="tooltip"]')->text()));
-        self::assertSame(['counted', 'measured'], $labels->each(static fn (Crawler $label): ?string => $label->attr('data-kind')));
+        $labels = $crawler->filter('.figure-kind');
+        self::assertSame(
+            [FigureKind::Estimated->source(), FigureKind::Counted->source(), FigureKind::Estimated->source()],
+            $labels->each(static fn (Crawler $label): string => $label->filter('.figure-kind-tip[role="tooltip"]')->text()),
+        );
         self::assertSame($labels->each(static fn (Crawler $label): ?string => $label->filter('.figure-kind-tip')->attr('id')), $labels->each(static fn (Crawler $label): ?string => $label->attr('aria-describedby')));
-        self::assertSame(['0', '0'], $labels->each(static fn (Crawler $label): ?string => $label->attr('tabindex')));
+    }
+
+    public function testNoLabelOnThePageIsATabStop(): void
+    {
+        $this->givenPricesOf('2026-11-13');
+        $this->givenAJudgedRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([null, null, null], $crawler->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('tabindex')));
     }
 
     public function testEachTooltipIsAnchoredToItsOwnLabelSoAScrollingTableCannotClipIt(): void
     {
+        $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        $labels = $crawler->filter('#round-round-1 table.tokens .figure-kind');
-        self::assertCount(6, $labels);
+        $labels = $crawler->filter('#round-round-1 .table-scroll .figure-kind');
+        self::assertCount(2, $labels);
         $anchors = $labels->each(static fn (Crawler $label): ?string => $label->attr('style'));
         self::assertSame(
             array_map(static fn (?string $anchor): string => str_replace('anchor-name', 'position-anchor', (string) $anchor), $anchors),
@@ -191,13 +253,13 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
         self::assertSame($labels->each(static fn (Crawler $label): string => 'anchor-name: --'.$label->attr('aria-describedby')), $anchors);
     }
 
-    private function givenAJudgedRound(): void
+    private function givenAJudgedRound(string $round = 'round-1', int $number = 1): void
     {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->startReviewer('round-1', 'correctness');
-        $this->ledger->useTokens('round-1', 1000, 300);
-        $this->ledger->answer('round-1', 'correctness', 2);
-        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'defer']);
+        $this->ledger->startRoundOf('feat/thing', $round, $number);
+        $this->ledger->startReviewer($round, 'correctness');
+        $this->ledger->useTokens($round, 1000, 300);
+        $this->ledger->answer($round, 'correctness', 2);
+        $this->ledger->judgeFindings($round, ['F1' => 'act', 'F2' => 'defer']);
     }
 
     private function givenPricesOf(?string $day): void

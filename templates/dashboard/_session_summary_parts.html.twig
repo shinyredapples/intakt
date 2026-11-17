@@ -15,10 +15,10 @@
         </div>
 {% endmacro %}
 
-{% macro round_cost(round, summary) %}<dd id="round-{{ round }}-summary-cost">{{ include('dashboard/components/cost.html.twig', {cost: summary.cost, at: 'round-' ~ round ~ '-summary-cost'}, with_context = false) }}</dd>{% endmacro %}
+{% macro round_cost(round, summary) %}<dd id="round-{{ round }}-summary-cost">{{ include('dashboard/components/cost_plain.html.twig', {cost: summary.cost}, with_context = false) }}</dd>{% endmacro %}
 
 {# Not in the summary's own stream, because a summary knows only its round: the judged round's update replaces it from the whole review. #}
-{% macro review_cost(round, cost) %}<dd id="round-{{ round }}-review-cost">{{ include('dashboard/components/cost.html.twig', {cost: cost, at: 'round-' ~ round ~ '-review-cost'}, with_context = false) }}</dd>{% endmacro %}
+{% macro review_cost(round, cost) %}<dd id="round-{{ round }}-review-cost">{{ include('dashboard/components/cost_plain.html.twig', {cost: cost}, with_context = false) }}</dd>{% endmacro %}
 
 {% macro files(round, summary) %}
     <div id="round-{{ round }}-summary-files">

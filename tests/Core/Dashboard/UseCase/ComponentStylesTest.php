@@ -152,8 +152,23 @@ final class ComponentStylesTest extends WebTestCase
         $rule = $this->rulesOf($this->componentSheet())['.figure-kind .figure-kind-tip'] ?? '';
 
         self::assertMatchesRegularExpression('/position:\s*fixed/', $rule);
-        self::assertMatchesRegularExpression('/position-area:\s*bottom span-left/', $rule);
         self::assertMatchesRegularExpression('/position-try-fallbacks:\s*flip-block/', $rule);
+    }
+
+    public function testAFigureKindTooltipGrowsAwayFromTheLeftEdgeAndFlipsBeforeLeavingTheViewport(): void
+    {
+        $rule = $this->rulesOf($this->componentSheet())['.figure-kind .figure-kind-tip'] ?? '';
+
+        self::assertMatchesRegularExpression('/position-area:\s*bottom span-right/', $rule);
+        self::assertMatchesRegularExpression('/position-try-fallbacks:\s*flip-block, flip-inline, flip-block flip-inline;/', $rule);
+    }
+
+    public function testAFigureKindTooltipShowsOnHoverOnly(): void
+    {
+        $rules = $this->rulesOf($this->componentSheet());
+
+        self::assertMatchesRegularExpression('/display:\s*block/', $rules['.figure-kind:hover .figure-kind-tip'] ?? '');
+        self::assertSame([], array_filter(array_keys($rules), static fn (string $selector): bool => str_contains($selector, '.figure-kind:focus')));
     }
 
     public function testOnPhonesAStepperButtonIs48By46(): void
