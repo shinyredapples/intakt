@@ -242,7 +242,7 @@ final class LedgerReviewPagesTest extends TestCase
      * @param list<string>              $replays
      * @param array<string, ReplayMark> $stored
      */
-    private function pagesOn(Ledger $ledger,array $replays = [], array $stored = []): LedgerReviewPages
+    private function pagesOn(Ledger $ledger, array $replays = [], array $stored = []): LedgerReviewPages
     {
         $costs = self::createStub(RoundCosts::class);
         $costs->method('costOf')->willReturn(Cost::inUsd(0.5));
