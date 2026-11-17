@@ -535,6 +535,13 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertSame(1, preg_match('~octopus-conducting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
     }
 
+    public function testTheSetupPageShowsOneOctopusAt144Px(): void
+    {
+        $images = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('img[src*="octopus-"]');
+
+        self::assertSame([['144', '144'], ['144', '144']], $images->each(static fn (Crawler $image): array => [$image->attr('width'), $image->attr('height')]));
+    }
+
     public function testAfterAnApprovedFirstReviewTheSetupPageShowsTheBowingOctopus(): void
     {
         $this->ledger->startRoundOfQuorum(SampleChange::CHANGE, 'round-1', 'all');

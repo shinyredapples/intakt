@@ -22,6 +22,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\LogLevel;
 use Symfony\Component\Clock\ClockInterface;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 #[CoversClass(ListReviewsController::class)]
@@ -309,6 +310,17 @@ final class ListReviewsControllerTest extends DashboardPageTestCase
         self::assertSelectorTextContains('main .empty', 'No review has started yet.');
         self::assertSelectorNotExists('.review-rows');
         self::assertSelectorNotExists('.failing-heads');
+    }
+
+    public function testTheEmptyReviewListShowsTheWaitingOctopusAt144PxAboveItsUnchangedWords(): void
+    {
+        $empty = $this->browser->request('GET', '/reviews')->filter('main .empty');
+        $images = $empty->filter('img.character');
+
+        self::assertSame(['No reviews yet', 'No review has started yet.'], [$empty->filter('h2')->text(), $empty->filter('p')->text()]);
+        self::assertSame([['', '144', '144'], ['', '144', '144']], $images->each(static fn (Crawler $image): array => [$image->attr('alt'), $image->attr('width'), $image->attr('height')]));
+        self::assertSame(1, preg_match('~octopus-waiting-light[^"]*\.webp$~', $images->eq(0)->attr('src') ?? ''));
+        self::assertSame(1, preg_match('~octopus-waiting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
     }
 
     public function testAHandedOverHeadShowsItsCauseAndNextTryOnItsCard(): void

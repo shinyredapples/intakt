@@ -6,6 +6,7 @@
 
 {% block body %}
 <div class="page-head">
+    {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
     <div>
         <h1>Board</h1>
         {# The id is the target of the pushed headline (LiveBoardHeadline), which updates only the words inside, so the line rendered here stays when live updates are off. #}
@@ -51,7 +52,8 @@
     {# The counts are totals over every project, so the project filter hides cards and never changes a count. A crowded column renders every card and marks those past the limit, which assets/column-more.js counts again over the cards the filter shows. The wrapper carries the edge classes assets/board-edge.js sets, because the fade they turn on masks the board inside it; the same script scrolls a board marked data-scroll-to-end to Done once. #}
     {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
     <div class="board-wrap"{% if board.startsScrolledToDone %} data-scroll-to-end{% endif %}>
-    <div class="board">
+    {# Focusable, because a board with no card (a fresh install, or a phone that hides the column buttons) scrolls sideways with nothing in it the keyboard could reach. #}
+    <div class="board" tabindex="0">
     {% for column in columns %}
         {{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit}, with_context = false) }}
     {% endfor %}
