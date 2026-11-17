@@ -565,7 +565,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         $who = $this->browser->request('GET', '/')->filter('.working .lane .who');
 
-        self::assertSame(['span dot ok', 'img character character-light', 'img character character-dark', 'span elapsed'], $who->children()->each(static fn (Crawler $child): string => $child->nodeName() . ' ' . $child->attr('class')));
+        self::assertSame(['span dot ok', 'img character character-light', 'img character character-dark', 'span elapsed'], $who->children()->each(static fn (Crawler $child): string => $child->nodeName().' '.$child->attr('class')));
         self::assertSame('correctness, standard', $who->getNode(0)?->childNodes->item(3)?->textContent);
     }
 
