@@ -15,7 +15,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 
-// Two workers on their own connections, the second storing its verdict between the first worker's read of its row and its write, the order in which two reviewers of the demo met on SQLite.
+// Two connections rather than two threads, because only a commit forced between the first worker's read of its row and its write reproduces the order in which two reviewers of the demo met on SQLite.
 #[Group('persistence')]
 #[CoversClass(ReviewerLeases::class)]
 #[CoversClass(ReviewWithReviewerHandler::class)]
