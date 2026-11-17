@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -19,6 +20,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(KeptProviderKeyFile::class)]
 #[CoversClass(KeptProviderKeyNotWritten::class)]
 #[CoversClass(KeptProviderKeyUnreadable::class)]
+#[CoversClass(ProviderKeyAlreadyKept::class)]
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(ConfiguredKey::class)]
 #[UsesClass(KeyKind::class)]
@@ -94,7 +96,7 @@ final class KeptProviderKeyFileTest extends TestCase
         }
     }
 
-    public function testKeepingAKeyReplacesALinkAtTheFilePathInsteadOfWritingThroughIt(): void
+    public function testKeepingAKeyIsRefusedByALinkAtTheFilePathAndNeverWritesThroughIt(): void
     {
         $filesystem = new Filesystem();
         $filesystem->mkdir($this->directory);
@@ -102,21 +104,39 @@ final class KeptProviderKeyFileTest extends TestCase
         $filesystem->dumpFile($target, 'untouched');
         symlink($target, $this->directory.'/provider-key.json');
 
-        $this->file()->keep(ProviderKey::recognise('sk-'.self::BODY));
-
-        self::assertSame('untouched', file_get_contents($target));
-        self::assertFalse(is_link($this->directory.'/provider-key.json'));
-        self::assertSame(KeyKind::OpenAi, $this->file()->configured()?->kind);
+        try {
+            $this->file()->keep(ProviderKey::recognise('sk-'.self::BODY));
+            self::fail('The link should refuse the key.');
+        } catch (ProviderKeyAlreadyKept) {
+            self::assertSame('untouched', file_get_contents($target));
+            self::assertTrue(is_link($this->directory.'/provider-key.json'));
+        }
     }
 
-    public function testKeepingASecondKeyReplacesTheFirst(): void
+    public function testKeepingASecondKeyIsRefusedAndTheFirstStays(): void
     {
         $file = $this->file();
         $file->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
-        $file->keep(ProviderKey::recognise('hf_'.self::BODY.'9999'));
 
-        self::assertSame(KeyKind::HuggingFace, $file->configured()?->kind);
-        self::assertSame('9999', $file->configured()->lastCharacters);
+        try {
+            $file->keep(ProviderKey::recognise('hf_'.self::BODY.'9999'));
+            self::fail('The second key should be refused.');
+        } catch (ProviderKeyAlreadyKept $alreadyKept) {
+            self::assertSame('sk-ant-'.self::BODY, $file->read()?->secret());
+            self::assertStringNotContainsString(self::BODY, print_r($alreadyKept->getTrace(), true).$alreadyKept);
+        }
+    }
+
+    public function testARefusedSecondKeyLeavesNoNewFileInTheDirectory(): void
+    {
+        $file = $this->file();
+        $file->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+
+        try {
+            $file->keep(ProviderKey::recognise('hf_'.self::BODY.'9999'));
+        } catch (ProviderKeyAlreadyKept) {
+            self::assertSame(['provider-key.json'], array_values(array_diff((array) scandir($this->directory), ['.', '..'])));
+        }
     }
 
     public function testAKeptKeyTooShortForItsFormIsUnreadableInsteadOfShownWhole(): void

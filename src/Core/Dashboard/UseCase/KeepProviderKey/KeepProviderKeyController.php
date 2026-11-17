@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
 use SensitiveParameter;
@@ -27,6 +28,7 @@ final readonly class KeepProviderKeyController
 
     private const string FLASH_SUCCESS = 'success';
     private const string FLASH_ERROR = 'error';
+    private const array ALREADY_CONFIGURED = [self::FLASH_ERROR, 'A provider key is already configured, so no key was kept. To change it, edit .env.local.'];
 
     public function __construct(
         private KeepProviderKey $keeping,
@@ -56,7 +58,7 @@ final readonly class KeepProviderKeyController
             return [self::FLASH_ERROR, $unreadable->getMessage().' Fix or remove the kept key, or set the key in .env.local.'];
         }
 
-        return $configured ? [self::FLASH_ERROR, 'A provider key is already configured, so no key was kept. To change it, edit .env.local.'] : null;
+        return $configured ? self::ALREADY_CONFIGURED : null;
     }
 
     private function anAccountIsEnabled(): bool
@@ -77,6 +79,9 @@ final readonly class KeepProviderKeyController
             return [self::FLASH_ERROR, 'The provider refused the key, so it was not kept.'];
         } catch (KeyNotChecked) {
             return [self::FLASH_ERROR, 'The provider could not be asked to check the key, so it was not kept. Try again.'];
+        } catch (ProviderKeyAlreadyKept) {
+            // Another request kept its key while this one was checked; the guard above saw none, so the write is what refuses it.
+            return self::ALREADY_CONFIGURED;
         } catch (KeptProviderKeyNotWritten) {
             return [self::FLASH_ERROR, 'The provider accepted the key, but it could not be written to the data folder.'];
         }

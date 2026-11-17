@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use JsonException;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -29,7 +30,7 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
     ) {
     }
 
-    // A new file renamed over the path replaces a link instead of following it, because a rename never writes through one; the file is 0600 before the key goes in, so others never read it.
+    // The file is 0600 before the key goes in, so others never read it.
     public function keep(ProviderKey $key): void
     {
         $filesystem = new Filesystem();
@@ -41,14 +42,36 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
             $written = $filesystem->tempnam($this->directory, '.'.self::FILE.'.');
             $filesystem->chmod($written, 0o600);
             $filesystem->appendToFile($written, json_encode(['kind' => $key->kind()->value, 'key' => $key->secret()], JSON_THROW_ON_ERROR));
-            $filesystem->rename($written, $this->file(), true);
+            $this->linkWhereNothingIs($written);
         } catch (IOException|JsonException) {
+            throw new KeptProviderKeyNotWritten();
+        } finally {
             if (null !== $written) {
                 $filesystem->remove($written);
             }
-
-            throw new KeptProviderKeyNotWritten();
         }
+    }
+
+    // A link fails when anything is at the path, a link to elsewhere included, so of two requests that both found no key only one keeps its key, and a link is never written through.
+    private function linkWhereNothingIs(string $written): void
+    {
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            $linked = link($written, $this->file());
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($linked) {
+            return;
+        }
+
+        if (is_link($this->file()) || file_exists($this->file())) {
+            throw new ProviderKeyAlreadyKept();
+        }
+
+        throw new KeptProviderKeyNotWritten();
     }
 
     public function read(): ?ProviderKey

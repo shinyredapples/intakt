@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase\KeepProviderKey;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
@@ -11,6 +12,7 @@ use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
@@ -49,6 +51,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 #[UsesClass(KeyNotChecked::class)]
 #[UsesClass(KeyRefusedByProvider::class)]
 #[UsesClass(KeyCheckOutcome::class)]
+#[UsesClass(ProviderKeyAlreadyKept::class)]
 final class KeepProviderKeyControllerTest extends WebTestCase
 {
     // Built from parts, so no key-shaped literal sits in the repository.
@@ -88,6 +91,22 @@ final class KeepProviderKeyControllerTest extends WebTestCase
 
         self::assertSelectorTextContains('.flash-error', 'A provider key is already configured');
         self::assertSame($this->key(), new KeptProviderKeyFile($this->directory)->read()?->secret());
+    }
+
+    public function testAKeyKeptByAnotherRequestWhileThisKeyIsCheckedIsRefusedAsAlreadyConfigured(): void
+    {
+        $file = new KeptProviderKeyFile($this->directory);
+        $first = $this->key();
+        $browser = $this->browser(static function () use ($file, $first): KeyCheckOutcome {
+            $file->keep(ProviderKey::recognise($first));
+
+            return KeyCheckOutcome::Accepted;
+        });
+
+        $this->post($browser, 'sk-'.self::OTHER_BODY);
+
+        self::assertSelectorTextContains('.flash-error', 'A provider key is already configured');
+        self::assertSame($first, $file->read()?->secret());
     }
 
     public function testASecondKeyIsRefusedWhileAProviderHasAnEnabledAccount(): void
@@ -160,7 +179,10 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         return 'sk-ant-'.self::BODY;
     }
 
-    private function browser(KeyCheckOutcome $outcome, bool $anAccountIsEnabled = false): KernelBrowser
+    /**
+     * @param KeyCheckOutcome|Closure(): KeyCheckOutcome $outcome
+     */
+    private function browser(KeyCheckOutcome|Closure $outcome, bool $anAccountIsEnabled = false): KernelBrowser
     {
         self::ensureKernelShutdown();
         $browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
@@ -170,7 +192,7 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         $container->set(Ledger::class, new DashboardLedger());
         $container->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
         $check = self::createStub(KeyCheck::class);
-        $check->method('check')->willReturn($outcome);
+        $check->method('check')->willReturnCallback($outcome instanceof Closure ? $outcome : static fn (): KeyCheckOutcome => $outcome);
         $container->set(KeepProviderKey::class, new KeepProviderKey($check, new KeptProviderKeyFile($this->directory)));
         $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => $anAccountIsEnabled ? [new Account($provider, Account::DEFAULT)] : []);
