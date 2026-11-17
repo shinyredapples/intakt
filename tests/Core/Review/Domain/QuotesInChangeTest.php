@@ -117,6 +117,38 @@ final class QuotesInChangeTest extends TestCase
         self::assertNotNull($reason);
     }
 
+    public function testALineStartingWithAnInlineTripleBacktickQuoteThatClosesOnTheSameLineOpensNoFence(): void
+    {
+        $text = "```grepName``` is not defined.\nThe call to `otherName` fails too.";
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertSame('none of its 1 quoted code fragments is in the change', $reason);
+    }
+
+    public function testAnInlineTripleBacktickQuoteThatClosesOnTheSameLineIsStillReadAsAQuote(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding("```customerName``` is fine.\n`grepName` is not defined."), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
+    public function testABacktickFenceWithAnInfoStringStillRunsToItsClosingLine(): void
+    {
+        $text = "Suggested fix:\n```js title\nrun(`customerName`);\n```\n`grepName` is not defined.";
+
+        $reason = new QuotesInChange()->reasonToDrop($this->finding($text), self::CHANGE);
+
+        self::assertSame('none of its 1 quoted code fragments is in the change', $reason);
+    }
+
+    public function testATildeFenceWhoseInfoStringHoldsBackticksStillOpensAFence(): void
+    {
+        $reason = new QuotesInChange()->reasonToDrop($this->finding("Suggested fix:\n~~~ `js`\nrun(`grepName`);\n~~~"), self::CHANGE);
+
+        self::assertNull($reason);
+    }
+
     public function testAFenceIndentedUnderANumberedListItemIsLeftOut(): void
     {
         $text = "1. Shell injection.\n    ```js\n    escapeArgument(`suggestedName`);\n    ```";
