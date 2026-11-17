@@ -1,6 +1,10 @@
-<div id="round-{{ reviewed.round }}-verdict">
-{% if reviewed.state.name == 'Judged' %}
+{#- newest comes from the caller, because only the newest round's approval earns the bowing octopus, so the page holds at most one; the words and the summary's chip still carry the outcome alone (D3.3 of #2411, #2269). -#}
+{% set judged = reviewed.state.name == 'Judged' %}
+{% set bowing = judged and (newest ?? false) and reviewed.reviewOutcome is same as(enum('Intakt\\Core\\Dashboard\\Domain\\ReviewOutcome').Approved) %}
+<div id="round-{{ reviewed.round }}-verdict"{% if bowing %} class="character-row"{% endif %}>
+{% if judged %}
 {% set failed = reviewed.failedReviewers %}
+{% if bowing %}{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Bowing, size: 72}, with_context = false) }}{% endif %}
 <p class="outcome" id="round-{{ reviewed.round }}-outcome">{% if reviewed.quorumOutcome is not null %}Outcome: {{ reviewed.quorumOutcome.value }}, decided by the quorum policy {{ reviewed.quorum.value }} over all {{ reviewed.reviewers }} reviewers.{% if failed > 0 %} {{ failed }} of {{ reviewed.reviewers }} reviewers failed, and a failed reviewer gives no approval.{% endif %}{% else %}No outcome shown: this round was started before Intakt recorded its quorum policy.{% endif %}</p>
 {% endif %}
 </div>

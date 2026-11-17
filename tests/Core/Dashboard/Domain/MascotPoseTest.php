@@ -46,6 +46,18 @@ final class MascotPoseTest extends TestCase
         }
     }
 
+    // Only the bowing pose has them, because only it is shown at 72 px, beside an approved newest round; 144 serves as its 2x.
+    public function testTheBowingPoseHasASquare72PxImageOnDiskInEachTheme(): void
+    {
+        foreach (['light', 'dark'] as $theme) {
+            $file = sprintf('%soctopus-bowing-%s-72.webp', self::MASCOT, $theme);
+            self::assertFileExists($file);
+            $size = getimagesize($file);
+            self::assertNotFalse($size);
+            self::assertSame([72, 72], [$size[0], $size[1]]);
+        }
+    }
+
     public function testThePosesAreWaitingConductingAndBowing(): void
     {
         self::assertSame(['waiting', 'conducting', 'bowing'], array_column(MascotPose::cases(), 'value'));
