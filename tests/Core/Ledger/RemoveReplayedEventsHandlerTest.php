@@ -59,6 +59,19 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
         self::assertSame(['{"round":"live"}'], $this->storedPayloads());
     }
 
+    public function testAnIdTheLedgerDoesNotHoldDoesNotStopTheKnownRowFromGoing(): void
+    {
+        $this->requireSqlite();
+        $replayed = $this->storedEvent('{"round":"replayed"}');
+        $this->storedEvent('{"round":"live"}');
+
+        $this->remove(new UuidV7(), $replayed);
+
+        self::assertSame(['{"round":"live"}'], $this->storedPayloads());
+        $this->expectException(DriverException::class);
+        $this->manager->getConnection()->executeStatement('DELETE FROM ledger_event');
+    }
+
     public function testRemovingNoEventsKeepsEveryRow(): void
     {
         $this->storedEvent('{"round":"live"}');
