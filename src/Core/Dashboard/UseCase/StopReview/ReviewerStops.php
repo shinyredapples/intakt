@@ -54,7 +54,7 @@ final readonly class ReviewerStops
             return null;
         }
 
-        // The page offers Stop for the whole round in review, also before the first reviewer starts and while the judge works, and a stop request can only reach a reviewer that started.
+        // An error line rather than a 404, because the page offers Stop for the whole round in review (also before the first reviewer starts and while the judge works) and a stop request can only reach a reviewer that started.
         if ([] === $running) {
             return [self::FLASH_ERROR, 'No reviewer runs in this round right now, so nothing was stopped.'];
         }
