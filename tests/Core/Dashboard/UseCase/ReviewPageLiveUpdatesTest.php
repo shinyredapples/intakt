@@ -369,7 +369,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('2 of 2 reviewers started.', $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-started')->text());
     }
 
-    // Decision D1 of #2341: the Reviewers section and the Now box agree after the judge's call, as the README's demo shows it.
+    // Opened before the start, because that is how the README's demo shows the round (decision D1 of #2341).
     public function testAPageOpenedBeforeItsRoundStartsShowsAgreeingCountsAfterTheJudgesCallWithoutAReload(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
