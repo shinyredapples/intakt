@@ -296,8 +296,9 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
             self::assertNotNull($template);
 
             foreach ($page->filter('[id="'.$stream->attr('target').'"]')->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
-                $parent = $target?->parentNode;
-                $document = $target?->ownerDocument;
+                self::assertNotNull($target);
+                $parent = $target->parentNode;
+                $document = $target->ownerDocument;
                 self::assertNotNull($parent);
                 self::assertNotNull($document);
 
