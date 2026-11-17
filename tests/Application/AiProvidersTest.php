@@ -529,7 +529,7 @@ final class AiProvidersTest extends KernelTestCase
     // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
     private function removeTheVaultsFolderWhenEmpty(): void
     {
-        $vaults = \dirname($this->vaultDirectory());
+        $vaults = dirname($this->vaultDirectory());
         if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
             rmdir($vaults);
         }
