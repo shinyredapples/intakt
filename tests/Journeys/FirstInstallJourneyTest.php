@@ -42,7 +42,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         $this->step('seed it again and keep what exists', $this->seedAgain(...));
         $this->step('open the reviews page', $this->openReviews(...));
         $review = $this->step('start the first review from the first-run page', $this->startTheFirstReview(...));
-        $this->step('open the review page the start redirected to',fn () => $this->openTheFirstReview($review));
+        $this->step('open the review page the start redirected to', fn () => $this->openTheFirstReview($review));
         $this->step('find the first-run page on the projects page', $this->findTheFirstRunPageOnProjects(...));
     }
 
