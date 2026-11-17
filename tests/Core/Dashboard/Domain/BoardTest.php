@@ -154,6 +154,16 @@ final class BoardTest extends TestCase
         self::assertFalse(new Board([])->startsCollapsed(BoardColumn::Done));
     }
 
+    public function testABoardWithoutCardsIsTheFirstDay(): void
+    {
+        self::assertTrue(new Board([])->isFirstDay());
+    }
+
+    public function testABoardWithOneReviewIsNoLongerTheFirstDay(): void
+    {
+        self::assertFalse(new Board([new Review([$this->round('r1', 'feat/a', 1)])])->isFirstDay());
+    }
+
     public function testBacklogStillStartsCollapsedWhenEveryOtherColumnIsEmpty(): void
     {
         $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);

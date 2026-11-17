@@ -11,7 +11,7 @@ use Intakt\Core\Budget\Contract\Prices;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
-use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
+use Intakt\Core\Review\Contract\SampleProjectData;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenFigures;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
@@ -121,7 +121,7 @@ final class SampleProjectSeedTest extends KernelTestCase
     // Set directly, because HF_TOKEN becomes these two only in the image's entrypoint, which this test does not run.
     private function setTheHuggingFaceRouter(): void
     {
-        $_SERVER['OPENAI_COMPATIBLE_BASE_URL'] = SampleProject::HUGGING_FACE_ROUTER;
+        $_SERVER['OPENAI_COMPATIBLE_BASE_URL'] = new SampleProjectData()->routerUrl()->toRawString();
         $_SERVER['OPENAI_COMPATIBLE_API_KEY'] = 'test-value';
     }
 

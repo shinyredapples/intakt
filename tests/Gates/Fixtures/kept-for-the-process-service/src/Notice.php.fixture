@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Core\Platform\Contract\KeptForTheProcess;
+
+final class Notice
+{
+    #[KeptForTheProcess]
+    private bool $reported = false;
+
+    public function __construct(private readonly string $text)
+    {
+    }
+
+    public function once(): ?string
+    {
+        if ($this->reported) {
+            return null;
+        }
+
+        $this->reported = true;
+
+        return $this->text;
+    }
+}

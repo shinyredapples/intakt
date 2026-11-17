@@ -35,7 +35,7 @@ final class EntrypointSampleSeedTest extends TestCase
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
+        new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
     }
 
     protected function tearDown(): void
@@ -118,6 +118,51 @@ final class EntrypointSampleSeedTest extends TestCase
         $this->waitForTheServer();
 
         self::assertSame('https://router.huggingface.co hf-test-value', trim(new Filesystem()->readFile($this->callsFile().'.compatible')));
+    }
+
+    public function testTheRouterUrlComesFromTheSampleProjectDataFile(): void
+    {
+        $this->givenTheDataFileRouterLine('router_url:   https://router.example.test  ');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'HF_TOKEN' => 'hf-test-value']);
+        $this->waitForTheServer();
+
+        self::assertSame('https://router.example.test hf-test-value', trim(new Filesystem()->readFile($this->callsFile().'.compatible')));
+    }
+
+    public function testADataFileWithoutARouterUrlStopsAHuggingFaceStartBeforeTheSeed(): void
+    {
+        $this->givenTheDataFileRouterLine('  router_url: https://router.example.test');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'HF_TOKEN' => 'hf-test-value']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('names no router_url', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
+    }
+
+    public function testAQuotedRouterUrlStopsAHuggingFaceStartBeforeTheSeed(): void
+    {
+        $this->givenTheDataFileRouterLine("router_url: 'https://router.example.test'");
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'HF_TOKEN' => 'hf-test-value']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('names no router_url', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
+    }
+
+    public function testAMissingDataFileStopsAHuggingFaceStartBeforeTheSeed(): void
+    {
+        new Filesystem()->remove($this->dataFile());
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'HF_TOKEN' => 'hf-test-value']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('names no router_url', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
     }
 
     public function testAnOpenAiCompatibleEndpointTheOwnerSetWinsOverTheHuggingFaceToken(): void
@@ -620,6 +665,20 @@ final class EntrypointSampleSeedTest extends TestCase
         $calls = @file_get_contents($this->callsFile());
 
         return is_string($calls) ? $calls : '';
+    }
+
+    private function givenTheDataFileRouterLine(string $line): void
+    {
+        $filesystem = new Filesystem();
+        $contents = preg_replace('/^router_url:.*$/m', $line, $filesystem->readFile($this->dataFile()), 1, $replaced);
+        self::assertSame(1, $replaced);
+        $filesystem->dumpFile($this->dataFile(), (string) $contents);
+    }
+
+    // Where the image's working directory holds it, because the entrypoint reads it by that relative path.
+    private function dataFile(): string
+    {
+        return $this->directory.'/config/sample-project.yaml';
     }
 
     private function callsFile(): string

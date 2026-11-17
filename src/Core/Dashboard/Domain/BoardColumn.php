@@ -25,4 +25,20 @@ enum BoardColumn: string
             default => false,
         };
     }
+
+    // What the column will hold and when, because on a fresh install "Nothing here" tells a newcomer nothing about the board (#2067, D7).
+    public function firstDayLine(): string
+    {
+        return match ($this) {
+            self::WaitingOnYou => 'What only you can decide appears here when Intakt asks you',
+            self::Backlog => 'Tasks appear here when Intakt takes in an issue',
+            self::Ready => 'Tasks appear here once they are ready to plan',
+            self::Planned => 'Tasks appear here once their plan is made',
+            self::Building => 'Tasks appear here while an agent builds them',
+            self::Checking => 'Tasks appear here while their checks run',
+            self::InReview => 'Reviews appear here while a panel reviews a change',
+            self::Merging => 'Tasks appear here while they wait to merge',
+            self::Done => 'Reviews appear here once the judge has decided them',
+        };
+    }
 }

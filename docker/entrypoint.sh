@@ -38,9 +38,20 @@ export_secret MERCURE_JWT_SECRET mercure-jwt-secret
 # The Caddyfile reads MERCURE_JWT_ISSUER without a default, so a missing one is named here instead of ending the web process silently.
 : "${MERCURE_JWT_ISSUER:?set MERCURE_JWT_ISSUER}"
 
-# The Hugging Face router speaks the OpenAI API, so its token stands in for the openai_compatible variables unless the owner set either; no /v1, because the bridge appends it.
+# Read from the sample project's data file, so the seed, the key check and this start name one router; bash alone, because the value is one plain top-level line.
+router_url() {
+    # Quotes are refused, because YAML would strip them and this read would not.
+    local line pattern="^router_url:[[:space:]]*([^[:space:]\"']+)[[:space:]]*\$"
+    while IFS= read -r line || [[ -n $line ]]; do
+        [[ $line =~ $pattern ]] && { echo "${BASH_REMATCH[1]}"; return 0; }
+    done < config/sample-project.yaml
+    return 1
+}
+
+# The Hugging Face router speaks the OpenAI API, so its token stands in for the openai_compatible variables unless the owner set either. Assigned apart from the export, because export would hide a failed read.
 if [[ -n ${HF_TOKEN:-} && -z ${OPENAI_COMPATIBLE_BASE_URL:-} && -z ${OPENAI_COMPATIBLE_API_KEY:-} ]]; then
-    export OPENAI_COMPATIBLE_BASE_URL=https://router.huggingface.co
+    router=$(router_url) || { echo "intakt: config/sample-project.yaml names no router_url, so HF_TOKEN cannot be used" >&2; exit 1; }
+    export OPENAI_COMPATIBLE_BASE_URL=$router
     export OPENAI_COMPATIBLE_API_KEY=$HF_TOKEN
 fi
 
