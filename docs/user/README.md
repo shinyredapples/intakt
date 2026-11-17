@@ -257,6 +257,7 @@ Intakt keeps one process alive across many requests and messages, so a service t
 
 - make the property, or the whole class, `readonly`;
 - implement `Symfony\Contracts\Service\ResetInterface` and clear the property in `reset()`, which Symfony calls between requests and messages;
+- if the value must last the whole process on purpose (a notice logged once per start, for example), mark the property with `#[Intakt\Core\Platform\Contract\KeptForTheProcess]`; the marker exempts only the property it sits on, so a reviewer sees each such property, and an attribute of the same short name from another namespace does not count;
 - if the class is a value object or a data transfer object rather than a service (a console input object for `#[MapInput]` included), mark it with Symfony's `#[Exclude]` attribute so the container does not register it. An `#[Argument]` or `#[Option]` property alone does not exempt a class, because the container still registers it.
 
 Doctrine entities, embeddables, mapped superclasses and column types, and exceptions are not services and are never reported. Neither is the kernel, which performs the reset, nor any class outside `src/` (tests, gate code, scripts), which the container never registers.
