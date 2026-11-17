@@ -19,8 +19,6 @@
 {% set judged = review.lastJudgedRound %}
 {% set open = review.openFindings %}
 {% set can_start = review.source is not null and review.nextNumber is not null %}
-{% set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') %}
-{% set kind_label = 'dashboard/components/figure_kind.html.twig' %}
 {% set chip = 'dashboard/components/chip.html.twig' %}
 {# Each round carries its own mark, because a replay round can follow a live round of the same change. #}
 {% set replay_chip = {label: 'Replay', on_page: true, extra: 'replay-mark'} %}
@@ -35,10 +33,11 @@
         {% else %}
         <p class="task-sentence muted">Task not recorded.</p>
         {% endif %}
+        {# One kind label in this line, on the cost, because it is the one estimate among the facts (decision D5 of #2206). #}
         {{ include('dashboard/components/meta.html.twig', {facts: [
             {text: review.project},
             {text: review.change ?: 'round ' ~ round, mono: true},
-            {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round ' : ' rounds '), include: {template: kind_label, with: {kind: kinds.Counted, at: 'summary-rounds'}}},
+            {icon: 'rounds', text: review.rounds|length ~ (review.rounds|length == 1 ? ' round' : ' rounds')},
             {icon: 'tokens', markup: totals.tokens(review)},
             {icon: 'wallet', text: 'Cost: ', markup: totals.cost(review)},
             {icon: 'clock', text: 'Latest round started ' ~ latest.startedAt|date('Y-m-d H:i:s', 'UTC') ~ ' UTC'},
@@ -121,13 +120,14 @@
             {% if outcome is not null %}{{ include('dashboard/components/outcome_chip.html.twig', {outcome: outcome, on_page: true}, with_context = false) }}{% endif %}
             {# Plain muted text, because the outcome is the headline and the process state only says where the round stands. #}
             <span class="muted small state-judged">{{ reviewed.state.value|capitalize }}</span>
-            {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. That count stays unlabeled: it counts marks, not findings, and no figure is added here. #}
-            <span class="muted small">{% if outcome is null %}outcome not recorded, {% endif %}{% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }} {{ include(kind_label, {kind: kinds.Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
+            {# A round judged before Intakt kept the findings holds only the judge's marks, so a count would pass them off as the reviewers' findings. #}
+            <span class="muted small">{% if outcome is null %}outcome not recorded, {% endif %}{% if reviewed.findingTextRecorded %}{{ reviewed.findings|length }} {{ reviewed.findings|length == 1 ? 'finding' : 'findings' }}{% else %}findings not recorded{% if reviewed.findings is not empty %}, {{ reviewed.findings|length }} marked by the judge{% endif %}{% endif %}</span>
             {% set spanFormat = reviewed.startedAt|date('Y-m-d', 'UTC') == reviewed.judgedAt|date('Y-m-d', 'UTC') ? 'H:i' : 'Y-m-d H:i' %}
             <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
             {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}
         </summary>
-        {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
+        {# Only the newest round's tables carry the kind labels, so the page keeps at most five however many rounds it lists (decision D5 of #2206). #}
+        {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed, labeled: loop.last}, with_context = false) }}
     </details>
 </section>
 {% else %}
@@ -141,7 +141,7 @@
     {% if reviewed.ending is not null %}
     <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">{{ reviewed.reviewOutcome.value }}: {{ reviewed.ending.reason }}</p>
     {% endif %}
-    {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
+    {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed, labeled: loop.last}, with_context = false) }}
 </section>
 {% endif %}
 {% endfor %}

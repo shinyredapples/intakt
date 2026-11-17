@@ -20,6 +20,8 @@ The page comes back with one line:
 | The key has the form of no listed provider | it does not look like a key of any provider Intakt knows; the line lists them | copy the whole key again, from the provider's page |
 | The provider refused the key | the provider said no to it | check that it is the right key, still valid and not revoked |
 | The provider could not be asked to check the key | the check got no usable answer (no connection, or the provider was busy), or no project maps its `light` tier to that provider, so there is no model to ask | try again later, or map a `light` tier to that provider in your settings |
-| A provider key is already configured | a key was set meanwhile | change it in `.env.local` instead |
+| The provider accepted the key, but it could not be written to the data folder | the key was good, but Intakt could not save it, so it is not kept | check that the data folder can be written to, then press **Keep the key** again |
+| The kept provider key cannot be read (followed by "Fix or remove the kept key, or set the key in .env.local.") | a key kept from this page earlier is in the data folder, but Intakt cannot read it | fix or remove the kept key, or set the key in `.env.local` |
+| A provider key is already configured, so no key was kept | a key was set meanwhile, or an account of any provider is already enabled, so the page keeps nothing | to change the key, edit `.env.local` |
 
 The key itself is never shown again and never written to a log: the page names only its provider and at most its last four characters. A key in `.env.local` or in the secrets vault always wins over one kept from this page. The [user guide](../user/README.md#running-the-demo-on-a-hugging-face-token) has the technical details, such as where the kept key is stored.

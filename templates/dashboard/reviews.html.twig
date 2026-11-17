@@ -66,7 +66,7 @@
 </section>
 {% endif %}
 {% if reviews is empty %}
-{{ include('dashboard/components/empty.html.twig', {title: 'No reviews yet', text: 'No review has started yet.'}, with_context = false) }}
+{{ include('dashboard/components/empty.html.twig', {title: 'No reviews yet', text: 'No review has started yet.', pose: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting}, with_context = false) }}
 {% else %}
 <section class="section">
 <ol class="review-rows" aria-label="Review rounds">

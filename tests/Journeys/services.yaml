@@ -3,6 +3,10 @@ services:
     Intakt\Tests\Journeys\Support\JourneyVendor: ~
     Intakt\Plugin\Vendor\Contract\Vendor: '@Intakt\Tests\Journeys\Support\JourneyVendor'
 
+    # Every pasted key in the test environment is accepted without a call, so a journey can paste a placeholder key into the first-run page.
+    Intakt\Tests\Journeys\Support\JourneyKeyCheck: ~
+    Intakt\Plugin\Vendor\Contract\KeyCheck: '@Intakt\Tests\Journeys\Support\JourneyKeyCheck'
+
     # In the share directory, because clearing the cache would remove a recording kept in the cache directory.
     Intakt\Tests\Journeys\Support\RecordingHub:
         decorates: mercure.hub.default
