@@ -8,6 +8,7 @@ use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Tests\Journeys\Support\JourneyTestCase;
 use Intakt\Tests\Journeys\Support\RoundStreamCheck;
+use Intakt\Tests\Journeys\Support\StreamedPage;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\Group;
 use Symfony\Component\DomCrawler\Crawler;
@@ -21,6 +22,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string ENDED_TEXT = 'Judged.';
+    private const string JUDGED_HERE = 'The judge has judged this round. Its call and the findings to fix are in the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string HEADLINE_TARGET = 'target="board-headline"';
     private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
@@ -49,7 +51,8 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $this->step('check the recorded updates against the running page', fn () => new RoundStreamCheck()->assertFitsThePage($round, $updates, $running));
         $this->step('read the reviewers the updates placed by role and model', fn () => $this->readTheReviewersPlacedLive($round, $updates));
         $this->step('read the board headline pushed once a reviewer started', fn () => $this->readThePushedHeadline($round));
-        $this->step('open the judged round', fn () => $this->openTheJudgedRound($round));
+        $judged = $this->step('open the judged round', fn (): Crawler => $this->openTheJudgedRound($round));
+        $this->step('read the judged content without a reload', fn () => $this->readTheJudgedContentWithoutAReload($round, new StreamedPage()->after($round, $updates, $running), $judged));
         $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
     }
 
@@ -150,12 +153,30 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertSame(array_values(array_unique(array_column($now, 1))), array_values(array_unique(array_column($table, 1))));
     }
 
-    private function openTheJudgedRound(string $round): void
+    private function openTheJudgedRound(string $round): Crawler
     {
         $page = $this->visit('/reviews/'.$round);
 
         self::assertStringContainsString(self::ENDED_TEXT, $page->filter('#round-'.$round.'-state')->text());
         self::assertSame('judged', mb_strtolower($page->filter('.state-judged')->text()));
+
+        return $page;
+    }
+
+    // Compared with a fresh load of the judged round, because a page that stayed open must end showing what a reload would show.
+    private function readTheJudgedContentWithoutAReload(string $round, Crawler $live, Crawler $judged): void
+    {
+        self::assertStringContainsString(self::ENDED_TEXT, $live->filter('#round-'.$round.'-state')->text());
+        self::assertSame(self::JUDGED_HERE, $live->filter('#round-'.$round.'-now-judge')->text());
+        self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
+
+        foreach (['#round-'.$round.'-verdict', '#round-'.$round.'-judged', '#round-'.$round.'-tokens', '#review-summary-tokens', '#review-summary-cost'] as $part) {
+            self::assertSame($judged->filter($part)->text(), $live->filter($part)->text(), $part.' on the page that stayed open differs from a fresh load');
+        }
+
+        // Read from the shown text only, because a script's own comments are no text the reader sees.
+        $shown = implode(' ', $live->filterXPath('//body//text()[not(ancestor::script) and not(ancestor::style) and not(ancestor::template)]')->each(static fn (Crawler $text): string => $text->text('')));
+        self::assertStringNotContainsStringIgnoringCase('reload', $shown);
     }
 
     /**
