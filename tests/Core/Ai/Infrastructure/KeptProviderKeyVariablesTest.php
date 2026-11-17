@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Ai\Infrastructure;
 
+use ArrayIterator;
 use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\Provider;
@@ -17,6 +18,12 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
+use Symfony\Component\DependencyInjection\Container;
+use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
+use Symfony\Component\DependencyInjection\EnvVarProcessor;
+use Symfony\Component\DependencyInjection\Exception\EnvNotFoundException;
+use Symfony\Component\String\LazyString;
 
 #[CoversClass(KeptProviderKeyVariables::class)]
 #[UsesClass(ProviderKey::class)]
@@ -86,6 +93,47 @@ final class KeptProviderKeyVariablesTest extends TestCase
         self::assertArrayHasKey('OPENAI_COMPATIBLE_API_KEY', $this->variablesOf($key));
     }
 
+    public function testAKeptHuggingFaceTokenIsNeverPairedWithAnEndpointTheOwnerSetOnlyInTheVault(): void
+    {
+        $processor = $this->processorWithVault(['OPENAI_COMPATIBLE_BASE_URL' => 'https://models.example.test']);
+
+        self::assertSame('https://models.example.test', $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', self::unused(...)));
+        $this->expectException(EnvNotFoundException::class);
+        $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', self::unused(...));
+    }
+
+    public function testAKeyTheOwnerSetOnlyInTheVaultIsNeverPairedWithTheHuggingFaceRouter(): void
+    {
+        $processor = $this->processorWithVault(['OPENAI_COMPATIBLE_API_KEY' => 'owner-key']);
+
+        self::assertSame('owner-key', $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', self::unused(...)));
+        $this->expectException(EnvNotFoundException::class);
+        $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', self::unused(...));
+    }
+
+    public function testAKeptHuggingFaceTokenStandsInWhenTheVaultLeavesTheOpenAiCompatibleVariablesEmpty(): void
+    {
+        $processor = $this->processorWithVault(['OPENAI_COMPATIBLE_BASE_URL' => '', 'OTHER_SECRET' => 'other']);
+
+        self::assertSame('https://router.huggingface.co', $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', self::unused(...)));
+        self::assertSame('hf_'.self::BODY, $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', self::unused(...)));
+    }
+
+    public function testAKeptHuggingFaceTokenLeavesTheOpenAiCompatibleEndpointAloneWhenAVaultValueCannotBeRead(): void
+    {
+        $unreadable = LazyString::fromCallable(static fn (): never => throw new RuntimeException('The vault cannot decrypt this secret.'));
+
+        self::assertSame(['HF_TOKEN' => 'hf_'.self::BODY], $this->variablesOf('hf_'.self::BODY, [new FixedEnvVars(['OPENAI_COMPATIBLE_BASE_URL' => $unreadable])]));
+    }
+
+    public function testAKeptHuggingFaceTokenLeavesTheOpenAiCompatibleEndpointAloneWhenAnotherLoaderFails(): void
+    {
+        $failing = self::createStub(EnvVarLoaderInterface::class);
+        $failing->method('loadEnvVars')->willThrowException(new RuntimeException('The vault cannot be opened.'));
+
+        self::assertSame(['HF_TOKEN' => 'hf_'.self::BODY], $this->variablesOf('hf_'.self::BODY, [$failing]));
+    }
+
     public function testAKeptKeyOfAProviderTheCatalogNoLongerListsLoadsNoVariable(): void
     {
         $keys = self::createStub(KeptProviderKeys::class);
@@ -113,14 +161,41 @@ final class KeptProviderKeyVariablesTest extends TestCase
     }
 
     /**
+     * @param list<EnvVarLoaderInterface> $otherLoaders
+     *
      * @return array<string, string>
      */
-    private function variablesOf(string $key): array
+    private function variablesOf(string $key, array $otherLoaders = []): array
+    {
+        return $this->loaderOf($key, $otherLoaders)->loadEnvVars();
+    }
+
+    /**
+     * @param list<EnvVarLoaderInterface> $otherLoaders
+     */
+    private function loaderOf(string $key, array $otherLoaders): KeptProviderKeyVariables
     {
         $providers = new SymfonyAiProviderCatalog();
         $keys = self::createStub(KeptProviderKeys::class);
         $keys->method('read')->willReturn(ProviderKey::recognise($key, $providers));
 
-        return new KeptProviderKeyVariables($keys, $providers)->loadEnvVars();
+        return new KeptProviderKeyVariables($keys, $providers, otherLoaders: $otherLoaders);
+    }
+
+    // The processor reads a plain string variable itself and calls this only for a prefix it chains.
+    private static function unused(): null
+    {
+        return null;
+    }
+
+    /**
+     * @param array<string, string> $secrets
+     */
+    private function processorWithVault(array $secrets): EnvVarProcessor
+    {
+        $vault = new FixedEnvVars($secrets);
+
+        // In the env processor's order: the vault's loader first, then the kept key's, which the container hands the vault's loader too.
+        return new EnvVarProcessor(new Container(), new ArrayIterator([$vault, $this->loaderOf('hf_'.self::BODY, [$vault])]));
     }
 }

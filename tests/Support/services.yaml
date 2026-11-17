@@ -28,5 +28,12 @@ services:
     Intakt\Tests\Application\RunRequestStep:
         autoconfigure: true
 
+    # Lists no variable, so it changes no value; it shows that the kept provider key's loader is handed every other env loader, as the framework's vault loader is where a vault directory exists.
+    intakt.test.empty_env_var_loader:
+        class: Intakt\Tests\Core\Ai\Infrastructure\FixedEnvVars
+        arguments: [{}]
+        tags: ['container.env_var_loader']
+        public: true
+
     Intakt\Tests\Support\UnsyncedSqlite:
         tags: ['doctrine.middleware']
