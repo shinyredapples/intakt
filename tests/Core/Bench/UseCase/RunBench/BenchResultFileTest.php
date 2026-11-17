@@ -101,8 +101,8 @@ final class BenchResultFileTest extends TestCase
 
     public function testTheResultFileRecordsEachChangesRunsAndWhetherTheyAgreed(): void
     {
-        $caught = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, ['boundary'], [], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000);
-        $missed = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, [], ['boundary' => FailureCause::Reviewer], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000);
+        $caught = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, ['boundary'], [], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, []);
+        $missed = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(false, [], ['boundary' => FailureCause::Reviewer], [], [], null), new RoundTokens(1, 100, 0, 0, 0, 10, 110), 1000, []);
         $agreeing = new RepeatedChange('free-shipping', [new BenchReview('free-shipping', Decision::Changes, [$caught], []), new BenchReview('free-shipping', Decision::Changes, [$caught], [])]);
         $disagreeing = new RepeatedChange('price-list', [new BenchReview('price-list', Decision::Changes, [$caught], []), new BenchReview('price-list', Decision::Changes, [$missed], [])]);
 
@@ -114,7 +114,7 @@ final class BenchResultFileTest extends TestCase
     public function testEachReviewerHoldsItsMatchedDefectsMissesFalseAlarmsTokensAndDuration(): void
     {
         $verdict = new RunVerdict(false, ['caught-one'], ['missed-one' => FailureCause::Reviewer, 'impossible' => FailureCause::Bench], [$this->finding('F2', 9)], [$this->finding('F3', 12)], null);
-        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(2, 500, 0, 0, 0, 40, 540), 3000);
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(2, 500, 0, 0, 0, 40, 540), 3000, []);
 
         $result = $this->written([new BenchReview('free-shipping', Decision::Changes, [$reviewer], [])]);
 
@@ -131,7 +131,7 @@ final class BenchResultFileTest extends TestCase
 
     public function testAReviewerWithoutAnEndHasNoDuration(): void
     {
-        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(true, [], [], [], [], null), new RoundTokens(0, 0, 0, 0, 0, 0, 0), null);
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, new RunVerdict(true, [], [], [], [], null), new RoundTokens(0, 0, 0, 0, 0, 0, 0), null, []);
 
         $result = $this->written([new BenchReview('round-total', Decision::Approve, [$reviewer], [])]);
 
@@ -141,7 +141,7 @@ final class BenchResultFileTest extends TestCase
     public function testAHarnessFailureIsWrittenWithItsReasonAndItsMissesAsTheHarnesses(): void
     {
         $verdict = new RunVerdict(false, [], ['coupon' => FailureCause::Harness], [], [], 'stopped at its output limit');
-        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500);
+        $reviewer = new BenchReviewerResult('role-1', Tier::Standard, $verdict, new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, []);
 
         $result = $this->written([new BenchReview('coupon-code', Decision::Blocked, [$reviewer], [])]);
 
