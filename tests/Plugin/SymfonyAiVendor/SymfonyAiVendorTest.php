@@ -36,6 +36,7 @@ use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\StreamEndedEarly;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
@@ -524,7 +525,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(Decision::Blocked, $verdict->verdict);
         self::assertSame(Verdict::INCOMPLETE_STREAM, $verdict->findings[0]->id);
         self::assertSame(['started', 'unsettled'], array_column($ledger->payloads(), 'phase'));
-        self::assertSame(IncompleteStreamException::class, $ledger->payloads()[1]['failure']);
+        self::assertSame(StreamEndedEarly::class, $ledger->payloads()[1]['failure']);
         /** @var list<array<string, int>> $usages */
         $usages = $ledger->payloads()[1]['usages'];
         self::assertSame([110, 120], array_column($usages, 'prompt'));
