@@ -194,6 +194,8 @@ When the `tests` gate of `bin/check` runs, its line also lists the ten slowest t
 
 The time of every test file, not only the ten slowest, is kept in `tests/durations.json` in the gates cache: the folder `INTAKT_GATES_CACHE` names, or `intakt-gates` in the system temp folder when it is not set. Each run replaces the file. A test file outside the project folder is left out of both the file and the `slowest` list, so no path of your machine shows up in them. The times never change whether the gate passes; when the cache folder cannot be written, the file is simply not written.
 
+In CI, the `check` job restores the analyser caches (PHPStan, PHP CS Fixer and Rector) from main's latest run, so the analysers check only what changed since then. Only runs on main save them; a pull request run uses them but never saves its own. A change to `composer.lock` or to anything under `config/gates/` starts from empty caches. The caches hold analysis results only, no secret and no token.
+
 ## The PHP profile and the environment gate
 
 The profile of the PHP that builds, reviews and CI use is in the repository: `config.platform.php` and the `ext-*` entries under `require` in `composer.json`, and the ini settings in `config/gates/php/check.ini` (for example `zend.assertions=1`). Load the settings by adding `config/gates/php` to `PHP_INI_SCAN_DIR`, after the directories PHP already scans. A leading `:` keeps PHP's own directory first, so from the project folder:
