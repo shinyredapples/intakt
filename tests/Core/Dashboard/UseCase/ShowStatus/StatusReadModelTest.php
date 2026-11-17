@@ -210,6 +210,39 @@ final class StatusReadModelTest extends TestCase
         self::assertSame([['task' => '12', 'step' => 'clone', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
     }
 
+    public function testATaskThatWentThroughThePushShowsItsPushStepPassed(): void
+    {
+        foreach (BuildStep::cases() as $step) {
+            $this->ledger->passBuildStep('alpha', '12', $step->value);
+        }
+
+        $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
+
+        self::assertSame([['task' => '12', 'step' => 'push', 'outcome' => 'passed', 'failure' => null, 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+    }
+
+    public function testATaskThatStoppedAtThePushShowsThePushStepAndItsFailure(): void
+    {
+        foreach (['task', 'mirror', 'clone', 'build_job', 'hand_back_check', 'pre_push_check'] as $step) {
+            $this->ledger->passBuildStep('alpha', '12', $step);
+        }
+        $this->ledger->failBuildStep('12', 'push', 'the remote refused the push of task-12 (git push exited with 1)');
+
+        $lane = $this->projectOf($this->read(), 'alpha')['lanes']['build'];
+
+        self::assertSame([['task' => '12', 'step' => 'push', 'outcome' => 'failed', 'failure' => 'the remote refused the push of task-12 (git push exited with 1)', 'ended_at' => '2026-10-28T12:00:00+00:00']], $lane);
+    }
+
+    public function testAPushFailureIsRedactedBeforeItIsReported(): void
+    {
+        $this->ledger->failBuildStep('12', 'push', 'the forge refused the write for token-abc');
+
+        $json = $this->readModel(redacting: 'token-abc')->json();
+
+        self::assertStringNotContainsString('token-abc', $json);
+        self::assertStringContainsString('the forge refused the write for [redacted]', $json);
+    }
+
     public function testATaskThatIsStillRunningShowsTheLastStepItPassed(): void
     {
         $this->ledger->passBuildStep('alpha', '12', 'task');
