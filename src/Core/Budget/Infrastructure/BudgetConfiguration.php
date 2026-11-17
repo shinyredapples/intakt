@@ -47,7 +47,7 @@ final class BudgetConfiguration implements ConfigurationInterface
         $windows = $node->addDefaultsIfNotSet()->normalizeKeys(false)->children();
 
         foreach (UsageWindow::cases() as $window) {
-            // NaN becomes a string because Symfony Config skips every check for NaN (upstream/config-nan-skips-validation); ints become floats for the guard.
+            // NaN becomes a string because Symfony Config before 8.2.0-BETA2 skips every check for NaN (upstream/config-nan-skips-validation); ints become floats for the guard.
             $windows->floatNode($window->value)->min(1)->max(100)->defaultValue($default)
                 ->beforeNormalization()->ifTrue(static fn (mixed $ceiling): bool => is_float($ceiling) && is_nan($ceiling))->then(static fn (): string => 'NaN')->end()
                 ->validate()->always(static fn (int|float $ceiling): float => (float) $ceiling);
@@ -69,7 +69,7 @@ final class BudgetConfiguration implements ConfigurationInterface
 
     private function amount(NodeBuilder $amounts, string $name): FloatNodeDefinition
     {
-        // A float that is not finite becomes a string so the type check refuses it, because Symfony Config skips every check for NaN and no maximum stops INF.
+        // A float that is not finite becomes a string so the type check refuses it, because Symfony Config before 8.2.0-BETA2 skips every check for NaN and no maximum stops INF.
         $amount = $amounts->floatNode($name)->min(0);
         $amount->beforeNormalization()->ifTrue(static fn (mixed $value): bool => is_float($value) && !is_finite($value))->then(static fn (mixed $value): string => var_export($value, true))->end()
             ->validate()->always(static fn (int|float $value): float => (float) $value);

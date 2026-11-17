@@ -107,6 +107,18 @@ final class PushToTheLocalGitForgeTest extends TestCase
         self::assertNull($this->scenario->remoteTip($this->forge));
     }
 
+    public function testAPushTheForgesHookRefusesGivesAReasonWithoutGitsErrorOutput(): void
+    {
+        $this->scenario->refuseWithAHookIn($this->forge);
+
+        $outcome = $this->scenario->push()->push($this->request());
+
+        self::assertInstanceOf(RefusedPush::class, $outcome);
+        self::assertSame('the remote refused the push of task (git push exited with 1)', $outcome->reason);
+        self::assertStringNotContainsString($this->forge, $outcome->reason);
+        self::assertNull($this->scenario->remoteTip($this->forge));
+    }
+
     public function testARefusedPushIsRecordedWithItsHeadAndReason(): void
     {
         $this->scenario->checkOutTheBranchIn($this->forge);

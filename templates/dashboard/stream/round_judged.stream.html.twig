@@ -6,7 +6,7 @@
 <turbo-stream action="replace" target="round-{{ round }}-verdict"><template>{{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-judged"><template>{{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
 <turbo-stream action="replace" target="round-{{ round }}-now-findings"><template>{{ include('dashboard/_now_findings.html.twig', {round: round, open: reviewed.actFindings, judged: reviewed.round}, with_context = false) }}</template></turbo-stream>
-<turbo-stream action="replace" target="round-{{ round }}-now-judge"><template><p class="muted" id="round-{{ round }}-now-judge">The judge has judged this round. Its call and the findings to fix are in the round below.</p></template></turbo-stream>
+<turbo-stream action="replace" target="round-{{ round }}-now-judge"><template>{{ include('dashboard/_now_judge.html.twig', {reviewed: reviewed}, with_context = false) }}</template></turbo-stream>
 {# The judge's own tokens and cost are settled now, so the round's table, the header's totals and the summary's review-wide cost move with it. #}
 {% import 'dashboard/_review_summary.html.twig' as totals %}
 {% import 'dashboard/_session_summary_parts.html.twig' as part %}
