@@ -4,21 +4,32 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use ArrayObject;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\RebuiltContainer;
 use PHPUnit\Framework\Attributes\CoversNothing;
+use ReflectionMethod;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Bundle\FrameworkBundle\Secrets\SodiumVault;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
 
 // Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
 #[CoversNothing]
 final class AiProvidersTest extends KernelTestCase
 {
+    private const string BODY = 'abcdefgh12345678';
+    private const string KEPT_KEY = 'sk-ant-'.self::BODY;
+
     private const array VARIABLES = [
         'ANTHROPIC_API_KEY',
         'OPENAI_API_KEY',
@@ -45,13 +56,15 @@ final class AiProvidersTest extends KernelTestCase
     {
         $this->containers = self::compiledContainers();
 
-        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET'] as $name) {
+        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET', 'INTAKT_PROVIDER_KEY_DIR'] as $name) {
             $this->saved[$name] = [
                 'server' => $_SERVER[$name] ?? null,
                 'env' => $_ENV[$name] ?? null,
                 'process' => getenv($name),
             ];
         }
+
+        $_SERVER['INTAKT_PROVIDER_KEY_DIR'] = $this->keptKeyDirectory();
     }
 
     protected function tearDown(): void
@@ -71,7 +84,7 @@ final class AiProvidersTest extends KernelTestCase
 
         parent::tearDown();
         $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove($this->vaultDirectory());
+        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
     }
 
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
@@ -164,6 +177,71 @@ final class AiProvidersTest extends KernelTestCase
         $container = $this->bootWith(array_diff_key($this->allSet(), ['OPENAI_API_KEY' => true]), keep: ['OPENAI_API_KEY']);
 
         self::assertTrue($container->has('ai.platform.openai'));
+    }
+
+    public function testAKeptKeyEnablesItsProviderWhenTheEnvironmentHasNone(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertTrue($container->has('ai.platform.anthropic'));
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
+    }
+
+    public function testAValueInTheEnvironmentWinsOverTheKeptKey(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+
+        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => 'value-from-the-environment']);
+
+        self::assertSame('value-from-the-environment', $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testAKeptKeyIsTheVariableWhenTheEnvironmentHasNone(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+
+        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testASecretInTheVaultWinsOverTheKeptKey(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        $this->keepKey(self::KEPT_KEY);
+
+        $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame('value-from-the-vault', $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testTheAnthropicPlatformSendsTheKeptKeyToTheProvider(): void
+    {
+        $this->keepKey(self::KEPT_KEY);
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+        $sent = new ArrayObject();
+        $provider = static function (string $method, string $url, array $options) use ($sent): MockResponse {
+            $headers = $options['normalized_headers'] ?? [];
+            $sent->append(is_array($headers) ? $headers['x-api-key'] ?? null : null);
+
+            return new MockResponse(json_encode([
+                'id' => 'msg_test', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-haiku-5-5',
+                'content' => [['type' => 'text', 'text' => 'ok']],
+                'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
+            ], JSON_THROW_ON_ERROR), ['response_headers' => ['content-type: application/json']]);
+        };
+        self::getContainer()->set('http_client', new MockHttpClient($provider));
+
+        $platform = $container->get('ai.platform.anthropic');
+        self::assertInstanceOf(PlatformInterface::class, $platform);
+        $platform->invoke('claude-haiku-5-5', new MessageBag(Message::ofUser('Answer with the single word: ok')))->asText();
+
+        self::assertSame([['x-api-key: '.self::KEPT_KEY]], $sent->getArrayCopy());
     }
 
     public function testAKeyStoredOnlyInTheSecretsVaultEnablesItsProvider(): void
@@ -266,6 +344,91 @@ final class AiProvidersTest extends KernelTestCase
         );
     }
 
+    public function testAVaultSecretBehindADecryptionSecretOfTheWrongLengthDisablesItsProviderDespiteAKeptKey(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        $this->useMalformedDecryptionSecret();
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
+        );
+    }
+
+    public function testAVaultSecretWithoutAnyUsableDecryptionKeyDisablesItsProviderDespiteAKeptKey(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
+        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.encrypt.public.php');
+        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.decrypt.private.php');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        // Only characters base64 ignores, so the secret decodes to an empty key.
+        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = '!!!';
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertFalse($container->has('ai.platform.anthropic'));
+        self::assertSame(
+            ['anthropic' => 'Provider "anthropic" is disabled: set ANTHROPIC_API_KEY to enable it.'],
+            $container->getParameter(AiServices::DISABLED_PROVIDERS),
+        );
+    }
+
+    public function testAKeptKeyIsUsedBehindAVaultSecretThatAWrongKeyOfTheRightLengthCannotOpen(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        // Another key pair of the right length, which libsodium takes and only fails to decrypt with, so the vault's loader returns nothing where a wrong length throws.
+        $secretKey = str_repeat("\x01", SODIUM_CRYPTO_BOX_SECRETKEYBYTES);
+        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode(sodium_crypto_box_keypair_from_secretkey_and_publickey($secretKey, sodium_crypto_box_publickey_from_secretkey($secretKey)));
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
+        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testAKeptKeyIsUsedBehindAVaultSecretWhosePrivateKeyFileIsMissing(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', 'value-from-the-vault');
+        unlink($this->vaultDirectory().'/'.$this->vaultEnvironment().'.decrypt.private.php');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
+        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    public function testAKeptKeyIsUsedBesideAnEmptySecretInTheVault(): void
+    {
+        $vault = new SodiumVault($this->vaultDirectory());
+        $vault->generateKeys();
+        $vault->seal('ANTHROPIC_API_KEY', '');
+        $_SERVER['APP_RUNTIME_ENV'] = $this->vaultEnvironment();
+        $this->keepKey(self::KEPT_KEY);
+
+        $container = $this->bootWith([...$this->allSet(), 'ANTHROPIC_API_KEY' => '']);
+
+        self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
+        self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
     // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
     private function useMalformedDecryptionSecret(): void
     {
@@ -330,7 +493,29 @@ final class AiProvidersTest extends KernelTestCase
             $vault[basename($file)] = file_get_contents($file);
         }
 
-        return [$variables, $vault];
+        $kept = $this->keptKeyDirectory().'/provider-key.json';
+
+        return [$variables, $vault, is_file($kept) ? file_get_contents($kept) : null];
+    }
+
+    // Reflection, because the container resolves a variable only for a service argument and its method for that is protected.
+    private function resolvedVariable(string $name): mixed
+    {
+        $container = self::$kernel?->getContainer();
+        self::assertNotNull($container);
+
+        return new ReflectionMethod($container, 'getEnv')->invoke($container, $name);
+    }
+
+    private function keepKey(string $key): void
+    {
+        new KeptProviderKeyFile($this->keptKeyDirectory())->keep(ProviderKey::recognise($key));
+    }
+
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    private function keptKeyDirectory(): string
+    {
+        return sys_get_temp_dir().'/ai-providers-test-kept-key';
     }
 
     private function vaultDirectory(): string
