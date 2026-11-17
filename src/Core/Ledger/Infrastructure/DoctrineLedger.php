@@ -24,6 +24,9 @@ use Symfony\Component\Uid\UuidV7;
 // The ledger owns the default entity manager: append flushes every pending change in it and a failed append's reset discards them, so a second entity needs its own manager or a flush of only the ledger record.
 final readonly class DoctrineLedger implements Ledger
 {
+    // SQLite refuses an expression deeper than 1000, and each text adds one LIKE to the OR chain, so a long list is read in parts.
+    private const int TEXTS_PER_QUERY = 200;
+
     public function __construct(
         private ManagerRegistry $registry,
         private ClockInterface $clock,
@@ -66,13 +69,28 @@ final readonly class DoctrineLedger implements Ledger
      */
     public function readMentioning(array $texts): RecordedEvents
     {
-        if ([] === $texts) {
-            return new RecordedEvents([]);
+        $records = [];
+        foreach (array_chunk($texts, self::TEXTS_PER_QUERY) as $chunk) {
+            foreach ($this->recordsMentioningAnyOf($chunk) as $record) {
+                $records[$record->position] = $record;
+            }
         }
 
+        ksort($records);
+
+        return $this->eventsOf($records);
+    }
+
+    /**
+     * @param list<string> $texts
+     *
+     * @return list<EventRecord>
+     */
+    private function recordsMentioningAnyOf(array $texts): array
+    {
         $manager = $this->registry->getManager();
         assert($manager instanceof EntityManagerInterface);
-        $query = $manager->createQueryBuilder()->select('event')->from(EventRecord::class, 'event')->orderBy('event.position', 'ASC');
+        $query = $manager->createQueryBuilder()->select('event')->from(EventRecord::class, 'event');
 
         foreach ($texts as $index => $text) {
             $query->orWhere("event.payload LIKE :text{$index} ESCAPE '!'")->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
@@ -81,7 +99,7 @@ final readonly class DoctrineLedger implements Ledger
         /** @var list<EventRecord> $records */
         $records = $query->getQuery()->getResult();
 
-        return $this->eventsOf($records);
+        return $records;
     }
 
     /**
