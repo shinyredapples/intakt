@@ -24,6 +24,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private const string ENDED_TEXT = 'Judged.';
     private const string JUDGED_HERE = 'The judge has judged this round. Its call and the findings to fix are in the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
+    private const string NONE_STARTED = '0 of 2 reviewers started.';
+    private const string ALL_STARTED = '2 of 2 reviewers started.';
+    private const string ALL_FINISHED = '2 of 2 reviewers finished.';
     private const string IDLE = 'Nothing is running. Nothing needs you.';
     private const string HEADLINE_TARGET = 'target="board-headline"';
     private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
@@ -118,6 +121,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
 
         self::assertSame('in progress', mb_strtolower($page->filter('.state-running')->text()));
         self::assertMatchesRegularExpression(self::PROGRESS, $page->filter('#round-'.$round.'-state')->text());
+        self::assertSame(self::NONE_STARTED, $page->filter('#round-'.$round.'-started')->text());
 
         return $page;
     }
@@ -171,8 +175,9 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertStringContainsString(self::ENDED_TEXT, $live->filter('#round-'.$round.'-state')->text());
         self::assertSame(self::JUDGED_HERE, $live->filter('#round-'.$round.'-now-judge')->text());
         self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
+        self::assertSame([self::ALL_STARTED, self::ALL_FINISHED], [$live->filter('#round-'.$round.'-started')->text(), $live->filter('#round-'.$round.'-now-progress')->text()]);
 
-        foreach (['#round-'.$round.'-verdict', '#round-'.$round.'-judged', '#round-'.$round.'-tokens', '#review-summary-tokens', '#review-summary-cost'] as $part) {
+        foreach (['#round-'.$round.'-started', '#round-'.$round.'-verdict', '#round-'.$round.'-judged', '#round-'.$round.'-tokens', '#review-summary-tokens', '#review-summary-cost'] as $part) {
             self::assertSame($judged->filter($part)->text(), $live->filter($part)->text(), $part.' on the page that stayed open differs from a fresh load');
         }
 
