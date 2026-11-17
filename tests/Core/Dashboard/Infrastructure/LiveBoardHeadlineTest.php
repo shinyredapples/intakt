@@ -1,0 +1,98 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Dashboard\Infrastructure;
+
+use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Domain\Board;
+use Intakt\Core\Dashboard\Domain\Headline;
+use Intakt\Core\Dashboard\Domain\WhoIsWorking;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
+use Intakt\Core\Dashboard\Infrastructure\LiveBoardHeadline;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Review\Contract\ChangeDecision;
+use Intakt\Core\Review\Contract\FailureInWords;
+use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\FixedRoundEndings;
+use Intakt\Tests\Support\KernelTestCase;
+use Intakt\Tests\Support\ReplayMarkBus;
+use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Tests\Support\UnpricedRoundCosts;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
+use Symfony\Component\DomCrawler\Crawler;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
+use Symfony\Component\Uid\Uuid;
+use Twig\Environment;
+
+#[CoversClass(LiveBoardHeadline::class)]
+#[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(LedgerRounds::class)]
+#[UsesClass(RoundPayloads::class)]
+#[UsesClass(ReplayMarks::class)]
+#[UsesClass(LedgerPayloads::class)]
+#[UsesClass(Board::class)]
+#[UsesClass(Headline::class)]
+#[UsesClass(WhoIsWorking::class)]
+#[UsesClass(LiveEvent::class)]
+final class LiveBoardHeadlineTest extends KernelTestCase
+{
+    public function testAPushedDoneColumnCarriesAtMostThePageLimitOfCards(): void
+    {
+        $done = $this->pushedDoneColumnOf(Board::PAGE_LIMIT + 3);
+
+        self::assertCount(Board::PAGE_LIMIT, $done->filter('article[data-project]'));
+    }
+
+    public function testAPushedDoneColumnLinksTheCardsItLeftOutToTheBoard(): void
+    {
+        $more = $this->pushedDoneColumnOf(Board::PAGE_LIMIT + 3)->filter('.col-cards > a.more-link');
+
+        self::assertSame(['Show 3 more', '/'], [$more->text(), $more->attr('href')]);
+    }
+
+    public function testAPushedDoneColumnStillCountsEveryCard(): void
+    {
+        $done = $this->pushedDoneColumnOf(Board::PAGE_LIMIT + 3);
+
+        self::assertSame((string) (Board::PAGE_LIMIT + 3), $done->filter('.col-head .count')->text());
+    }
+
+    public function testAPushedDoneColumnOfExactlyThePageLimitLeavesNoCardOut(): void
+    {
+        $done = $this->pushedDoneColumnOf(Board::PAGE_LIMIT);
+
+        self::assertCount(Board::PAGE_LIMIT, $done->filter('article[data-project]'));
+        self::assertCount(0, $done->filter('.more-link, .more-btn, [data-past-limit]'));
+    }
+
+    private function pushedDoneColumnOf(int $judged): Crawler
+    {
+        $ledger = new DashboardLedger();
+
+        foreach (range(1, $judged) as $number) {
+            $ledger->startRoundOf('change-'.$number, 'r'.$number, 1);
+            $ledger->judgeRound('r'.$number);
+        }
+
+        $live = new PublishedLiveEvents();
+        $this->headlineOn($ledger, $live)->publishLatest(Uuid::v7());
+
+        return new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="col-done"] section#col-done');
+    }
+
+    private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live): LiveBoardHeadline
+    {
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(Environment::class, $twig);
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+
+        return new LiveBoardHeadline($pages, $twig, $live, new LockFactory(new InMemoryStore()), new NullLogger());
+    }
+}

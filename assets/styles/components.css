@@ -263,6 +263,7 @@ a.card.needs:hover, .card.needs.is-hover { filter: brightness(.98); }
 .col-cards > [data-past-limit] { display: none; }
 .more-btn { width: 100%; }
 .more-btn[hidden] { display: none; }
+.more-link { width: 100%; }
 .col-fold { display: none; }
 .col-hide { margin-left: auto; height: 28px; }
 .col-hide:focus-visible { outline-offset: -2px; }
