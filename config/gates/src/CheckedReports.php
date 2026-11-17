@@ -33,7 +33,8 @@ final readonly class CheckedReports
     private const string PULL_REQUESTS_LINE = '/^- \*\*Pull requests and commits:\*\*[ \t]*(?<rest>\S.*)$/m';
 
     // Read as the start of the text, like READY, because only a line that found nothing must carry the date of the search.
-    private const string NONE_FOUND = '/^[`*_\s]*none found\b/i';
+    // Not \b after "found": "_" is a word character, so closing emphasis as in "_none found_" would hide the phrase.
+    private const string NONE_FOUND = '/^[`*_\s]*none found(?![\p{L}\p{N}])/iu';
 
     private const string ANY_DATE = '/\b(?<date>\d{4}-\d{2}-\d{2})\b/';
 
