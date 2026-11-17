@@ -70,11 +70,11 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         self::assertSame('Set up Intakt', $link->text());
     }
 
-    public function testBeforeAReviewHasRunTheProjectListLinksNoFirstRunPage(): void
+    public function testBeforeAReviewHasRunThePageHeadLinksNoFirstRunPage(): void
     {
         $page = $this->browser->request('GET', '/projects');
 
-        self::assertCount(0, $page->filter('main a[href="/setup"]'));
+        self::assertCount(0, $page->filter('.page-head a[href="/setup"]'));
     }
 
     public function testTheProjectListSaysSoWhenTheLedgerHasNoReviews(): void
@@ -84,6 +84,14 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('main .empty', 'No project has started a review yet.');
         self::assertSelectorNotExists('.list');
+    }
+
+    public function testTheEmptyProjectListHasTheFirstRunPageAsItsOneAction(): void
+    {
+        $action = $this->browser->request('GET', '/projects')->filter('main .empty a');
+
+        self::assertSame(['/setup'], $action->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertSame('Set up Intakt', $action->text());
     }
 
     public function testAProjectNameWithMarkupIsEscaped(): void

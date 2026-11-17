@@ -696,6 +696,15 @@ final class DashboardComponentsTest extends KernelTestCase
 
         self::assertSame('Nothing needs you', $empty->filter('h2')->text());
         self::assertSame('Intakt keeps building.', $empty->filter('p')->text());
+        self::assertCount(0, $empty->filter('a'));
+    }
+
+    public function testAnEmptyStateWithAnActionOffersItAsItsOneLink(): void
+    {
+        $empty = $this->render('empty', ['title' => 'No projects yet', 'text' => 'No project yet.', 'action' => ['href' => '/setup', 'label' => 'Set up Intakt']])->filter('.empty');
+
+        self::assertSame(['/setup'], $empty->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertSame('Set up Intakt', $empty->filter('a')->text());
     }
 
     public function testAnEmptyColumnSaysNothingHere(): void

@@ -1,2 +1,2 @@
-{#- text says what happens next. -#}
-<div class="empty"><h2>{{ title }}</h2><p class="muted">{{ text }}</p></div>
+{#- text says what happens next; action, a link with href and label, is the one way on from here. -#}
+<div class="empty"><h2>{{ title }}</h2><p class="muted">{{ text }}</p>{% if action is defined %}<a class="btn primary" href="{{ action.href }}">{{ action.label }}</a>{% endif %}</div>

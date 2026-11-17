@@ -111,7 +111,15 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
         $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 0));
 
         self::assertSame('Nothing is running yet. Start the first review.', $line->text());
-        self::assertCount(0, $line->filter('.count, a'));
+        self::assertCount(0, $line->filter('.count'));
+    }
+
+    public function testAFreshInstallsHeadlineLinksTheFirstRunPage(): void
+    {
+        $link = $this->rendered(new Headline(new WhoIsWorking([]), [], 0))->filter('a');
+
+        self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertSame('Nothing is running yet. Start the first review.', $link->text());
     }
 
     private function rendered(Headline $headline): Crawler
