@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Ai\Contract\ConfiguredKey;
+use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
+use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Core\Dashboard\Domain\AgentStep;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
@@ -27,6 +31,10 @@ use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
 use Intakt\Core\Review\Infrastructure\ConfiguredPanels;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\WebTestCase;
@@ -62,13 +70,21 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(ConfiguredTierResolver::class)]
 #[UsesClass(ConfiguredPanels::class)]
 #[UsesClass(ConfiguredAccounts::class)]
+#[UsesClass(KeptProviderKeyFile::class)]
+#[UsesClass(ProviderKey::class)]
+#[UsesClass(ConfiguredKey::class)]
+#[UsesClass(SymfonyAiProviderCatalog::class)]
+#[UsesClass(AnthropicDescriptor::class)]
+#[UsesClass(OpenAiDescriptor::class)]
+#[UsesClass(HuggingFaceDescriptor::class)]
+#[UsesClass(KeptProviderKeyUnreadable::class)]
 #[UsesClass(DashboardLedger::class)]
 final class FirstRunControllerTest extends WebTestCase
 {
     // The container is built from these, so each one a test changes is cleared first and restored after.
     private const array VARIABLES = [
         'ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'INTAKT_CONFIG',
-        'MCP_OWNER_TOKEN', 'MCP_OWNER_ACCESS', 'INTAKT_COMPOSE_SERVICE', 'INTAKT_SAMPLE_REPOSITORY',
+        'MCP_OWNER_TOKEN', 'MCP_OWNER_ACCESS', 'INTAKT_COMPOSE_SERVICE', 'INTAKT_SAMPLE_REPOSITORY', 'INTAKT_PROVIDER_KEY_DIR',
     ];
 
     private const string SAMPLE_REPOSITORY = '/repos/sample';
@@ -90,9 +106,14 @@ final class FirstRunControllerTest extends WebTestCase
                     strong: { provider: openai, model: other }
         YAML;
 
+    // Built from parts at run time by the test, so no key-shaped literal sits in the repository.
+    private const string KEPT_BODY = 'qrstuvwx12345678';
+
     private const string OWNER_TOKEN = 'owner-token-for-the-first-run-test';
 
     private string $file = '';
+
+    private string $keptDirectory = '';
 
     /** @var array<string, array{server: mixed, env: mixed, process: string|false}> */
     private array $saved = [];
@@ -146,7 +167,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         parent::tearDown();
         $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove($this->file);
+        new Filesystem()->remove([$this->file, $this->keptDirectory]);
     }
 
     public function testWithOneKeyTheProviderStepIsDoneAndNamesTheProviderThatHasIt(): void
@@ -185,9 +206,58 @@ final class FirstRunControllerTest extends WebTestCase
         $page = $this->firstRunPage(self::PROJECTS, []);
 
         self::assertSame('missing', $page->filter('#step-providers')->attr('data-state'));
-        self::assertSame('No provider has a key yet: set the variable named below for a provider you use.', $page->filter('#step-providers .lead')->text());
+        self::assertSame('No provider has a key yet: paste one below, or set the variable named below for a provider you use.', $page->filter('#step-providers .lead')->text());
         self::assertCount(4, $page->filter('#step-providers .keyless li'));
         self::assertStringContainsString('set ANTHROPIC_API_KEY to enable it.', $page->filter('#step-providers .keyless')->text());
+    }
+
+    public function testWithNoKeyTheProviderStepOffersOneKeyFieldWithTheFormToken(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        $form = $page->filter('#step-providers form.keep-provider-key');
+        self::assertSame('/setup/provider-key', $form->attr('action'));
+        self::assertNotSame('', $form->filter('input[name=_token]')->attr('value'));
+        self::assertCount(1, $form->filter('input[type=password][name=key][autocomplete=off]'));
+        self::assertNull($form->filter('input[name=key]')->attr('value'));
+    }
+
+    public function testTheKeyFieldIsLabelledWithTheCatalogsProviders(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame('A key or token for Anthropic, OpenAI or Hugging Face', $page->filter('#step-providers label[for=provider-key]')->text());
+    }
+
+    public function testWithAKeyedProviderTheProviderStepOffersNoKeyField(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('#step-providers form'));
+    }
+
+    public function testAKeptKeyShowsItsProviderAndAtMostItsLastFourCharactersAndNoField(): void
+    {
+        $directory = $this->keptKeyDirectory();
+        new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
+
+        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+
+        self::assertSame('done', $page->filter('#step-providers')->attr('data-state'));
+        self::assertSame('The huggingface key ending in '.substr(self::KEPT_BODY, -4).' is kept. Restart Intakt to use it.', $page->filter('#step-providers .lead')->text());
+        self::assertCount(0, $page->filter('#step-providers form'));
+        self::assertStringNotContainsString(self::KEPT_BODY, (string) $this->browser()->getResponse()->getContent());
+    }
+
+    public function testAnUnreadableKeptKeyIsNamedInsteadOfOfferingTheField(): void
+    {
+        $directory = $this->keptKeyDirectory();
+        new Filesystem()->dumpFile($directory.'/provider-key.json', 'not json');
+
+        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+
+        self::assertStringStartsWith('The key kept in the browser cannot be read', $page->filter('#step-providers .lead')->text());
+        self::assertCount(0, $page->filter('#step-providers form'));
     }
 
     public function testWithNoKeyNoTierOfTheFirstProjectHasAModel(): void
@@ -600,8 +670,9 @@ final class FirstRunControllerTest extends WebTestCase
     /**
      * @param list<string> $keys
      */
-    private function firstRunPage(string $projects, array $keys): Crawler
+    private function firstRunPage(string $projects, array $keys, string $keptKeyDirectory = ''): Crawler
     {
+        $_SERVER['INTAKT_PROVIDER_KEY_DIR'] = '' === $keptKeyDirectory ? sys_get_temp_dir().'/intakt-no-kept-key' : $keptKeyDirectory;
         file_put_contents($this->file, $projects);
 
         foreach ($keys as $key) {
@@ -610,7 +681,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         self::ensureKernelShutdown();
         // Keyed by what the container is built from, so an install with other keys or projects gets a container of its own.
-        $this->containers->useFor([$projects, $keys]);
+        $this->containers->useFor([$projects, $keys, $keptKeyDirectory]);
         $browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
         // Kept between requests, so the ledger double and the bus mock stay for the post after the page that hands out the token.
         $browser->disableReboot();
@@ -654,6 +725,13 @@ final class FirstRunControllerTest extends WebTestCase
     private static function compiledContainers(): CompiledContainers
     {
         return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'first-run');
+    }
+
+    private function keptKeyDirectory(): string
+    {
+        $this->keptDirectory = sys_get_temp_dir().'/'.uniqid('first-run-kept-', true);
+
+        return $this->keptDirectory;
     }
 
     private function unsetVariable(string $name): void

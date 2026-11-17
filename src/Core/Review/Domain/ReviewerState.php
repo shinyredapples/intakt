@@ -19,4 +19,9 @@ enum ReviewerState: string
             self::Queued, self::Running => false,
         };
     }
+
+    public function hasStarted(): bool
+    {
+        return self::Queued !== $this;
+    }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Generator;
+use Intakt\Core\Review\Contract\StreamCutBy;
 use Override;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\RetryableExceptionInterface;
@@ -32,6 +33,7 @@ final class StreamedAnswer extends AbstractStreamListener
 
     public function __construct(
         private readonly AnthropicTextBlocks $blocks,
+        private readonly StreamTally $tally,
     ) {
     }
 
@@ -77,12 +79,16 @@ final class StreamedAnswer extends AbstractStreamListener
 
         try {
             foreach ($stream->getContent() as $delta) {
+                $this->tally->counted($delta);
                 $started = $started || !$delta instanceof TokenUsageInterface && !$delta instanceof MetadataDelta;
 
                 yield $delta;
             }
         } catch (RetryableExceptionInterface $broken) {
-            throw $started ? new IncompleteStreamException(self::BROKEN_MID_STREAM, 0, $broken) : $broken;
+            throw $started ? $this->tally->cut(StreamCutBy::ProviderFailureMidStream, self::BROKEN_MID_STREAM, $broken) : $broken;
+        } catch (IncompleteStreamException $cut) {
+            // Raised again with the platform's message and cause, so the retry rules and the account's cooldown read it as before.
+            throw $this->tally->cut(StreamCutBy::Platform, $cut->getMessage(), $cut->getPrevious());
         }
     }
 

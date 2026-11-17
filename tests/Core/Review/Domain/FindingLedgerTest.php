@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
@@ -275,7 +276,7 @@ final class FindingLedgerTest extends TestCase
     public static function failedReviews(): iterable
     {
         yield 'a recorded invalid output' => [new Verdict(Decision::Changes, [new Finding(Verdict::INVALID_OUTPUT, Severity::P1, null, null, null, 'Broken.', FixableBy::Builder, false, null, null)], [], [])];
-        yield 'incomplete stream' => [Verdict::incompleteStream('the stream ended.')];
+        yield 'incomplete stream' => [Verdict::incompleteStream('the stream ended.', new Evidence('the call to anthropic, model big', 'cut by: platform'))];
         yield 'unread approval' => [Verdict::unreadApproval()];
         yield 'no tools' => [Verdict::noTools()];
         yield 'cut approval' => [Verdict::cutApproval()];

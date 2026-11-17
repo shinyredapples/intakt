@@ -20,6 +20,7 @@ use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -27,6 +28,7 @@ use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\StreamEndedEarly;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
@@ -138,7 +140,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         $this->vendor($this->cutThen($this->cutAgain(...)))->review('alpha', Tier::Strong, $this->request());
 
         [, $unsettled] = $this->ledger->payloads();
-        self::assertSame(['unsettled', IncompleteStreamException::class], [$unsettled['phase'], $unsettled['failure']]);
+        self::assertSame(['unsettled', StreamEndedEarly::class], [$unsettled['phase'], $unsettled['failure']]);
         /** @var list<array<string, int>> $usages */
         $usages = $unsettled['usages'];
         self::assertSame([100], array_column($usages, 'prompt'));
@@ -154,7 +156,7 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         self::assertCount(1, $verdict->findings);
         self::assertSame([true, false], $this->streamed);
         self::assertSame(['started', 'unsettled', 'started', 'settled'], array_column($this->ledger->payloads(), 'phase'));
-        self::assertSame(IncompleteStreamException::class, $this->ledger->payloads()[1]['failure']);
+        self::assertSame(StreamEndedEarly::class, $this->ledger->payloads()[1]['failure']);
         self::assertSame(['big', 'big'], [$this->ledger->payloads()[0]['model'], $this->ledger->payloads()[2]['model']]);
         self::assertNotSame($this->ledger->payloads()[0]['call'], $this->ledger->payloads()[2]['call']);
     }
@@ -167,7 +169,26 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         self::assertStringContainsString('The stream ended before its last event.', $verdict->findings[0]->text);
         self::assertSame([true, false], $this->streamed);
         self::assertSame(['started', 'unsettled', 'started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
-        self::assertSame([IncompleteStreamException::class, IncompleteStreamException::class], [$this->ledger->payloads()[1]['failure'], $this->ledger->payloads()[3]['failure']]);
+        self::assertSame([StreamEndedEarly::class, IncompleteStreamException::class], [$this->ledger->payloads()[1]['failure'], $this->ledger->payloads()[3]['failure']]);
+    }
+
+    public function testAReviewerBlockedByACutStreamKeepsTheProviderTheModelAndTheChunksOfTheFirstCutAsEvidence(): void
+    {
+        $verdict = $this->vendor($this->cutThen($this->cutAgain(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        $evidence = $verdict->findings[0]->evidence;
+        self::assertInstanceOf(Evidence::class, $evidence);
+        self::assertSame('the call to anthropic, model big', $evidence->probe);
+        self::assertSame("cut by: platform\nchunks: 2\nlast chunks: TokenUsage, TextDelta \"{\\\"verdict\\\":\\\"approve\\\",\"", $evidence->output);
+    }
+
+    public function testAReviewerBlockedByACutOutsideAStreamSaysNoChunksWereCounted(): void
+    {
+        $verdict = $this->vendor($this->cutAgain(...))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        $evidence = $verdict->findings[0]->evidence;
+        self::assertInstanceOf(Evidence::class, $evidence);
+        self::assertSame(['the call to anthropic, model big', 'cut by: platform, outside a counted stream'], [$evidence->probe, $evidence->output]);
     }
 
     public function testAProviderFailureOnTheUnstreamedTryAfterACutStreamFollowsTheRuleOfThatFailure(): void

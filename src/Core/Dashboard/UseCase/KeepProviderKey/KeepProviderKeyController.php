@@ -73,8 +73,9 @@ final readonly class KeepProviderKeyController
     {
         try {
             $configured = $this->keeping->keep($key);
-        } catch (KeyNotRecognised) {
-            return [self::FLASH_ERROR, 'That is not an Anthropic key, an OpenAI key or a Hugging Face token, so no key was kept.'];
+        } catch (KeyNotRecognised $notRecognised) {
+            // The message lists the catalog's provider labels and never carries the input, so the page names no vendor of its own.
+            return [self::FLASH_ERROR, $notRecognised->getMessage().' No key was kept.'];
         } catch (KeyRefusedByProvider) {
             return [self::FLASH_ERROR, 'The provider refused the key, so it was not kept.'];
         } catch (KeyNotChecked) {
@@ -86,6 +87,6 @@ final readonly class KeepProviderKeyController
             return [self::FLASH_ERROR, 'The provider accepted the key, but it could not be written to the data folder.'];
         }
 
-        return [self::FLASH_SUCCESS, sprintf('The %s key ending in %s is kept. Restart Intakt to use it.', $configured->kind->value, $configured->lastCharacters)];
+        return [self::FLASH_SUCCESS, sprintf('The %s key ending in %s is kept. Restart Intakt to use it.', $configured->provider, $configured->lastCharacters)];
     }
 }
