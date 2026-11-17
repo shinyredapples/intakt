@@ -22,12 +22,12 @@ final readonly class DiffHunks
 
         foreach (preg_split('~^(?=diff --git )~m', $diff) ?: [] as $file) {
             $paths = $this->paths->in($file);
-            // The last path is the changed file's own, because a rename or a copy names its source first.
             if ([] === $paths) {
                 continue;
             }
 
-            $path = $paths[array_key_last($paths)];
+            // The last path is the changed file's own, because a rename or a copy names its source first.
+            $path = array_last($paths);
             preg_match_all(self::HUNK, $file, $found, PREG_SET_ORDER);
             foreach ($found as $hunk) {
                 $first = (int) $hunk[1];
