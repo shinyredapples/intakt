@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Character;
@@ -39,7 +40,6 @@ use Intakt\Core\Review\Infrastructure\StoredSessionSummaries;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
-use DOMNode;
 use Intakt\Kernel;
 use Intakt\Tests\Core\Mcp\Contract\McpServerClient;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
