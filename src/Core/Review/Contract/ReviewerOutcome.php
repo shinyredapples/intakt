@@ -22,7 +22,7 @@ final readonly class ReviewerOutcome
         public RoundTokens $tokens,
         public ?int $milliseconds,
         // The models the reviewer's calls ran on, from the ledger, because the tier alone does not say which model answered; empty when no call named one.
-        public array $models = [],
+        public array $models,
     ) {
     }
 }

@@ -173,7 +173,7 @@ final class ReviewBenchChangeCommandTest extends TestCase
     private function review(): ChangeReview
     {
         $finding = new Finding('F1', Severity::P1, 'src/shipping.js', $this->plantedLine(), null, 'Off by one.', FixableBy::Builder, false, null, null);
-        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000);
+        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, []);
 
         return new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$reviewer]);
     }

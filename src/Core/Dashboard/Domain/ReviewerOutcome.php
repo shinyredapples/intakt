@@ -42,7 +42,7 @@ final readonly class ReviewerOutcome
     // The tier stands in for a start written before Intakt recorded the model, so every place that names a reviewer says the same.
     public function modelInWords(): string
     {
-        return $this->model ?? $this->tier.' tier, model not recorded';
+        return null === $this->model || '' === $this->model ? $this->tier.' tier, model not recorded' : $this->model;
     }
 
     public function outcome(): ?ReviewOutcome

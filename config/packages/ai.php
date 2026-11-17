@@ -87,8 +87,8 @@ return static function (ContainerConfigurator $container): void {
         }
     };
 
-    // A variable of its own so a test keeps its key outside the install's data volume, where the file is the live key.
-    $keptKeyDirectory = $environmentValue('INTAKT_PROVIDER_KEY_DIR') ?? dirname(__DIR__, 2).'/var/data';
+    // Only the test environment reads a variable for it, so a test keeps its key outside the install's data volume, where the file is the live key, and no other install can be pointed away from it.
+    $keptKeyDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_PROVIDER_KEY_DIR') : null) ?? dirname(__DIR__, 2).'/var/data';
     $container->parameters()->set(AiServices::KEPT_KEY_DIRECTORY, $keptKeyDirectory);
 
     // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
