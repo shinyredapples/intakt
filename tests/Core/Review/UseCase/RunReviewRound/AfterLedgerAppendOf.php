@@ -44,4 +44,12 @@ final readonly class AfterLedgerAppendOf implements Ledger
     {
         return $this->inner->readOfKind($kind);
     }
+
+    /**
+     * @param list<string> $texts
+     */
+    public function readMentioning(array $texts): RecordedEvents
+    {
+        return $this->inner->readMentioning($texts);
+    }
 }

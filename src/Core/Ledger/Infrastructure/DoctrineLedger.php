@@ -6,6 +6,7 @@ namespace Intakt\Core\Ledger\Infrastructure;
 
 use DateTimeZone;
 use Doctrine\DBAL\Exception;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Exception\EntityManagerClosed;
 use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ledger\Contract\AppendResult;
@@ -61,12 +62,41 @@ final readonly class DoctrineLedger implements Ledger
     }
 
     /**
+     * @param list<string> $texts
+     */
+    public function readMentioning(array $texts): RecordedEvents
+    {
+        if ([] === $texts) {
+            return new RecordedEvents([]);
+        }
+
+        $manager = $this->registry->getManager();
+        assert($manager instanceof EntityManagerInterface);
+        $query = $manager->createQueryBuilder()->select('event')->from(EventRecord::class, 'event')->orderBy('event.position', 'ASC');
+
+        foreach (array_values($texts) as $index => $text) {
+            $query->orWhere("event.payload LIKE :text{$index} ESCAPE '!'")->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
+        }
+
+        /** @var list<EventRecord> $records */
+        $records = $query->getQuery()->getResult();
+
+        return $this->eventsOf($records);
+    }
+
+    /**
      * @param array<string, string> $criteria
      */
     private function recordedEventsOf(array $criteria): RecordedEvents
     {
-        $records = $this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']);
+        return $this->eventsOf($this->registry->getManager()->getRepository(EventRecord::class)->findBy($criteria, ['position' => 'ASC']));
+    }
 
+    /**
+     * @param array<EventRecord> $records
+     */
+    private function eventsOf(array $records): RecordedEvents
+    {
         $events = [];
         foreach ($records as $record) {
             $kind = $record->kind();
