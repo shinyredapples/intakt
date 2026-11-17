@@ -42,6 +42,12 @@ final readonly class LedgerReviewPages
         return array_first($this->rounds($this->ledger->readInOrder())->reviews());
     }
 
+    // The review whose first round started last, because a project may hold the reviews of more than one change.
+    public function latestReviewOf(string $project): ?Review
+    {
+        return array_last(array_filter($this->rounds($this->ledger->readInOrder())->reviews(), static fn (Review $review): bool => $review->project === $project));
+    }
+
     /**
      * @return list<ReviewedRound>
      */

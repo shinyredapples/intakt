@@ -1,0 +1,2 @@
+{#- A replace of the whole caption, so the empty element before a demo run becomes the bar; assets/tour-caption.js holds it back while the caption is paused. -#}
+<turbo-stream action="replace" target="tour-caption"><template>{{ include('dashboard/_tour_caption.html.twig', {caption: caption}, with_context = false) }}</template></turbo-stream>

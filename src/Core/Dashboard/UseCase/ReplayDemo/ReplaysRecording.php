@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\TourCaptionUpdates;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
@@ -33,6 +34,7 @@ final readonly class ReplaysRecording
         private ClockInterface $clock,
         private LockFactory $locks,
         private ReplayMarks $marks,
+        private TourCaptionUpdates $captions,
     ) {
     }
 
@@ -151,6 +153,9 @@ final readonly class ReplaysRecording
         if (!$result->succeeded()) {
             throw ReplayStopped::at($recording, $number, (string) $result->failure);
         }
+
+        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
+        $this->captions->publishTheStage();
     }
 
     // A step recorded before the first one follows at once, because the ledger and the capture keep the recorded order.
