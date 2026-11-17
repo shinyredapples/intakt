@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\RoundJudged;
+use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingLedger;
@@ -159,6 +160,7 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
 
         $last = array_last($this->fixture->updates->progress);
+        self::assertInstanceOf(RoundProgress::class, $last);
         self::assertSame([2, 2, 2], [$last->reviewersStarted, $last->reviewersFinished, $last->reviewers]);
     }
 

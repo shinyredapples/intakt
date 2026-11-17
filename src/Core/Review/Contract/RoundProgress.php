@@ -10,8 +10,6 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class RoundProgress
 {
-    public int $reviewersStarted;
-
     // $finished holds each finished reviewer's state by reviewer id, so the page can stop showing it running.
     /**
      * @param array<string, FinishedState> $finished
@@ -21,10 +19,8 @@ final readonly class RoundProgress
         public int $reviewers,
         public bool $judged,
         public array $finished = [],
-        ?int $reviewersStarted = null,
+        public int $reviewersStarted = 0,
     ) {
-        // A finished reviewer has started, so the started count never falls below the finished one.
-        $this->reviewersStarted = max($reviewersFinished, $reviewersStarted ?? 0);
     }
 
     public function isSameAs(?self $other): bool

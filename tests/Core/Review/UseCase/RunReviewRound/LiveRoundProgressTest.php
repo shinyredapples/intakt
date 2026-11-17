@@ -112,11 +112,6 @@ final class LiveRoundProgressTest extends KernelTestCase
         self::assertFalse(new RoundProgress(0, 2, false, [], 1)->isSameAs(new RoundProgress(0, 2, false, [], 0)));
     }
 
-    public function testAProgressNeverCountsFewerReviewersStartedThanFinished(): void
-    {
-        self::assertSame(2, new RoundProgress(2, 2, true)->reviewersStarted);
-    }
-
     public function testTheRoundsFirstProgressIsPublishedAtItsStartBeforeAnyReviewerRuns(): void
     {
         $round = $this->fixture->start(2);
