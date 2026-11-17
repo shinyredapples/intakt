@@ -52,7 +52,7 @@ final readonly class SampleProjectData
 
         $amounts = [];
         foreach ($price as $kind => $amount) {
-            if (!is_string($kind) || !(is_int($amount) || is_float($amount))) {
+            if (!is_string($kind) || !is_int($amount) && !is_float($amount)) {
                 throw $this->broken('prices', $model);
             }
 
