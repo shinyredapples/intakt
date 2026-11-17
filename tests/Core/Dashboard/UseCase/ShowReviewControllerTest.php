@@ -21,6 +21,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\Infrastructure\LedgerTokens;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
@@ -65,6 +66,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(ReplayMarks::class)]
+#[UsesClass(ReplayedStart::class)]
 #[UsesClass(ReviewOutcome::class)]
 final class ShowReviewControllerTest extends DashboardPageTestCase
 {
@@ -124,6 +126,47 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
             [0, 1, 1, 0],
             [$crawler->filter('#round-round-1 .replay-mark')->count(), $crawler->filter('#round-round-2 .replay-mark')->count(), $crawler->filter('.state-block .sb-head .replay-mark')->count(), $crawler->filter('.page-head .replay-mark')->count()],
         );
+    }
+
+    public function testTheReviewPageOfAReplayedRoundShowsItsSpeedFactorBesideTheReplayMark(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->ledger->startReplayedRoundOf('feat/thing', 'round-1', 4.0);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['Replay', 'Played 4 times as fast as recorded'], [$crawler->filter('#round-round-1 .replay-mark')->text(), $crawler->filter('#round-round-1 .replay-factor')->text()]);
+    }
+
+    public function testAJudgedReplayedRoundShowsAFractionalSpeedFactorInItsHeading(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->ledger->startReplayedRoundOf('feat/thing', 'round-1', 1.5);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Played 1.5 times as fast as recorded', $crawler->filter('#round-round-1 summary .replay-factor')->text());
+    }
+
+    public function testTheReviewPageOfALiveRoundShowsNoSpeedFactor(): void
+    {
+        $this->givenACompletedTwoRoundReview();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertCount(0, $crawler->filter('.replay-factor'));
+    }
+
+    public function testAStoredFactorNoReplayCouldRunAtShowsNoSpeedFactorButKeepsTheRound(): void
+    {
+        $this->flagAsReplay('alpha');
+        $this->ledger->startReplayedRoundOf('feat/thing', 'round-1', 0.0);
+        $this->ledger->startReplayedRoundOf('feat/thing', 'round-2', 'fast');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame([2, 0], [$crawler->filter('section.round')->count(), $crawler->filter('.replay-factor')->count()]);
     }
 
     public function testEachRoundListsItsReviewersWithTheirVerdicts(): void

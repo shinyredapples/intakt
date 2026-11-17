@@ -7,6 +7,7 @@ namespace Intakt\Core\Ai\Contract;
 interface KeptProviderKeys
 {
     /**
+     * @throws ProviderKeyAlreadyKept
      * @throws KeptProviderKeyNotWritten
      */
     public function keep(ProviderKey $key): void;
