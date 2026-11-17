@@ -63,14 +63,14 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
     {
         $compatible = Provider::OpenAiCompatible->variables();
 
-        if (Provider::OpenAiCompatible !== $descriptor->tierProvider() || [] !== array_intersect($descriptor->variables(), $compatible) || array_any($compatible, self::isSetInTheEnvironment(...))) {
+        if (Provider::OpenAiCompatible !== $descriptor->tierProvider() || [] !== array_intersect($descriptor->variables(), $compatible) || array_any($compatible, $this->isSetInTheEnvironment(...))) {
             return [];
         }
 
         return array_combine($compatible, [$descriptor->baseUrl()->toString(), $key->secret()]);
     }
 
-    private static function isSetInTheEnvironment(string $name): bool
+    private function isSetInTheEnvironment(string $name): bool
     {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
 
