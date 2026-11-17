@@ -35,12 +35,12 @@ final readonly class HuggingFaceDescriptor implements SymfonyAiProvider
         return '/^hf_[A-Za-z0-9]{8,}$/D';
     }
 
-    // Without /v1, because the generic bridge appends /v1/chat/completions itself.
     public function __construct(
         private Uri $baseUrl = new Uri('https://router.huggingface.co'),
     ) {
     }
 
+    // Without /v1, because the generic bridge appends /v1/chat/completions itself.
     public function baseUrl(): Uri
     {
         return $this->baseUrl;

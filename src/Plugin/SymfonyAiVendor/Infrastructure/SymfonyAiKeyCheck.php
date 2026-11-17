@@ -61,10 +61,10 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
         return $provider->checkModel() ?? $this->lightModelOn($provider->tierProvider());
     }
 
-    // The first project's light tier on that provider, because it is the cheapest model the owner already maps there.
     /**
      * @return non-empty-string|null
      */
+    // The first project's light tier on that provider, because it is the cheapest model the owner already maps there.
     private function lightModelOn(Provider $provider): ?string
     {
         foreach ($this->tiers->projects() as $project) {
