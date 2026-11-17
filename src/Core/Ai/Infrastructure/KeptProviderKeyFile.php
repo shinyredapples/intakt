@@ -52,9 +52,14 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
         }
     }
 
-    // A link fails when anything is at the path, a link to elsewhere included, so of two requests that both found no key only one keeps its key, and a link is never written through.
+    // A link fails when anything is at the path, so of two requests that both found no key only one keeps its key.
+    // PHP may resolve a dangling link at the path before it links, which would put the key at the link's target, so a link is refused first.
     private function linkWhereNothingIs(string $written): void
     {
+        if (is_link($this->file())) {
+            throw new ProviderKeyAlreadyKept();
+        }
+
         set_error_handler(static fn (): bool => true);
 
         try {

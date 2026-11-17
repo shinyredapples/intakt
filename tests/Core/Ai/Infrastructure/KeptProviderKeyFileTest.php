@@ -113,6 +113,23 @@ final class KeptProviderKeyFileTest extends TestCase
         }
     }
 
+    public function testKeepingAKeyIsRefusedByADanglingLinkAtTheFilePathAndCreatesNoFileAtItsTarget(): void
+    {
+        new Filesystem()->mkdir($this->directory);
+        $target = $this->directory.'-outside';
+        symlink($target, $this->directory.'/provider-key.json');
+
+        try {
+            $this->file()->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+            self::fail('The dangling link should refuse the key.');
+        } catch (ProviderKeyAlreadyKept) {
+            self::assertFileDoesNotExist($target);
+            self::assertTrue(is_link($this->directory.'/provider-key.json'));
+        } finally {
+            new Filesystem()->remove($target);
+        }
+    }
+
     public function testKeepingASecondKeyIsRefusedAndTheFirstStays(): void
     {
         $file = $this->file();
