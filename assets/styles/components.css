@@ -607,7 +607,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .finding-card.selected { background: var(--selected); }
 .fc-body { flex: 1; min-width: 0; display: grid; gap: var(--s4); }
 .fc-body p { margin: 0; }
-.fc-place, .fc-call { color: var(--muted); font-size: var(--t13); }
+.fc-place, .fc-call, .fc-merged { color: var(--muted); font-size: var(--t13); }
 .fc-call { font-weight: 600; }
 @media (max-width: 760px) {
   .finding-card { flex-wrap: wrap; }

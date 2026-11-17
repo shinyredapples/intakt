@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\RoundJudged;
+use Intakt\Core\Review\Domain\CausesInOneHunk;
 use Intakt\Core\Review\Domain\QuotesInChange;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Plugin\Vendor\Contract\ProviderFailedTransiently;
@@ -40,7 +41,8 @@ final readonly class JudgeRoundHandler
         }
 
         [$findings, $dropped] = $this->sortedByQuotes($round, $this->rounds->findingsOf($round));
-        $judged = JudgedFindings::of($this->judgementOf($round, $findings), $findings, $dropped);
+        $judgement = new CausesInOneHunk()->checked($this->judgementOf($round, $findings), $findings, $this->rounds->hunksOf($round));
+        $judged = JudgedFindings::of($judgement, $findings, $dropped);
         $this->rounds->record($round, $judged);
         $this->events->dispatch(new RoundJudged($command->roundId, $round->checkoutRoot()));
     }

@@ -70,15 +70,16 @@ final readonly class StoredFindings
         return $this->findingsIn($round->reportedFindingsJson());
     }
 
-    // One entry per place, because two reviewers reporting one file and line send the builder one fix; the act ids are the judge's.
+    // One entry per place and per cause, because two reviewers reporting one file and line, or one change the judge linked, send the builder one fix; the act ids and the links are the judge's.
     /**
-     * @param list<string> $actIds
+     * @param list<string>          $actIds
+     * @param array<string, string> $sameCause
      *
      * @return list<Finding>
      */
-    public function actListOf(ReviewRound $round, array $actIds): array
+    public function actListOf(ReviewRound $round, array $actIds, array $sameCause): array
     {
-        return new OnePerPlace()->actList($this->reportedIn($round), $actIds);
+        return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause);
     }
 
     /**

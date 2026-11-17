@@ -1,0 +1,3 @@
+## Symfony components
+
+| HttpKernel error controller (`framework.error_controller`) | every uncaught exception, a missing page included, is answered by the dashboard's own controller in place of the framework's error page: inside the dashboard's shell with a link back to the board, a 5xx with a reference the log carries too, and as a plain page without project names for a `Host` that does not name the dashboard; a route outside the dashboard (the MCP endpoints) gets the framework's `error_renderer` answer in the requested format | done | #2185, #2419, `src/Core/Dashboard/UseCase/ShowError/ShowErrorController.php` |

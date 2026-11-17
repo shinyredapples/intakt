@@ -23,12 +23,6 @@ final readonly class RoundFinding
         $this->call = JudgeCall::NotActedOn;
     }
 
-    // Joined with "+" as ReviewReport::asLines() joins an act entry's ids for intakt:review, so the page and the console name a merged entry alike.
-    public function entryId(): string
-    {
-        return implode('+', $this->ids());
-    }
-
     /**
      * @return non-empty-list<string>
      */
