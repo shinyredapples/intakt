@@ -70,7 +70,7 @@ final class DemoTourJourneyTest extends JourneyTestCase
         $page = $dashboard->request('GET', '/demo');
         $page = $dashboard->submit($page->selectButton('Play the demo run')->form());
 
-        self::assertSame('The demo run is starting: the caption at the bottom of each page names the stage it is in.', $page->filter('.toast')->text());
+        self::assertSame('The demo run is starting: the caption at the bottom of each page names the stage it is in.', $page->filter('.flash-success')->text());
 
         return $dashboard;
     }
@@ -91,7 +91,7 @@ final class DemoTourJourneyTest extends JourneyTestCase
     {
         $page = $dashboard->request('GET', '/reviews/'.self::SECOND);
 
-        self::assertSame('No finding is open.', $page->filter('#round-'.self::SECOND.'-now-findings')->text());
+        self::assertSame('The reviewers reported no findings, so the judge had nothing to mark.', $page->filter('#round-'.self::SECOND.'-judged')->text());
         self::assertSame('Stage 7 of 7', $page->filter('#tour-caption .tour-count')->text());
         self::assertSame('The new round is judged with nothing left to fix, so the findings are closed.', $page->filter('#tour-caption .tour-line')->text());
     }
