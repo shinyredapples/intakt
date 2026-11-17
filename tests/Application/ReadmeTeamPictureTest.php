@@ -27,6 +27,8 @@ final class ReadmeTeamPictureTest extends TestCase
             $oneX = getimagesize($this->root().'/docs/assets/team-'.$theme.'-1x.webp');
             $twoX = getimagesize($this->root().'/docs/assets/team-'.$theme.'.webp');
 
+            self::assertIsArray($oneX);
+            self::assertIsArray($twoX);
             self::assertSame([760, $height], [$oneX[0], $oneX[1]]);
             self::assertSame($height, (int) round($twoX[1] * 760 / $twoX[0]));
             self::assertGreaterThanOrEqual(1520, $twoX[0]);
