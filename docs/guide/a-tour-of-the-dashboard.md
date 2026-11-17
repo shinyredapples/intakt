@@ -118,7 +118,7 @@ flowchart TD
 
 ## Around the board
 
-- **Lanes and slots** (a strip above the board, called **Who is working**): it says how many are working and opens to one card for each reviewer running now, with its change, project, round and the time it started. While nobody is working it is just the line "Nobody is working", with nothing to open; on a new install it adds what will show up there: "Nobody is working yet: reviewers appear here while they review a change". The builder slots join it later (planned), so there is no idle count yet.
+- **Lanes and slots** (a strip above the board, called **Who is working**): it says how many are working and opens to one card for each reviewer running now, with its change, project, round and the time it started. A small meerkat head sits before each reviewer's role; it is only a picture, and the words beside it say everything. While nobody is working it is just the line "Nobody is working", with nothing to open; on a new install it adds what will show up there: "Nobody is working yet: reviewers appear here while they review a change". The builder slots join it later (planned), so there is no idle count yet.
 - **Budgets:** each AI account's windows (five-hour and weekly), how much is used and reserved, and the forecast for the rest of the window. When a window resets shows only in the admin area.
 - **Projects:** with several projects, each card and item carries its project, a filter shows one or all, and each project has a summary: its share of the week against its actual spend, whether it is paused and why, and what it is working on.
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
