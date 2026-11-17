@@ -80,7 +80,7 @@ final readonly class StatefulServiceResetRule implements Rule
 
     private function isKeptForTheProcess(ReflectionProperty $property): bool
     {
-        // state meant to outlive every reset carries a marker a reviewer sees on the property, instead of hiding in an object behind a readonly one
+        // an explicit marker, because state meant to outlive every reset must be visible to a reviewer on the property instead of hiding in an object behind a readonly one
         return [] !== $property->getAttributes(KeptForTheProcess::class);
     }
 
