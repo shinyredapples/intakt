@@ -251,6 +251,38 @@ final class RunReviewRoundTest extends KernelTestCase
         self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
     }
 
+    public function testAVerdictTheLedgerRefusesOnceIsStoredOnANewTransactionWithoutCallingTheReviewerAgain(): void
+    {
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $vendor = new ScriptedVendor();
+        $ledger = new InMemoryLedger();
+
+        $this->fixture->worker($this->fixture->entities, $vendor, new RefusingVerdictsFirst($ledger, 1))($message);
+
+        self::assertSame(1, $vendor->calls);
+        self::assertSame(ReviewerState::Verdict, $this->fixture->reviewer($message->reviewerId)->state());
+        self::assertSame(1, count(array_filter($ledger->kinds(), static fn (LedgerEventKind $kind): bool => LedgerEventKind::VerdictReceived === $kind)));
+    }
+
+    public function testAVerdictTheLedgerKeepsRefusingIsTriedThreeTimesThenTheReviewerIsHandedBack(): void
+    {
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $vendor = new ScriptedVendor();
+        $ledger = new InMemoryLedger();
+
+        try {
+            $this->fixture->worker($this->fixture->entities, $vendor, new RefusingVerdictsFirst($ledger, 3))($message);
+            self::fail('The refused ledger event was swallowed.');
+        } catch (ReviewEventNotRecorded) {
+        }
+
+        self::assertSame(1, $vendor->calls);
+        self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
+        self::assertNotContains(LedgerEventKind::VerdictReceived, $ledger->kinds());
+    }
+
     public function testARestartedWorkerSkipsFinishedReviewersAndRunsTheRest(): void
     {
         $round = $this->fixture->start(3);

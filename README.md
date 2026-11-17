@@ -46,7 +46,14 @@ The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in pl
 
 On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings. Docker Desktop on Apple Silicon runs the arm64 image.
 
-The timing from `docker compose up -d --wait` to the verdict on the review page is added here once it is measured from a clean clone.
+Measured on 2026-11-17 on a 4-core Intel i7-4790K with 16 GB RAM, Ubuntu 26.10 and Docker 29: ten consecutive runs of the five-minute path, each from a fresh `git archive` of main, with a Hugging Face token in `.env.local` and the terminal path `docker compose exec intakt php bin/console intakt:demo`.
+
+| Measure | Median | Range |
+|---|---|---|
+| Warm start, `docker compose up -d --wait` (image already built) | 13.5 s | 10 to 22 s |
+| Demo review, `intakt:demo` to verdict | 42 s | 13 to 101 s |
+
+Both reviewers answered in all ten runs, and all ten ended with the verdict `changes` on the sample change. A cold start, with the image removed and Docker's build cache kept, took a 42 s build and a 30 s start (72 s), then a 44 s review.
 
 What works without Docker or a provider key:
 
