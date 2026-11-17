@@ -62,7 +62,7 @@ final readonly class Verdict
         return Decision::Changes === $this->verdict && [] === $this->findings;
     }
 
-    public static function incompleteStream(string $reason): self
+    public static function incompleteStream(string $reason, Evidence $evidence): self
     {
         $finding = new Finding(
             id: self::INCOMPLETE_STREAM,
@@ -74,7 +74,7 @@ final readonly class Verdict
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'A verdict counts only when the reviewer finished it; a cut-off stream blocks and never counts as approval or changes.',
-            evidence: null,
+            evidence: $evidence,
         );
 
         return new self(Decision::Blocked, [$finding], [], []);

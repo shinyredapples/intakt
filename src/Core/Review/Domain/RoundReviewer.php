@@ -130,6 +130,11 @@ final class RoundReviewer implements HasPlace
         return $this->state;
     }
 
+    public function hasStarted(): bool
+    {
+        return $this->state->hasStarted();
+    }
+
     public function isFinished(): bool
     {
         return $this->state->isFinished();

@@ -19,11 +19,12 @@ final readonly class RoundProgress
         public int $reviewers,
         public bool $judged,
         public array $finished = [],
+        public int $reviewersStarted = 0,
     ) {
     }
 
     public function isSameAs(?self $other): bool
     {
-        return $other instanceof self && $other->reviewersFinished === $this->reviewersFinished && $other->reviewers === $this->reviewers && $other->judged === $this->judged && $other->finished === $this->finished;
+        return $other instanceof self && $other->reviewersStarted === $this->reviewersStarted && $other->reviewersFinished === $this->reviewersFinished && $other->reviewers === $this->reviewers && $other->judged === $this->judged && $other->finished === $this->finished;
     }
 }

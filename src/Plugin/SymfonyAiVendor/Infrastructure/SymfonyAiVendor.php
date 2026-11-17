@@ -18,6 +18,7 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -26,6 +27,8 @@ use Intakt\Core\Review\Contract\Reviewer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\ReviewServerAccesses;
+use Intakt\Core\Review\Contract\StreamCutBy;
+use Intakt\Core\Review\Contract\StreamEndedEarly;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
 use Intakt\Plugin\Vendor\Contract\NoProviderLeft;
@@ -89,7 +92,7 @@ final readonly class SymfonyAiVendor implements Vendor
         };
 
         // Around the whole review on the provider that answers it, so a substitute keeps its own limit and a review refused for a busy account reserves and counts no usage.
-        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut(fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
+        return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut($answering, fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
     }
 
     // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
@@ -123,13 +126,22 @@ final readonly class SymfonyAiVendor implements Vendor
     /**
      * @param Closure(): Verdict $review
      */
-    private function blockedWhenCut(Closure $review): Verdict
+    private function blockedWhenCut(ResolvedModel $answering, Closure $review): Verdict
     {
         try {
             return $review();
         } catch (IncompleteStreamException $incomplete) {
-            return Verdict::incompleteStream($incomplete->getMessage());
+            return Verdict::incompleteStream($incomplete->getMessage(), $this->evidenceOfCut($answering, $incomplete));
         }
+    }
+
+    // Kept on the finding, because the message alone cannot tell a provider that cut the stream from a platform or an Intakt check that misread a complete one (issue #1964); every try asks the same provider and model.
+    private function evidenceOfCut(ResolvedModel $answering, IncompleteStreamException $cut): Evidence
+    {
+        return new Evidence(
+            sprintf('the call to %s, model %s', $answering->provider->value, $answering->model),
+            $cut instanceof StreamEndedEarly ? $cut->described() : sprintf('cut by: %s, outside a counted stream', StreamCutBy::Platform->value),
+        );
     }
 
     // Twice the tier's default when the mapping sent none, because the model's own default stopped the call then.
