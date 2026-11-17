@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Prompt
+{
+    public function forReviewer(string $name): string
+    {
+        return "Ask {$name} on gpt-5-mini";
+    }
+}

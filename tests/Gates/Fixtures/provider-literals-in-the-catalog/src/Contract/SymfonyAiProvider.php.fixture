@@ -1,0 +1,10 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample\Contract;
+
+interface SymfonyAiProvider extends ProviderDescriptor
+{
+    public function baseUrl(): string;
+}
