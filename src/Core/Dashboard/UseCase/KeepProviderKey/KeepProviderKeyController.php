@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\KeepProviderKey;
 
+use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
 use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
@@ -11,12 +12,12 @@ use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Infrastructure\FormPress;
+use SensitiveParameter;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use SensitiveParameter;
 
 // Limit: the owner session of the dashboard design does not exist yet, so the Host check, the CSRF token and the refusal while a key is configured are all that guard this route.
 final readonly class KeepProviderKeyController
@@ -50,7 +51,7 @@ final readonly class KeepProviderKeyController
     private function refusalWhileConfigured(): ?array
     {
         try {
-            $configured = null !== $this->keeping->configured() || $this->anAccountIsEnabled();
+            $configured = $this->keeping->configured() instanceof ConfiguredKey || $this->anAccountIsEnabled();
         } catch (KeptProviderKeyUnreadable $unreadable) {
             return [self::FLASH_ERROR, $unreadable->getMessage().' Fix or remove the kept key, or set the key in .env.local.'];
         }

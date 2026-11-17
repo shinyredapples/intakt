@@ -169,8 +169,8 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         // Answered without the database, because the page the redirect leads to reads the ledger and this test creates no schema.
         $container->set(Ledger::class, new DashboardLedger());
         $container->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
-        $container->set(KeepProviderKey::class, new KeepProviderKey(new class($outcome) implements KeyCheck {
-            public function __construct(private readonly KeyCheckOutcome $outcome)
+        $container->set(KeepProviderKey::class, new KeepProviderKey(new readonly class($outcome) implements KeyCheck {
+            public function __construct(private KeyCheckOutcome $outcome)
             {
             }
 
@@ -179,8 +179,8 @@ final class KeepProviderKeyControllerTest extends WebTestCase
                 return $this->outcome;
             }
         }, new KeptProviderKeyFile($this->directory)));
-        $container->set(EnabledAccounts::class, new class($anAccountIsEnabled) implements EnabledAccounts {
-            public function __construct(private readonly bool $enabled)
+        $container->set(EnabledAccounts::class, new readonly class($anAccountIsEnabled) implements EnabledAccounts {
+            public function __construct(private bool $enabled)
             {
             }
 
