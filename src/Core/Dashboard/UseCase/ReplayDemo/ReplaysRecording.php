@@ -46,10 +46,21 @@ final readonly class ReplaysRecording
         }
 
         try {
+            $this->refuseUpdatesWithoutTopic($recording);
             $this->refuseRoundsTheLedgerHolds($recording);
             $this->playAtTheRecordedPace($recording, $factor);
         } finally {
             $lock->release();
+        }
+    }
+
+    // Checked before the first append, because a refusal partway through would leave rows whose round blocks any second attempt.
+    private function refuseUpdatesWithoutTopic(Recording $recording): void
+    {
+        foreach ($recording->updates as $number => $update) {
+            if ('' === trim($update->topic)) {
+                throw ReplayIsRefused::becauseAnUpdateHasNoTopic($number);
+            }
         }
     }
 

@@ -110,10 +110,25 @@ final class ReplaysRecordingTest extends TestCase
 
         try {
             $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('The replay should have stopped.');
         } catch (ReplayStopped) {
         }
 
         self::assertSame([1], array_column($this->updates->published(), 'rows'));
+    }
+
+    public function testARecordingWithABlankUpdateTopicIsRefusedBeforeAnyRowIsAppended(): void
+    {
+        $recording = $this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"r"}', 0)], [new CapturedUpdate(new DateTimeImmutable(self::START), ' ', '<turbo-stream></turbo-stream>')]);
+
+        try {
+            $this->replays()->replay($recording, 1.0);
+            self::fail('The replay should have been refused.');
+        } catch (ReplayIsRefused) {
+        }
+
+        self::assertSame([], $this->appended());
+        self::assertSame([], $this->updates->published());
     }
 
     public function testARefusedReplayPublishesNoUpdate(): void
