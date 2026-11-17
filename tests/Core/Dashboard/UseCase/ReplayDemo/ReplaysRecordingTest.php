@@ -119,7 +119,7 @@ final class ReplaysRecordingTest extends TestCase
 
     public function testARecordingWithABlankUpdateTopicIsRefusedBeforeAnyRowIsAppended(): void
     {
-        $recording = $this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"r"}', 0)], [new CapturedUpdate(new DateTimeImmutable(self::START), ' ', '<turbo-stream></turbo-stream>')]);
+        $recording = $this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"r"}', 0)], [new CapturedUpdate($this->clock->now(), ' ', '<turbo-stream></turbo-stream>')]);
 
         try {
             $this->replays()->replay($recording, 1.0);
