@@ -402,7 +402,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame('Outcome not recorded, 1 finding to fix', $updated->filter('#round-'.$id.'-now-judge .now-call')->text());
+        self::assertSame('outcome not recorded, 1 finding to fix', $updated->filter('#round-'.$id.'-now-judge .now-call')->text());
     }
 
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheActListTheVerdictAndTheRoundStateOnceTheRoundIsJudged(): void
