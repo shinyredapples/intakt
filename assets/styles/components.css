@@ -433,6 +433,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .palette .res:hover { background: var(--tint); }
 .palette .res[aria-selected="true"] { background: var(--selected); }
 /* Long names wrap and never clip mid-word (DESIGN.md, Long titles). */
+.palette .res .res-outcome .chip { height: 28px; font: 600 var(--t15)/1 var(--f-head); }
 .palette .res .lbl { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .palette .res .sub { max-width: 50%; color: var(--muted); font-size: var(--t13); text-align: right; overflow-wrap: anywhere; }
 .palette .res[aria-selected="true"] .sub { color: var(--ink); }

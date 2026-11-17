@@ -90,6 +90,7 @@ final readonly class SearchIndex
             $review->project.', '.$review->state->value,
             $this->urls->generate(DashboardRoutes::SHOW_REVIEW, ['round' => $review->round]),
             roundId: $review->round,
+            outcome: $review->outcome,
         );
     }
 
