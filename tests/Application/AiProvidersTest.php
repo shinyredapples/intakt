@@ -86,6 +86,12 @@ final class AiProvidersTest extends KernelTestCase
         parent::tearDown();
         $this->containers->restoreTheSharedCache();
         new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
+
+        // An empty config/secrets/ left behind makes the framework keep its vault env loader in every container compiled after this test.
+        $vaults = dirname($this->vaultDirectory());
+        if (is_dir($vaults) && [] === array_diff(scandir($vaults) ?: [], ['.', '..'])) {
+            rmdir($vaults);
+        }
     }
 
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
