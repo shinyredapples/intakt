@@ -4,7 +4,15 @@
 
 {% block content_width %} roomy{% endblock %}
 
+{# Every review belongs to a project, so the rail keeps Projects current (decision D3 of #2184). #}
+{% set rail_section = 'projects' %}
+
 {% block body %}
+{{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
+    {label: 'Projects', href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_PROJECTS'))},
+    {label: review.project, href: path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS'), {project: review.project})},
+    {label: review.change ?: 'round ' ~ round},
+]}, with_context = false) }}
 {% set total = review.tokens %}
 {% set latest = review.rounds|last %}
 {% set active = review.activeRound %}
@@ -70,7 +78,7 @@
             <p class="muted" id="round-{{ active.round }}-now-progress">{{ active.outcomes|filter(o => o.progress.name != 'Running')|length }} of {{ active.reviewers }} reviewers finished.</p>
             <ul class="sb-list" id="round-{{ active.round }}-now-reviewers">
                 {% for outcome in active.outcomes %}
-                <li><span><strong>{{ outcome.role }}</strong> ({{ outcome.tier }}): <span id="round-{{ active.round }}-now-reviewer-{{ outcome.id }}-state">{{ outcome.progress.value }}</span>{% if outcome.decision is not null %}, {{ outcome.decision }}{% endif %}</span></li>
+                <li><span><strong>{{ outcome.role }}</strong> ({{ outcome.modelInWords }}): <span id="round-{{ active.round }}-now-reviewer-{{ outcome.id }}-state">{{ include('dashboard/stream/_reviewer_outcome.html.twig', {state: outcome.progress.value, outcome: outcome}, with_context = false) }}</span></span></li>
                 {% else %}
                 <li class="muted" id="round-{{ active.round }}-now-none">No reviewer has started yet.</li>
                 {% endfor %}
@@ -123,10 +131,10 @@
     <div class="round-head">
         <h2>Round {{ reviewed.number ?? '(number not recorded)' }}</h2>
         {% if reviewed.isReplay %}{{ include(chip, replay_chip, with_context = false) }}{% endif %}
-        <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, ending: reviewed.ending}, with_context = false) }}</span>
+        <span id="round-{{ reviewed.round }}-head-state">{{ include('dashboard/_round_state.html.twig', {state: reviewed.state, outcome: reviewed.reviewOutcome, plain: true}, with_context = false) }}</span>
     </div>
     {% if reviewed.ending is not null %}
-    <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">Blocked: {{ reviewed.ending.reason }}</p>
+    <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">{{ reviewed.reviewOutcome.value }}: {{ reviewed.ending.reason }}</p>
     {% endif %}
     {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
 </section>
@@ -141,7 +149,7 @@
     <p class="muted log-empty">Each reviewer's tool calls and text appear here as it works.</p>
     <div class="live-reviewers" id="round-{{ active.round }}-live">
     {% for outcome in active.outcomes %}
-        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.tier ~ ')'}) }}
+        {{ include('dashboard/_live_reviewer.html.twig', {reviewer: outcome.id, heading: outcome.role ~ ' (' ~ outcome.modelInWords ~ ')'}) }}
     {% endfor %}
     </div>
     </div>

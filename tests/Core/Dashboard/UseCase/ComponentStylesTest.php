@@ -107,7 +107,35 @@ final class ComponentStylesTest extends WebTestCase
         $rules = $this->rulesOf($this->componentSheet());
 
         self::assertDoesNotMatchRegularExpression('/outline:\s*(?:none|0)\b/', $rules['.palette .q input'] ?? '');
-        self::assertMatchesRegularExpression('/outline-offset:\s*-2px/', $rules['.palette .q input:focus-visible'] ?? '');
+        self::assertArrayHasKey('.palette .q input:focus-visible', $rules);
+    }
+
+    public function testTheSearchFieldsFocusRingFollowsItsRoundedShapeOutsideItsText(): void
+    {
+        $rules = $this->rulesOf($this->componentSheet());
+
+        self::assertMatchesRegularExpression('/border-radius:\s*var\(--r-btn\)/', $rules['.palette .q input'] ?? '');
+        self::assertMatchesRegularExpression('/outline-offset:\s*0;/', $rules['.palette .q input:focus-visible'] ?? '');
+    }
+
+    public function testTheSearchFieldPadsItsTextAwayFromItsFocusRing(): void
+    {
+        self::assertMatchesRegularExpression('/padding:\s*0 var\(--s8\)/', $this->rulesOf($this->componentSheet())['.palette .q input'] ?? '');
+    }
+
+    public function testOnPhonesTheSearchFieldKeepsTheInputFloorOf48Px(): void
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->componentSheet(), $phone);
+
+        self::assertMatchesRegularExpression('/height:\s*48px/', $this->rulesOf(implode("\n", $phone[1]))['.overlay .palette .q input'] ?? '');
+    }
+
+    public function testTheBreadcrumbSeparatesItsCrumbsWithAMutedSlash(): void
+    {
+        $rules = $this->rulesOf($this->componentSheet());
+
+        self::assertMatchesRegularExpression('/content:\s*"\/"/', $rules['.crumbs li + li::before'] ?? '');
+        self::assertMatchesRegularExpression('/color:\s*var\(--muted\)/', $rules['.crumbs li + li::before'] ?? '');
     }
 
     public function testACompactBannerShowsOnlyItsToggleAtEveryWidth(): void
