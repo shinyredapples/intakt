@@ -32,3 +32,5 @@ framework:
             Intakt\Core\Review\UseCase\IndexResolvedFindings\IndexResolvedFindings: async
             Intakt\Core\Review\UseCase\PublishVerdict\PublishVerdict: async
             Intakt\Core\Review\Contract\RoundOpened: async
+            # A replay sleeps at the recorded pace for minutes, so it runs in a queue worker and never in a web worker.
+            Intakt\Core\Dashboard\UseCase\PlayDemo\PlayDemoRun: async
