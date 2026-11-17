@@ -77,6 +77,16 @@ final class StreamEndTest extends TestCase
         $this->textOf([$this->opening(), $this->content(), $this->usage(), self::DONE]);
     }
 
+    // Not checked against the router: if a provider sends its error in this shape, the bridge reports a cut stream instead of the error.
+    public function testAnInStreamErrorObjectWithoutAnErrorKeyRaisesIncompleteStreamException(): void
+    {
+        $this->expectException(IncompleteStreamException::class);
+
+        $error = 'data: '.json_encode(['object' => 'error', 'message' => 'Upstream provider failed.', 'type' => 'server_error', 'code' => 500], JSON_THROW_ON_ERROR)."\n\n";
+
+        $this->textOf([$this->opening(), $this->content(), $error, self::DONE]);
+    }
+
     public function testAConnectionLostMidBodyRaisesATransportErrorInsteadOfIncompleteStreamException(): void
     {
         $this->expectException(TransportExceptionInterface::class);
