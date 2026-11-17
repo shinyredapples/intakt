@@ -89,16 +89,6 @@ final class AiProvidersTest extends KernelTestCase
         $this->removeTheVaultsFolderWhenEmpty();
     }
 
-    // The framework keeps its vault loader in every container built while config/secrets exists, even empty, and a later kernel test then reads that loader.
-    private function removeTheVaultsFolderWhenEmpty(): void
-    {
-        $folder = dirname($this->vaultDirectory());
-
-        if (is_dir($folder) && [] === array_diff(scandir($folder), ['.', '..'])) {
-            rmdir($folder);
-        }
-    }
-
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
     {
         $container = $this->bootWith($this->allSet());
@@ -534,6 +524,15 @@ final class AiProvidersTest extends KernelTestCase
     private function vaultDirectory(): string
     {
         return self::createKernel()->getProjectDir().'/config/secrets/'.$this->vaultEnvironment();
+    }
+
+    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
+    private function removeTheVaultsFolderWhenEmpty(): void
+    {
+        $vaults = dirname($this->vaultDirectory());
+        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
+            rmdir($vaults);
+        }
     }
 
     // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
