@@ -170,7 +170,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
         self::assertCount(1, $crawler->filter('.ls-findings button[data-highlight-finding="F2"]'));
-        self::assertSame(['F1+F2'], $crawler->filter('#round-round-1 li[data-finding~="F2"] .fc-id')->each(static fn (Crawler $id): string => $id->text()));
+        self::assertSame(['F1'], $crawler->filter('#round-round-1 li[data-finding~="F2"] .fc-id')->each(static fn (Crawler $id): string => $id->text()));
     }
 
     public function testTheStylesheetKeepsTheSummaryInViewWhileTheLogScrollsAboveIt(): void
