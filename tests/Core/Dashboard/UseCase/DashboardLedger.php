@@ -124,18 +124,29 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
-    // Written as RoundLedger records the README's round once the judge linked F4 to F1 (one changed comparison) and F3 sits at F2's place.
+    // Written as RoundLedger records a round whose judge linked F4 to F1 and whose F3 sits at F2's place, because the page must fold both merged findings into their entries.
     public function judgeOneEntryPerCause(string $round): void
     {
-        $finding = static fn (string $id, string $severity, int $line, array $merged): array => ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'merged' => $merged, 'file' => 'src/discount.js', 'line' => $line];
-
         $this->add(LedgerEventKind::JudgeDone, [
             'round' => $round,
             'act' => ['F1', 'F2', 'F3', 'F4'],
             'follow_ups' => [],
-            'findings' => [$finding('F1', 'P1', 12, ['F4']), $finding('F2', 'P2', 30, ['F3']), $finding('F3', 'P2', 30, []), $finding('F4', 'P2', 13, [])],
+            'findings' => [
+                ['merged' => ['F4']] + $this->inDiscount('F1', 'P1', 12),
+                ['merged' => ['F3']] + $this->inDiscount('F2', 'P2', 30),
+                ['merged' => []] + $this->inDiscount('F3', 'P2', 30),
+                ['merged' => []] + $this->inDiscount('F4', 'P2', 13),
+            ],
             'same_cause' => ['F4' => 'F1'],
         ]);
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function inDiscount(string $id, string $severity, int $line): array
+    {
+        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
     }
 
     public function judgeToFixAtLine7OfA(string $round, string $text): void

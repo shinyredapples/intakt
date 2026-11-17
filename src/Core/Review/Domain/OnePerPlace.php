@@ -19,28 +19,27 @@ final readonly class OnePerPlace
     /**
      * @param list<Finding>         $reported
      * @param list<string>          $actIds
-     * @param array<string, string> $sameCause the judge's link from a finding's id to the id of another finding with the same cause
+     * @param array<string, string> $sameCause
      *
      * @return list<Finding>
      */
     public function actList(array $reported, array $actIds, array $sameCause = []): array
     {
-        $acting = array_values(array_filter($reported, static fn (Finding $finding): bool => in_array($finding->id, $actIds, true)));
         $entries = [];
         $places = [];
-        $entryOf = [];
+        $seen = [];
 
-        foreach ($acting as $finding) {
-            $at = $this->entryAt($places, $finding) ?? $this->entryOfSameCause($entryOf, $acting, $finding, $sameCause);
+        foreach (array_filter($reported, static fn (Finding $finding): bool => in_array($finding->id, $actIds, true)) as $finding) {
+            $at = $this->entryAt($places, $finding) ?? $this->entryOfSameCause($seen, $finding, $sameCause);
             if (null !== $at) {
                 $entries[$at] = $this->merged($entries[$at], $finding);
-                $entryOf[$finding->id] = $at;
+                $seen[] = [$at, $finding];
 
                 continue;
             }
 
             $entries[] = $finding;
-            $entryOf[$finding->id] = array_key_last($entries);
+            $seen[] = [array_key_last($entries), $finding];
             if (null !== $finding->file && null !== $finding->line) {
                 $places[$finding->file][$finding->line] = array_key_last($entries);
             }
@@ -64,16 +63,15 @@ final readonly class OnePerPlace
 
     // Either finding of a link may come first in panel order, so a link counts in both directions.
     /**
-     * @param array<string, int>    $entryOf
-     * @param list<Finding>         $acting
-     * @param array<string, string> $sameCause
+     * @param list<array{int, Finding}> $seen
+     * @param array<string, string>     $sameCause
      */
-    private function entryOfSameCause(array $entryOf, array $acting, Finding $finding, array $sameCause): ?int
+    private function entryOfSameCause(array $seen, Finding $finding, array $sameCause): ?int
     {
-        foreach ($acting as $earlier) {
+        foreach ($seen as [$at, $earlier]) {
             $linked = ($sameCause[$finding->id] ?? null) === $earlier->id || ($sameCause[$earlier->id] ?? null) === $finding->id;
-            if ($linked && isset($entryOf[$earlier->id]) && $this->nearby($earlier, $finding)) {
-                return $entryOf[$earlier->id];
+            if ($linked && $this->nearby($earlier, $finding)) {
+                return $at;
             }
         }
 
