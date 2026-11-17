@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use Doctrine\DBAL\Types\Type;
+use Intakt\Core\Platform\Contract\KeptForTheProcess;
 use PhpParser\Node;
 use PHPStan\Analyser\Scope;
 use PHPStan\BetterReflection\Reflection\Adapter\ReflectionProperty;
@@ -22,8 +23,6 @@ use Throwable;
  */
 final readonly class StatefulServiceResetRule implements Rule
 {
-    public const string KEPT_FOR_THE_PROCESS = 'Intakt\Core\Platform\Contract\KeptForTheProcess';
-
     public function __construct(private ContainerRegistration $registration)
     {
     }
@@ -82,7 +81,7 @@ final readonly class StatefulServiceResetRule implements Rule
     private function isKeptForTheProcess(ReflectionProperty $property): bool
     {
         // state meant to outlive every reset carries a marker a reviewer sees on the property, instead of hiding in an object behind a readonly one
-        return [] !== $property->getAttributes(self::KEPT_FOR_THE_PROCESS);
+        return [] !== $property->getAttributes(KeptForTheProcess::class);
     }
 
     private function isDeclaredInTheRegisteredResource(ReflectionProperty $property): bool
