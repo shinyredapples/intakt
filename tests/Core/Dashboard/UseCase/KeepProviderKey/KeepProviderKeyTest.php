@@ -26,6 +26,7 @@ use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -200,7 +201,7 @@ final class KeepProviderKeyTest extends TestCase
             return $answer;
         });
 
-        return new KeepProviderKey(new SymfonyAiKeyCheck($http, $providers, $this->lightTiers()), new KeptProviderKeyFile($this->directory, $providers), $providers);
+        return new KeepProviderKey(new SymfonyAiKeyCheck($http, $providers, $this->lightTiers(), new NullLogger()), new KeptProviderKeyFile($this->directory, $providers), $providers);
     }
 
     private function lightTiers(): TierResolver

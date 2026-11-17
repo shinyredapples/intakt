@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
+use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
@@ -27,6 +28,7 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
         private HttpClientInterface $http,
         private SymfonyAiProviderCatalog $providers,
         private TierResolver $tiers,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -45,8 +47,10 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
                 ->asText();
         } catch (AuthenticationException) {
             return KeyCheckOutcome::Refused;
-        } catch (Throwable) {
-            // Dropped without its message or chain, because a provider's text can echo the request headers that carry the key.
+        } catch (Throwable $failure) {
+            // Only the class, because a provider's text can echo the request headers that carry the key, and a key not yet kept is no held credential the log redacts.
+            $this->logger->warning('A provider key could not be checked.', ['provider' => $key->provider(), 'exception_class' => $failure::class]);
+
             return KeyCheckOutcome::NotChecked;
         }
 
