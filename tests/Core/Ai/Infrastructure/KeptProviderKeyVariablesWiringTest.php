@@ -29,6 +29,10 @@ final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
             $expected[] = $container->get('secrets.env_var_loader');
         }
 
-        self::assertEqualsCanonicalizing(array_map(spl_object_id(...), $expected), array_map(spl_object_id(...), [...$others]));
+        $actual = [...$others];
+        self::assertCount(count($expected), $actual);
+        foreach ($expected as $loader) {
+            self::assertContains($loader, $actual);
+        }
     }
 }
