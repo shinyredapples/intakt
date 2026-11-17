@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\Character;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
@@ -64,6 +65,7 @@ use Twig\Environment;
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
 #[UsesClass(ReviewerOutcome::class)]
+#[UsesClass(ReviewOutcome::class)]
 #[UsesClass(ProjectMode::class)]
 #[UsesClass(RoundProgress::class)]
 #[UsesClass(FinishedState::class)]
@@ -324,7 +326,83 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertSame('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
+        self::assertStringStartsWith('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
+    }
+
+    public function testAPageOpenedBeforeTheRoundStartsStatesTheJudgesCallInTheNowBoxOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(ReviewOutcome::ChangesRequested->value, $updated->filter('#round-'.$id.'-now-judge .now-outcome')->text());
+    }
+
+    public function testAPageOpenedBeforeTheRoundStartsCountsTheFindingsToFixInTheNowBoxOnceTheRoundIsJudged(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('2 findings to fix', $updated->filter('#round-'.$id.'-now-judge .now-to-fix')->text());
+    }
+
+    public function testTheNowBoxCountsTheFindingsToFixAsTheOpenFindingsItLists(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame($updated->filter('#round-'.$id.'-now-findings a.sb-finding')->count().' findings to fix', $updated->filter('#round-'.$id.'-now-judge .now-to-fix')->text());
+    }
+
+    public function testTheNowBoxCountsOneFindingToFixInTheSingular(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('1 finding to fix', $updated->filter('#round-'.$id.'-now-judge .now-to-fix')->text());
+    }
+
+    public function testTheJudgesCallInTheNowBoxLinksToTheJudgedRound(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $link = $updated->filter('#round-'.$id.'-now-judge a');
+        self::assertSame('#round-'.$id, $link->attr('href'));
+        self::assertCount(1, $updated->filter('section.round'.$link->attr('href')));
+    }
+
+    public function testAJudgedRoundWithNothingToFixStatesItsCallAndNoFindingToFixInTheNowBox(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, []);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(
+            'The judge has judged this round. Its call and the findings to fix are in the round below. '.ReviewOutcome::Approved->value.', 0 findings to fix',
+            $updated->filter('#round-'.$id.'-now-judge')->text(),
+        );
+    }
+
+    // A round started without a recorded quorum has no outcome, and a policy must never be guessed.
+    public function testAJudgedRoundWithoutARecordedOutcomeSaysSoInTheNowBox(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('Outcome not recorded, 1 finding to fix', $updated->filter('#round-'.$id.'-now-judge .now-call')->text());
     }
 
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheActListTheVerdictAndTheRoundStateOnceTheRoundIsJudged(): void
@@ -1078,6 +1156,33 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->ledger->judgeFindings($id, []);
 
         return [$round, $id, $page];
+    }
+
+    /**
+     * @param array<string, 'act'|'defer'|'reject'> $marks
+     */
+    private function givenTheRoundIsJudgedWith(Uuid $round, array $marks): void
+    {
+        $id = $round->toRfc4122();
+        $this->ledger->startReviewer($id, 'security');
+        $this->ledger->startReviewer($id, 'correctness');
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 0, false));
+        $this->ledger->answer($id, 'security', count($marks));
+        $this->ledger->answer($id, 'correctness', count($marks));
+        $this->ledger->judgeFindings($id, $marks);
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(2, 2, true));
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeTheRoundOfQuorumStarted(): array
+    {
+        $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOfQuorum('feat/thing', $id, 'all');
+
+        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
     }
 
     private function publishedStreams(): string

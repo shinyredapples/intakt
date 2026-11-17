@@ -1,0 +1,7 @@
+{#- The call in the outcome words every page uses, so the Now box and the round below never word the same call apart. -#}
+{% set outcome = reviewed.reviewOutcome %}
+{% set to_fix = reviewed.actFindings|length %}
+<div id="round-{{ reviewed.round }}-now-judge">
+<p class="muted">The judge has judged this round. Its call and the findings to fix are in the round below.</p>
+<p class="now-call"><a href="#round-{{ reviewed.round }}"><strong class="now-outcome">{{ outcome is null ? 'Outcome not recorded' : outcome.value }}</strong>, <span class="now-to-fix">{{ to_fix }} {{ to_fix == 1 ? 'finding' : 'findings' }} to fix</span></a></p>
+</div>
