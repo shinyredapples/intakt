@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Tests\Application;
 
 use ArrayObject;
-use FilesystemIterator;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
@@ -87,7 +86,7 @@ final class AiProvidersTest extends KernelTestCase
         parent::tearDown();
         $this->containers->restoreTheSharedCache();
         new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
-        $this->removeTheVaultsDirectoryIfEmpty();
+        $this->removeTheVaultsFolderWhenEmpty();
     }
 
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
@@ -522,18 +521,18 @@ final class AiProvidersTest extends KernelTestCase
         return sys_get_temp_dir().'/ai-providers-test-kept-key';
     }
 
-    // An empty config/secrets/ left behind makes the framework keep its vault env loader in every container compiled after this test.
-    private function removeTheVaultsDirectoryIfEmpty(): void
-    {
-        $vaults = dirname($this->vaultDirectory());
-        if (is_dir($vaults) && !new FilesystemIterator($vaults)->valid()) {
-            rmdir($vaults);
-        }
-    }
-
     private function vaultDirectory(): string
     {
         return self::createKernel()->getProjectDir().'/config/secrets/'.$this->vaultEnvironment();
+    }
+
+    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
+    private function removeTheVaultsFolderWhenEmpty(): void
+    {
+        $vaults = dirname($this->vaultDirectory());
+        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
+            rmdir($vaults);
+        }
     }
 
     // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.

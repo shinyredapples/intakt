@@ -1,14 +1,14 @@
 {#- Its own partial, because the judged round's live update replaces it with the same markup a reload renders. -#}
-{%- set kinds = enum('Intakt\\Core\\Platform\\Contract\\FigureKind') -%}
 <div class="table-scroll" id="round-{{ reviewed.round }}-tokens" tabindex="0" role="region" aria-label="Tokens and cost of round {{ reviewed.round }}">
 <table class="ledger tokens">
-    <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost</th></tr></thead>
+    {#- One label for the table, on the cost, because the token counts are the provider's own figures and the cost is the one figure Intakt works out (decision D5 of #2206). An unknown cost has no figure to label. An older round's table goes without, and the judged round's live update is the newest round's, so it keeps the label. -#}
+    <thead><tr><th class="num">Prompt</th><th class="num">Cache read</th><th class="num">Cache write</th><th class="num">Cached</th><th class="num">Completion</th><th class="num">Total</th><th>Cost{% if (labeled ?? true) and reviewed.cost.usd is not null %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Estimated, at: 'round-' ~ reviewed.round ~ '-cost'}, with_context = false) }}{% endif %}</th></tr></thead>
     <tbody>
         <tr>
             {% for tokens in [reviewed.tokens.prompt, reviewed.tokens.cacheRead, reviewed.tokens.cacheWrite, reviewed.tokens.cached, reviewed.tokens.completion, reviewed.tokens.total] %}
-            <td class="num">{{ tokens }} {{ include('dashboard/components/figure_kind.html.twig', {kind: kinds.Measured, at: 'round-' ~ reviewed.round ~ '-tokens-' ~ loop.index}, with_context = false) }}</td>
+            <td class="num">{{ tokens }}</td>
             {% endfor %}
-            <td>{{ include('dashboard/components/cost.html.twig', {cost: reviewed.cost, at: 'round-' ~ reviewed.round ~ '-cost'}, with_context = false) }}</td>
+            <td>{{ include('dashboard/components/cost_plain.html.twig', {cost: reviewed.cost}, with_context = false) }}</td>
         </tr>
     </tbody>
 </table>

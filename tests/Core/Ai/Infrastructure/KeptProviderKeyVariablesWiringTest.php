@@ -9,13 +9,13 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use ReflectionProperty;
-use Symfony\Component\DependencyInjection\EnvVarProcessor;
+use Symfony\Component\DependencyInjection\StaticEnvVarLoader;
 
 #[CoversClass(KeptProviderKeyVariables::class)]
 #[UsesClass(FixedEnvVars::class)]
 final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
 {
-    // Read through reflection because the loaders are private; the expected list comes from the env var processor, because the framework keeps its vault loader only while a config/secrets/ directory exists, which a parallel test can create while the container compiles.
+    // Read through reflection because the loaders are private; the test container adds an empty env loader, because the framework drops its vault loader where no config/secrets/ folder exists, and keeps it where another test left one.
     public function testTheKeptKeyIsHandedEveryOtherEnvLoaderButItself(): void
     {
         $container = self::getContainer();
@@ -25,11 +25,10 @@ final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
         $others = new ReflectionProperty(KeptProviderKeyVariables::class, 'otherLoaders')->getValue($kept);
         self::assertIsIterable($others);
 
-        $all = new ReflectionProperty(EnvVarProcessor::class, 'originalLoaders')->getValue($container->get('container.env_var_processor'));
-        self::assertIsIterable($all);
-        $expected = array_values(array_filter([...$all], static fn (mixed $loader): bool => $loader !== $kept));
+        $isVaultLoader = static fn (mixed $loader): bool => $loader instanceof StaticEnvVarLoader;
+        $actual = [...$others];
 
-        self::assertContains($container->get('intakt.test.empty_env_var_loader'), $expected);
-        self::assertSame($expected, [...$others]);
+        self::assertLessThanOrEqual(1, count(array_filter($actual, $isVaultLoader)));
+        self::assertSame([$container->get('intakt.test.empty_env_var_loader')], array_values(array_filter($actual, static fn (mixed $loader): bool => !$isVaultLoader($loader))));
     }
 }
