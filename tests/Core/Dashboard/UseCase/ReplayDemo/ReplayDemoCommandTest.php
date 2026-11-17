@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
@@ -17,6 +18,7 @@ use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -42,6 +44,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(RecordingIsMalformed::class)]
 #[UsesClass(CapturedUpdate::class)]
 #[UsesClass(LiveEvent::class)]
+#[UsesClass(ReplayMarks::class)]
+#[UsesClass(ReplayMark::class)]
 final class ReplayDemoCommandTest extends TestCase
 {
     private const string STREAM = '<turbo-stream action="replace" target="round-state"><template>r-1 started</template></turbo-stream>';
@@ -201,10 +205,22 @@ final class ReplayDemoCommandTest extends TestCase
         self::assertStringContainsString('The replay stopped after 1 of 2 ledger events: the reviewer_started row was not appended (disk full).', $this->flat($tester));
     }
 
-    private function tester(string $composeService): CommandTester
+    public function testAReplayIsRefusedWhileTheDemoProjectIsNoReplay(): void
     {
+        $tester = $this->tester('intakt', ReplayMark::Live);
+
+        $tester->execute(['recording' => $this->recordingFile()]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('The demo project demo-replay is not marked as a replay, so nothing is replayed; create it with intakt:demo:create first.', $this->flat($tester));
+        self::assertSame(0, $this->appendedRows());
+    }
+
+    private function tester(string $composeService, ReplayMark $demoProject = ReplayMark::Replay): CommandTester
+    {
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), new ReplayMarks(new MarkAnsweringQueries($demoProject)));
         $application = new Application();
-        $application->addCommand(new ReplayDemoCommand(new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore())), $this->format, new Filesystem(), $composeService));
+        $application->addCommand(new ReplayDemoCommand($replays, $this->format, new Filesystem(), $composeService));
 
         return new CommandTester($application->find('intakt:demo:replay'));
     }

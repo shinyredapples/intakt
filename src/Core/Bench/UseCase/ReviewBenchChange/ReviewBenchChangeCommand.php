@@ -6,7 +6,7 @@ namespace Intakt\Core\Bench\UseCase\ReviewBenchChange;
 
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
-use Intakt\Core\Bench\Contract\FailureCause;
+use Intakt\Core\Bench\Domain\FailureCause;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Symfony\Component\Console\Attribute\Argument;
 use Symfony\Component\Console\Attribute\AsCommand;
