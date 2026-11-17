@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Reasoning
+{
+    /**
+     * @return list<string>
+     */
+    public function ids(): array
+    {
+        return [
+            'o3',
+            'o3-2025-04-16',
+            'o1-preview',
+            'o4-mini-2025-04-16',
+            'o3-pro-2025-06-10',
+            'o3-deep-research',
+            'O1-MINI',
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function words(): array
+    {
+        return ['o3-compatible', 'proto3-preview', 'o3x', 'radio1-preview'];
+    }
+}

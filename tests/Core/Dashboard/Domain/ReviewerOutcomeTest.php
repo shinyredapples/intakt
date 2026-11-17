@@ -11,11 +11,10 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReviewerOutcome::class)]
-#[UsesClass(ReviewOutcome::class)]
+#[CoversClass(ReviewOutcome::class)]
 final class ReviewerOutcomeTest extends TestCase
 {
     /**
