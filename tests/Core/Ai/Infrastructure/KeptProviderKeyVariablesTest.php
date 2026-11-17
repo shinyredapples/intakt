@@ -97,26 +97,26 @@ final class KeptProviderKeyVariablesTest extends TestCase
     {
         $processor = $this->processorWithVault(['OPENAI_COMPATIBLE_BASE_URL' => 'https://models.example.test']);
 
-        self::assertSame('https://models.example.test', $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', self::unused(...)));
+        self::assertSame('https://models.example.test', $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', $this->unused(...)));
         $this->expectException(EnvNotFoundException::class);
-        $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', self::unused(...));
+        $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', $this->unused(...));
     }
 
     public function testAKeyTheOwnerSetOnlyInTheVaultIsNeverPairedWithTheHuggingFaceRouter(): void
     {
         $processor = $this->processorWithVault(['OPENAI_COMPATIBLE_API_KEY' => 'owner-key']);
 
-        self::assertSame('owner-key', $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', self::unused(...)));
+        self::assertSame('owner-key', $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', $this->unused(...)));
         $this->expectException(EnvNotFoundException::class);
-        $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', self::unused(...));
+        $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', $this->unused(...));
     }
 
     public function testAKeptHuggingFaceTokenStandsInWhenTheVaultLeavesTheOpenAiCompatibleVariablesEmpty(): void
     {
         $processor = $this->processorWithVault(['OPENAI_COMPATIBLE_BASE_URL' => '', 'OTHER_SECRET' => 'other']);
 
-        self::assertSame('https://router.huggingface.co', $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', self::unused(...)));
-        self::assertSame('hf_'.self::BODY, $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', self::unused(...)));
+        self::assertSame('https://router.huggingface.co', $processor->getEnv('string', 'OPENAI_COMPATIBLE_BASE_URL', $this->unused(...)));
+        self::assertSame('hf_'.self::BODY, $processor->getEnv('string', 'OPENAI_COMPATIBLE_API_KEY', $this->unused(...)));
     }
 
     public function testAKeptHuggingFaceTokenLeavesTheOpenAiCompatibleEndpointAloneWhenAVaultValueCannotBeRead(): void
@@ -183,7 +183,7 @@ final class KeptProviderKeyVariablesTest extends TestCase
     }
 
     // The processor reads a plain string variable itself and calls this only for a prefix it chains.
-    private static function unused(): null
+    private function unused(): null
     {
         return null;
     }
