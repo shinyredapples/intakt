@@ -97,4 +97,22 @@ final class StatefulServiceResetRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Counting::$count', $findings);
         self::assertStringContainsString('src/Mailer.php:7 intakt.statefulService Service property Sender::$last', $findings);
     }
+
+    public function testAMutablePropertyMarkedAsKeptForTheProcessPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('kept-for-the-process-service');
+    }
+
+    public function testAnUnmarkedMutablePropertyBesideAMarkedOneStillFailsStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsOf('kept-for-the-process-beside-mutable');
+
+        self::assertStringContainsString('src/Notice.php:14 intakt.statefulService Service property $sent', $findings);
+        self::assertStringNotContainsString('$reported', $findings);
+    }
+
+    public function testAnAttributeOfTheSameShortNameFromAnotherNamespaceDoesNotExemptAProperty(): void
+    {
+        $this->assertRuleRejects('kept-for-the-process-lookalike', 'src/Notice.php:9 intakt.statefulService Service property $reported');
+    }
 }

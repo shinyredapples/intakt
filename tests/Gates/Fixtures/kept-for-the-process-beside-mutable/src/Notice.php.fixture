@@ -1,0 +1,26 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+use Intakt\Core\Platform\Contract\KeptForTheProcess;
+
+final class Notice
+{
+    #[KeptForTheProcess]
+    private bool $reported = false;
+
+    private int $sent = 0;
+
+    public function once(): ?int
+    {
+        if ($this->reported) {
+            return null;
+        }
+
+        $this->reported = true;
+
+        return ++$this->sent;
+    }
+}

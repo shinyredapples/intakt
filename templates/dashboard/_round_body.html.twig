@@ -10,7 +10,8 @@
     {{ include('dashboard/_round_verdict.html.twig', {reviewed: reviewed}, with_context = false) }}
 
     <h3>Reviewers</h3>
-    <p class="muted">{{ reviewed.outcomes|length }} of {{ reviewed.reviewers }} reviewers started.</p>
+    {# Its own partial, because the round's live update replaces it with the started count of the same progress as the finished counts. #}
+    {{ include('dashboard/_round_started.html.twig', {round: reviewed.round, started: reviewed.outcomes|length, reviewers: reviewed.reviewers}, with_context = false) }}
     {# Shown while the round runs with no reviewer started too, because a reviewer that finishes after the page loaded is streamed into it. #}
     {% if reviewed.outcomes is not empty or running %}
     <div class="table-scroll" tabindex="0" role="region" aria-label="Reviewers of round {{ reviewed.round }}">
