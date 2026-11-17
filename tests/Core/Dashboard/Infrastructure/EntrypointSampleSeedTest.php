@@ -141,6 +141,18 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
     }
 
+    public function testAQuotedRouterUrlStopsAHuggingFaceStartBeforeTheSeed(): void
+    {
+        $this->givenTheDataFileRouterLine("router_url: 'https://router.example.test'");
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml', 'HF_TOKEN' => 'hf-test-value']);
+
+        $this->entrypoint?->wait();
+
+        self::assertNotSame(0, $this->entrypoint?->getExitCode());
+        self::assertStringContainsString('names no router_url', (string) $this->entrypoint?->getErrorOutput());
+        self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
+    }
+
     public function testAMissingDataFileStopsAHuggingFaceStartBeforeTheSeed(): void
     {
         new Filesystem()->remove($this->dataFile());

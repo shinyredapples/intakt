@@ -40,7 +40,8 @@ export_secret MERCURE_JWT_SECRET mercure-jwt-secret
 
 # Read from the sample project's data file, so the seed, the key check and this start name one router; bash alone, because the value is one plain top-level line.
 router_url() {
-    local line pattern='^router_url:[[:space:]]*([^[:space:]]+)[[:space:]]*$'
+    # Quotes are refused, because YAML would strip them and this read would not.
+    local line pattern="^router_url:[[:space:]]*([^[:space:]\"']+)[[:space:]]*\$"
     while IFS= read -r line || [[ -n $line ]]; do
         [[ $line =~ $pattern ]] && { echo "${BASH_REMATCH[1]}"; return 0; }
     done < config/sample-project.yaml
