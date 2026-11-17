@@ -208,6 +208,16 @@ final class ReplaysRecordingTest extends TestCase
         self::assertSame($recording->events[3]->payload, $this->appended()[3]->event->payload);
     }
 
+    public function testAReviewStartedRowThatNamesNoRecordedProjectIsAppendedUnchangedWithoutAFactor(): void
+    {
+        $started = '{"round":"'.self::ROUND.'","project":"other","reviewers":2,"change":"sample-change","number":1}';
+        $recording = $this->recording([$this->row(LedgerEventKind::ReviewStarted, $started, 0)]);
+
+        $this->replays()->replay($recording, 4.0);
+
+        self::assertSame($started, $this->appended()[0]->event->payload);
+    }
+
     public function testTheReviewStartedRowNamesTheDemoProjectNotTheRecordedOne(): void
     {
         $this->replays()->replay($this->recordedRun(), 1.0);
