@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge marks every finding against the task, but every P1 and P2 finding reaches the act list whatever the judge answers, even when its answer is invalid; only a P3 finding can be deferred or rejected. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
+Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge marks every finding against the task, but every P1 and P2 finding that passes the quote check reaches the act list whatever the judge answers, even when its answer is invalid; only a P3 finding can be deferred or rejected. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
 
 <p align="center">
   <picture>
