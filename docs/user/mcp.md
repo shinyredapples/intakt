@@ -46,3 +46,5 @@ Then give the client the token as a bearer header: `claude mcp add --transport h
 ## When something goes wrong
 
 A round id that does not exist gives an MCP error saying so (for the resource, a resource-not-found error). A start without the token, with writes off, for a round number that is not the next one, or for a branch Intakt cannot read gives an MCP error too. A refused or failing tool answers with an MCP error and a short message, never a stack trace. The details are in the application log.
+
+Should an endpoint fail in a way Intakt did not catch, the answer is a plain error in the format the client asked for (JSON for `Accept: application/json`) with status 500, not a dashboard page. The application log records it as "A request failed" with a short reference.
