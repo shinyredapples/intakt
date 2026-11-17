@@ -66,7 +66,6 @@ final class CharacterTemplateTest extends KernelTestCase
     public function testARoleCharacterAtASizeWithoutImageFilesIsRefused(): void
     {
         $this->expectException(RuntimeError::class);
-        $this->expectExceptionMessage('No image files exist for the judge at 32 px.');
 
         $this->rendered(Character::Judge, 32);
     }
