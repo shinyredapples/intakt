@@ -45,7 +45,7 @@ final readonly class ProviderStep
         }
 
         if ([] === $this->keyed && $this->kept instanceof ConfiguredKey) {
-            return sprintf('The %s key ending in %s is kept. Restart Intakt to use it.', $this->kept->provider,$this->kept->lastCharacters);
+            return sprintf('The %s key ending in %s is kept. Restart Intakt to use it.', $this->kept->provider, $this->kept->lastCharacters);
         }
 
         if ([] === $this->keyed) {
