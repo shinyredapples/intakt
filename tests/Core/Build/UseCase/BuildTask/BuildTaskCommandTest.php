@@ -23,12 +23,17 @@ use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackCheck;
 use Intakt\Core\Build\UseCase\BuildTask\HandBackFile;
 use Intakt\Core\Build\UseCase\BuildTask\PrePushCheck;
+use Intakt\Core\Build\UseCase\BuildTask\PushStep;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildVerdict;
 use Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob;
+use Intakt\Core\Git\Contract\BranchPush;
+use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\PushedBranch;
+use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
@@ -47,6 +52,8 @@ use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Plugin\Forge\Contract\ChangeId;
+use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\GitHubForge\Contract\IssueListing;
 use Intakt\Plugin\GitHubForge\Contract\IssueReads;
@@ -74,6 +81,12 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(HandBackCheck::class)]
 #[UsesClass(HandBackFile::class)]
 #[UsesClass(PrePushCheck::class)]
+#[UsesClass(PushStep::class)]
+#[UsesClass(BranchPushRequest::class)]
+#[UsesClass(PushedBranch::class)]
+#[UsesClass(RefusedPush::class)]
+#[UsesClass(ChangeText::class)]
+#[UsesClass(ChangeId::class)]
 #[UsesClass(CheckJob::class)]
 #[UsesClass(CheckJobOutcome::class)]
 #[UsesClass(CheckVerdict::class)]
@@ -117,8 +130,11 @@ final class BuildTaskCommandTest extends TestCase
 
     private CheckJobOutcome|RefusedHandBack $checkedBeforePush;
 
+    private PushedBranch|RefusedPush $pushed;
+
     protected function setUp(): void
     {
+        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
         $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
         $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
         $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
@@ -138,7 +154,20 @@ final class BuildTaskCommandTest extends TestCase
         $tester = $this->execute(new InMemoryLedger(), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-        self::assertStringContainsString("task passed\nmirror passed\nclone passed\nbuild_job passed\nhand_back_check passed\npre_push_check passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString("task passed\nmirror passed\nclone passed\nbuild_job passed\nhand_back_check passed\npre_push_check passed\npush passed\ntitle Task 7", $tester->getDisplay());
+    }
+
+    public function testItExitsWithFailureWhenTheRemoteRefusesThePushAndPrintsItsReason(): void
+    {
+        $this->pushed = new RefusedPush('the remote refused the push of feat/task');
+        $ledger = new InMemoryLedger();
+
+        $tester = $this->execute($ledger, self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString("pre_push_check passed\ntitle Task 7", $tester->getDisplay());
+        self::assertStringContainsString('push failed: the remote refused the push of feat/task', $tester->getDisplay());
+        self::assertSame(['passed', 'passed', 'passed', 'passed', 'passed', 'passed', 'failed'], array_column($ledger->payloads(), 'outcome'));
     }
 
     public function testItExitsWithFailureWhenThePrePushCheckFailsAndPrintsNothingOfItsLog(): void
@@ -294,8 +323,10 @@ final class BuildTaskCommandTest extends TestCase
         $checkJobs = self::createStub(CheckJobs::class);
         $checkJobs->method('run')->willReturn($this->checkedBeforePush);
         $files = new HandBackFile($checkout, new Filesystem(), $this->folder.'/hand-backs');
+        $branches = self::createStub(BranchPush::class);
+        $branches->method('push')->willReturn($this->pushed);
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), $ledger);
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $ledger);
     }
 
     private function listing(ListedIssue $task): IssueReads
