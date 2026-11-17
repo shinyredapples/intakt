@@ -33,16 +33,6 @@ enum ReviewOutcome: string
         return self::ofQuorum($round);
     }
 
-    // A judged ending carries no outcome of its own, so the round falls back to its reviewers and quorum.
-    private static function ofEnding(RoundEnding $ending): ?self
-    {
-        return match ($ending->end) {
-            RoundEnds::JudgingFailed => self::Failed,
-            RoundEnds::NoOutcomeInTime => self::Blocked,
-            RoundEnds::Judged => null,
-        };
-    }
-
     public static function ofQuorum(ReviewedRound $round): ?self
     {
         return $round->outcome instanceof Decision ? self::ofDecision($round->outcome) : null;
@@ -77,6 +67,16 @@ enum ReviewOutcome: string
             self::ChangesRequested => 'rounds',
             self::Blocked => 'stop',
             self::Failed => 'broken',
+        };
+    }
+
+    // A judged ending carries no outcome of its own, so the round falls back to its reviewers and quorum.
+    private static function ofEnding(RoundEnding $ending): ?self
+    {
+        return match ($ending->end) {
+            RoundEnds::JudgingFailed => self::Failed,
+            RoundEnds::NoOutcomeInTime => self::Blocked,
+            RoundEnds::Judged => null,
         };
     }
 }

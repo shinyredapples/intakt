@@ -38,7 +38,7 @@ final readonly class ReviewedRound
     public ?Decision $outcome;
     public ?DateTimeImmutable $judgedAt;
 
-    // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay; the speed factor is null for every round but a demo replay that stored one.
+    // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay; it stays a parameter no caller passes until PHPStan sees that `clone with` sets it (upstream/phpstan-clone-with-readonly-constructor-type). The speed factor is null for every round but a demo replay that stored one.
     public function __construct(
         RoundStart $start,
         RoundPlace $place,
