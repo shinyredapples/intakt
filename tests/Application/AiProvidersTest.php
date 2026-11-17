@@ -25,8 +25,7 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 
-// Covers nothing because the behavior is in config/packages/ai.php, which is not a class.
-// Serial because its vaults create config/secrets/, which the workers share, and a container another worker compiles meanwhile keeps the vault loader for good.
+// Covers nothing because the behavior is in config/packages/ai.php, which is not a class; serial because its vaults create config/secrets/, which the workers share, and a container another worker compiles meanwhile keeps the vault loader for good.
 #[CoversNothing]
 #[Group('serial')]
 final class AiProvidersTest extends KernelTestCase
