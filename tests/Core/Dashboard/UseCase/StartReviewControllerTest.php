@@ -25,6 +25,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LogLevel;
 use stdClass;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -90,15 +91,53 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertSame('Start round 3', trim($crawler->filter('form.start-review button[type=submit]')->text()));
     }
 
-    // Stop is rendered too, but the idle marker hides it, so exactly one action shows.
-    public function testAReviewWithNoRoundRunningOffersOnlyTheStartOfTheNextRound(): void
+    // The start form is rendered for the stream's sake, and the in-review marker hides it, so only Stop shows.
+    public function testARoundWithARunningReviewerOffersOnlyStop(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'security');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.now-stop-idle'));
+        self::assertCount(1, $crawler->filter('.task-actions form.stop-round'));
+        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+    }
+
+    // Before its first reviewer starts the round is in review already, so the start of the next round stays hidden too.
+    public function testARoundInReviewWithoutARunningReviewerHidesTheStartOfTheNextRound(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(1, $crawler->filter('.task-actions .now-stop-idle ~ form.stop-round'));
-        self::assertCount(1, $crawler->filter('.task-actions > form.start-review'));
+        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+    }
+
+    // Every reviewer finished but the judge has not called yet, so the round still runs.
+    public function testARoundWhoseReviewersFinishedButIsNotJudgedHidesTheStartOfTheNextRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'security');
+        $this->ledger->answer('round-1', 'security', 0);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+    }
+
+    public function testAJudgedReviewOffersOnlyTheStartOfTheNextRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'security');
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(0, $crawler->filter('.now-runs'));
+        self::assertCount(0, $crawler->filter('form.stop-round'));
+        self::assertSame(['Start round 2'], $crawler->filter('.task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
     }
 
     // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.

@@ -476,8 +476,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .headline-short { display: none; }
 .page-head .actions { margin-left: auto; }
 .now-stop-idle ~ .stop-round { display: none; }
-/* One action at a time: the start form stays server-rendered (it needs the session token) and hides while a Stop shows. */
-.task-actions:has(.stop-round):not(:has(.now-stop-idle)) > .start-review { display: none; }
+/* One action at a time: the start form stays server-rendered (it needs the session token) and hides while a round is in review. */
+.task-actions:has(.now-runs) > .start-review { display: none; }
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }
 /* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
 .page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }

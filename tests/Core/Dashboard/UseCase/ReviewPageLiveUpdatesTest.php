@@ -278,6 +278,33 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $updated->filter('form.stop-round'));
     }
 
+    // The judge has not called yet, so the round still runs and the next one cannot start.
+    public function testTheStartOfTheNextRoundStaysHiddenOnceEveryReviewerFinishedButTheRoundIsNotJudged(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        self::assertCount(1, $page->filter('.task-actions:has(.now-runs) > form.start-review'));
+
+        $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, false, ['round-1-correctness' => FinishedState::Verdict])]));
+
+        self::assertCount(0, $updated->filter('form.stop-round'));
+        self::assertCount(1, $updated->filter('.task-actions:has(.now-runs) > form.start-review'));
+    }
+
+    public function testAJudgedRoundPushedToThePageOffersTheStartOfTheNextRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(1, 1, true)]));
+
+        self::assertCount(0, $updated->filter('.now-runs'));
+        self::assertCount(0, $updated->filter('form.stop-round'));
+        self::assertSame('Start round 2', trim($updated->filter('.task-actions > form.start-review button')->text()));
+    }
+
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheJudgesCallAndTheFindingsOnceTheRoundIsJudged(): void
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
