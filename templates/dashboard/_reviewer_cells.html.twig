@@ -2,4 +2,4 @@
 <td>{{ outcome.role }}</td>
 <td>{{ outcome.modelInWords }}</td>
 {{ include('dashboard/_reviewer_state_cell.html.twig', {round: round, outcome: outcome}, with_context = false) }}
-<td class="num">{% if outcome.findings is not null %}{{ outcome.findings }} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Counted, at: 'round-' ~ round ~ '-reviewer-' ~ outcome.id}, with_context = false) }}{% elseif outcome.progress.name == 'Running' %}no answer yet{% else %}no answer{% endif %}</td>
+<td class="num">{% if outcome.findings is not null %}{{ outcome.findings }}{% elseif outcome.progress.name == 'Running' %}no answer yet{% else %}no answer{% endif %}</td>

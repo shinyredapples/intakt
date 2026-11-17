@@ -9,12 +9,13 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use ReflectionProperty;
+use Symfony\Component\DependencyInjection\StaticEnvVarLoader;
 
 #[CoversClass(KeptProviderKeyVariables::class)]
 #[UsesClass(FixedEnvVars::class)]
 final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
 {
-    // Read through reflection because the loaders are private; the test container adds an empty env loader, and the framework's vault loader is there only when config/secrets/ existed at compile time, which other tests leave behind.
+    // Read through reflection because the loaders are private; the test container adds an empty env loader, because the framework drops its vault loader where no config/secrets/ folder exists, and keeps it where another test left one.
     public function testTheKeptKeyIsHandedEveryOtherEnvLoaderButItself(): void
     {
         $container = self::getContainer();
@@ -24,11 +25,10 @@ final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
         $others = new ReflectionProperty(KeptProviderKeyVariables::class, 'otherLoaders')->getValue($kept);
         self::assertIsIterable($others);
 
-        $expected = [$container->get('intakt.test.empty_env_var_loader')];
-        if ($container->has('secrets.env_var_loader')) {
-            $expected[] = $container->get('secrets.env_var_loader');
-        }
+        $isVaultLoader = static fn (mixed $loader): bool => $loader instanceof StaticEnvVarLoader;
+        $actual = [...$others];
 
-        self::assertSame($expected, [...$others]);
+        self::assertLessThanOrEqual(1, count(array_filter($actual, $isVaultLoader)));
+        self::assertSame([$container->get('intakt.test.empty_env_var_loader')], array_values(array_filter($actual, static fn (mixed $loader): bool => !$isVaultLoader($loader))));
     }
 }

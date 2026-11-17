@@ -70,7 +70,7 @@ final class ReviewPageWithoutHubTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         self::assertCount(0, $crawler->filter('turbo-mercure-stream-source'));
         self::assertSame('2', $crawler->filter('#round-round-1-summary-tools .ls-tools dd')->first()->text());
-        self::assertStringStartsWith('0.3000 USD estimated', $crawler->filter('#round-round-1-summary-cost')->text());
+        self::assertStringStartsWith('0.3000 USD,', $crawler->filter('#round-round-1-summary-cost')->text());
     }
 
     public function testThePlainPageStillLoadsTheScriptThatHoldsBackTheFirstClickOnStop(): void

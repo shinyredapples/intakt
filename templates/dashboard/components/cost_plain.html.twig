@@ -1,0 +1,3 @@
+{#- A cost with the day of its price list and no kind label, for a place whose estimated label sits once in its column head or in the page's summary line (decision D5 of #2206). -#}
+{{- cost.reading -}}
+{%- if cost.usd is not null %}, {{ cost.priceDateReading }}{% endif -%}
