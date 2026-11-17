@@ -94,7 +94,7 @@ final readonly class StreamedPage
      */
     private function update(DOMNode $target, array $content): void
     {
-        while (null !== $target->firstChild) {
+        while ($target->firstChild instanceof DOMNode) {
             $target->removeChild($target->firstChild);
         }
 
