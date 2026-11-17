@@ -129,7 +129,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $calls = new ArrayObject();
         $providers = new SymfonyAiProviderCatalog([new NamedCheckModel(new AnthropicDescriptor(), 'named-check-model')]);
 
-        (void) $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), $providers);
+        $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), $providers);
 
         self::assertSame('named-check-model', $calls[0][2]['model'] ?? null);
     }
@@ -139,7 +139,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $tiers = $this->tiers(['other' => Provider::OpenAi, 'first' => Provider::Anthropic, 'second' => Provider::Anthropic]);
         $calls = new ArrayObject();
 
-        (void) $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), tiers: $tiers);
+        $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), tiers: $tiers);
 
         self::assertSame('light-first', $calls[0][2]['model'] ?? null);
     }
@@ -149,11 +149,10 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('projects')->willReturn(['broken', 'mapped']);
         $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => 'broken' === $project
-            ? throw new TierNotMapped($project, Tier::Light)
-            : new ResolvedModel(Provider::Anthropic, 'light-mapped'));
+            ? throw new TierNotMapped($project, Tier::Light) : new ResolvedModel(Provider::Anthropic, 'light-mapped'));
         $calls = new ArrayObject();
 
-        (void) $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), tiers: $tiers);
+        $this->check('sk-ant-'.self::BODY, $calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER), tiers: $tiers);
 
         self::assertSame('light-mapped', $calls[0][2]['model'] ?? null);
     }
@@ -256,7 +255,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
         /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
         $calls = new ArrayObject();
 
-        (void) $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
+        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
 
         return array_values($calls->getArrayCopy());
     }
