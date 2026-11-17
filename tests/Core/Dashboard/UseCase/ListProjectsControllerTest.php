@@ -11,6 +11,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListProjects\ListProjectsController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ListProjectsController::class)]
 #[CoversClass(ProjectSummary::class)]
@@ -57,6 +58,23 @@ final class ListProjectsControllerTest extends DashboardPageTestCase
         $crawler = $this->browser->request('GET', '/projects');
 
         self::assertSame('/reviews?project=alpha', $crawler->filter('.list .row .t a')->attr('href'));
+    }
+
+    public function testOnceAReviewHasRunThePageHeadLinksTheFirstRunPage(): void
+    {
+        $this->ledger->startRound('round-1', 'alpha');
+
+        $link = $this->browser->request('GET', '/projects')->filter('.page-head .actions a');
+
+        self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertSame('Set up Intakt', $link->text());
+    }
+
+    public function testBeforeAReviewHasRunTheProjectListLinksNoFirstRunPage(): void
+    {
+        $page = $this->browser->request('GET', '/projects');
+
+        self::assertCount(0, $page->filter('main a[href="/setup"]'));
     }
 
     public function testTheProjectListSaysSoWhenTheLedgerHasNoReviews(): void
