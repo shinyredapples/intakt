@@ -6,11 +6,14 @@ namespace Intakt\Core\Ai\Contract;
 
 use RuntimeException;
 
-// The message is fixed and never carries the input, not even a prefix, so a refused key cannot reach a log.
+// The message names only the listed providers and never carries the input, not even a prefix, so a refused key cannot reach a log.
 final class KeyNotRecognised extends RuntimeException
 {
-    public function __construct()
+    /**
+     * @param list<string> $labels
+     */
+    public function __construct(array $labels)
     {
-        parent::__construct('The key is not an Anthropic key, an OpenAI key or a Hugging Face token.');
+        parent::__construct('The key has the form of no listed provider ('.implode(', ', $labels).').');
     }
 }

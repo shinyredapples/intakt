@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
+use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
 use NoDiscard;
 use SensitiveParameter;
 
@@ -20,6 +21,7 @@ final readonly class KeepProviderKey
     public function __construct(
         private KeyCheck $keyCheck,
         private KeptProviderKeys $kept,
+        private ProviderCatalog $providers,
     ) {
     }
 
@@ -32,7 +34,7 @@ final readonly class KeepProviderKey
     #[NoDiscard('the configured key is what the page shows')]
     public function keep(#[SensitiveParameter] string $key): ConfiguredKey
     {
-        $providerKey = ProviderKey::recognise($key);
+        $providerKey = ProviderKey::recognise($key, $this->providers);
 
         return match ($this->keyCheck->check($providerKey)) {
             KeyCheckOutcome::Accepted => $this->kept($providerKey),

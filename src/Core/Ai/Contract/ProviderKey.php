@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Contract;
 
+use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
+use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
 use SensitiveParameter;
 use SensitiveParameterValue;
 
@@ -14,29 +16,39 @@ final readonly class ProviderKey
     // The key sits in a SensitiveParameterValue so var_dump, print_r and var_export show an empty object instead of it.
     private SensitiveParameterValue $key;
 
+    /**
+     * @param non-empty-string $provider
+     */
     private function __construct(
-        private KeyKind $kind,
+        private string $provider,
         #[SensitiveParameter]
         string $key,
     ) {
         $this->key = new SensitiveParameterValue($key);
     }
 
-    public static function recognise(#[SensitiveParameter] string $key): self
+    /**
+     * @throws KeyNotRecognised
+     */
+    public static function recognise(#[SensitiveParameter] string $key, ProviderCatalog $catalog): self
     {
         $key = trim($key);
-        $kind = KeyKind::fromForm($key);
+        $fitting = array_values(array_filter($catalog->descriptors(), static fn (ProviderDescriptor $descriptor): bool => 1 === preg_match($descriptor->keyPattern(), $key)));
 
-        if (!$kind instanceof KeyKind) {
-            throw new KeyNotRecognised();
+        // Exactly one, so a key two forms fit is refused instead of going to whichever provider is listed first.
+        if (1 !== count($fitting)) {
+            throw new KeyNotRecognised(array_map(static fn (ProviderDescriptor $descriptor): string => $descriptor->label(), $catalog->descriptors()));
         }
 
-        return new self($kind, $key);
+        return new self($fitting[0]->id(), $key);
     }
 
-    public function kind(): KeyKind
+    /**
+     * @return non-empty-string
+     */
+    public function provider(): string
     {
-        return $this->kind;
+        return $this->provider;
     }
 
     // Handed out because the check call must send the key to its provider and the kept file must hold it; the key goes nowhere else.
@@ -51,6 +63,6 @@ final readonly class ProviderKey
         // A quarter of the key at most, so a short key never shows more than a small part of itself.
         $shown = min(self::SHOWN_AT_MOST, intdiv(strlen($key), 4));
 
-        return new ConfiguredKey($this->kind, substr($key, -$shown));
+        return new ConfiguredKey($this->provider, substr($key, -$shown));
     }
 }
