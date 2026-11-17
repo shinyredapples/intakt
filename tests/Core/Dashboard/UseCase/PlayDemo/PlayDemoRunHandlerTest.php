@@ -106,11 +106,13 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertStringContainsString('href="/reviews/round-1"', $captions[0]->turboStream);
     }
 
-    public function testOutsideTheComposeDemoTheReplayPublishesNoCaption(): void
+    public function testAQueuedPlayOnAnInstallNoLongerOnTheComposeDemoAppendsNothingAndIsLoggedAsAnError(): void
     {
         $this->handler($this->recordingFile(), '')();
 
-        self::assertSame([], array_filter($this->updates->events, static fn (LiveEvent $event): bool => DashboardTopics::SHELL === $event->topic));
+        self::assertSame([], $this->rows());
+        self::assertSame([], $this->updates->events);
+        self::assertLoggedError('error', 'The demo run was not played.');
     }
 
     public function testAMissingRecordingIsLoggedAsAnErrorAndAppendsNothing(): void
@@ -147,7 +149,7 @@ final class PlayDemoRunHandlerTest extends TestCase
         $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
         $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
 
-        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording);
+        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
     }
 
     private function recordingFile(): string

@@ -28,11 +28,20 @@ final readonly class PlayDemoRunHandler
         private LoggerInterface $logger,
         #[Autowire(env: 'INTAKT_DEMO_RECORDING')]
         private string $recording,
+        #[Autowire(env: 'INTAKT_COMPOSE_SERVICE')]
+        private string $composeService,
     ) {
     }
 
     public function __invoke(): void
     {
+        // Checked again here, because a message queued on the compose demo can reach a worker after the install left it.
+        if ('' === $this->composeService) {
+            $this->logger->error('The demo run was not played.', ['recording' => $this->recording, 'reason' => DemoReadiness::NotComposeDemo->sentence()]);
+
+            return;
+        }
+
         try {
             $this->replays->replay($this->format->read($this->filesystem->readFile($this->recording)), self::FACTOR);
         } catch (IOException|RecordingIsMalformed|ReplayIsRefused|ReplayStopped $failure) {
