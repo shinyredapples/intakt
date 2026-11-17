@@ -430,6 +430,17 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame($this->twoSeparateEntries(12), $payload['findings']);
     }
 
+    public function testFindingsLinkedInAChainThatReachesFurtherThanFiveLinesAreRecordedAsSeparateEntries(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 1), $this->atLine('B', Severity::P2, 5), $this->atLine('C', Severity::P2, 9)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1'), new JudgedFinding('F3', Mark::Act, 'F2')])))($this->judgingOf($round));
+
+        $findings = $this->judgeDonePayloads()[0]['findings'];
+        self::assertIsArray($findings);
+        self::assertSame([['F1', 'Text of A.', []], ['F2', 'Text of B.', []], ['F3', 'Text of C.', []]], array_map(static fn (array $finding): array => [$finding['id'], $finding['text'], $finding['merged']], $findings));
+    }
+
     public function testALinkToAFindingDroppedBeforeTheJudgeIsNotRecorded(): void
     {
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->atLine('B', Severity::P2, 3)]);

@@ -9,7 +9,7 @@ use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\Judgement;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// The judge only proposes a cause; plain code keeps a link only when both findings are in one hunk of one file and at most NEARBY_LINES apart, so a steered judge cannot fold a defect further away into another entry, even in a new file that is one long hunk. A link it drops leaves the mark, so nothing is lost.
+// The judge only proposes a cause; plain code keeps a link only when both findings are in one hunk of one file and at most NEARBY_LINES apart, so a steered judge cannot fold a defect further away into another entry, even in a new file that is one long hunk. OnePerPlace holds the same bound for a whole group, because links that each pass here can still form a chain. A link it drops leaves the mark, so nothing is lost.
 #[Exclude]
 final readonly class CausesInOneHunk
 {
