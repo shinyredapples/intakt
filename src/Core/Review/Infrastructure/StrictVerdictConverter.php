@@ -59,11 +59,12 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
 
         // Passed on with listeners, because the agent reports each streamed delta as progress and the verdict exists only once the stream ends; the usage one goes first so a refused verdict still settles the usage.
         if ($text instanceof StreamResult) {
-            $answer = new StreamedAnswer($blocks);
+            $tally = new StreamTally();
+            $answer = new StreamedAnswer($blocks, $tally);
             $stream = new StreamResult($answer->of($text));
             $stream->addListener(new FinalStreamedUsage());
             $stream->addListener($answer);
-            $stream->addListener(new StrictVerdictStreamListener($this->verdictFrom(...)));
+            $stream->addListener(new StrictVerdictStreamListener($this->verdictFrom(...), $tally));
 
             return $stream;
         }
