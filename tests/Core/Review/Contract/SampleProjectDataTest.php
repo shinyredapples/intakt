@@ -1,0 +1,169 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Tests\Core\Review\Contract;
+
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\SampleProjectData;
+use LogicException;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Yaml;
+
+#[CoversClass(SampleProjectData::class)]
+#[UsesClass(Provider::class)]
+#[UsesClass(Tier::class)]
+final class SampleProjectDataTest extends TestCase
+{
+    private string $directory;
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-sample-data-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
+    }
+
+    public function testTheShippedFileNamesAModelAndAPriceForEveryProviderAndTier(): void
+    {
+        $data = new SampleProjectData();
+
+        foreach ([Provider::Anthropic, Provider::OpenAi, Provider::OpenAiCompatible] as $provider) {
+            foreach (Tier::cases() as $tier) {
+                self::assertArrayHasKey('input', $data->price($data->model($provider, $tier)));
+            }
+        }
+        self::assertArrayHasKey('output', $data->price($data->secondMaker()));
+    }
+
+    public function testTheShippedRouterUrlHasNoVersionPathBecauseTheBridgeAppendsIt(): void
+    {
+        self::assertSame('', new SampleProjectData()->routerUrl()->getPath());
+    }
+
+    public function testEachValueIsReadFromTheFileItIsGiven(): void
+    {
+        $data = $this->dataOf(self::valid());
+
+        self::assertSame(
+            ['https://router.example.test', '2030-01-02', 'made-up-strong', 'made-up-second-maker', ['input' => 0.5, 'output' => 2]],
+            [$data->routerUrl()->toRawString(), $data->priceDate(), $data->model(Provider::Anthropic, Tier::Strong), $data->secondMaker(), $data->price('made-up-strong')],
+        );
+    }
+
+    public function testAModelTheFileDoesNotNameIsRefusedByItsPath(): void
+    {
+        $this->expectExceptionObject(new LogicException(sprintf('The sample project data file %s has no valid models.openai.light.', $this->file())));
+
+        $this->dataOf(self::valid())->model(Provider::OpenAi, Tier::Light);
+    }
+
+    public function testAModelWithoutAPriceIsRefused(): void
+    {
+        $this->expectExceptionMessage('has no valid prices.made-up-second-maker.');
+
+        $this->dataOf(self::valid())->price('made-up-second-maker');
+    }
+
+    /**
+     * @return iterable<string, array{mixed}>
+     */
+    public static function brokenPrices(): iterable
+    {
+        yield 'no amounts' => [[]];
+        yield 'an amount in words' => [['input' => 'five']];
+        yield 'amounts without kinds' => [[1, 2]];
+        yield 'a price that is no list' => ['5'];
+    }
+
+    #[DataProvider('brokenPrices')]
+    public function testAPriceThatIsNotAmountsByKindIsRefused(mixed $price): void
+    {
+        $this->expectExceptionMessage('has no valid prices.made-up-strong.');
+
+        $this->dataOf(['prices' => ['made-up-strong' => $price]] + self::valid())->price('made-up-strong');
+    }
+
+    public function testAnEmptyPriceDateIsRefused(): void
+    {
+        $this->expectExceptionMessage('has no valid price_date.');
+
+        $this->dataOf(['price_date' => ''] + self::valid())->priceDate();
+    }
+
+    public function testARouterUrlThatIsNoUriIsRefused(): void
+    {
+        $this->expectExceptionMessage('has no valid router_url.');
+
+        $this->dataOf(['router_url' => 'https://router example'] + self::valid())->routerUrl();
+    }
+
+    public function testAFileWhoseTopIsNoMappingNamesNoValue(): void
+    {
+        new Filesystem()->dumpFile($this->file(), "just text\n");
+
+        $this->expectExceptionMessage('has no valid router_url.');
+
+        new SampleProjectData($this->file())->routerUrl();
+    }
+
+    public function testAMissingFileIsNamed(): void
+    {
+        $this->expectException(ParseException::class);
+        $this->expectExceptionMessage($this->file());
+
+        new SampleProjectData($this->file())->routerUrl();
+    }
+
+    public function testAnUnreadableFileIsRefused(): void
+    {
+        new Filesystem()->dumpFile($this->file(), Yaml::dump(self::valid()));
+        chmod($this->file(), 0000);
+        if (is_readable($this->file())) {
+            self::markTestSkipped('The user running the tests reads files whatever their mode.');
+        }
+
+        $this->expectException(ParseException::class);
+
+        new SampleProjectData($this->file())->routerUrl();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function valid(): array
+    {
+        return [
+            'router_url' => 'https://router.example.test',
+            'price_date' => '2030-01-02',
+            'models' => ['anthropic' => ['strong' => 'made-up-strong']],
+            'second_maker' => 'made-up-second-maker',
+            'prices' => ['made-up-strong' => ['input' => 0.5, 'output' => 2]],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $contents
+     */
+    private function dataOf(array $contents): SampleProjectData
+    {
+        new Filesystem()->dumpFile($this->file(), Yaml::dump($contents));
+
+        return new SampleProjectData($this->file());
+    }
+
+    private function file(): string
+    {
+        return $this->directory.'/sample-project.yaml';
+    }
+}

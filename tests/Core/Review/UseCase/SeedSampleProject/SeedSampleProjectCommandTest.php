@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReviewerModel;
 use Intakt\Core\Review\Contract\ReviewerRole;
+use Intakt\Core\Review\Contract\SampleProjectData;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
@@ -51,18 +52,23 @@ use Symfony\Component\Yaml\Yaml;
 #[UsesClass(ReviewerRole::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Decision::class)]
+#[UsesClass(SampleProjectData::class)]
 final class SeedSampleProjectCommandTest extends TestCase
 {
     private const string FIXTURES = __DIR__.'/../../../../../fixtures/sample-repository';
 
     private string $directory;
 
-    private string $compatibleBaseUrl = SampleProject::HUGGING_FACE_ROUTER;
+    private string $compatibleBaseUrl;
+
+    private SampleProjectData $data;
 
     protected function setUp(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->directory);
+        $this->data = new SampleProjectData();
+        $this->compatibleBaseUrl = $this->data->routerUrl()->toRawString();
     }
 
     protected function tearDown(): void
@@ -163,6 +169,55 @@ final class SeedSampleProjectCommandTest extends TestCase
     public function testAnOpenAiCompatibleEndpointBesideAnotherKeyStaysOffThePanel(): void
     {
         $this->compatibleBaseUrl = 'https://llm.example.test';
+
+        $this->seed(Provider::Anthropic, Provider::OpenAiCompatible);
+
+        self::assertSame(['anthropic'], $this->panelProviders());
+    }
+
+    public function testTheSampleProjectSeedsItsModelsAndPricesFromTheDataFile(): void
+    {
+        $this->givenADataFile();
+
+        $this->seed(Provider::Anthropic);
+
+        self::assertSame(['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'], array_map(static fn (array $tier): string => $tier['model'], $this->writtenProject()['tiers']));
+        self::assertSame(['made-up-strong' => ['input' => 7, 'output' => 70], 'made-up-standard' => ['input' => 0.7, 'output' => 7]], $this->writtenPrices());
+    }
+
+    public function testTheSeededPriceDateComesFromTheDataFile(): void
+    {
+        $this->givenADataFile();
+
+        $this->seed(Provider::Anthropic);
+
+        self::assertSame('2030-01-02', $this->written()['budget']['price_date']);
+        self::assertStringContainsString('list prices read on 2030-01-02', new Filesystem()->readFile($this->configuration()));
+    }
+
+    public function testWithOnlyTheRouterTheSecondMakerIsTheOneTheDataFileNames(): void
+    {
+        $this->givenADataFile();
+        $this->compatibleBaseUrl = 'https://router.example.test';
+
+        $this->seed(Provider::OpenAiCompatible);
+
+        self::assertSame(['made-up-router', 'made-up-second-maker'], $this->reviewerModels());
+    }
+
+    public function testTheOpenAiCompatibleEndpointCountsAtTheRouterUrlOfTheDataFile(): void
+    {
+        $this->givenADataFile();
+        $this->compatibleBaseUrl = 'https://router.example.test';
+
+        $this->seed(Provider::Anthropic, Provider::OpenAiCompatible);
+
+        self::assertSame(['anthropic', 'openai_compatible'], $this->panelProviders());
+    }
+
+    public function testTheShippedRouterUrlDoesNotCountWhenTheDataFileNamesAnotherRouter(): void
+    {
+        $this->givenADataFile();
 
         $this->seed(Provider::Anthropic, Provider::OpenAiCompatible);
 
@@ -304,7 +359,30 @@ final class SeedSampleProjectCommandTest extends TestCase
         $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
 
-        return new SampleProject($accounts, $this->compatibleBaseUrl);
+        return new SampleProject($accounts, $this->compatibleBaseUrl, $this->data);
+    }
+
+    // Made-up names, prices and date, so a value that still came from code instead of the data file would show.
+    private function givenADataFile(): void
+    {
+        $file = $this->directory.'/sample-project.yaml';
+        new Filesystem()->dumpFile($file, Yaml::dump([
+            'router_url' => 'https://router.example.test',
+            'price_date' => '2030-01-02',
+            'models' => [
+                'anthropic' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
+                'openai' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
+                'openai_compatible' => ['strong' => 'made-up-router', 'standard' => 'made-up-router', 'light' => 'made-up-router'],
+            ],
+            'second_maker' => 'made-up-second-maker',
+            'prices' => [
+                'made-up-strong' => ['input' => 7, 'output' => 70],
+                'made-up-standard' => ['input' => 0.7, 'output' => 7],
+                'made-up-router' => ['input' => 1, 'output' => 2],
+                'made-up-second-maker' => ['input' => 3, 'output' => 4],
+            ],
+        ]));
+        $this->data = new SampleProjectData($file);
     }
 
     /**
@@ -342,11 +420,11 @@ final class SeedSampleProjectCommandTest extends TestCase
     }
 
     /**
-     * @return array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{prices: array<string, array{input: int|float, output: int|float}>}}
+     * @return array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{price_date: string, prices: array<string, array{input: int|float, output: int|float}>}}
      */
     private function written(): array
     {
-        /** @var array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{prices: array<string, array{input: int|float, output: int|float}>}} $written */
+        /** @var array{projects: array{sample: array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}}, budget: array{price_date: string, prices: array<string, array{input: int|float, output: int|float}>}} $written */
         $written = Yaml::parseFile($this->configuration());
 
         return $written;
