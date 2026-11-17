@@ -52,6 +52,13 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.task-actions .btn'] ?? '');
     }
 
+    public function testTheStylesheetHidesTheStartOfARoundWhileARoundIsInReview(): void
+    {
+        $css = (string) file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
+
+        self::assertStringContainsString('.task-actions:has(.now-runs) > .start-review { display: none; }', $css);
+    }
+
     public function testFrom1500WideTheLogSitsBesideAWiderTimelineAndScrollsWithin520Px(): void
     {
         $rules = $this->rulesOf($this->mediaBlocks('min-width: 1500px'));
