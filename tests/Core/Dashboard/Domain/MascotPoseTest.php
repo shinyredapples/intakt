@@ -39,7 +39,9 @@ final class MascotPoseTest extends TestCase
             foreach ([96, 144, 192, 288] as $px) {
                 $file = sprintf('%soctopus-%s-%s-%d.webp', self::MASCOT, $pose->value, $theme, $px);
                 self::assertFileExists($file);
-                self::assertSame([$px, $px], array_slice(getimagesize($file) ?: [], 0, 2));
+                $size = getimagesize($file);
+                self::assertNotFalse($size);
+                self::assertSame([$px, $px], [$size[0], $size[1]]);
             }
         }
     }
