@@ -8,7 +8,7 @@ use PhpToken;
 
 final readonly class LeftUndoneComments
 {
-    private const string COMMENT_SYNTAX = '~^\s*(?://+|#+|/\*+|\*+(?!/))?\s*~';
+    private const string COMMENT_SYNTAX = '~^\s*(?:(?://+|#+|/\*+|\*+(?!/))\s*)*~';
     private const string MARKER = '/^(TODO|FIXME|XXX)\b/i';
     public const string ISSUE_REFERENCE = '\(#[1-9][0-9]*\):';
     private const string REASONED_EXCEPTION = '/^(?:TODO|FIXME|XXX)'.self::ISSUE_REFERENCE.'.*[[:alpha:]]/i';

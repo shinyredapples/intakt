@@ -49,6 +49,14 @@ final class ComposerAuditGateCooldownExceptionTest extends SandboxTestCase
         self::assertSame('cooldown exceptions in force: intakt/fresh-package (every version)', $run->noteOf('audit'));
     }
 
+    public function testAPackageExceptedWithANullValueIsNamedForEveryVersionBecauseComposerAppliesItSo(): void
+    {
+        $run = $this->sandboxWithIgnore('{"intakt/fresh-package": null}')->checkWith(self::OFFLINE, '--only=audit');
+
+        self::assertSame(0, $run->exitCode(), $run->output());
+        self::assertSame('cooldown exceptions in force: intakt/fresh-package (every version)', $run->noteOf('audit'));
+    }
+
     public function testAListOfRulesUnderOnePackageIsNamedWithTheConstraintOfEachRule(): void
     {
         $run = $this->sandboxWithIgnore('{"intakt/fresh-package": [{"constraint": "1.0.0"}, {"constraint": "^3.0"}]}')->checkWith(self::OFFLINE, '--only=audit');

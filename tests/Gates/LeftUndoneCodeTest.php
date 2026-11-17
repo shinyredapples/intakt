@@ -121,6 +121,14 @@ final class LeftUndoneCodeTest extends TestCase
         self::assertStringStartsWith('Skip attribute without a reason', $findings[3] ?? '');
     }
 
+    public function testTwoSkipAttributesInOneGroupOnOneLineAreReportedOnceNamingTheFirst(): void
+    {
+        $findings = new LeftUndoneCode()->findingsOn('tests/OrderTest.php', "<?php\n#[Skip, Incomplete]\nfunction testOrder() {}\n", [2]);
+
+        self::assertSame([2], array_keys($findings));
+        self::assertStringStartsWith('Skip attribute without a reason', $findings[2]);
+    }
+
     public function testAnUnchangedSkipInAnAttributeGroupThatGainsAnotherAttributeIsNotReported(): void
     {
         $source = "<?php\n#[Test,\n    Skip\n]\nfunction testOrder() {}\n";
