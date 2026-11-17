@@ -24,6 +24,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private const string ENDED_TEXT = 'Judged.';
     private const string JUDGED_HERE = 'The judge has judged this round. Its call and the findings to fix are in the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
+    private const string IDLE = 'Nothing is running. Nothing needs you.';
     private const string HEADLINE_TARGET = 'target="board-headline"';
     private const string REVIEWING = '/^The Code reviewers are reviewing change \S+ of '.SampleProject::NAME.'\. The Code reviewers are reviewing 1 change\. Nothing needs you\.$/';
 
@@ -80,14 +81,15 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         return $round;
     }
 
-    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened.
+    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened; past the idle lines, because the progress published at the round's start pushes the headline before any reviewer started.
     private function readThePushedHeadline(string $round): void
     {
         $lines = $this->pushedHeadlines();
+        $first = array_find($lines, static fn (Crawler $line): bool => self::IDLE !== $line->text());
 
-        self::assertNotSame([], $lines);
-        self::assertMatchesRegularExpression(self::REVIEWING, $lines[0]->text());
-        self::assertSame(['/reviews/'.$round], $lines[0]->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertNotNull($first);
+        self::assertMatchesRegularExpression(self::REVIEWING, $first->text());
+        self::assertSame(['/reviews/'.$round], $first->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
     }
 
     // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
@@ -95,7 +97,7 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     {
         $line = $this->visit('/')->filter('#board-headline')->text();
 
-        self::assertSame('Nothing is running. Nothing needs you.', $line);
+        self::assertSame(self::IDLE, $line);
         self::assertSame($line, array_last($this->pushedHeadlines())?->text());
     }
 

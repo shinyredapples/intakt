@@ -6,9 +6,8 @@ namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
-use Intakt\Core\Ai\Contract\KeyKind;
-use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
@@ -19,10 +18,9 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
 {
     public const int PRIORITY = -100;
 
-    private const string HUGGING_FACE_VARIABLE = 'HF_TOKEN';
-
     public function __construct(
         private KeptProviderKeys $keys,
+        private ProviderCatalog $providers,
         private ?LoggerInterface $logger = null,
     ) {
     }
@@ -45,15 +43,12 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
             return [];
         }
 
-        return [$this->variableOf($key->kind()) => $key->secret()];
-    }
+        $variable = array_first($this->providers->descriptor($key->provider())?->variables() ?? []);
 
-    private function variableOf(KeyKind $kind): string
-    {
-        return match ($kind) {
-            KeyKind::Anthropic => Provider::Anthropic->variables()[0],
-            KeyKind::OpenAi => Provider::OpenAi->variables()[0],
-            KeyKind::HuggingFace => self::HUGGING_FACE_VARIABLE,
-        };
+        if (null === $variable) {
+            return [];
+        }
+
+        return [$variable => $key->secret()];
     }
 }

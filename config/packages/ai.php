@@ -36,6 +36,7 @@ use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
 use Symfony\AI\Platform\ModelCatalog\CompositeModelCatalog;
@@ -91,7 +92,8 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(AiServices::KEPT_KEY_DIRECTORY, $keptKeyDirectory);
 
     // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
-    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory))->loadEnvVars();
+    $keyProviders = new SymfonyAiProviderCatalog();
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders)->loadEnvVars();
 
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
     $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {

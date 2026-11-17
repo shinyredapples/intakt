@@ -44,7 +44,10 @@ final readonly class LiveRoundProgress
     // Only after the lease that started the reviewer is committed, because a listener reads the ledger to show who is working.
     public function publishStartOf(RoundReviewer $reviewer): void
     {
-        $this->updates->reviewerStarted($reviewer->round()->id(), $reviewer->id()->toRfc4122());
+        $roundId = $reviewer->round()->id();
+
+        $this->updates->reviewerStarted($roundId, $reviewer->id()->toRfc4122());
+        $this->publishLatest($roundId);
     }
 
     // Only after the verdict that answered the stop is stored, never inside its transaction, because a refused ledger row would roll back a stop that was already shown.

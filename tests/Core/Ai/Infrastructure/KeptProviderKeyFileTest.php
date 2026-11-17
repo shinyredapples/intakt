@@ -7,11 +7,14 @@ namespace Intakt\Tests\Core\Ai\Infrastructure;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
-use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -23,8 +26,11 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(ProviderKeyAlreadyKept::class)]
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(ConfiguredKey::class)]
-#[UsesClass(KeyKind::class)]
 #[UsesClass(KeyNotRecognised::class)]
+#[UsesClass(SymfonyAiProviderCatalog::class)]
+#[UsesClass(AnthropicDescriptor::class)]
+#[UsesClass(OpenAiDescriptor::class)]
+#[UsesClass(HuggingFaceDescriptor::class)]
 final class KeptProviderKeyFileTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
@@ -43,23 +49,37 @@ final class KeptProviderKeyFileTest extends TestCase
 
     public function testAKeptKeyIsWrittenWithPermissionsOnlyItsOwnerHas(): void
     {
-        $this->file()->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+        $this->file()->keep($this->key('sk-ant-'.self::BODY));
 
         self::assertSame(0o600, fileperms($this->directory.'/provider-key.json') & 0o777);
         self::assertSame(0o700, fileperms($this->directory) & 0o777);
     }
 
-    public function testAKeptKeyReadsBackWithItsKindAndOnlyItsLastCharactersAsConfiguredState(): void
+    public function testAKeptKeyReadsBackWithItsProviderAndOnlyItsLastCharactersAsConfiguredState(): void
     {
         $file = $this->file();
-        $file->keep(ProviderKey::recognise('hf_'.self::BODY));
+        $file->keep($this->key('hf_'.self::BODY));
 
         $configured = $file->configured();
 
         self::assertInstanceOf(ConfiguredKey::class, $configured);
-        self::assertSame(KeyKind::HuggingFace, $configured->kind);
+        self::assertSame('huggingface', $configured->provider);
         self::assertSame('5678', $configured->lastCharacters);
         self::assertSame('hf_'.self::BODY, $file->read()?->secret());
+    }
+
+    public function testAKeyKeptBeforeTheProviderFieldReadsBackFromItsKind(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"kind":"openai","key":"sk-'.self::BODY.'"}');
+
+        self::assertSame('openai', $this->file()->read()?->provider());
+    }
+
+    public function testAKeptKeyAlsoNamesItsProviderAsKindSoAnEarlierReleaseReadsIt(): void
+    {
+        $this->file()->keep($this->key('sk-ant-'.self::BODY));
+
+        self::assertSame(['provider' => 'anthropic', 'kind' => 'anthropic', 'key' => 'sk-ant-'.self::BODY], json_decode((string) file_get_contents($this->directory.'/provider-key.json'), true));
     }
 
     public function testNoKeptFileMeansNoConfiguredKey(): void
@@ -70,7 +90,7 @@ final class KeptProviderKeyFileTest extends TestCase
 
     public function testAKeptFileThatCannotBeParsedThrowsWithNoneOfItsContentInTheMessage(): void
     {
-        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"kind":"anthropic","key":"sk-ant-'.self::BODY);
+        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"provider":"anthropic","key":"sk-ant-'.self::BODY);
 
         try {
             $this->file()->read();
@@ -80,11 +100,11 @@ final class KeptProviderKeyFileTest extends TestCase
         }
     }
 
-    public function testAKeptFileWithAnUnknownKindOrNoKeyIsUnreadable(): void
+    public function testAKeptFileWithAnUnlistedProviderOrNoKeyIsUnreadable(): void
     {
         $filesystem = new Filesystem();
 
-        foreach (['{"kind":"other","key":"hf_'.self::BODY.'"}', '{"kind":"openai"}', '{"kind":"openai","key":""}', '[]', '"text"'] as $json) {
+        foreach (['{"provider":"other","key":"hf_'.self::BODY.'"}', '{"kind":"anthropic","key":"sk-'.self::BODY.'"}', '{"key":"sk-'.self::BODY.'"}', '{"provider":"openai"}', '{"provider":"openai","key":""}', '[]', '"text"'] as $json) {
             $filesystem->dumpFile($this->directory.'/provider-key.json', $json);
 
             try {
@@ -105,7 +125,7 @@ final class KeptProviderKeyFileTest extends TestCase
         symlink($target, $this->directory.'/provider-key.json');
 
         try {
-            $this->file()->keep(ProviderKey::recognise('sk-'.self::BODY));
+            $this->file()->keep($this->key('sk-'.self::BODY));
             self::fail('The link should refuse the key.');
         } catch (ProviderKeyAlreadyKept) {
             self::assertSame('untouched', file_get_contents($target));
@@ -120,7 +140,7 @@ final class KeptProviderKeyFileTest extends TestCase
         symlink($target, $this->directory.'/provider-key.json');
 
         try {
-            $this->file()->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+            $this->file()->keep($this->key('sk-ant-'.self::BODY));
             self::fail('The dangling link should refuse the key.');
         } catch (ProviderKeyAlreadyKept) {
             self::assertFileDoesNotExist($target);
@@ -133,10 +153,10 @@ final class KeptProviderKeyFileTest extends TestCase
     public function testKeepingASecondKeyIsRefusedAndTheFirstStays(): void
     {
         $file = $this->file();
-        $file->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+        $file->keep($this->key('sk-ant-'.self::BODY));
 
         try {
-            $file->keep(ProviderKey::recognise('hf_'.self::BODY.'9999'));
+            $file->keep($this->key('hf_'.self::BODY.'9999'));
             self::fail('The second key should be refused.');
         } catch (ProviderKeyAlreadyKept $alreadyKept) {
             self::assertSame('sk-ant-'.self::BODY, $file->read()?->secret());
@@ -147,10 +167,10 @@ final class KeptProviderKeyFileTest extends TestCase
     public function testARefusedSecondKeyLeavesNoNewFileInTheDirectory(): void
     {
         $file = $this->file();
-        $file->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+        $file->keep($this->key('sk-ant-'.self::BODY));
 
         try {
-            $file->keep(ProviderKey::recognise('hf_'.self::BODY.'9999'));
+            $file->keep($this->key('hf_'.self::BODY.'9999'));
         } catch (ProviderKeyAlreadyKept) {
             self::assertSame(['provider-key.json'], array_values(array_diff((array) scandir($this->directory), ['.', '..'])));
         }
@@ -158,16 +178,16 @@ final class KeptProviderKeyFileTest extends TestCase
 
     public function testAKeptKeyTooShortForItsFormIsUnreadableInsteadOfShownWhole(): void
     {
-        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"kind":"openai","key":"abc"}');
+        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"provider":"openai","key":"abc"}');
 
         $this->expectException(KeptProviderKeyUnreadable::class);
 
         $this->file()->configured();
     }
 
-    public function testAKeptKeyWhoseFormNamesAnotherKindIsUnreadable(): void
+    public function testAKeptKeyWhoseFormNamesAnotherProviderIsUnreadable(): void
     {
-        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"kind":"anthropic","key":"hf_'.self::BODY.'"}');
+        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"provider":"anthropic","key":"hf_'.self::BODY.'"}');
 
         $this->expectException(KeptProviderKeyUnreadable::class);
 
@@ -179,7 +199,7 @@ final class KeptProviderKeyFileTest extends TestCase
         new Filesystem()->dumpFile($this->directory, 'a file where the directory belongs');
 
         try {
-            $this->file()->keep(ProviderKey::recognise('sk-ant-'.self::BODY));
+            $this->file()->keep($this->key('sk-ant-'.self::BODY));
             self::fail('The key should not be written.');
         } catch (KeptProviderKeyNotWritten $notWritten) {
             self::assertNull($notWritten->getPrevious());
@@ -189,6 +209,11 @@ final class KeptProviderKeyFileTest extends TestCase
 
     private function file(): KeptProviderKeyFile
     {
-        return new KeptProviderKeyFile($this->directory);
+        return new KeptProviderKeyFile($this->directory, new SymfonyAiProviderCatalog());
+    }
+
+    private function key(string $key): ProviderKey
+    {
+        return ProviderKey::recognise($key, new SymfonyAiProviderCatalog());
     }
 }

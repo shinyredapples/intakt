@@ -6,9 +6,18 @@ namespace Intakt\Tests\Plugin\SymfonyAiVendor\Infrastructure;
 
 use ArrayObject;
 use Closure;
-use Intakt\Core\Ai\Contract\KeyKind;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Ai\Contract\TierNotMapped;
+use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiKeyCheck;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProvider;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -16,28 +25,35 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Uri\Rfc3986\Uri;
 
 #[CoversClass(SymfonyAiKeyCheck::class)]
+#[CoversClass(AnthropicDescriptor::class)]
+#[CoversClass(OpenAiDescriptor::class)]
+#[CoversClass(HuggingFaceDescriptor::class)]
 #[UsesClass(ProviderKey::class)]
-#[UsesClass(KeyKind::class)]
+#[UsesClass(SymfonyAiProviderCatalog::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(Provider::class)]
+#[UsesClass(TierNotMapped::class)]
 final class SymfonyAiKeyCheckTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
 
     private const array ANTHROPIC_ANSWER = [
-        'id' => 'msg_test', 'type' => 'message', 'role' => 'assistant', 'model' => 'claude-haiku-5-5',
+        'id' => 'msg_test', 'type' => 'message', 'role' => 'assistant', 'model' => 'light-anthropic',
         'content' => [['type' => 'text', 'text' => 'ok']],
         'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
     ];
 
     private const array OPENAI_ANSWER = [
-        'id' => 'resp_test', 'object' => 'response', 'status' => 'completed', 'model' => 'gpt-4.1-nano',
+        'id' => 'resp_test', 'object' => 'response', 'status' => 'completed', 'model' => 'light-openai',
         'output' => [['type' => 'message', 'role' => 'assistant', 'content' => [['type' => 'output_text', 'text' => 'ok']]]],
         'usage' => ['input_tokens' => 1, 'output_tokens' => 1, 'total_tokens' => 2],
     ];
 
     private const array CHAT_COMPLETION_ANSWER = [
-        'id' => 'chatcmpl_test', 'object' => 'chat.completion', 'created' => 1, 'model' => 'meta-llama/Llama-3.2-1B-Instruct',
+        'id' => 'chatcmpl_test', 'object' => 'chat.completion', 'created' => 1, 'model' => 'light-openai_compatible',
         'choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => 'ok'], 'finish_reason' => 'stop']],
         'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1, 'total_tokens' => 2],
     ];
@@ -65,11 +81,11 @@ final class SymfonyAiKeyCheckTest extends TestCase
     /**
      * @return iterable<string, array{string, string, array<string, mixed>}>
      */
-    public static function endpoints(): iterable
+    public static function paths(): iterable
     {
-        yield 'anthropic' => ['sk-ant-'.self::BODY, 'https://api.anthropic.com/v1/messages', self::ANTHROPIC_ANSWER];
-        yield 'openai' => ['sk-'.self::BODY, 'https://api.openai.com/v1/responses', self::OPENAI_ANSWER];
-        yield 'hugging face' => ['hf_'.self::BODY, 'https://router.huggingface.co/v1/chat/completions', self::CHAT_COMPLETION_ANSWER];
+        yield 'anthropic' => ['sk-ant-'.self::BODY, '/v1/messages', self::ANTHROPIC_ANSWER];
+        yield 'openai' => ['sk-'.self::BODY, '/v1/responses', self::OPENAI_ANSWER];
+        yield 'hugging face' => ['hf_'.self::BODY, '/v1/chat/completions', self::CHAT_COMPLETION_ANSWER];
     }
 
     /**
@@ -77,20 +93,23 @@ final class SymfonyAiKeyCheckTest extends TestCase
      */
     public static function requests(): iterable
     {
-        yield 'anthropic' => ['sk-ant-'.self::BODY, ['model' => 'claude-haiku-5-5', 'max_tokens' => 1], self::ANTHROPIC_ANSWER];
-        yield 'openai' => ['sk-'.self::BODY, ['model' => 'gpt-4.1-nano', 'max_output_tokens' => 16], self::OPENAI_ANSWER];
-        yield 'hugging face' => ['hf_'.self::BODY, ['model' => 'meta-llama/Llama-3.2-1B-Instruct', 'max_tokens' => 1], self::CHAT_COMPLETION_ANSWER];
+        yield 'anthropic' => ['sk-ant-'.self::BODY, ['model' => 'light-anthropic', 'max_tokens' => 1], self::ANTHROPIC_ANSWER];
+        yield 'openai' => ['sk-'.self::BODY, ['model' => 'light-openai', 'max_output_tokens' => 16], self::OPENAI_ANSWER];
+        yield 'hugging face' => ['hf_'.self::BODY, ['model' => 'light-openai_compatible', 'max_tokens' => 1], self::CHAT_COMPLETION_ANSWER];
     }
 
     /**
      * @param array<string, mixed> $answer
      */
-    #[DataProvider('endpoints')]
-    public function testEachKindIsCheckedWithOneCallToItsOwnProvider(string $key, string $url, array $answer): void
+    #[DataProvider('paths')]
+    public function testEachProviderIsCheckedWithOneCallToItsDescriptorsBaseUrl(string $key, string $path, array $answer): void
     {
+        $providers = new SymfonyAiProviderCatalog();
+        $baseUrl = $providers->descriptor(ProviderKey::recognise($key, $providers)->provider())?->baseUrl()->toString();
+
         $calls = $this->callsMadeFor($key, $answer);
 
-        self::assertSame([['POST', $url]], array_map(static fn (array $call): array => [$call[0], $call[1]], $calls));
+        self::assertSame([['POST', $baseUrl.$path]], array_map(static fn (array $call): array => [$call[0], $call[1]], $calls));
     }
 
     /**
@@ -98,13 +117,86 @@ final class SymfonyAiKeyCheckTest extends TestCase
      * @param array<string, mixed>      $answer
      */
     #[DataProvider('requests')]
-    public function testEachKindAsksTheCheapestModelForTheShortestAnswerItsProviderAllows(string $key, array $expected, array $answer): void
+    public function testEachProviderAsksItsLightTierModelForItsDescriptorsSmallestAnswer(string $key, array $expected, array $answer): void
     {
         $calls = $this->callsMadeFor($key, $answer);
 
         self::assertCount(1, $calls);
         $request = $calls[0][2];
         self::assertSame($expected, array_map(static fn (string $field): mixed => $request[$field] ?? null, array_combine(array_keys($expected), array_keys($expected))));
+    }
+
+    /**
+     * @return iterable<string, array{SymfonyAiProvider, string, array<string, mixed>}>
+     */
+    public static function movedEndpoints(): iterable
+    {
+        yield 'anthropic' => [new AnthropicDescriptor(new Uri('https://gateway.example')), 'sk-ant-'.self::BODY, self::ANTHROPIC_ANSWER];
+        yield 'openai' => [new OpenAiDescriptor(new Uri('https://gateway.example')), 'sk-'.self::BODY, self::OPENAI_ANSWER];
+        yield 'hugging face' => [new HuggingFaceDescriptor(new Uri('https://gateway.example')), 'hf_'.self::BODY, self::CHAT_COMPLETION_ANSWER];
+    }
+
+    /**
+     * @param array<string, mixed> $answer
+     */
+    #[DataProvider('movedEndpoints')]
+    public function testADescriptorWithAnotherBaseUrlIsCheckedThere(SymfonyAiProvider $provider, string $key, array $answer): void
+    {
+        $providers = new SymfonyAiProviderCatalog([$provider]);
+        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
+        $calls = new ArrayObject();
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, $answer)), $providers, $this->tiers());
+
+        $outcome = $check->check(ProviderKey::recognise($key, $providers));
+
+        self::assertSame(KeyCheckOutcome::Accepted, $outcome);
+        $urls = array_column($calls->getArrayCopy(), 1);
+        self::assertCount(1, $urls);
+        self::assertStringStartsWith('https://gateway.example/v1/', $urls[0]);
+    }
+
+    public function testACheckModelInTheDescriptorOverridesTheLightTier(): void
+    {
+        $providers = new SymfonyAiProviderCatalog([new NamedCheckModel(new AnthropicDescriptor(), 'named-check-model')]);
+
+        self::assertSame('named-check-model', $this->modelAsked($providers, $this->tiers()));
+    }
+
+    public function testTheFirstProjectWithItsLightTierOnTheProviderGivesTheModel(): void
+    {
+        $tiers = $this->tiers(['other' => Provider::OpenAi, 'first' => Provider::Anthropic, 'second' => Provider::Anthropic]);
+
+        self::assertSame('light-first', $this->modelAsked(new SymfonyAiProviderCatalog(), $tiers));
+    }
+
+    public function testAProjectWhoseLightTierCannotBeReadIsSkipped(): void
+    {
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(['broken', 'mapped']);
+        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => 'broken' === $project
+            ? throw new TierNotMapped($project, Tier::Light) : new ResolvedModel(Provider::Anthropic, 'light-mapped'));
+
+        self::assertSame('light-mapped', $this->modelAsked(new SymfonyAiProviderCatalog(), $tiers));
+    }
+
+    public function testWithoutALightTierOnTheProviderTheKeyIsNotCheckedAndNoCallIsMade(): void
+    {
+        $calls = new ArrayObject();
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), new SymfonyAiProviderCatalog(), $this->tiers(['other' => Provider::OpenAi]));
+
+        $outcome = $check->check(ProviderKey::recognise('sk-ant-'.self::BODY, new SymfonyAiProviderCatalog()));
+
+        self::assertSame([KeyCheckOutcome::NotChecked, 0], [$outcome, count($calls)]);
+    }
+
+    public function testAKeyOfAProviderTheCatalogDoesNotListIsNotCheckedAndNoCallIsMade(): void
+    {
+        $calls = new ArrayObject();
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::CHAT_COMPLETION_ANSWER)), new SymfonyAiProviderCatalog([new AnthropicDescriptor()]), $this->tiers());
+
+        $outcome = $check->check(ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog()));
+
+        self::assertSame([KeyCheckOutcome::NotChecked, 0], [$outcome, count($calls)]);
     }
 
     /**
@@ -158,6 +250,20 @@ final class SymfonyAiKeyCheckTest extends TestCase
         return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
     }
 
+    // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
+    /**
+     * @param array<string, Provider>|null $lightTiers
+     */
+    private function tiers(?array $lightTiers = null): TierResolver
+    {
+        $lightTiers ??= array_combine(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()), Provider::cases());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('projects')->willReturn(array_map(strval(...), array_keys($lightTiers)));
+        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
+
+        return $tiers;
+    }
+
     /**
      * @param array<string, mixed> $answer
      *
@@ -173,13 +279,35 @@ final class SymfonyAiKeyCheckTest extends TestCase
         return array_values($calls->getArrayCopy());
     }
 
+    private function modelAsked(SymfonyAiProviderCatalog $providers, TierResolver $tiers): mixed
+    {
+        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
+        $calls = new ArrayObject();
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), $providers, $tiers);
+
+        $check->check(ProviderKey::recognise('sk-ant-'.self::BODY, $providers));
+
+        return array_first($calls->getArrayCopy())[2]['model'] ?? null;
+    }
+
     /**
      * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
      * @param Closure(array<mixed>): MockResponse                   $answer
      */
     private function check(string $key, ArrayObject $calls, Closure $answer): KeyCheckOutcome
     {
-        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
+        $providers = new SymfonyAiProviderCatalog();
+
+        return new SymfonyAiKeyCheck($this->http($calls, $answer), $providers, $this->tiers())->check(ProviderKey::recognise($key, $providers));
+    }
+
+    /**
+     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
+     * @param Closure(array<mixed>): MockResponse                   $answer
+     */
+    private function http(ArrayObject $calls, Closure $answer): MockHttpClient
+    {
+        return new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
             $body = $options['body'] ?? null;
             self::assertIsString($body);
             $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
@@ -188,7 +316,5 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
             return $answer($request);
         });
-
-        return new SymfonyAiKeyCheck($http)->check(ProviderKey::recognise($key));
     }
 }
