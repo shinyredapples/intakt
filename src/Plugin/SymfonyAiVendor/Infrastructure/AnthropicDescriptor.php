@@ -36,9 +36,14 @@ final readonly class AnthropicDescriptor implements SymfonyAiProvider
         return '/^sk-ant-[A-Za-z0-9_-]{8,}$/D';
     }
 
+    public function __construct(
+        private Uri $baseUrl = new Uri('https://api.anthropic.com'),
+    ) {
+    }
+
     public function baseUrl(): Uri
     {
-        return new Uri('https://api.anthropic.com');
+        return $this->baseUrl;
     }
 
     public function tierProvider(): Provider

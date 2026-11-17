@@ -6,8 +6,8 @@ namespace Intakt\Plugin\SymfonyAiVendor\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
 use SensitiveParameter;
-use Symfony\AI\Platform\Bridge\OpenAi\Factory;
-use Symfony\AI\Platform\Bridge\OpenAi\Gpt;
+use Symfony\AI\Platform\Bridge\OpenResponses\Factory;
+use Symfony\AI\Platform\Bridge\OpenResponses\ResponsesModel;
 use Symfony\AI\Platform\ModelCatalog\InMemoryModelCatalog;
 use Symfony\AI\Platform\PlatformInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -37,10 +37,14 @@ final readonly class OpenAiDescriptor implements SymfonyAiProvider
         return '/^sk-(?!ant-)[A-Za-z0-9_-]{8,}$/D';
     }
 
-    // The bridge's own endpoint without a region, because the OpenAI bridge takes a region instead of a base URL.
+    public function __construct(
+        private Uri $baseUrl = new Uri('https://api.openai.com'),
+    ) {
+    }
+
     public function baseUrl(): Uri
     {
-        return new Uri('https://api.openai.com');
+        return $this->baseUrl;
     }
 
     public function tierProvider(): Provider
@@ -59,8 +63,15 @@ final readonly class OpenAiDescriptor implements SymfonyAiProvider
         return 16;
     }
 
+    // The Open Responses bridge the OpenAI bridge builds on, because the OpenAI bridge takes a region instead of a base URL.
     public function platform(#[SensitiveParameter] string $secret, string $model, HttpClientInterface $http): PlatformInterface
     {
-        return Factory::createPlatform($secret, $http, new InMemoryModelCatalog([$model => ['class' => Gpt::class, 'capabilities' => self::CHECK_CAPABILITIES]]));
+        return Factory::createPlatform(
+            $this->baseUrl()->toString(),
+            $secret,
+            $http,
+            new InMemoryModelCatalog([$model => ['class' => ResponsesModel::class, 'capabilities' => self::CHECK_CAPABILITIES]]),
+            name: $this->id(),
+        );
     }
 }

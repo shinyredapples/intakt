@@ -36,9 +36,14 @@ final readonly class HuggingFaceDescriptor implements SymfonyAiProvider
     }
 
     // Without /v1, because the generic bridge appends /v1/chat/completions itself.
+    public function __construct(
+        private Uri $baseUrl = new Uri('https://router.huggingface.co'),
+    ) {
+    }
+
     public function baseUrl(): Uri
     {
-        return new Uri('https://router.huggingface.co');
+        return $this->baseUrl;
     }
 
     // The OpenAI compatible endpoint, because the image points it at the router when HF_TOKEN is set, so the router models are mapped there.

@@ -16,6 +16,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiKeyCheck;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProvider;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Uri\Rfc3986\Uri;
 
 #[CoversClass(SymfonyAiKeyCheck::class)]
 #[CoversClass(AnthropicDescriptor::class)]
@@ -122,6 +124,33 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertCount(1, $calls);
         $request = $calls[0][2];
         self::assertSame($expected, array_map(static fn (string $field): mixed => $request[$field] ?? null, array_combine(array_keys($expected), array_keys($expected))));
+    }
+
+    /**
+     * @return iterable<string, array{SymfonyAiProvider, string, string, array<string, mixed>}>
+     */
+    public static function movedEndpoints(): iterable
+    {
+        yield 'anthropic' => [new AnthropicDescriptor(new Uri('https://gateway.example')), 'sk-ant-'.self::BODY, '/v1/messages', self::ANTHROPIC_ANSWER];
+        yield 'openai' => [new OpenAiDescriptor(new Uri('https://gateway.example')), 'sk-'.self::BODY, '/v1/responses', self::OPENAI_ANSWER];
+        yield 'hugging face' => [new HuggingFaceDescriptor(new Uri('https://gateway.example')), 'hf_'.self::BODY, '/v1/chat/completions', self::CHAT_COMPLETION_ANSWER];
+    }
+
+    /**
+     * @param array<string, mixed> $answer
+     */
+    #[DataProvider('movedEndpoints')]
+    public function testADescriptorWithAnotherBaseUrlIsCheckedThere(SymfonyAiProvider $provider, string $key, string $path, array $answer): void
+    {
+        $providers = new SymfonyAiProviderCatalog([$provider]);
+        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
+        $calls = new ArrayObject();
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, $answer)), $providers, $this->tiers());
+
+        $outcome = $check->check(ProviderKey::recognise($key, $providers));
+
+        self::assertSame(KeyCheckOutcome::Accepted, $outcome);
+        self::assertSame(['https://gateway.example'.$path], array_column($calls->getArrayCopy(), 1));
     }
 
     public function testACheckModelInTheDescriptorOverridesTheLightTier(): void

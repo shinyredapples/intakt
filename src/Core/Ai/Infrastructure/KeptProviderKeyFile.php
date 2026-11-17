@@ -42,7 +42,8 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
             $filesystem->mkdir($this->directory, 0o700);
             $written = $filesystem->tempnam($this->directory, '.'.self::FILE.'.');
             $filesystem->chmod($written, 0o600);
-            $filesystem->appendToFile($written, json_encode(['provider' => $key->provider(), 'key' => $key->secret()], JSON_THROW_ON_ERROR));
+            // Also as kind, the field earlier releases read, so a rollback still finds the key.
+            $filesystem->appendToFile($written, json_encode(['provider' => $key->provider(), 'kind' => $key->provider(), 'key' => $key->secret()], JSON_THROW_ON_ERROR));
             $this->linkWhereNothingIs($written);
         } catch (IOException|JsonException) {
             throw new KeptProviderKeyNotWritten();
@@ -109,7 +110,8 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
             throw new KeptProviderKeyUnreadable();
         }
 
-        $provider = is_array($data) ? ($data['provider'] ?? null) : null;
+        // A file kept before the provider id names it as kind, with the same ids, so it still reads after an upgrade.
+        $provider = is_array($data) ? ($data['provider'] ?? $data['kind'] ?? null) : null;
         $key = is_array($data) ? ($data['key'] ?? null) : null;
 
         if (!is_string($provider) || !is_string($key)) {

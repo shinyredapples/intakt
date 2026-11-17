@@ -68,6 +68,20 @@ final class KeptProviderKeyFileTest extends TestCase
         self::assertSame('hf_'.self::BODY, $file->read()?->secret());
     }
 
+    public function testAKeyKeptBeforeTheProviderFieldReadsBackFromItsKind(): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/provider-key.json', '{"kind":"openai","key":"sk-'.self::BODY.'"}');
+
+        self::assertSame('openai', $this->file()->read()?->provider());
+    }
+
+    public function testAKeptKeyAlsoNamesItsProviderAsKindSoAnEarlierReleaseReadsIt(): void
+    {
+        $this->file()->keep($this->key('sk-ant-'.self::BODY));
+
+        self::assertSame(['provider' => 'anthropic', 'kind' => 'anthropic', 'key' => 'sk-ant-'.self::BODY], json_decode((string) file_get_contents($this->directory.'/provider-key.json'), true));
+    }
+
     public function testNoKeptFileMeansNoConfiguredKey(): void
     {
         self::assertNotInstanceOf(ConfiguredKey::class, $this->file()->configured());
@@ -90,7 +104,7 @@ final class KeptProviderKeyFileTest extends TestCase
     {
         $filesystem = new Filesystem();
 
-        foreach (['{"provider":"other","key":"hf_'.self::BODY.'"}', '{"kind":"openai","key":"sk-'.self::BODY.'"}', '{"provider":"openai"}', '{"provider":"openai","key":""}', '[]', '"text"'] as $json) {
+        foreach (['{"provider":"other","key":"hf_'.self::BODY.'"}', '{"kind":"anthropic","key":"sk-'.self::BODY.'"}', '{"key":"sk-'.self::BODY.'"}', '{"provider":"openai"}', '{"provider":"openai","key":""}', '[]', '"text"'] as $json) {
             $filesystem->dumpFile($this->directory.'/provider-key.json', $json);
 
             try {
