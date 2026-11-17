@@ -91,10 +91,40 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private Ledger $ledger;
 
+    private RoundCosts $costs;
+
     protected function setUp(): void
     {
         $this->log = new BufferingLogger();
         $this->ledger = new DashboardLedger();
+        $this->costs = self::createStub(RoundCosts::class);
+        $this->costs->method('costOf')->willReturn(Cost::none());
+    }
+
+    public function testAJudgedStateAsksTheCostOfTheRoundsOfItsOwnReviewOnly(): void
+    {
+        $other = '01a19a97-48cf-70f1-bdae-965425786c48';
+        $earlier = '01a19a97-48cf-70f1-bdae-965425786c49';
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/other', $other, 1);
+        $ledger->judgeRound($other);
+        $ledger->startRoundOf('feat/thing', $earlier, 1);
+        $ledger->judgeRound($earlier);
+        $ledger->startRoundOf('feat/thing', self::ROUND, 2);
+        $ledger->judgeRound(self::ROUND);
+        $this->ledger = $ledger;
+        $asked = [];
+        $costs = $this->createMock(RoundCosts::class);
+        $costs->expects($this->atLeastOnce())->method('costOf')->willReturnCallback(static function (string $round) use (&$asked): Cost {
+            $asked[$round] = true;
+
+            return Cost::none();
+        });
+        $this->costs = $costs;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertEqualsCanonicalizing([$earlier, self::ROUND], array_map(strval(...), array_keys($asked)));
     }
 
     public function testUpdatesOfARoundReachTheHubInTheOrderTheyHappened(): void
@@ -699,10 +729,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private function pages(): LedgerReviewPages
     {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-
-        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     // The first read pauses its fiber and answers a running round, because it stands for a read taken before the judge committed; every later one finds the round judged, since the judge commits before it publishes.
