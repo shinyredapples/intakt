@@ -113,8 +113,7 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
      */
     private function storedPayloads(): array
     {
-        /* @var list<string> */
-        return $this->manager->getConnection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position');
+        return array_values(array_filter($this->manager->getConnection()->fetchFirstColumn('SELECT payload FROM ledger_event ORDER BY position'), is_string(...)));
     }
 
     // Only SQLite has the triggers, because the migration adds them nowhere else; other engines rely on the Doctrine listener.

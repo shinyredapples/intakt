@@ -40,7 +40,7 @@ final readonly class ReviewRowsOfChange
         );
     }
 
-    // The rows of every change of the project, for removing a replayed project as a whole.
+    // Every change's rows, because removing the demo project must leave none of its replayed reviews behind.
     /**
      * @return list<RecordedEvent>
      */

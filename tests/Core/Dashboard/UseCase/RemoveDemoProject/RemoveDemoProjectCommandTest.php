@@ -159,7 +159,7 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         $this->givenAReview(CreateDemoProjectCommand::NAME, 'demo-round', 'demo-call');
     }
 
-    // The rows a replay writes: only the start and the started usage name the project, the others only the round or the call.
+    // Shaped as a replay writes them, because only the start and the started usage name the project and the removal must find the others by round or call.
     private function givenAReview(string $project, string $round, string $call): void
     {
         $this->append(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => $project, 'reviewers' => 1, 'change' => 'sample-change', 'number' => 1]);
