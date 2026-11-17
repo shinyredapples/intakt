@@ -14,6 +14,7 @@ final readonly class ProviderStep
      * @param list<string>   $keyed
      * @param list<string>   $keyless
      * @param list<TierLine> $tiers
+     * @param list<string>   $keyLabels
      */
     public function __construct(
         public array $keyed,
@@ -22,6 +23,7 @@ final readonly class ProviderStep
         public array $tiers,
         public ?ConfiguredKey $kept = null,
         public bool $keptUnreadable = false,
+        public array $keyLabels = [],
     ) {
     }
 
@@ -43,7 +45,7 @@ final readonly class ProviderStep
         }
 
         if ([] === $this->keyed && $this->kept instanceof ConfiguredKey) {
-            return sprintf('The %s key ending in %s is kept. Restart Intakt to use it.', $this->kept->kind->value, $this->kept->lastCharacters);
+            return sprintf('The %s key ending in %s is kept. Restart Intakt to use it.', $this->kept->provider,$this->kept->lastCharacters);
         }
 
         if ([] === $this->keyed) {

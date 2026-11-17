@@ -6,11 +6,14 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 
 use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
-use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Intakt\Core\Dashboard\Domain\AgentStep;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
@@ -70,7 +73,10 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[UsesClass(KeptProviderKeyFile::class)]
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(ConfiguredKey::class)]
-#[UsesClass(KeyKind::class)]
+#[UsesClass(SymfonyAiProviderCatalog::class)]
+#[UsesClass(AnthropicDescriptor::class)]
+#[UsesClass(OpenAiDescriptor::class)]
+#[UsesClass(HuggingFaceDescriptor::class)]
 #[UsesClass(KeptProviderKeyUnreadable::class)]
 #[UsesClass(DashboardLedger::class)]
 final class FirstRunControllerTest extends WebTestCase
@@ -216,6 +222,13 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertNull($form->filter('input[name=key]')->attr('value'));
     }
 
+    public function testTheKeyFieldIsLabelledWithTheCatalogsProviders(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame('A key or token for Anthropic, OpenAI or Hugging Face', $page->filter('#step-providers label[for=provider-key]')->text());
+    }
+
     public function testWithAKeyedProviderTheProviderStepOffersNoKeyField(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
@@ -223,10 +236,10 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(0, $page->filter('#step-providers form'));
     }
 
-    public function testAKeptKeyShowsItsKindAndAtMostItsLastFourCharactersAndNoField(): void
+    public function testAKeptKeyShowsItsProviderAndAtMostItsLastFourCharactersAndNoField(): void
     {
         $directory = $this->keptKeyDirectory();
-        new KeptProviderKeyFile($directory)->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY));
+        new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
 
         $page = $this->firstRunPage(self::PROJECTS, [], $directory);
 
