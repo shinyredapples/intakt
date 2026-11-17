@@ -72,15 +72,37 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertCount(0, $done->filter('.more-link, .more-btn, [data-past-limit]'));
     }
 
+    public function testAPushedDoneColumnLeavesOutAProjectsCardsPastTheLimitAndCountsThemInItsLink(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, Board::PAGE_LIMIT);
+        $ledger->startRound('beyond', 'beta');
+        $ledger->judgeRound('beyond');
+
+        $done = $this->pushedDoneColumnFrom($ledger);
+
+        self::assertCount(0, $done->filter('article[data-project="beta"]'));
+        self::assertSame('Show 1 more', $done->filter('.col-cards > a.more-link')->text());
+    }
+
     private function pushedDoneColumnOf(int $judged): Crawler
     {
         $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, $judged);
 
+        return $this->pushedDoneColumnFrom($ledger);
+    }
+
+    private function judgeRoundsOf(DashboardLedger $ledger, int $judged): void
+    {
         foreach (range(1, $judged) as $number) {
             $ledger->startRoundOf('change-'.$number, 'r'.$number, 1);
             $ledger->judgeRound('r'.$number);
         }
+    }
 
+    private function pushedDoneColumnFrom(DashboardLedger $ledger): Crawler
+    {
         $live = new PublishedLiveEvents();
         $this->headlineOn($ledger, $live)->publishLatest(Uuid::v7());
 
