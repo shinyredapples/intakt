@@ -1,4 +1,4 @@
 {# One home for the header's review-wide totals: the page prints them and the judged round's update replaces them, each by the id the macro gives it. #}
-{% macro tokens(review) %}<span id="review-summary-tokens">{{ review.tokens.total|number_format(0, '.', ',') }} tokens {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Measured, at: 'summary-tokens'}, with_context = false) }}</span>{% endmacro %}
+{% macro tokens(review) %}<span id="review-summary-tokens">{{ review.tokens.total|number_format(0, '.', ',') }} tokens</span>{% endmacro %}
 
 {% macro cost(review) %}<span id="review-summary-cost">{{ include('dashboard/components/cost.html.twig', {cost: review.cost, at: 'summary-cost'}, with_context = false) }}</span>{% endmacro %}

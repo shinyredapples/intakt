@@ -18,7 +18,7 @@
     <table class="ledger reviewers">
         {# The Stop column shows only while a reviewer of the running round can be stopped, because otherwise it would be empty in every row. #}
         {% set stoppable = running and reviewed.outcomes|filter(o => o.progress.name == 'Running') is not empty %}
-        <thead><tr><th>Role</th><th>Model</th><th>Outcome</th><th class="num">Findings</th>{% if stoppable %}<th class="stop">Stop</th>{% endif %}</tr></thead>
+        <thead><tr><th>Role</th><th>Model</th><th>Outcome</th><th class="num">Findings{% if labeled %} {{ include('dashboard/components/figure_kind.html.twig', {kind: enum('Intakt\\Core\\Platform\\Contract\\FigureKind').Counted, at: 'round-' ~ reviewed.round ~ '-findings'}, with_context = false) }}{% endif %}</th>{% if stoppable %}<th class="stop">Stop</th>{% endif %}</tr></thead>
         <tbody id="round-{{ reviewed.round }}-reviewers">
         {% for outcome in reviewed.outcomes %}
             {% set progress = outcome.progress.name %}
@@ -42,4 +42,4 @@
     {{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}
 
     <h3>Tokens and cost</h3>
-    {{ include('dashboard/_round_tokens.html.twig', {reviewed: reviewed}, with_context = false) }}
+    {{ include('dashboard/_round_tokens.html.twig', {reviewed: reviewed, labeled: labeled}, with_context = false) }}
