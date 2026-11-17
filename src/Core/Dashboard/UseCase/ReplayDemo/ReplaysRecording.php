@@ -75,7 +75,7 @@ final readonly class ReplaysRecording
         $number = 0;
 
         foreach ($steps as $step) {
-            $due = $this->secondsBetween(self::momentOf($steps[0]), self::momentOf($step)) / $factor;
+            $due = $this->secondsBetween($this->momentOf($steps[0]), $this->momentOf($step)) / $factor;
             $this->clock->sleep(max(0.0, $due - $this->secondsBetween($start, $this->clock->now())));
 
             if ($step instanceof CapturedUpdate) {
@@ -136,7 +136,7 @@ final readonly class ReplaysRecording
         return json_encode($row, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }
 
-    private static function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
+    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
     {
         return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
     }
