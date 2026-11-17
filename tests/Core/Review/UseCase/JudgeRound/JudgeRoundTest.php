@@ -17,6 +17,7 @@ use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\RoundJudged;
+use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\FindingLedger;
@@ -148,7 +149,19 @@ final class JudgeRoundTest extends KernelTestCase
 
         $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole([]));
 
-        self::assertSame([sprintf('round %s 1/2', $round->id()->toRfc4122())], $this->fixture->updates->seen);
+        self::assertSame([sprintf('round %s 0/2', $round->id()->toRfc4122()), sprintf('round %s 1/2', $round->id()->toRfc4122())], $this->fixture->updates->seen);
+    }
+
+    public function testAfterTheJudgesCallEveryReviewerCountsAsStartedAndFinished(): void
+    {
+        $round = $this->completedRound();
+        $this->fixture->updates->progress = [];
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([])))($this->judgingOf($round));
+
+        $last = array_last($this->fixture->updates->progress);
+        self::assertInstanceOf(RoundProgress::class, $last);
+        self::assertSame([2, 2, 2], [$last->reviewersStarted, $last->reviewersFinished, $last->reviewers]);
     }
 
     public function testAJudgedRoundPublishesItsFinalState(): void

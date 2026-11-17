@@ -8,7 +8,8 @@ use PhpToken;
 
 final readonly class LeftUndoneComments
 {
-    private const string COMMENT_SYNTAX = '~^\s*(?://+|#+|/\*+|\*+(?!/))?\s*~';
+    private const string WHITESPACE = " \t\n\r\v\f";
+    private const string COMMENT_SYNTAX = '~\G(?://++|#++|/\*++|\*++(?!/))\s*+~';
     private const string MARKER = '/^(TODO|FIXME|XXX)\b/i';
     public const string ISSUE_REFERENCE = '\(#[1-9][0-9]*\):';
     private const string REASONED_EXCEPTION = '/^(?:TODO|FIXME|XXX)'.self::ISSUE_REFERENCE.'.*[[:alpha:]]/i';
@@ -64,12 +65,40 @@ final readonly class LeftUndoneComments
 
     private function unreasonedMarkerIn(string $commentLine): ?string
     {
-        $text = (string) preg_replace(self::COMMENT_SYNTAX, '', $commentLine);
+        $text = $this->withoutCommentSyntax($commentLine);
 
-        if (1 !== preg_match(self::MARKER, $text, $marker) || 1 === preg_match(self::REASONED_EXCEPTION, $text)) {
+        $marker = $this->matchIn(self::MARKER, $text);
+
+        if (null === $marker || null !== $this->matchIn(self::REASONED_EXCEPTION, $text)) {
             return null;
         }
 
-        return $marker[1];
+        return $marker[1] ?? null;
+    }
+
+    // Because a repeated group exhausts the pattern engine's stack on thousands of nested markers, one marker is stripped per match.
+    private function withoutCommentSyntax(string $commentLine): string
+    {
+        $offset = strspn($commentLine, self::WHITESPACE);
+
+        while (null !== $syntax = $this->matchIn(self::COMMENT_SYNTAX, $commentLine, $offset)) {
+            $offset += strlen($syntax[0] ?? '');
+        }
+
+        return substr($commentLine, $offset);
+    }
+
+    /**
+     * @return array<int|string, string>|null
+     */
+    private function matchIn(string $pattern, string $subject, int $offset = 0): ?array
+    {
+        $result = preg_match($pattern, $subject, $match, 0, $offset);
+
+        if (false === $result) {
+            throw new ScopeFailure('cannot read a comment: '.preg_last_error_msg());
+        }
+
+        return 1 === $result ? $match : null;
     }
 }

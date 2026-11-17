@@ -122,7 +122,7 @@ final readonly class BenchChangeCheckout
     {
         $lineCounts = [];
         foreach ([$this->fixtures.'/base', $tree] as $directory) {
-            foreach (new Finder()->files()->in($directory) as $file) {
+            foreach (new Finder()->files()->ignoreDotFiles(false)->ignoreVCS(false)->in($directory) as $file) {
                 $lineCounts[$file->getRelativePathname()] = substr_count(rtrim($file->getContents(), "\n"), "\n") + 1;
             }
         }

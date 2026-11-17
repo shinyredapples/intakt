@@ -44,4 +44,19 @@ final class ForwardedProgressTest extends TestCase
 
         self::assertSame([3.0, 3.0, 'The round is judged.'], $sent);
     }
+
+    public function testAStartedReviewerDoesNotAddAStepBecauseOnlyFinishedReviewersAndTheJudgeDo(): void
+    {
+        $sent = [];
+        $client = $this->createMock(ClientGateway::class);
+        $client->expects(self::once())->method('progress')->willReturnCallback(static function (float $progress) use (&$sent): void {
+            $sent[] = $progress;
+        });
+        $progress = new ForwardedProgress($client);
+
+        $progress->reached(new RoundProgress(0, 2, false, [], 0));
+        $progress->reached(new RoundProgress(0, 2, false, [], 2));
+
+        self::assertSame([0.0], $sent);
+    }
 }

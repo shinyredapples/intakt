@@ -6,15 +6,21 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\KeepProviderKey;
 
 use ArrayObject;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
-use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
+use Intakt\Core\Ai\Contract\ResolvedModel;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeepProviderKey;
 use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeyNotChecked;
 use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeyRefusedByProvider;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiKeyCheck;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -31,9 +37,14 @@ use Throwable;
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(KeptProviderKeyFile::class)]
 #[UsesClass(ConfiguredKey::class)]
-#[UsesClass(KeyKind::class)]
 #[UsesClass(KeyNotRecognised::class)]
 #[UsesClass(SymfonyAiKeyCheck::class)]
+#[UsesClass(SymfonyAiProviderCatalog::class)]
+#[UsesClass(AnthropicDescriptor::class)]
+#[UsesClass(OpenAiDescriptor::class)]
+#[UsesClass(HuggingFaceDescriptor::class)]
+#[UsesClass(ResolvedModel::class)]
+#[UsesClass(Provider::class)]
 #[UsesClass(KeyCheckOutcome::class)]
 #[UsesClass(ProviderKeyAlreadyKept::class)]
 final class KeepProviderKeyTest extends TestCase
@@ -60,7 +71,7 @@ final class KeepProviderKeyTest extends TestCase
             'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
         ]))->keep('sk-ant-'.self::BODY);
 
-        self::assertSame(KeyKind::Anthropic, $configured->kind);
+        self::assertSame('anthropic', $configured->provider);
         self::assertSame('5678', $configured->lastCharacters);
     }
 
@@ -72,7 +83,7 @@ final class KeepProviderKeyTest extends TestCase
             'stop_reason' => 'end_turn', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1],
         ]))->keep('sk-ant-'.self::BODY);
 
-        self::assertSame('sk-ant-'.self::BODY, new KeptProviderKeyFile($this->directory)->read()?->secret());
+        self::assertSame('sk-ant-'.self::BODY, new KeptProviderKeyFile($this->directory, new SymfonyAiProviderCatalog())->read()?->secret());
         self::assertSame('5678', $this->useCase(new ArrayObject(), $this->answer(200, []))->configured()?->lastCharacters);
     }
 
@@ -150,18 +161,19 @@ final class KeepProviderKeyTest extends TestCase
 
     public function testAKeyKeptByAnotherRequestWhileThisKeyIsCheckedIsNotReplaced(): void
     {
-        $file = new KeptProviderKeyFile($this->directory);
+        $providers = new SymfonyAiProviderCatalog();
+        $file = new KeptProviderKeyFile($this->directory, $providers);
         $first = 'sk-ant-'.self::BODY;
         // Forces the order of a race, because the other request passed the "none configured" guard too and finishes while this one waits on its provider check.
         $check = self::createStub(KeyCheck::class);
-        $check->method('check')->willReturnCallback(static function () use ($file, $first): KeyCheckOutcome {
-            $file->keep(ProviderKey::recognise($first));
+        $check->method('check')->willReturnCallback(static function () use ($file, $first, $providers): KeyCheckOutcome {
+            $file->keep(ProviderKey::recognise($first, $providers));
 
             return KeyCheckOutcome::Accepted;
         });
 
         try {
-            (void) new KeepProviderKey($check, $file)->keep('hf_'.self::BODY);
+            (void) new KeepProviderKey($check, $file, $providers)->keep('hf_'.self::BODY);
             self::fail('The second key should be refused.');
         } catch (ProviderKeyAlreadyKept) {
             self::assertSame($first, $file->read()?->secret());
@@ -181,10 +193,23 @@ final class KeepProviderKeyTest extends TestCase
      */
     private function useCase(ArrayObject $calls, MockResponse $answer): KeepProviderKey
     {
-        return new KeepProviderKey(new SymfonyAiKeyCheck(new MockHttpClient(static function (string $method, string $url) use ($calls, $answer): MockResponse {
+        $providers = new SymfonyAiProviderCatalog();
+        $http = new MockHttpClient(static function (string $method, string $url) use ($calls, $answer): MockResponse {
             $calls->append($url);
 
             return $answer;
-        })), new KeptProviderKeyFile($this->directory));
+        });
+
+        return new KeepProviderKey(new SymfonyAiKeyCheck($http, $providers, $this->lightTiers()), new KeptProviderKeyFile($this->directory, $providers), $providers);
+    }
+
+    private function lightTiers(): TierResolver
+    {
+        $tiers = self::createStub(TierResolver::class);
+        // One project per provider, each with its light tier on that provider, so every key has a check model.
+        $tiers->method('projects')->willReturn(array_map(static fn (Provider $provider): string => $provider->value, Provider::cases()));
+        $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel(Provider::from($project), 'light-'.$project));
+
+        return $tiers;
     }
 }

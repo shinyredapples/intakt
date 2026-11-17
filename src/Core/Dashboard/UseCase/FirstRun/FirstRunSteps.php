@@ -28,6 +28,8 @@ use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
+use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
+use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -42,6 +44,7 @@ final readonly class FirstRunSteps
         private TierResolver $tiers,
         private EnabledAccounts $accounts,
         private KeptProviderKeys $keptKeys,
+        private ProviderCatalog $providerCatalog,
         private Panels $panels,
         private LedgerReviewPages $reviews,
         private SampleChangeSource $sample,
@@ -90,6 +93,7 @@ final readonly class FirstRunSteps
             null === $firstProject ? [] : $this->tiersOf($firstProject),
             $kept,
             $unreadable,
+            array_map(static fn (ProviderDescriptor $descriptor): string => $descriptor->label(), $this->providerCatalog->descriptors()),
         );
     }
 

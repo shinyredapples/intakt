@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
+use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
@@ -15,8 +16,10 @@ use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayIsRefused;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayStopped;
+use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -33,6 +36,8 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(RecordingFormat::class)]
 #[UsesClass(CapturedUpdate::class)]
 #[UsesClass(LiveEvent::class)]
+#[UsesClass(ReplayMarks::class)]
+#[UsesClass(ReplayMark::class)]
 final class ReplaysRecordingTest extends TestCase
 {
     private const string ROUND = '0196a000-0000-7000-8000-000000000001';
@@ -53,6 +58,8 @@ final class ReplaysRecordingTest extends TestCase
     private InMemoryStore $locks;
 
     private ClockedLiveUpdates $updates;
+
+    private ReplayMark $demoProject = ReplayMark::Replay;
 
     protected function setUp(): void
     {
@@ -118,6 +125,21 @@ final class ReplaysRecordingTest extends TestCase
         self::assertSame([1], array_column($this->updates->published(), 'rows'));
     }
 
+    public function testAReplayIntoADemoProjectThatIsNoReplayIsRefusedBeforeAnyRowIsAppended(): void
+    {
+        $this->demoProject = ReplayMark::Live;
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('The replay should have been refused.');
+        } catch (ReplayIsRefused $refused) {
+            self::assertStringContainsString('demo-replay is not marked as a replay', $refused->getMessage());
+        }
+
+        self::assertSame([], $this->appended());
+        self::assertSame([], $this->updates->published());
+    }
+
     public function testARecordingWithABlankUpdateTopicIsRefusedBeforeAnyRowIsAppended(): void
     {
         $recording = $this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"r"}', 0)], [new CapturedUpdate($this->clock->now(), ' ', '<turbo-stream></turbo-stream>')]);
@@ -138,7 +160,7 @@ final class ReplaysRecordingTest extends TestCase
         $again = new ClockedLiveUpdates($this->clock, $this->ledger);
 
         try {
-            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks))->replay($this->recordedRun(), 1.0);
+            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks), $this->marks())->replay($this->recordedRun(), 1.0);
         } catch (ReplayIsRefused) {
         }
 
@@ -308,6 +330,20 @@ final class ReplaysRecordingTest extends TestCase
         self::assertCount(5, $this->appended());
     }
 
+    public function testARecordingWhoseModelCallIsAlreadyInTheLedgerIsRefusedBeforeAnyRowIsWritten(): void
+    {
+        $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"other","tier":"standard","round":"live-round"}'));
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('A recording whose model call the ledger holds was replayed.');
+        } catch (ReplayIsRefused $refused) {
+            self::assertStringContainsString(self::CALL, $refused->getMessage());
+        }
+
+        self::assertCount(1, $this->appended());
+    }
+
     public function testARecordingOfAnotherRoundIsReplayedBesideAnEarlierReplay(): void
     {
         $this->replays()->replay($this->recordedRun(), 1.0);
@@ -340,7 +376,12 @@ final class ReplaysRecordingTest extends TestCase
 
     private function replays(): ReplaysRecording
     {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks));
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks());
+    }
+
+    private function marks(): ReplayMarks
+    {
+        return new ReplayMarks(new MarkAnsweringQueries($this->demoProject));
     }
 
     /**

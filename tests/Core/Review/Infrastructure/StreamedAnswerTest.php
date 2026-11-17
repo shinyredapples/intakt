@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Generator;
+use Intakt\Core\Review\Contract\StreamCutBy;
+use Intakt\Core\Review\Contract\StreamEndedEarly;
 use Intakt\Core\Review\Infrastructure\AnthropicTextBlocks;
 use Intakt\Core\Review\Infrastructure\StreamedAnswer;
+use Intakt\Core\Review\Infrastructure\StreamTally;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\BadRequestException;
@@ -25,6 +28,8 @@ use Throwable;
 
 #[CoversClass(StreamedAnswer::class)]
 #[CoversClass(AnthropicTextBlocks::class)]
+#[CoversClass(StreamTally::class)]
+#[CoversClass(StreamEndedEarly::class)]
 final class StreamedAnswerTest extends TestCase
 {
     private TextSeenByLaterListeners $later;
@@ -102,6 +107,64 @@ final class StreamedAnswerTest extends TestCase
         self::assertInstanceOf(IncompleteStreamException::class, $cut);
     }
 
+    public function testAServerErrorOnceTheAnswerStartedKeepsTheChunksThatCameBeforeIt(): void
+    {
+        $cut = $this->thrownBy($this->brokenAfter([new TokenUsage(promptTokens: 120), new TextDelta('{"verdict":')], new ServerException(503)));
+
+        self::assertInstanceOf(StreamEndedEarly::class, $cut);
+        self::assertSame([StreamCutBy::ProviderFailureMidStream, 2], [$cut->by, $cut->chunks]);
+        self::assertSame(['TokenUsage', 'TextDelta "{\"verdict\":"'], $cut->lastChunks);
+    }
+
+    public function testAStreamThePlatformCutIsRaisedAgainWithItsMessageCauseAndTheChunksBeforeIt(): void
+    {
+        $cause = new ServerException(502);
+        $platformCut = new IncompleteStreamException('Completions stream ended before a finish reason was received.', 0, $cause);
+
+        $cut = $this->thrownBy($this->brokenAfter([new TextDelta('{"verdict":'), new MetadataDelta('finish_reason', null)], $platformCut));
+
+        self::assertInstanceOf(StreamEndedEarly::class, $cut);
+        self::assertSame(['Completions stream ended before a finish reason was received.', $cause], [$cut->getMessage(), $cut->getPrevious()]);
+        self::assertSame([StreamCutBy::Platform, 2], [$cut->by, $cut->chunks]);
+        self::assertSame(['TextDelta "{\"verdict\":"', 'MetadataDelta finish_reason=null'], $cut->lastChunks);
+    }
+
+    public function testAStreamThePlatformCutBeforeAnyChunkKeepsNone(): void
+    {
+        $cut = $this->thrownBy($this->brokenAfter([], new IncompleteStreamException('The stream ended before its last event.')));
+
+        self::assertInstanceOf(StreamEndedEarly::class, $cut);
+        self::assertSame([0, []], [$cut->chunks, $cut->lastChunks]);
+        self::assertStringContainsString('last chunks: none', $cut->described());
+    }
+
+    public function testEveryChunkIsCountedButOnlyTheLastFiveAreKept(): void
+    {
+        $deltas = array_map(static fn (int $n): TextDelta => new TextDelta((string) $n), range(1, 7));
+
+        $cut = $this->thrownBy($this->brokenAfter($deltas, new IncompleteStreamException('Cut.')));
+
+        self::assertInstanceOf(StreamEndedEarly::class, $cut);
+        self::assertSame(7, $cut->chunks);
+        self::assertSame(['TextDelta "3"', 'TextDelta "4"', 'TextDelta "5"', 'TextDelta "6"', 'TextDelta "7"'], $cut->lastChunks);
+    }
+
+    public function testAKeptChunkShowsOnlyTheFirstEightyCharactersOfItsText(): void
+    {
+        $cut = $this->thrownBy($this->brokenAfter([new ThinkingDelta(str_repeat('é', 79).'ab')], new IncompleteStreamException('Cut.')));
+
+        self::assertInstanceOf(StreamEndedEarly::class, $cut);
+        self::assertSame(['ThinkingDelta "'.str_repeat('é', 79).'a"'], $cut->lastChunks);
+    }
+
+    public function testAKeptMetadataChunkShowsAScalarValueAndOnlyTheTypeOfAnyOther(): void
+    {
+        $cut = $this->thrownBy($this->brokenAfter([new MetadataDelta('finish_reason', 'stop'), new MetadataDelta('logprobs', ['a' => 1])], new IncompleteStreamException('Cut.')));
+
+        self::assertInstanceOf(StreamEndedEarly::class, $cut);
+        self::assertSame(['MetadataDelta finish_reason="stop"', 'MetadataDelta logprobs=array'], $cut->lastChunks);
+    }
+
     public function testAFailureThatARetryCannotOvercomeStaysItselfAlsoMidStream(): void
     {
         $refused = new BadRequestException('Refused.');
@@ -120,7 +183,7 @@ final class StreamedAnswerTest extends TestCase
             throw $outage;
         };
 
-        return new StreamResult(new StreamedAnswer(new AnthropicTextBlocks(new InMemoryRawResult()))->of(new StreamResult($broken())));
+        return new StreamResult(new StreamedAnswer(new AnthropicTextBlocks(new InMemoryRawResult()), new StreamTally())->of(new StreamResult($broken())));
     }
 
     private function thrownBy(StreamResult $stream): ?Throwable
@@ -142,7 +205,7 @@ final class StreamedAnswerTest extends TestCase
     private function streamed(array $events): array
     {
         $blocks = new AnthropicTextBlocks(new InMemoryRawResult(dataStream: $events));
-        $answer = new StreamedAnswer($blocks);
+        $answer = new StreamedAnswer($blocks, new StreamTally());
         $stream = new StreamResult($answer->of(new StreamResult($this->deltasOf($blocks))));
         $stream->addListener($answer);
         $stream->addListener($this->later);

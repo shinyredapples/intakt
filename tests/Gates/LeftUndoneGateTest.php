@@ -39,6 +39,9 @@ final class LeftUndoneGateTest extends SandboxTestCase
         yield 'a marker without a reason after its issue' => ['    // TODO(#12):', 'TODO'];
         yield 'a marker naming an issue without a hash' => ['    // TODO(12): handle the refund', 'TODO'];
         yield 'a marker naming an issue without a colon' => ['    // TODO(#12) handle the refund', 'TODO'];
+        yield 'a marker behind a nested line comment marker' => ['    // // TODO later', 'TODO'];
+        yield 'a marker behind a nested hash comment marker' => ['    # # FIXME the total', 'FIXME'];
+        yield 'a marker behind mixed nested comment markers' => ['    /* // XXX breaks on empty orders */', 'XXX'];
     }
 
     #[DataProvider('addedMarkerComments')]
@@ -73,6 +76,8 @@ final class LeftUndoneGateTest extends SandboxTestCase
         yield 'a word that starts with a marker' => ['    // TODOS stay sorted because the view reads them in order'];
         yield 'an exception naming its issue and reason' => ['    // TODO(#123): drop once the forge sends the total, because it is computed twice'];
         yield 'a FIXME exception' => ['    // FIXME(#7): the rounding needs the new money type'];
+        yield 'an exception behind a nested comment marker' => ['    // // TODO(#12): drop once the forge sends the total'];
+        yield 'a nested comment marker before ordinary text' => ['    // // keep the order sorted because the view reads it'];
     }
 
     #[DataProvider('linesWithoutALeftUndoneComment')]
