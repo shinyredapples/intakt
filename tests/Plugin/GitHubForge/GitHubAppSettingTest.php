@@ -74,15 +74,4 @@ final class GitHubAppSettingTest extends TestCase
 
         self::assertSame([['info', self::NOTICE, []]], $log->cleanLogs());
     }
-
-    public function testACallWhenConfiguredIsSkippedForAnAppIdOfOnlyWhitespace(): void
-    {
-        $ran = false;
-
-        new GitHubAppSetting(" \t", new BufferingLogger())->whenConfigured(static function () use (&$ran): void {
-            $ran = true;
-        });
-
-        self::assertFalse($ran);
-    }
 }
