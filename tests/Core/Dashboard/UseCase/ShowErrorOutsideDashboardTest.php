@@ -68,7 +68,12 @@ final class ShowErrorOutsideDashboardTest extends WebTestCase
                 throw new RuntimeException('boom');
             }
         });
-        $browser->request($method, $path, server: ['HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json'], content: '{}');
+        $browser->request(
+            $method,
+            $path,
+            server: ['HTTP_ACCEPT' => 'application/json', 'CONTENT_TYPE' => 'application/json'],
+            content: '{}',
+        );
 
         return $browser->getResponse();
     }
