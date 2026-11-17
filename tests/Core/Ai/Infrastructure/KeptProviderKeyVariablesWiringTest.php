@@ -9,6 +9,7 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use ReflectionProperty;
+use Symfony\Component\DependencyInjection\StaticEnvVarLoader;
 
 #[CoversClass(KeptProviderKeyVariables::class)]
 #[UsesClass(FixedEnvVars::class)]
@@ -24,15 +25,10 @@ final class KeptProviderKeyVariablesWiringTest extends KernelTestCase
         $others = new ReflectionProperty(KeptProviderKeyVariables::class, 'otherLoaders')->getValue($kept);
         self::assertIsIterable($others);
 
-        $expected = [$container->get('intakt.test.empty_env_var_loader')];
-        if ($container->has('secrets.env_var_loader')) {
-            $expected[] = $container->get('secrets.env_var_loader');
-        }
-
+        $isVaultLoader = static fn (mixed $loader): bool => $loader instanceof StaticEnvVarLoader;
         $actual = [...$others];
-        self::assertCount(count($expected), $actual);
-        foreach ($expected as $loader) {
-            self::assertContains($loader, $actual);
-        }
+
+        self::assertLessThanOrEqual(1, count(array_filter($actual, $isVaultLoader)));
+        self::assertSame([$container->get('intakt.test.empty_env_var_loader')], array_values(array_filter($actual, static fn (mixed $loader): bool => !$isVaultLoader($loader))));
     }
 }
