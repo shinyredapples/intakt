@@ -169,10 +169,10 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         // Answered without the database, because the page the redirect leads to reads the ledger and this test creates no schema.
         $container->set(Ledger::class, new DashboardLedger());
         $container->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
-        $check = $this->createStub(KeyCheck::class);
+        $check = self::createStub(KeyCheck::class);
         $check->method('check')->willReturn($outcome);
         $container->set(KeepProviderKey::class, new KeepProviderKey($check, new KeptProviderKeyFile($this->directory)));
-        $accounts = $this->createStub(EnabledAccounts::class);
+        $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => $anAccountIsEnabled ? [new Account($provider, Account::DEFAULT)] : []);
         $container->set(EnabledAccounts::class, $accounts);
 
