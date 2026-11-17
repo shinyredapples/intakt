@@ -27,7 +27,7 @@ final class GitHubAppSetting
     #[AsEventListener(event: WorkerStartedEvent::class)]
     public function onWorkerStarted(): void
     {
-        if ('' === trim($this->appId)) {
+        if ($this->isMissing()) {
             $this->reportMissingAppOnce();
         }
     }
@@ -37,13 +37,18 @@ final class GitHubAppSetting
      */
     public function whenConfigured(Closure $call): void
     {
-        if ('' === trim($this->appId)) {
+        if ($this->isMissing()) {
             $this->reportMissingAppOnce();
 
             return;
         }
 
         $call();
+    }
+
+    private function isMissing(): bool
+    {
+        return '' === trim($this->appId);
     }
 
     private function reportMissingAppOnce(): void
