@@ -7,6 +7,7 @@ namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Contract\LiveUpdates;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
@@ -95,7 +96,7 @@ final readonly class ReplaysRecording
                 continue;
             }
 
-            $this->append($step, $recording, $number++);
+            $this->append(new LedgerEvent($step->kind, $this->asReplayed($step, $recording->project, $factor)), $recording, $number++);
         }
     }
 
@@ -116,9 +117,9 @@ final readonly class ReplaysRecording
         return [...$steps, ...$events, ...$updates];
     }
 
-    private function append(RecordedLedgerEvent $event, Recording $recording, int $number): void
+    private function append(LedgerEvent $event, Recording $recording, int $number): void
     {
-        $result = $this->ledger->append(new LedgerEvent($event->kind, $this->inTheDemoProject($event->payload, $recording->project)));
+        $result = $this->ledger->append($event);
 
         if (!$result->succeeded()) {
             throw ReplayStopped::at($recording, $number, (string) $result->failure);
@@ -133,16 +134,20 @@ final readonly class ReplaysRecording
         return max(0.0, $seconds);
     }
 
-    // Encoded again only when it names the recorded project, with the stored serializer's options, so every other row stays the text the live review stored.
-    private function inTheDemoProject(string $payload, string $recorded): string
+    // Encoded again only when it names the recorded project, with the stored serializer's options, so every other row stays the text the live review stored; the start row also keeps the factor, because a review page loaded later has no other way to know it.
+    private function asReplayed(RecordedLedgerEvent $event, string $recorded, float $factor): string
     {
-        $row = json_decode($payload);
+        $row = json_decode($event->payload);
 
         if (!$row instanceof stdClass || $recorded !== ($row->project ?? null)) {
-            return $payload;
+            return $event->payload;
         }
 
         $row->project = CreateDemoProjectCommand::NAME;
+
+        if (LedgerEventKind::ReviewStarted === $event->kind) {
+            $row->{ReplayedStart::KEY} = $factor;
+        }
 
         return json_encode($row, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }

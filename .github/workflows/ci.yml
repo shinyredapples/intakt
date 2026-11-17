@@ -52,6 +52,20 @@ jobs:
           path: ${{ runner.temp }}/composer-cache
           key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
           restore-keys: composer-${{ runner.os }}-
+      # The analysers' result caches (INTAKT_GATES_CACHE), so a run analyses only what changed. The key hashes composer.lock
+      # and everything under config/gates/, Intakt's fixers included, since PHP CS Fixer's own cache signature ignores
+      # their code. Only a push to main saves them, under a key with its commit; every run restores main's latest.
+      - name: Name the gates cache
+        id: gates-cache-name
+        env:
+          CONFIG_HASH: ${{ hashFiles('composer.lock', 'config/gates/**') }}
+        run: echo "name=gates-$RUNNER_OS-$GITHUB_REF_NAME-$CONFIG_HASH-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - name: Restore the gates cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/gates-cache
+          key: ${{ steps.gates-cache-name.outputs.name }}
+          restore-keys: gates-${{ runner.os }}-main-${{ hashFiles('composer.lock', 'config/gates/**') }}-
       # The gate tests run processes in a new user namespace and mount a fresh /proc there. The seccomp profile is
       # Docker's default plus unshare (only together with a new user namespace) and mount. systempaths=unconfined is
       # needed because the kernel refuses a new /proc in a user namespace while Docker's masks cover parts of the old
@@ -86,12 +100,16 @@ jobs:
           if [ "$EVENT" = push ] && [ "$GITHUB_REF" = refs/heads/main ]; then cache_mode= read_only=0; fi
           chmod -R a+rX "$cache"
           if [ "$read_only" = 0 ]; then chmod -R a+w "$cache"; fi
+          gates_cache="$RUNNER_TEMP/gates-cache"
+          mkdir -p "$gates_cache"
+          chmod -R a+rwX "$gates_cache"
           docker run --rm --user 1000:1000 \
             --security-opt seccomp=.github/ci/seccomp-userns.json \
             --security-opt systempaths=unconfined \
             $apparmor \
             --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
             --tmpfs /tmp:rw,exec,size=1g \
+            --volume "$gates_cache:/gates-cache" --env INTAKT_GATES_CACHE=/gates-cache \
             --volume "$cache:/composer-cache$cache_mode" --env COMPOSER_CACHE_DIR=/composer-cache --env "COMPOSER_CACHE_READ_ONLY=$read_only" \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh bin/check "$@"
@@ -101,6 +119,12 @@ jobs:
         with:
           path: ${{ runner.temp }}/composer-cache
           key: ${{ steps.composer-cache.outputs.cache-primary-key }}
+      - name: Save the gates cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/gates-cache
+          key: ${{ steps.gates-cache-name.outputs.name }}
   # The journeys on the change itself, so one that breaks the first install or the live review page fails its own pull
   # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
   journeys:

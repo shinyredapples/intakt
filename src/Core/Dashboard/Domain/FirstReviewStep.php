@@ -44,6 +44,14 @@ final readonly class FirstReviewStep
         return $this->review?->latest()->round;
     }
 
+    // Any round, not the latest, because an approval is a milestone that a later round started or sent back does not undo.
+    public function mascot(): MascotPose
+    {
+        $approved = array_any($this->review->rounds ?? [], static fn (ReviewedRound $round): bool => Decision::Approve === $round->outcome);
+
+        return $approved ? MascotPose::Bowing : MascotPose::Conducting;
+    }
+
     private function outcome(ReviewedRound $round): string
     {
         return match (true) {

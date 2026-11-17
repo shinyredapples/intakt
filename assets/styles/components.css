@@ -476,14 +476,21 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* The board headline counts its running changes below 761 px, so it stays within two lines on a phone (decision D4 of the board headline). */
 .headline-short { display: none; }
 .page-head .actions { margin-left: auto; }
-.now-stop-idle ~ .stop-round { display: none; }
+/* One action at a time: the start form stays server-rendered (it needs the session token) and hides while a round is in review. */
+.task-actions:has(.now-runs) > .start-review { display: none; }
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }
 /* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
 .page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .page-head .meta span { white-space: normal; overflow-wrap: anywhere; }
+/* The octopus stays beside the title on a phone: the head does not wrap and the title column takes the rest of the width. */
+.setup .page-head { align-items: center; flex-wrap: nowrap; }
+.setup .page-head > div { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+/* The first-run octopus is decorative, so its height is capped whatever size the partial renders. */
+.setup .page-head .character { max-height: 200px; width: auto; }
 /* The mock's phone head: a closer gap under the headline, so the board's first lane stays in view. */
 @media (max-width: 760px) {
   .page-head { margin-bottom: var(--s16); }
+  .setup .page-head .character { max-height: 140px; }
   .headline-long { display: none; }
   .headline-short { display: inline; }
 }
@@ -519,7 +526,9 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .round-id code { font-family: var(--f-mono); overflow-wrap: anywhere; user-select: all; }
 .round-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s8) var(--s12); margin-bottom: var(--s8); }
 .round-head h2 { margin: 0; }
-.round h3 { margin: var(--s24) 0 var(--s8); }
+.round h3, .round .character-row:has(> h3) { margin: var(--s24) 0 var(--s8); }
+/* The row holds the heading's space, because a margin inside the flex row would push the text off the head's center line. */
+.round .character-row > h3, .live .character-row > h3 { margin: 0; }
 /* A round's tables sit in a scroll box, so a cell keeps its words whole and the table scrolls, instead of a phone splitting "correctness" across three lines. */
 .round .ledger td { overflow-wrap: break-word; }
 .reviewer-outcome { display: inline-flex; align-items: baseline; gap: var(--s8); }
@@ -527,6 +536,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .live-reviewers { display: grid; gap: var(--s12); margin-top: var(--s16); }
 .live { padding: var(--s12) var(--s16); border-radius: var(--r-card); background: var(--tint); }
 .live h3 { margin: 0 0 var(--s8); font-size: var(--t15); }
+.live > .character-row { margin: 0 0 var(--s8); }
 .live-calls { margin: 0 0 var(--s8); padding-left: var(--s16); color: var(--muted); font-family: var(--f-mono); font-size: var(--t13); overflow-wrap: anywhere; }
 .live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .live-text .asked-again { margin: var(--s8) 0; padding-top: var(--s8); border-top: 1px solid var(--hairline); color: var(--muted); font-size: var(--t13); white-space: normal; }

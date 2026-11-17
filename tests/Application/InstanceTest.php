@@ -62,6 +62,26 @@ final class InstanceTest extends InstanceTestCase
         self::assertSame(1, $run['exit']);
     }
 
+    public function testAnHttp500WhoseLogHoldsOnlyTheBuiltInServersOwnLinesReportsThatTheLogNamesNoReason(): void
+    {
+        $project = $this->copyOfTheProject();
+        file_put_contents($project.'/public/index.php', "<?php\nhttp_response_code(500);\n");
+
+        $run = $this->runInstance($project);
+
+        self::assertSame('HTTP 500: the server log names no reason', $this->decoded($run['status'])['reason']);
+    }
+
+    public function testAnHttp500ReportsTheLastLogLineTheBuiltInServerDidNotWriteAboutItself(): void
+    {
+        $project = $this->copyOfTheProject();
+        file_put_contents($project.'/public/index.php', "<?php\nfile_put_contents('php://stderr', \"the disk is full\\n\");\nhttp_response_code(500);\n");
+
+        $run = $this->runInstance($project);
+
+        self::assertSame('HTTP 500: the disk is full', $this->decoded($run['status'])['reason']);
+    }
+
     public function testTheVarFolderItCreatedWithoutTmpdirIsGoneAfterABoot(): void
     {
         $project = $this->stubWithoutVarFolder();
