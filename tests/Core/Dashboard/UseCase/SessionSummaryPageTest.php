@@ -192,6 +192,13 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertMatchesRegularExpression('/\.log-summary \{[^}]*flex: none;/', $sheet);
     }
 
+    public function testTheStylesheetKeepsEachFindingIdOnOneLineBesideALongFindingText(): void
+    {
+        $sheet = (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
+
+        self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none; min-width: 4ch;[^}]*white-space: nowrap;/', $sheet);
+    }
+
     private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);

@@ -348,7 +348,7 @@ final readonly class RoundFixture
     }
 
     // WAL, because there a reader does not block the other round's commit but keeps the snapshot from before it, as concurrent workers on SQLite meet it; other engines refuse the pragma and read committed rows already.
-    private function useWalOnSqlite(): void
+    public function useWalOnSqlite(): void
     {
         $connection = $this->entities->getConnection();
 

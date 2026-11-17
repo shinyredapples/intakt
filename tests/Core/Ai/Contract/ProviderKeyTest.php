@@ -78,6 +78,20 @@ final class ProviderKeyTest extends TestCase
         self::assertSame('gh', $configured->lastCharacters);
     }
 
+    public function testAKeyUnderFourCharactersShowsNoCharacters(): void
+    {
+        $configured = ProviderKey::recognise('abc', $this->catalog($this->descriptor('tiny', '/^\w{1,3}$/D')))->configured();
+
+        self::assertEquals(new ConfiguredKey('tiny', ''), $configured);
+    }
+
+    public function testTheShortestKeyWithAShownPartShowsOneCharacter(): void
+    {
+        $configured = ProviderKey::recognise('abcd', $this->catalog($this->descriptor('tiny', '/^\w{1,4}$/D')))->configured();
+
+        self::assertSame('d', $configured->lastCharacters);
+    }
+
     public function testTheKeyDoesNotAppearInVarExportPrintROrVarDumpOutput(): void
     {
         $key = ProviderKey::recognise('a_'.$this->body('visiblepart'), $this->catalog());
