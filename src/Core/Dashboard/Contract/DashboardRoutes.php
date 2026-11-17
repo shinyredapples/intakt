@@ -17,6 +17,7 @@ final readonly class DashboardRoutes
     public const string SHOW_REVIEW = self::PREFIX.'show_review';
     public const string START_REVIEW = self::PREFIX.'start_review';
     public const string START_FIRST_REVIEW = self::PREFIX.'start_first_review';
+    public const string KEEP_PROVIDER_KEY = self::PREFIX.'keep_provider_key';
     public const string STOP_REVIEW = self::PREFIX.'stop_review';
     public const string STOP_ROUND = self::PREFIX.'stop_round';
     public const string SHOW_TASK = self::PREFIX.'show_task';

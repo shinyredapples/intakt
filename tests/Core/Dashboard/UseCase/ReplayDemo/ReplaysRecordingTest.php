@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
@@ -28,9 +30,13 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
 #[UsesClass(RecordingFormat::class)]
+#[UsesClass(CapturedUpdate::class)]
+#[UsesClass(LiveEvent::class)]
 final class ReplaysRecordingTest extends TestCase
 {
     private const string ROUND = '0196a000-0000-7000-8000-000000000001';
+
+    private const string TOPIC = 'review/rounds/'.self::ROUND;
 
     private const string CALL = '0196a000-0000-7000-8000-0000000000c1';
 
@@ -45,11 +51,111 @@ final class ReplaysRecordingTest extends TestCase
 
     private InMemoryStore $locks;
 
+    private ClockedLiveUpdates $updates;
+
     protected function setUp(): void
     {
         $this->clock = new MockClock(self::START);
         $this->ledger = new ClockedLedger($this->clock);
         $this->locks = new InMemoryStore();
+        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
+    }
+
+    public function testReplayingARecordingPublishesEveryCapturedUpdateWithItsRecordedTopicAndStreamInCaptureOrder(): void
+    {
+        $recording = $this->recordedRun();
+
+        $this->replays()->replay($recording, 1.0);
+
+        self::assertSame(
+            array_map(static fn (CapturedUpdate $update): array => [$update->topic, $update->data], $recording->updates),
+            array_map(static fn (array $published): array => [$published['topic'], $published['stream']], $this->updates->published()),
+        );
+    }
+
+    public function testEachUpdateIsPublishedOnceTheClockHasAdvancedByItsRecordedGapDividedByTheFactor(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 4.0);
+
+        self::assertSame(['09:00:00.125000', '09:00:02.500000', '09:00:32.875000'], array_column($this->updates->published(), 'at'));
+    }
+
+    public function testEachUpdateFindsTheRowsRecordedUpToItsMomentAlreadyAppended(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+
+        self::assertSame([1, 2, 5], array_column($this->updates->published(), 'rows'));
+    }
+
+    public function testAnUpdateWhoseMomentAnAppendHasOverrunIsPublishedWithoutWaiting(): void
+    {
+        $this->ledger->takeSecondsPerAppend(3.0);
+
+        $this->replays()->replay($this->recordedRun(), 2.0);
+
+        self::assertSame(['09:00:03.000000', '09:00:08.000000', '09:01:11.500000'], array_column($this->updates->published(), 'at'));
+    }
+
+    public function testAnUpdateCapturedBeforeTheFirstRowIsPublishedAtTheStartAndTheRowFollowsAtItsGap(): void
+    {
+        $this->replays()->replay($this->recording([$this->row(LedgerEventKind::ReviewerStarted, '{"round":"r"}', 4)], [$this->update(0)]), 2.0);
+
+        self::assertSame(['09:00:00.000000'], array_column($this->updates->published(), 'at'));
+        self::assertSame('09:00:02.000000', $this->appended()[0]->recordedAt->format('H:i:s.u'));
+    }
+
+    public function testAFailedAppendStopsTheReplayBeforeTheUpdatesThatFollowIt(): void
+    {
+        $this->ledger->failAppend(2);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('The replay should have stopped.');
+        } catch (ReplayStopped) {
+        }
+
+        self::assertSame([1], array_column($this->updates->published(), 'rows'));
+    }
+
+    public function testARecordingWithABlankUpdateTopicIsRefusedBeforeAnyRowIsAppended(): void
+    {
+        $recording = $this->recording([$this->row(LedgerEventKind::ReviewStarted, '{"round":"r"}', 0)], [new CapturedUpdate($this->clock->now(), ' ', '<turbo-stream></turbo-stream>')]);
+
+        try {
+            $this->replays()->replay($recording, 1.0);
+            self::fail('The replay should have been refused.');
+        } catch (ReplayIsRefused) {
+        }
+
+        self::assertSame([], $this->appended());
+        self::assertSame([], $this->updates->published());
+    }
+
+    public function testARefusedReplayPublishesNoUpdate(): void
+    {
+        $this->replays()->replay($this->recordedRun(), 1.0);
+        $again = new ClockedLiveUpdates($this->clock, $this->ledger);
+
+        try {
+            new ReplaysRecording($this->ledger, $again, $this->clock, new LockFactory($this->locks))->replay($this->recordedRun(), 1.0);
+        } catch (ReplayIsRefused) {
+        }
+
+        self::assertSame([], $again->published());
+    }
+
+    public function testAReplayRefusedWhileAnotherRunsPublishesNoUpdate(): void
+    {
+        // Kept in a variable, because a lock released by its destructor would let the replay run.
+        $running = new LockFactory($this->locks)->createLock(ReplaysRecording::LOCK);
+        $running->acquire();
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+        } catch (ReplayIsRefused) {
+        }
+
+        self::assertSame([], $this->updates->published());
     }
 
     public function testReplayingARecordingAppendsTheSameLedgerRowsAsTheRecordedRunInRecordedOrder(): void
@@ -196,7 +302,7 @@ final class ReplaysRecordingTest extends TestCase
 
     private function replays(): ReplaysRecording
     {
-        return new ReplaysRecording($this->ledger, $this->clock, new LockFactory($this->locks));
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks));
     }
 
     /**
@@ -218,20 +324,35 @@ final class ReplaysRecordingTest extends TestCase
             $this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"started","project":"sample","tier":"standard","round":"'.self::ROUND.'","model":"claude-opus-5-5"}', 11),
             $this->row(LedgerEventKind::UsageRecorded, '{"call":"'.self::CALL.'","phase":"settled","usages":[{"model":"claude-opus-5-5","total":1.0}]}', 131),
             $this->row(LedgerEventKind::VerdictReceived, '{"round":"'.self::ROUND.'","reviewer":"r-1","role":"correctness","tier":"standard","decision":"approve","findings":0}', 131),
+        ], [
+            $this->update(500),
+            // Captured at the moment of the reviewer_started row, so a test sees the row appended before the update that shows it.
+            $this->update(10_000),
+            $this->update(131_500),
         ])));
     }
 
     /**
      * @param list<RecordedLedgerEvent> $events
+     * @param list<CapturedUpdate>      $updates
      */
-    private function recording(array $events): Recording
+    private function recording(array $events, array $updates = []): Recording
     {
-        return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, []);
+        return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, $updates);
     }
 
     private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
     {
         return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000aa', $kind, $payload, new DateTimeImmutable('2026-11-16T09:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
+    }
+
+    private function update(int $millisecondsAfterStart): CapturedUpdate
+    {
+        return new CapturedUpdate(
+            new DateTimeImmutable('2026-11-16T09:00:00+00:00')->modify(sprintf('+%d milliseconds', $millisecondsAfterStart)),
+            self::TOPIC,
+            sprintf('<turbo-stream action="replace" target="round-state"><template>at %d ms</template></turbo-stream>', $millisecondsAfterStart),
+        );
     }
 
     private static function withProject(string $payload, string $project): string
