@@ -475,7 +475,6 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 /* The board headline counts its running changes below 761 px, so it stays within two lines on a phone (decision D4 of the board headline). */
 .headline-short { display: none; }
 .page-head .actions { margin-left: auto; }
-.now-stop-idle ~ .stop-round { display: none; }
 /* One action at a time: the start form stays server-rendered (it needs the session token) and hides while a round is in review. */
 .task-actions:has(.now-runs) > .start-review { display: none; }
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }

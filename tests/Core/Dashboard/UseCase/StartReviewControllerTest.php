@@ -99,23 +99,21 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(0, $crawler->filter('.now-stop-idle'));
-        self::assertCount(1, $crawler->filter('.task-actions form.stop-round'));
-        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+        $this->assertOnlyStopIsOffered($crawler);
     }
 
-    // Before its first reviewer starts the round is in review already, so the start of the next round stays hidden too.
-    public function testARoundInReviewWithoutARunningReviewerHidesTheStartOfTheNextRound(): void
+    // Before its first reviewer starts the round is in review already, so Stop is offered and the start of the next round stays hidden.
+    public function testARoundInReviewWithoutARunningReviewerOffersOnlyStop(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+        $this->assertOnlyStopIsOffered($crawler);
     }
 
     // Every reviewer finished but the judge has not called yet, so the round still runs.
-    public function testARoundWhoseReviewersFinishedButIsNotJudgedHidesTheStartOfTheNextRound(): void
+    public function testARoundWhoseReviewersFinishedButIsNotJudgedOffersOnlyStop(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $this->ledger->startReviewer('round-1', 'security');
@@ -123,7 +121,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
+        $this->assertOnlyStopIsOffered($crawler);
     }
 
     public function testAJudgedReviewOffersOnlyTheStartOfTheNextRound(): void
@@ -138,6 +136,15 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('.now-runs'));
         self::assertCount(0, $crawler->filter('form.stop-round'));
         self::assertSame(['Start round 2'], $crawler->filter('.task-actions button')->each(static fn (Crawler $button): string => trim($button->text())));
+    }
+
+    // The start form stays rendered for the judged round's stream, so the in-review marker is what keeps it from showing beside Stop.
+    private function assertOnlyStopIsOffered(Crawler $crawler): void
+    {
+        self::assertSame(['round-round-1-now-runs', 'round-round-1-now-stop', 'start-review'], $crawler->filter('.task-actions > *')->each(static fn (Crawler $child): string => $child->attr('id') ?? (string) $child->attr('class')));
+        self::assertSame(['stop-round'], $crawler->filter('#round-round-1-now-stop > *')->each(static fn (Crawler $child): string => (string) $child->attr('class')));
+        self::assertSame('Stop', trim($crawler->filter('form.stop-round button')->text()));
+        self::assertCount(1, $crawler->filter('.task-actions:has(.now-runs) > form.start-review'));
     }
 
     // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.

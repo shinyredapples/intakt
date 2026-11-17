@@ -12,7 +12,5 @@
 {% endfor %}
 {% if progress.judged %}
 <turbo-stream action="remove" target="round-{{ round }}-now-runs"></turbo-stream>
-{% endif %}
-{% if progress.judged or progress.reviewersFinished >= progress.reviewers %}
 <turbo-stream action="replace" target="round-{{ round }}-now-stop"><template><div id="round-{{ round }}-now-stop"></div></template></turbo-stream>
 {% endif %}
