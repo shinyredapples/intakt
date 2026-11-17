@@ -78,10 +78,11 @@ final class LedgerReviewPagesTest extends TestCase
 
         $review = $this->pagesOn(new ReviewBoundLedger($ledger))->reviewOf('r2');
 
-        self::assertSame(['r1', 'r2'], array_map(static fn (ReviewedRound $round): string => $round->round, $review->rounds ?? []));
-        self::assertSame(1200, $review?->rounds[0]->tokens->total());
-        self::assertCount(1, $review?->rounds[0]->outcomes ?? []);
-        self::assertTrue($review?->rounds[0]->isJudged());
+        self::assertNotNull($review);
+        self::assertSame(['r1', 'r2'], array_map(static fn (ReviewedRound $round): string => $round->round, $review->rounds));
+        self::assertSame(1200, $review->rounds[0]->tokens->total());
+        self::assertCount(1, $review->rounds[0]->outcomes);
+        self::assertTrue($review->rounds[0]->isJudged());
     }
 
     public function testATokenRowNamingBothItsRoundAndItsCallIsCountedOnce(): void

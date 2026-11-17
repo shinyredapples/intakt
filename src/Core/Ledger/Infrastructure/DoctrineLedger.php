@@ -74,7 +74,7 @@ final readonly class DoctrineLedger implements Ledger
         assert($manager instanceof EntityManagerInterface);
         $query = $manager->createQueryBuilder()->select('event')->from(EventRecord::class, 'event')->orderBy('event.position', 'ASC');
 
-        foreach (array_values($texts) as $index => $text) {
+        foreach ($texts as $index => $text) {
             $query->orWhere("event.payload LIKE :text{$index} ESCAPE '!'")->setParameter('text'.$index, '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $text).'%');
         }
 
