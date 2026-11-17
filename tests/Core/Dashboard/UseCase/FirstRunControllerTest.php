@@ -7,10 +7,12 @@ namespace Intakt\Tests\Core\Dashboard\UseCase;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredAccounts;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Core\Dashboard\Domain\AgentStep;
+use Intakt\Core\Dashboard\Domain\DemoChoices;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
 use Intakt\Core\Dashboard\Domain\PanelOfProject;
@@ -20,9 +22,11 @@ use Intakt\Core\Dashboard\Domain\StepState;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
+use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunController;
 use Intakt\Core\Dashboard\UseCase\FirstRun\FirstRunSteps;
 use Intakt\Core\Dashboard\UseCase\StartReview\ReviewStarts;
+use Intakt\Core\Dashboard\UseCase\StartReview\StartAnswer;
 use Intakt\Core\Dashboard\UseCase\StartReview\StartFirstReviewController;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Review\Contract\ChangeSource;
@@ -46,6 +50,7 @@ use stdClass;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
@@ -65,6 +70,9 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 #[CoversClass(StepState::class)]
 #[CoversClass(StartFirstReviewController::class)]
 #[CoversClass(ReviewStarts::class)]
+#[CoversClass(StartAnswer::class)]
+#[CoversClass(DemoChoices::class)]
+#[CoversClass(SampleChangeSource::class)]
 #[UsesClass(LedgerReviewPages::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(ConfiguredTierResolver::class)]
@@ -239,14 +247,26 @@ final class FirstRunControllerTest extends WebTestCase
     public function testAKeptKeyShowsItsProviderAndAtMostItsLastFourCharactersAndNoField(): void
     {
         $directory = $this->keptKeyDirectory();
+        // Kept after the container is built, as the page keeps it in a running install, because a container built with the kept key turns its provider on.
+        $this->firstRunPage(self::PROJECTS, [], $directory);
         new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
 
-        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+        $page = $this->browser()->request('GET', '/setup');
 
         self::assertSame('done', $page->filter('#step-providers')->attr('data-state'));
         self::assertSame('The huggingface key ending in '.substr(self::KEPT_BODY, -4).' is kept. Restart Intakt to use it.', $page->filter('#step-providers .lead')->text());
         self::assertCount(0, $page->filter('#step-providers form'));
         self::assertStringNotContainsString(self::KEPT_BODY, (string) $this->browser()->getResponse()->getContent());
+    }
+
+    public function testAKeptHuggingFaceTokenTurnsOnTheOpenAiCompatibleEndpointOnceTheContainerIsBuiltWithIt(): void
+    {
+        $directory = $this->keptKeyDirectory();
+        new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
+
+        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+
+        self::assertSame('openai_compatible has a key.', $page->filter('#step-providers .lead')->text());
     }
 
     public function testAnUnreadableKeptKeyIsNamedInsteadOfOfferingTheField(): void
@@ -604,7 +624,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertCount(0, $page->filter('form.start-first-review'));
     }
 
-    public function testTheStartButtonStartsTheSampleChangeAndComesBackWithTheRoundId(): void
+    public function testTheStartButtonStartsTheSampleChangeAndOpensItsLiveReviewPage(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $commands = $this->commandBus();
@@ -616,6 +636,32 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(303);
+        self::assertResponseRedirects('/reviews/round-1');
+    }
+
+    public function testTheStartLeavesAToastNamingTheRoundsNumber(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+        $commands = $this->commandBus();
+        $token = $this->tokenFromThePage();
+        $commands->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass(), [new HandledStamp('round-1', 'handler')]));
+
+        $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
+
+        $session = $this->browser()->getRequest()->getSession();
+        self::assertInstanceOf(FlashBagAwareSessionInterface::class, $session);
+        self::assertSame(['Started round 1.'], $session->getFlashBag()->peek('toast'));
+    }
+
+    public function testAStartWhoseHandlerNamesNoRoundComesBackToTheFirstRunPage(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+        $commands = $this->commandBus();
+        $token = $this->tokenFromThePage();
+        $commands->expects(self::once())->method('dispatch')->willReturn(new Envelope(new stdClass()));
+
+        $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
+
         self::assertResponseRedirects('/setup');
         $this->browser()->followRedirect();
         self::assertSelectorTextSame('.toast', 'Started round 1.');
@@ -631,6 +677,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
+        self::assertResponseRedirects('/setup');
         $this->browser()->followRedirect();
         self::assertSelectorTextContains('.flash-error', 'Round 1 was asked for');
         self::assertStringNotContainsString('Stack trace', (string) $this->browser()->getResponse()->getContent());
@@ -648,18 +695,104 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "The form token is missing or wrong, so nothing was started."', BadRequestHttpException::class));
     }
 
-    public function testAStartAfterTheSampleRepositoryWasUnsetIsRefused(): void
+    public function testAStartOnAnInstallWithoutTheSampleRepositoryIsRefused(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $token = $this->tokenFromThePage();
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = '';
-        // Rebooted, because only a new kernel reads the variable again; the session that holds the token stays.
-        $this->browser()->enableReboot();
+        // Replaced in the running container, because the repository is read when the container is built, and a new build would lose the session that holds the token.
+        $container = self::getContainer();
+        $starts = new ReviewStarts($container->get(LedgerReviewPages::class), $container->get('command.bus'), new SampleChangeSource($container->get(TierResolver::class), null));
+        $container->set(ReviewStarts::class, $starts);
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
         self::assertResponseStatusCodeSame(404);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "This install has no sample change to review, so nothing was started."', NotFoundHttpException::class));
+    }
+
+    public function testOnADemoInstallThePageOffersTheRecordedReviewAndTheDemoReview(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame(
+            ['Watch a recorded real review now', 'Paste one provider key or Hugging Face token and run the demo review'],
+            $page->filter('#demo-choices h3')->each(static fn (Crawler $title): string => $title->text()),
+        );
+    }
+
+    public function testTheChoicesComeBeforeTheFirstStep(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame(['demo-choices', 'step-providers'], array_slice($page->filter('.setup section')->each(static fn (Crawler $section): string => (string) $section->attr('id')), 0, 2));
+    }
+
+    public function testWithoutTheSampleRepositoryThePageOffersNoChoices(): void
+    {
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertCount(0, $page->filter('#demo-choices'));
+    }
+
+    public function testTheRecordedReviewChoiceSaysItArrivesWithTheDemoTourAndShowsNoCommand(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+        $_SERVER['INTAKT_COMPOSE_SERVICE'] = 'intakt';
+
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame('Watch a recorded real review now', $page->filter('#choice-recorded h3')->text());
+        self::assertSame('The recorded review, which needs no key, arrives with the demo tour.', $page->filter('#choice-recorded .recorded-when')->text());
+        self::assertCount(0, $page->filter('#choice-recorded pre, #choice-recorded code'));
+    }
+
+    public function testWithoutAKeyTheDemoReviewChoiceSaysToPasteOneAndRestart(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(self::PROJECTS, []);
+
+        self::assertSame(
+            'Paste the key or token in step 1, restart Intakt, then press "Start the first review" in step 3: it starts the demo review and opens its live page.',
+            $page->filter('#choice-live .next')->text(),
+        );
+    }
+
+    public function testWithAKeyButNoSampleProjectTheDemoReviewChoiceSaysToRestart(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(<<<'YAML'
+            projects:
+                beta:
+                    tiers:
+                        strong: { provider: anthropic, model: big }
+            YAML, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Restart Intakt, so the sample project gets its reviewers, then press "Start the first review" in step 3.', $page->filter('#choice-live .next')->text());
+    }
+
+    public function testWithAKeyAndTheSampleProjectTheDemoReviewChoicePointsToTheStart(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('Press "Start the first review" in step 3: it starts the demo review and opens its live page.', $page->filter('#choice-live .next')->text());
+    }
+
+    public function testAfterAReviewRanTheDemoReviewChoicePointsToItsPage(): void
+    {
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
+        $this->ledger->startRoundOf(SampleChange::CHANGE, 'round-1', 1);
+
+        $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
+
+        self::assertSame('The demo review has run: step 3 opens its page.', $page->filter('#choice-live .next')->text());
     }
 
     public function testAProjectNameWithMarkupIsEscaped(): void
@@ -689,7 +822,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         self::ensureKernelShutdown();
         // Keyed by what the container is built from, so an install with other keys or projects gets a container of its own.
-        $this->containers->useFor([$projects, $keys, $keptKeyDirectory]);
+        $this->containers->useFor([$projects, $keys, $keptKeyDirectory, $_SERVER['INTAKT_SAMPLE_REPOSITORY'] ?? '']);
         $browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
         // Kept between requests, so the ledger double and the bus mock stay for the post after the page that hands out the token.
         $browser->disableReboot();

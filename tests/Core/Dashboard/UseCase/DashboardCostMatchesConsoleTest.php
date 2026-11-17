@@ -62,7 +62,8 @@ final class DashboardCostMatchesConsoleTest extends DashboardPageTestCase
 
         self::assertSame('0.0050 USD estimated, prices of 2026-11-13', $console);
         self::assertSame('Cost: '.$console, $this->wordsOf($crawler->filter('.page-head p.meta > span:nth-child(5)')));
-        self::assertSame($console, $this->wordsOf($crawler->filter('table.tokens tbody td:last-child')));
+        // The table's cost leaves its estimated label to the column head, so the figure and its price date match without it.
+        self::assertSame(str_replace(' estimated,', ',', $console), $this->wordsOf($crawler->filter('table.tokens tbody td:last-child')));
     }
 
     public function testTheDashboardAndTheConsoleShowTheSameUnknownForARoundWithoutAPrice(): void

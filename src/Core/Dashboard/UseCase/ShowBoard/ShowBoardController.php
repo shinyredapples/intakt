@@ -12,11 +12,14 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
+use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final readonly class ShowBoardController
 {
@@ -27,6 +30,8 @@ final readonly class ShowBoardController
         private LedgerFailingMains $failingMains,
         private Redactor $redactor,
         private LivePageRendering $pages,
+        private SampleChangeSource $sample,
+        private UrlGeneratorInterface $urls,
     ) {
     }
 
@@ -36,6 +41,11 @@ final readonly class ShowBoardController
     {
         $events = $this->ledger->readInOrder();
         $board = $this->reviewPages->boardOf($events);
+
+        // Only on a demo install, because an install without the sample has nothing on the first-run page to start and keeps the board's own opening.
+        if ($board->hasNoReview() && $this->sample->hasRepository()) {
+            return new RedirectResponse($this->urls->generate(DashboardRoutes::FIRST_RUN), Response::HTTP_SEE_OTHER);
+        }
 
         return new Response($this->pages->render($request, 'dashboard/board.html.twig', [
             'board' => $board,

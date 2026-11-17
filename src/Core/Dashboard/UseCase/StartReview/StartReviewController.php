@@ -30,8 +30,8 @@ final readonly class StartReviewController
     public function __invoke(Request $request, string $round): Response
     {
         $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so nothing was started.');
-        $line = $this->starts->startNextOf($round, $this->expectedNumber($request)) ?? throw new NotFoundHttpException('The ledger holds no review with this round that can be started again.');
-        $this->press->flash($request, $line);
+        $answer = $this->starts->startNextOf($round, $this->expectedNumber($request)) ?? throw new NotFoundHttpException('The ledger holds no review with this round that can be started again.');
+        $this->press->flash($request, $answer->line);
 
         return new RedirectResponse($this->urls->generate(DashboardRoutes::SHOW_REVIEW, ['round' => $round]), Response::HTTP_SEE_OTHER);
     }
