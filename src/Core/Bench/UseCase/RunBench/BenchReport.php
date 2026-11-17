@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Core\Bench\UseCase\RunBench;
 
 use Closure;
-use Intakt\Core\Bench\Domain\BenchFigures;
 use Intakt\Core\Bench\Contract\BenchReview;
 use Intakt\Core\Bench\Contract\BenchReviewerResult;
-use Intakt\Core\Bench\Domain\FailureCause;
 use Intakt\Core\Bench\Contract\RepeatedChange;
+use Intakt\Core\Bench\Domain\BenchFigures;
+use Intakt\Core\Bench\Domain\FailureCause;
 use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Review\Contract\Finding;
 

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Bench\Domain;
 
-use Intakt\Core\Bench\Domain\FailureCause;
 use Intakt\Core\Bench\Domain\BenchFigures;
+use Intakt\Core\Bench\Domain\FailureCause;
 use Intakt\Core\Bench\Domain\RunVerdict;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;

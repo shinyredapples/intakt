@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\SampleRepository;
 
 use Intakt\Core\Bench\Domain\BenchFigures;
-use Intakt\Core\Bench\Domain\FailureCause;
-use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Bench\Domain\ChangeFiles;
 use Intakt\Core\Bench\Domain\DefectMatcher;
 use Intakt\Core\Bench\Domain\Expectations;
+use Intakt\Core\Bench\Domain\FailureCause;
 use Intakt\Core\Bench\Domain\PlantedDefect;
 use Intakt\Core\Bench\Domain\RunClassifier;
 use Intakt\Core\Bench\Domain\RunOutcome;
+use Intakt\Core\Bench\Domain\RunVerdict;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
