@@ -16,7 +16,7 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-// The demo's start runs this once the server answers, so the command a reader copies works at once and is the last thing the start prints.
+// A reader runs this after the demo's start to get the command that reviews the sample change, so it only offers that command once the sample project is written.
 #[AsCommand(name: 'intakt:sample:show', description: 'Print the dashboard address, the command that reviews the sample change and the MCP setup, framed')]
 final readonly class ShowSampleReviewCommand
 {
