@@ -175,12 +175,21 @@
                 event.detail.render = (stream) => {
                     const collapsed = replaced.classList.contains('collapsed');
                     const expanded = replaced.hasAttribute('data-expanded');
+                    // A replaced column is new markup, so a card the person had focused is found again by its link, and a glossary term inside it by its place among the card's focusable terms (their ids are random per render); without this the keyboard falls back to the page start at every push.
+                    const focused = replaced.contains(document.activeElement) ? document.activeElement : null;
+                    const focusedCard = focused?.closest('a[href]') ?? null;
+                    const focusedLink = focusedCard?.getAttribute('href') ?? null;
+                    const focusedTerm = focusedCard !== null && focused !== focusedCard ? [...focusedCard.querySelectorAll('[tabindex]')].indexOf(focused) : -1;
                     render(stream);
                     const pushed = document.getElementById(replaced.id);
                     pushed?.classList.toggle('collapsed', collapsed);
                     pushed?.querySelector('.col-fold')?.setAttribute('aria-expanded', String(!collapsed));
                     pushed?.toggleAttribute('data-expanded', expanded);
                     showProject();
+                    if (focusedLink !== null) {
+                        const card = [...(pushed?.querySelectorAll('a[href]') ?? [])].find((link) => link.getAttribute('href') === focusedLink);
+                        (focusedTerm < 0 ? card : card?.querySelectorAll('[tabindex]')[focusedTerm])?.focus({ preventScroll: true });
+                    }
                 };
                 return;
             }

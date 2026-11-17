@@ -23,6 +23,7 @@ final readonly class ReviewerLeases
     private const string WORKER_STOPPED = 'the worker stopped twice before the reviewer had a verdict';
     private const string MESSAGE_FAILED = 'the review message failed for good';
     private const string CEILING_PASSED = 'the reviewer had no result within the review ceiling';
+    private const int STORE_ATTEMPTS = 3;
 
     public function __construct(
         private EntityManagerInterface $entities,
@@ -123,30 +124,50 @@ final readonly class ReviewerLeases
      */
     private function record(RoundReviewer $reviewer, Closure $move): mixed
     {
+        $attempts = 0;
+
+        while (true) {
+            try {
+                return $this->recordOnce($reviewer, $move);
+            } catch (ReviewEventNotRecorded $refused) {
+                // A new transaction, because the result is already in hand and only a fresh snapshot can write after another reviewer committed.
+                if (++$attempts < self::STORE_ATTEMPTS && $this->entities->isOpen()) {
+                    continue;
+                }
+
+                // Left running rather than handed back, because a retry of a queued reviewer would call the vendor, and pay, again.
+                throw ResultNotStored::after($attempts, $refused);
+            }
+        }
+    }
+
+    /**
+     * @template T
+     *
+     * @param Closure(RoundReviewer): T $move
+     *
+     * @return T|null
+     */
+    private function recordOnce(RoundReviewer $reviewer, Closure $move): mixed
+    {
         $now = $this->clock->now();
 
-        try {
-            return $this->inOneTransaction(function () use ($reviewer, $move, $now): mixed {
-                $stored = $this->lockedRow($reviewer->id());
+        return $this->inOneTransaction(function () use ($reviewer, $move, $now): mixed {
+            $stored = $this->lockedRow($reviewer->id());
 
-                // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
-                if (!$this->isStillHeldBy($reviewer, $stored)) {
-                    return null;
-                }
+            // Left alone unless it is this worker's own attempt, because anything else was decided while the vendor call ran and stands.
+            if (!$this->isStillHeldBy($reviewer, $stored)) {
+                return null;
+            }
 
-                if (!$this->withinTheHold($stored, $now)) {
-                    $this->moves->fail($stored, self::CEILING_PASSED);
+            if (!$this->withinTheHold($stored, $now)) {
+                $this->moves->fail($stored, self::CEILING_PASSED);
 
-                    return null;
-                }
+                return null;
+            }
 
-                return $move($stored);
-            });
-        } catch (ReviewEventNotRecorded $refused) {
-            $this->handBack($reviewer);
-
-            throw $refused;
-        }
+            return $move($stored);
+        });
     }
 
     // The attempt too, because after the hold another worker may have started the reviewer again, and the row is then running for that worker.
