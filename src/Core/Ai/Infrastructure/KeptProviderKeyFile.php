@@ -9,10 +9,10 @@ use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
-use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
+use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
 use JsonException;
 use SensitiveParameter;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -27,6 +27,7 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
     public function __construct(
         #[Autowire(param: AiServices::KEPT_KEY_DIRECTORY)]
         private string $directory,
+        private ProviderCatalog $providers,
     ) {
     }
 
@@ -41,7 +42,8 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
             $filesystem->mkdir($this->directory, 0o700);
             $written = $filesystem->tempnam($this->directory, '.'.self::FILE.'.');
             $filesystem->chmod($written, 0o600);
-            $filesystem->appendToFile($written, json_encode(['kind' => $key->kind()->value, 'key' => $key->secret()], JSON_THROW_ON_ERROR));
+            // Also as kind, the field earlier releases read, so a rollback still finds the key.
+            $filesystem->appendToFile($written, json_encode(['provider' => $key->provider(), 'kind' => $key->provider(), 'key' => $key->secret()], JSON_THROW_ON_ERROR));
             $this->linkWhereNothingIs($written);
         } catch (IOException|JsonException) {
             throw new KeptProviderKeyNotWritten();
@@ -108,26 +110,27 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
             throw new KeptProviderKeyUnreadable();
         }
 
-        $kind = is_array($data) && is_string($data['kind'] ?? null) ? KeyKind::tryFrom($data['kind']) : null;
+        // A file kept before the provider id names it as kind, with the same ids, so it still reads after an upgrade.
+        $provider = is_array($data) ? ($data['provider'] ?? $data['kind'] ?? null) : null;
         $key = is_array($data) ? ($data['key'] ?? null) : null;
 
-        if (!$kind instanceof KeyKind || !is_string($key)) {
+        if (!is_string($provider) || !is_string($key)) {
             throw new KeptProviderKeyUnreadable();
         }
 
-        return $this->recognised($kind, $key);
+        return $this->recognised($provider, $key);
     }
 
-    // The file is outside input, so its key must still have the form of its kind; a short value would otherwise show whole as configured.
-    private function recognised(KeyKind $kind, #[SensitiveParameter] string $key): ProviderKey
+    // The file is outside input, so its key must still have the form of its provider; a short value would otherwise show whole as configured.
+    private function recognised(string $provider, #[SensitiveParameter] string $key): ProviderKey
     {
         try {
-            $providerKey = ProviderKey::recognise($key);
+            $providerKey = ProviderKey::recognise($key, $this->providers);
         } catch (KeyNotRecognised) {
             throw new KeptProviderKeyUnreadable();
         }
 
-        if ($providerKey->kind() !== $kind) {
+        if ($providerKey->provider() !== $provider) {
             throw new KeptProviderKeyUnreadable();
         }
 

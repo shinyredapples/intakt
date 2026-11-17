@@ -56,7 +56,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** none. **Size:** M. **Labels:** `class:tooling`, `priority:high`.
 
 ### T2 Ledger: append-only events on SQLite
-- **Description:** The `Ledger` core module stores events (review started, reviewer started, verdict received, judge done, usage recorded) in one append-only table through Doctrine, with a migration. No updates or deletes. Event ids are UUIDv7 (Symfony Uid), so they sort by time; findings use the same id type when they are stored.
+- **Description:** The `Ledger` core module stores events (review started, reviewer started, verdict received, judge done, usage recorded) in one append-only table through Doctrine, with a migration. No updates or deletes (one later exception, issue #2078: `intakt:demo:remove` deletes the rows replayed into the demo project). Event ids are UUIDv7 (Symfony Uid), so they sort by time; findings use the same id type when they are stored.
 - **Acceptance:** appending and reading events in order works; event ids are UUIDv7; an update or delete is refused; tests are in the `persistence` group.
 - **Evidence:** `bin/console doctrine:migrations:migrate` output on SQLite and the events of a test run read back with a console query.
 - **PHP 8.5:** `#[NoDiscard]` on the append result, so a write that failed cannot be ignored.
