@@ -82,6 +82,12 @@ class FakeColumn extends FakeElement {
         super(page, '', { '.col-fold': new FakeElement(page) });
         this.cards = [Object.assign(new FakeElement(page), { id: `${id}-card` })];
         this.cards[0].setAttribute('href', '/reviews/round-1');
+        // The card's glossary terms, each focusable without a link of its own.
+        this.terms = [new FakeElement(page, 'reviewer'), new FakeElement(page, 'judge')];
+        this.terms.forEach((term) => term.setAttribute('tabindex', '0'));
+        this.cards[0].closest = (selector) => (selector === 'a[href]' ? this.cards[0] : null);
+        this.cards[0].querySelectorAll = (selector) => (selector === '[tabindex]' ? this.terms : []);
+        this.terms.forEach((term) => (term.closest = (selector) => (selector === 'a[href]' ? this.cards[0] : null)));
         this.children['.col-fold'].setAttribute('aria-expanded', !collapsed);
         this.id = id;
         this.classes = new Set(['col', ...(collapsed ? ['collapsed'] : [])]);
@@ -96,7 +102,7 @@ class FakeColumn extends FakeElement {
     }
 
     contains(element) {
-        return this.cards.includes(element);
+        return this.cards.includes(element) || this.terms.includes(element);
     }
 
     querySelectorAll(selector) {

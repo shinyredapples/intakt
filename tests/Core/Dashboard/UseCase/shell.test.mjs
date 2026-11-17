@@ -553,6 +553,15 @@ test('a card focused inside a column keeps focus when the column is pushed', () 
     assert.equal(page.column('col-in-review').cards.includes(page.focused()), true);
 });
 
+test('a term focused inside a card keeps focus when the column is pushed', () => {
+    const page = new Browser('light').open();
+    page.column('col-in-review').terms[1].focus();
+
+    page.pushColumn('col-in-review');
+
+    assert.equal(page.focused(), page.column('col-in-review').terms[1]);
+});
+
 test('a pushed column leaves focus alone when it was outside the column', () => {
     const page = new Browser('light').open();
     page.railToggle.focus();
