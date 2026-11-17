@@ -24,6 +24,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
 use Uri\Rfc3986\Uri;
@@ -59,6 +61,13 @@ final class SymfonyAiKeyCheckTest extends TestCase
         'choices' => [['index' => 0, 'message' => ['role' => 'assistant', 'content' => 'ok'], 'finish_reason' => 'stop']],
         'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1, 'total_tokens' => 2],
     ];
+
+    private BufferingLogger $log;
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+    }
 
     /**
      * @return iterable<string, array{string}>
@@ -147,7 +156,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $providers = new SymfonyAiProviderCatalog([$provider]);
         /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
         $calls = new ArrayObject();
-        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, $answer)), $providers, $this->tiers());
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, $answer)), $providers, $this->tiers(), $this->log);
 
         $outcome = $check->check(ProviderKey::recognise($key, $providers));
 
@@ -191,7 +200,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     public function testWithoutALightTierOnTheProviderTheKeyIsNotCheckedAndNoCallIsMade(): void
     {
         $calls = new ArrayObject();
-        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), new SymfonyAiProviderCatalog(), $this->tiers(['other' => Provider::OpenAi]));
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), new SymfonyAiProviderCatalog(), $this->tiers(['other' => Provider::OpenAi]), $this->log);
 
         $outcome = $check->check(ProviderKey::recognise('sk-ant-'.self::BODY, new SymfonyAiProviderCatalog()));
 
@@ -201,7 +210,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     public function testAKeyOfAProviderTheCatalogDoesNotListIsNotCheckedAndNoCallIsMade(): void
     {
         $calls = new ArrayObject();
-        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::CHAT_COMPLETION_ANSWER)), new SymfonyAiProviderCatalog([new AnthropicDescriptor()]), $this->tiers());
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::CHAT_COMPLETION_ANSWER)), new SymfonyAiProviderCatalog([new AnthropicDescriptor()]), $this->tiers(), $this->log);
 
         $outcome = $check->check(ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog()));
 
@@ -251,6 +260,53 @@ final class SymfonyAiKeyCheckTest extends TestCase
         self::assertSame(KeyCheckOutcome::Accepted, $outcome);
     }
 
+    public function testACheckThatFailsForAnotherReasonLogsAWarningNamingOnlyTheExceptionClass(): void
+    {
+        $key = 'sk-ant-'.self::BODY;
+
+        $outcome = $this->check($key, new ArrayObject(), static fn (): never => throw new RuntimeException('Unknown model, request sent with '.$key));
+
+        self::assertSame(KeyCheckOutcome::NotChecked, $outcome);
+        self::assertSame([['warning', 'A provider key could not be checked.', ['provider' => 'anthropic', 'exception_class' => RuntimeException::class]]], $this->log->cleanLogs());
+    }
+
+    public function testTheWarningOfAFailedCheckCarriesNeitherTheExceptionMessageNorTheKey(): void
+    {
+        $key = 'sk-ant-'.self::BODY;
+
+        $this->check($key, new ArrayObject(), static fn (): never => throw new RuntimeException('Unknown model, request sent with '.$key));
+
+        $logged = json_encode($this->log->cleanLogs(), JSON_THROW_ON_ERROR);
+        self::assertStringNotContainsString(self::BODY, $logged);
+        self::assertStringNotContainsString('Unknown model', $logged);
+    }
+
+    public function testAProviderServerErrorIsLoggedAsAWarning(): void
+    {
+        $this->check('sk-ant-'.self::BODY, new ArrayObject(), static fn (): MockResponse => self::answer(500, ['error' => ['message' => 'overloaded']]));
+
+        self::assertSame(['warning'], array_column($this->log->cleanLogs(), 0));
+    }
+
+    #[DataProvider('keys')]
+    public function testARefusedKeyLogsNothing(string $key): void
+    {
+        $this->check($key, new ArrayObject(), static fn (): MockResponse => self::answer(401, ['type' => 'error', 'error' => ['type' => 'authentication_error', 'message' => 'Invalid key']]));
+
+        self::assertSame([], $this->log->cleanLogs());
+    }
+
+    /**
+     * @param array<string, mixed> $answer
+     */
+    #[DataProvider('answers')]
+    public function testAnAcceptedKeyLogsNothing(string $key, array $answer): void
+    {
+        $this->check($key, new ArrayObject(), static fn (): MockResponse => self::answer(200, $answer));
+
+        self::assertSame([], $this->log->cleanLogs());
+    }
+
     /**
      * @param array<string, mixed> $body
      */
@@ -292,7 +348,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     {
         /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
         $calls = new ArrayObject();
-        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), $providers, $tiers);
+        $check = new SymfonyAiKeyCheck($this->http($calls, static fn (): MockResponse => self::answer(200, self::ANTHROPIC_ANSWER)), $providers, $tiers, $this->log);
 
         $check->check(ProviderKey::recognise('sk-ant-'.self::BODY, $providers));
 
@@ -307,7 +363,7 @@ final class SymfonyAiKeyCheckTest extends TestCase
     {
         $providers = new SymfonyAiProviderCatalog();
 
-        return new SymfonyAiKeyCheck($this->http($calls, $answer), $providers, $this->tiers())->check(ProviderKey::recognise($key, $providers));
+        return new SymfonyAiKeyCheck($this->http($calls, $answer), $providers, $this->tiers(), $this->log)->check(ProviderKey::recognise($key, $providers));
     }
 
     /**

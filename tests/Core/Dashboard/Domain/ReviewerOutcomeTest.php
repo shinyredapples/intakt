@@ -33,6 +33,13 @@ final class ReviewerOutcomeTest extends TestCase
         self::assertSame($outcome, $this->reviewer()->answered($decision->value, 2, ProjectMode::Live)->outcome());
     }
 
+    public function testAReviewerStartedWithAnEmptyModelNamesItsTierLikeOneWithNone(): void
+    {
+        $reviewer = new ReviewerOutcome('r1', 'correctness', 'standard', new DateTimeImmutable('2026-11-13 10:00:00'), '');
+
+        self::assertSame('standard tier, model not recorded', $reviewer->modelInWords());
+    }
+
     public function testAFailedReviewerGivesFailed(): void
     {
         self::assertSame(ReviewOutcome::Failed, $this->reviewer()->failed('timeout')->outcome());

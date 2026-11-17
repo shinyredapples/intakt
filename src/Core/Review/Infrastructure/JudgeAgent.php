@@ -34,7 +34,7 @@ final readonly class JudgeAgent implements Judge
 
         $judgement = $this->answerIn($execution);
 
-        return $judgement instanceof Judgement && $this->marksEachFindingOnce($request->findings, $judgement) ? $judgement : Judgement::everyBlockingFindingActs($request->findings);
+        return $judgement instanceof Judgement && $this->marksEachFindingOnce($request->findings, $judgement) && $this->linksOnlyOtherGivenFindings($request->findings, $judgement) ? $judgement : Judgement::everyBlockingFindingActs($request->findings);
     }
 
     // Anything the Validator or the mapping refuses is no answer; a failed call is not the judge's answer, so it stays an error.
@@ -69,5 +69,15 @@ final readonly class JudgeAgent implements Judge
         sort($marked);
 
         return $given === $marked;
+    }
+
+    /**
+     * @param list<Finding> $findings
+     */
+    private function linksOnlyOtherGivenFindings(array $findings, Judgement $judgement): bool
+    {
+        $given = array_map(static fn (Finding $finding): string => $finding->id, $findings);
+
+        return array_all($judgement->marks, static fn (JudgedFinding $mark): bool => null === $mark->same_cause_as || ($mark->same_cause_as !== $mark->id && in_array($mark->same_cause_as, $given, true)));
     }
 }

@@ -109,22 +109,23 @@ final readonly class RoundLedger
             $round->id()->toRfc4122(),
             $act,
             array_map(static fn (FollowUp $followUp): string => $followUp->finding->id, $judged->followUps),
-            $this->recordedFindings($judged->findings, $act),
+            $this->recordedFindings($judged, $act),
             $judged->dropped,
+            $judged->sameCause,
         ));
     }
 
     // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
     /**
-     * @param list<Finding> $findings
-     * @param list<string>  $act
+     * @param list<string> $act
      *
      * @return list<JudgeDoneFinding>
      */
-    private function recordedFindings(array $findings, array $act): array
+    private function recordedFindings(JudgedFindings $judged, array $act): array
     {
+        $findings = $judged->findings;
         $entries = [];
-        foreach (new OnePerPlace()->actList($findings, $act) as $entry) {
+        foreach (new OnePerPlace()->actList($findings, $act, $judged->sameCause) as $entry) {
             $entries[$entry->id] = $entry;
         }
 

@@ -39,6 +39,37 @@ final class ReadAnswerTest extends TestCase
         self::assertSame('The boundary is off by one.', $read->title);
     }
 
+    public function testATitleOfExactlyTheCapIsKeptWhole(): void
+    {
+        $line = str_repeat('a', 160);
+
+        $read = ReadFinding::of($this->findingWritten($line."\nThe rest."));
+
+        self::assertSame($line, $read->title);
+    }
+
+    public function testATitleLongerThanTheCapIsCutToTheCapAndEndsWithAnEllipsis(): void
+    {
+        $read = ReadFinding::of($this->findingWritten(str_repeat('a', 161)));
+
+        self::assertSame(str_repeat('a', 159).'…', $read->title);
+    }
+
+    public function testALongTitleOfMultibyteCharactersIsCutOnACharacterBoundary(): void
+    {
+        $read = ReadFinding::of($this->findingWritten(str_repeat('é', 400)));
+
+        self::assertSame(str_repeat('é', 159).'…', $read->title);
+        self::assertTrue(mb_check_encoding($read->title, 'UTF-8'));
+    }
+
+    public function testACutTitleDropsTheSpaceBeforeTheEllipsis(): void
+    {
+        $read = ReadFinding::of($this->findingWritten(str_repeat('a', 158).' '.str_repeat('b', 50)));
+
+        self::assertSame(str_repeat('a', 158).'…', $read->title);
+    }
+
     public function testAnApprovalIsReadWithoutFindings(): void
     {
         $answer = ReadAnswer::of(new Verdict(Decision::Approve, [], [], []));
@@ -54,6 +85,11 @@ final class ReadAnswerTest extends TestCase
         self::assertFalse($answer->wasRead());
         self::assertNull($answer->verdict);
         self::assertSame([], $answer->findings);
+    }
+
+    private function findingWritten(string $text): Finding
+    {
+        return new Finding('F1', Severity::P2, 'src/Cart.php', 3, null, $text, FixableBy::Builder, false, null, null);
     }
 
     private function findingReadAs(ReadFinding $read): Finding
