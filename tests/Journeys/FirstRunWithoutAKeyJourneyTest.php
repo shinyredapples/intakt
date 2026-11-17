@@ -41,7 +41,7 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
         self::assertStringContainsString('[OK]', $this->console(['doctrine:migrations:migrate']));
     }
 
-    // As the container entrypoint does on a start without a key: build, seed the repository alone, build again.
+    // Built again after the seed, because the dashboard reads the sample repository from the compiled container, as after the entrypoint's start.
     private function startTheDemoWithoutAKey(): void
     {
         $this->directory = sys_get_temp_dir().'/intakt-journey-'.bin2hex(random_bytes(6));

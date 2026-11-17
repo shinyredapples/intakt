@@ -92,7 +92,7 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
         self::assertStringContainsString('sample-change', $page->filter('h1')->text());
     }
 
-    // Build, seed, build again, as the container entrypoint does on every start.
+    // Built before the seed because the seed reads the kept key through the container, and after it because the sample project lives in the compiled container.
     private function startAsTheEntrypointDoes(): string
     {
         $environment = [

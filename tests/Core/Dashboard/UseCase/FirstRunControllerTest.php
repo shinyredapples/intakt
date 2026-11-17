@@ -247,14 +247,26 @@ final class FirstRunControllerTest extends WebTestCase
     public function testAKeptKeyShowsItsProviderAndAtMostItsLastFourCharactersAndNoField(): void
     {
         $directory = $this->keptKeyDirectory();
+        // Kept after the container is built, as the page keeps it in a running install, because a container built with the kept key turns its provider on.
+        $this->firstRunPage(self::PROJECTS, [], $directory);
         new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
 
-        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+        $page = $this->browser()->request('GET', '/setup');
 
         self::assertSame('done', $page->filter('#step-providers')->attr('data-state'));
         self::assertSame('The huggingface key ending in '.substr(self::KEPT_BODY, -4).' is kept. Restart Intakt to use it.', $page->filter('#step-providers .lead')->text());
         self::assertCount(0, $page->filter('#step-providers form'));
         self::assertStringNotContainsString(self::KEPT_BODY, (string) $this->browser()->getResponse()->getContent());
+    }
+
+    public function testAKeptHuggingFaceTokenTurnsOnTheOpenAiCompatibleEndpointOnceTheContainerIsBuiltWithIt(): void
+    {
+        $directory = $this->keptKeyDirectory();
+        new KeptProviderKeyFile($directory, new SymfonyAiProviderCatalog())->keep(ProviderKey::recognise('hf_'.self::KEPT_BODY, new SymfonyAiProviderCatalog()));
+
+        $page = $this->firstRunPage(self::PROJECTS, [], $directory);
+
+        self::assertSame('openai_compatible has a key.', $page->filter('#step-providers .lead')->text());
     }
 
     public function testAnUnreadableKeptKeyIsNamedInsteadOfOfferingTheField(): void

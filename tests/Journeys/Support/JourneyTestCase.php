@@ -22,7 +22,6 @@ use Symfony\Component\Process\Process;
 abstract class JourneyTestCase extends TestCase
 {
     private const string ADDRESS_VARIABLE = 'INTAKT_INSTANCE_URL';
-    // Set by bin/instance only in worker mode.
     private const string ADMIN_ADDRESS_VARIABLE = 'INTAKT_INSTANCE_ADMIN_URL';
     private const string ROOT = __DIR__.'/../../..';
     // The instance runs in the test environment, so it reads the same file.
@@ -109,12 +108,16 @@ abstract class JourneyTestCase extends TestCase
     {
         $uri = $form->getUri();
         $cookies = $this->browser->getCookieJar();
+        $sent = [];
+        foreach ($cookies->allRawValues($uri) as $name => $value) {
+            $sent[] = $name.'='.$value;
+        }
         $what = $form->getMethod().' '.$uri;
         $response = HttpClient::create()->request($form->getMethod(), $uri, [
             'headers' => [
                 'Host' => 'localhost:'.$this->dashboardPort(),
                 'Content-Type' => 'application/x-www-form-urlencoded',
-                'Cookie' => implode('; ', array_map(static fn (string $name, string $value): string => $name.'='.$value, array_keys($cookies->allRawValues($uri)), $cookies->allRawValues($uri))),
+                'Cookie' => implode('; ', $sent),
             ],
             'body' => http_build_query($form->getPhpValues()),
             'max_redirects' => 0,
