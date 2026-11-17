@@ -127,6 +127,15 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame(['F1', 'F2'], array_column($act, 'id'));
     }
 
+    public function testAFindingAtThePlaceOfOneMergedThroughACauseLinkJoinsTheSameEntry(): void
+    {
+        $reported = [$this->finding('F1', 'src/discount.js', 12), $this->finding('F2', 'src/discount.js', 14), $this->finding('F3', 'src/discount.js', 14)];
+
+        $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F1']);
+
+        self::assertSame([['F1', ['F2', 'F3']]], array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged], $act));
+    }
+
     public function testAFindingNamingACauseOffTheActListStaysOnItsOwn(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 8)], ['F2'], ['F2' => 'F1']);

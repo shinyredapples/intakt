@@ -21,7 +21,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Judgement::class)]
 final class CausesInOneHunkTest extends TestCase
 {
-    private const array HUNKS = [['src/discount.js', 10, 15], ['src/discount.js', 40, 42], ['src/cart.js', 10, 15]];
+    private const array HUNKS = [['src/discount.js', 10, 15], ['src/discount.js', 40, 42], ['src/cart.js', 10, 15], ['src/New.php', 1, 500]];
 
     public function testALinkBetweenTwoFindingsInOneHunkIsKept(): void
     {
@@ -31,6 +31,21 @@ final class CausesInOneHunkTest extends TestCase
     public function testALinkBetweenFindingsAtTheFirstAndLastLineOfAHunkIsKept(): void
     {
         self::assertSame('F1', $this->linkOf(['src/discount.js', 10], ['src/discount.js', 15]));
+    }
+
+    public function testALinkBetweenFindingsFarApartInANewFileThatIsOneHunkIsDropped(): void
+    {
+        self::assertNull($this->linkOf(['src/New.php', 3], ['src/New.php', 480]));
+    }
+
+    public function testALinkBetweenFindingsFiveLinesApartIsKept(): void
+    {
+        self::assertSame('F1', $this->linkOf(['src/New.php', 3], ['src/New.php', 8]));
+    }
+
+    public function testALinkBetweenFindingsSixLinesApartInOneHunkIsDropped(): void
+    {
+        self::assertNull($this->linkOf(['src/New.php', 9], ['src/New.php', 3]));
     }
 
     public function testALinkToALineJustPastTheHunkIsDropped(): void

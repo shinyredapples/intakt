@@ -30,15 +30,15 @@ final readonly class OnePerPlace
             $at = $this->entryAt($places, $finding) ?? $this->entryOfSameCause($seen, $finding, $sameCause);
             if (null !== $at) {
                 $entries[$at] = $this->merged($entries[$at], $finding);
-                $seen[] = [$at, $finding];
-
-                continue;
+            } else {
+                $entries[] = $finding;
+                $at = array_key_last($entries);
             }
 
-            $entries[] = $finding;
-            $seen[] = [array_key_last($entries), $finding];
+            $seen[] = [$at, $finding];
+            // A finding merged through a cause link marks its own place too, so a later finding there joins the same entry.
             if (null !== $finding->file && null !== $finding->line) {
-                $places[$finding->file][$finding->line] = array_key_last($entries);
+                $places[$finding->file][$finding->line] ??= $at;
             }
         }
 
