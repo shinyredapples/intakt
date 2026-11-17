@@ -204,16 +204,21 @@ final class ReviewRound implements HasPlace
     public function progress(array $stopped = []): RoundProgress
     {
         $finished = [];
+        $started = 0;
 
         foreach ($this->reviewers() as $reviewer) {
             $id = $reviewer->id()->toRfc4122();
+
+            if ($reviewer->hasStarted()) {
+                ++$started;
+            }
 
             if ($reviewer->isFinished()) {
                 $finished[$id] = in_array($id, $stopped, true) ? FinishedState::Stopped : FinishedState::from($reviewer->state()->value);
             }
         }
 
-        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished);
+        return new RoundProgress(count($finished), count($this->reviewers()), RoundState::Judged === $this->state, $finished, $started);
     }
 
     public function state(): RoundState

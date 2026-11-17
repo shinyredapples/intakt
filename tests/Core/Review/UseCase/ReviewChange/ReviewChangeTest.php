@@ -305,6 +305,23 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame([2, 2, true, [FinishedState::Verdict, FinishedState::Verdict]], [$last->reviewersFinished, $last->reviewers, $last->judged, array_values($last->finished)]);
     }
 
+    public function testEveryProgressAChangeReviewReportsHasNoMoreFinishedThanStartedReviewers(): void
+    {
+        $progress = new RecordingProgress();
+        $work = function (): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, new VerdictPerRole([]));
+            }
+        };
+
+        $this->reviewChange($work, new UpperWait(1, 1))->review($this->request(), $progress);
+
+        foreach ($progress->reported as $reported) {
+            self::assertLessThanOrEqual($reported->reviewersStarted, $reported->reviewersFinished);
+            self::assertLessThanOrEqual($reported->reviewers, $reported->reviewersStarted);
+        }
+    }
+
     public function testTheTokensOfTheCallsMadeForTheRoundAreAddedAndNoOthers(): void
     {
         $this->recordUsage('before', 1000);
