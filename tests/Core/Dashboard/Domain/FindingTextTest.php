@@ -125,6 +125,14 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
     }
 
+    public function testManyUnclosedMarksAreReadInLinearTime(): void
+    {
+        $start = hrtime(true);
+        new FindingText(str_repeat(' *a', 20000).' end')->spans();
+
+        self::assertLessThan(500, (hrtime(true) - $start) / 1e6);
+    }
+
     public function testAnEmptyTextHasNoSpans(): void
     {
         self::assertSame([], new FindingText('')->spans());

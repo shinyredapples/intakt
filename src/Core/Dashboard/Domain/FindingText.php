@@ -77,8 +77,8 @@ final readonly class FindingText
     {
         $codes = array_values(array_filter($spans, static fn (array $span): bool => $span['code']));
         $marked = implode('', array_map(static fn (array $span): string => $span['code'] ? self::CODE : $span['text'], $spans));
-        $strong = preg_replace('/'.self::OPENS.'(\*\*|__)(?=\S)(.+?)(?<=\S)\1'.self::CLOSES.'/us', '$2', $marked) ?? $marked;
-        $plain = preg_replace('/'.self::OPENS.'([*_])(?=[^\s*_])(.+?)(?<=[^\s*_])\1'.self::CLOSES.'/us', '$2', $strong) ?? $strong;
+        $strong = preg_replace('/'.self::OPENS.'(\*\*|__)(?=\S)(.{1,300}?)(?<=\S)\1'.self::CLOSES.'/us', '$2', $marked) ?? $marked;
+        $plain = preg_replace('/'.self::OPENS.'([*_])(?=[^\s*_])(.{1,300}?)(?<=[^\s*_])\1'.self::CLOSES.'/us', '$2', $strong) ?? $strong;
 
         $result = [];
         foreach (explode(self::CODE, $plain) as $index => $text) {
