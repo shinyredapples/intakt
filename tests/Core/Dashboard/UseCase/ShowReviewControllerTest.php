@@ -205,7 +205,7 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-1');
 
-        self::assertSame(['Role', 'Model', 'Outcome', 'Findings counted'], $crawler->filter('#round-round-1 table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
+        self::assertSame(['Role', 'Model', 'Outcome', 'Findings'], $crawler->filter('#round-round-1 table.reviewers thead th')->each(static fn (Crawler $header): string => self::wordsOf($header)));
         self::assertNotContains('', array_merge(...$this->rowsOf($crawler->filter('table.reviewers tbody tr'))));
     }
 

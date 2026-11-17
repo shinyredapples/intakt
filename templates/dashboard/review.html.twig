@@ -126,7 +126,8 @@
             <time>{{ reviewed.startedAt|date(spanFormat, 'UTC') }} to {{ reviewed.judgedAt|date(spanFormat, 'UTC') }} UTC</time>
             {{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}
         </summary>
-        {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
+        {# Only the newest round's tables carry the kind labels, so the page keeps at most five however many rounds it lists (decision D5 of #2206). #}
+        {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed, labeled: loop.last}, with_context = false) }}
     </details>
 </section>
 {% else %}
@@ -140,7 +141,7 @@
     {% if reviewed.ending is not null %}
     <p class="muted round-ending" id="round-{{ reviewed.round }}-ending">{{ reviewed.reviewOutcome.value }}: {{ reviewed.ending.reason }}</p>
     {% endif %}
-    {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed}, with_context = false) }}
+    {{ include('dashboard/_round_body.html.twig', {reviewed: reviewed, labeled: loop.last}, with_context = false) }}
 </section>
 {% endif %}
 {% endfor %}

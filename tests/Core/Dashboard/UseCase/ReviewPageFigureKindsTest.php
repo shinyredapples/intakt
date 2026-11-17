@@ -23,7 +23,22 @@ use Twig\Environment;
 #[UsesClass(SessionSummary::class)]
 final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 {
-    public function testAReviewOfTwoJudgedRoundsCarriesOneLabelInTheSummaryAndOnePerTable(): void
+    public function testAReviewOfThreeJudgedRoundsCarriesOneLabelInTheSummaryAndOnePerTableOfTheNewestRound(): void
+    {
+        $this->givenPricesOf('2026-11-13');
+        $this->givenAJudgedRound();
+        $this->givenAJudgedRound('round-2', 2);
+        $this->givenAJudgedRound('round-3', 3);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-3');
+
+        self::assertSame(
+            ['kind-summary-cost', 'kind-round-round-3-findings', 'kind-round-round-3-cost'],
+            $crawler->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('aria-describedby')),
+        );
+    }
+
+    public function testTheTablesOfAnOlderRoundCarryNoLabel(): void
     {
         $this->givenPricesOf('2026-11-13');
         $this->givenAJudgedRound();
@@ -31,10 +46,11 @@ final class ReviewPageFigureKindsTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame(
-            ['estimated', 'counted', 'estimated', 'counted', 'estimated'],
-            $crawler->filter('.figure-kind')->each(static fn (Crawler $label): ?string => $label->attr('data-kind')),
-        );
+        self::assertSame(['Findings', 'Cost', 0], [
+            $crawler->filter('#round-round-1 table.reviewers thead th.num')->text(),
+            $crawler->filter('#round-round-1 table.tokens thead th')->last()->text(),
+            $crawler->filter('#round-round-1 .figure-kind')->count(),
+        ]);
     }
 
     public function testTheSummaryLeavesTheRoundCountAndTheTokenTotalUnlabeled(): void
