@@ -6,8 +6,10 @@ namespace Intakt\Core\Ai\Infrastructure;
 
 use Intakt\Core\Ai\Contract\KeptProviderKeys;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
+use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
@@ -43,12 +45,35 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
             return [];
         }
 
-        $variable = array_first($this->providers->descriptor($key->provider())?->variables() ?? []);
+        $descriptor = $this->providers->descriptor($key->provider());
+        $variable = array_first($descriptor?->variables() ?? []);
 
-        if (null === $variable) {
+        if (!$descriptor instanceof ProviderDescriptor || null === $variable) {
             return [];
         }
 
-        return [$variable => $key->secret()];
+        return [$variable => $key->secret(), ...$this->compatibleStandIn($descriptor, $key)];
+    }
+
+    // As the image's entrypoint does for HF_TOKEN, because the models of such a key are mapped on the OpenAI compatible endpoint, which a kept key would otherwise never turn on; an endpoint the owner set keeps theirs, so the key is never sent to it.
+    /**
+     * @return array<string, string>
+     */
+    private function compatibleStandIn(ProviderDescriptor $descriptor, ProviderKey $key): array
+    {
+        $compatible = Provider::OpenAiCompatible->variables();
+
+        if (Provider::OpenAiCompatible !== $descriptor->tierProvider() || [] !== array_intersect($descriptor->variables(), $compatible) || array_any($compatible, self::isSetInTheEnvironment(...))) {
+            return [];
+        }
+
+        return array_combine($compatible, [$descriptor->baseUrl()->toString(), $key->secret()]);
+    }
+
+    private static function isSetInTheEnvironment(string $name): bool
+    {
+        $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+
+        return is_string($value) && '' !== $value;
     }
 }

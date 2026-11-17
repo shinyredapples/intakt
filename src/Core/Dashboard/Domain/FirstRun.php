@@ -11,6 +11,7 @@ final readonly class FirstRun
         public ProjectStep $project,
         public FirstReviewStep $firstReview,
         public AgentStep $agent,
+        public ?DemoChoices $choices = null,
     ) {
     }
 

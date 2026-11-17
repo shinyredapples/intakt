@@ -13,6 +13,7 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Dashboard\Domain\AgentStep;
+use Intakt\Core\Dashboard\Domain\DemoChoices;
 use Intakt\Core\Dashboard\Domain\FirstReviewStep;
 use Intakt\Core\Dashboard\Domain\FirstRun;
 use Intakt\Core\Dashboard\Domain\PanelOfProject;
@@ -21,6 +22,7 @@ use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
+use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplayDemoCommand;
 use Intakt\Core\Mcp\Contract\McpRoutes;
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Intakt\Core\Review\Contract\ChangeDescription;
@@ -64,13 +66,29 @@ final readonly class FirstRunSteps
     public function firstRun(): FirstRun
     {
         $projects = $this->tiers->projects();
+        $providers = $this->providers(array_first($projects));
+        $firstReview = new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource);
 
         return new FirstRun(
-            $this->providers(array_first($projects)),
+            $providers,
             new ProjectStep(array_map($this->panelOf(...), $projects)),
-            new FirstReviewStep($this->reviews->firstReview(), $this->sample->source() instanceof ChangeSource),
+            $firstReview,
             $this->agent(),
+            $this->choices($providers, $firstReview),
         );
+    }
+
+    // Only on a demo install, because without the sample there is no demo review to run and no replay project to play one into.
+    private function choices(ProviderStep $providers, FirstReviewStep $firstReview): ?DemoChoices
+    {
+        if (!$this->sample->hasRepository()) {
+            return null;
+        }
+
+        // Only in the compose demo, because the replay refuses everywhere else.
+        $replayCommand = '' === $this->composeService ? null : sprintf('docker compose exec %s php bin/console %s <recording> --factor=10', $this->composeService, ReplayDemoCommand::NAME);
+
+        return new DemoChoices($providers, $firstReview, $replayCommand);
     }
 
     private function providers(?string $firstProject): ProviderStep

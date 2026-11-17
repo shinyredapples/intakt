@@ -30,10 +30,7 @@ final readonly class ReviewStarts
     }
 
     // Null when this install has no sample change, so the caller answers that nothing could be started; the number is always 1, so a second press is refused as not next.
-    /**
-     * @return array{string, string}|null
-     */
-    public function startSampleChange(): ?array
+    public function startSampleChange(): ?StartAnswer
     {
         $source = $this->sample->source();
 
@@ -44,11 +41,8 @@ final readonly class ReviewStarts
         return $this->started(new StartReview(SampleChange::PROJECT, SampleChange::TASK, new RequestedRound(SampleChange::CHANGE, 1, $source)));
     }
 
-    /**
-     * @return array{string, string}|null
-     */
     // Null when the ledger holds no source to start from, so the caller answers that nothing could be started.
-    public function startNextOf(string $round, int $number): ?array
+    public function startNextOf(string $round, int $number): ?StartAnswer
     {
         $review = $this->reviews->reviewOf($round);
         $source = $review?->source();
@@ -68,19 +62,19 @@ final readonly class ReviewStarts
         return new StartReview($review->project, $source->task, $round);
     }
 
-    /**
-     * @return array{string, string}
-     */
-    private function started(StartReview $command): array
+    private function started(StartReview $command): StartAnswer
     {
         try {
             $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
         } catch (HandlerFailedException $failed) {
             $reportable = array_first($failed->getWrappedExceptions(ReportableFailure::class, true));
 
-            return [self::FLASH_ERROR, $reportable?->getMessage() ?? 'The review could not be started.'];
+            return new StartAnswer([self::FLASH_ERROR, $reportable?->getMessage() ?? 'The review could not be started.']);
         }
 
-        return [self::FLASH_SUCCESS, 'Started round '.(is_string($handled?->getResult()) ? $handled->getResult() : '').'.'];
+        $round = $handled?->getResult();
+        $round = is_string($round) && '' !== $round ? $round : null;
+
+        return new StartAnswer([self::FLASH_SUCCESS, 'Started round '.$round.'.'], $round);
     }
 }

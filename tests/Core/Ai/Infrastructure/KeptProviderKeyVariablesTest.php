@@ -43,11 +43,47 @@ final class KeptProviderKeyVariablesTest extends TestCase
         self::assertSame(['OPENAI_API_KEY' => $key], $this->variablesOf($key));
     }
 
-    public function testAKeptHuggingFaceTokenLoadsAsHfToken(): void
+    private const array COMPATIBLE = ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'];
+
+    protected function tearDown(): void
+    {
+        foreach (self::COMPATIBLE as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
+        }
+    }
+
+    public function testAKeptHuggingFaceTokenLoadsAsHfTokenAndAsTheRouterOnTheOpenAiCompatibleEndpoint(): void
     {
         $key = 'hf_'.self::BODY;
 
+        self::assertSame(
+            ['HF_TOKEN' => $key, 'OPENAI_COMPATIBLE_BASE_URL' => 'https://router.huggingface.co', 'OPENAI_COMPATIBLE_API_KEY' => $key],
+            $this->variablesOf($key),
+        );
+    }
+
+    public function testAKeptHuggingFaceTokenLeavesTheOpenAiCompatibleEndpointAloneWhenTheEnvironmentSetsItsBaseUrl(): void
+    {
+        $key = 'hf_'.self::BODY;
+        $_SERVER['OPENAI_COMPATIBLE_BASE_URL'] = 'https://models.example.test';
+
         self::assertSame(['HF_TOKEN' => $key], $this->variablesOf($key));
+    }
+
+    public function testAKeptHuggingFaceTokenLeavesTheOpenAiCompatibleEndpointAloneWhenTheEnvironmentSetsItsKey(): void
+    {
+        $key = 'hf_'.self::BODY;
+        $_ENV['OPENAI_COMPATIBLE_API_KEY'] = 'owner-key';
+
+        self::assertSame(['HF_TOKEN' => $key], $this->variablesOf($key));
+    }
+
+    public function testAKeptHuggingFaceTokenStandsInWhenTheEnvironmentLeavesTheOpenAiCompatibleVariablesEmpty(): void
+    {
+        $key = 'hf_'.self::BODY;
+        $_SERVER['OPENAI_COMPATIBLE_BASE_URL'] = '';
+
+        self::assertArrayHasKey('OPENAI_COMPATIBLE_API_KEY', $this->variablesOf($key));
     }
 
     public function testAKeptKeyOfAProviderTheCatalogNoLongerListsLoadsNoVariable(): void

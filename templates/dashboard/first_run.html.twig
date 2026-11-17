@@ -26,6 +26,26 @@
     </ol>
     <p class="step-count">{{ first_run.done }} of {{ first_run.needed }} steps done</p>
 
+    {%- set choices = first_run.choices %}
+    {%- if choices is not null %}
+    <section class="step choices" id="demo-choices" aria-labelledby="demo-choices-h">
+        <h2 id="demo-choices-h">Two ways to see a review</h2>
+        <div class="choice" id="choice-recorded">
+            <h3>Watch a recorded real review now</h3>
+            <p>No key is needed: a replay plays a recording of a real review into the {{ constant('Intakt\\Core\\Dashboard\\UseCase\\CreateDemoProject\\CreateDemoProjectCommand::NAME') }} project at the recorded pace, and its verdict never counts.</p>
+            {%- if choices.replayCommand is not null %}
+            <pre class="command"><code class="replay-command">{{ choices.replayCommand }}</code></pre>
+            {%- else %}
+            <p class="replay-where">A replay runs only on the compose demo.</p>
+            {%- endif %}
+        </div>
+        <div class="choice" id="choice-live">
+            <h3>Paste one provider key or Hugging Face token and run the demo review</h3>
+            <p class="next">{{ choices.liveReviewNext }}</p>
+        </div>
+    </section>
+    {%- endif %}
+
     {%- set step = first_run.providers %}
     <section class="step" id="step-providers" data-state="{{ step.state.value }}" aria-labelledby="step-providers-h">
         <h2 id="step-providers-h">1 {{ titles[0] }} {{ _self.state(step.state) }}</h2>

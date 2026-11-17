@@ -15,17 +15,14 @@ The demo reviews a sample change with two reviewers ([how long it takes](#timed-
 
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
-cp .env.dist .env.local   # add a provider API key or a Hugging Face token; the secrets are made for you
-docker compose up -d --wait   # Intakt, its database and a sample repository
+docker compose up -d --wait
 ```
 
-Calls are billed to the key's or token's owner; `HF_TOKEN` alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)). The command returns once the dashboard answers. `docker compose exec intakt php bin/console intakt:sample:show /app/var/data/sample-repository` prints the review command and an MCP line. Take a path from this folder:
+Then open http://localhost:7781. A new install opens on the first-run page with two choices: **watch a recorded real review now**, with no key, or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
-| Path | Command | What you see |
-| --- | --- | --- |
-| Console | the `intakt:review` that `intakt:sample:show` prints | verdict and act list, exit 0, 10 or 11 ([read it](docs/user/README.md#reading-a-verdict)) |
-| Dashboard | `http://localhost:7781` | each round live, the judge's call per finding ([details](docs/user/README.md#the-demo-with-docker-compose)) |
-| MCP | the `claude mcp add` it prints, [skill](skills/intakt-review/README.md) | "intakt review the demo": your agent loops, fixes, reports ([details](docs/user/mcp.md)) |
+From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)).
+
+MCP: step 4 of the first-run page and `intakt:demo` show the `claude mcp add` line that connects your agent; then say "intakt review the demo" and your agent loops, fixes and reports ([skill](skills/intakt-review/README.md), [details](docs/user/mcp.md)).
 
 <details>
 <summary>Screenshot: the dashboard's review page for the sample change</summary>
@@ -40,13 +37,13 @@ The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in pl
 
 Tested platforms: the whole path ran on x86-64 Linux, in two sets of runs: the three runs of 2026-11-15 in the table below, and, apart from them, an earlier run on 2026-11-13 on a four-core host, which took 202 s to a running install. On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings; no arm64 run is recorded here yet. Docker Desktop on Apple Silicon runs the arm64 image.
 
-The times below are measured: three runs of this path on 2026-11-15, each from a clean clone with only `HF_TOKEN` and the two secrets in `.env.local` (note `.env.local`, not `.env`: `compose.yaml` reads `.env.local`). Cloning and filling in `.env.local` come first and are not timed, because they depend on your network and your typing.
+The path is timed from `docker compose up -d --wait` to the verdict on the review page. It has not been timed end to end yet. The three runs of 2026-11-15 (each from a clean clone with `HF_TOKEN` in `.env.local`) measured the older path, which ran the review from the terminal; their figures are below until the new path is timed. Cloning comes first and is not timed, because it depends on your network.
 
-| Step | Command | Time (measured) |
+| Step | What was timed | Time |
 | --- | --- | --- |
-| Start, cold | `docker compose up` on a machine without the image, until the log prints the review command | about 175 s |
-| Start, warm | `docker compose up` again, with the image already built | 5 to 6 s |
-| Review | the `docker compose exec intakt php bin/console intakt:review sample-change ...` the start printed then (now `intakt:sample:show` prints it), in a second terminal | 8 to 25 s per review |
+| Start, cold | `docker compose up` on a machine without the image, until the log printed the review command | about 175 s (measured) |
+| Start, warm | `docker compose up` again, with the image already built | 5 to 6 s (measured) |
+| Review | the console review of the sample change; on the new path: pressing the start on the first-run page until the review page shows the verdict | 8 to 25 s per console review (measured); the page: not yet measured |
 
 What works without Docker or a provider key:
 
