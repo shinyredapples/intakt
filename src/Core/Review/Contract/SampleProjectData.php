@@ -41,18 +41,25 @@ final readonly class SampleProjectData
     }
 
     /**
-     * @return non-empty-array<string, int|float>
+     * @return array<string, int|float>
      */
     public function price(string $model): array
     {
         $price = $this->value('prices', $model);
-
-        if (!is_array($price) || [] === $price || !array_all($price, static fn (mixed $amount, int|string $kind): bool => is_string($kind) && (is_int($amount) || is_float($amount)))) {
+        if (!is_array($price) || [] === $price) {
             throw $this->broken('prices', $model);
         }
 
-        /** @var non-empty-array<string, int|float> $price */
-        return $price;
+        $amounts = [];
+        foreach ($price as $kind => $amount) {
+            if (!is_string($kind) || !(is_int($amount) || is_float($amount))) {
+                throw $this->broken('prices', $model);
+            }
+
+            $amounts[$kind] = $amount;
+        }
+
+        return $amounts;
     }
 
     private function text(string ...$path): string

@@ -53,7 +53,7 @@ final class SampleProjectDataTest extends TestCase
 
     public function testEachValueIsReadFromTheFileItIsGiven(): void
     {
-        $data = $this->dataOf(self::valid());
+        $data = $this->dataOf($this->valid());
 
         self::assertSame(
             ['https://router.example.test', '2030-01-02', 'made-up-strong', 'made-up-second-maker', ['input' => 0.5, 'output' => 2]],
@@ -63,16 +63,16 @@ final class SampleProjectDataTest extends TestCase
 
     public function testAModelTheFileDoesNotNameIsRefusedByItsPath(): void
     {
-        $this->expectExceptionObject(new LogicException(sprintf('The sample project data file %s has no valid models.openai.light.', $this->file())));
+        $this->expectExceptionObject($this->broken('models.openai.light'));
 
-        $this->dataOf(self::valid())->model(Provider::OpenAi, Tier::Light);
+        $this->dataOf($this->valid())->model(Provider::OpenAi, Tier::Light);
     }
 
     public function testAModelWithoutAPriceIsRefused(): void
     {
-        $this->expectExceptionMessage('has no valid prices.made-up-second-maker.');
+        $this->expectExceptionObject($this->broken('prices.made-up-second-maker'));
 
-        $this->dataOf(self::valid())->price('made-up-second-maker');
+        $this->dataOf($this->valid())->price('made-up-second-maker');
     }
 
     /**
@@ -89,45 +89,49 @@ final class SampleProjectDataTest extends TestCase
     #[DataProvider('brokenPrices')]
     public function testAPriceThatIsNotAmountsByKindIsRefused(mixed $price): void
     {
-        $this->expectExceptionMessage('has no valid prices.made-up-strong.');
+        $this->expectExceptionObject($this->broken('prices.made-up-strong'));
 
-        $this->dataOf(['prices' => ['made-up-strong' => $price]] + self::valid())->price('made-up-strong');
+        $this->dataOf(['prices' => ['made-up-strong' => $price]] + $this->valid())->price('made-up-strong');
     }
 
     public function testAnEmptyPriceDateIsRefused(): void
     {
-        $this->expectExceptionMessage('has no valid price_date.');
+        $this->expectExceptionObject($this->broken('price_date'));
 
-        $this->dataOf(['price_date' => ''] + self::valid())->priceDate();
+        $this->dataOf(['price_date' => ''] + $this->valid())->priceDate();
     }
 
     public function testARouterUrlThatIsNoUriIsRefused(): void
     {
-        $this->expectExceptionMessage('has no valid router_url.');
+        $this->expectExceptionObject($this->broken('router_url'));
 
-        $this->dataOf(['router_url' => 'https://router example'] + self::valid())->routerUrl();
+        $this->dataOf(['router_url' => 'https://router example'] + $this->valid())->routerUrl();
     }
 
     public function testAFileWhoseTopIsNoMappingNamesNoValue(): void
     {
         new Filesystem()->dumpFile($this->file(), "just text\n");
 
-        $this->expectExceptionMessage('has no valid router_url.');
+        $this->expectExceptionObject($this->broken('router_url'));
 
         new SampleProjectData($this->file())->routerUrl();
     }
 
     public function testAMissingFileIsNamed(): void
     {
-        $this->expectException(ParseException::class);
-        $this->expectExceptionMessage($this->file());
+        $failure = null;
+        try {
+            new SampleProjectData($this->file())->routerUrl();
+        } catch (ParseException $failure) {
+        }
 
-        new SampleProjectData($this->file())->routerUrl();
+        self::assertInstanceOf(ParseException::class, $failure);
+        self::assertStringContainsString($this->file(), $failure->getMessage());
     }
 
     public function testAnUnreadableFileIsRefused(): void
     {
-        new Filesystem()->dumpFile($this->file(), Yaml::dump(self::valid()));
+        new Filesystem()->dumpFile($this->file(), Yaml::dump($this->valid()));
         chmod($this->file(), 0000);
         if (is_readable($this->file())) {
             self::markTestSkipped('The user running the tests reads files whatever their mode.');
@@ -141,7 +145,7 @@ final class SampleProjectDataTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private static function valid(): array
+    private function valid(): array
     {
         return [
             'router_url' => 'https://router.example.test',
@@ -150,6 +154,11 @@ final class SampleProjectDataTest extends TestCase
             'second_maker' => 'made-up-second-maker',
             'prices' => ['made-up-strong' => ['input' => 0.5, 'output' => 2]],
         ];
+    }
+
+    private function broken(string $path): LogicException
+    {
+        return new LogicException(sprintf('The sample project data file %s has no valid %s.', $this->file(), $path));
     }
 
     /**
