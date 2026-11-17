@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class OnePerPlace
 {
-    // The links are the judge's as CausesInOneHunk kept them, so only findings in one hunk of one file are linked. The groups come from the places and the links alone, so which findings share an entry does not depend on the panel order; that order only picks the entry's id and text, because the first reviewer's text is the one kept. Only act ids count, so a P3 the judge marked otherwise never joins an act entry (a P1 or P2 is always an act id).
+    // The links are the judge's as CausesInOneHunk kept them, so only findings in one hunk of one file are linked. The groups come from the places and the links, so a group no wider than NEARBY_LINES is the same in any panel order; that order picks the entry's id and text, because the first reviewer's text is the one kept, and the order in which links are tried when the bound refuses one. Only act ids count, so a P3 the judge marked otherwise never joins an act entry (a P1 or P2 is always an act id).
     /**
      * @param list<Finding>         $reported
      * @param list<string>          $actIds
@@ -23,10 +23,10 @@ final readonly class OnePerPlace
     public function actList(array $reported, array $actIds, array $sameCause = []): array
     {
         $act = array_values(array_filter($reported, static fn (Finding $finding): bool => in_array($finding->id, $actIds, true)));
-        $places = $this->groupedByPlace($act);
-        $links = $this->linksBetween($act, $sameCause);
-        $causes = $this->joinedByCause($places, $links);
-        $groups = $this->placesWhereACauseReachesTooFar($causes, $places, $act);
+        $groups = $this->groupedByPlace($act);
+        foreach ($this->linksInPanelOrder($act, $sameCause) as [$one, $other]) {
+            $groups = $this->joinedWhenNearby($groups, $act, $one, $other);
+        }
 
         return $this->entries($act, $groups);
     }
@@ -54,61 +54,43 @@ final readonly class OnePerPlace
         return $groups;
     }
 
-    // A link names findings by id, either of which may come first in panel order; one that names a finding off the act list links nothing.
+    // Links are applied in the panel order of the linking finding, so when the bound refuses one of them the result is still the same on every run. A link that names a finding off the act list links nothing.
     /**
      * @param list<Finding>         $act
      * @param array<string, string> $sameCause
      *
      * @return list<array{int, int}>
      */
-    private function linksBetween(array $act, array $sameCause): array
+    private function linksInPanelOrder(array $act, array $sameCause): array
     {
         $at = array_flip(array_map(static fn (Finding $finding): string => $finding->id, $act));
 
         $links = [];
-        foreach ($sameCause as $id => $cause) {
-            if (isset($at[$id], $at[$cause])) {
-                $links[] = [$at[$id], $at[$cause]];
+        foreach ($act as $one => $finding) {
+            $cause = $sameCause[$finding->id] ?? null;
+            if (null !== $cause && isset($at[$cause])) {
+                $links[] = [$one, $at[$cause]];
             }
         }
 
         return $links;
     }
 
-    // A link joins the whole groups of its two findings, because a finding linked to one entry may sit at the place of another.
+    // A link joins the whole groups of its two findings, because a finding linked to one entry may sit at the place of another. An entry keeps only its first finding's text, so a link whose joined group would leave one file or reach further than NEARBY_LINES is ignored: both groups stay entries and no far finding loses its text, even through a chain of links that each pass CausesInOneHunk.
     /**
-     * @param list<int>             $groups
-     * @param list<array{int, int}> $links
-     *
-     * @return list<int>
-     */
-    private function joinedByCause(array $groups, array $links): array
-    {
-        foreach ($links as [$one, $other]) {
-            $kept = min($groups[$one], $groups[$other]);
-            $joined = max($groups[$one], $groups[$other]);
-            $groups = array_map(static fn (int $group): int => $group === $joined ? $kept : $group, $groups);
-        }
-
-        return $groups;
-    }
-
-    // An entry keeps only its first finding's text, so a cause that reaches further than NEARBY_LINES, through a chain of links or a shared line, is not merged: its findings fall back to their places and none of them loses its text to a far one.
-    /**
-     * @param list<int>     $causes
-     * @param list<int>     $places
+     * @param list<int>     $groups
      * @param list<Finding> $act
      *
      * @return list<int>
      */
-    private function placesWhereACauseReachesTooFar(array $causes, array $places, array $act): array
+    private function joinedWhenNearby(array $groups, array $act, int $one, int $other): array
     {
-        $members = [];
-        foreach ($causes as $at => $cause) {
-            $members[$cause][] = $act[$at];
-        }
+        $kept = min($groups[$one], $groups[$other]);
+        $joined = max($groups[$one], $groups[$other]);
+        $candidate = array_map(static fn (int $group): int => $group === $joined ? $kept : $group, $groups);
+        $members = array_values(array_filter($act, static fn (int $at): bool => $candidate[$at] === $kept, ARRAY_FILTER_USE_KEY));
 
-        return array_map(fn (int $cause, int $place): int => $this->areNearby($members[$cause]) ? $cause : $place, $causes, $places);
+        return $this->areNearby($members) ? $candidate : $groups;
     }
 
     /**

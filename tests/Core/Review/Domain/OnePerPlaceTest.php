@@ -188,49 +188,58 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame([['F1', ['F2', 'F3']]], $this->idsOf($act));
     }
 
-    public function testFindingsLinkedInAChainThatReachesOneLineFurtherThanTheNearbyLinesStaySeparate(): void
+    public function testFindingsLinkedInAChainAcrossAnEarlierLineWithinTheNearbyLinesAreOneEntry(): void
+    {
+        $reported = [$this->finding('F1', 'src/discount.js', 12), $this->finding('F2', 'src/discount.js', 17), $this->finding('F3', 'src/discount.js', 14)];
+
+        $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F3', 'F3' => 'F1']);
+
+        self::assertSame([['F1', ['F2', 'F3']]], $this->idsOf($act));
+    }
+
+    public function testALinkThatWouldStretchItsGroupOneLineFurtherThanTheNearbyLinesIsIgnored(): void
     {
         $reported = [$this->finding('F1', 'src/New.php', 3), $this->finding('F2', 'src/New.php', 8), $this->finding('F3', 'src/New.php', 9)];
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F1', 'F3' => 'F2']);
 
-        self::assertSame([['F1', []], ['F2', []], ['F3', []]], $this->idsOf($act));
+        self::assertSame([['F1', ['F2']], ['F3', []]], $this->idsOf($act));
     }
 
-    public function testAChainOfLinksEachWithinTheNearbyLinesDoesNotFoldAFarFindingIntoTheFirstEntry(): void
+    public function testAChainOfLinksEachWithinTheNearbyLinesKeepsTheFarFindingAsItsOwnEntryWithItsText(): void
     {
-        $reported = [$this->finding('F1', 'src/New.php', 3), $this->finding('F2', 'src/New.php', 8), $this->finding('F3', 'src/New.php', 13)];
+        $reported = [$this->finding('F1', 'src/New.php', 3), $this->finding('F2', 'src/New.php', 8), new Finding('F3', Severity::P2, 'src/New.php', 13, null, 'Far defect.', FixableBy::Builder, false, null, null)];
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F1', 'F3' => 'F2']);
 
-        self::assertSame([['F1', []], ['F2', []], ['F3', []]], $this->idsOf($act));
+        self::assertSame([['F1', ['F2'], 'Broken.'], ['F3', [], 'Far defect.']], array_map(static fn (Finding $entry): array => [$entry->id, $entry->merged, $entry->text], $act));
     }
 
-    public function testAChainThatReachesTooFarGivesTheSameEntriesInAnotherPanelOrder(): void
+    public function testLinksAreTriedInThePanelOrderOfTheLinkingFinding(): void
     {
         $reported = [$this->finding('F3', 'src/New.php', 13), $this->finding('F2', 'src/New.php', 8), $this->finding('F1', 'src/New.php', 3)];
 
-        $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F3' => 'F2', 'F2' => 'F1']);
+        $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3'], ['F2' => 'F1', 'F3' => 'F2']);
 
-        self::assertSame([['F3', []], ['F2', []], ['F1', []]], $this->idsOf($act));
+        self::assertSame([['F3', ['F2']], ['F1', []]], $this->idsOf($act));
     }
 
-    public function testLinkedFindingsThatASharedLineJoinsBeyondTheNearbyLinesMergeByPlaceOnly(): void
+    public function testALinkIsIgnoredWhenTheFindingsAtItsPlaceWouldStretchTheGroupTooFarButThePlaceStaysMerged(): void
     {
         $reported = [$this->finding('F1', 'src/New.php', 3), $this->finding('F2', 'src/New.php', 8), $this->finding('F3', 'src/New.php', 8), $this->finding('F4', 'src/New.php', 13)];
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3', 'F4'], ['F2' => 'F1', 'F4' => 'F3']);
 
-        self::assertSame([['F1', []], ['F2', ['F3']], ['F4', []]], $this->idsOf($act));
+        self::assertSame([['F1', ['F2', 'F3']], ['F4', []]], $this->idsOf($act));
     }
 
-    public function testACauseThatReachesTooFarLeavesAnotherCauseMerged(): void
+    public function testALinkIgnoredForReachingTooFarLeavesAnotherCauseMerged(): void
     {
         $reported = [$this->finding('F1', 'src/New.php', 3), $this->finding('F2', 'src/New.php', 8), $this->finding('F3', 'src/New.php', 13), $this->finding('F4', 'src/discount.js', 12), $this->finding('F5', 'src/discount.js', 14)];
 
         $act = new OnePerPlace()->actList($reported, ['F1', 'F2', 'F3', 'F4', 'F5'], ['F2' => 'F1', 'F3' => 'F2', 'F5' => 'F4']);
 
-        self::assertSame([['F1', []], ['F2', []], ['F3', []], ['F4', ['F5']]], $this->idsOf($act));
+        self::assertSame([['F1', ['F2']], ['F3', []], ['F4', ['F5']]], $this->idsOf($act));
     }
 
     public function testALinkBetweenFindingsSixLinesApartIsNotMerged(): void

@@ -430,7 +430,7 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame($this->twoSeparateEntries(12), $payload['findings']);
     }
 
-    public function testFindingsLinkedInAChainThatReachesFurtherThanFiveLinesAreRecordedAsSeparateEntries(): void
+    public function testTheLinkThatWouldStretchAChainFurtherThanFiveLinesIsNotAppliedToTheRecordedEntries(): void
     {
         $round = $this->roundReporting([$this->atLine('A', Severity::P2, 1), $this->atLine('B', Severity::P2, 5), $this->atLine('C', Severity::P2, 9)]);
 
@@ -438,7 +438,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $findings = $this->judgeDonePayloads()[0]['findings'];
         self::assertIsArray($findings);
-        self::assertSame([['F1', 'Text of A.', []], ['F2', 'Text of B.', []], ['F3', 'Text of C.', []]], array_map(static fn (array $finding): array => [$finding['id'], $finding['text'], $finding['merged']], $findings));
+        self::assertSame([['F1', 'Text of A.', ['F2']], ['F2', 'Text of B.', []], ['F3', 'Text of C.', []]],array_map(static fn (array $finding): array => [$finding['id'], $finding['text'], $finding['merged']], $findings));
     }
 
     public function testALinkToAFindingDroppedBeforeTheJudgeIsNotRecorded(): void
