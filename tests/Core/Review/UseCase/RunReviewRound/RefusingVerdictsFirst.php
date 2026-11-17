@@ -11,7 +11,7 @@ use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Override;
 
-// Refuses the first stores of a verdict the way a ledger does when another reviewer's commit holds the lock, and takes every other event.
+// Refuses the first stores of a verdict, because that is how a ledger answers while another reviewer's commit holds the lock.
 final class RefusingVerdictsFirst implements Ledger
 {
     private int $refused = 0;
