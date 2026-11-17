@@ -125,6 +125,61 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertCount(4, $crawler->filter('.state-block img.character'));
     }
 
+    public function testEveryLiveLogBlockShowsExactlyOneCodeReviewerHeadOf24PixelsBeforeItsHeading(): void
+    {
+        $this->givenARunningRound();
+        $this->ledger->startReviewerOn('round-1', 'security', 'Kimi K3');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $blocks = $crawler->filter('#round-round-1-live .live');
+        self::assertCount(2, $blocks);
+        foreach ($blocks->each(static fn (Crawler $block): Crawler => $block) as $block) {
+            self::assertCount(2, $block->filter('img'));
+            $this->assertOneHeadPair($block->filter('h3')->ancestors()->first(), 'code_reviewer', 24);
+            self::assertSame('h3', $block->filter('.character-row > *')->last()->nodeName());
+        }
+    }
+
+    public function testTheHeadLeavesTheTextOfALiveLogHeadingUnchanged(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['correctness (standard tier, model not recorded) live'], $crawler->filter('#round-round-1-live .live .character-row')->each(static fn (Crawler $row): string => $row->text()));
+    }
+
+    public function testTheRoundsFindingsHeadingShowsOneOwlOf24PixelsOutsideTheElementTheJudgedUpdateReplaces(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $heading = $crawler->filter('#round-round-1 h3')->reduce(static fn (Crawler $h3): bool => "Findings and the judge's call" === $h3->text());
+        self::assertCount(1, $heading);
+        $row = $heading->ancestors()->first();
+        $this->assertOneHeadPair($row, 'judge', 24);
+        self::assertSame("Findings and the judge's call", $row->text());
+        self::assertCount(0, $crawler->filter('#round-round-1-judged img'));
+    }
+
+    public function testAJudgedRoundShowsTheSameOwlBesideItsFindingsHeading(): void
+    {
+        $this->givenARunningRound();
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'defer']);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $heading = $crawler->filter('#round-round-1 h3')->reduce(static fn (Crawler $h3): bool => "Findings and the judge's call" === $h3->text());
+        self::assertCount(1, $heading);
+        self::assertCount(1, $heading->ancestors()->filter('details.ev'));
+        $row = $heading->ancestors()->first();
+        $this->assertOneHeadPair($row, 'judge', 24);
+        self::assertSame("Findings and the judge's call", $row->text());
+    }
+
     // Both images are checked, because the partial emits one per theme and CSS shows one; the attributes follow D1 and D4 of #2344.
     private function assertOneHeadPair(Crawler $holder, string $character, int $size): void
     {

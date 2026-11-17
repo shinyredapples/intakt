@@ -36,7 +36,7 @@
     </div>
     {% endif %}
 
-    <h3>Findings and the judge's call</h3>
+    <div class="character-row">{{ include('dashboard/components/character.html.twig', {character: constant('Intakt\\Core\\Dashboard\\Domain\\Character::Judge'), size: 24}, with_context = false) }}<h3>Findings and the judge's call</h3></div>
     {# Its own partial, because the judged round's live update replaces it with the same markup a reload renders. #}
     {{ include('dashboard/_judged_round.html.twig', {reviewed: reviewed}, with_context = false) }}
 
