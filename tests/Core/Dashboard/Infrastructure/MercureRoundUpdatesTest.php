@@ -229,13 +229,13 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $this->published[0]->getData());
     }
 
-    public function testAReviewerAskedAgainAppendsAMarkerForThatTryToItsLiveTextUnlessThePageHoldsItAlready(): void
+    public function testAReviewerAskedAgainReplacesItsLiveTextWithOneLineForThatTryUnlessThePageHoldsItAlready(): void
     {
         $this->updates()->reviewerAskedAgain(Uuid::fromString(self::ROUND), self::REVIEWER, 'try-2');
 
         $data = $this->published[0]->getData();
-        self::assertStringContainsString(sprintf('<turbo-stream action="append" targets="#reviewer-%1$s-text:not(:has(#reviewer-%1$s-try-try-2))">', self::REVIEWER), $data);
-        self::assertStringContainsString(sprintf('<p class="asked-again" id="reviewer-%s-try-try-2">Asked again:', self::REVIEWER), $data);
+        self::assertStringContainsString(sprintf('<turbo-stream action="update" targets="#reviewer-%1$s-text:not(:has(#reviewer-%1$s-try-try-2))">', self::REVIEWER), $data);
+        self::assertStringContainsString(sprintf('<p class="asked-again" id="reviewer-%s-try-try-2">First try gave no usable answer, so the reviewer was asked again.</p>', self::REVIEWER), $data);
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $data);
     }
 
@@ -336,7 +336,7 @@ final class MercureRoundUpdatesTest extends TestCase
             ['replace '.$base.'-tools', 'replace '.$base.'-cost', 'replace '.$base.'-files', 'replace '.$base.'-findings'],
             array_map($this->actionAndTargetOf(...), $this->streamsOf($this->published[0])),
         );
-        self::assertStringContainsString('<dt>read_file</dt><dd>3</dd>', $this->published[0]->getData());
+        self::assertStringContainsString('<dt>File reads</dt><dd>3</dd>', $this->published[0]->getData());
         self::assertStringContainsString('0.5000 USD', $this->published[0]->getData());
     }
 
@@ -366,8 +366,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates(null, $this->summaries($summary))->summaryChanged(Uuid::fromString(self::ROUND));
 
         self::assertStringContainsString('&lt;b&gt;x&lt;/b&gt;.php', $this->published[0]->getData());
-        self::assertStringContainsString('&lt;i&gt;x&lt;/i&gt;', $this->published[0]->getData());
         self::assertStringNotContainsString('<b>', $this->published[0]->getData());
+        self::assertStringNotContainsString('<i>', $this->published[0]->getData());
     }
 
     public function testASummaryThatCannotBeComputedIsLoggedAndPublishesNothingButTheRoundChangeStillGoesOut(): void
