@@ -9,7 +9,6 @@ use Symfony\AI\Platform\Bridge\Anthropic\Factory;
 use Symfony\AI\Platform\Exception\ValidationException;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
-use Symfony\AI\Platform\Result\ObjectResult;
 use Symfony\AI\Platform\StructuredOutput\PlatformSubscriber;
 use Symfony\AI\Platform\StructuredOutput\Validator\ValidatorSubscriber;
 use Symfony\Component\EventDispatcher\EventDispatcher;
@@ -66,17 +65,6 @@ function events(string $stopReason, array ...$content): MockResponse
     return new MockResponse($body, ['response_headers' => ['content-type' => 'text/event-stream']]);
 }
 
-function describeObjectPart(mixed $answer): string
-{
-    foreach (is_array($answer) ? $answer : [] as $part) {
-        if ($part instanceof ObjectResult && $part->getContent() instanceof Answer) {
-            return sprintf(' (the unvalidated object among the parts has decision "%s")', $part->getContent()->decision);
-        }
-    }
-
-    return '';
-}
-
 /**
  * @param list<MockResponse>   $responses
  * @param array<string, mixed> $options
@@ -97,13 +85,14 @@ function decisionOf(array $responses, array $options): string
             }
         }
 
-        $answer = $execution->getResult()->getContent();
+        // asObject() finds the object among the parts too, so case B shows only whether the Validator saw it.
+        $answer = $execution->asObject();
 
         if ($answer instanceof Answer) {
-            return $answer->decision;
+            return sprintf('decision "%s"', $answer->decision);
         }
 
-        return 'a '.get_debug_type($answer).' instead of an Answer'.describeObjectPart($answer);
+        return 'a '.get_debug_type($answer).' instead of an Answer';
     } catch (ValidationException) {
         return 'refused by the Validator';
     } catch (Throwable $failure) {
@@ -119,13 +108,13 @@ $invalid = ['type' => 'text', 'text' => '{"decision":""}'];
 
 // Each case carries its own expectation because the invalid answers must be refused, not approved.
 $cases = [
-    'control: the answer alone' => [decisionOf([message('end_turn', $verdict)], []), 'approve'],
-    'control: the answer alone, streamed' => [decisionOf([events('end_turn', $verdict)], ['stream' => true]), 'approve'],
+    'control: the answer alone' => [decisionOf([message('end_turn', $verdict)], []), 'decision "approve"'],
+    'control: the answer alone, streamed' => [decisionOf([events('end_turn', $verdict)], ['stream' => true]), 'decision "approve"'],
     'control: an invalid answer alone' => [decisionOf([message('end_turn', $invalid)], []), 'refused by the Validator'],
-    'A: narration before a tool call' => [decisionOf([message('tool_use', $narration, $toolCall), message('end_turn', $verdict)], []), 'approve'],
-    'B: the answer beside thinking' => [decisionOf([message('end_turn', $thought, $verdict)], []), 'approve'],
+    'A: narration before a tool call' => [decisionOf([message('tool_use', $narration, $toolCall), message('end_turn', $verdict)], []), 'decision "approve"'],
+    'B: the answer beside thinking' => [decisionOf([message('end_turn', $thought, $verdict)], []), 'decision "approve"'],
     'B: an invalid answer beside thinking' => [decisionOf([message('end_turn', $thought, $invalid)], []), 'refused by the Validator'],
-    'C: streamed narration before a tool call' => [decisionOf([events('tool_use', $narration, $toolCall), events('end_turn', $verdict)], ['stream' => true]), 'approve'],
+    'C: streamed narration before a tool call' => [decisionOf([events('tool_use', $narration, $toolCall), events('end_turn', $verdict)], ['stream' => true]), 'decision "approve"'],
 ];
 
 $failed = false;
@@ -136,7 +125,7 @@ foreach ($cases as $case => [$actual, $expected]) {
 }
 
 if ($failed) {
-    echo 'Structured output does not return the typed answer of a model that thinks or calls tools', PHP_EOL;
+    echo 'Structured output fails or skips validation for a model that thinks or calls tools', PHP_EOL;
 
     exit(1);
 }
