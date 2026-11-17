@@ -8,22 +8,22 @@ use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\ProjectMemoryNeedsEmbeddingModel;
 use Intakt\Core\Memory\Contract\RelevantMemory;
+use Intakt\Core\Platform\Contract\KeptForTheProcess;
 use Override;
 use Psr\Log\LoggerInterface;
-use stdClass;
 use Throwable;
 
 // Memory only helps a review, so a project without an embeddings account or a set-up store reviews without it instead of failing every reviewer.
-final readonly class OptionalProjectMemory implements ProjectMemory
+final class OptionalProjectMemory implements ProjectMemory
 {
-    // Per-process state on purpose: the notice is once per start, so a reset between messages would bring back one line per review. A readonly property holds a mutable marker to keep the stateful-service gate honest.
-    private stdClass $notice;
+    // Per-process state on purpose: the notice is once per start, so a reset between messages would bring back one line per review.
+    #[KeptForTheProcess]
+    private bool $reported = false;
 
     public function __construct(
-        private ProjectMemory $memory,
-        private LoggerInterface $logger,
+        private readonly ProjectMemory $memory,
+        private readonly LoggerInterface $logger,
     ) {
-        $this->notice = new stdClass();
     }
 
     #[Override]
@@ -43,11 +43,11 @@ final readonly class OptionalProjectMemory implements ProjectMemory
     // One info line per start without a trace, because nothing is broken and a per-message reset would bring back one line per review.
     private function reportMissingModelOnce(string $project, ProjectMemoryNeedsEmbeddingModel $missing): void
     {
-        if (isset($this->notice->reported)) {
+        if ($this->reported) {
             return;
         }
 
-        $this->notice->reported = true;
+        $this->reported = true;
         $this->logger->info($missing->getMessage(), ['project' => $project]);
     }
 }

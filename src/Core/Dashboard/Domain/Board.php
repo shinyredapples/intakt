@@ -41,6 +41,12 @@ final readonly class Board
         return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards));
     }
 
+    // A card is a review, so a board without one is an install on which no review has run yet.
+    public function isFirstDay(): bool
+    {
+        return [] === $this->cards;
+    }
+
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.
     public function startsCollapsed(BoardColumn $column): bool
     {

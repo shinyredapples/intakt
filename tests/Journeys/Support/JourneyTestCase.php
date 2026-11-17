@@ -8,6 +8,7 @@ use Closure;
 use Intakt\Kernel;
 use PHPUnit\Framework\Attributes\After;
 use PHPUnit\Framework\TestCase;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Component\BrowserKit\HttpBrowser;
 use Symfony\Component\Clock\MonotonicClock;
 use Symfony\Component\DomCrawler\Crawler;
@@ -96,21 +97,10 @@ abstract class JourneyTestCase extends TestCase
 
     final protected function liveRoundDriver(): LiveRoundDriver
     {
-        // Because a second call would otherwise save the first call's settings as the ones to put back.
-        $this->shutDownDriverKernel();
-
-        // Read from $_ENV first by the container, and put back after the test, so the harness's other tests keep what .env.test gives them.
-        foreach ($this->driverEnvironment() as $name => $value) {
-            $before = $_ENV[$name] ?? null;
-            $this->environmentBefore[$name] = is_string($before) ? $before : null;
-            $_ENV[$name] = $value;
-        }
-
         // A kernel of the journey's own, on the instance's database and share directory, because a round is queued through the command bus the dashboard uses and the console has no door for it.
-        $this->driverKernel = new Kernel(self::ENVIRONMENT, false);
-        $this->driverKernel->boot();
+        $kernel = $this->bootDriverKernel([]);
         // Typed by the container's own dump, which the phpstan gate reads, so the bus needs no instanceof guard.
-        $bus = $this->driverKernel->getContainer()->get('test.service_container')->get(MessageBusInterface::class);
+        $bus = $kernel->getContainer()->get('test.service_container')->get(MessageBusInterface::class);
 
         return new LiveRoundDriver(
             $bus,
@@ -118,6 +108,39 @@ abstract class JourneyTestCase extends TestCase
             fn (): array => $this->publishedUpdates(),
             new MonotonicClock(),
         );
+    }
+
+    // The instance's pages served by a kernel of the journey's own on its database, because bin/instance hands its server only an allowlist of variables, so a page that reads one the journey sets (the sample repository) needs this kernel.
+    /**
+     * @param array<string,string> $environment
+     */
+    final protected function dashboardWith(array $environment): KernelBrowser
+    {
+        $browser = new KernelBrowser($this->bootDriverKernel($environment), ['HTTP_HOST' => 'localhost:'.$this->dashboardPort()]);
+        $browser->followRedirects();
+
+        return $browser;
+    }
+
+    /**
+     * @param array<string,string> $environment
+     */
+    private function bootDriverKernel(array $environment): Kernel
+    {
+        // Because a second call would otherwise save the first call's settings as the ones to put back.
+        $this->shutDownDriverKernel();
+
+        // Read from $_ENV first by the container, and put back after the test, so the harness's other tests keep what .env.test gives them.
+        foreach ([...$this->driverEnvironment(), ...$environment] as $name => $value) {
+            $before = $_ENV[$name] ?? null;
+            $this->environmentBefore[$name] = is_string($before) ? $before : null;
+            $_ENV[$name] = $value;
+        }
+
+        $this->driverKernel = new Kernel(self::ENVIRONMENT, false);
+        $this->driverKernel->boot();
+
+        return $this->driverKernel;
     }
 
     // On the shared queue, because the worker that runs the queued round is another console process than the tick that queued it.

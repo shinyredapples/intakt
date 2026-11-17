@@ -48,6 +48,12 @@ final readonly class Headline
         return 'The '.self::REVIEWERS.' are reviewing '.$running.' '.(1 === $running ? 'change' : 'changes').'.';
     }
 
+    // Asked by the line's partial, because the first-day opening asks for the first review and so links the first-run page (#2067, D3).
+    public function isFirstDay(): bool
+    {
+        return 0 === $this->cards;
+    }
+
     // The first lane's round, because the opening names that lane's change first, so the lead opens the review it names (#2207, D1).
     public function runningRound(): ?string
     {
