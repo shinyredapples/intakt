@@ -35,7 +35,7 @@ final readonly class StreamedPage
     {
         $action = (string) $stream->attr('action');
 
-        // Turbo does nothing for a remove whose target is gone, and each reviewer's placement removes the line for no reviewer again.
+        // A gone target is no failure here, because Turbo ignores it too and each reviewer's placement removes the line for no reviewer again.
         if ('remove' === $action) {
             $this->remove($this->matching($stream, $page));
 
