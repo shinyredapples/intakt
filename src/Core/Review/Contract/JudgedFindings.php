@@ -15,12 +15,14 @@ final readonly class JudgedFindings
      * @param list<Finding>        $actList
      * @param list<FollowUp>       $followUps
      * @param list<DroppedFinding> $dropped
+     * @param array<string, string> $sameCause
      */
     private function __construct(
         public array $findings,
         public array $actList,
         public array $followUps,
         public array $dropped,
+        public array $sameCause,
     ) {
     }
 
@@ -31,15 +33,20 @@ final readonly class JudgedFindings
     public static function of(Judgement $judgement, array $findings, array $dropped = []): self
     {
         $marks = [];
+        $sameCause = [];
+        $given = array_map(static fn (Finding $finding): string => $finding->id, $findings);
 
         foreach ($judgement->marks as $judged) {
             $marks[$judged->id] = $judged->mark;
+            if (null !== $judged->same_cause_as && in_array($judged->id, $given, true) && in_array($judged->same_cause_as, $given, true)) {
+                $sameCause[$judged->id] = $judged->same_cause_as;
+            }
         }
 
         $blocking = static fn (Finding $finding): bool => Severity::P3 !== $finding->severity;
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped);
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause);
     }
 }

@@ -393,6 +393,26 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['id' => 'F2', 'severity' => 'P2', 'text' => '`old` is still read.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 1]], $this->judgeDonePayloads()[0]['findings']);
     }
 
+    public function testTwoFindingsTheJudgeGivesOneCauseAreRecordedAsOneEntryWithTheHigherSeverityAndTheLink(): void
+    {
+        $round = $this->roundReporting([$this->atLine('A', Severity::P2, 3), $this->atLine('B', Severity::P1, 5)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
+
+        $payload = $this->judgeDonePayloads()[0];
+        self::assertSame(['F2' => 'F1'], $payload['same_cause']);
+        self::assertSame([['id' => 'F1', 'severity' => 'P1', 'text' => 'Text of A.', 'merged' => ['F2'], 'file' => 'src/Thing.php', 'line' => 3], ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 5]], $payload['findings']);
+    }
+
+    public function testALinkToAFindingDroppedBeforeTheJudgeIsNotRecorded(): void
+    {
+        $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.'), $this->atLine('B', Severity::P2, 3)]);
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F2', Mark::Act, 'F1')])))($this->judgingOf($round));
+
+        self::assertSame([], $this->judgeDonePayloads()[0]['same_cause']);
+    }
+
     public function testARoundWhoseEveryFindingIsDroppedIsJudgedWithoutAskingTheJudge(): void
     {
         $round = $this->roundReporting([$this->quoting('A', Severity::P1, '`grepName` is not defined.')]);
@@ -471,6 +491,11 @@ final class JudgeRoundTest extends KernelTestCase
         return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
     }
 
+    private function atLine(string $id, Severity $severity, int $line): Finding
+    {
+        return new Finding($id, $severity, 'src/Thing.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
     private function judgingOf(ReviewRound $round): JudgeRound
     {
         return new JudgeRound($round->id()->toRfc4122());
@@ -481,7 +506,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true]), $this->judgeDonePayloads());
     }
 
     /**

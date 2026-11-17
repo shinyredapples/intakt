@@ -17,6 +17,8 @@ final readonly class JudgedFinding
         public string $id,
         #[Schema(description: 'Always act for a P1 or P2 finding; defer and reject are for a P3 finding only.')]
         public Mark $mark,
+        #[Schema(description: 'The id of another finding you were given with the same cause in the same file (one change reported twice), or null.')]
+        public ?string $same_cause_as = null,
     ) {
     }
 }

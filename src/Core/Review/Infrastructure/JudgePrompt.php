@@ -26,6 +26,8 @@ final readonly class JudgePrompt
         - reject: a P3 finding that is wrong, a matter of taste, or against a non-goal of the task.
 
         Mark every finding you were given, once, with exactly the id you were given, and mark no other id. When unsure, choose act.
+
+        Two findings have the same cause when they report one change in the same file at nearby lines (for example the same comparison flagged by two reviewers). Give the later of them same_cause_as with the id of the earlier one; give every other finding same_cause_as null. A finding is never its own cause.
         TEXT;
 
     public function __construct(private Fence $fence)

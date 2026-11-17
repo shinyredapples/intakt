@@ -11,6 +11,7 @@ final readonly class JudgeDone
      * @param list<string>           $followUps
      * @param list<JudgeDoneFinding> $findings
      * @param list<DroppedFinding>   $dropped
+     * @param array<string, string>  $sameCause
      */
     public function __construct(
         public string $round,
@@ -19,6 +20,8 @@ final readonly class JudgeDone
         public array $findings,
         // Empty by default, because a judge_done row written before drop reasons were recorded holds no dropped findings.
         public array $dropped = [],
+        // Empty by default, because a judge_done row written before the judge named causes links no findings.
+        public array $sameCause = [],
     ) {
     }
 }
