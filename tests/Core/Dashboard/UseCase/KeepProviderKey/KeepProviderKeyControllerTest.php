@@ -8,7 +8,6 @@ use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\EnabledAccounts;
-use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
@@ -21,6 +20,10 @@ use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeepProviderKeyController;
 use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeyNotChecked;
 use Intakt\Core\Dashboard\UseCase\KeepProviderKey\KeyRefusedByProvider;
 use Intakt\Core\Ledger\Contract\Ledger;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
@@ -46,7 +49,10 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 #[UsesClass(KeptProviderKeyFile::class)]
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(ConfiguredKey::class)]
-#[UsesClass(KeyKind::class)]
+#[UsesClass(SymfonyAiProviderCatalog::class)]
+#[UsesClass(AnthropicDescriptor::class)]
+#[UsesClass(OpenAiDescriptor::class)]
+#[UsesClass(HuggingFaceDescriptor::class)]
 #[UsesClass(KeyNotRecognised::class)]
 #[UsesClass(KeyNotChecked::class)]
 #[UsesClass(KeyRefusedByProvider::class)]
@@ -85,20 +91,20 @@ final class KeepProviderKeyControllerTest extends WebTestCase
     public function testASecondKeyIsRefusedWhileAKeptKeyIsConfiguredAndTheKeptKeyStaysUnchanged(): void
     {
         $browser = $this->browser(KeyCheckOutcome::Accepted);
-        new KeptProviderKeyFile($this->directory)->keep(ProviderKey::recognise($this->key()));
+        $this->file()->keep(ProviderKey::recognise($this->key(), new SymfonyAiProviderCatalog()));
 
         $this->post($browser, 'sk-'.self::OTHER_BODY);
 
         self::assertSelectorTextContains('.flash-error', 'A provider key is already configured');
-        self::assertSame($this->key(), new KeptProviderKeyFile($this->directory)->read()?->secret());
+        self::assertSame($this->key(), $this->file()->read()?->secret());
     }
 
     public function testAKeyKeptByAnotherRequestWhileThisKeyIsCheckedIsRefusedAsAlreadyConfigured(): void
     {
-        $file = new KeptProviderKeyFile($this->directory);
+        $file = $this->file();
         $first = $this->key();
         $browser = $this->browser(static function () use ($file, $first): KeyCheckOutcome {
-            $file->keep(ProviderKey::recognise($first));
+            $file->keep(ProviderKey::recognise($first, new SymfonyAiProviderCatalog()));
 
             return KeyCheckOutcome::Accepted;
         });
@@ -145,7 +151,7 @@ final class KeepProviderKeyControllerTest extends WebTestCase
 
         $this->post($browser, 'not-a-key');
 
-        self::assertSelectorTextContains('.flash-error', 'That is not an Anthropic key');
+        self::assertSelectorTextContains('.flash-error', 'The key has the form of no listed provider (Anthropic, OpenAI, Hugging Face). No key was kept.');
         self::assertFileDoesNotExist($this->directory.'/provider-key.json');
     }
 
@@ -156,7 +162,7 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         $this->post($browser, $this->key());
 
         self::assertSelectorTextContains('.flash-success', 'The anthropic key ending in 5678 is kept.');
-        self::assertSame($this->key(), new KeptProviderKeyFile($this->directory)->read()?->secret());
+        self::assertSame($this->key(), $this->file()->read()?->secret());
         self::assertStringNotContainsString($this->key(), (string) $browser->getResponse()->getContent());
         self::assertStringNotContainsString(self::BODY, (string) $browser->getResponse()->getContent());
     }
@@ -179,6 +185,11 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         return 'sk-ant-'.self::BODY;
     }
 
+    private function file(): KeptProviderKeyFile
+    {
+        return new KeptProviderKeyFile($this->directory, new SymfonyAiProviderCatalog());
+    }
+
     /**
      * @param KeyCheckOutcome|Closure(): KeyCheckOutcome $outcome
      */
@@ -193,7 +204,7 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         $container->set(ReplayMarks::class, new ReplayMarks(new ReplayMarkBus()));
         $check = self::createStub(KeyCheck::class);
         $check->method('check')->willReturnCallback($outcome instanceof Closure ? $outcome : static fn (): KeyCheckOutcome => $outcome);
-        $container->set(KeepProviderKey::class, new KeepProviderKey($check, new KeptProviderKeyFile($this->directory)));
+        $container->set(KeepProviderKey::class, new KeepProviderKey($check, $this->file(), new SymfonyAiProviderCatalog()));
         $accounts = self::createStub(EnabledAccounts::class);
         $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => $anAccountIsEnabled ? [new Account($provider, Account::DEFAULT)] : []);
         $container->set(EnabledAccounts::class, $accounts);
