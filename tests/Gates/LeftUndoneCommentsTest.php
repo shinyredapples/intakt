@@ -32,10 +32,10 @@ final class LeftUndoneCommentsTest extends TestCase
         ini_set('pcre.backtrack_limit', '1');
 
         try {
-            $this->expectException(ScopeFailure::class);
-            $this->expectExceptionMessage('cannot read a comment: Backtrack limit exhausted');
-
             new LeftUndoneComments()->markersOn("<?php\n// TODO(#12): drop once the forge sends the total\n", [2]);
+            self::fail('The comment passed although the pattern engine could not read it.');
+        } catch (ScopeFailure $failure) {
+            self::assertSame('cannot read a comment: Backtrack limit exhausted', $failure->getMessage());
         } finally {
             ini_set('pcre.backtrack_limit', $limit);
         }

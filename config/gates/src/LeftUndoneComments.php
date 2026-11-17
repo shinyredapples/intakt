@@ -67,11 +67,13 @@ final readonly class LeftUndoneComments
     {
         $text = $this->withoutCommentSyntax($commentLine);
 
-        if (!$this->matches(self::MARKER, $text, $marker) || $this->matches(self::REASONED_EXCEPTION, $text)) {
+        $marker = $this->matchIn(self::MARKER, $text);
+
+        if (null === $marker || null !== $this->matchIn(self::REASONED_EXCEPTION, $text)) {
             return null;
         }
 
-        return $marker[1];
+        return $marker[1] ?? null;
     }
 
     // Because a repeated group exhausts the pattern engine's stack on thousands of nested markers, one marker is stripped per match.
@@ -79,19 +81,17 @@ final readonly class LeftUndoneComments
     {
         $offset = strspn($commentLine, self::WHITESPACE);
 
-        while ($this->matches(self::COMMENT_SYNTAX, $commentLine, $syntax, $offset)) {
-            $offset += strlen($syntax[0]);
+        while (null !== $syntax = $this->matchIn(self::COMMENT_SYNTAX, $commentLine, $offset)) {
+            $offset += strlen($syntax[0] ?? '');
         }
 
         return substr($commentLine, $offset);
     }
 
     /**
-     * @param array<int|string, string> $match
-     *
-     * @param-out array<int|string, string> $match
+     * @return array<int|string, string>|null
      */
-    private function matches(string $pattern, string $subject, ?array &$match = null, int $offset = 0): bool
+    private function matchIn(string $pattern, string $subject, int $offset = 0): ?array
     {
         $result = preg_match($pattern, $subject, $match, 0, $offset);
 
@@ -99,6 +99,6 @@ final readonly class LeftUndoneComments
             throw new ScopeFailure('cannot read a comment: '.preg_last_error_msg());
         }
 
-        return 1 === $result;
+        return 1 === $result ? $match : null;
     }
 }
