@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\KeptProviderKeyNotWritten;
 use Intakt\Core\Ai\Contract\KeptProviderKeyUnreadable;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\AnthropicDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
@@ -22,6 +23,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(KeptProviderKeyFile::class)]
 #[CoversClass(KeptProviderKeyNotWritten::class)]
 #[CoversClass(KeptProviderKeyUnreadable::class)]
+#[CoversClass(ProviderKeyAlreadyKept::class)]
 #[UsesClass(ProviderKey::class)]
 #[UsesClass(ConfiguredKey::class)]
 #[UsesClass(KeyNotRecognised::class)]
@@ -100,7 +102,7 @@ final class KeptProviderKeyFileTest extends TestCase
         }
     }
 
-    public function testKeepingAKeyReplacesALinkAtTheFilePathInsteadOfWritingThroughIt(): void
+    public function testKeepingAKeyIsRefusedByALinkAtTheFilePathAndNeverWritesThroughIt(): void
     {
         $filesystem = new Filesystem();
         $filesystem->mkdir($this->directory);
@@ -108,21 +110,56 @@ final class KeptProviderKeyFileTest extends TestCase
         $filesystem->dumpFile($target, 'untouched');
         symlink($target, $this->directory.'/provider-key.json');
 
-        $this->file()->keep($this->key('sk-'.self::BODY));
-
-        self::assertSame('untouched', file_get_contents($target));
-        self::assertFalse(is_link($this->directory.'/provider-key.json'));
-        self::assertSame('openai', $this->file()->configured()?->provider);
+        try {
+            $this->file()->keep($this->key('sk-'.self::BODY));
+            self::fail('The link should refuse the key.');
+        } catch (ProviderKeyAlreadyKept) {
+            self::assertSame('untouched', file_get_contents($target));
+            self::assertTrue(is_link($this->directory.'/provider-key.json'));
+        }
     }
 
-    public function testKeepingASecondKeyReplacesTheFirst(): void
+    public function testKeepingAKeyIsRefusedByADanglingLinkAtTheFilePathAndCreatesNoFileAtItsTarget(): void
+    {
+        new Filesystem()->mkdir($this->directory);
+        $target = $this->directory.'-outside';
+        symlink($target, $this->directory.'/provider-key.json');
+
+        try {
+            $this->file()->keep($this->key('sk-ant-'.self::BODY));
+            self::fail('The dangling link should refuse the key.');
+        } catch (ProviderKeyAlreadyKept) {
+            self::assertFileDoesNotExist($target);
+            self::assertTrue(is_link($this->directory.'/provider-key.json'));
+        } finally {
+            new Filesystem()->remove($target);
+        }
+    }
+
+    public function testKeepingASecondKeyIsRefusedAndTheFirstStays(): void
     {
         $file = $this->file();
         $file->keep($this->key('sk-ant-'.self::BODY));
-        $file->keep($this->key('hf_'.self::BODY.'9999'));
 
-        self::assertSame('huggingface', $file->configured()?->provider);
-        self::assertSame('9999', $file->configured()->lastCharacters);
+        try {
+            $file->keep($this->key('hf_'.self::BODY.'9999'));
+            self::fail('The second key should be refused.');
+        } catch (ProviderKeyAlreadyKept $alreadyKept) {
+            self::assertSame('sk-ant-'.self::BODY, $file->read()?->secret());
+            self::assertStringNotContainsString(self::BODY, print_r($alreadyKept->getTrace(), true).$alreadyKept);
+        }
+    }
+
+    public function testARefusedSecondKeyLeavesNoNewFileInTheDirectory(): void
+    {
+        $file = $this->file();
+        $file->keep($this->key('sk-ant-'.self::BODY));
+
+        try {
+            $file->keep($this->key('hf_'.self::BODY.'9999'));
+        } catch (ProviderKeyAlreadyKept) {
+            self::assertSame(['provider-key.json'], array_values(array_diff((array) scandir($this->directory), ['.', '..'])));
+        }
     }
 
     public function testAKeptKeyTooShortForItsFormIsUnreadableInsteadOfShownWhole(): void

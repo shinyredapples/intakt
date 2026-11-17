@@ -9,6 +9,7 @@ use Intakt\Core\Ai\Contract\ConfiguredKey;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Core\Ai\Contract\ProviderKeyAlreadyKept;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
@@ -20,6 +21,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\HuggingFaceDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\OpenAiDescriptor;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiKeyCheck;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
+use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -44,6 +46,7 @@ use Throwable;
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(Provider::class)]
 #[UsesClass(KeyCheckOutcome::class)]
+#[UsesClass(ProviderKeyAlreadyKept::class)]
 final class KeepProviderKeyTest extends TestCase
 {
     private const string BODY = 'abcdefgh12345678';
@@ -153,6 +156,27 @@ final class KeepProviderKeyTest extends TestCase
         } catch (KeyNotChecked $unchecked) {
             self::assertStringNotContainsString($key, (string) $unchecked);
             self::assertNotInstanceOf(Throwable::class, $unchecked->getPrevious());
+        }
+    }
+
+    public function testAKeyKeptByAnotherRequestWhileThisKeyIsCheckedIsNotReplaced(): void
+    {
+        $providers = new SymfonyAiProviderCatalog();
+        $file = new KeptProviderKeyFile($this->directory, $providers);
+        $first = 'sk-ant-'.self::BODY;
+        // Forces the order of a race, because the other request passed the "none configured" guard too and finishes while this one waits on its provider check.
+        $check = self::createStub(KeyCheck::class);
+        $check->method('check')->willReturnCallback(static function () use ($file, $first, $providers): KeyCheckOutcome {
+            $file->keep(ProviderKey::recognise($first, $providers));
+
+            return KeyCheckOutcome::Accepted;
+        });
+
+        try {
+            (void) new KeepProviderKey($check, $file, $providers)->keep('hf_'.self::BODY);
+            self::fail('The second key should be refused.');
+        } catch (ProviderKeyAlreadyKept) {
+            self::assertSame($first, $file->read()?->secret());
         }
     }
 

@@ -80,6 +80,10 @@ test('the run for the board at / is named board', () => {
     );
 });
 
+test('the first-run page at /setup is checked', () => {
+    assert.ok(PAGES.some((page) => page.name === 'setup' && page.path === '/setup'));
+});
+
 test('every page is checked in both themes at 1440, 1920 and 390 wide', () => {
     const jobs = jobsFor([{ name: 'projects', path: '/projects' }]);
 

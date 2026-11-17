@@ -113,6 +113,7 @@ Before a key typed in the browser is kept, plain code checks it with one call to
 - **Output:** the answer is dropped unread beyond its success; only an authentication failure counts as a refusal, and any other failure leaves the key not checked, so a provider's text cannot mark a key good or bad.
 - **Storage:** an accepted key is kept in the data volume in a file only the app user can read (`KeptProviderKeyFile`); it never reaches a log, an exception message or trace, or the browser, which gets the provider and at most its last four characters. The file is read back as outside input: a key without the form of its stored provider is refused, not shown.
 - **Failures:** a provider's error text can echo the request, the key included, so it is never kept: the outcome is an enum, and the exceptions `KeepProviderKey` throws have fixed messages and no previous exception.
+- **Door:** the dashboard has no login, so the route that takes the key (`POST /setup/provider-key`) accepts a key only while none is configured (the write itself refuses a file or a symbolic link already at the path, a dangling link included, so two requests at once keep only one key), checks a CSRF token and sits behind the Host check; the response is a redirect with a fixed flash line and never carries the key.
 
 ## External dependencies
 
