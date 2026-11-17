@@ -44,15 +44,9 @@ The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in pl
 
 ### Timed run
 
-Tested platforms: the whole path ran on x86-64 Linux, in two sets of runs: the three runs of 2026-11-15 in the table below, and, apart from them, an earlier run on 2026-11-13 on a four-core host, which took 202 s to a running install. On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings; no arm64 run is recorded here yet. Docker Desktop on Apple Silicon runs the arm64 image.
+On arm64 Linux, the `image-arm64` CI workflow builds and first-starts the image on every push to main and prints both timings. Docker Desktop on Apple Silicon runs the arm64 image.
 
-The path is timed from `docker compose up -d --wait` to the verdict on the review page. It has not been timed end to end yet. The three runs of 2026-11-15 (each from a clean clone with `HF_TOKEN` in `.env.local`) measured the older path, which ran the review from the terminal; their figures are below until the new path is timed. Cloning comes first and is not timed, because it depends on your network.
-
-| Step | What was timed | Time |
-| --- | --- | --- |
-| Start, cold | `docker compose up` on a machine without the image, until the log printed the review command | about 175 s (measured) |
-| Start, warm | `docker compose up` again, with the image already built | 5 to 6 s (measured) |
-| Review | the console review of the sample change; on the new path: pressing the start on the first-run page until the review page shows the verdict | 8 to 25 s per console review (measured); the page: not yet measured |
+The timing from `docker compose up -d --wait` to the verdict on the review page is added here once it is measured from a clean clone.
 
 What works without Docker or a provider key:
 
