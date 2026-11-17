@@ -103,7 +103,7 @@ Once a review round completes, a worker indexes the findings it resolved into pr
 - **Stored text stays untrusted:** a note is model text, so when the briefing gives it to a later reviewer it is fenced as project memory ([Untrusted text](#untrusted-text)).
 - **Kept to its project:** one install serves several projects from one store, so each note carries the project of the round that wrote it, and retrieval filters on the project under review; one project's findings never reach another project's reviewer.
 - **Proposed checks:** when the index shows a finding kind recurring, plain code files a task proposing a check ([Reviews](07-reviews.md)); no model decides to file it. The example findings it quotes are reviewer text, so they go inside an `<!-- external -->` block, redacted and scanned before the task is filed, and every role reads them as it reads the review in a task filed from a catch-up review. The task is built only once a person with write access labels it.
-- **No OpenAI account:** nothing is sent; the indexing message fails with the reason and stays in the failure transport.
+- **No OpenAI account:** nothing is sent; the indexing message completes with one `info` log line (the reason, no trace), is not retried and does not reach the failure transport.
 
 ## Checking a provider key
 

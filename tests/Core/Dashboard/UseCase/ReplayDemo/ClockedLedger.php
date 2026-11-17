@@ -60,4 +60,12 @@ final class ClockedLedger implements Ledger
     {
         return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => $kind === $recorded->event->kind)));
     }
+
+    /**
+     * @param list<string> $texts
+     */
+    public function readMentioning(array $texts): RecordedEvents
+    {
+        return new RecordedEvents(array_values(array_filter($this->recorded, static fn (RecordedEvent $recorded): bool => array_any($texts, static fn (string $text): bool => str_contains($recorded->event->payload, $text)))));
+    }
 }

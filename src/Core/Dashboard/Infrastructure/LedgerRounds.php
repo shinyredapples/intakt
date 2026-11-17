@@ -91,17 +91,28 @@ final class LedgerRounds
 
     public function reviewOf(string $round): ?Review
     {
-        $chosen = $this->started[$round] ?? null;
+        $rounds = $this->membersOf($round);
 
-        if (!$chosen instanceof ReviewedRound) {
-            return null;
-        }
+        return [] === $rounds ? null : new Review(array_map($this->completed(...), $rounds));
+    }
 
-        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
-        $rounds = [$chosen, ...array_values($others)];
-        usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
+    // Empty for a round never started readably; known from the starts alone, so a read of one review can learn which rounds to read before it reads them.
+    /**
+     * @return list<string>
+     */
+    public function roundsOfTheReviewOf(string $round): array
+    {
+        return array_map(static fn (ReviewedRound $member): string => $member->round, $this->membersOf($round));
+    }
 
-        return new Review(array_map($this->completed(...), $rounds));
+    /**
+     * @param list<string> $rounds
+     *
+     * @return list<string>
+     */
+    public function callsOf(array $rounds): array
+    {
+        return $this->tokens->callsOf($rounds);
     }
 
     // Each review is read from its first round in ledger order and its rounds are skipped after, so a change with several rounds is one review. The ids come from the rounds, not the keys, because PHP turns a key of digits into an integer.
@@ -125,13 +136,31 @@ final class LedgerRounds
         return $reviews;
     }
 
-    // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round.
+    // In the ledger order of each round's first readable start, because the review list sorts by it and a later start must not move a round; without cost, tokens or replay mark, because the list shows none of them and each costs a query per round.
     /**
      * @return list<ReviewedRound>
      */
-    public function inStartOrder(): array
+    public function listedInStartOrder(): array
     {
-        return array_map($this->completed(...), array_values($this->started));
+        return array_map($this->decidedAsOnThePage(...), array_values($this->started));
+    }
+
+    /**
+     * @return list<ReviewedRound>
+     */
+    private function membersOf(string $round): array
+    {
+        $chosen = $this->started[$round] ?? null;
+
+        if (!$chosen instanceof ReviewedRound) {
+            return [];
+        }
+
+        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
+        $rounds = [$chosen, ...array_values($others)];
+        usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
+
+        return $rounds;
     }
 
     // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
@@ -244,7 +273,13 @@ final class LedgerRounds
 
     private function completed(ReviewedRound $round): ReviewedRound
     {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []))->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round));
+        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
+    }
+
+    // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.
+    private function decidedAsOnThePage(ReviewedRound $round): ReviewedRound
+    {
+        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []));
 
         $judged = $this->judged[$round->round] ?? null;
 

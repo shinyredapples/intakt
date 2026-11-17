@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ShowSampleReview;
 
+use Intakt\Core\Ai\Contract\EnabledAccounts;
 use Intakt\Core\Mcp\Contract\OwnerClientLine;
 use Intakt\Core\Mcp\Contract\OwnerToken;
+use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\ShowSampleReview\ShowSampleReviewCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -17,6 +19,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 #[CoversClass(ShowSampleReviewCommand::class)]
 #[UsesClass(OwnerToken::class)]
 #[UsesClass(OwnerClientLine::class)]
+#[UsesClass(SampleProject::class)]
 final class ShowSampleReviewCommandTest extends TestCase
 {
     private const string REPOSITORY = '/app/var/data/sample-repository';
@@ -26,6 +29,42 @@ final class ShowSampleReviewCommandTest extends TestCase
     private string $composeService = '';
 
     private ?string $keptFile = null;
+
+    private string $configuration = '';
+
+    protected function setUp(): void
+    {
+        $this->configuration = sys_get_temp_dir().'/'.uniqid('intakt-', true).'.yaml';
+        file_put_contents($this->configuration, "projects: {}\n");
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->configuration)) {
+            unlink($this->configuration);
+        }
+    }
+
+    public function testAfterAKeylessStartItNamesTheKeysToSetInsteadOfTheReviewCommand(): void
+    {
+        unlink($this->configuration);
+
+        $display = $this->show()->getDisplay();
+
+        self::assertStringNotContainsString('intakt:review', $display);
+        self::assertStringContainsString('No sample project yet: set ANTHROPIC_API_KEY or OPENAI_API_KEY or HF_TOKEN and start again to write it, then run intakt:sample:show again.', $display);
+    }
+
+    public function testAfterAKeylessStartItStillNamesTheDashboardAndTheMcpSetup(): void
+    {
+        unlink($this->configuration);
+        $this->ownerToken = 'demo-owner-token';
+
+        $lines = $this->framedLines();
+
+        self::assertSame('Open the dashboard: http://localhost:7781', $lines[0]);
+        self::assertStringStartsWith('Connect an MCP client: ', $lines[2]);
+    }
 
     public function testOutsideTheComposeDemoItPrintsTheReviewCommandAsTheConsoleRunsIt(): void
     {
@@ -113,7 +152,7 @@ final class ShowSampleReviewCommandTest extends TestCase
     private function show(): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new ShowSampleReviewCommand('http://localhost:7781', new OwnerToken($this->ownerToken, $this->keptFile), $this->composeService, 7781));
+        $application->addCommand(new ShowSampleReviewCommand('http://localhost:7781', new OwnerToken($this->ownerToken, $this->keptFile), $this->composeService, 7781, new SampleProject(self::createStub(EnabledAccounts::class), null), $this->configuration));
         $tester = new CommandTester($application->find('intakt:sample:show'));
         $tester->execute(['repository' => self::REPOSITORY]);
 
