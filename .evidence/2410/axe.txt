@@ -1,0 +1,36 @@
+# #2410 axe check: bin/instance (migrated empty database), Playwright headless Chromium, axe-core; Host localhost:7780
+## This branch
+axe-core 4.14.1, head f4ee2cf04, migrated empty database
+board light 1440: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-light-144-F6OruCa.webp 144x144 alt="" role=none
+board light 390: HTTP 200, theme light, axe critical 0, serious 1, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-light-144-F6OruCa.webp 96x96 alt="" role=none
+  serious scrollable-region-focusable: .board
+board dark 1440: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-dark-144-41_nNzy.webp 144x144 alt="" role=none
+board dark 390: HTTP 200, theme dark, axe critical 0, serious 1, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-dark-144-41_nNzy.webp 96x96 alt="" role=none
+  serious scrollable-region-focusable: .board
+reviews light 1440: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-light-144-F6OruCa.webp 144x144 alt="" role=none
+reviews light 390: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-light-144-F6OruCa.webp 144x144 alt="" role=none
+reviews dark 1440: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-dark-144-41_nNzy.webp 144x144 alt="" role=none
+reviews dark 390: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-waiting-dark-144-41_nNzy.webp 144x144 alt="" role=none
+setup light 1440: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-light-144-Xq9WqBR.webp 144x144 alt="" role=none
+setup light 390: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-light-144-Xq9WqBR.webp 140x140 alt="" role=none
+setup dark 1440: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-dark-144-4rbCLgJ.webp 144x144 alt="" role=none
+setup dark 390: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-dark-144-4rbCLgJ.webp 140x140 alt="" role=none
+serious or critical violations: 2
+
+## main (no octopus on board or reviews), same script
+axe-core 4.14.1, main 73b796600, migrated empty database
+board light 1440: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus none
+board light 390: HTTP 200, theme light, axe critical 0, serious 1, moderate 0, minor 0, layout shift 0.000, octopus none
+  serious scrollable-region-focusable: .board
+board dark 1440: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus none
+board dark 390: HTTP 200, theme dark, axe critical 0, serious 1, moderate 0, minor 0, layout shift 0.000, octopus none
+  serious scrollable-region-focusable: .board
+reviews light 1440: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus none
+reviews light 390: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus none
+reviews dark 1440: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus none
+reviews dark 390: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus none
+setup light 1440: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-light-pC26hpl.webp 200x200 alt="" role=none
+setup light 390: HTTP 200, theme light, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-light-pC26hpl.webp 140x140 alt="" role=none
+setup dark 1440: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-dark-9WbyQbx.webp 200x200 alt="" role=none
+setup dark 390: HTTP 200, theme dark, axe critical 0, serious 0, moderate 0, minor 0, layout shift 0.000, octopus octopus-conducting-dark-9WbyQbx.webp 140x140 alt="" role=none
+serious or critical violations: 2
