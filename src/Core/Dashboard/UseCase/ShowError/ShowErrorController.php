@@ -11,6 +11,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\ErrorHandler\ErrorRenderer\ErrorRendererInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -34,6 +35,7 @@ final readonly class ShowErrorController
         private DashboardHost $dashboard,
         #[Autowire(service: 'error_renderer')]
         private ErrorRendererInterface $errorRenderer,
+        private RequestStack $requests,
     ) {
     }
 
@@ -56,10 +58,10 @@ final readonly class ShowErrorController
         return new Response($page, $status, $headers);
     }
 
-    // A request that matched no route (a 404 or a 405) stays on the dashboard's pages, because it has no route name to judge.
+    // The error sub-request carries no route name, so the failing request one level up the stack is judged; one that matched no route (a 404 or a 405) stays on the dashboard's pages.
     private function isOutsideDashboard(Request $request): bool
     {
-        $route = $request->attributes->get('_route');
+        $route = ($this->requests->getParentRequest() ?? $request)->attributes->get('_route');
 
         return is_string($route) && !str_starts_with($route, DashboardRoutes::PREFIX);
     }
