@@ -58,6 +58,7 @@ $highlights = explode("\n", (string) file_get_contents($root.'/docs/highlights.m
 // Pages serves the journey page at /journey/, so its drawings lie beside it, and its Jekyll does not render Mermaid.
 $files = [
     'index.md' => $highlights[0]."\n\n".JOURNEY_LINK.($highlights[1] ?? ''),
+    // Correct only because docs/journey.md links nothing under journey/ but the *.svg drawings copied below (PagesCommandTest pins it).
     'journey/index.md' => (string) preg_replace(MermaidTimeline::BLOCK, '![Timeline](timeline.svg)', str_replace('](journey/', '](', $journey)),
 ];
 
