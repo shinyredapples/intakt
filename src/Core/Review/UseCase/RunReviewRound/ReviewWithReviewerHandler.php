@@ -41,7 +41,15 @@ final readonly class ReviewWithReviewerHandler
         // Running means this worker holds it now; a finished one still tries to complete the round, because the worker that finished it may have stopped before it did.
         if (ReviewerState::Running === $reviewer->state()) {
             $this->progress->publishStartOf($reviewer);
-            $this->review($reviewer);
+
+            try {
+                $this->review($reviewer);
+            } catch (Throwable $handedBack) {
+                // A reviewer whose review throws was handed back to the queue, so the page stops counting it as started before its message comes back.
+                $this->progress->publishLatest($roundId);
+
+                throw $handedBack;
+            }
         }
 
         $this->rounds->completeWhenEveryReviewerIsIn($roundId);

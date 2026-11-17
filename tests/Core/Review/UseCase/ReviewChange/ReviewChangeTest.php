@@ -316,6 +316,7 @@ final class ReviewChangeTest extends KernelTestCase
 
         $this->reviewChange($work, new UpperWait(1, 1))->review($this->request(), $progress);
 
+        self::assertNotEmpty($progress->reported);
         foreach ($progress->reported as $reported) {
             self::assertLessThanOrEqual($reported->reviewersStarted, $reported->reviewersFinished);
             self::assertLessThanOrEqual($reported->reviewers, $reported->reviewersStarted);

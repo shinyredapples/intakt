@@ -8,7 +8,7 @@ use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Intakt\Core\Review\Contract\RoundOpened;
 use Symfony\Component\Uid\Uuid;
 
-// Runs from the queue after the round is committed, so the page opened before any reviewer starts already reads "0 of N" from the round state.
+// Runs from the queue after the round is committed and publishes the round's latest state, so a page opened before any reviewer is read has counts from the round state; a reviewer that started first is already counted.
 #[AsCommandHandler]
 final readonly class PublishRoundStartHandler
 {
