@@ -23,6 +23,8 @@ final readonly class ShowErrorController
 {
     private const string NOT_FOUND_MESSAGE = 'This page does not exist. The address may be mistyped, or the page may have moved.';
     private const string SERVER_MESSAGE = 'Something went wrong on our side. Nothing you did caused it.';
+    private const string DASHBOARD_LOG = 'A dashboard page failed, reference {reference}.';
+    private const string PLAIN_LOG = 'A request failed, reference {reference}.';
     private const string REQUEST_MESSAGE = 'This request could not be answered.';
 
     public function __construct(
@@ -39,7 +41,7 @@ final readonly class ShowErrorController
     {
         $status = $exception instanceof HttpExceptionInterface ? $exception->getStatusCode() : Response::HTTP_INTERNAL_SERVER_ERROR;
         $outside = $this->isOutsideDashboard($request);
-        $reference = $status >= Response::HTTP_INTERNAL_SERVER_ERROR ? $this->referenceFor($exception, $outside) : null;
+        $reference = $status >= Response::HTTP_INTERNAL_SERVER_ERROR ? $this->referenceFor($exception, $outside ? self::PLAIN_LOG : self::DASHBOARD_LOG) : null;
         // Carried over as the framework's own error page does, so a 405 still names its allowed methods.
         $headers = $exception instanceof HttpExceptionInterface ? $exception->getHeaders() : [];
 
@@ -63,7 +65,7 @@ final readonly class ShowErrorController
     }
 
     /**
-     * @param array<string, string|list<string>> $headers
+     * @param array<mixed> $headers
      */
     private function plainAnswer(Throwable $exception, int $status, array $headers): Response
     {
@@ -82,10 +84,10 @@ final readonly class ShowErrorController
     }
 
     // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
-    private function referenceFor(Throwable $exception, bool $outside): string
+    private function referenceFor(Throwable $exception, string $log): string
     {
         $reference = bin2hex(random_bytes(4));
-        $this->logger->error($outside ? 'A request failed, reference {reference}.' : 'A dashboard page failed, reference {reference}.', ['reference' => $reference, 'exception' => $exception]);
+        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
 
         return $reference;
     }

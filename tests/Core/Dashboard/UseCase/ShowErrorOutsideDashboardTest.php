@@ -55,7 +55,7 @@ final class ShowErrorOutsideDashboardTest extends WebTestCase
      */
     private function takeLoggedMessages(): array
     {
-        // The reference is random, so the exact message cannot be asserted by name; taking the records marks them as asserted.
+        // The reference is random, so the exact message cannot be asserted by name, and taking the records marks them as asserted.
         return array_map(static fn (array $record): string => $record['message'], LogRecords::ofThisRun()?->takeErrors() ?? []);
     }
 
@@ -63,7 +63,7 @@ final class ShowErrorOutsideDashboardTest extends WebTestCase
     {
         $request = Request::create('http://localhost:7780/x', server: ['HTTP_ACCEPT' => $accept]);
         $request->attributes->set('_route', $route);
-        // The renderer reads the format from the request stack, as it is when the kernel handles the error sub-request.
+        // The renderer reads the format from the request stack, because it is filled when the kernel handles the error sub-request.
         self::getContainer()->get('request_stack')->push($request);
 
         return self::getContainer()->get(ShowErrorController::class)(new RuntimeException('boom'), $request);
