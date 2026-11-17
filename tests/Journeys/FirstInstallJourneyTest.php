@@ -95,8 +95,7 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         self::assertCount(4, $this->visit(self::FIRST_RUN)->filter('ol.steps > li'));
     }
 
-    // Through the journey's own kernel, because only it has the sample repository the start button needs; it writes to the instance's ledger, so the instance shows the round.
-    // The container is rebuilt first, because the sample repository is read when the container is built.
+    // Through the journey's own kernel, because only it has the sample repository the start button needs; it writes to the instance's ledger, so the instance shows the round; the container is rebuilt first, because the sample repository is read when it is built.
     private function startTheFirstReview(): string
     {
         $environment = [...$this->environment(), 'INTAKT_SAMPLE_REPOSITORY' => $this->directory.'/sample'];
