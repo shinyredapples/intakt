@@ -89,6 +89,11 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame(2, $this->browser->request('GET', '/')->filter('img[src*="octopus-"]')->count());
     }
 
+    public function testAFreshInstallsBoardCanBeScrolledFromTheKeyboardThoughItHasNoCards(): void
+    {
+        self::assertSame('0', $this->browser->request('GET', '/')->filter('.board')->attr('tabindex'));
+    }
+
     public function testABoardAfterAReviewShowsNoOctopus(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
