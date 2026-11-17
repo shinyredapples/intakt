@@ -45,4 +45,4 @@ The report starts with what went wrong and why: every missed mistake (the review
 
 The **result file** is one file under `var/bench/` in the install, named after the moment of the run, and the command prints where it is. It holds everything the report is made from: the Intakt version, fingerprints of the review instructions and of the bench changes (so you can tell whether two runs measured the same thing), and for every change and run the decision, the judge's list of what to fix and, per reviewer, its model, what it caught and missed, its false alarms and other findings, any failure, and its tokens and time. With docker compose the file sits inside the container, so copy it out before you remove the container ([how](../user/README.md#the-review-bench)).
 
-Intakt prints no price for a bench run. To know what it cost, multiply the reported tokens by your AI company's prices.
+Intakt prints no price for a bench run. Multiplying the reported tokens by your AI company's prices estimates only what the reviewers cost: the report counts reviewer tokens, not the judge's, so the judge's calls cost extra. Your AI company's usage page shows the whole bill.
