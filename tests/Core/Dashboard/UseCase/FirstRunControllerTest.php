@@ -631,7 +631,7 @@ final class FirstRunControllerTest extends WebTestCase
         self::assertResponseRedirects('/reviews/round-1');
     }
 
-    public function testTheStartLeavesTheStartedRoundsIdAsTheFlashLine(): void
+    public function testTheStartLeavesAToastNamingTheRoundsNumber(): void
     {
         $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = self::SAMPLE_REPOSITORY;
         $commands = $this->commandBus();
@@ -642,7 +642,7 @@ final class FirstRunControllerTest extends WebTestCase
 
         $session = $this->browser()->getRequest()->getSession();
         self::assertInstanceOf(FlashBagAwareSessionInterface::class, $session);
-        self::assertSame(['Started round round-1.'], $session->getFlashBag()->peek('success'));
+        self::assertSame(['Started round 1.'], $session->getFlashBag()->peek('toast'));
     }
 
     public function testAStartWhoseHandlerNamesNoRoundComesBackToTheFirstRunPage(): void
@@ -655,6 +655,8 @@ final class FirstRunControllerTest extends WebTestCase
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 
         self::assertResponseRedirects('/setup');
+        $this->browser()->followRedirect();
+        self::assertSelectorTextSame('.toast', 'Started round 1.');
     }
 
     public function testASecondPressComesBackWithTheRefusalAndNoTrace(): void

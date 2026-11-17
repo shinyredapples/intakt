@@ -19,7 +19,7 @@ use Symfony\Component\Messenger\Stamp\HandledStamp;
 
 final readonly class ReviewStarts
 {
-    private const string FLASH_SUCCESS = 'success';
+    private const string FLASH_TOAST = 'toast';
     private const string FLASH_ERROR = 'error';
 
     public function __construct(
@@ -75,6 +75,7 @@ final readonly class ReviewStarts
         $round = $handled?->getResult();
         $round = is_string($round) && '' !== $round ? $round : null;
 
-        return new StartAnswer([self::FLASH_SUCCESS, 'Started round '.$round.'.'], $round);
+        // Named by the number the round was asked to get and not by its id, because a person reads the number and the id only pushed the page around (#2370, D4).
+        return new StartAnswer([self::FLASH_TOAST, sprintf('Started round %d.', $command->round->number)], $round);
     }
 }
