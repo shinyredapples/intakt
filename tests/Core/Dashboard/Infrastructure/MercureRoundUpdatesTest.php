@@ -59,6 +59,7 @@ use Twig\TwigFunction;
 // Through the real MercureLiveUpdates over a MockHub, because what callers see is the update that reaches the hub.
 #[CoversClass(MercureRoundUpdates::class)]
 #[UsesClass(RoundProgress::class)]
+#[UsesClass(FinishedState::class)]
 #[UsesClass(MercureLiveUpdates::class)]
 #[UsesClass(LiveEvent::class)]
 #[UsesClass(SessionSummary::class)]
@@ -259,7 +260,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $data = $this->published[0]->getData();
         $row = 'round-'.self::ROUND.'-reviewer-'.self::REVIEWER;
 
-        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state">stopped</td>', $row, $row), $data);
+        self::assertStringContainsString(sprintf('target="%s-state"><template><td id="%s-state"><span class="muted">stopped</span></td>', $row, $row), $data);
         self::assertStringContainsString(sprintf('targets="#%s-stop"><template><td id="%s-stop"></td>', $row, $row), $data);
     }
 
@@ -469,6 +470,24 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('<p class="fc-call">Fix now</p>', $judged->getData());
     }
 
+    public function testARoundChangeWhoseRoundCannotBeReadStillPublishesTheReviewerStatesAsProcessTextAndLogsWhy(): void
+    {
+        $failure = new RuntimeException('the ledger is gone');
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException($failure);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false, [self::REVIEWER => FinishedState::Verdict]));
+
+        self::assertCount(1, $this->published);
+        self::assertStringContainsString('<span class="muted">answered</span>', $this->published[0]->getData());
+        self::assertStringNotContainsString('verdict', $this->published[0]->getData());
+        self::assertSame(
+            [['warning', 'The round was not read for its live reviewer rows.', ['round' => self::ROUND, 'exception' => $failure]]],
+            $this->log->cleanLogs(),
+        );
+    }
+
     public function testAJudgedRoundWhoseFindingsCannotBeReadStillPublishesItsJudgedStateAndLogsWhy(): void
     {
         $failure = new RuntimeException('the ledger is gone');
@@ -631,6 +650,8 @@ final class MercureRoundUpdatesTest extends TestCase
         // Registered because the judged stream renders a component, which asks for its options through this function.
         $twig = new Environment(new FilesystemLoader(__DIR__.'/../../../../templates'));
         $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
+        // Registered because a placed reviewer row shows a character, whose images the asset mapper names in the app.
+        $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
 
         return new MercureRoundUpdates(
             $this->live($publisher),

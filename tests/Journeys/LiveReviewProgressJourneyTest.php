@@ -135,14 +135,15 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $table = [];
 
         foreach ($updates as $update) {
-            preg_match_all('#<li><span><strong>([^<]+)</strong> \(([^)]+)\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">([^<]+)</span>#', $update->getData(), $rows, PREG_SET_ORDER);
-            $now = [...$now, ...array_map(static fn (array $row): array => [$row[1], $row[2], $row[3]], $rows)];
+            preg_match_all('#<li class="character-row">(?:<img [^>]+>)+<span><strong>([^<]+)</strong> \(([^)]+)\): <span id="round-'.$round.'-now-reviewer-[^"]+-state">(.+?)</span></li>#s', $update->getData(), $rows, PREG_SET_ORDER);
+            $now = [...$now, ...array_map(static fn (array $row): array => [$row[1], $row[2], trim(strip_tags($row[3]))], $rows)];
             preg_match_all('#<template><tr><td>([^<]+)</td>\s*<td>([^<]+)</td>#', $update->getData(), $rows, PREG_SET_ORDER);
             $table = [...$table, ...array_map(static fn (array $row): array => [$row[1], $row[2]], $rows)];
         }
 
         self::assertSame(['correctness', 'security'], array_values(array_unique(array_column($now, 0))));
-        self::assertSame(['verdict'], array_values(array_unique(array_column($now, 2))));
+        self::assertNotSame([], $now);
+        self::assertSame([], array_diff(array_column($now, 2), ['Approved', 'Changes requested', 'Blocked']));
         self::assertSame(['correctness', 'security'], array_values(array_unique(array_column($table, 0))));
         // Named by a model, because the sample maps a model to every tier, so neither the fallback for an unread start nor the one for an unrecorded model may show.
         self::assertSame([], array_filter([...array_column($now, 1), ...array_column($table, 1)], static fn (string $model): bool => str_contains($model, 'not read') || str_contains($model, 'not recorded')));
