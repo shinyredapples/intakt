@@ -109,7 +109,7 @@ abstract class JourneyTestCase extends TestCase
         $uri = $form->getUri();
         $cookies = $this->browser->getCookieJar();
         $sent = [];
-        foreach ($cookies->allRawValues($uri) as $name => $value) {
+        foreach (array_filter($cookies->allRawValues($uri), is_string(...)) as $name => $value) {
             $sent[] = $name.'='.$value;
         }
         $what = $form->getMethod().' '.$uri;
