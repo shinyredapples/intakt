@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\UseCase\ShowSampleReview;
 
 use Intakt\Core\Mcp\Contract\OwnerClientLine;
 use Intakt\Core\Mcp\Contract\OwnerToken;
+use Intakt\Core\Review\Contract\ReviewServices;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleProject;
 use Intakt\Core\Review\UseCase\SeedSampleProject\SampleRepository;
 use Symfony\Component\Console\Attribute\Argument;
@@ -30,6 +31,9 @@ final readonly class ShowSampleReviewCommand
         private string $composeService,
         #[Autowire(env: 'int:DASHBOARD_PORT')]
         private int $dashboardPort,
+        private SampleProject $project,
+        #[Autowire(param: ReviewServices::PROJECT_FILE)]
+        private string $configuration,
     ) {
     }
 
@@ -54,6 +58,13 @@ final readonly class ShowSampleReviewCommand
 
     private function printReviewCommand(SymfonyStyle $io, string $repository): void
     {
+        // A start without a key leaves the project file unwritten, so the review command would name a project that does not exist.
+        if (!$this->project->isWritten($this->configuration)) {
+            $io->writeln(sprintf('No sample project yet: set %s and start again to write it, then run intakt:sample:show again.', implode(' or ', $this->project->keyVariables())));
+
+            return;
+        }
+
         $io->writeln(OutputFormatter::escape(sprintf(
             'Review the sample change: %sphp bin/console intakt:review %s --project=%s --repository=%s --base=%s --task="%s"',
             $this->hostPrefix(),

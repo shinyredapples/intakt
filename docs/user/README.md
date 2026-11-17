@@ -832,6 +832,8 @@ It prints the command that reviews the sample change, in the form your shell run
 docker compose exec intakt php bin/console intakt:review sample-change --project=sample --repository=/app/var/data/sample-repository --base=main --task="Add a shipping cost by weight and a report of a customer's orders; a cart of 100 or more keeps its discount."
 ```
 
+After a start without a key there is no sample project to review yet, so in place of that command it prints `No sample project yet: set ANTHROPIC_API_KEY or OPENAI_API_KEY or HF_TOKEN and start again to write it, then run intakt:sample:show again.`
+
 Or let one short command run that same review for you, with the sample's values built in:
 
 ```
