@@ -1040,7 +1040,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $this->publishedUpdates()->textStreamed($round, $id.'-security', 'Reading the cart.');
         $this->publishedUpdates()->reviewerAskedAgain($round, $id.'-security', 'try-2');
-        // A streamed retry refused before its first delta reports its start again, unstreamed.
+        // Sent twice, because a streamed retry refused before its first delta reports its start again, unstreamed.
         $this->publishedUpdates()->reviewerAskedAgain($round, $id.'-security', 'try-2');
         $this->publishedUpdates()->textStreamed($round, $id.'-security', 'Reading the discount.');
 

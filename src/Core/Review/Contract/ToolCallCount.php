@@ -12,7 +12,7 @@ final readonly class ToolCallCount
     ) {
     }
 
-    // Counted by the review server under the tool's name, which a reader of the summary should not have to know.
+    // In words, because the review server counts under the tool's name and a reader of the summary should not have to know it.
     public function kindInWords(): string
     {
         return ReviewTool::tryFrom($this->tool)?->kindInWords() ?? 'Other tool calls';

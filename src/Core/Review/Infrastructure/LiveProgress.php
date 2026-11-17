@@ -61,7 +61,7 @@ final readonly class LiveProgress
         }
     }
 
-    // Over MCP the tools carry the server's prefix (review_read_file), and the live log names neither.
+    // The prefix is dropped, because over MCP the tools carry the server's prefix (review_read_file) and the live log names neither.
     private function inWords(ToolCall $call): string
     {
         $name = $call->getName();
