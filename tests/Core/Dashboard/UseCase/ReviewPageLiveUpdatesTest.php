@@ -20,6 +20,7 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FinishedState;
@@ -734,6 +735,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $state = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-reviewer-'.$id.'-security-state');
         self::assertSame(['Failed', 'the model did not answer in time'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
+    }
+
+    public function testAReviewerThatGaveNoApprovalWithoutNamingAFindingAfterThePageLoadedIsLabelledFailedAndNeverBlocked(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->failReviewer($id, 'correctness', ChangesWithoutFindings::class);
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Failed]));
+
+        $replaced = $this->replaced($page, $this->publishedStreams());
+        $state = $replaced->filter('#round-'.$id.'-reviewer-'.$id.'-correctness-state');
+        self::assertSame(['Failed', 'gave no approval without naming a finding'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
+        self::assertStringNotContainsString('Blocked', $replaced->filter('#round-'.$id)->text());
     }
 
     public function testAFailedReviewerTheTableAlreadyListsShowsItsCauseOnceItFails(): void

@@ -46,6 +46,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Review\Contract\RecordedAnswer;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
@@ -197,9 +198,9 @@ final class ReviewerRetryVendorTest extends KernelTestCase
 
     public function testARecordedVerdictOnlyAnswerIsAskedAgainWithTheExpectedFindingShapeAndTheNamedFindingCounts(): void
     {
-        $verdict = $this->vendor($this->answering($this->recordedVerdictOnly(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+        $verdict = $this->vendor($this->answering($this->recordedVerdictOnly(...), static fn (): TextResult => new TextResult(RecordedAnswer::named(RecordedAnswer::RETRY_WITH_A_FINDING))))->review('alpha', Tier::Strong, $this->request())->verdict;
 
-        self::assertSame([Decision::Changes, 1], [$verdict->verdict, count($verdict->findings)]);
+        self::assertSame([Decision::Changes, ['F1']], [$verdict->verdict, array_column($verdict->findings, 'id')]);
         self::assertSame([false, true], $this->askedToNameFindings);
         self::assertStringContainsString(ReviewerPrompt::EXAMPLE_FINDING, ReviewerPrompt::NAME_FINDINGS_OR_APPROVE);
     }
@@ -272,12 +273,12 @@ final class ReviewerRetryVendorTest extends KernelTestCase
     // In the shape the live log of #2450 showed, because the default correctness model answered a verdict with no finding on both tries of a first review.
     private function recordedVerdictOnly(): TextResult
     {
-        return new TextResult('{"verdict":"changes","findings":[],"resolved":[],"follow_ups":[]}');
+        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_CHANGES));
     }
 
     private function blockedWithoutFindings(): TextResult
     {
-        return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->with('findings', [])->json());
+        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_BLOCKED));
     }
 
     private function approvalWithoutFindings(): TextResult
