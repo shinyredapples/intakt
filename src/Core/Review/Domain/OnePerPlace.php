@@ -24,8 +24,8 @@ final readonly class OnePerPlace
     {
         $act = array_values(array_filter($reported, static fn (Finding $finding): bool => in_array($finding->id, $actIds, true)));
         $groups = $this->groupedByPlace($act);
-        foreach ($this->linksInPanelOrder($act, $sameCause) as [$one, $other]) {
-            $groups = $this->joinedWhenNearby($groups, $act, $one, $other);
+        foreach ($this->linksInPanelOrder($act, $sameCause) as $link) {
+            $groups = $this->joinedWhenNearby($groups, $act, $link);
         }
 
         return $this->entries($act, $groups);
@@ -78,13 +78,15 @@ final readonly class OnePerPlace
 
     // A link joins the whole groups of its two findings, because a finding linked to one entry may sit at the place of another. An entry keeps only its first finding's text, so a link whose joined group would leave one file or reach further than NEARBY_LINES is ignored: both groups stay entries and no far finding loses its text, even through a chain of links that each pass CausesInOneHunk.
     /**
-     * @param list<int>     $groups
-     * @param list<Finding> $act
+     * @param list<int>       $groups
+     * @param list<Finding>   $act
+     * @param array{int, int} $link
      *
      * @return list<int>
      */
-    private function joinedWhenNearby(array $groups, array $act, int $one, int $other): array
+    private function joinedWhenNearby(array $groups, array $act, array $link): array
     {
+        [$one, $other] = $link;
         $kept = min($groups[$one], $groups[$other]);
         $joined = max($groups[$one], $groups[$other]);
         $candidate = array_map(static fn (int $group): int => $group === $joined ? $kept : $group, $groups);

@@ -438,7 +438,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $findings = $this->judgeDonePayloads()[0]['findings'];
         self::assertIsArray($findings);
-        self::assertSame([['F1', 'Text of A.', ['F2']], ['F2', 'Text of B.', []], ['F3', 'Text of C.', []]], array_map(static fn (array $finding): array => [$finding['id'], $finding['text'], $finding['merged']], $findings));
+        self::assertSame([['F1', 'F2', 'F3'], ['Text of A.', 'Text of B.', 'Text of C.'], [['F2'], [], []]], [array_column($findings, 'id'), array_column($findings, 'text'), array_column($findings, 'merged')]);
     }
 
     public function testALinkToAFindingDroppedBeforeTheJudgeIsNotRecorded(): void
