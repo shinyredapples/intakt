@@ -43,4 +43,35 @@ final class GitHubAppSettingTest extends TestCase
 
         self::assertSame([['info', self::NOTICE, []]], $log->cleanLogs());
     }
+
+    public function testACallWhenConfiguredRunsWhenAnAppIsSet(): void
+    {
+        $ran = false;
+
+        new GitHubAppSetting('12345', new BufferingLogger())->whenConfigured(static function () use (&$ran): void {
+            $ran = true;
+        });
+
+        self::assertTrue($ran);
+    }
+
+    public function testACallWhenConfiguredIsSkippedWithoutAnApp(): void
+    {
+        $ran = false;
+
+        new GitHubAppSetting('', new BufferingLogger())->whenConfigured(static function () use (&$ran): void {
+            $ran = true;
+        });
+
+        self::assertFalse($ran);
+    }
+
+    public function testAnAppIdOfOnlyWhitespaceCountsAsMissing(): void
+    {
+        $log = new BufferingLogger();
+
+        new GitHubAppSetting(" \t", $log)->onWorkerStarted();
+
+        self::assertSame([['info', self::NOTICE, []]], $log->cleanLogs());
+    }
 }
