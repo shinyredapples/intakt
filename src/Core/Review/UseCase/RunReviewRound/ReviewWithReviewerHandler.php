@@ -45,7 +45,7 @@ final readonly class ReviewWithReviewerHandler
             try {
                 $this->review($reviewer);
             } catch (Throwable $handedBack) {
-                // A reviewer whose review throws was handed back to the queue, so the page stops counting it as started before its message comes back.
+                // Republishes whatever the stored round now holds, because a review that throws handed its reviewer back to the queue and the started count dropped.
                 $this->progress->publishLatest($roundId);
 
                 throw $handedBack;
