@@ -561,10 +561,43 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
     public function testTheBoardLinksToTheReviewListBehindIt(): void
     {
-        $link = $this->browser->request('GET', '/')->filter('.page-head .actions a');
+        $link = $this->browser->request('GET', '/')->filter('.page-head .actions a.secondary');
 
         self::assertSame('/reviews', $link->attr('href'));
         self::assertSame('Open the review list', $link->text());
+    }
+
+    public function testAFreshInstallsBoardLinksTheFirstRunPageAsItsPrimaryAction(): void
+    {
+        $link = $this->browser->request('GET', '/')->filter('.page-head .actions a.btn.primary');
+
+        self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
+        self::assertSame('Set up Intakt', $link->text());
+    }
+
+    public function testOnceAReviewHasRunTheBoardNoLongerLinksTheFirstRunPage(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        self::assertCount(0, $this->browser->request('GET', '/')->filter('a[href="/setup"]'));
+    }
+
+    public function testOnAFreshInstallEveryColumnSaysWhatWillAppearInIt(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame(
+            array_map(static fn (BoardColumn $column): string => $column->firstDayLine(), BoardColumn::cases()),
+            $page->filter('.board > section.col .col-empty')->each(static fn (Crawler $empty): string => $empty->text()),
+        );
+    }
+
+    public function testOnAFreshInstallWhoIsWorkingSaysThatReviewersAppearWhileTheyReview(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $page->filter('p.working-none')->text());
     }
 
     public function testABoardWithoutFailingHeadsShowsNoBanner(): void

@@ -16,7 +16,8 @@
     {% for review in cards %}
         {{ include('dashboard/_board_card.html.twig', {review: review, past_limit: loop.index > limit}, with_context = false) }}
     {% else %}
-        {{ include('dashboard/components/column_empty.html.twig', needs ? {text: 'Nothing needs you'} : {}, with_context = false) }}
+        {# A fresh install says what the column will hold, so a newcomer learns the board before it has a card (#2067, D7). #}
+        {{ include('dashboard/components/column_empty.html.twig', board.firstDay ? {text: column.firstDayLine} : (needs ? {text: 'Nothing needs you'} : {}), with_context = false) }}
     {% endfor %}
     {% if crowded %}<button type="button" class="btn secondary sm more-btn">Show {{ cards|length - limit }} more</button>{% endif %}
     </div>

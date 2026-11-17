@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Notice
+{
+    #[KeptForTheProcess]
+    private bool $reported = false;
+
+    public function once(): bool
+    {
+        $first = !$this->reported;
+        $this->reported = true;
+
+        return $first;
+    }
+}

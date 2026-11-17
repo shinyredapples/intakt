@@ -38,6 +38,11 @@ final class HeadlineTest extends TestCase
         self::assertSame('Nothing is running yet. Start the first review.', $headline->opening());
     }
 
+    public function testOnlyAHeadlineWithoutCardsIsTheFirstDay(): void
+    {
+        self::assertSame([true, false], [new Headline(new WhoIsWorking([]), [], 0)->isFirstDay(), new Headline(new WhoIsWorking([]), [], 1)->isFirstDay()]);
+    }
+
     public function testOneRunningReviewNamesTheCodeReviewersAndItsChange(): void
     {
         $headline = $this->headline([$this->running('sample', '3')], []);

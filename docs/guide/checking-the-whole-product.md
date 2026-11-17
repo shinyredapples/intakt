@@ -18,7 +18,7 @@ A third helper, the round driver, starts a review on the sample project and move
 
 | Journey | The path | Status |
 |---|---|---|
-| First install and setup | a new install gets its database, its board's first line says nothing is running yet, it shows an empty projects page, is given the sample project (a second time changes nothing), and shows an empty reviews page | built |
+| First install and setup | a new install gets its database, its board's first line says nothing is running yet, its **Set up Intakt** button opens the first-run page, it shows an empty projects page, is given the sample project (a second time changes nothing), shows an empty reviews page, starts the first review from the first-run page, which opens that review's page, after which the button has moved to the projects page | built |
 | First run of the demo without a key | a new demo install without a key opens on the first-run page, which offers the two ways to see a review: the recorded review, and the demo review, whose line says to paste a key, restart and press the start | built |
 | First run of the demo with a key | the same start, then a pasted Hugging Face token (a stand-in, so no provider is asked) is kept, a restart gives the sample project its reviewers, and pressing the start opens the live review page of the review it started | built |
 | A task picked, built, reviewed and merged on the demo repository | the whole life of a task | planned |
