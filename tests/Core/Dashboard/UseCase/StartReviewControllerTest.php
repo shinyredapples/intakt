@@ -80,6 +80,27 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertSame('3', $crawler->filter('form.start-review input[name=number]')->attr('value'));
     }
 
+    public function testTheButtonIsLabeledWithTheNumberOfTheRoundItStarts(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame('Start round 3', trim($crawler->filter('form.start-review button[type=submit]')->text()));
+    }
+
+    // Stop is rendered too, but the idle marker hides it, so exactly one action shows.
+    public function testAReviewWithNoRoundRunningOffersOnlyTheStartOfTheNextRound(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertCount(1, $crawler->filter('.task-actions .now-stop-idle ~ form.stop-round'));
+        self::assertCount(1, $crawler->filter('.task-actions > form.start-review'));
+    }
+
     // The ledger already holds round 2 when the stale page's number arrives, so only the number from the page lets the Review module refuse it.
     public function testAStalePageAsksForTheNumberItShowedAndNotTheNextOneInTheLedger(): void
     {

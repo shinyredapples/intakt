@@ -62,7 +62,7 @@
         <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::START_REVIEW'), {round: round}) }}" class="start-review">
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\StartReview\\StartReviewController::TOKEN_ID')) }}">
             <input type="hidden" name="number" value="{{ review.nextNumber }}">
-            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start the next round on the current head'}, with_context = false) }}
+            {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Start round ' ~ review.nextNumber}, with_context = false) }}
         </form>
         {% endif %}
     </div>
