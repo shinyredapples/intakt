@@ -460,7 +460,7 @@ final class LedgerRoundsTest extends TestCase
         );
 
         self::assertEquals([new RoundFinding('F1', 'P1', 'Broken.', ['F2'])->calledBy(JudgeCall::Act)], $review?->rounds[0]->findings);
-        self::assertSame('F1+F2', $review?->rounds[0]->findings[0]->entryId());
+        self::assertSame(['F1', 'F2'], $review?->rounds[0]->findings[0]->ids());
     }
 
     public function testAJudgeRowWrittenBeforeMergedIdsWereRecordedKeepsEveryFindingAsItsOwnRow(): void
@@ -471,7 +471,7 @@ final class LedgerRoundsTest extends TestCase
             $this->event(LedgerEventKind::JudgeDone, '{"round":"r1","act":["F1","F2"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1","text":"Broken."},{"id":"F2","severity":"P2","text":"Also broken."}]}'),
         );
 
-        self::assertSame(['F1', 'F2'], array_map(static fn (RoundFinding $finding): string => $finding->entryId(), $review?->rounds[0]->findings ?? []));
+        self::assertSame([['F1'], ['F2']], array_map(static fn (RoundFinding $finding): array => $finding->ids(), $review?->rounds[0]->findings ?? []));
     }
 
     public function testAnEventOfAnotherKindWithReviewerFieldsAddsNoReviewer(): void
