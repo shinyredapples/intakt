@@ -4,14 +4,27 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use Intakt\Core\Dashboard\Domain\Character;
+use Intakt\Core\Dashboard\Domain\MascotPose;
+use Intakt\Core\Dashboard\Domain\Review;
+use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\RoundProgress;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
 
 #[CoversClass(ShowReviewController::class)]
+#[UsesClass(LedgerReviewPages::class)]
+#[UsesClass(Review::class)]
+#[UsesClass(ReviewedRound::class)]
+#[UsesClass(ReviewOutcome::class)]
+#[UsesClass(RoundProgress::class)]
+#[UsesClass(MascotPose::class)]
+#[UsesClass(Character::class)]
 final class ReviewPageOctopusTest extends DashboardPageTestCase
 {
     private const string OCTOPUS = 'img.character[src*="/mascot/octopus-bowing-"]';
