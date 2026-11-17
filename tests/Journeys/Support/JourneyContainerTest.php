@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Journeys\Support;
 
 use Intakt\Kernel;
+use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\Vendor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -19,6 +20,7 @@ use Symfony\Component\Messenger\Bridge\Doctrine\Transport\DoctrineTransport;
 // A journey test case, because what it proves is that the instance's container and the journey agree on where the hub records.
 #[CoversClass(JourneyTestCase::class)]
 #[UsesClass(JourneyVendor::class)]
+#[UsesClass(JourneyKeyCheck::class)]
 #[UsesClass(RecordingHub::class)]
 #[UsesClass(JourneySteps::class)]
 #[UsesClass(LiveRoundDriver::class)]
@@ -44,6 +46,11 @@ final class JourneyContainerTest extends JourneyTestCase
     public function testTheTestContainerReviewsWithTheJourneyVendor(): void
     {
         self::assertInstanceOf(JourneyVendor::class, $this->container()->get(Vendor::class));
+    }
+
+    public function testTheTestContainerChecksPastedKeysWithTheJourneyKeyCheck(): void
+    {
+        self::assertInstanceOf(JourneyKeyCheck::class, $this->container()->get(KeyCheck::class));
     }
 
     public function testAnUpdatePublishedThroughTheTestContainerIsReadByTheJourney(): void

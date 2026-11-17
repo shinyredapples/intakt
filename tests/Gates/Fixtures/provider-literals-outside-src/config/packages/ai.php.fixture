@@ -1,0 +1,8 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+    'model' => 'gpt-5-nano',
+    'host' => 'api.openai.com',
+];

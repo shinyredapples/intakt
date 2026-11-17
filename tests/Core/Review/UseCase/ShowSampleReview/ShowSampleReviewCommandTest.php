@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\ShowSampleReview;
 
+use Intakt\Core\Mcp\Contract\OwnerClientLine;
 use Intakt\Core\Mcp\Contract\OwnerToken;
 use Intakt\Core\Review\UseCase\ShowSampleReview\ShowSampleReviewCommand;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 #[CoversClass(ShowSampleReviewCommand::class)]
+#[UsesClass(OwnerToken::class)]
+#[UsesClass(OwnerClientLine::class)]
 final class ShowSampleReviewCommandTest extends TestCase
 {
     private const string REPOSITORY = '/app/var/data/sample-repository';

@@ -93,7 +93,7 @@ return static function (ContainerConfigurator $container): void {
 
     // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
     $keyProviders = new SymfonyAiProviderCatalog();
-    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders)->loadEnvVars();
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, otherLoaders: [$vault])->loadEnvVars();
 
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
     $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {

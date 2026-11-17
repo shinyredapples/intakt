@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class AnthropicDescriptor
+{
+    private const string CHECK_MODEL = 'claude-haiku-5-5';
+
+    public function checkModel(): string
+    {
+        return self::CHECK_MODEL;
+    }
+}

@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Ids
+{
+    public function light(string $model = 'o4-mini'): string
+    {
+        return $model.<<<'TEXT'
+
+            openai/gpt-oss-120b:novita
+            TEXT;
+    }
+
+    public function bedrock(): string
+    {
+        return 'us.anthropic.claude-haiku-5-5'
+            .new class {
+                public function router(): string
+                {
+                    return 'moonshotai/Kimi-K3:deepinfra';
+                }
+            }->router()
+            .<<<TEXT
+                {$this->light()} gemini-2.5-pro
+                TEXT;
+    }
+
+    public function router(): string
+    {
+        return 'https://router.huggingface.co/v1';
+    }
+}

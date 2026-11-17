@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Hosts
+{
+    /**
+     * @return list<string>
+     */
+    public function all(): array
+    {
+        return [
+            'https://API.OPENAI.COM:443/v1',
+            'api.openai.com.example.org',
+            <<<'TEXT'
+                https://router.huggingface.co/v1
+                TEXT,
+        ];
+    }
+}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Contract;
 
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUp;
@@ -21,6 +22,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Judgement::class)]
 #[UsesClass(JudgedFinding::class)]
 #[UsesClass(Finding::class)]
+#[UsesClass(DroppedFinding::class)]
 final class JudgedFindingsTest extends TestCase
 {
     public function testEveryJudgedFindingIsKeptWhateverItsMark(): void
@@ -88,6 +90,15 @@ final class JudgedFindingsTest extends TestCase
 
         self::assertEquals([$finding], $judged->actList);
         self::assertSame([], $judged->followUps);
+    }
+
+    public function testJudgedFindingsKeepTheDroppedFindingsTheyAreGiven(): void
+    {
+        $dropped = [DroppedFinding::of($this->finding('gone', Severity::P2), 'Names no file.')];
+
+        $judged = JudgedFindings::of($this->marks([]), $this->findings('a'), $dropped);
+
+        self::assertSame($dropped, $judged->dropped);
     }
 
     public function testAP2WithoutAMarkStaysOnTheActList(): void

@@ -29,9 +29,14 @@ final readonly class StartFirstReviewController
     public function __invoke(Request $request): Response
     {
         $this->press->refuseWithoutToken($request, self::TOKEN_ID, 'The form token is missing or wrong, so nothing was started.');
-        $line = $this->starts->startSampleChange() ?? throw new NotFoundHttpException('This install has no sample change to review, so nothing was started.');
-        $this->press->flash($request, $line);
+        $answer = $this->starts->startSampleChange() ?? throw new NotFoundHttpException('This install has no sample change to review, so nothing was started.');
+        $this->press->flash($request, $answer->line);
 
-        return new RedirectResponse($this->urls->generate(DashboardRoutes::FIRST_RUN), Response::HTTP_SEE_OTHER);
+        // Back to the first-run page when nothing started, because its flash line says why and the step still offers the start.
+        $target = null === $answer->round
+            ? $this->urls->generate(DashboardRoutes::FIRST_RUN)
+            : $this->urls->generate(DashboardRoutes::SHOW_REVIEW, ['round' => $answer->round]);
+
+        return new RedirectResponse($target, Response::HTTP_SEE_OTHER);
     }
 }
