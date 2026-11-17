@@ -628,6 +628,57 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringStartsWith('The judge has judged this round.', $updated->filter('#round-round-1-now-judge')->text());
     }
 
+    public function testALiveLogBlockPlacedByAStreamShowsExactlyOneCodeReviewerHeadOf24Pixels(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+
+        $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
+
+        $block = $this->replaced($page, $this->publishedStreams())->filter('#round-'.$id.'-live .live');
+        self::assertCount(1, $block);
+        $images = $block->filter('.character-row > img.character');
+        self::assertCount(2, $block->filter('img'));
+        self::assertSame(['', ''], $images->each(static fn (Crawler $img): ?string => $img->attr('alt')));
+        self::assertSame([['24', '24'], ['24', '24']], $images->each(static fn (Crawler $img): array => [$img->attr('width'), $img->attr('height')]));
+        self::assertCount(2, $images->filter('img[src*="code_reviewer-"]'));
+        self::assertSame('correctness (Kimi K3) live', $block->filter('.character-row')->text());
+    }
+
+    public function testALiveLogBlockPlacedByAStreamIsTheBlockThePageRendersOnLoad(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+
+        $this->publishedUpdates()->textStreamed($round, $id.'-correctness', 'Looking');
+
+        $placed = $this->replaced($page, $this->publishedStreams())->filter('#reviewer-'.$id.'-correctness > .character-row')->outerHtml();
+        $loaded = $this->browser->request('GET', '/reviews/'.$id)->filter('#reviewer-'.$id.'-correctness > .character-row')->outerHtml();
+        self::assertSame($loaded, $placed);
+    }
+
+    public function testALiveLogBlockPlacedWhileItsStartCannotBeReadKeepsItsFallbackHeadingAndOneHead(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
+
+        $row = $updated->filter('#round-round-1-live .live .character-row');
+        self::assertSame('A reviewer (role not read) live', $row->text());
+        self::assertCount(2, $row->children('img.character'));
+    }
+
+    public function testTheOwlBesideTheRoundsFindingsHeadingSurvivesTheJudgedUpdate(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        $updated = $this->replaced($page, $this->stream('round_judged', ['round' => 'round-1', 'progress' => new RoundProgress(2, 2, true)]));
+
+        self::assertCount(2, $updated->filter('#round-round-1-judged')->previousAll()->first()->filter('img[src*="judge-"][width="24"]'));
+    }
+
     public function testAReviewerThePageAlreadyListsKeepsItsOneRowWhenItFinishes(): void
     {
         $this->givenARunningRound();
