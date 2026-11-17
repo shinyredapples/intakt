@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge checks every finding against the task before it reaches the act list. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
+Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge marks every finding against the task, but every P1 and P2 finding that passes the quote check reaches the act list whatever the judge answers, even when its answer is invalid; only a P3 finding can be deferred or rejected. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
 
 <p align="center">
   <picture>
@@ -20,6 +20,8 @@ PHP 8.5, Symfony AI Â· [Status](#status): what works today and what is planned Â
 
 ## Five-minute start
 
+**No provider key?** Take the tour first: start the demo below with no key in `.env.local`, open `http://localhost:7781/demo` and press **Play the demo run**. It plays a recorded review onto the dashboard without calling any model, with a caption at the bottom of every page that names each stage, from the change arriving to the act list of round 1 and the closed findings of round 2. It needs a recording: none ships with Intakt yet, so set `INTAKT_DEMO_RECORDING` in `.env.local` to one written by `intakt:demo:record` ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
+
 The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)):
 
 ```
@@ -27,7 +29,7 @@ git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
-Then open http://localhost:7781. A new install opens on the first-run page with two choices: **watch a recorded real review now**, with no key (the page says it arrives with the demo tour; it cannot be played yet), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+Then open http://localhost:7781. A new install opens on the first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above once a recording is installed; until then the page says why it cannot play), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
 
 From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)).
 

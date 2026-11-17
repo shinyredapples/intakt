@@ -15,6 +15,13 @@
             <p class="lead">What this install has set up and what is still missing, read from the running install.</p>
         </div>
     </div>
+    {%- set demo_ready = demo is same as(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\DemoReadiness::Ready')) %}
+    {%- if demo_ready and first_run.choices is null %}
+    <div class="play-demo-offer step-nav">
+        <p>No provider key yet? Watch a recorded review run instead, with a caption that names each stage.</p>
+        {{ _self.play_demo() }}
+    </div>
+    {%- endif %}
     <ol class="steps" aria-label="Setup progress">
         {%- for title in titles %}
         {%- if loop.index0 === first_run.current %}
@@ -32,7 +39,10 @@
         <h2 id="demo-choices-h">Two ways to see a review</h2>
         <div class="choice" id="choice-recorded">
             <h3>Watch a recorded real review now</h3>
-            <p class="recorded-when">The recorded review, which needs no key, arrives with the demo tour.</p>
+            <p class="recorded-when">{{ demo.sentence }}</p>
+            {%- if demo_ready %}
+            {{ _self.play_demo() }}
+            {%- endif %}
         </div>
         <div class="choice" id="choice-live">
             <h3>Paste one provider key or Hugging Face token and run the demo review</h3>
@@ -123,4 +133,12 @@
 
 {% macro state(state) -%}
 {{ include('dashboard/components/chip.html.twig', {label: state.words, dot: state.dot, on_page: true}, with_context = false) }}
+{%- endmacro %}
+
+{#- A secondary button, because the page's one primary action stays the next setup step. -#}
+{% macro play_demo() -%}
+<form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::PLAY_DEMO')) }}" class="play-demo">
+    <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\PlayDemo\\PlayDemoController::TOKEN_ID')) }}">
+    {{ include('dashboard/components/button.html.twig', {kind: 'secondary', type: 'submit', label: 'Play the demo run'}, with_context = false) }}
+</form>
 {%- endmacro %}
