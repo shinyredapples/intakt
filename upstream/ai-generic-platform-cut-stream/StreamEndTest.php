@@ -77,7 +77,7 @@ final class StreamEndTest extends TestCase
         $this->textOf([$this->opening(), $this->content(), $this->usage(), self::DONE]);
     }
 
-    // Not checked against the router: if a provider sends its error in this shape, the bridge reports a cut stream instead of the error.
+    // Pins today's behavior, not the expected one: an error the provider sends in the stream should surface as a provider error carrying its message, so a pre-release where this test fails because another exception is raised has fixed it. Not checked against the router: whether it sends errors in this shape.
     public function testAnInStreamErrorObjectWithoutAnErrorKeyRaisesIncompleteStreamException(): void
     {
         $this->expectException(IncompleteStreamException::class);
