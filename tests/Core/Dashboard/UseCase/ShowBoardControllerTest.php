@@ -14,6 +14,7 @@ use Intakt\Core\Dashboard\Domain\Headline;
 use Intakt\Core\Dashboard\Domain\Lane;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Domain\WhoIsWorking;
@@ -38,6 +39,7 @@ use Symfony\Component\HttpFoundation\Response;
 #[UsesClass(BoardColumn::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
+#[UsesClass(ReviewOutcome::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(Lane::class)]
@@ -371,6 +373,29 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(3, $facts);
         self::assertSame('Round 2', $this->wordsWithoutExplanationOf($facts->eq(0)->filter('.term')));
         self::assertSame(['2 reviewers', 'Cost '.Cost::none()->reading()], [$facts->eq(1)->text(), $facts->eq(2)->text()]);
+    }
+
+    public function testACardOfARoundThatAskedForChangesLeadsWithTheChangesRequestedChipAndItsIconAboveTheTitle(): void
+    {
+        $this->ledger->startRoundOfQuorum('42', 'round-1', 'all');
+        $this->ledger->answer('round-1', 'correctness', 2);
+        $this->ledger->answer('round-1', 'security', 0);
+        $this->ledger->judgeRound('round-1');
+
+        $outcome = $this->column($this->browser->request('GET', '/'), 'Done')->filter('.card .top + .outcome');
+
+        self::assertSame('Changes requested', $outcome->filter('.chip')->text());
+        self::assertCount(1, $outcome->filter('.chip svg.i'));
+        self::assertCount(1, $outcome->nextAll()->filter('.title'));
+    }
+
+    public function testACardOfARoundStillInReviewShowsNoOutcome(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        $card = $this->column($this->browser->request('GET', '/'), 'In review')->filter('.card');
+
+        self::assertCount(0, $card->filter('.outcome'));
     }
 
     public function testTheRoundOnACardExplainsTheWord(): void

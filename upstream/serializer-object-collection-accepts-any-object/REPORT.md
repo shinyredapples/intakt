@@ -1,6 +1,6 @@
 # [Serializer] A list of objects accepts a `stdClass` and ends in a `TypeError`
 
-Draft, not posted. Affected: 6.4.49, 7.4.22, 8.1.9, 8.1.11 and 8.2.0-BETA1; target branch: 6.4. Versions: `symfony/serializer` v8.1.9, `symfony/property-info` v8.1.8, PHP 8.5.12.
+Fixed by symfony/symfony#67913 (merged 2026-11-06). Affected: 6.4.49, 7.4.22, 8.1.9, 8.1.11 and 8.2.0-BETA1; target branch: 6.4. Versions: `symfony/serializer` v8.1.9, `symfony/property-info` v8.1.8, PHP 8.5.12.
 
 ## What happens
 
@@ -35,4 +35,4 @@ Checked on 2026-11-02, refreshed on 2026-11-06.
 - **Decision:** `fixed upstream` (v8.2.0-BETA2).
 - **Owner review (2026-11-03, symfony/symfony 6.4 to 8.2):** an issue, with the narrow trigger stated (`JsonDecode::ASSOCIATIVE => false` or pre-built objects; `MapRequestPayload` users are not affected). The fix looks small: the fallback `TypeIdentifier::OBJECT => \is_object($data)` check accepts any object for the class `Item[]`. `reproduce.php` also fails with `symfony/serializer` v6.4.49 and v7.4.22 (scratch projects, 2026-11-03).
 - **Refresh (2026-11-06):** still reproduces on 6.4.49, 7.4.22, 8.1.11 and 8.2.0-BETA1. The suggested guard is `null !== $class && str_ends_with($class, '[]')`: a plain `object` type has a null class, and `str_ends_with(null, ...)` is deprecated.
-- **Status:** `fixed upstream` (v8.2.0-BETA2): nothing to file; `ISSUE.md` is no longer needed.
+- **Status:** `fixed upstream` (v8.2.0-BETA2): nothing to file; `ISSUE.md` was removed.

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\ReplayDemo;
 
 use DateTimeImmutable;
+use Intakt\Core\Dashboard\Contract\LiveEvent;
+use Intakt\Core\Dashboard\Contract\LiveUpdates;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordedLedgerEvent;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -23,6 +26,7 @@ final readonly class ReplaysRecording
 
     public function __construct(
         private Ledger $ledger,
+        private LiveUpdates $updates,
         private ClockInterface $clock,
         private LockFactory $locks,
     ) {
@@ -42,10 +46,21 @@ final readonly class ReplaysRecording
         }
 
         try {
+            $this->refuseUpdatesWithoutTopic($recording);
             $this->refuseRoundsTheLedgerHolds($recording);
-            $this->appendAtTheRecordedPace($recording, $factor);
+            $this->playAtTheRecordedPace($recording, $factor);
         } finally {
             $lock->release();
+        }
+    }
+
+    // Checked before the first append, because a refusal partway through would leave rows whose round blocks any second attempt.
+    private function refuseUpdatesWithoutTopic(Recording $recording): void
+    {
+        foreach ($recording->updates as $number => $update) {
+            if ('' === trim($update->topic)) {
+                throw ReplayIsRefused::becauseAnUpdateHasNoTopic($number);
+            }
         }
     }
 
@@ -63,17 +78,42 @@ final readonly class ReplaysRecording
         }
     }
 
-    // Each row's moment counts from the replay's start, so the time an append takes is not added to the gaps that follow it.
-    private function appendAtTheRecordedPace(Recording $recording, float $factor): void
+    // Each step's moment counts from the replay's start, so the time an append takes is not added to the gaps that follow it.
+    private function playAtTheRecordedPace(Recording $recording, float $factor): void
     {
-        $first = array_first($recording->events)?->recordedAt;
+        $steps = $this->timelineOf($recording);
         $start = $this->clock->now();
+        $number = 0;
 
-        foreach ($recording->events as $number => $event) {
-            $due = $this->secondsBetween($first, $event->recordedAt) / $factor;
+        foreach ($steps as $step) {
+            $due = $this->secondsBetween($this->momentOf($steps[0]), $this->momentOf($step)) / $factor;
             $this->clock->sleep(max(0.0, $due - $this->secondsBetween($start, $this->clock->now())));
-            $this->append($event, $recording, $number);
+
+            if ($step instanceof CapturedUpdate) {
+                $this->updates->publish(new LiveEvent($step->topic, $step->data));
+
+                continue;
+            }
+
+            $this->append($step, $recording, $number++);
         }
+    }
+
+    // Merged rather than sorted, so each list keeps its recorded order; a row goes before an update of the same moment, because the page an update reloads must find that row.
+    /**
+     * @return list<RecordedLedgerEvent|CapturedUpdate>
+     */
+    private function timelineOf(Recording $recording): array
+    {
+        $events = $recording->events;
+        $updates = $recording->updates;
+        $steps = [];
+
+        while ([] !== $events && [] !== $updates) {
+            $steps[] = $events[0]->recordedAt <= $updates[0]->at ? array_shift($events) : array_shift($updates);
+        }
+
+        return [...$steps, ...$events, ...$updates];
     }
 
     private function append(RecordedLedgerEvent $event, Recording $recording, int $number): void
@@ -85,13 +125,9 @@ final readonly class ReplaysRecording
         }
     }
 
-    // A row recorded before the first one follows at once, because the ledger keeps the recorded order.
-    private function secondsBetween(?DateTimeImmutable $earlier, DateTimeImmutable $later): float
+    // A step recorded before the first one follows at once, because the ledger and the capture keep the recorded order.
+    private function secondsBetween(DateTimeImmutable $earlier, DateTimeImmutable $later): float
     {
-        if (!$earlier instanceof DateTimeImmutable) {
-            return 0.0;
-        }
-
         $seconds = $later->getTimestamp() - $earlier->getTimestamp() + ((int) $later->format('u') - (int) $earlier->format('u')) / 1_000_000;
 
         return max(0.0, $seconds);
@@ -109,6 +145,11 @@ final readonly class ReplaysRecording
         $row->project = CreateDemoProjectCommand::NAME;
 
         return json_encode($row, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+    }
+
+    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
+    {
+        return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
     }
 
     private static function roundOf(string $payload): ?string
