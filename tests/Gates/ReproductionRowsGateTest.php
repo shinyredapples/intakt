@@ -23,6 +23,8 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 {
     private const string SECTION = "## Found in the beta\n\nEach entry is a reproduction under `upstream/<slug>/`.\n\n| Probe | Status | Where | Upstream issue |\n|---|---|---|---|\n";
 
+    private const string PULL_REQUESTS = "- **Pull requests and commits:** #1857 (open) touches the same file.\n";
+
     public function testAReproductionWithoutARowFails(): void
     {
         $this->assertRejectedBy('reproductions', 'reproduction-without-row', 'upstream/messenger-lost-message/ has no row in "Found in the beta" of docs/highlights.md');
@@ -268,9 +270,16 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 
     public function testAReadyToFileReportCheckedThreeDaysAgoPasses(): void
     {
-        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3)." against main.\n- **Decision:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3)." against main.\n".self::PULL_REQUESTS."- **Decision:** `ready to file`.\n");
 
         self::assertTrue($run->passed('reproductions'), $run->output());
+    }
+
+    public function testAReadyToFileReportWithoutAPullRequestsAndCommitsLineFails(): void
+    {
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3)." against main.\n- **Decision:** `ready to file`.\n");
+
+        self::assertStringContainsString('upstream/a-bug/REPORT.md is ready to file but has no "Pull requests and commits" line', $run->findingsOf('reproductions'));
     }
 
     public function testAReadyToFileReportCheckedTwentyDaysAgoFails(): void
@@ -338,7 +347,7 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 
     public function testASubheadingInsideTheUpstreamStatusSectionKeepsItsLines(): void
     {
-        $run = $this->checkReport("### Check\n\n- **Checked:** ".$this->daysAgo(3)." against main.\n- **Decision:** `ready to file`.\n");
+        $run = $this->checkReport("### Check\n\n- **Checked:** ".$this->daysAgo(3)." against main.\n".self::PULL_REQUESTS."- **Decision:** `ready to file`.\n");
 
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
@@ -373,14 +382,14 @@ final class ReproductionRowsGateTest extends SandboxTestCase
 
     public function testACheckedDateFollowedByAColonIsRead(): void
     {
-        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3).": main abc1234, 7.3.5.\n- **Status:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3).": main abc1234, 7.3.5.\n".self::PULL_REQUESTS."- **Status:** `ready to file`.\n");
 
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
 
     public function testACheckedDateFollowedByAPeriodIsRead(): void
     {
-        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3).".\n- **Status:** `ready to file`.\n");
+        $run = $this->checkReport('- **Checked:** '.$this->daysAgo(3).".\n".self::PULL_REQUESTS."- **Status:** `ready to file`.\n");
 
         self::assertTrue($run->passed('reproductions'), $run->output());
     }
