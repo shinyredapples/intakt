@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Infrastructure\KeptProviderKeyFile;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Intakt\Tests\Support\CompiledContainers;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\RebuiltContainer;
@@ -509,7 +510,8 @@ final class AiProvidersTest extends KernelTestCase
 
     private function keepKey(string $key): void
     {
-        new KeptProviderKeyFile($this->keptKeyDirectory())->keep(ProviderKey::recognise($key));
+        $providers = new SymfonyAiProviderCatalog();
+        new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise($key, $providers));
     }
 
     // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.

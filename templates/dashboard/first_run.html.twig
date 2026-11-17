@@ -33,7 +33,7 @@
         {%- if step.offersKeyForm %}
         <form method="post" action="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::KEEP_PROVIDER_KEY')) }}" class="keep-provider-key step-nav">
             <input type="hidden" name="_token" value="{{ csrf_token(constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::TOKEN_ID')) }}">
-            <label for="provider-key">An Anthropic key, an OpenAI key or a Hugging Face token</label>
+            <label for="provider-key">A key or token for {{ step.keyLabels|join(', ', ' or ') }}</label>
             <input type="password" id="provider-key" name="{{ constant('Intakt\\Core\\Dashboard\\UseCase\\KeepProviderKey\\KeepProviderKeyController::FIELD') }}" autocomplete="off" required>
             {{ include('dashboard/components/button.html.twig', {kind: 'primary', type: 'submit', label: 'Keep the key'}, with_context = false) }}
         </form>

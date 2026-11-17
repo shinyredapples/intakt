@@ -5,88 +5,82 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Ai\Contract;
 
 use Intakt\Core\Ai\Contract\ConfiguredKey;
-use Intakt\Core\Ai\Contract\KeyKind;
 use Intakt\Core\Ai\Contract\KeyNotRecognised;
 use Intakt\Core\Ai\Contract\ProviderKey;
+use Intakt\Plugin\Vendor\Contract\ProviderCatalog;
+use Intakt\Plugin\Vendor\Contract\ProviderDescriptor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Throwable;
 
 #[CoversClass(ProviderKey::class)]
-#[UsesClass(KeyKind::class)]
 #[CoversClass(KeyNotRecognised::class)]
 #[UsesClass(ConfiguredKey::class)]
 final class ProviderKeyTest extends TestCase
 {
-    public function testAnAnthropicKeyIsRecognisedAsAnthropic(): void
+    public function testAKeyIsRecognisedAsTheProviderWhoseFormItFits(): void
     {
-        self::assertSame(KeyKind::Anthropic, ProviderKey::recognise('sk-ant-'.$this->body())->kind());
-    }
-
-    public function testAnOpenAiKeyIsRecognisedAsOpenAi(): void
-    {
-        self::assertSame(KeyKind::OpenAi, ProviderKey::recognise('sk-'.$this->body())->kind());
-    }
-
-    public function testAnOpenAiProjectKeyIsRecognisedAsOpenAi(): void
-    {
-        self::assertSame(KeyKind::OpenAi, ProviderKey::recognise('sk-proj-'.$this->body())->kind());
-    }
-
-    public function testAHuggingFaceTokenIsRecognisedAsHuggingFace(): void
-    {
-        self::assertSame(KeyKind::HuggingFace, ProviderKey::recognise('hf_'.$this->body())->kind());
+        self::assertSame('beta', ProviderKey::recognise('b_'.$this->body(), $this->catalog())->provider());
     }
 
     public function testSurroundingWhitespaceIsIgnored(): void
     {
-        self::assertSame(KeyKind::HuggingFace, ProviderKey::recognise('  hf_'.$this->body()."\n")->kind());
+        self::assertSame('alpha', ProviderKey::recognise('  a_'.$this->body()."\n", $this->catalog())->provider());
     }
 
-    public function testAKeyOfAnUnknownFormIsRefused(): void
+    public function testAKeyOfNoListedFormIsRefused(): void
     {
         $this->expectException(KeyNotRecognised::class);
 
-        ProviderKey::recognise('xx-'.$this->body());
+        ProviderKey::recognise('xx-'.$this->body(), $this->catalog());
     }
 
     public function testAnEmptyKeyIsRefused(): void
     {
         $this->expectException(KeyNotRecognised::class);
 
-        ProviderKey::recognise('   ');
+        ProviderKey::recognise('   ', $this->catalog());
     }
 
-    public function testTheRefusalMessageDoesNotContainTheKey(): void
+    public function testAKeyTwoListedFormsFitIsRefusedInsteadOfGoingToTheFirst(): void
+    {
+        $catalog = $this->catalog($this->descriptor('alpha', '/^a_\w{8,}$/D'), $this->descriptor('wide', '/^\w{8,}$/D'));
+
+        $this->expectException(KeyNotRecognised::class);
+
+        ProviderKey::recognise('a_'.$this->body(), $catalog);
+    }
+
+    public function testTheRefusalNamesTheListedProvidersButNotTheKey(): void
     {
         $key = 'xx-secretvalue'.$this->body();
 
         try {
-            ProviderKey::recognise($key);
+            ProviderKey::recognise($key, $this->catalog());
             self::fail('The key should be refused.');
         } catch (KeyNotRecognised $refusal) {
-            self::assertStringNotContainsString('secretvalue', $refusal->getMessage());
+            self::assertSame('The key has the form of no listed provider (Alpha, Beta).', $refusal->getMessage());
         }
     }
 
-    public function testTheConfiguredStateShowsOnlyTheLastFourCharacters(): void
+    public function testTheConfiguredStateShowsTheProviderAndOnlyTheLastFourCharacters(): void
     {
-        $configured = ProviderKey::recognise('sk-ant-'.$this->body())->configured();
+        $configured = ProviderKey::recognise('a_'.$this->body(), $this->catalog())->configured();
 
-        self::assertEquals(new ConfiguredKey(KeyKind::Anthropic, '1234'), $configured);
+        self::assertEquals(new ConfiguredKey('alpha', '1234'), $configured);
     }
 
     public function testAShortKeyShowsFewerThanFourCharacters(): void
     {
-        $configured = ProviderKey::recognise('hf_abcdefgh')->configured();
+        $configured = ProviderKey::recognise('b_abcdefgh', $this->catalog())->configured();
 
         self::assertSame('gh', $configured->lastCharacters);
     }
 
     public function testTheKeyDoesNotAppearInVarExportPrintROrVarDumpOutput(): void
     {
-        $key = ProviderKey::recognise('sk-ant-'.$this->body('visiblepart'));
+        $key = ProviderKey::recognise('a_'.$this->body('visiblepart'), $this->catalog());
 
         ob_start();
         var_dump($key);
@@ -101,11 +95,33 @@ final class ProviderKeyTest extends TestCase
         $caught = null;
 
         try {
-            ProviderKey::recognise('xx-tracedvalue'.$this->body());
+            ProviderKey::recognise('xx-tracedvalue'.$this->body(), $this->catalog());
         } catch (Throwable $caught) {
         }
 
         self::assertStringNotContainsString('tracedvalue', (string) $caught?->getTraceAsString());
+    }
+
+    private function catalog(ProviderDescriptor ...$descriptors): ProviderCatalog
+    {
+        $catalog = self::createStub(ProviderCatalog::class);
+        $catalog->method('descriptors')->willReturn([] === $descriptors ? [$this->descriptor('alpha', '/^a_\w{8,}$/D'), $this->descriptor('beta', '/^b_\w{8,}$/D')] : array_values($descriptors));
+
+        return $catalog;
+    }
+
+    /**
+     * @param non-empty-string $id
+     * @param non-empty-string $pattern
+     */
+    private function descriptor(string $id, string $pattern): ProviderDescriptor
+    {
+        $descriptor = self::createStub(ProviderDescriptor::class);
+        $descriptor->method('id')->willReturn($id);
+        $descriptor->method('label')->willReturn(ucfirst($id));
+        $descriptor->method('keyPattern')->willReturn($pattern);
+
+        return $descriptor;
     }
 
     private function body(string $tail = '1234'): string
