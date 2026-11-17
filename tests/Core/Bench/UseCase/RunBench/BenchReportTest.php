@@ -89,7 +89,7 @@ final class BenchReportTest extends TestCase
         $results = array_map(static fn (array $named): BenchReviewerResult => new BenchReviewerResult('reviewer', Tier::Standard, new RunVerdict(false, [], [], [], [], null), new RoundTokens(1, 10, 0, 0, 0, 2, 12), 1, $named), $models);
         $lines = new BenchReport()->linesOf([new RepeatedChange('example', [new BenchReview('example', Decision::Approve, $results, [])])]);
 
-        return array_slice($lines, array_search('totals per reviewer and model over every run:', $lines, true) + 1);
+        return array_slice($lines, (int) array_search('totals per reviewer and model over every run:', $lines, true) + 1);
     }
 
     /**
