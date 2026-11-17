@@ -11,6 +11,7 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\DomCrawler\Crawler;
 use Twig\Environment;
+use Twig\Error\RuntimeError;
 
 #[CoversNothing]
 final class CharacterTemplateTest extends KernelTestCase
@@ -60,6 +61,14 @@ final class CharacterTemplateTest extends KernelTestCase
 
         self::assertMatchesRegularExpression('#^/assets/images/roles/code_reviewer-light-96-[\w-]+\.webp 1x, /assets/images/roles/code_reviewer-light-192-[\w-]+\.webp 2x$#', (string) $images->first()->attr('srcset'));
         self::assertMatchesRegularExpression('#^/assets/images/roles/code_reviewer-dark-96-[\w-]+\.webp 1x, /assets/images/roles/code_reviewer-dark-192-[\w-]+\.webp 2x$#', (string) $images->last()->attr('srcset'));
+    }
+
+    public function testARoleCharacterAtASizeWithoutImageFilesIsRefused(): void
+    {
+        $this->expectException(RuntimeError::class);
+        $this->expectExceptionMessage('No image files exist for the judge at 32 px.');
+
+        $this->rendered(Character::Judge, 32);
     }
 
     public function testTheOctopusShowsItsPoseInEachTheme(): void

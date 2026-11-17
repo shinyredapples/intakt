@@ -158,6 +158,16 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertCount(0, $crawler->filter('.log-summary b, .log-summary script'));
     }
 
+    public function testABacktickSpanInAFindingOfTheSummaryShowsAsCode(): void
+    {
+        $this->givenTheRunningRoundRecorded(new SessionSummary([], Cost::none(), [], [$this->finding('F1', Severity::P2, 'Call `Lock::acquire()` first.')], [], [], false));
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame(['Lock::acquire()'], $crawler->filter('.ls-findings .ls-text code')->each(static fn (Crawler $code): string => $code->text()));
+        self::assertStringNotContainsString('`', $crawler->filter('.ls-findings')->text());
+    }
+
     public function testAFindingMergedIntoAnActEntryReachesThatEntryFromItsHighlightButton(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
