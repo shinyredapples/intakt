@@ -18,6 +18,8 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewerStillHeld;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewEventNotRecorded;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewer;
+use Intakt\Core\Review\UseCase\RunReviewRound\BlockReviewerOfFailedMessage;
+use Intakt\Core\Review\UseCase\RunReviewRound\ResultNotStored;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundOpening;
@@ -30,6 +32,9 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use RuntimeException;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
+use Symfony\Component\Messenger\Exception\UnrecoverableExceptionInterface;
 
 #[Group('persistence')]
 #[CoversClass(RunReviewRoundHandler::class)]
@@ -40,6 +45,8 @@ use RuntimeException;
 #[CoversClass(ReviewerMoves::class)]
 #[CoversClass(ReviewerStillHeld::class)]
 #[CoversClass(RoundLedger::class)]
+#[CoversClass(ResultNotStored::class)]
+#[UsesClass(BlockReviewerOfFailedMessage::class)]
 #[UsesClass(RoundState::class)]
 #[UsesClass(ReviewerState::class)]
 #[UsesClass(ReviewerTransition::class)]
@@ -214,7 +221,7 @@ final class RunReviewRoundTest extends KernelTestCase
         );
     }
 
-    public function testAnEndTheLedgerRefusesIsNotStoredEitherAndTheReviewerGoesBackToTheQueue(): void
+    public function testAnEndTheLedgerKeepsRefusingIsNotStoredAndTheReviewerIsNotHandedBack(): void
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
@@ -224,31 +231,63 @@ final class RunReviewRoundTest extends KernelTestCase
         try {
             $this->fixture->worker($this->fixture->entities, $vendor, $refusingAfterTheStart)($message);
             self::fail('The refused ledger event was swallowed.');
-        } catch (ReviewEventNotRecorded) {
+        } catch (ResultNotStored $notStored) {
+            self::assertInstanceOf(ReviewEventNotRecorded::class, $notStored->getPrevious());
         }
 
         $reviewer = $this->fixture->reviewer($message->reviewerId);
         self::assertSame(1, $vendor->calls);
-        self::assertSame(ReviewerState::Queued, $reviewer->state());
+        self::assertSame(ReviewerState::Running, $reviewer->state());
         self::assertNull($reviewer->verdictJson());
         self::assertSame(RoundState::Collecting, $this->fixture->round($round->id()->toRfc4122())->state());
     }
 
-    public function testTheRetryAfterARefusedEndRunsTheReviewerAgainAndRecordsItsEnd(): void
+    public function testAnEndNotStoredIsNotRetriedByMessengerBecauseARetryWouldCallTheReviewerAgain(): void
+    {
+        $this->fixture->start(1);
+
+        try {
+            $this->fixture->worker($this->fixture->entities, new ScriptedVendor(), new InMemoryLedger(accepted: 1))($this->fixture->bus->messages[0]);
+            self::fail('The refused ledger event was swallowed.');
+        } catch (ResultNotStored $notStored) {
+            self::assertInstanceOf(UnrecoverableExceptionInterface::class, $notStored);
+        }
+    }
+
+    public function testARedeliveryAfterTheStoreAttemptsRanOutDoesNotCallTheAnsweredReviewerAgain(): void
+    {
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $vendor = new ScriptedVendor();
+        $worker = $this->fixture->worker($this->fixture->entities, $vendor, new RefusingVerdictsFirst(new InMemoryLedger(), 3));
+
+        try {
+            $worker($message);
+        } catch (ResultNotStored) {
+        }
+
+        try {
+            $worker($message);
+            self::fail('The redelivery took the reviewer the first delivery still holds.');
+        } catch (ReviewerStillHeld) {
+        }
+
+        self::assertSame(1, $vendor->calls);
+    }
+
+    public function testTheFailedMessageOfAnEndNotStoredBlocksTheReviewerAndCompletesTheRound(): void
     {
         $round = $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
-        $vendor = new ScriptedVendor();
 
         try {
-            $this->fixture->worker($this->fixture->entities, $vendor, new InMemoryLedger(accepted: 1))($message);
-        } catch (ReviewEventNotRecorded) {
+            $this->fixture->worker($this->fixture->entities, new ScriptedVendor(), new RefusingVerdictsFirst(new InMemoryLedger(), 3))($message);
+        } catch (ResultNotStored $notStored) {
+            ($this->fixture->failedMessages())(new WorkerMessageFailedEvent(new Envelope($message), 'async', $notStored));
         }
-        $this->fixture->deliver($message, $vendor);
 
-        self::assertSame(2, $vendor->calls);
+        self::assertSame(ReviewerState::Blocked, $this->fixture->reviewer($message->reviewerId)->state());
         self::assertSame(RoundState::Complete, $this->fixture->round($round->id()->toRfc4122())->state());
-        self::assertSame([LedgerEventKind::ReviewStarted, LedgerEventKind::ReviewerStarted, LedgerEventKind::VerdictReceived], $this->fixture->ledgerKinds());
     }
 
     public function testAVerdictTheLedgerRefusesOnceIsStoredOnANewTransactionWithoutCallingTheReviewerAgain(): void
@@ -257,29 +296,31 @@ final class RunReviewRoundTest extends KernelTestCase
         $message = $this->fixture->bus->messages[0];
         $vendor = new ScriptedVendor();
         $ledger = new InMemoryLedger();
+        $refusing = new RefusingVerdictsFirst($ledger, 1);
 
-        $this->fixture->worker($this->fixture->entities, $vendor, new RefusingVerdictsFirst($ledger, 1))($message);
+        $this->fixture->worker($this->fixture->entities, $vendor, $refusing)($message);
 
         self::assertSame(1, $vendor->calls);
         self::assertSame(ReviewerState::Verdict, $this->fixture->reviewer($message->reviewerId)->state());
-        self::assertSame(1, count(array_filter($ledger->kinds(), static fn (LedgerEventKind $kind): bool => LedgerEventKind::VerdictReceived === $kind)));
+        self::assertSame([1, 1], [$refusing->refused, count(array_filter($ledger->kinds(), static fn (LedgerEventKind $kind): bool => LedgerEventKind::VerdictReceived === $kind))]);
     }
 
-    public function testAVerdictTheLedgerKeepsRefusingIsTriedThreeTimesThenTheReviewerIsHandedBack(): void
+    public function testAVerdictTheLedgerKeepsRefusingIsTriedThreeTimesThenLeftUnstored(): void
     {
         $this->fixture->start(1);
         $message = $this->fixture->bus->messages[0];
         $vendor = new ScriptedVendor();
         $ledger = new InMemoryLedger();
+        $refusing = new RefusingVerdictsFirst($ledger, 4);
 
         try {
-            $this->fixture->worker($this->fixture->entities, $vendor, new RefusingVerdictsFirst($ledger, 3))($message);
+            $this->fixture->worker($this->fixture->entities, $vendor, $refusing)($message);
             self::fail('The refused ledger event was swallowed.');
-        } catch (ReviewEventNotRecorded) {
+        } catch (ResultNotStored) {
         }
 
-        self::assertSame(1, $vendor->calls);
-        self::assertSame(ReviewerState::Queued, $this->fixture->reviewer($message->reviewerId)->state());
+        self::assertSame([1, 3], [$vendor->calls, $refusing->refused]);
+        self::assertSame(ReviewerState::Running, $this->fixture->reviewer($message->reviewerId)->state());
         self::assertNotContains(LedgerEventKind::VerdictReceived, $ledger->kinds());
     }
 

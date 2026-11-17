@@ -22,8 +22,8 @@ final readonly class ReviewerLeases
 {
     private const string WORKER_STOPPED = 'the worker stopped twice before the reviewer had a verdict';
     private const string MESSAGE_FAILED = 'the review message failed for good';
-    private const int STORE_ATTEMPTS = 3;
     private const string CEILING_PASSED = 'the reviewer had no result within the review ceiling';
+    private const int STORE_ATTEMPTS = 3;
 
     public function __construct(
         private EntityManagerInterface $entities,
@@ -124,20 +124,19 @@ final readonly class ReviewerLeases
      */
     private function record(RoundReviewer $reviewer, Closure $move): mixed
     {
-        $attemptsLeft = self::STORE_ATTEMPTS;
+        $attempts = 0;
 
         while (true) {
             try {
                 return $this->recordOnce($reviewer, $move);
             } catch (ReviewEventNotRecorded $refused) {
-                // A new transaction first, because the verdict is already in hand and only a fresh snapshot can write after another reviewer committed; handing the reviewer back would call the vendor, and pay, again.
-                if (--$attemptsLeft > 0 && $this->entities->isOpen()) {
+                // A new transaction, because the result is already in hand and only a fresh snapshot can write after another reviewer committed.
+                if (++$attempts < self::STORE_ATTEMPTS && $this->entities->isOpen()) {
                     continue;
                 }
 
-                $this->handBack($reviewer);
-
-                throw $refused;
+                // Left running rather than handed back, because a retry of a queued reviewer would call the vendor, and pay, again.
+                throw ResultNotStored::after($attempts, $refused);
             }
         }
     }

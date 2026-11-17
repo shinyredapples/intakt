@@ -14,7 +14,7 @@ use Override;
 // Refuses the first stores of a verdict, because that is how a ledger answers while another reviewer's commit holds the lock.
 final class RefusingVerdictsFirst implements Ledger
 {
-    private int $refused = 0;
+    public private(set) int $refused = 0;
 
     public function __construct(private readonly Ledger $inner, private readonly int $times)
     {
