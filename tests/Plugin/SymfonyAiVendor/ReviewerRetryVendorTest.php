@@ -269,7 +269,7 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->with('findings', [])->json());
     }
 
-    // The answer the default correctness model gave on both tries of a first review: a verdict line and no finding.
+    // In the shape the live log of #2450 showed, because the default correctness model answered a verdict with no finding on both tries of a first review.
     private function recordedVerdictOnly(): TextResult
     {
         return new TextResult('{"verdict":"changes","findings":[],"resolved":[],"follow_ups":[]}');
