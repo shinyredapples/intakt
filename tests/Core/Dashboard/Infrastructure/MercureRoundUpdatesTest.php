@@ -470,6 +470,40 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString('<p class="fc-call">Fix now</p>', $judged->getData());
     }
 
+    public function testAJudgedRoundCarriesItsTokensTableAndTheReviewsTotalsInItsJudgedState(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->useTokens(self::ROUND, 1000, 200);
+        $ledger->judgeFindings(self::ROUND, []);
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        $judged = array_last($this->published);
+        self::assertNotNull($judged);
+        $targets = array_map($this->actionAndTargetOf(...), $this->streamsOf($judged));
+        foreach (['round-'.self::ROUND.'-tokens', 'review-summary-tokens', 'review-summary-cost', 'round-'.self::ROUND.'-review-cost'] as $target) {
+            self::assertContains('replace '.$target, $targets);
+        }
+        self::assertStringContainsString('<span id="review-summary-tokens">1,200 tokens', $judged->getData());
+    }
+
+    public function testAJudgedRoundWhoseLedgerCannotBeReadGoesOutWithoutItsTokensAndTheReviewsTotals(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willThrowException(new RuntimeException('the ledger is gone'));
+        $this->ledger = $ledger;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertCount(1, $this->published);
+        foreach (['round-'.self::ROUND.'-tokens', 'review-summary-tokens', 'review-summary-cost', 'round-'.self::ROUND.'-review-cost'] as $target) {
+            self::assertStringNotContainsString('target="'.$target.'"', $this->published[0]->getData());
+        }
+        self::assertCount(1, $this->log->cleanLogs());
+    }
+
     public function testARoundChangeWhoseRoundCannotBeReadStillPublishesTheReviewerStatesAsProcessTextAndLogsWhy(): void
     {
         $failure = new RuntimeException('the ledger is gone');

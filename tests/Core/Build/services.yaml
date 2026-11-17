@@ -10,6 +10,8 @@ services:
     Intakt\Plugin\GitHubForge\Contract\IssueReads: '@Intakt\Tests\Core\Build\RecordedIssues'
     Intakt\Tests\Core\Build\ScriptedJobRunner:
         autowire: true
+    Intakt\Tests\Core\Build\LocalChangeOpening: ~
+    Intakt\Plugin\Forge\Contract\ChangeOpening: '@Intakt\Tests\Core\Build\LocalChangeOpening'
     # Only the build and check jobs' runner, because the review jobs keep the container runner their own tests use; the check job reads check-result from the same folder.
     Intakt\Core\Build\UseCase\RunBuildJob\RunBuildJob:
         autowire: true
