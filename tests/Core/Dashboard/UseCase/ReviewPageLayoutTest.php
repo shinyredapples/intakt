@@ -90,7 +90,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         $rows = $crawler->filter('#round-round-1-now-reviewers li');
         self::assertCount(2, $rows);
         foreach ($rows->each(static fn (Crawler $row): Crawler => $row) as $row) {
-            self::assertOneHeadPair($row, 'code_reviewer', 24);
+            $this->assertOneHeadPair($row, 'code_reviewer', 24);
         }
     }
 
@@ -111,7 +111,7 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
 
         $heading = $crawler->filter('.state-block h3')->reduce(static fn (Crawler $h3): bool => "The judge's call" === $h3->text());
         self::assertCount(1, $heading);
-        self::assertOneHeadPair($heading->ancestors()->first(), 'judge', 48);
+        $this->assertOneHeadPair($heading->ancestors()->first(), 'judge', 48);
         self::assertCount(0, $crawler->filter('#round-round-1-now-judge img'));
         self::assertSame('The judge has not judged this round yet.', $crawler->filter('#round-round-1-now-judge')->text());
     }
@@ -125,8 +125,8 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertCount(4, $crawler->filter('.state-block img.character'));
     }
 
-    // One light and one dark image per head, decoration only, with a fixed box and a 1x/2x pair (D1 and D4 of #2344).
-    private static function assertOneHeadPair(Crawler $holder, string $character, int $size): void
+    // Both images are checked, because the partial emits one per theme and CSS shows one; the attributes follow D1 and D4 of #2344.
+    private function assertOneHeadPair(Crawler $holder, string $character, int $size): void
     {
         $images = $holder->children('img.character');
         self::assertSame(['character character-light', 'character character-dark'], $images->each(static fn (Crawler $img): ?string => $img->attr('class')));
