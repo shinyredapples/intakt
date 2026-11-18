@@ -31,7 +31,7 @@ final readonly class FindingKeys
     /**
      * @param list<string> $paths
      *
-     * @return array<string, string>|null
+     * @return list<array{string, string}>|null
      */
     private function hashesAt(Checkout $checkout, array $paths): ?array
     {
@@ -45,7 +45,7 @@ final readonly class FindingKeys
                 return null;
             }
 
-            $hashes[$path] = $hash;
+            $hashes[] = [$path, $hash];
         }
 
         return $hashes;
@@ -55,7 +55,7 @@ final readonly class FindingKeys
     /**
      * @param list<string> $paths
      *
-     * @return array<string, string>|null
+     * @return list<array{string, string}>|null
      */
     private function hashesOfFilesAt(Checkout $checkout, array $paths): ?array
     {
@@ -74,7 +74,7 @@ final readonly class FindingKeys
                 return null;
             }
 
-            $hashes[$path] = $hash;
+            $hashes[] = [$path, $hash];
         }
 
         return $hashes;

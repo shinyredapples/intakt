@@ -131,16 +131,16 @@ final class FindingKeyTest extends TestCase
     public function testTheKeyKeepsTheSpacingInsideAQuote(string $text, string $other): void
     {
         self::assertNotSame(
-            new FindingKey()->of($this->finding('src/Thing.php', $text), ['src/Thing.php' => 'aaa']),
-            new FindingKey()->of($this->finding('src/Thing.php', $other), ['src/Thing.php' => 'aaa']),
+            new FindingKey()->of($this->finding('src/Thing.php', $text), [['src/Thing.php', 'aaa']]),
+            new FindingKey()->of($this->finding('src/Thing.php', $other), [['src/Thing.php', 'aaa']]),
         );
     }
 
     public function testTheKeyIgnoresSpacingAroundAQuote(): void
     {
         self::assertSame(
-            new FindingKey()->of($this->finding('src/Thing.php', 'The ACL  allows `Admin User`  always.'), ['src/Thing.php' => 'aaa']),
-            new FindingKey()->of($this->finding('src/Thing.php', "The ACL allows\n`Admin User` always. "), ['src/Thing.php' => 'aaa']),
+            new FindingKey()->of($this->finding('src/Thing.php', 'The ACL  allows `Admin User`  always.'), [['src/Thing.php', 'aaa']]),
+            new FindingKey()->of($this->finding('src/Thing.php', "The ACL allows\n`Admin User` always. "), [['src/Thing.php', 'aaa']]),
         );
     }
 
@@ -154,32 +154,32 @@ final class FindingKeyTest extends TestCase
         $finding = $this->finding('src/Thing.php', 'Not restart safe.');
 
         self::assertSame(
-            new FindingKey()->of($finding, ['src/Thing.php' => 'aaa', 'src/Other.php' => 'bbb']),
-            new FindingKey()->of($finding, ['src/Other.php' => 'bbb', 'src/Thing.php' => 'aaa']),
+            new FindingKey()->of($finding, [['src/Thing.php', 'aaa'], ['src/Other.php', 'bbb']]),
+            new FindingKey()->of($finding, [['src/Other.php', 'bbb'], ['src/Thing.php', 'aaa']]),
         );
     }
 
     public function testTheKeyIgnoresSpacingOfTheText(): void
     {
         self::assertSame(
-            new FindingKey()->of($this->finding('src/Thing.php', 'Not restart  safe.'), ['src/Thing.php' => 'aaa']),
-            new FindingKey()->of($this->finding('src/Thing.php', " Not\nrestart safe."), ['src/Thing.php' => 'aaa']),
+            new FindingKey()->of($this->finding('src/Thing.php', 'Not restart  safe.'), [['src/Thing.php', 'aaa']]),
+            new FindingKey()->of($this->finding('src/Thing.php', " Not\nrestart safe."), [['src/Thing.php', 'aaa']]),
         );
     }
 
     public function testTheKeyKeepsTheCaseOfTheText(): void
     {
         self::assertNotSame(
-            new FindingKey()->of($this->finding('src/Thing.php', 'The role `Admin` is never checked.'), ['src/Thing.php' => 'aaa']),
-            new FindingKey()->of($this->finding('src/Thing.php', 'The role `admin` is never checked.'), ['src/Thing.php' => 'aaa']),
+            new FindingKey()->of($this->finding('src/Thing.php', 'The role `Admin` is never checked.'), [['src/Thing.php', 'aaa']]),
+            new FindingKey()->of($this->finding('src/Thing.php', 'The role `admin` is never checked.'), [['src/Thing.php', 'aaa']]),
         );
     }
 
     public function testTheKeyChangesWhenTheFindingTextChanges(): void
     {
         self::assertNotSame(
-            new FindingKey()->of($this->finding('src/Thing.php', 'Not restart safe.'), ['src/Thing.php' => 'aaa']),
-            new FindingKey()->of($this->finding('src/Thing.php', 'Leaks the token.'), ['src/Thing.php' => 'aaa']),
+            new FindingKey()->of($this->finding('src/Thing.php', 'Not restart safe.'), [['src/Thing.php', 'aaa']]),
+            new FindingKey()->of($this->finding('src/Thing.php', 'Leaks the token.'), [['src/Thing.php', 'aaa']]),
         );
     }
 
@@ -187,14 +187,40 @@ final class FindingKeyTest extends TestCase
     {
         $finding = $this->finding('src/Thing.php', 'Not restart safe.');
 
-        self::assertNotSame(new FindingKey()->of($finding, ['src/Thing.php' => 'aaa']), new FindingKey()->of($finding, ['src/Thing.php' => 'bbb']));
+        self::assertNotSame(new FindingKey()->of($finding, [['src/Thing.php', 'aaa']]), new FindingKey()->of($finding, [['src/Thing.php', 'bbb']]));
     }
 
     public function testAPathAndHashCannotBeShiftedIntoAnotherOfTheSameCharacters(): void
     {
         $finding = $this->finding('src/Thing.php', 'Not restart safe.');
 
-        self::assertNotSame(new FindingKey()->of($finding, ['a' => 'bc']), new FindingKey()->of($finding, ['ab' => 'c']));
+        self::assertNotSame(new FindingKey()->of($finding, [['a', 'bc']]), new FindingKey()->of($finding, [['ab', 'c']]));
+    }
+
+    public function testTwoPathsOfDigitsOnlyWithTheSameContentGiveTwoKeys(): void
+    {
+        $finding = $this->finding('src/Thing.php', 'The limits in 12 and 7 are wrong.');
+
+        self::assertNotSame(new FindingKey()->of($finding, [['12', 'aaa']]), new FindingKey()->of($finding, [['7', 'aaa']]));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function wordsWithASignNoFragmentHolds(): iterable
+    {
+        yield 'an at sign' => ['The rule in assets/logo@2x.png is unsafe.', 'assets/logo@2x.png'];
+        yield 'a comma' => ['The rule in src/Foo,Bar.php is unsafe.', 'src/Foo,Bar.php'];
+        yield 'ending a sentence' => ['The rule is unsafe, see docs/a+b.md.', 'docs/a+b.md'];
+        yield 'with a line and a comma' => ['The rule in docs/a~b.md:12-14, is unsafe.', 'docs/a~b.md'];
+        yield 'in parentheses' => ['The rule (see docs/x=y.md) is unsafe.', 'docs/x=y.md'];
+        yield 'in double quotes' => ['The rule in "docs/a+b.md" is unsafe.', 'docs/a+b.md'];
+    }
+
+    #[DataProvider('wordsWithASignNoFragmentHolds')]
+    public function testAWordBetweenSpacesIsAPossiblePathAsAWhole(string $text, string $word): void
+    {
+        self::assertContains($word, new FindingKey()->possiblePaths($this->finding('src/Thing.php', $text)));
     }
 
     public function testAFindingNamingNoFileGetsNoKey(): void
@@ -204,7 +230,7 @@ final class FindingKeyTest extends TestCase
 
     public function testTheKeyIsASha256(): void
     {
-        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', (string) new FindingKey()->of($this->finding('src/Thing.php', 'Not restart safe.'), ['src/Thing.php' => 'aaa']));
+        self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', (string) new FindingKey()->of($this->finding('src/Thing.php', 'Not restart safe.'), [['src/Thing.php', 'aaa']]));
     }
 
     private function finding(?string $file, string $text): Finding

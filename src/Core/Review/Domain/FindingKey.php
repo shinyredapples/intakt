@@ -25,6 +25,13 @@ final readonly class FindingKey
     // Dropped from a code span, because a citation puts a line or a line range and the full stop of its sentence behind the path, and the file is named without them.
     private const string LINE_AND_FULL_STOP = '~(?::\d+(?:-\d+)?)?\.?$~';
 
+    // Stripped from a word, because a path cited in a sentence carries the quote, parenthesis or punctuation around it, and a citation puts a line behind it.
+    private const string OPENING = '`"\'([{<';
+
+    private const string CLOSING = '`"\'.,;:!?)]}>';
+
+    private const string LINE = '~:\d+(?:-\d+)?$~';
+
     // Kept as written by the key, because spacing inside one is part of a value.
     private const string QUOTED = '~(`[^`]*`|"[^"]*")~';
 
@@ -39,22 +46,22 @@ final readonly class FindingKey
         return array_values(array_unique([...(null === $finding->file ? [] : [$finding->file]), ...$inText]));
     }
 
-    // Every other word of the text, because a file at the root is cited by its bare name (`Makefile`, `LICENSE`, `README.md`) and reads like prose (`and/or`, `8.5/8.6`, a route, `e.g`), and every inline code span as a whole, because a path with a space or another character no fragment holds (`docs/Release Notes.md`) is otherwise cut into pieces that are no files. Each counts only where the checkout holds a regular file under that path, so a wrong guess can only add a real file to the key, which errs toward judging again.
+    // Every other fragment of the text, because a file at the root is cited by its bare name (`Makefile`, `LICENSE`, `README.md`) and reads like prose (`and/or`, `8.5/8.6`, a route, `e.g`); every word between spaces and every inline code span as a whole, because a path with a space or another character no fragment holds (`docs/Release Notes.md`, `assets/logo@2x.png`, `src/Foo,Bar.php`) is otherwise cut into pieces that are no files. Each counts only where the checkout holds a regular file under that path, so a wrong guess can only add a real file to the key, which errs toward judging again.
     /**
      * @return list<string>
      */
     public function possiblePaths(Finding $finding): array
     {
         $named = $this->namedPaths($finding);
-        $words = array_filter($this->fragmentsOf($finding->text), fn (string $fragment): bool => !$this->isCertainlyAPath($fragment));
-        $possible = array_filter([...$words, ...$this->codeSpansOf($finding->text)], static fn (string $path): bool => !in_array($path, $named, true));
+        $fragments = array_filter($this->fragmentsOf($finding->text), fn (string $fragment): bool => !$this->isCertainlyAPath($fragment));
+        $possible = array_filter([...$fragments, ...$this->wordsOf($finding->text), ...$this->codeSpansOf($finding->text)], static fn (string $path): bool => !in_array($path, $named, true));
 
         return array_values(array_unique($possible));
     }
 
-    // Null without a file, because a key on the text alone would stand for any code; the parts are JSON encoded, so no path or text can shift into its neighbor. The hashes are each named file's SHA-256 by path.
+    // Null without a file, because a key on the text alone would stand for any code; the parts are JSON encoded, so no path or text can shift into its neighbor. Each file is a pair of its path and its SHA-256, so a path of digits only stays a string.
     /**
-     * @param array<string, string> $fileHashes
+     * @param list<array{string, string}> $fileHashes
      */
     public function of(Finding $finding, array $fileHashes): ?string
     {
@@ -62,11 +69,9 @@ final readonly class FindingKey
             return null;
         }
 
-        $paths = array_map(strval(...), array_keys($fileHashes));
-        sort($paths, SORT_STRING);
-        $files = array_map(static fn (string $path): array => [$path, $fileHashes[$path]], $paths);
+        usort($fileHashes, static fn (array $one, array $other): int => strcmp($one[0], $other[0]));
 
-        return hash('sha256', json_encode([$this->normalized($finding->text), $files], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([$this->normalized($finding->text), $fileHashes], JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -81,6 +86,16 @@ final readonly class FindingKey
 
         // Trimmed, because a path that ends a sentence carries its full stop.
         return array_values(array_filter(array_map(static fn (string $fragment): string => rtrim($fragment, '.'), $matches[0]), static fn (string $fragment): bool => '' !== $fragment));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function wordsOf(string $text): array
+    {
+        $words = array_map(static fn (string $word): string => rtrim((string) preg_replace(self::LINE, '', rtrim(ltrim($word, self::OPENING), self::CLOSING)), '.'), preg_split('~\s+~', $text, flags: PREG_SPLIT_NO_EMPTY) ?: []);
+
+        return array_values(array_filter($words, static fn (string $word): bool => '' !== $word));
     }
 
     /**

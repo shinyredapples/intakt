@@ -119,7 +119,7 @@ final class FindingKeysTest extends TestCase
         $this->repository->commitFile('src/Sub/Inner.php', "<?php\n");
 
         self::assertSame(
-            new FindingKey()->of($this->finding('src/Thing.php', $text), ['src/Thing.php' => (string) hash_file('sha256', $this->repository->path.'/src/Thing.php')]),
+            new FindingKey()->of($this->finding('src/Thing.php', $text), [['src/Thing.php', (string) hash_file('sha256', $this->repository->path.'/src/Thing.php')]]),
             $this->keyOf($this->finding('src/Thing.php', $text)),
         );
     }
@@ -169,6 +169,27 @@ final class FindingKeysTest extends TestCase
         yield 'a letter outside ASCII, in plain text' => ['docs/Überblick.md', 'The rule in docs/Überblick.md is unsafe.'];
         yield 'a letter outside ASCII and no directory' => ['Überblick.md', 'Überblick.md still states the old rule.'];
         yield 'a sign no fragment holds, in backticks' => ['docs/a+b.md', 'The rule in `docs/a+b.md` is unsafe.'];
+        yield 'an at sign, in plain text' => ['assets/logo@2x.png', 'The rule in assets/logo@2x.png is unsafe.'];
+        yield 'a plus sign, in plain text' => ['docs/a+b.md', 'The rule in docs/a+b.md is unsafe.'];
+        yield 'a comma, in plain text' => ['src/Foo,Bar.php', 'The rule in src/Foo,Bar.php is unsafe.'];
+        yield 'an equals sign, in plain text' => ['docs/x=y.md', 'The rule in docs/x=y.md is unsafe.'];
+        yield 'a tilde, in plain text' => ['docs/a~b.md', 'The rule in docs/a~b.md is unsafe.'];
+        yield 'a sign no fragment holds, ending a sentence' => ['docs/a+b.md', 'The rule is unsafe, see docs/a+b.md.'];
+        yield 'a sign no fragment holds, with a line and a comma' => ['docs/a+b.md', 'The rule in docs/a+b.md:12, is unsafe.'];
+        yield 'a sign no fragment holds, in parentheses' => ['docs/a+b.md', 'The rule (see docs/a+b.md) is unsafe.'];
+    }
+
+    public function testTwoFilesNamedByDigitsOnlyWithTheSameContentGiveTwoKeys(): void
+    {
+        $finding = $this->finding('src/Thing.php', 'The limits in 12 and 7 are wrong.');
+        $this->repository->commitFile('12', "limit\n");
+        $withTwelve = $this->keyOf($finding);
+        $this->repository->remove();
+        $this->setUp();
+        $this->repository->commitFile('7', "limit\n");
+
+        self::assertNotNull($withTwelve);
+        self::assertNotSame($withTwelve, $this->keyOf($finding));
     }
 
     #[DataProvider('citedPathsNoFragmentHolds')]
