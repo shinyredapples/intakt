@@ -9,7 +9,7 @@ use InvalidArgumentException;
 // The gates a builder's `bin/check` runs at once, because three builders each running all 8 gates on 12 processors loaded the host to 22 to 28 and took 7 to 9 minutes a check (#1140).
 final readonly class GatesAtOnce
 {
-    // Every gate of `bin/check --fast` at once, which is what one builder alone runs today.
+    // Eight, because that is every gate of `bin/check --fast`, so one builder alone keeps running them all at once.
     public const int MOST = 8;
 
     // Two, because one gate runs beside the `tests` gate even on a small host.
