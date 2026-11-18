@@ -26,6 +26,14 @@ final class ProviderTest extends TestCase
         self::assertSame([true, true, true], [Provider::Anthropic->readsTheCheckout(), Provider::OpenAi->readsTheCheckout(), Provider::OpenAiCompatible->readsTheCheckout()]);
     }
 
+    public function testOnlyTheSubscriptionClisSpendAPlan(): void
+    {
+        self::assertSame(
+            [false, false, false, true, true],
+            [Provider::Anthropic->spendsAPlan(), Provider::OpenAi->spendsAPlan(), Provider::OpenAiCompatible->spendsAPlan(), Provider::ClaudeCode->spendsAPlan(), Provider::Codex->spendsAPlan()],
+        );
+    }
+
     public function testOnlyTheApiProvidersStream(): void
     {
         self::assertSame(
