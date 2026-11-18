@@ -68,3 +68,20 @@ dark 1440 project=all: octopus hidden, axe serious+critical 0
 dark 1440 project=alpha: octopus shown 144 px, axe serious+critical 0
 dark 1440 project=beta: octopus hidden, axe serious+critical 0
 dark 390 project=all (no filter on a phone): octopus hidden, axe serious+critical 0
+
+# Project-filter state, 2026-11-18 (#2658 round of 2026-11-18, decision 3): alpha idle (one judged review) beside beta busy (a running review), alpha chosen in the project filter so the empty-column lines show; axe and bin/ui-check's measureFloors on that state
+board light 1440 project=alpha: theme light, empty-column lines shown col-waiting-on-you col-ready col-planned col-building col-checking col-in-review col-merging, octopus 144 px, axe critical 0, serious 0, moderate 0, minor 0
+board light 1920 project=alpha: theme light, empty-column lines shown col-waiting-on-you col-ready col-planned col-building col-checking col-in-review col-merging, octopus 144 px, axe critical 0, serious 0, moderate 0, minor 0
+board light 390 project=all (no filter on a phone): theme light, empty-column lines shown col-waiting-on-you col-backlog col-ready col-planned col-building col-checking col-merging, octopus hidden, axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+board dark 1440 project=alpha: theme dark, empty-column lines shown col-waiting-on-you col-ready col-planned col-building col-checking col-in-review col-merging, octopus 144 px, axe critical 0, serious 0, moderate 0, minor 0
+board dark 1920 project=alpha: theme dark, empty-column lines shown col-waiting-on-you col-ready col-planned col-building col-checking col-in-review col-merging, octopus 144 px, axe critical 0, serious 0, moderate 0, minor 0
+board dark 390 project=all (no filter on a phone): theme dark, empty-column lines shown col-waiting-on-you col-backlog col-ready col-planned col-building col-checking col-merging, octopus hidden, axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+# At 390 the phone has no filter, so beta's cards were hidden as the filter hides them and intakt:project-shown sent, to measure the In review line it shows
+board light 390 project=alpha (filter state forced): theme light, empty-column lines shown col-waiting-on-you col-backlog col-ready col-planned col-building col-checking col-in-review col-merging, octopus hidden, axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+board dark 390 project=alpha (filter state forced): theme dark, empty-column lines shown col-waiting-on-you col-backlog col-ready col-planned col-building col-checking col-in-review col-merging, octopus hidden, axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+Project filter check: 0 serious or critical axe violations, phone floor findings and page errors in total.
+Screenshots: 2658-filter-alpha-light-1440.png, 2658-filter-alpha-dark-1440.png
+
+# Build in flight on the same install (decision 1): alpha records a passed task step, then a failed mirror step
+after task passed: headline "A build is running. Nothing needs you.", <span id="board-octopus" hidden> (no data-idle-projects: alpha is not idle)
+after mirror failed: headline "Nothing is running. Nothing needs you.", <span class="head-character" id="board-octopus" data-idle-projects='["alpha"]' hidden>
