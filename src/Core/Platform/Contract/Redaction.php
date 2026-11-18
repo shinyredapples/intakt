@@ -44,7 +44,8 @@ final readonly class Redaction
      */
     private function redactHeldCredentials(string $text, array $credentials): string
     {
-        // Longest first, so a credential that contains another is redacted whole.
+        $credentials = $this->withTrimmedForms($credentials);
+        // Longest first, so a credential that contains another, or its own trimmed form, is redacted whole.
         usort($credentials, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
 
         foreach ($credentials as $credential) {
@@ -56,6 +57,19 @@ final readonly class Redaction
         }
 
         return $text;
+    }
+
+    /**
+     * @param list<string> $credentials
+     *
+     * @return list<string>
+     */
+    // A value is often stored with a trailing newline (a secrets file, a heredoc) but quoted without it, so its trimmed form is held too.
+    private function withTrimmedForms(array $credentials): array
+    {
+        $trimmed = array_filter(array_map(trim(...), $credentials), static fn (string $form): bool => '' !== $form);
+
+        return array_values(array_unique([...$credentials, ...$trimmed]));
     }
 
     private function heldCredentialPattern(string $credential): string

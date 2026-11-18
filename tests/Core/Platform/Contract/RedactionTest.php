@@ -26,6 +26,39 @@ final class RedactionTest extends TestCase
         self::assertSame('value [redacted] here', $redacted);
     }
 
+    public function testItRedactsAHeldCredentialWithATrailingNewlineQuotedWithoutIt(): void
+    {
+        $redacted = new Redaction()->redact('the key was held-key-value, then nothing', "held-key-value\n");
+
+        self::assertSame('the key was [redacted], then nothing', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialWithEdgeSpacesQuotedTrimmed(): void
+    {
+        $redacted = new Redaction()->redact('key=held-key-value;', '  held-key-value  ');
+
+        self::assertSame('key=[redacted];', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialWithItsEdgeWhitespaceAsOneMarker(): void
+    {
+        $redacted = new Redaction()->redact("before \t held-key-value\n after", " \t held-key-value\n");
+
+        self::assertSame('before[redacted] after', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialWithEdgeWhitespaceInJsonTextQuotedTrimmed(): void
+    {
+        $text = json_encode(['note' => 'quoted held-key-value here'], JSON_THROW_ON_ERROR);
+
+        self::assertSame('{"note":"quoted [redacted] here"}', new Redaction()->redact($text, "held-key-value\r\n"));
+    }
+
+    public function testItAddsNoEmptyFormForAHeldCredentialOfWhitespaceOnly(): void
+    {
+        self::assertSame('ab', new Redaction()->redact('ab', "\n"));
+    }
+
     public function testItRedactsAHeldCredentialEncodedTwice(): void
     {
         $credential = 'pa"ss/wo\\rd';
