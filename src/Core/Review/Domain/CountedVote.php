@@ -39,7 +39,7 @@ final readonly class CountedVote
         $this->actIds = array_map(static fn (Finding $finding): string => $finding->id, $judged->actList);
     }
 
-    // A changes verdict counts as changes only with a finding on the act list, as approval when the judge deferred or rejected every one of its findings and all are P3, and otherwise as blocked, because the builder would be sent back with nothing to act on.
+    // A changes verdict counts as changes only with a finding on the act list, as approval when the judge deferred or rejected every one of its findings and all are P3, and otherwise as blocked, because the builder would be sent back with nothing to act on; a changes verdict without findings, which the vendor already refuses, counts as given.
     public function of(Verdict $verdict): Decision
     {
         if (Decision::Changes !== $verdict->verdict) {
@@ -74,7 +74,7 @@ final readonly class CountedVote
         return [] !== $matches && array_all($matches, fn (Finding $reported): bool => Severity::P3 === $reported->severity && in_array($reported->id, $this->setAsideIds, true));
     }
 
-    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by every field the ledger keeps except its id, because the ledger gives it an id of its own (the stored verdict already holds the severity the goalpost rule left it), so another reviewer's finding differing in any kept field never counts for this one. The ledger does not record which reviewer reported which id, so two reports alike in every kept field both match, and every match stays in view so no act mark is missed.
+    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by every field the ledger keeps except its id and the repeat flag (severity, file, line, symbol, text, requirement, fixable_by, regression, and evidence by its probe and output), because the ledger gives it an id of its own (the stored verdict already holds the severity the goalpost rule left it), so another reviewer's finding differing in any kept field never counts for this one. The ledger does not record which reviewer reported which id, so two reports alike in every kept field both match, and every match stays in view so no act mark is missed.
     /**
      * @return list<Finding>
      */
