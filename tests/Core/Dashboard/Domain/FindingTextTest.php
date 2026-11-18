@@ -101,6 +101,44 @@ final class FindingTextTest extends TestCase
         );
     }
 
+    public function testEmphasisClosedRightBeforeADashIsShownWithoutTheMarks(): void
+    {
+        foreach ([
+            'The **read**-only mode still writes to disk.' => 'The read-only mode still writes to disk.',
+            'This is *not*-as-claimed safe.' => 'This is not-as-claimed safe.',
+            'The check is **wrong**—it never runs.' => 'The check is wrong—it never runs.',
+            'The range is **open**–ended, _never_-closed.' => 'The range is open–ended, never-closed.',
+        ] as $written => $shown) {
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
+    public function testCodeLikeTextWithADashAfterAMarkIsLeftAsWritten(): void
+    {
+        foreach ([
+            'Use __DIR__-relative paths and __init__.py',
+            '--include=*.php --exclude=*-test.php',
+            'matches *.php files and test*-old',
+            'x_y_ z, _private_var and _other-name',
+            'Skip src/**/x and tmp/*.',
+            'Copy *Test.php to tests/*-old.',
+            'Copy **kwargs to dir/**-old.',
+        ] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
+    public function testEmphasisEndingInASlashKeepsItsMarksUnlessThePathIsCode(): void
+    {
+        $written = 'The matcher must **ignore paths under /tmp/**.';
+
+        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+        self::assertSame(
+            [['text' => 'The matcher must ignore paths under ', 'code' => false], ['text' => '/tmp/', 'code' => true], ['text' => '.', 'code' => false]],
+            new FindingText('The matcher must **ignore paths under `/tmp/`**.')->spans(),
+        );
+    }
+
     public function testMarksInsideWordsArithmeticAndPathsAreLeftAsWritten(): void
     {
         $written = 'Keep max_retry_count and __construct, 2 * 3 * 4, a*b*c, a lone * here and src/**/x/**/y.';
