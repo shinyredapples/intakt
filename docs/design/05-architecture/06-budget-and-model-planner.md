@@ -15,7 +15,7 @@ For each vendor account Intakt keeps a budget model:
 ## Order of use
 
 The order is a ranking made at each job start over the whole pool, not a chain that waits for the first account to run out. Accounts that are spent, blocked at the vendor or backing off, or not allowed for the job's role, are left out. The rest are ranked, within each account's cap (where one is set) and roles, by step first:
-1. credit that expires soon or can only be spent on certain work, while it can be (a credit pool counts as expiring soon when it ends before the account's next period: the next weekly reset on a subscription, the end of the spend cap's week on an API key, or the next week when it has no cap);
+1. subscription credit that expires soon or can only be spent on certain work, while it can be (a credit pool counts as expiring soon when it ends before the subscription's next weekly reset); credit on a paid account (an API key or overage) ranks in step 3 however soon it expires, so it is never spent while a subscription has room;
 2. subscription windows, within Intakt's share of them;
 3. paid usage, overage or API keys, after every subscription with room: up to the owner's weekly cap per account or per install where one is set, otherwise until the balance is gone.
 
@@ -93,5 +93,5 @@ Not in the first release. What a merge needs is an independent second run of the
   - **Minutes are a budget input.** Per project, the plan's included minutes, their reset date and the used share are read from the forge's billing API where it has one; for self-hosted runners, their count and busy share. The planner treats CI like a vendor window: a forecast that runs out before the reset slows the admission of new builds first, before the reviews of heads already pushed.
   - **Fewer runs per change.** Each push costs a run, so a newer push cancels the runs of the head it replaces, red-CI send-backs are capped (see [Reviews](07-reviews.md)), and the pre-push check catches what it can before a push.
   - **Spent minutes are a cause, not a wait.** A run refused for spent minutes, or with no runner to take it, is recorded with its cause. Heads wait without a slot, and the owner gets one card (raise the limit, add a runner, or wait for the reset) with the reset date.
-  - **Paid minutes are treated** like paid vendor accounts: minutes billed past the plan count against the owner's spend cap where one is set, and never start silently.
+  - **Paid minutes are capped:** minutes billed past the plan count against the owner's CI spend cap and never start silently. Unlike paid vendor accounts, CI minutes have no uncapped mode.
   - **The dashboard shows** minutes used, the forecast at reset and minutes per merge.
