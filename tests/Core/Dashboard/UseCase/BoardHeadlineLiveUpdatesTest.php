@@ -398,13 +398,12 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
             $template = $stream->filter('template')->getNode(0);
             self::assertNotNull($template);
 
-            foreach ($page->filter('[id="'.$stream->attr('target').'"]')->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
-                self::assertNotNull($target);
-                // Turbo morphs a `method="morph"` stream into the shown element, so an element pushed with the markup it already has stays the same node.
-                if ('morph' === $stream->attr('method') && new Crawler($target)->outerHtml() === trim($stream->filter('template')->html())) {
-                    continue;
-                }
+            // Turbo morphs a `method="morph"` stream into the shown element, so an element pushed with the markup it already has stays the same node.
+            $shownAlready = 'morph' === $stream->attr('method') ? trim($stream->filter('template')->html()) : null;
+            $targets = $page->filter('[id="'.$stream->attr('target').'"]')->reduce(static fn (Crawler $old): bool => $old->outerHtml() !== $shownAlready);
 
+            foreach ($targets->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
+                self::assertNotNull($target);
                 $parent = $target->parentNode;
                 $document = $target->ownerDocument;
                 self::assertNotNull($parent);
