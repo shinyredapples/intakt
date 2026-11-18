@@ -198,6 +198,16 @@ final class CountedVoteTest extends TestCase
         self::assertSame(Decision::Changes, $vote);
     }
 
+    public function testADeferredP3CountsAsApprovalThoughAnotherReviewersP3OfTheSameTextCitingAnotherRequirementIsOnTheActList(): void
+    {
+        $deferred = new Finding('A', Severity::P3, 'src/A.php', 5, null, 'Rename the helper.', FixableBy::Builder, false, 'Local cleanup', null);
+        $acted = new Finding('B', Severity::P3, 'src/A.php', 5, null, 'Rename the helper.', FixableBy::Builder, false, 'Required naming rule', null);
+        $vote = $this->counted([$deferred->withId('F1'), $acted->withId('F2')], ['F1' => Mark::Defer, 'F2' => Mark::Act]);
+
+        self::assertSame(Decision::Approve, $vote->of($this->changes($deferred)));
+        self::assertSame(Decision::Changes, $vote->of($this->changes($acted)));
+    }
+
     public function testABlockedVerdictWithOnlyP3FindingsStaysBlocked(): void
     {
         $blocked = new Verdict(Decision::Blocked, [$this->finding('A', Severity::P3, 'One.')], [], []);
