@@ -1176,6 +1176,74 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['P2 Missing changelog'], $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->each(static fn (Crawler $line): string => $line->text()));
     }
 
+    public function testAReadFindingReachesTheLiveLogWithoutEmphasisMarksAndWithItsCodeSpansAsCode(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, 'the amount is **greater than** 100 in `<b>total()`', FixableBy::Builder, false, null, null)], [], []));
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+        $line = $updated->filter('#reviewer-round-1-correctness-text .answer-finding');
+        self::assertSame('P2 the amount is greater than 100 in <b>total()', $line->text());
+        self::assertSame(['<b>total()'], $line->filter('code')->each(static fn (Crawler $code): string => $code->text()));
+    }
+
+    public function testAReadFindingWhoseTitleIsCutInsideEmphasisReachesTheLiveLogWithoutTheOpeningMark(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, 'Update **'.str_repeat('word ', 32).'here**.', FixableBy::Builder, false, null, null)], [], []));
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+        $line = $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->text();
+        self::assertStringStartsWith('P2 Update word word', $line);
+        self::assertStringNotContainsString('*', $line);
+    }
+
+    public function testAReadFindingWhoseTitleIsCutAtAnyOffsetAroundItsClosingMarkReachesTheLiveLogWithoutAMark(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        foreach (['**', '__', '*', '_'] as $mark) {
+            foreach (range(144, 152) as $length) {
+                $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, 'Update '.$mark.'the '.str_repeat('x', $length).$mark.' before shipping.', FixableBy::Builder, false, null, null)], [], []));
+
+                $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+                $shown = 'Update the '.str_repeat('x', $length).' before shipping.';
+                self::assertSame('P2 '.rtrim(mb_substr($shown, 0, 159)).'…', $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->last()->text(), $mark.' around '.$length);
+            }
+        }
+    }
+
+    public function testAReadFindingWhoseLongTitleNamesAGlobReachesTheLiveLogWithItsStar(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, str_repeat('a ', 75).'skip *Test.php files', FixableBy::Builder, false, null, null)], [], []));
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+        self::assertStringEndsWith('skip *Tes…', $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->text());
+    }
+
+    public function testAReadFindingEndingInAnEllipsisTheReviewerWroteReachesTheLiveLogWithItsWildcards(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        foreach (['Copy *.php…', 'Match **kwargs…', 'Use _private and more…', 'Copy *.php and *.twig…'] as $written) {
+            $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, $written, FixableBy::Builder, false, null, null)], [], []));
+
+            $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+            self::assertSame('P2 '.$written, $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->last()->text());
+        }
+    }
+
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
         $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
