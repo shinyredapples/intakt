@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\AddedLines;
 use Intakt\Gates\CommentLanguages;
 use Intakt\Gates\JavaScriptComments;
+use Intakt\Gates\JavaScriptSlash;
 use Intakt\Gates\LeftUndoneCode;
 use Intakt\Gates\LeftUndoneComments;
 use Intakt\Gates\LeftUndoneGate;
@@ -24,6 +25,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[CoversClass(JavaScriptComments::class)]
 #[CoversClass(LeftUndoneComments::class)]
 #[UsesClass(PhpComments::class)]
+#[UsesClass(JavaScriptSlash::class)]
 #[UsesClass(TwigComments::class)]
 #[UsesClass(AddedLines::class)]
 #[UsesClass(LeftUndoneCode::class)]

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\JavaScriptComments;
+use Intakt\Gates\JavaScriptSlash;
 use Intakt\Gates\LeftUndoneComments;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -12,6 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(JavaScriptComments::class)]
 #[CoversClass(LeftUndoneComments::class)]
+#[CoversClass(JavaScriptSlash::class)]
 final class JavaScriptCommentsTest extends TestCase
 {
     /**
@@ -42,6 +44,7 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment after carriage return line ends' => ["const a = 1;\r\n\r\n// TODO later\r\n", [3 => 'TODO']];
         yield 'an unclosed block comment' => ["const a = 1;\n/* TODO later\n", [2 => 'TODO']];
         yield 'a comment after a string left open on its line' => ["const a = 'open\n// TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a regular expression left open on its line' => ["const re = /[a'\n// TODO later\n", [2 => 'TODO']];
         yield 'a lower-case marker' => ["// todo: later\n", [1 => 'todo']];
     }
 

@@ -23,21 +23,21 @@ final readonly class JavaScriptComments implements CommentLanguage
 
     public function commentsIn(string $source): array
     {
-        return iterator_to_array($this->code($source, 0, false), false);
+        return iterator_to_array($this->code($source, 0, null), false);
     }
 
     /**
      * @return Generator<int, array{int, string}, mixed, int>
      */
-    private function code(string $source, int $offset, bool $inTemplate): Generator
+    private function code(string $source, int $offset, ?string $closer): Generator
     {
         $length = strlen($source);
         $depth = 0;
-        $regexMayFollow = true;
+        $slash = JavaScriptSlash::Regex;
 
         while (true) {
             $stop = $offset + strcspn($source, self::CODE_STOPS, $offset);
-            $regexMayFollow = $this->regexMayFollow(substr($source, $offset, $stop - $offset), $regexMayFollow);
+            $slash = $this->slashAfter(substr($source, $offset, $stop - $offset)) ?? $slash;
 
             if ($stop >= $length) {
                 return $length;
@@ -45,46 +45,46 @@ final readonly class JavaScriptComments implements CommentLanguage
 
             $char = $source[$stop];
 
-            if ($inTemplate && 0 === $depth && '}' === $char) {
+            if (0 === $depth && $char === $closer) {
                 return $stop + 1;
             }
 
-            [$offset, $regexMayFollow] = match ($char) {
-                "'", '"' => [$this->afterQuoted($source, $stop + 1, $char), false],
-                '`' => [yield from $this->template($source, $stop + 1), false],
-                '/' => yield from $this->slash($source, $stop, $regexMayFollow),
-                ')', ']' => [$stop + 1, false],
-                default => [$stop + 1, true],
+            [$offset, $slash] = match ($char) {
+                "'", '"' => [$this->afterQuoted($source, $stop + 1, $char), JavaScriptSlash::Division],
+                '`' => [yield from $this->template($source, $stop + 1), JavaScriptSlash::Division],
+                '/' => yield from $this->slash($source, $stop, $slash),
+                ')', ']' => [$stop + 1, JavaScriptSlash::Division],
+                default => [$stop + 1, JavaScriptSlash::Regex],
             };
             $depth = $this->depthAfter($char, $depth);
         }
     }
 
     /**
-     * @return Generator<int, array{int, string}, mixed, array{int, bool}>
+     * @return Generator<int, array{int, string}, mixed, array{int, JavaScriptSlash}>
      */
-    private function slash(string $source, int $offset, bool $regexMayFollow): Generator
+    private function slash(string $source, int $offset, JavaScriptSlash $slash): Generator
     {
-        $next = $source[$offset + 1] ?? '';
+        $end = match ($source[$offset + 1] ?? '') {
+            '/' => $offset + strcspn($source, self::LINE_ENDS, $offset),
+            '*' => $this->afterBlockComment($source, $offset + 2),
+            default => null,
+        };
 
-        if ('/' === $next) {
-            $end = $offset + strcspn($source, self::LINE_ENDS, $offset);
-
+        if (null !== $end) {
             yield [$offset, substr($source, $offset, $end - $offset)];
 
-            return [$end, $regexMayFollow];
+            return [$end, $slash];
         }
 
-        if ('*' === $next) {
-            $end = strpos($source, '*/', $offset + 2);
-            $end = false === $end ? strlen($source) : $end + 2;
+        return JavaScriptSlash::Regex === $slash ? [$this->afterRegex($source, $offset + 1), JavaScriptSlash::Division] : [$offset + 1, JavaScriptSlash::Regex];
+    }
 
-            yield [$offset, substr($source, $offset, $end - $offset)];
+    private function afterBlockComment(string $source, int $offset): int
+    {
+        $end = strpos($source, '*/', $offset);
 
-            return [$end, $regexMayFollow];
-        }
-
-        return $regexMayFollow ? [$this->afterRegex($source, $offset + 1), false] : [$offset + 1, true];
+        return false === $end ? strlen($source) : $end + 2;
     }
 
     // Because an unescaped line end cannot stand in a quoted string, a string left open ends there instead of hiding the rest of the file.
@@ -109,7 +109,7 @@ final readonly class JavaScriptComments implements CommentLanguage
         while (($offset += strcspn($source, '`\\$', $offset)) < $length && '`' !== $source[$offset]) {
             $offset = match (true) {
                 '\\' === $source[$offset] => $offset + 2,
-                '{' === ($source[$offset + 1] ?? '') => yield from $this->code($source, $offset + 2, true),
+                '{' === ($source[$offset + 1] ?? '') => yield from $this->code($source, $offset + 2, '}'),
                 default => $offset + 1,
             };
         }
@@ -120,47 +120,47 @@ final readonly class JavaScriptComments implements CommentLanguage
     private function afterRegex(string $source, int $offset): int
     {
         $length = strlen($source);
-        $inClass = false;
 
-        while (($offset += strcspn($source, "/\\[]\r\n", $offset)) < $length) {
+        while (($offset += strcspn($source, "/\\[\r\n", $offset)) < $length) {
             $char = $source[$offset];
 
-            if ('\\' === $char) {
-                $offset += 2;
-
-                continue;
-            }
-
-            if (('/' === $char && !$inClass) || str_contains(self::LINE_ENDS, $char)) {
+            if ('/' === $char || str_contains(self::LINE_ENDS, $char)) {
                 return $offset + 1;
             }
 
-            $inClass = match ($char) {
-                '[' => true,
-                ']' => false,
-                default => $inClass,
-            };
-            ++$offset;
+            $offset = '\\' === $char ? $offset + 2 : $this->afterClass($source, $offset + 1);
         }
 
         return $length;
     }
 
-    private function regexMayFollow(string $code, bool $before): bool
+    // Because a slash inside a character class does not close the regular expression, the class is read to its own end.
+    private function afterClass(string $source, int $offset): int
+    {
+        $length = strlen($source);
+
+        while (($offset += strcspn($source, "]\\\r\n", $offset)) < $length && '\\' === $source[$offset]) {
+            $offset += 2;
+        }
+
+        return $offset < $length && ']' === $source[$offset] ? $offset + 1 : $offset;
+    }
+
+    private function slashAfter(string $code): ?JavaScriptSlash
     {
         $code = rtrim($code);
 
         if ('' === $code) {
-            return $before;
+            return null;
         }
 
         if (!str_contains(self::WORD_CHARACTERS, $code[-1])) {
-            return true;
+            return JavaScriptSlash::Regex;
         }
 
         $word = substr($code, strlen($code) - strspn(strrev($code), self::WORD_CHARACTERS));
 
-        return in_array($word, self::KEYWORDS_BEFORE_AN_EXPRESSION, true);
+        return in_array($word, self::KEYWORDS_BEFORE_AN_EXPRESSION, true) ? JavaScriptSlash::Regex : JavaScriptSlash::Division;
     }
 
     private function depthAfter(string $char, int $depth): int
