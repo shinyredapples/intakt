@@ -92,10 +92,14 @@ final readonly class FullReport
         return $this->path;
     }
 
-    // Because a stopped run writes no report, its scratch results must not outlive it.
+    // Because a stopped run writes no report, its scratch results must not outlive it; a scratch entry that cannot be removed stays behind, since the report must never cost the gates their verdict.
     public function discard(): void
     {
-        $this->results?->remove();
+        try {
+            $this->results?->remove();
+        } catch (IOException) {
+            return;
+        }
     }
 
     private function directoryIn(string $root): ?string

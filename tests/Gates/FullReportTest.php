@@ -13,6 +13,7 @@ use Intakt\Gates\GateResult;
 use Intakt\Gates\ProcessResult;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
 #[CoversClass(FullReport::class)]
@@ -315,6 +316,27 @@ final class FullReportTest extends SandboxTestCase
         $scratch = dirname((string) file_get_contents($ready));
         self::assertStringContainsString('intakt-check-results', $scratch);
         self::assertDirectoryDoesNotExist($scratch);
+    }
+
+    public function testAScratchEntryThatCannotBeRemovedStillLeavesTheReportAndItsVerdict(): void
+    {
+        $this->skipWhenPermissionsAreIgnored();
+        $sandbox = $this->emptySandbox();
+        $report = FullReport::start();
+        $stuck = dirname($this->fileFor($report, 'cs')).'/stuck';
+        mkdir($stuck);
+        file_put_contents($stuck.'/left.json', '{}');
+        chmod($stuck, 0o500);
+
+        try {
+            $name = $report->writeTo($sandbox->root, ['result' => 'fail', 'failed' => ['cs']], [$this->reportOf(GateResult::failedBecause('cs', 'a finding'))]);
+        } finally {
+            chmod($stuck, 0o700);
+            new Filesystem()->remove(dirname($stuck));
+        }
+
+        self::assertMatchesRegularExpression(self::REPORT_NAME, (string) $name);
+        self::assertSame(['result' => 'fail', 'failed' => ['cs']], array_slice($this->reportAt($sandbox, $name), 0, 2));
     }
 
     public function testAChildTakesItsFileOutOfTheEnvironmentItsOwnChildrenInherit(): void
