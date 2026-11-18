@@ -26,7 +26,7 @@
   3. Follow a finding: Tab x9 reaches the first open finding of the Now block
     focus: a.sb-finding "P2F1 Text of F1.", ring: 2px solid
     (Tab x2 to the tabs, Right: Live log chosen first, to show the finding brings the timeline back; pane log)
-      Shift+Tab x1 back to the finding
+      Shift+Tab x1 back to the second finding (F2)
     focus: a.sb-finding "P2F2 Text of F2.", ring: 2px solid
     Enter: address #round-01a1eee8-ab2b-7316-af46-1f36689a1b01-finding-F2, round 1 open: true, its card in view: li.finding-card at y=142 of 844, pane shown: timeline
     axe (round 1 opened by the finding): 0 serious or critical
@@ -90,7 +90,7 @@
   3. Follow a finding: Tab x9 reaches the first open finding of the Now block
     focus: a.sb-finding "P2F1 Text of F1.", ring: 2px solid
     (Tab x2 to the tabs, Right: Live log chosen first, to show the finding brings the timeline back; pane log)
-      Shift+Tab x1 back to the finding
+      Shift+Tab x1 back to the second finding (F2)
     focus: a.sb-finding "P2F2 Text of F2.", ring: 2px solid
     Enter: address #round-01a1eee8-ab2b-7316-af46-1f36689a1b01-finding-F2, round 1 open: true, its card in view: li.finding-card at y=142 of 844, pane shown: timeline
     axe (round 1 opened by the finding): 0 serious or critical

@@ -1,5 +1,6 @@
 // Scratch: keyboard-only walk-through of the review page (D5 of #1795), with axe in each opened state.
 // Every control is reached and used with the keyboard only (Tab, Shift+Tab, Enter, Space, arrows, Home, End, Escape); a page load is the only other action.
+// The page is reloaded between segments (steps 3-4, 5, 6) on purpose: each starts from the initial focus, so the Tab counts are comparable.
 // Usage: node walk.cjs <playwright node_modules> <axe node_modules> <chrome> <address> <round>
 'use strict';
 const [modules, axeModules, chrome, address, round] = process.argv.slice(2);
@@ -53,7 +54,7 @@ async function walk(browser, theme, width) {
     console.log(`    (Tab x${n} to the tabs, Right: Live log chosen first, to show the finding brings the timeline back; pane ${await page.getAttribute('.task-grid', 'data-pane')})`);
     let back = 0;
     while (!(await page.evaluate(() => document.activeElement.matches('a.sb-finding'))) && back++ < 20) await page.keyboard.press('Shift+Tab');
-    await step(page, `    Shift+Tab x${back} back to the finding`);
+    await step(page, `    Shift+Tab x${back} back to the finding that Shift+Tab reaches first (F2, the one after the first finding Tab reached)`);
   }
   await page.keyboard.press('Enter');
   await page.waitForTimeout(400);
@@ -91,6 +92,10 @@ async function walk(browser, theme, width) {
     const panel = await page.evaluate(() => { const p = document.activeElement; return `${p.id} role=${p.getAttribute('role')} labelledby=${p.getAttribute('aria-labelledby')}`; });
     await step(page, `    Tab: the chosen pane (${panel})`);
     await page.keyboard.press('Shift+Tab');
+    for (const key of ['Enter', ' ']) {
+      await page.keyboard.press(key);
+      console.log(`    ${key === ' ' ? 'Space' : key} on the focused Live log tab: aria-selected ${await page.evaluate(() => document.activeElement.getAttribute('aria-selected'))}, pane ${await page.getAttribute('.task-grid', 'data-pane')}`);
+    }
     await page.keyboard.press('ArrowLeft');
     await page.keyboard.press('Tab');
     const timelinePanel = await page.evaluate(() => { const p = document.activeElement; return `${p.id} role=${p.getAttribute('role')} labelledby=${p.getAttribute('aria-labelledby')}`; });
