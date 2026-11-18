@@ -54,7 +54,7 @@ final class LiveBoardHeadlineTest extends KernelTestCase
 
         self::assertCount(1, $live->events);
         self::assertSame(DashboardTopics::SHELL, $live->events[0]->topic);
-        self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.head-character'));
+        self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.firstday'));
     }
 
     public function testAPushedDoneColumnCarriesAtMostThePageLimitOfCards(): void

@@ -1,7 +1,17 @@
-{#- One home for the empty board's octopus, because the page renders it on load and the pushed board replaces it, so the first review takes it away without a reload. It sits in the head beside the one Set up Intakt link, because the board has no empty block of its own and a second one would add a second title and action (#2067). -#}
+{#- One home for the empty board's first-day panel, because the page renders it on load and the pushed board replaces it, so the first review takes it away without a reload. The waiting octopus sits above the panel's words (DESIGN.md, First day). The steps name only what this install does: there is no issue intake yet, so the mock's issues link has no target and the head's Set up Intakt stays the one action (#2067, D3). -#}
 {%- if board.firstDay -%}
-<span class="head-character" id="board-octopus">{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) }}</span>
+<section class="firstday" id="board-octopus" aria-labelledby="board-octopus-h">
+    {{- include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Waiting, size: 144}, with_context = false) -}}
+    <div>
+        <h2 id="board-octopus-h">Give Intakt its first task</h2>
+        <ol>
+            <li>Choose <strong>Set up Intakt</strong> and add an AI provider and a project.</li>
+            <li>Start the first review there. It shows up in In review while the panel reviews the change, then in Done once the judge decides.</li>
+            <li>Reviewers show up under Who is working while they review it.</li>
+        </ol>
+    </div>
+</section>
 {%- else -%}
-{#- An empty hidden target stays, so a board that becomes empty again gets its octopus back on the next push (#2437); it has no head-character class, so the head's flex rules leave no gap for it. -#}
+{#- An empty hidden target stays, so a board that becomes empty again gets its panel back on the next push (#2437). -#}
 <span id="board-octopus" hidden></span>
 {%- endif -%}

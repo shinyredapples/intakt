@@ -72,16 +72,45 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
     }
 
-    public function testAFreshInstallsBoardShowsTheWaitingOctopusBesideItsOneSetUpLink(): void
+    public function testAFreshInstallsBoardShowsTheWaitingOctopusInEachThemeAsDecoration(): void
     {
-        $head = $this->browser->request('GET', '/')->filter('.page-head');
-        $images = $head->filter('img.character');
+        $images = $this->browser->request('GET', '/')->filter('#board-octopus img.character');
 
         self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
         self::assertSame([['144', '144', null], ['144', '144', null]], $images->each(static fn (Crawler $image): array => [$image->attr('width'), $image->attr('height'), $image->attr('role')]));
         self::assertSame(1, preg_match('~octopus-waiting-light[^"]*\.webp$~', $images->eq(0)->attr('src') ?? ''));
         self::assertSame(1, preg_match('~octopus-waiting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
+    }
+
+    public function testAFreshInstallsBoardStacksTheWaitingOctopusAboveTheFirstDayPanelsText(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('main > section.firstday#board-octopus > img.character-light:first-child + img.character-dark + div > h2'));
+        self::assertCount(0, $page->filter('.page-head img.character'));
+    }
+
+    public function testAFreshInstallsBoardGivesTheThreeStepsToItsFirstTask(): void
+    {
+        $panel = $this->browser->request('GET', '/')->filter('#board-octopus');
+
+        self::assertSame('Give Intakt its first task', $panel->filter('h2')->text());
+        self::assertSame('board-octopus-h', $panel->attr('aria-labelledby'));
+        self::assertCount(3, $panel->filter('ol > li'));
+    }
+
+    public function testAFreshInstallsBoardKeepsSetUpIntaktAsItsOneHeadAction(): void
+    {
+        $head = $this->browser->request('GET', '/')->filter('.page-head');
+
         self::assertSame(['Set up Intakt'], $head->filter('.btn.primary')->each(static fn (Crawler $link): string => $link->text()));
+    }
+
+    public function testABoardAfterAReviewShowsNoFirstDayPanel(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        self::assertCount(0, $this->browser->request('GET', '/')->filter('.firstday'));
     }
 
     public function testAFreshInstallsBoardShowsOneOctopusOnly(): void
@@ -706,7 +735,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(['alpha', 'beta'], $page->filter('.page-head ~ .banner.broken')->each(static fn (Crawler $banner): ?string => $banner->attr('data-project')));
-        self::assertCount(1, $page->filter('.banner + .working-none'));
+        self::assertCount(1, $page->filter('.banner ~ .working-none'));
         self::assertCount(0, $page->filter('.working-none ~ .banner'));
     }
 

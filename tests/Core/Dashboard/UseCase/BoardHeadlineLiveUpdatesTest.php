@@ -175,7 +175,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
     public function testTheFirstReviewPushedToAFreshBoardTakesTheWaitingOctopusAway(): void
     {
         $page = $this->browser->request('GET', '/');
-        self::assertCount(2, $page->filter('.page-head img[src*="octopus-waiting-"]'));
+        self::assertCount(2, $page->filter('#board-octopus img[src*="octopus-waiting-"]'));
 
         $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
 
@@ -194,13 +194,14 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($page->filter('#board-octopus')->outerHtml(), trim($pushed->html()));
     }
 
-    public function testTheFirstReviewPushedToAFreshBoardKeepsAnEmptyOctopusTargetInTheHead(): void
+    public function testTheFirstReviewPushedToAFreshBoardKeepsAnEmptyOctopusTarget(): void
     {
         $page = $this->browser->request('GET', '/');
 
         $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
 
-        self::assertCount(1, $updated->filter('.page-head > #board-octopus[hidden]:empty'));
+        self::assertCount(1, $updated->filter('main > #board-octopus[hidden]:empty'));
+        self::assertCount(0, $updated->filter('.firstday'));
     }
 
     public function testABoardPushedEmptyAfterAReviewBringsTheWaitingOctopusBackWithoutAReload(): void
@@ -212,7 +213,7 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($this->replaced($page, $afterAReview), $empty);
 
-        self::assertCount(2, $updated->filter('.page-head > #board-octopus img[src*="octopus-waiting-"]'));
+        self::assertCount(2, $updated->filter('main > #board-octopus.firstday img[src*="octopus-waiting-"]'));
     }
 
     public function testABoardPageLoadedAfterAReviewHoldsAnEmptyHiddenOctopusTarget(): void
@@ -221,8 +222,8 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
         $page = $this->browser->request('GET', '/');
 
-        self::assertCount(1, $page->filter('.page-head > #board-octopus[hidden]:empty'));
-        self::assertCount(0, $page->filter('.page-head > .head-character'));
+        self::assertCount(1, $page->filter('main > #board-octopus[hidden]:empty'));
+        self::assertCount(0, $page->filter('.firstday'));
     }
 
     public function testTheBoardShowsTheCurrentHeadlineWithoutAStreamSourceWhenLiveUpdatesAreOff(): void

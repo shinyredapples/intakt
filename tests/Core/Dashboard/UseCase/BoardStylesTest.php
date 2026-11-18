@@ -59,13 +59,18 @@ final class BoardStylesTest extends TestCase
         self::assertArrayNotHasKey('.board .col.collapsed', $this->rulesOf($this->sheetOutside('min-width: 761px')));
     }
 
-    public function testOnAPhoneTheHeadsOctopusShrinksTo96PxAndKeepsTheTitleBesideIt(): void
+    public function testTheFirstDayPanelStacksItsOctopusAboveItsTextAtMost144PxHigh(): void
+    {
+        self::assertMatchesRegularExpression('/\n\.firstday \{[^}]*flex-direction:\s*column;/', $this->sheet());
+        self::assertMatchesRegularExpression('/\n\.firstday > \.character \{\s*max-height:\s*144px;\s*width:\s*auto;/', $this->sheet());
+    }
+
+    public function testOnAPhoneTheFirstDayPanelsOctopusIsAtMost120PxHigh(): void
     {
         preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
         $rules = $this->rulesOf(implode("\n", $blocks[1]));
 
-        self::assertMatchesRegularExpression('/max-height:\s*96px;\s*width:\s*auto;/', $rules['.page-head > .head-character > .character'] ?? '');
-        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.page-head > .head-character + div'] ?? '');
+        self::assertMatchesRegularExpression('/max-height:\s*120px;/', $rules['.firstday > .character'] ?? '');
     }
 
     // The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md).
@@ -75,14 +80,6 @@ final class BoardStylesTest extends TestCase
         $rules = $this->rulesOf(implode("\n", $blocks[1]));
 
         self::assertMatchesRegularExpression('/^\s*display:\s*inline-block;\s*min-height:\s*44px;\s*$/', $rules['.page-head .lead .headline-setup'] ?? '');
-    }
-
-    public function testABoardWithACardKeepsTheWrapRuleOnTheTitleColumnBehindTheHiddenOctopusTarget(): void
-    {
-        $rules = $this->rulesOf($this->sheet());
-        $selector = '.page-head > #board-octopus[hidden] + div';
-
-        self::assertMatchesRegularExpression('/min-width:\s*0;\s*overflow-wrap:\s*anywhere;/', $rules[$selector] ?? '');
     }
 
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void

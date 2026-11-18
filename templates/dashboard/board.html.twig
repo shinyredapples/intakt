@@ -6,7 +6,6 @@
 
 {% block body %}
 <div class="page-head">
-    {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
     <div>
         <h1>Board</h1>
         {# The id is the target of the pushed headline (LiveBoardHeadline), which updates only the words inside, so the line rendered here stays when live updates are off. #}
@@ -30,6 +29,7 @@
         {% block action %}<a class="btn quiet sm" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}#failing-heads">See the failed pull requests</a>{% endblock %}
     {% endembed %}
 {% endfor %}
+{{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
 {# A disclosure with no lane would open to nothing, so it is a plain line until a lane runs. #}
 {% if working.lanes is empty %}
 <p class="working working-none" id="working">{{ board.nobodyWorkingLine }}</p>
