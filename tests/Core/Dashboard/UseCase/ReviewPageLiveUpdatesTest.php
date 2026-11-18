@@ -99,26 +99,6 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
      */
     private array $published = [];
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
-        $this->secretBefore = is_string($before) ? $before : null;
-        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        parent::setUp();
-        $this->givenTheDownloadedScriptsExist();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $secret = $this->secretBefore ?? '';
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        $this->removeTheStandIns();
-        parent::tearDown();
-    }
-
     public function testTheReviewPageListensToThePrivateTopicOfARunningRound(): void
     {
         $this->givenARunningRound();
@@ -1323,6 +1303,26 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $held = $crawler->filter('.shell[data-controller="connection"]')->filter($actions)->each(static fn (Crawler $button): string => $button->text());
         self::assertSame(['Stop', 'Stop this reviewer'], $held);
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
+        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        parent::setUp();
+        $this->givenTheDownloadedScriptsExist();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $secret = $this->secretBefore ?? '';
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        $this->removeTheStandIns();
+        parent::tearDown();
     }
 
     private function actionsTheConnectionControllerHolds(): string

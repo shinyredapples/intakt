@@ -36,32 +36,6 @@ final class EntrypointProcessesTest extends TestCase
     /** @var array<string, string> */
     private array $environment;
 
-    protected function setUp(): void
-    {
-        // The entrypoint is started per test, not per class, because each test kills, stops or restarts its processes and so cannot share them.
-        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->environment = [
-            'PATH' => $this->standInPrograms().':'.getenv('PATH'),
-            'MESSENGER_CONSUMERS' => '2',
-            'WORKER_MEMORY_CEILING_MB' => '256',
-            'APP_SECRET' => self::SECRET,
-            'MERCURE_JWT_SECRET' => self::SECRET,
-            'MERCURE_JWT_ISSUER' => 'http://localhost',
-        ];
-    }
-
-    protected function tearDown(): void
-    {
-        // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
-        $this->entrypoint->stop(15);
-        // Killed here because an entrypoint with the defect the forced-order test proves absent ends without stopping this child, which would otherwise outlive the test.
-        foreach ($this->childrenStartedBeforeTheStop() as $pid) {
-            posix_kill($pid, self::KILL);
-        }
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheConsumersAndTheSchedulerRunBesideTheWebServerAlsoWithPlainPhp(): void
     {
         $this->startEntrypoint();
@@ -206,6 +180,32 @@ final class EntrypointProcessesTest extends TestCase
         self::assertNotSame(0, $this->entrypoint->getExitCode());
         self::assertStringContainsString(self::CADDYFILE_REJECTED, $this->entrypoint->getErrorOutput());
         self::assertStringNotContainsString('started:', $this->entrypoint->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        // The entrypoint is started per test, not per class, because each test kills, stops or restarts its processes and so cannot share them.
+        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->environment = [
+            'PATH' => $this->standInPrograms().':'.getenv('PATH'),
+            'MESSENGER_CONSUMERS' => '2',
+            'WORKER_MEMORY_CEILING_MB' => '256',
+            'APP_SECRET' => self::SECRET,
+            'MERCURE_JWT_SECRET' => self::SECRET,
+            'MERCURE_JWT_ISSUER' => 'http://localhost',
+        ];
+    }
+
+    protected function tearDown(): void
+    {
+        // Longer than the entrypoint's grace period, so it ends its children itself and none outlives the test.
+        $this->entrypoint->stop(15);
+        // Killed here because an entrypoint with the defect the forced-order test proves absent ends without stopping this child, which would otherwise outlive the test.
+        foreach ($this->childrenStartedBeforeTheStop() as $pid) {
+            posix_kill($pid, self::KILL);
+        }
+        new Filesystem()->remove($this->directory);
     }
 
     /**

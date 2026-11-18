@@ -32,18 +32,6 @@ final class CodexLoginsTest extends TestCase
 
     private InMemoryStore $lockStore;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-codex-'.bin2hex(random_bytes(6));
-        $this->http = new MockHttpClient(new JsonMockResponse(['access_token' => 'access-2', 'refresh_token' => 'refresh-2']));
-        $this->lockStore = new InMemoryStore();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testACallGetsAReadOnlyCopyOfTheLoginInItsOwnHome(): void
     {
         $logins = $this->logins();
@@ -224,6 +212,18 @@ final class CodexLoginsTest extends TestCase
     {
         self::assertSame($this->root.'/logins/team_2/auth.json', $this->logins()->loginFile('team_2'));
         self::assertSame($this->root.'/logins/default/auth.json', $this->logins()->loginFile(Account::DEFAULT));
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-codex-'.bin2hex(random_bytes(6));
+        $this->http = new MockHttpClient(new JsonMockResponse(['access_token' => 'access-2', 'refresh_token' => 'refresh-2']));
+        $this->lockStore = new InMemoryStore();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
     }
 
     private function logins(): CodexLogins

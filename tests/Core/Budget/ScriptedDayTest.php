@@ -45,17 +45,6 @@ final class ScriptedDayTest extends KernelTestCase
     private DoctrineMeasuredUse $measured;
     private CeilingStartGuard $guard;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
-        $this->guard = new CeilingStartGuard($this->measured, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
-    }
-
     public function testTheGuardDecidesEachStartOfAScriptedDayFromTheMeasuredUseOfItsOwnAccount(): void
     {
         $decisions = [];
@@ -80,6 +69,17 @@ final class ScriptedDayTest extends KernelTestCase
             '14:00 with 0 running: at-ceiling',
             '23:00 with 1 running: start',
         ], $decisions);
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
+        $this->guard = new CeilingStartGuard($this->measured, $this->clock, ['five-hour' => 90.0, 'weekly' => 90.0]);
     }
 
     /**

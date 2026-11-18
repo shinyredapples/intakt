@@ -19,11 +19,6 @@ final class ProviderLiteralRuleTest extends PhpStanRuleTestCase
     // the fixtures' own contract, since a fixture cannot declare the repository's ProviderDescriptor a second time
     private const string CATALOG = 'Intakt\Sample\Contract\ProviderDescriptor';
 
-    protected function ruleFor(string $root): ProviderLiteralRule
-    {
-        return new ProviderLiteralRule($root, self::createReflectionProvider(), self::CATALOG);
-    }
-
     public function testAModelIdOutsideTheCatalogFailsStaticAnalysis(): void
     {
         $this->assertRuleRejects('model-id-outside-the-catalog', "src/ReviewerChoice.php:9 intakt.providerLiteral 'claude-sonnet-5-5' names a model");
@@ -122,5 +117,10 @@ final class ProviderLiteralRuleTest extends PhpStanRuleTestCase
     public function testProviderWordsThatNameNoModelOrHostPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('provider-words-without-a-model-or-host');
+    }
+
+    protected function ruleFor(string $root): ProviderLiteralRule
+    {
+        return new ProviderLiteralRule($root, self::createReflectionProvider(), self::CATALOG);
     }
 }

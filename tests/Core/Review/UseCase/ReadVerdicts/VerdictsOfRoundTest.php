@@ -57,11 +57,6 @@ final class VerdictsOfRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTheVerdictsOfARoundOnAnUnchangedIdentityAreCurrentAndCount(): void
     {
         $round = $this->reviewedRound();
@@ -164,6 +159,11 @@ final class VerdictsOfRoundTest extends KernelTestCase
         $this->expectException(IdentityNotOfRound::class);
 
         $this->fixture->startWithIdentityOf(RoundFixture::TASK, 3, 2);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function reviewedRound(): string

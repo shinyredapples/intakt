@@ -31,21 +31,6 @@ final class InstallationTokensTest extends TestCase
     private string $lifetime = '+1 hour';
     private InstallationTokens $tokens;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $http = new MockHttpClient(function (): ResponseInterface {
-            ++$this->exchanges;
-            if ($this->refuse) {
-                return new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]);
-            }
-
-            return new MockResponse(json_encode(['token' => 'value-'.$this->exchanges, 'expires_at' => $this->clock->now()->modify($this->lifetime)->format(DATE_ATOM)], JSON_THROW_ON_ERROR), ['http_code' => 201]);
-        });
-        $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
-        $this->tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $this->clock);
-    }
-
     public function testAFreshlyMintedTokenThatIsAlreadyExpiredFailsTheCall(): void
     {
         $this->lifetime = '-1 hour';
@@ -135,5 +120,20 @@ final class InstallationTokensTest extends TestCase
         (void) $this->tokens->current();
 
         self::assertSame(2, $this->exchanges);
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $http = new MockHttpClient(function (): ResponseInterface {
+            ++$this->exchanges;
+            if ($this->refuse) {
+                return new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]);
+            }
+
+            return new MockResponse(json_encode(['token' => 'value-'.$this->exchanges, 'expires_at' => $this->clock->now()->modify($this->lifetime)->format(DATE_ATOM)], JSON_THROW_ON_ERROR), ['http_code' => 201]);
+        });
+        $jwt = new AppJwt('12345', AppKey::generate()->private, $this->clock);
+        $this->tokens = new InstallationTokens(new InstallationTokenMinter($jwt, $http, new NullLogger()), '678', $this->clock);
     }
 }

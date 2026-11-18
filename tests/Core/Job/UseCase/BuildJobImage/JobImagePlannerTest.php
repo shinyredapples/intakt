@@ -42,16 +42,6 @@ final class JobImagePlannerTest extends TestCase
 
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->repository->path);
-    }
-
     public function testTheDevcontainerComesBeforeTheDockerfile(): void
     {
         $this->repository->commitFile('composer.json', self::COMPOSER_JSON);
@@ -262,6 +252,16 @@ final class JobImagePlannerTest extends TestCase
         $this->expectExceptionObject(JobImageNotBuilt::notExtendable('it sets the escape character to "`"'));
 
         $this->reviewPlanFor();
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->repository->path);
     }
 
     private function planFor(): JobImagePlan

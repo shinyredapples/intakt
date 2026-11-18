@@ -246,6 +246,15 @@ final class ProcessRunnerTest extends TestCase
         self::assertSame('err', $result->errors);
     }
 
+    protected function tearDown(): void
+    {
+        foreach ($this->markers as $marker) {
+            if (is_file($marker)) {
+                unlink($marker);
+            }
+        }
+    }
+
     private function skipWhenNamespacesAreRefused(ProcessRunner $runner): void
     {
         if (ProcessRunner::PID_NAMESPACE !== $runner->containment()) {
@@ -314,14 +323,5 @@ final class ProcessRunnerTest extends TestCase
         $end = strrpos($status, ')');
 
         return false !== $end && 'Z' !== substr($status, $end + 2, 1);
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->markers as $marker) {
-            if (is_file($marker)) {
-                unlink($marker);
-            }
-        }
     }
 }

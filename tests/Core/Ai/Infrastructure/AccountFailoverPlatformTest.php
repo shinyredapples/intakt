@@ -77,11 +77,6 @@ final class AccountFailoverPlatformTest extends TestCase
 {
     private AccountCooldownWindows $cooldowns;
 
-    protected function setUp(): void
-    {
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
-    }
-
     public function testACallGoesToTheFirstAccountInTheOwnersOrder(): void
     {
         $result = $this->accounts($this->answering('first'), $this->answering('second'))->invoke('big', 'Review.');
@@ -653,6 +648,11 @@ final class AccountFailoverPlatformTest extends TestCase
 
         self::assertTrue($failures->record($this->account(Account::DEFAULT), $failure));
         self::assertTrue($failures->record($this->account('team'), $failure));
+    }
+
+    protected function setUp(): void
+    {
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
     private function readStream(DeferredResult $result): void

@@ -93,16 +93,6 @@ final class RunCheckJobCommandTest extends TestCase
 
     private BuildHistory $history;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testAGreenCheckPrintsTheEndOfItsLogAndPassed(): void
     {
         $this->history->commit('Build work');
@@ -195,6 +185,16 @@ final class RunCheckJobCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('there is no socket at /var/run/docker.sock', $this->flat($tester));
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     /**

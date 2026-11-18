@@ -32,23 +32,6 @@ final class TakeCheckedHeadTest extends TestCase
 
     private string $clone;
 
-    protected function setUp(): void
-    {
-        $this->source = new TemporaryRepository();
-        $this->source->commitFile('a.txt', 'one');
-        $this->mirrors = new Mirrors(sys_get_temp_dir().'/intakt-take-head-'.bin2hex(random_bytes(6)));
-        $this->clone = $this->mirrors->directory.'-clone';
-        $this->git(['clone', '--quiet', '--bare', $this->source->path, $this->mirrors->pathOf('alpha')], $this->source->path);
-        $this->git(['clone', '--quiet', $this->source->path, $this->clone], $this->source->path);
-        $this->git(['switch', '--quiet', '-c', 'feat/task'], $this->clone);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->mirrors->directory, $this->clone]);
-        $this->source->remove();
-    }
-
     public function testTheCloneTakesTheCheckedHeadOnItsBranchWithItsFilesCheckedOut(): void
     {
         $head = $this->headInTheMirrorOnly();
@@ -79,6 +62,23 @@ final class TakeCheckedHeadTest extends TestCase
         $this->expectException(CheckedHeadNotTaken::class);
 
         $this->take(str_repeat('0', 40));
+    }
+
+    protected function setUp(): void
+    {
+        $this->source = new TemporaryRepository();
+        $this->source->commitFile('a.txt', 'one');
+        $this->mirrors = new Mirrors(sys_get_temp_dir().'/intakt-take-head-'.bin2hex(random_bytes(6)));
+        $this->clone = $this->mirrors->directory.'-clone';
+        $this->git(['clone', '--quiet', '--bare', $this->source->path, $this->mirrors->pathOf('alpha')], $this->source->path);
+        $this->git(['clone', '--quiet', $this->source->path, $this->clone], $this->source->path);
+        $this->git(['switch', '--quiet', '-c', 'feat/task'], $this->clone);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->mirrors->directory, $this->clone]);
+        $this->source->remove();
     }
 
     private function headInTheMirrorOnly(): string

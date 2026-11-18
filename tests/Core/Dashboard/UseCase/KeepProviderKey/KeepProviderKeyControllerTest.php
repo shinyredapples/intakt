@@ -66,17 +66,6 @@ final class KeepProviderKeyControllerTest extends WebTestCase
 
     private string $directory = '';
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/'.uniqid('keep-key-page-', true);
-    }
-
-    protected function tearDown(): void
-    {
-        parent::tearDown();
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAPostWithoutAValidFormTokenIsRefusedAndKeepsNoKey(): void
     {
         $browser = $this->browser(KeyCheckOutcome::Accepted);
@@ -178,6 +167,17 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         foreach ($records as $record) {
             self::assertStringNotContainsString(self::BODY, $record['message']);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/'.uniqid('keep-key-page-', true);
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        new Filesystem()->remove($this->directory);
     }
 
     private function key(): string

@@ -63,6 +63,18 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
         return false;
     }
 
+    #[Override]
+    public function getDataStream(): iterable
+    {
+        return $this->inner->getDataStream();
+    }
+
+    #[Override]
+    public function getObject(): object
+    {
+        return $this->inner->getObject();
+    }
+
     /**
      * @param array<mixed> $item
      */
@@ -80,18 +92,6 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     private function answered(mixed $result): bool
     {
         return is_array($result) && false === ($result['isError'] ?? false);
-    }
-
-    #[Override]
-    public function getDataStream(): iterable
-    {
-        return $this->inner->getDataStream();
-    }
-
-    #[Override]
-    public function getObject(): object
-    {
-        return $this->inner->getObject();
     }
 
     /**

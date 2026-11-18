@@ -93,18 +93,6 @@ final class ReviewChangeCommandTest extends TestCase
         self::$shared->remove();
     }
 
-    protected function setUp(): void
-    {
-        $this->repository = self::$shared;
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->repository !== self::$shared) {
-            $this->repository->remove();
-        }
-    }
-
     /**
      * @return iterable<string, array{Decision, int}>
      */
@@ -337,6 +325,18 @@ final class ReviewChangeCommandTest extends TestCase
         ))->willReturn($this->outcome(Decision::Approve));
 
         $this->whenTheCommandRuns($reviews);
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = self::$shared;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->repository !== self::$shared) {
+            $this->repository->remove();
+        }
     }
 
     /**

@@ -30,24 +30,6 @@ final class RoundReadContractTest extends KernelTestCase
 
     private string $roundId;
 
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $fixture = new RoundFixture(self::getContainer());
-        $round = $fixture->start(2);
-        $this->roundId = $round->id()->toRfc4122();
-        $findings = [new Finding('A', Severity::P1, null, null, null, 'Text of A.', FixableBy::Builder, false, null, null)];
-
-        foreach ($fixture->bus->messages as $message) {
-            $fixture->deliver($message, new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-        }
-
-        $fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))(new JudgeRound($this->roundId));
-        $this->client = new McpServerClient($kernel);
-        $this->client->initialize('2025-11-25');
-    }
-
     public function testEveryReadToolIsListedReadOnlyAndNotDestructive(): void
     {
         $tools = McpServerClient::at($this->client->call('tools/list', [], 2), 'result', 'tools');
@@ -141,6 +123,24 @@ final class RoundReadContractTest extends KernelTestCase
         self::assertIsInt(McpServerClient::at($answer, 'error', 'code'));
         self::assertStringNotContainsString('#0', $this->client->lastBody());
         self::assertLoggedError('error', 'Resource not found');
+    }
+
+    protected function setUp(): void
+    {
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $fixture = new RoundFixture(self::getContainer());
+        $round = $fixture->start(2);
+        $this->roundId = $round->id()->toRfc4122();
+        $findings = [new Finding('A', Severity::P1, null, null, null, 'Text of A.', FixableBy::Builder, false, null, null)];
+
+        foreach ($fixture->bus->messages as $message) {
+            $fixture->deliver($message, new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+        }
+
+        $fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))(new JudgeRound($this->roundId));
+        $this->client = new McpServerClient($kernel);
+        $this->client->initialize('2025-11-25');
     }
 
     /**

@@ -73,17 +73,6 @@ final class PushStepTest extends TestCase
     private PushScenario $scenario;
     private string $forge;
 
-    protected function setUp(): void
-    {
-        $this->scenario = new PushScenario();
-        $this->forge = $this->scenario->localGitForge();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-    }
-
     public function testABranchTheLocalGitForgeAcceptsIsPushedAndGivesNoFailure(): void
     {
         $failure = $this->stepOf($this->scenario->push())->failureOf($this->request(), $this->accepted(), $this->text());
@@ -150,6 +139,17 @@ final class PushStepTest extends TestCase
 
         self::assertSame('the project name is no folder name', $failure);
         self::assertSame([], $this->scenario->ledger->kinds());
+    }
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+        $this->forge = $this->scenario->localGitForge();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
     }
 
     private function stepOf(BranchPush $branches): PushStep

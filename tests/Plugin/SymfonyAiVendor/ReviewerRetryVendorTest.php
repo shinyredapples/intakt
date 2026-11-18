@@ -103,11 +103,6 @@ final class ReviewerRetryVendorTest extends KernelTestCase
      */
     private array $askedToNameFindings = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new InMemoryLedger();
-    }
-
     public function testAReviewerWhoseEndpointCouldNotBeReachedIsAskedOnceMoreAndThatVerdictCounts(): void
     {
         $verdict = $this->vendor($this->answering($this->unreachable(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
@@ -237,6 +232,11 @@ final class ReviewerRetryVendorTest extends KernelTestCase
 
         self::assertSame(Decision::Approve, $verdict->verdict);
         self::assertSame([false], $this->askedToNameFindings);
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new InMemoryLedger();
     }
 
     /**

@@ -57,17 +57,6 @@ final class ReviewJobTest extends TestCase
 
     private string $promptSeen = '';
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-review-job-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/checkout');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testAJobThatExitedWithTheCliAnswerGivesTheAnswersText(): void
     {
         $answer = $this->reviews($this->answered(self::CLAUDE_ANSWER))->run($this->request());
@@ -303,6 +292,17 @@ final class ReviewJobTest extends TestCase
         $this->expectExceptionMessageIsOrContains('The reviewer\'s CLI claude_code gave no answer the review job can read.');
 
         (void) $this->reviews(new JobResult(new JobEnd(JobCause::Exited, 0), $output))->run($this->request());
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-review-job-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/checkout');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function request(?ResolvedModel $model = null, string $project = 'demo', string $reviewer = 'correctness'): ReviewJobRequest

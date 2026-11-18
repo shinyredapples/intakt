@@ -13,17 +13,6 @@ final class TestDurationsTest extends TestCase
 {
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-durations-'.bin2hex(random_bytes(6));
-        mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->removeDirectory($this->directory);
-    }
-
     public function testTimesOfTestCasesInOneFileAreSummedUnderThatFile(): void
     {
         $report = $this->report('a.xml', ['/work/tests/AlphaTest.php' => [0.25, 0.5], '/work/tests/BetaTest.php' => [0.1]]);
@@ -110,6 +99,17 @@ final class TestDurationsTest extends TestCase
 
         self::assertSame([], $warnings);
         self::assertFileDoesNotExist($this->directory.'/tests/durations.json');
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-durations-'.bin2hex(random_bytes(6));
+        mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->removeDirectory($this->directory);
     }
 
     /**

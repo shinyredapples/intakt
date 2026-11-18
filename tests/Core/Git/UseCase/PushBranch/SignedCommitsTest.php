@@ -34,16 +34,6 @@ final class SignedCommitsTest extends TestCase
 
     private PushScenario $scenario;
 
-    protected function setUp(): void
-    {
-        $this->scenario = new PushScenario();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->scenario->remove();
-    }
-
     public function testTheCheckRefusesACommitThatIsNotSigned(): void
     {
         $this->assertRefusedBecause('it has no signature', fn () => $this->scenario->signedCommits()->verify($this->scenario->gitDirectory(), $this->scenario->head, self::MAIN));
@@ -94,6 +84,16 @@ final class SignedCommitsTest extends TestCase
         $signed = $this->scenario->signedCommits()->of($this->scenario->gitDirectory(), new AcceptedHandBack($base, $this->scenario->head, 0), self::MAIN);
 
         self::assertSame($base, $this->scenario->repository->objectAt($signed.'^'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->scenario = new PushScenario();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->scenario->remove();
     }
 
     private function assertRefusedBecause(string $reason, callable $check): void

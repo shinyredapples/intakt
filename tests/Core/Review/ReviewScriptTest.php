@@ -38,36 +38,6 @@ final class ReviewScriptTest extends TestCase
     private string $prompt = '';
     private string $head = '';
 
-    protected function setUp(): void
-    {
-        if (0 === posix_geteuid()) {
-            self::markTestSkipped('This user ignores file permissions (superuser), so no checkout is read-only.');
-        }
-        $this->folder = sys_get_temp_dir().'/intakt-review-script-'.bin2hex(random_bytes(6));
-        $this->source = $this->folder.'/source';
-        $this->checkout = $this->folder.'/checkout';
-        $this->output = $this->folder.'/output';
-        $this->work = $this->folder.'/job';
-        $this->bin = $this->folder.'/bin';
-        $this->prompt = $this->folder.'/prompt.md';
-        new Filesystem()->mkdir([$this->source, $this->output, $this->work, $this->bin]);
-        file_put_contents($this->prompt, "Review the head.\n");
-        $this->git($this->source, 'init', '--quiet', '--initial-branch=main');
-        $this->head = $this->commitFiles(['.gitignore' => "vendor/\n", 'AGENTS.md' => "Rules.\n", 'src/Code.php' => "<?php\n"]);
-        $this->git($this->folder, 'clone', '--quiet', $this->source, $this->checkout);
-        $this->givenTheCli('claude', 'echo "{\"type\":\"result\"}"');
-        $this->givenTheCli('codex', 'echo "{\"type\":\"turn.completed\"}"');
-    }
-
-    protected function tearDown(): void
-    {
-        if ('' === $this->folder) {
-            return;
-        }
-        $this->changeTheCheckoutsModes(static fn (int $mode): int => $mode | 0o200);
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testAClaudeCodeReviewOfACleanCheckoutRunsTheCliInTheCheckoutWithThePromptAndOnlyFileReads(): void
     {
         $this->givenTheCli('claude', 'printf "%s\n" "$@" > "$RECORD/arguments"; pwd > "$RECORD/directory"; cat > "$RECORD/input"; echo answered');
@@ -569,6 +539,36 @@ final class ReviewScriptTest extends TestCase
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('review.log'));
         self::assertFileExists($this->folder.'/ran');
+    }
+
+    protected function setUp(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('This user ignores file permissions (superuser), so no checkout is read-only.');
+        }
+        $this->folder = sys_get_temp_dir().'/intakt-review-script-'.bin2hex(random_bytes(6));
+        $this->source = $this->folder.'/source';
+        $this->checkout = $this->folder.'/checkout';
+        $this->output = $this->folder.'/output';
+        $this->work = $this->folder.'/job';
+        $this->bin = $this->folder.'/bin';
+        $this->prompt = $this->folder.'/prompt.md';
+        new Filesystem()->mkdir([$this->source, $this->output, $this->work, $this->bin]);
+        file_put_contents($this->prompt, "Review the head.\n");
+        $this->git($this->source, 'init', '--quiet', '--initial-branch=main');
+        $this->head = $this->commitFiles(['.gitignore' => "vendor/\n", 'AGENTS.md' => "Rules.\n", 'src/Code.php' => "<?php\n"]);
+        $this->git($this->folder, 'clone', '--quiet', $this->source, $this->checkout);
+        $this->givenTheCli('claude', 'echo "{\"type\":\"result\"}"');
+        $this->givenTheCli('codex', 'echo "{\"type\":\"turn.completed\"}"');
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' === $this->folder) {
+            return;
+        }
+        $this->changeTheCheckoutsModes(static fn (int $mode): int => $mode | 0o200);
+        new Filesystem()->remove($this->folder);
     }
 
     /**

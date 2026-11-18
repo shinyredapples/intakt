@@ -32,18 +32,6 @@ final class EntrypointSampleSeedTest extends TestCase
 
     private ?Process $entrypoint = null;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
-        new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->entrypoint?->stop(15);
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheDemoBuildsTheContainerAgainBeforeAndAfterTheSeed(): void
     {
         self::assertSame([
@@ -463,6 +451,18 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertNotSame(0, $this->entrypoint?->getExitCode());
         self::assertStringContainsString('INTAKT_CONFIG', (string) $this->entrypoint?->getErrorOutput());
         self::assertStringNotContainsString('intakt:sample:seed', $this->calls());
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-entrypoint-seed-'.bin2hex(random_bytes(6));
+        new Filesystem()->copy(dirname(__DIR__, 4).'/config/sample-project.yaml', $this->dataFile());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->entrypoint?->stop(15);
+        new Filesystem()->remove($this->directory);
     }
 
     /**

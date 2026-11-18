@@ -31,21 +31,6 @@ final class RemoveKeptSnapshotTest extends TestCase
     private LocalGitForge $forge;
     private BufferingLogger $log;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-        $this->forge = new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser());
-        $this->log = new BufferingLogger();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheSnapshotKeptForAJudgedRoundIsRemovedWithItsWorktreeEntry(): void
     {
         $snapshot = $this->forge->keepSnapshotOf($this->head());
@@ -89,6 +74,21 @@ final class RemoveKeptSnapshotTest extends TestCase
         $logs = $this->log->cleanLogs();
         self::assertIsArray($logs[0] ?? null);
         self::assertSame('warning', $logs[0][0]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+        $this->forge = new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser());
+        $this->log = new BufferingLogger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function head(): CommitId

@@ -6,11 +6,6 @@ namespace Intakt\Gates;
 
 abstract readonly class PhpFilesGate implements Gate
 {
-    /**
-     * @param non-empty-list<string> $files
-     */
-    abstract protected function check(Workspace $workspace, array $files): GateResult;
-
     final public function run(Workspace $workspace): GateResult
     {
         try {
@@ -25,4 +20,9 @@ abstract readonly class PhpFilesGate implements Gate
 
         return $this->check($workspace, $files);
     }
+
+    /**
+     * @param non-empty-list<string> $files
+     */
+    abstract protected function check(Workspace $workspace, array $files): GateResult;
 }

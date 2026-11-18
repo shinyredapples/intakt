@@ -64,11 +64,6 @@ final class GitHubForgeWithoutAppTest extends TestCase
 
     private BufferingLogger $log;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     public function testAVerdictIsNotPublishedAndNoRequestReachesGitHubWithoutAnApp(): void
     {
         $this->forge('')->publishVerdict('alpha', new ChangeId(self::PULL), $this->verdict());
@@ -105,6 +100,11 @@ final class GitHubForgeWithoutAppTest extends TestCase
 
         self::assertSame(['POST https://api.github.com/app/installations/678/access_tokens'], $this->requests);
         self::assertSame([], $this->log->cleanLogs());
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
     }
 
     private function verdict(): PublishedVerdict

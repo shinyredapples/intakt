@@ -48,20 +48,6 @@ final class MakeBuildCloneCommandTest extends TestCase
 
     private TemporaryRepository $remote;
 
-    protected function setUp(): void
-    {
-        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
-        $this->clone = $this->mirrors.'-clone';
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone', $this->mirrors.'-clone-<info>literal<', $this->mirrors.'-task.md']);
-        $this->remote->remove();
-    }
-
     public function testTheCommandPrintsThePathOfTheBuildCloneAndExitsWithZero(): void
     {
         $this->givenTheProjectHasAMirror();
@@ -194,6 +180,20 @@ final class MakeBuildCloneCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    protected function setUp(): void
+    {
+        $this->mirrors = sys_get_temp_dir().'/intakt-mirrors-'.bin2hex(random_bytes(6));
+        $this->clone = $this->mirrors.'-clone';
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->mirrors, $this->mirrors.'-clone', $this->mirrors.'-clone-<info>literal<', $this->mirrors.'-task.md']);
+        $this->remote->remove();
     }
 
     private function givenTheSourceBranch(): string

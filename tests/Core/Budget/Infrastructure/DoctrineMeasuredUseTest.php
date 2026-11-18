@@ -42,17 +42,6 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
     private MockClock $clock;
     private DoctrineMeasuredUse $measured;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-01 08:00:00 UTC');
-        $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
-    }
-
     public function testAReadingIsKeptWithItsResetTimeAndItsAgeOnTheClock(): void
     {
         $this->record($this->reading($this->claude('main'), UsageWindow::FiveHour, 42.0));
@@ -197,6 +186,17 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
 
         self::assertSame(43.0, $this->measured->of($this->claude('main'), UsageWindow::FiveHour)?->usage->usedPercent);
         self::assertSame(1, $this->entities->getRepository(WindowReadingRecord::class)->count());
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-01 08:00:00 UTC');
+        $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
     }
 
     private function record(WindowReading $reading): void

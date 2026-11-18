@@ -21,11 +21,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): ContainerUnknownHasIdRule
-    {
-        return new ContainerUnknownHasIdRule(new NoServices(), new AskedServiceIds());
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -54,5 +49,10 @@ final class ContainerUnknownHasIdRuleTest extends PhpStanRuleTestCase
     public function testAskingTheContainerBagForAParameterIsAllowed(): void
     {
         $this->assertRuleAccepts('container-bag-has-parameter');
+    }
+
+    protected function ruleFor(string $root): ContainerUnknownHasIdRule
+    {
+        return new ContainerUnknownHasIdRule(new NoServices(), new AskedServiceIds());
     }
 }

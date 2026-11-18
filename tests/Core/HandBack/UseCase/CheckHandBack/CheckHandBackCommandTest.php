@@ -72,18 +72,6 @@ final class CheckHandBackCommandTest extends TestCase
 
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->ledger = new RecordingLedger();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testAnAcceptedBundlePrintsItsHeadThePushedBaseAndHowManyCommitsWereRewritten(): void
     {
         $base = $this->history->commit('First');
@@ -223,6 +211,18 @@ final class CheckHandBackCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('refused, sent back to the builder: '.HandBackRefusal::HoldsSecret->reason(), $this->flat($tester));
         self::assertStringNotContainsString($key, $tester->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->ledger = new RecordingLedger();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     /**

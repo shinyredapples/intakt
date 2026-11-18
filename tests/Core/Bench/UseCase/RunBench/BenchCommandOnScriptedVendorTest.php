@@ -114,18 +114,6 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
 
     private string $results;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->results = sys_get_temp_dir().'/intakt-bench-command-'.bin2hex(random_bytes(4));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
-        parent::tearDown();
-    }
-
     public function testTheDocumentedCommandOnTheScriptedVendorSucceedsAndPrintsItsResultFile(): void
     {
         $tester = $this->runTheDocumentedCommand();
@@ -154,6 +142,18 @@ final class BenchCommandOnScriptedVendorTest extends KernelTestCase
         $this->runTheDocumentedCommand();
 
         self::assertCount(24, $this->fixture->storedRounds());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->results = sys_get_temp_dir().'/intakt-bench-command-'.bin2hex(random_bytes(4));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
+        parent::tearDown();
     }
 
     private function runTheDocumentedCommand(): CommandTester

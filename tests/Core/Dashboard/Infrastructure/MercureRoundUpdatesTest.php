@@ -95,14 +95,6 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private RoundCosts $costs;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-        $this->ledger = new DashboardLedger();
-        $this->costs = self::createStub(RoundCosts::class);
-        $this->costs->method('costOf')->willReturn(Cost::none());
-    }
-
     public function testAJudgedStateAsksTheCostOfTheRoundsOfItsOwnReviewOnly(): void
     {
         $other = '01a19a97-48cf-70f1-bdae-965425786c48';
@@ -267,11 +259,6 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertStringContainsString('&lt;/template&gt;&lt;script&gt;x&lt;/script&gt;', $this->published[0]->getData());
         self::assertStringNotContainsString('<script>', $this->published[0]->getData());
-    }
-
-    private function readAnswer(string $title): ReadAnswer
-    {
-        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
     }
 
     public function testAHubThatRefusesTheUpdateDoesNotFailTheCallerAndIsLoggedOnceByTheLiveUpdates(): void
@@ -704,6 +691,19 @@ final class MercureRoundUpdatesTest extends TestCase
 
         self::assertSame(['replace round-'.self::ROUND.'-summary-tools'], array_map($this->actionAndTargetOf(...), $this->published));
         self::assertSame([LockReleasingException::class], $this->exceptionsLogged());
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
+        $this->ledger = new DashboardLedger();
+        $this->costs = self::createStub(RoundCosts::class);
+        $this->costs->method('costOf')->willReturn(Cost::none());
+    }
+
+    private function readAnswer(string $title): ReadAnswer
+    {
+        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
     }
 
     /**

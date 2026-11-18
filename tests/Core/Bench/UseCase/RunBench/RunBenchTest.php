@@ -106,18 +106,6 @@ final class RunBenchTest extends KernelTestCase
 
     private string $results;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->results = sys_get_temp_dir().'/intakt-bench-scripted-'.bin2hex(random_bytes(4));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
-        parent::tearDown();
-    }
-
     public function testTheResultFileOfAScriptedRunHoldsEachReviewersMatchedDefectsTokensAndDuration(): void
     {
         $changes = $this->scriptedRun()['changes'];
@@ -168,6 +156,18 @@ final class RunBenchTest extends KernelTestCase
         $freeShipping = array_find($changes, static fn (array $change): bool => 'free-shipping' === $change['change']) ?? self::fail('free-shipping is not in the result file');
         self::assertFalse($freeShipping['agreed']);
         self::assertSame([['free-shipping-boundary'], []], array_map(static fn (array $run): array => $run['reviewers'][0]['caught'], $freeShipping['runs']));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->results = sys_get_temp_dir().'/intakt-bench-scripted-'.bin2hex(random_bytes(4));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->results, $this->results.'-checkouts']);
+        parent::tearDown();
     }
 
     /**

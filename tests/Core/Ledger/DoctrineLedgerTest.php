@@ -41,15 +41,6 @@ final class DoctrineLedgerTest extends KernelTestCase
 {
     private ManagerRegistry $registry;
 
-    protected function setUp(): void
-    {
-        $registry = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $registry);
-        $this->registry = $registry;
-
-        $this->createSchema();
-    }
-
     public function testEventsAreReadBackInTheOrderTheyWereAppended(): void
     {
         $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
@@ -339,6 +330,15 @@ final class DoctrineLedgerTest extends KernelTestCase
 
         self::assertCount(1, $warnings);
         self::assertStringContainsString('a failed append is only reported through the result', $warnings[0]);
+    }
+
+    protected function setUp(): void
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        $this->registry = $registry;
+
+        $this->createSchema();
     }
 
     // Takes a plain Closure because static analysis refuses a discarded call it can see, and the engine still checks this one.

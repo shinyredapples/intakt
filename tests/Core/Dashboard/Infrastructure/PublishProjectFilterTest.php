@@ -74,11 +74,6 @@ final class PublishProjectFilterTest extends TestCase
 
     private ?PublishProjectFilter $secondWorker = null;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     public function testAnOpenedRoundPublishesTheProjectFilterOnTheShellTopicAsAPrivateUpdate(): void
     {
         $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha'))(new RoundOpened('r1', 'alpha'));
@@ -202,6 +197,11 @@ final class PublishProjectFilterTest extends TestCase
         $this->publisher($this->hubThatAccepts(), $this->ledgerOf('alpha'))(new RoundOpened('r9', 'beta'));
 
         self::assertSame([], $this->posted);
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
     }
 
     private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter

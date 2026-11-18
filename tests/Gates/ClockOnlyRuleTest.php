@@ -16,11 +16,6 @@ final class ClockOnlyRuleTest extends PhpStanRuleTestCase
 {
     private const int FIRST_CASE_LINE = 11;
 
-    protected function ruleFor(string $root): ClockOnlyRule
-    {
-        return new ClockOnlyRule();
-    }
-
     /**
      * @return iterable<string, array{list<string>}>
      */
@@ -71,6 +66,11 @@ final class ClockOnlyRuleTest extends PhpStanRuleTestCase
     public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
         $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
+    }
+
+    protected function ruleFor(string $root): ClockOnlyRule
+    {
+        return new ClockOnlyRule();
     }
 
     /**

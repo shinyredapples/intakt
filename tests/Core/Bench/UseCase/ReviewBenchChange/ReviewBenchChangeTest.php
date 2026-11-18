@@ -87,11 +87,6 @@ final class ReviewBenchChangeTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTheReviewReturnsEachReviewersMatchedDefectsTokensDurationAndTheActList(): void
     {
         $verdicts = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', 5)], [], [])]);
@@ -125,6 +120,11 @@ final class ReviewBenchChangeTest extends KernelTestCase
         self::assertSame('stopped at its output limit', $failed->verdict->harnessFailure);
         self::assertSame(['coupon' => FailureCause::Harness], $failed->verdict->missed);
         self::assertNull($other->verdict->harnessFailure);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function recording(VerdictPerRole $verdicts): Vendor

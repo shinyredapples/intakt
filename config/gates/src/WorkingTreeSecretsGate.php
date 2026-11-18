@@ -31,6 +31,11 @@ final class WorkingTreeSecretsGate extends GitleaksGate
         }
     }
 
+    protected function bypassesIn(Workspace $workspace): array
+    {
+        return [...$this->ignoreFileFindings($workspace), ...$this->inlineAllowDirectivesIn($workspace), ...$this->trackedFilesGitleaksSkips($workspace)];
+    }
+
     private function scanTree(Workspace $workspace, string $source): GateResult
     {
         return $this->scan($workspace, new ScanTarget($source, ['--no-git']), $workspace->config('gitleaks.toml'));
@@ -79,11 +84,6 @@ final class WorkingTreeSecretsGate extends GitleaksGate
         }
 
         rmdir($directory);
-    }
-
-    protected function bypassesIn(Workspace $workspace): array
-    {
-        return [...$this->ignoreFileFindings($workspace), ...$this->inlineAllowDirectivesIn($workspace), ...$this->trackedFilesGitleaksSkips($workspace)];
     }
 
     /**

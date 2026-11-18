@@ -54,6 +54,28 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
         }
     }
 
+    public function read(): ?ProviderKey
+    {
+        $file = $this->file();
+
+        if (!is_file($file)) {
+            return null;
+        }
+
+        $json = file_get_contents($file);
+
+        if (false === $json) {
+            throw new KeptProviderKeyUnreadable();
+        }
+
+        return $this->parsed($json);
+    }
+
+    public function configured(): ?ConfiguredKey
+    {
+        return $this->read()?->configured();
+    }
+
     // A link fails when anything is at the path, so only one of two racing requests keeps its key; PHP may resolve a dangling link there to its target, so a link is refused first.
     private function linkWhereNothingIs(string $written): void
     {
@@ -78,28 +100,6 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
         }
 
         throw new KeptProviderKeyNotWritten();
-    }
-
-    public function read(): ?ProviderKey
-    {
-        $file = $this->file();
-
-        if (!is_file($file)) {
-            return null;
-        }
-
-        $json = file_get_contents($file);
-
-        if (false === $json) {
-            throw new KeptProviderKeyUnreadable();
-        }
-
-        return $this->parsed($json);
-    }
-
-    public function configured(): ?ConfiguredKey
-    {
-        return $this->read()?->configured();
     }
 
     private function parsed(#[SensitiveParameter] string $json): ProviderKey

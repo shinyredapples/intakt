@@ -77,6 +77,18 @@ final readonly class Scope
     }
 
     /**
+     * @return list<string>
+     */
+    public function repositoryFiles(): array
+    {
+        if (!file_exists($this->root.'/.git')) {
+            return $this->walkDirectory();
+        }
+
+        return $this->gitLines(['ls-files', '-z', '--cached', '--others', self::GITIGNORE_ONLY]);
+    }
+
+    /**
      * @param list<string> $paths
      *
      * @return list<string>
@@ -87,18 +99,6 @@ final readonly class Scope
         sort($inScope);
 
         return $inScope;
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function repositoryFiles(): array
-    {
-        if (!file_exists($this->root.'/.git')) {
-            return $this->walkDirectory();
-        }
-
-        return $this->gitLines(['ls-files', '-z', '--cached', '--others', self::GITIGNORE_ONLY]);
     }
 
     /**

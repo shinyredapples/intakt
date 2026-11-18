@@ -20,11 +20,6 @@ final class ReSpelledNameRuleTest extends PhpStanRuleTestCase
     // the fixtures' own enum, since a fixture cannot declare the repository's Provider a second time
     private const string PROVIDER = 'Intakt\Sample\Contract\Provider';
 
-    protected function ruleFor(string $root): ReSpelledNameRule
-    {
-        return new ReSpelledNameRule($root, self::createReflectionProvider(), self::PROVIDER);
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -87,5 +82,10 @@ final class ReSpelledNameRuleTest extends PhpStanRuleTestCase
     public function testRespelledNamesInTestsAndGateConfigurationPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('re-spelled-names-outside-the-checked-folders');
+    }
+
+    protected function ruleFor(string $root): ReSpelledNameRule
+    {
+        return new ReSpelledNameRule($root, self::createReflectionProvider(), self::PROVIDER);
     }
 }

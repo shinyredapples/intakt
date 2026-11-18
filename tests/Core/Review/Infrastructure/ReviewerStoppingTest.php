@@ -41,13 +41,6 @@ final class ReviewerStoppingTest extends TestCase
     /** @var list<string> */
     private array $reached = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $this->round = new UuidV7();
-        $this->reviewer = new UuidV7();
-    }
-
     public function testAPendingStopRequestCancelsTheRunAtItsFirstProgressUpdate(): void
     {
         $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
@@ -142,6 +135,13 @@ final class ReviewerStoppingTest extends TestCase
         $this->record(LedgerEventKind::ReviewerStopRequested, $this->reviewer);
 
         self::assertSame(ExecutionStatus::Completed, $this->statusAfterRunning(new ReviewerConversation('You review.', new UuidV7(), reviewerId: $this->reviewer)));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $this->round = new UuidV7();
+        $this->reviewer = new UuidV7();
     }
 
     private function conversation(UuidV7 $conversation): ReviewerConversation

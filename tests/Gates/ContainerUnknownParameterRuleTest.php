@@ -20,11 +20,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class ContainerUnknownParameterRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): ContainerUnknownParameterRule
-    {
-        return new ContainerUnknownParameterRule(self::createStub(ParameterMap::class));
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -40,5 +35,10 @@ final class ContainerUnknownParameterRuleTest extends PhpStanRuleTestCase
     public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
         $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
+    }
+
+    protected function ruleFor(string $root): ContainerUnknownParameterRule
+    {
+        return new ContainerUnknownParameterRule(self::createStub(ParameterMap::class));
     }
 }

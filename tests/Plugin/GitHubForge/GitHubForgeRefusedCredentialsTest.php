@@ -87,11 +87,6 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
 
     private MockClock $clock;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
-
     public function testAReadAnswered401FailsWithRefusedCredentialsAsItsCause(): void
     {
         $forge = $this->forgeAnswering(static fn (): MockResponse => new MockResponse('{"message":"Bad credentials"}', ['http_code' => 401]));
@@ -142,6 +137,11 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
         self::assertInstanceOf(InstallationNotReadBack::class, $failure->getPrevious());
         self::assertInstanceOf(InstallationTokenNotMinted::class, $failure->getPrevious()->getPrevious());
         self::assertInstanceOf(ForgeCredentialsRefused::class, $failure->getPrevious()->getPrevious()->getPrevious());
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
     private function failureOf(Closure $call): Throwable

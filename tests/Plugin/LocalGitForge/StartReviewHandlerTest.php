@@ -44,19 +44,6 @@ final class StartReviewHandlerTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testStartingAReviewQueuesARoundAndReturnsItsIdWithoutWaitingForTheJudge(): void
     {
         $seen = null;
@@ -159,6 +146,19 @@ final class StartReviewHandlerTest extends TestCase
         } catch (RoundNotNext) {
             self::assertDirectoryDoesNotExist((string) $seen?->checkoutRoot);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function removeSnapshot(string $snapshot): void

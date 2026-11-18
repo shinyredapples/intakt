@@ -16,6 +16,11 @@ use Uri\Rfc3986\Uri;
 
 final readonly class HuggingFaceDescriptor implements SymfonyAiProvider
 {
+    public function __construct(
+        private ?Uri $baseUrl = null,
+    ) {
+    }
+
     public function id(): string
     {
         return 'huggingface';
@@ -34,11 +39,6 @@ final readonly class HuggingFaceDescriptor implements SymfonyAiProvider
     public function keyPattern(): string
     {
         return '/^hf_[A-Za-z0-9]{8,}$/D';
-    }
-
-    public function __construct(
-        private ?Uri $baseUrl = null,
-    ) {
     }
 
     // The sample project's router URL unless one is given, so the key check calls the router the image points openai_compatible at.

@@ -53,20 +53,6 @@ final class BootHeadHandlersTest extends TestCase
     private CommitId $main;
     private BootAt $head;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('composer.json', '{"name": "intakt-test/boot"}');
-        $this->main = new CommitId($this->repository->commitFile('bin/instance', self::FAILING));
-        $this->repository->checkoutNewBranch('feature');
-        $this->head = new BootAt(new ChangeSource($this->repository->path, 'main'), new CommitId($this->repository->commitFile('bin/instance', self::READY)));
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testBootingTheHarnessBootsACommitWithTheHarnessItCarries(): void
     {
         $outcome = new BootHarnessHandler(new InstanceBoot())(new BootHarness($this->head));
@@ -87,5 +73,19 @@ final class BootHeadHandlersTest extends TestCase
         $main = new MainCommitHandler()(new MainCommit($this->head->source));
 
         self::assertTrue($this->main->equals($main));
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('composer.json', '{"name": "intakt-test/boot"}');
+        $this->main = new CommitId($this->repository->commitFile('bin/instance', self::FAILING));
+        $this->repository->checkoutNewBranch('feature');
+        $this->head = new BootAt(new ChangeSource($this->repository->path, 'main'), new CommitId($this->repository->commitFile('bin/instance', self::READY)));
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 }

@@ -60,21 +60,6 @@ final class ReplayDemoCommandTest extends TestCase
 
     private RecordingFormat $format;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-demo-replay-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->clock = new MockClock('2026-11-16T09:00:00+00:00');
-        $this->ledger = new ClockedLedger($this->clock);
-        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
-        $this->format = new RecordingFormat(StoredSerializerFactory::create());
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheReplayIsRefusedOnAnInstallThatIsNotTheComposeDemo(): void
     {
         $tester = $this->tester('');
@@ -214,6 +199,21 @@ final class ReplayDemoCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('The demo project demo-replay is not marked as a replay, so nothing is replayed; create it with intakt:demo:create first.', $this->flat($tester));
         self::assertSame(0, $this->appendedRows());
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-demo-replay-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->clock = new MockClock('2026-11-16T09:00:00+00:00');
+        $this->ledger = new ClockedLedger($this->clock);
+        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
+        $this->format = new RecordingFormat(StoredSerializerFactory::create());
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function tester(string $composeService, ReplayMark $demoProject = ReplayMark::Replay): CommandTester

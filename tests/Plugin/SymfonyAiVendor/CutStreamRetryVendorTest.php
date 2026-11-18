@@ -111,12 +111,6 @@ final class CutStreamRetryVendorTest extends KernelTestCase
      */
     private array $streamed = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new InMemoryLedger();
-        $this->updates = new RecordedRoundUpdates();
-    }
-
     public function testAReviewerAskedAgainAfterACutStreamIsMarkedBeforeTheAnswerOfItsRetryAndTheCutAnswerIsNeverShown(): void
     {
         $answer = $this->cutThen(static fn (): TextResult => new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json()));
@@ -246,6 +240,12 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         self::assertStringContainsString('The provider failed after the answer had started streaming.', $verdict->findings[0]->text);
         self::assertSame([true], $this->streamed);
         self::assertSame(['started', 'unsettled'], array_column($this->ledger->payloads(), 'phase'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new InMemoryLedger();
+        $this->updates = new RecordedRoundUpdates();
     }
 
     /**

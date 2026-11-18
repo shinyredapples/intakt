@@ -47,11 +47,6 @@ final class DemoTourTest extends TestCase
     /** @var list<string> */
     private array $replays = [self::DEMO];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testOutsideTheComposeDemoThereIsNoCaptionAtAll(): void
     {
         $this->startRound('r1', 1);
@@ -185,6 +180,11 @@ final class DemoTourTest extends TestCase
             self::assertMatchesRegularExpression('/^[A-Z][^.]*[.]$/', $stage->sentence());
             self::assertLessThanOrEqual(100, strlen($stage->sentence()));
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     private function caption(): TourCaption

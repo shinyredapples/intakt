@@ -30,20 +30,6 @@ final class SqliteMemoryStoreTest extends TestCase
     private StoreMemoryIndex $index;
     private StoreProjectMemory $memory;
 
-    protected function setUp(): void
-    {
-        $store = Store::fromPdo(new PDO('sqlite::memory:'), 'project_memory');
-        $store->setup();
-        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
-            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
-        ));
-        $vectorizer = new Vectorizer($platform, 'embedder');
-        $documents = new MemoryDocuments();
-
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
-        $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
-    }
-
     public function testAnEntryIndexedInTheSqliteStoreIsRetrievedForItsFile(): void
     {
         $this->index->index(new MemoryEntry('alpha', 'Run the migration first.', ['src/Db.php']));
@@ -70,5 +56,19 @@ final class SqliteMemoryStoreTest extends TestCase
         $found = $this->memory->relevantTo(new MemoryQuery('alpha', ['a b.php'], 1000));
 
         self::assertEquals([new MemoryEntry('alpha', 'Same note.', ['a b.php'])], $found->entries);
+    }
+
+    protected function setUp(): void
+    {
+        $store = Store::fromPdo(new PDO('sqlite::memory:'), 'project_memory');
+        $store->setup();
+        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
+            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
+        ));
+        $vectorizer = new Vectorizer($platform, 'embedder');
+        $documents = new MemoryDocuments();
+
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
     }
 }

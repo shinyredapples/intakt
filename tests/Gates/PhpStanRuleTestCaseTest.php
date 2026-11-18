@@ -16,13 +16,6 @@ use PHPUnit\Framework\Attributes\Depends;
 #[CoversNothing]
 final class PhpStanRuleTestCaseTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NoDeprecatedReferenceRule
-    {
-        $reflections = self::createReflectionProvider();
-
-        return new NoDeprecatedReferenceRule(new DeprecatedClasses($reflections, new FileScopeDeprecation(self::getParser(), $reflections)));
-    }
-
     public function testAClassOfTheSandboxIsAnalyzedAsItIsDeclaredThere(): void
     {
         $findings = $this->findingsWithLegacy("/**\n * @deprecated\n */\nclass Legacy\n{\n}\n");
@@ -52,6 +45,13 @@ final class PhpStanRuleTestCaseTest extends PhpStanRuleTestCase
         $this->writeConsumer($sandbox, 'variants/VariantConsumer.php', 'VariantConsumer');
 
         self::assertStringContainsString('variants/VariantConsumer.php:11 intakt.deprecatedReference', $this->ruleFindingsIn($sandbox));
+    }
+
+    protected function ruleFor(string $root): NoDeprecatedReferenceRule
+    {
+        $reflections = self::createReflectionProvider();
+
+        return new NoDeprecatedReferenceRule(new DeprecatedClasses($reflections, new FileScopeDeprecation(self::getParser(), $reflections)));
     }
 
     private function findingsWithLegacy(string $legacy): string

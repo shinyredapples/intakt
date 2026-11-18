@@ -42,11 +42,6 @@ final class CheckedInstallationTokensTest extends TestCase
 
     private RecordedInstallation $github;
 
-    protected function setUp(): void
-    {
-        $this->github = new RecordedInstallation();
-    }
-
     public function testAMatchingInstallationHandsOutTheToken(): void
     {
         self::assertSame('minted-value', $this->tokens(self::MATCHING)->current()->value);
@@ -89,6 +84,11 @@ final class CheckedInstallationTokensTest extends TestCase
         (void) $tokens->current();
 
         self::assertSame(2, $this->readBacks());
+    }
+
+    protected function setUp(): void
+    {
+        $this->github = new RecordedInstallation();
     }
 
     private function tokens(string $permissions): CheckedInstallationTokens

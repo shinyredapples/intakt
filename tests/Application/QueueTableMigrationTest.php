@@ -21,20 +21,6 @@ final class QueueTableMigrationTest extends KernelTestCase
 
     private string $configuredDsn;
 
-    protected function setUp(): void
-    {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
-        $this->configuredDsn = is_string($configured) ? $configured : '';
-        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
-    }
-
-    protected function tearDown(): void
-    {
-        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
-
-        parent::tearDown();
-    }
-
     // The migration writes the table by hand, since the transport's auto_setup is off; this keeps it the table the transport describes.
     public function testTheMigrationsCreateTheQueueTableTheDoctrineTransportDescribes(): void
     {
@@ -53,6 +39,20 @@ final class QueueTableMigrationTest extends KernelTestCase
         $difference = $manager->createComparator()->compareTables($manager->introspectTableByUnquotedName('messenger_messages'), $described);
 
         self::assertTrue($difference->isEmpty(), 'The migrated messenger_messages table differs from the one the Doctrine transport describes.');
+    }
+
+    protected function setUp(): void
+    {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
+        $this->configuredDsn = is_string($configured) ? $configured : '';
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+
+        parent::tearDown();
     }
 
     private function console(): ApplicationTester

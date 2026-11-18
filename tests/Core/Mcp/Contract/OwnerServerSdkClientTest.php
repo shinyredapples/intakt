@@ -53,28 +53,6 @@ final class OwnerServerSdkClientTest extends KernelTestCase
 
     private KernelHttpClient $kernelClient;
 
-    protected function setUp(): void
-    {
-        $this->ownerToken = bin2hex(random_bytes(16));
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-
-        // Put back what .env set, because later tests of the process resolve the same variables.
-        foreach ($this->previous as $name => $value) {
-            $_ENV[$name] = $_SERVER[$name] = $value;
-            putenv($name.'='.$value);
-        }
-
-        parent::tearDown();
-    }
-
     public function testEveryToolIsListedAndTheStartToolIsAWriteThatMayDestroy(): void
     {
         $tools = $this->tools($this->connected(withWrites: true));
@@ -203,6 +181,28 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         self::assertTrue($result->isError);
         self::assertStringContainsString('Round 2 was asked for', $this->text($result));
         self::assertStringNotContainsString('#0', $this->text($result));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ownerToken = bin2hex(random_bytes(16));
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+
+        // Put back what .env set, because later tests of the process resolve the same variables.
+        foreach ($this->previous as $name => $value) {
+            $_ENV[$name] = $_SERVER[$name] = $value;
+            putenv($name.'='.$value);
+        }
+
+        parent::tearDown();
     }
 
     private function connected(bool $withWrites, ?string $bearer = null, bool $connect = true): Client

@@ -100,10 +100,9 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(RoundEnding::class)]
 final class LedgerRoundsTest extends TestCase
 {
+    private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
     private ?RoundCosts $costs = null;
     private ?RoundEndings $endings = null;
-
-    private const string START = '{"round":"r1","project":"alpha","reviewers":2,"change":"feat/thing","number":1}';
 
     public function testAStartWithANumberThatIsNoIntegerIsSkipped(): void
     {

@@ -89,12 +89,6 @@ final class GitHubForgeRateLimitTest extends TestCase
     private RateLimitReadings $readings;
     private bool $limited = true;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = FreshReadings::at($this->clock);
-    }
-
     public function testItRaisesTheResetOfAPrimaryLimitAnswered403(): void
     {
         $reset = $this->clock->now()->getTimestamp() + 1200;
@@ -214,6 +208,12 @@ final class GitHubForgeRateLimitTest extends TestCase
         $reading = $this->readings->latest('678');
         self::assertSame(4321, $reading?->remaining);
         self::assertSame($reset, $reading->resetsAt->getTimestamp());
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
     }
 
     private function rateLimitOf(Closure $call): ForgeRateLimited

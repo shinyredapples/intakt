@@ -33,18 +33,6 @@ final class BinaryChangeConversationTest extends KernelTestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-        parent::tearDown();
-    }
-
     public function testAReviewerConversationHoldingTheDiffOfAChangeThatAddsAPngIsStored(): void
     {
         $this->repository->checkoutNewBranch('feature');
@@ -58,6 +46,18 @@ final class BinaryChangeConversationTest extends KernelTestCase
         $stored = $store->load($conversation)->getUserMessage();
         self::assertInstanceOf(UserMessage::class, $stored);
         self::assertStringContainsString('Binary file, not shown: absent at the base, 29 bytes at the head', $stored->asText() ?? '');
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+        parent::tearDown();
     }
 
     private function migratedStore(): MessageStoreInterface

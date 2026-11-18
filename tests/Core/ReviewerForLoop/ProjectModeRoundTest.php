@@ -64,39 +64,6 @@ final class ProjectModeRoundTest extends KernelTestCase
         parent::tearDownAfterClass();
     }
 
-    protected function setUp(): void
-    {
-        $this->savedConfig = $_SERVER['INTAKT_CONFIG'] ?? null;
-        $this->file = sys_get_temp_dir().'/intakt-project-mode-'.bin2hex(random_bytes(4)).'.yaml';
-        file_put_contents($this->file, <<<'YAML'
-            projects:
-                beta:
-                    tiers:
-                        standard: { provider: anthropic, model: big }
-                gamma:
-                    mode: reviewer-for-loop
-                    tiers:
-                        standard: { provider: anthropic, model: big }
-            YAML);
-        $_SERVER['INTAKT_CONFIG'] = $this->file;
-        $this->containers = self::compiledContainers();
-        // Keyed by the config's content, because its path changes per test while the content is the only build input this class sets.
-        $this->containers->useFor([(string) file_get_contents($this->file)]);
-        $this->fixture = new RoundFixture(self::getContainer(), $this->modes());
-    }
-
-    protected function tearDown(): void
-    {
-        unset($_SERVER['INTAKT_CONFIG']);
-        if (null !== $this->savedConfig) {
-            $_SERVER['INTAKT_CONFIG'] = $this->savedConfig;
-        }
-
-        parent::tearDown();
-        $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove($this->file);
-    }
-
     public function testALiveProjectsVerdictsAreMarkedLiveInTheLedger(): void
     {
         $this->reviewChange()->review($this->request('beta'));
@@ -137,6 +104,39 @@ final class ProjectModeRoundTest extends KernelTestCase
 
         self::assertSame(Standing::Current, $verdicts->standing->standing);
         self::assertCount(2, $verdicts->counting);
+    }
+
+    protected function setUp(): void
+    {
+        $this->savedConfig = $_SERVER['INTAKT_CONFIG'] ?? null;
+        $this->file = sys_get_temp_dir().'/intakt-project-mode-'.bin2hex(random_bytes(4)).'.yaml';
+        file_put_contents($this->file, <<<'YAML'
+            projects:
+                beta:
+                    tiers:
+                        standard: { provider: anthropic, model: big }
+                gamma:
+                    mode: reviewer-for-loop
+                    tiers:
+                        standard: { provider: anthropic, model: big }
+            YAML);
+        $_SERVER['INTAKT_CONFIG'] = $this->file;
+        $this->containers = self::compiledContainers();
+        // Keyed by the config's content, because its path changes per test while the content is the only build input this class sets.
+        $this->containers->useFor([(string) file_get_contents($this->file)]);
+        $this->fixture = new RoundFixture(self::getContainer(), $this->modes());
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER['INTAKT_CONFIG']);
+        if (null !== $this->savedConfig) {
+            $_SERVER['INTAKT_CONFIG'] = $this->savedConfig;
+        }
+
+        parent::tearDown();
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove($this->file);
     }
 
     // Read through the container's handler, so the project's mode comes from its config as the merge will read it.

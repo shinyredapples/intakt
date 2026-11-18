@@ -43,14 +43,6 @@ abstract class GitleaksGate implements Gate
         return $this->resultOf($result, $report, $target->source);
     }
 
-    private function pinnedScanner(Workspace $workspace): ?string
-    {
-        $scanner = RequiredTools::scanner();
-        $version = $workspace->command([$scanner, 'version']);
-
-        return $version->succeeded() && self::PINNED_VERSION === ltrim(trim($version->output), 'v') ? $scanner : null;
-    }
-
     /**
      * @return list<string>
      */
@@ -70,6 +62,14 @@ abstract class GitleaksGate implements Gate
     final protected function lines(string $output): array
     {
         return array_values(array_filter(explode("\n", $output), static fn (string $line): bool => '' !== $line));
+    }
+
+    private function pinnedScanner(Workspace $workspace): ?string
+    {
+        $scanner = RequiredTools::scanner();
+        $version = $workspace->command([$scanner, 'version']);
+
+        return $version->succeeded() && self::PINNED_VERSION === ltrim(trim($version->output), 'v') ? $scanner : null;
     }
 
     private function resultOf(ProcessResult $result, string $report, string $root): GateResult

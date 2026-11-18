@@ -71,13 +71,6 @@ final class MergedActEntryPageTest extends WebTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
-        $this->browser->disableReboot();
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTwoReviewersReportingOnePlaceShowOneEntryWithBothIdsInTheConsoleTheJsonAndOnThePage(): void
     {
         $review = $this->reviewed([$this->findingAt('A', Severity::P2), $this->findingAt('B', Severity::P1)]);
@@ -144,6 +137,13 @@ final class MergedActEntryPageTest extends WebTestCase
         self::assertResponseIsSuccessful();
         self::assertSame([['P1', 'F2', 'Take the lock first.', 'Fix now']], $this->pageRows($page->filter('.finding-card:not([data-dropped])')));
         self::assertSame([['P2', 'F1', 'Call ghostName first.', 'Dropped before the judge: none of its 1 quoted code fragments is in the change']], $this->pageRows($page->filter('[data-dropped]')));
+    }
+
+    protected function setUp(): void
+    {
+        $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
+        $this->browser->disableReboot();
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     /**

@@ -54,21 +54,6 @@ final class WorkerModeTest extends TestCase
 
     private ProcessSettings $processBefore;
 
-    protected function setUp(): void
-    {
-        // Both arrays, because the env var processor reads $_ENV first and the dotenv file filled it with an empty token.
-        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
-        $this->processBefore = ProcessSettings::now();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->processBefore->restore();
-        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = '';
-        unset($_SERVER['FRANKENPHP_RESET_KERNEL']);
-        $this->kernel?->shutdown();
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
@@ -279,6 +264,21 @@ final class WorkerModeTest extends TestCase
 
         self::assertCount(1, $shown->filter('.toast'));
         self::assertCount(0, $again->filter('.toast'));
+    }
+
+    protected function setUp(): void
+    {
+        // Both arrays, because the env var processor reads $_ENV first and the dotenv file filled it with an empty token.
+        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = self::OWNER_TOKEN;
+        $this->processBefore = ProcessSettings::now();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->processBefore->restore();
+        $_ENV['MCP_OWNER_TOKEN'] = $_SERVER['MCP_OWNER_TOKEN'] = '';
+        unset($_SERVER['FRANKENPHP_RESET_KERNEL']);
+        $this->kernel?->shutdown();
     }
 
     // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request. A kernel cloned per request boots afresh first.

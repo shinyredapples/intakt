@@ -59,31 +59,6 @@ final class TrustOnTheContainerTest extends KernelTestCase
     /** @var array<string, mixed> */
     private array $savedEnv = [];
 
-    protected function setUp(): void
-    {
-        $this->savedServer = [];
-        $this->savedEnv = [];
-        foreach ([...self::SETTINGS, self::PRIVATE_KEY => AppKey::generate()->private] as $name => $value) {
-            if (array_key_exists($name, $_SERVER)) {
-                $this->savedServer[$name] = $_SERVER[$name];
-            }
-            if (array_key_exists($name, $_ENV)) {
-                $this->savedEnv[$name] = $_ENV[$name];
-            }
-            $_SERVER[$name] = $_ENV[$name] = $value;
-        }
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ([...array_keys(self::SETTINGS), self::PRIVATE_KEY] as $name) {
-            unset($_SERVER[$name], $_ENV[$name]);
-        }
-        $_SERVER = [...$_SERVER, ...$this->savedServer];
-        $_ENV = [...$_ENV, ...$this->savedEnv];
-        parent::tearDown();
-    }
-
     /**
      * @return iterable<string, array{string, string}>
      */
@@ -110,5 +85,30 @@ final class TrustOnTheContainerTest extends KernelTestCase
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
         self::assertSame($decision, trim($tester->getDisplay()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->savedServer = [];
+        $this->savedEnv = [];
+        foreach ([...self::SETTINGS, self::PRIVATE_KEY => AppKey::generate()->private] as $name => $value) {
+            if (array_key_exists($name, $_SERVER)) {
+                $this->savedServer[$name] = $_SERVER[$name];
+            }
+            if (array_key_exists($name, $_ENV)) {
+                $this->savedEnv[$name] = $_ENV[$name];
+            }
+            $_SERVER[$name] = $_ENV[$name] = $value;
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ([...array_keys(self::SETTINGS), self::PRIVATE_KEY] as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
+        }
+        $_SERVER = [...$_SERVER, ...$this->savedServer];
+        $_ENV = [...$_ENV, ...$this->savedEnv];
+        parent::tearDown();
     }
 }

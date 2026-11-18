@@ -39,11 +39,6 @@ final class ReplayMarksTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAProjectNeverFlaggedReadsAsLive(): void
     {
         self::assertSame(ReplayMark::Live, $this->markOfProject('alpha'));
@@ -131,6 +126,11 @@ final class ReplayMarksTest extends KernelTestCase
         $mark = $queries->dispatch(new ReplayMarkOfProject('alpha'))->last(HandledStamp::class)?->getResult();
 
         self::assertSame(ReplayMark::Replay, $mark);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function flag(string $project): void

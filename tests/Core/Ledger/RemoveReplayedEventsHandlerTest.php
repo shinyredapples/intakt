@@ -37,17 +37,6 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
 {
     private EntityManagerInterface $manager;
 
-    protected function setUp(): void
-    {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $manager = $container->get('doctrine')->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-        $this->manager = $manager;
-        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
-        AppendOnlyTriggers::in($manager->getConnection());
-    }
-
     public function testOnlyTheNamedEventsAreRemoved(): void
     {
         $replayed = $this->storedEvent('{"round":"replayed"}');
@@ -103,6 +92,17 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
         $this->expectException(LedgerEventsAreAppendOnly::class);
 
         $this->manager->flush();
+    }
+
+    protected function setUp(): void
+    {
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $manager = $container->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+        $this->manager = $manager;
+        new SchemaTool($manager)->createSchema($manager->getMetadataFactory()->getAllMetadata());
+        AppendOnlyTriggers::in($manager->getConnection());
     }
 
     private function remove(Uuid ...$events): void

@@ -18,13 +18,6 @@ final class SampleRepositoryTest extends TestCase
 
     private ?TemporaryRepository $repository = null;
 
-    protected function tearDown(): void
-    {
-        if ($this->repository instanceof TemporaryRepository) {
-            new Filesystem()->remove($this->repository->path);
-        }
-    }
-
     public function testTheSampleBuildsIntoABaseAndAPullRequestBranch(): void
     {
         $repository = $this->build();
@@ -96,6 +89,13 @@ final class SampleRepositoryTest extends TestCase
         }
 
         return $issues;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->repository instanceof TemporaryRepository) {
+            new Filesystem()->remove($this->repository->path);
+        }
     }
 
     /**

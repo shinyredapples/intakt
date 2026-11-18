@@ -111,18 +111,6 @@ final class RunBenchCommandTest extends TestCase
 
     private string $results;
 
-    // The checkouts go to a folder of the test, so it can see what the run leaves behind.
-    protected function setUp(): void
-    {
-        $this->workspace = sys_get_temp_dir().'/intakt-bench-run-'.bin2hex(random_bytes(4));
-        $this->results = $this->workspace.'-results';
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove([$this->workspace, $this->results]);
-    }
-
     public function testTheBenchCommandWithoutAProjectFailsAndWritesNoFile(): void
     {
         $tester = $this->runCommand([], $this->reviews());
@@ -293,6 +281,18 @@ final class RunBenchCommandTest extends TestCase
 
         self::assertSame(array_fill(0, 8, 1), $during);
         self::assertSame([], glob($this->workspace.'/*'));
+    }
+
+    // The checkouts go to a folder of the test, so it can see what the run leaves behind.
+    protected function setUp(): void
+    {
+        $this->workspace = sys_get_temp_dir().'/intakt-bench-run-'.bin2hex(random_bytes(4));
+        $this->results = $this->workspace.'-results';
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove([$this->workspace, $this->results]);
     }
 
     private function checkoutsNow(): int

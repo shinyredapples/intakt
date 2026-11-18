@@ -60,18 +60,6 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
 
     private PublishedLiveEvents $live;
 
-    protected function setUp(): void
-    {
-        $container = self::getContainer();
-        EmptyDatabase::in($container);
-        $entities = $container->get('doctrine')->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        AppendOnlyTriggers::in($entities->getConnection());
-        $this->locks = new InMemoryStore();
-        $this->live = new PublishedLiveEvents();
-    }
-
     public function testTheCommandDeletesTheDemoProjectsLedgerRowsAndItsReplayMark(): void
     {
         $this->givenTheDemoProjectWithAReplayedReview();
@@ -191,6 +179,18 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         $this->removal('');
 
         self::assertSame([], $this->live->events);
+    }
+
+    protected function setUp(): void
+    {
+        $container = self::getContainer();
+        EmptyDatabase::in($container);
+        $entities = $container->get('doctrine')->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        AppendOnlyTriggers::in($entities->getConnection());
+        $this->locks = new InMemoryStore();
+        $this->live = new PublishedLiveEvents();
     }
 
     private function lastPushedBoard(): Crawler

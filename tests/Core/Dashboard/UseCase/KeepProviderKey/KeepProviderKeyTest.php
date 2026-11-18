@@ -54,16 +54,6 @@ final class KeepProviderKeyTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/'.uniqid('keep-key-', true);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testARecognisedKeyTheProviderAcceptsIsKeptAsConfiguredWithItsLastCharactersOnly(): void
     {
         $configured = $this->useCase(new ArrayObject(), $this->answer(200, [
@@ -179,6 +169,16 @@ final class KeepProviderKeyTest extends TestCase
         } catch (ProviderKeyAlreadyKept) {
             self::assertSame($first, $file->read()?->secret());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/'.uniqid('keep-key-', true);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     /**

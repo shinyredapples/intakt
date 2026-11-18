@@ -119,24 +119,6 @@ final class MercureHubTest extends TestCase
         }
     }
 
-    protected function setUp(): void
-    {
-        $this->round = Uuid::v7()->toRfc4122();
-        $this->client = HttpClient::create();
-        $logger = new BufferingLogger();
-        // Registered because the judged stream renders a component, which asks for its options through this function.
-        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
-        $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
-        $this->updates = new MercureRoundUpdates(
-            new MercureLiveUpdates(new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
-            $twig,
-            self::createStub(SessionSummaries::class),
-            new LedgerReviewPages(new DashboardLedger(), new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), self::createStub(RoundCosts::class), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())),
-            new LockFactory(new InMemoryStore()),
-            $logger,
-        );
-    }
-
     public function testEventsPublishedByARoundReachASubscribedClientInOrder(): void
     {
         $stream = $this->subscribe(self::FROM_THE_START);
@@ -193,6 +175,24 @@ final class MercureHubTest extends TestCase
         $response = $this->client->request('GET', 'http://'.self::$admin.'/mercure/health/ready');
 
         self::assertSame(200, $response->getStatusCode());
+    }
+
+    protected function setUp(): void
+    {
+        $this->round = Uuid::v7()->toRfc4122();
+        $this->client = HttpClient::create();
+        $logger = new BufferingLogger();
+        // Registered because the judged stream renders a component, which asks for its options through this function.
+        $twig = new Environment(new FilesystemLoader(dirname(__DIR__, 4).'/templates'));
+        $twig->addFunction(new TwigFunction('component_option', new ComponentOptions()->of(...)));
+        $this->updates = new MercureRoundUpdates(
+            new MercureLiveUpdates(new Hub(self::$url, new StaticTokenProvider($this->token(new Grant([Grant::ACTION_PUBLISH], ['*']))), httpClient: $this->client), $logger),
+            $twig,
+            self::createStub(SessionSummaries::class),
+            new LedgerReviewPages(new DashboardLedger(), new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), self::createStub(RoundCosts::class), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus())),
+            new LockFactory(new InMemoryStore()),
+            $logger,
+        );
     }
 
     private function publishThree(): void

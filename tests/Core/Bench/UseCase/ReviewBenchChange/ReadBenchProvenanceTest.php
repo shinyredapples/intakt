@@ -25,19 +25,6 @@ final class ReadBenchProvenanceTest extends TestCase
 {
     private string $fixtures;
 
-    protected function setUp(): void
-    {
-        $this->fixtures = sys_get_temp_dir().'/intakt-provenance-'.bin2hex(random_bytes(4));
-        $files = new Filesystem();
-        $files->dumpFile($this->fixtures.'/base/a.js', "one\n");
-        $files->dumpFile($this->fixtures.'/bench/change/tree/a.js', "two\n");
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->fixtures);
-    }
-
     public function testTheProvenanceNamesTheVersionThePromptsAndTheBenchRepository(): void
     {
         $provenance = $this->read();
@@ -86,6 +73,19 @@ final class ReadBenchProvenanceTest extends TestCase
         new Filesystem()->rename($this->fixtures.'/base/a.js', $this->fixtures.'/bench/a.js');
 
         self::assertNotSame($before, $this->read()->benchRepositoryHash);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixtures = sys_get_temp_dir().'/intakt-provenance-'.bin2hex(random_bytes(4));
+        $files = new Filesystem();
+        $files->dumpFile($this->fixtures.'/base/a.js', "one\n");
+        $files->dumpFile($this->fixtures.'/bench/change/tree/a.js', "two\n");
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->fixtures);
     }
 
     private function read(): BenchProvenance

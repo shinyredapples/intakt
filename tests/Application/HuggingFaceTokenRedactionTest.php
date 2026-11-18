@@ -18,12 +18,6 @@ final class HuggingFaceTokenRedactionTest extends KernelTestCase
 {
     private const string TOKEN = 'hf_CanaryCanaryCanaryCanaryCanaryCanary';
 
-    protected function tearDown(): void
-    {
-        unset($_SERVER['HF_TOKEN'], $_SERVER['OPENAI_COMPATIBLE_API_KEY']);
-        parent::tearDown();
-    }
-
     public function testAHuggingFaceTokenAnExplicitEndpointOverridesIsStillWrittenRedacted(): void
     {
         $_SERVER['HF_TOKEN'] = self::TOKEN;
@@ -37,6 +31,12 @@ final class HuggingFaceTokenRedactionTest extends KernelTestCase
         $_SERVER['HF_TOKEN'] = self::TOKEN;
 
         self::assertStringContainsString('router-detail', $this->loggedLine('router-detail'));
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER['HF_TOKEN'], $_SERVER['OPENAI_COMPATIBLE_API_KEY']);
+        parent::tearDown();
     }
 
     private function loggedLine(string $detail): string

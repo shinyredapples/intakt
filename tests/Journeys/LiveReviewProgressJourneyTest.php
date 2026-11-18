@@ -34,18 +34,6 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
 
     private string $directory = '';
 
-    protected function tearDown(): void
-    {
-        if ('' !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'live review progress on the dashboard';
-    }
-
     public function testTheDashboardShowsAReviewRoundsProgressLiveUntilTheJudgeHasRuled(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
@@ -59,6 +47,18 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         $judged = $this->step('open the judged round', fn (): Crawler => $this->openTheJudgedRound($round));
         $this->step('read the judged content without a reload', fn () => $this->readTheJudgedContentWithoutAReload($round, new StreamedPage()->after($round, $updates, $running), $judged));
         $this->step('read the board headline after the judge', $this->readTheBoardHeadline(...));
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'live review progress on the dashboard';
     }
 
     private function createTheDatabase(): void

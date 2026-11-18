@@ -21,21 +21,6 @@ final class StartCheckScriptTest extends TestCase
     private string $work = '';
     private string $tools = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-start-check-'.bin2hex(random_bytes(4));
-        $this->output = $this->root.'/output';
-        $this->work = $this->root.'/work';
-        $this->tools = $this->root.'/bin';
-        new Filesystem()->mkdir([$this->output, $this->work, $this->tools, $this->root.'/input']);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->chmod([$this->output, $this->work, $this->root.'/input'], 0o700);
-        new Filesystem()->remove($this->root);
-    }
-
     public function testAJobWhoseMountsWorkRunsInFullModeWithAnEmptyReport(): void
     {
         $run = $this->whenTheCheckRuns([$this->root.'/input']);
@@ -142,6 +127,21 @@ final class StartCheckScriptTest extends TestCase
 
         self::assertSame(64, $run->getExitCode());
         self::assertStringContainsString('intakt-start-check: no command to run', $run->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-start-check-'.bin2hex(random_bytes(4));
+        $this->output = $this->root.'/output';
+        $this->work = $this->root.'/work';
+        $this->tools = $this->root.'/bin';
+        new Filesystem()->mkdir([$this->output, $this->work, $this->tools, $this->root.'/input']);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->chmod([$this->output, $this->work, $this->root.'/input'], 0o700);
+        new Filesystem()->remove($this->root);
     }
 
     /**

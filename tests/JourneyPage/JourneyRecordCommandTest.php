@@ -20,17 +20,6 @@ final class JourneyRecordCommandTest extends TestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-journey-record-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir([$this->root.'/stub', $this->root.'/recorded']);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheJourneyRecordCommandIsExecutable(): void
     {
         self::assertTrue(is_executable(self::COMMAND));
@@ -114,6 +103,17 @@ final class JourneyRecordCommandTest extends TestCase
 
         self::assertSame(2, $run->getExitCode());
         self::assertSame("usage: bin/journey-record <folder>\n", $run->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-journey-record-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir([$this->root.'/stub', $this->root.'/recorded']);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
     }
 
     private function stubGh(string $script): void

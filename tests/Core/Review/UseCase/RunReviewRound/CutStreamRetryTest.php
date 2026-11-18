@@ -77,11 +77,6 @@ final class CutStreamRetryTest extends KernelTestCase
      */
     private array $streamed = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAStreamCutOnceGivesTheVerdictOfTheUnstreamedRetry(): void
     {
         $this->fixture->start(1);
@@ -104,6 +99,11 @@ final class CutStreamRetryTest extends KernelTestCase
         self::assertSame(['blocked', Verdict::INCOMPLETE_STREAM], $this->storedVerdict());
         self::assertSame([true, false], $this->streamed);
         self::assertSame(['started', 'unsettled', 'started', 'unsettled'], $this->usagePhases());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     /**

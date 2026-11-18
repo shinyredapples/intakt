@@ -24,13 +24,6 @@ final class BenchRepositoryTest extends TestCase
 
     private ?TemporaryRepository $repository = null;
 
-    protected function tearDown(): void
-    {
-        if ($this->repository instanceof TemporaryRepository) {
-            new Filesystem()->remove($this->repository->path);
-        }
-    }
-
     public function testEveryBenchChangeBuildsOnTheBaseAsItsOwnBranch(): void
     {
         $repository = $this->build();
@@ -100,6 +93,13 @@ final class BenchRepositoryTest extends TestCase
         $withDefects = array_filter(self::changes(), static fn (string $change): bool => !self::expectationsOf($change)->isDefectFree());
 
         return array_combine($withDefects, array_map(static fn (string $change): array => [$change], $withDefects));
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->repository instanceof TemporaryRepository) {
+            new Filesystem()->remove($this->repository->path);
+        }
     }
 
     /**

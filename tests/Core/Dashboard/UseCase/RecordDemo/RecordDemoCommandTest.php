@@ -58,19 +58,6 @@ final class RecordDemoCommandTest extends TestCase
 
     private RecordingFormat $format;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-demo-record-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->ledger = new DashboardLedger();
-        $this->format = new RecordingFormat(StoredSerializerFactory::create());
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheRecordingHoldsTheLedgerRowsOfBothRoundsOfTheChangeInLedgerOrder(): void
     {
         $this->givenTwoRoundsOfTheSampleChange();
@@ -217,6 +204,19 @@ final class RecordDemoCommandTest extends TestCase
         $tester->execute(['project' => 'alpha', 'change' => 'sample-change', 'recording' => $this->directory.'/taken/recording.json']);
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-demo-record-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->ledger = new DashboardLedger();
+        $this->format = new RecordingFormat(StoredSerializerFactory::create());
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function givenTwoRoundsOfTheSampleChange(): void

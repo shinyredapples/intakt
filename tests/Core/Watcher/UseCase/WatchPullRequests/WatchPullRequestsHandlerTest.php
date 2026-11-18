@@ -160,25 +160,6 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     private bool $authorTrusted = true;
     private bool $trustCheckDown = false;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->listing = new RecordedForge();
-        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
-        $this->commands = new RecordingCommandBus();
-        $this->ledger = new InMemoryLedger();
-        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
-        $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
-        $this->queries = new StandingQueryBus($recorded, $entities);
-        $this->locks = new BeforeChangeLockStore();
-        $this->logger = new RecordingLogger();
-        $this->handler = $this->handler();
-    }
-
     public function testANewHeadWithPendingCiStartsNoRound(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
@@ -1350,6 +1331,25 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertCount(1, $this->commands->started);
         self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertTrue(array_any($this->logger->logged, static fn (array $line): bool => 'The boot gate failed, so the review starts without it.' === $line[0]));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->listing = new RecordedForge();
+        $this->checks = new RecordedChecks([str_repeat(self::PENDING, 40) => 'pending', str_repeat(self::GREEN, 40) => 'green', str_repeat(self::RED, 40) => 'red', str_repeat(self::NEXT_GREEN, 40) => 'rerun']);
+        $this->commands = new RecordingCommandBus();
+        $this->ledger = new InMemoryLedger();
+        $this->clock = new MockClock('2026-11-02T10:00:00+00:00');
+        $recorded = new VerdictIdentity(new CommitRange(new CommitId(str_repeat(self::BASE, 40)), new CommitId(str_repeat(self::GREEN, 40))), ReviewTerms::of('Review it.', 'bin/check', $this->panel()));
+        $this->queries = new StandingQueryBus($recorded, $entities);
+        $this->locks = new BeforeChangeLockStore();
+        $this->logger = new RecordingLogger();
+        $this->handler = $this->handler();
     }
 
     private function moveFromGreenToNextGreenAndBack(): void

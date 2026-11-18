@@ -17,16 +17,6 @@ final class RecordingLoggerTest extends TestCase
 {
     private LogRecords $records;
 
-    protected function setUp(): void
-    {
-        $this->records = new LogRecords((string) tempnam(sys_get_temp_dir(), 'intakt-recording-logger-test-'));
-    }
-
-    protected function tearDown(): void
-    {
-        $this->records->discard();
-    }
-
     public function testATemplatedMessageIsRecordedWithItsPlaceholdersFilledIn(): void
     {
         new RecordingLogger($this->records)->error('Failed {name} after {seconds}s.', ['name' => 'the sync', 'seconds' => 3]);
@@ -70,5 +60,15 @@ final class RecordingLoggerTest extends TestCase
         $this->records->all();
 
         self::assertSame([['level' => 'error', 'message' => 'Disk on fire.']], $this->records->takeErrors());
+    }
+
+    protected function setUp(): void
+    {
+        $this->records = new LogRecords((string) tempnam(sys_get_temp_dir(), 'intakt-recording-logger-test-'));
+    }
+
+    protected function tearDown(): void
+    {
+        $this->records->discard();
     }
 }

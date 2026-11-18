@@ -42,18 +42,6 @@ final class SweepJobContainersCommandTest extends TestCase
     private FakeDockerEngine $engine;
     private InMemoryLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-jobs-'.bin2hex(random_bytes(4));
-        $this->engine = new FakeDockerEngine();
-        $this->ledger = new InMemoryLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheContainersOfAGoneOrchestratorAreRemovedAndListed(): void
     {
         $orphan = $this->engine->leaveRunning('build-7');
@@ -87,6 +75,18 @@ final class SweepJobContainersCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('there is no socket at', $this->display($tester));
         self::assertSame([], $this->engine->sockets());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-jobs-'.bin2hex(random_bytes(4));
+        $this->engine = new FakeDockerEngine();
+        $this->ledger = new InMemoryLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
     }
 
     private function whenTheSweepRuns(string $socket = FakeDockerEngine::SOCKET): CommandTester

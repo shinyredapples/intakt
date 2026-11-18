@@ -15,20 +15,6 @@ final class HealthcheckScriptTest extends TestCase
 {
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-healthcheck-'.bin2hex(random_bytes(6));
-        $filesystem = new Filesystem();
-        $filesystem->dumpFile($this->directory.'/stubs/curl', "#!/bin/bash\necho \"\$*\" >> \"\$CALLS\"\n[[ \" \$* \" == *\" \$FAIL_ON \"* ]] && exit 22\nexit 0\n");
-        $filesystem->chmod($this->directory.'/stubs/curl', 0755);
-        $filesystem->mkdir($this->directory.'/var');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheHealthCheckFailsWhileTheServerDoesNotAnswer(): void
     {
         $process = $this->check(['FAIL_ON' => 'http://localhost:2019/metrics']);
@@ -65,6 +51,20 @@ final class HealthcheckScriptTest extends TestCase
         $process = $this->check([]);
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-healthcheck-'.bin2hex(random_bytes(6));
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($this->directory.'/stubs/curl', "#!/bin/bash\necho \"\$*\" >> \"\$CALLS\"\n[[ \" \$* \" == *\" \$FAIL_ON \"* ]] && exit 22\nexit 0\n");
+        $filesystem->chmod($this->directory.'/stubs/curl', 0755);
+        $filesystem->mkdir($this->directory.'/var');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     /**

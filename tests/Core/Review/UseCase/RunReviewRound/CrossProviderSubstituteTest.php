@@ -115,13 +115,6 @@ final class CrossProviderSubstituteTest extends KernelTestCase
      */
     private array $sent = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
-    }
-
     public function testARoundWithOneProvidersKeyRevokedIsReviewedByTheSubstituteAndOwesACatchUp(): void
     {
         $round = $this->fixture->start(1);
@@ -227,6 +220,13 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         self::assertSame(RoundState::Complete, $stored->state());
         self::assertSame(ReviewerState::Failed, $stored->reviewers()[0]->state());
         self::assertSame(ProviderRejectedTheKey::class, $stored->reviewers()[0]->failure());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
     }
 
     // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.

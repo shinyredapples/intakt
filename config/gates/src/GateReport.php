@@ -31,6 +31,11 @@ final readonly class GateReport
         return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson());
     }
 
+    public function isPassing(): bool
+    {
+        return true === self::verdictOf($this->gate, $this->line);
+    }
+
     // Because a finding is cut at its end, and the end of what a child wrote names why it stopped (a timeout, a signal, a fatal error).
     private static function endOf(ProcessResult $child, string $reason): string
     {
@@ -48,11 +53,6 @@ final readonly class GateReport
         }
 
         return '...'.$end;
-    }
-
-    public function isPassing(): bool
-    {
-        return true === self::verdictOf($this->gate, $this->line);
     }
 
     // Because only the exact bytes a gate's own GateResult writes may pass: no stray byte, repeated key or object where a list belongs.

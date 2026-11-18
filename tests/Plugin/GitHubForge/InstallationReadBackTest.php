@@ -58,14 +58,6 @@ final class InstallationReadBackTest extends TestCase
     private MockClock $clock;
     private RateLimitReadings $readings;
 
-    protected function setUp(): void
-    {
-        $this->key = AppKey::generate();
-        $this->logger = new RecordingLogger();
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = FreshReadings::at($this->clock);
-    }
-
     public function testAnInstallationThatMatchesTheConfigurationPasses(): void
     {
         $installation = $this->readBack(self::PERMISSIONS, self::REPOSITORIES)->check();
@@ -268,6 +260,14 @@ final class InstallationReadBackTest extends TestCase
         }
 
         self::assertSame(['installation_repositories.json'], $this->pages);
+    }
+
+    protected function setUp(): void
+    {
+        $this->key = AppKey::generate();
+        $this->logger = new RecordingLogger();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
     }
 
     private function readBack(string $permissions, string $repositories): InstallationReadBack

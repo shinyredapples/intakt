@@ -60,15 +60,6 @@ final class SteeringTrustCheckTest extends TestCase
     private MockClock $clock;
     private RateLimitReadings $readings;
 
-    protected function setUp(): void
-    {
-        $this->github = new RecordedTrust();
-        $this->logger = new RecordingLogger();
-        $this->key = AppKey::generate();
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-        $this->readings = FreshReadings::at($this->clock);
-    }
-
     public function testAPermissionReadWaitsForTheResetOfTheInstallation(): void
     {
         $this->pauseTheInstallation();
@@ -308,6 +299,15 @@ final class SteeringTrustCheckTest extends TestCase
         }
 
         self::assertSame([], $this->github->requested);
+    }
+
+    protected function setUp(): void
+    {
+        $this->github = new RecordedTrust();
+        $this->logger = new RecordingLogger();
+        $this->key = AppKey::generate();
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
+        $this->readings = FreshReadings::at($this->clock);
     }
 
     #[NoDiscard]

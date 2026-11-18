@@ -13,13 +13,6 @@ final class OwnerTokenTest extends TestCase
 {
     private ?string $file = null;
 
-    protected function tearDown(): void
-    {
-        if (null !== $this->file && is_file($this->file)) {
-            unlink($this->file);
-        }
-    }
-
     public function testAConfiguredTokenWinsOverTheKeptFile(): void
     {
         $this->keep(str_repeat('ab', 32));
@@ -60,6 +53,13 @@ final class OwnerTokenTest extends TestCase
             self::assertSame('', new OwnerToken('', $this->file)->value());
         } finally {
             chmod((string) $this->file, 0o600);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->file && is_file($this->file)) {
+            unlink($this->file);
         }
     }
 

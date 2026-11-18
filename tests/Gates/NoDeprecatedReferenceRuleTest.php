@@ -32,19 +32,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(DeprecationRules::class)]
 final class NoDeprecatedReferenceRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): DeprecationRules
-    {
-        $reflections = self::createReflectionProvider();
-        $deprecated = new DeprecatedClasses($reflections, new FileScopeDeprecation(self::getParser(), $reflections));
-        $docblocks = new DeprecatedDocblockTypes(self::getContainer()->getByType(FileTypeMapper::class), self::getContainer()->getByType(TypeNodeResolver::class), $deprecated);
-
-        return new DeprecationRules(
-            new NoDeprecatedReferenceRule($deprecated),
-            new NoDeprecatedDocblockTypeRule($docblocks),
-            new NoDeprecatedClassDocblockTypeRule($docblocks),
-        );
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -292,6 +279,19 @@ final class NoDeprecatedReferenceRuleTest extends PhpStanRuleTestCase
     public function testAnAliasedDeprecationCallDeprecatesAClass(): void
     {
         $this->assertLegacyRefused("use function trigger_deprecation as warn;\n\nwarn('acme/legacy', '1.0', 'Legacy is deprecated.');\n\nclass Legacy\n{\n}\n");
+    }
+
+    protected function ruleFor(string $root): DeprecationRules
+    {
+        $reflections = self::createReflectionProvider();
+        $deprecated = new DeprecatedClasses($reflections, new FileScopeDeprecation(self::getParser(), $reflections));
+        $docblocks = new DeprecatedDocblockTypes(self::getContainer()->getByType(FileTypeMapper::class), self::getContainer()->getByType(TypeNodeResolver::class), $deprecated);
+
+        return new DeprecationRules(
+            new NoDeprecatedReferenceRule($deprecated),
+            new NoDeprecatedDocblockTypeRule($docblocks),
+            new NoDeprecatedClassDocblockTypeRule($docblocks),
+        );
     }
 
     private function assertLegacyRefused(string $body): void

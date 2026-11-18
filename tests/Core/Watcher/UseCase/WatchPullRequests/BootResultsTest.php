@@ -65,17 +65,6 @@ final class BootResultsTest extends KernelTestCase
     private MockClock $clock;
     private DashboardLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->entities = $entities;
-        $this->clock = new MockClock('2026-11-13T10:00:00+00:00');
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testMainsBootResultIsReusedForTheSameCommitAndToolFingerprint(): void
     {
         $bus = new BootingBus(BootOutcome::booted());
@@ -587,6 +576,17 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertSame(BootState::Failed, $winner->ofMain($this->key('a', 'tools-1'), $this->source())->state);
         self::assertSame(['alpha'], array_map(static fn (FailingMain $main): string => $main->project, new LedgerFailingMains()->in($this->ledger->readInOrder())));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
+        $this->clock = new MockClock('2026-11-13T10:00:00+00:00');
+        $this->ledger = new DashboardLedger();
     }
 
     // A forked process on a connection of its own, because only a process that dies runs no further line of the worker and loses its open transaction as a killed worker does.

@@ -63,19 +63,6 @@ final class SeedSampleProjectCommandTest extends TestCase
 
     private SampleProjectData $data;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->data = new SampleProjectData();
-        $this->compatibleBaseUrl = $this->data->routerUrl()->toRawString();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     /**
      * @return iterable<string, array{list<Provider>}>
      */
@@ -338,6 +325,19 @@ final class SeedSampleProjectCommandTest extends TestCase
 
         self::assertStringNotContainsString('intakt:review', $display);
         self::assertStringNotContainsString('mcp/owner', $display);
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-sample-seed-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->data = new SampleProjectData();
+        $this->compatibleBaseUrl = $this->data->routerUrl()->toRawString();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function seed(Provider ...$keyed): CommandTester

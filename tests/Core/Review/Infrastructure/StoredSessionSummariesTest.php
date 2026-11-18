@@ -59,17 +59,6 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
     private ReviewCredential $credential;
 
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $this->app = $kernel;
-        $this->fixture = new RoundFixture(self::getContainer());
-        $credential = self::getContainer()->get(ReviewCredential::class);
-        self::assertInstanceOf(ReviewCredential::class, $credential);
-        $this->credential = $credential;
-    }
-
     public function testToolCallsAreCountedByKind(): void
     {
         $round = $this->fixture->start(1)->id()->toRfc4122();
@@ -306,6 +295,17 @@ final class StoredSessionSummariesTest extends KernelTestCase
     public function testARoundIdThatIsNoUuidHasNoSummary(): void
     {
         self::assertNull($this->summaries()->ofRound('round-1'));
+    }
+
+    protected function setUp(): void
+    {
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $this->app = $kernel;
+        $this->fixture = new RoundFixture(self::getContainer());
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
     }
 
     private function summaryOf(string $roundId, ?Cost $cost = null): SessionSummary

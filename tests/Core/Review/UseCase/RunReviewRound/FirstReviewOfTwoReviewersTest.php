@@ -67,11 +67,6 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
 
     private int $calls = 0;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAFirstReviewWhoseFirstReviewerAnswersAVerdictOnlyAndThenAFindingShowsBothReviewersWithAVerdict(): void
     {
         $this->fixture->start(2);
@@ -90,6 +85,11 @@ final class FirstReviewOfTwoReviewersTest extends KernelTestCase
 
         self::assertSame([ReviewerState::Failed, ReviewerState::Verdict], $this->states());
         self::assertSame([['approve', 0]], $this->verdicts());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     /**

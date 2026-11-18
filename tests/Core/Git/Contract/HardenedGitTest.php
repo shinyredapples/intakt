@@ -38,21 +38,6 @@ final class HardenedGitTest extends TestCase
 
     private string $workingDirectory;
 
-    protected function setUp(): void
-    {
-        $this->environment = $_ENV;
-        $this->workingDirectory = (string) getcwd();
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $_ENV = $this->environment;
-        chdir($this->workingDirectory);
-        $this->repository->remove();
-    }
-
     public function testTheCommandDisablesHooksFsmonitorExternalDiffAttributesSignaturesAndOutputEncodings(): void
     {
         $command = new HardenedGit()->call(['status'], $this->repository->path)->command;
@@ -288,6 +273,21 @@ final class HardenedGitTest extends TestCase
         } catch (RepositoryAttributesRefused $refused) {
             self::assertStringContainsString('/.git/info/attributes exists', $refused->getMessage());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->environment = $_ENV;
+        $this->workingDirectory = (string) getcwd();
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV = $this->environment;
+        chdir($this->workingDirectory);
+        $this->repository->remove();
     }
 
     /**

@@ -36,19 +36,6 @@ final class OutageWatchTest extends TestCase
     /** @var list<string> */
     private array $outages = [];
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->readings = new ReadingsInMemory($this->clock);
-        $events = new EventDispatcher();
-        $events->addListener(UsageReadingsStayedAway::class, function (UsageReadingsStayedAway $outage): void {
-            $this->outages[] = sprintf('%s since %s, seen %s', $outage->account->key(), $outage->lastReadingAt->format(DateTimeInterface::ATOM), $outage->seenAt->format(DateTimeInterface::ATOM));
-        });
-        $this->watch = new OutageWatch($this->readings, $this->clock, $events);
-        $this->readLow($this->claude('main'));
-        $this->readLow($this->claude('team'));
-    }
-
     public function testAReadingOlderThanThreeHoursIsAnOutageSinceThatReading(): void
     {
         $this->clock->sleep(OutageWatch::OUTAGE_SECONDS);
@@ -94,6 +81,19 @@ final class OutageWatchTest extends TestCase
         $this->watch->watch($this->claude('team'));
 
         self::assertSame([], $this->outages);
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $this->readings = new ReadingsInMemory($this->clock);
+        $events = new EventDispatcher();
+        $events->addListener(UsageReadingsStayedAway::class, function (UsageReadingsStayedAway $outage): void {
+            $this->outages[] = sprintf('%s since %s, seen %s', $outage->account->key(), $outage->lastReadingAt->format(DateTimeInterface::ATOM), $outage->seenAt->format(DateTimeInterface::ATOM));
+        });
+        $this->watch = new OutageWatch($this->readings, $this->clock, $events);
+        $this->readLow($this->claude('main'));
+        $this->readLow($this->claude('team'));
     }
 
     private function readLow(Account $account): void

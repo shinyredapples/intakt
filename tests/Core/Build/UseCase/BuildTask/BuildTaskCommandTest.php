@@ -138,23 +138,6 @@ final class BuildTaskCommandTest extends TestCase
 
     private PushedBranch|RefusedPush $pushed;
 
-    protected function setUp(): void
-    {
-        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
-        $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
-        $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
-        $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        $this->options = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1'];
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testItPrintsEachPassedStepAndTheEscapedTitle(): void
     {
         $tester = $this->execute(new InMemoryLedger(), self::createStub(BuildCheckout::class), ['project' => 'alpha', 'issue' => '7', ...$this->options]);
@@ -298,6 +281,23 @@ final class BuildTaskCommandTest extends TestCase
         yield 'no branch' => ['7', '--branch', 'The --branch option is required.'];
         yield 'no directory' => ['7', '--directory', 'The --directory option is required.'];
         yield 'no image' => ['7', '--image', 'The --image option is required.'];
+    }
+
+    protected function setUp(): void
+    {
+        $this->pushed = new PushedBranch(str_repeat('b', 40), new ChangeId('https://github.com/acme/alpha/pull/1'));
+        $this->checked = new AcceptedHandBack(null, str_repeat('a', 40), 0);
+        $this->checkedBeforePush = new CheckJobOutcome(CheckVerdict::Passed, log: "ok\n");
+        $this->folder = sys_get_temp_dir().'/intakt-build-task-command-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->folder.'/output/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        $this->options = ['--remote' => 'remote', '--branch' => 'feat/task', '--directory' => $this->folder.'/clone', '--image' => 'intakt-job-alpha:1'];
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     private function displayOfTitle(string $title): string

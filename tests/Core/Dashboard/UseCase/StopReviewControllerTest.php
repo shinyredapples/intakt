@@ -38,13 +38,6 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 #[UsesClass(ShowReviewController::class)]
 final class StopReviewControllerTest extends DashboardPageTestCase
 {
-    // The container keeps the ledger double across the page that hands out the token and the post that uses it.
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->browser->disableReboot();
-    }
-
     public function testARunningReviewerRowShowsAStopFormForItsReviewerId(): void
     {
         $this->runningReviewer();
@@ -190,6 +183,13 @@ final class StopReviewControllerTest extends DashboardPageTestCase
 
         self::assertResponseStatusCodeSame(405);
         self::assertLoggedError(LogLevel::WARNING, sprintf('Uncaught PHP Exception %s: "No route found for "GET http://localhost:7780/reviews/round-1/reviewers/round-1-security/stop": Method Not Allowed (Allow: POST)"', MethodNotAllowedHttpException::class));
+    }
+
+    // The container keeps the ledger double across the page that hands out the token and the post that uses it.
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->browser->disableReboot();
     }
 
     private function runningReviewer(): void

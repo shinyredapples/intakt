@@ -20,18 +20,6 @@ final class GateChildTreeTest extends TestCase
 {
     private string $marker;
 
-    protected function setUp(): void
-    {
-        $this->marker = sys_get_temp_dir().'/intakt-gate-descendant-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_file($this->marker)) {
-            unlink($this->marker);
-        }
-    }
-
     public function testAProgramThatATimedOutGateChildStartedIsStoppedWithIt(): void
     {
         $child = new ProcessRunner()->runToItsEnd($this->gateLeavingADescendant('sleep(10);'), sys_get_temp_dir(), 1);
@@ -82,6 +70,18 @@ final class GateChildTreeTest extends TestCase
         self::assertTrue($status['signaled']);
         self::assertSame(2, $status['termsig']);
         self::assertFileDoesNotExist($this->marker);
+    }
+
+    protected function setUp(): void
+    {
+        $this->marker = sys_get_temp_dir().'/intakt-gate-descendant-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->marker)) {
+            unlink($this->marker);
+        }
     }
 
     /**

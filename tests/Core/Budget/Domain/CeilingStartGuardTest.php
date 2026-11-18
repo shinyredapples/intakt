@@ -33,13 +33,6 @@ final class CeilingStartGuardTest extends TestCase
     // Six days ahead puts the start one day into the week, so the weekly pace is 90 * (24 + 5) / 168 percent, about 15.5.
     private DateTimeImmutable $weekResets;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
-        $this->readings = new ReadingsInMemory($this->clock);
-        $this->weekResets = $this->clock->now()->modify('+6 days');
-    }
-
     public function testAStartIsAdmittedBelowTheFiveHourCeiling(): void
     {
         $this->read(89.9, 10.0);
@@ -196,6 +189,13 @@ final class CeilingStartGuardTest extends TestCase
         $admitting = array_filter(StartDecision::cases(), static fn (StartDecision $decision): bool => $decision->admits());
 
         self::assertSame([StartDecision::Start], array_values($admitting));
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-02 08:00:00 UTC');
+        $this->readings = new ReadingsInMemory($this->clock);
+        $this->weekResets = $this->clock->now()->modify('+6 days');
     }
 
     /**

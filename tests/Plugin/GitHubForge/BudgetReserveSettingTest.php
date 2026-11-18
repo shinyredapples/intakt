@@ -24,6 +24,20 @@ final class BudgetReserveSettingTest extends KernelTestCase
         parent::tearDownAfterClass();
     }
 
+    public function testTheReserveKeepsAFifthOfTheHourWhenTheOwnerSetsNone(): void
+    {
+        $this->bootWith('');
+
+        self::assertSame(20, self::getContainer()->getParameter(GitHubForgeServices::RESERVE_PERCENT));
+    }
+
+    public function testTheReserveIsTheShareTheOwnerSetsInTheProjectFile(): void
+    {
+        $this->bootWith("github:\n    reserve_percent: 35\n");
+
+        self::assertSame(35, self::getContainer()->getParameter(GitHubForgeServices::RESERVE_PERCENT));
+    }
+
     protected function setUp(): void
     {
         $this->savedConfig = $_SERVER['INTAKT_CONFIG'] ?? null;
@@ -40,20 +54,6 @@ final class BudgetReserveSettingTest extends KernelTestCase
         parent::tearDown();
         self::compiledContainers()->restoreTheSharedCache();
         new Filesystem()->remove($this->file);
-    }
-
-    public function testTheReserveKeepsAFifthOfTheHourWhenTheOwnerSetsNone(): void
-    {
-        $this->bootWith('');
-
-        self::assertSame(20, self::getContainer()->getParameter(GitHubForgeServices::RESERVE_PERCENT));
-    }
-
-    public function testTheReserveIsTheShareTheOwnerSetsInTheProjectFile(): void
-    {
-        $this->bootWith("github:\n    reserve_percent: 35\n");
-
-        self::assertSame(35, self::getContainer()->getParameter(GitHubForgeServices::RESERVE_PERCENT));
     }
 
     private function bootWith(string $contents): void

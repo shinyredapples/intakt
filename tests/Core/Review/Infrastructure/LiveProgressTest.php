@@ -30,11 +30,6 @@ final class LiveProgressTest extends TestCase
 
     private RecordedRoundUpdates $updates;
 
-    protected function setUp(): void
-    {
-        $this->updates = new RecordedRoundUpdates();
-    }
-
     public function testAFileReadOverMcpReachesTheLiveLogAsReadAndItsPathWithoutTheToolsName(): void
     {
         $this->whenTheReviewerCalls(new ToolCall('1', ReviewerMcpToolboxFactory::TOOL_PREFIX.'read_file', ['path' => 'src/discount.js']));
@@ -54,6 +49,11 @@ final class LiveProgressTest extends TestCase
         $this->whenTheReviewerCalls(new ToolCall('1', 'review_write_file', ['path' => 'a']));
 
         self::assertSame(['tool '.self::REVIEWER.' used a tool'], $this->updates->seen);
+    }
+
+    protected function setUp(): void
+    {
+        $this->updates = new RecordedRoundUpdates();
     }
 
     private function whenTheReviewerCalls(ToolCall $call): void

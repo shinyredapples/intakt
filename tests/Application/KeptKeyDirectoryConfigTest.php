@@ -23,6 +23,16 @@ final class KeptKeyDirectoryConfigTest extends TestCase
     /** @var array{server: mixed, env: mixed, process: string|false} */
     private array $saved;
 
+    public function testAnInstallOutsideTheTestEnvironmentKeepsItsKeyInItsDataFolderWhateverTheVariableSays(): void
+    {
+        self::assertSame(dirname(__DIR__, 2).'/var/data', $this->keptKeyDirectoryIn('prod'));
+    }
+
+    public function testTheTestEnvironmentKeepsItsKeyWhereTheVariableSays(): void
+    {
+        self::assertSame(sys_get_temp_dir().self::MOVED, $this->keptKeyDirectoryIn('test'));
+    }
+
     protected function setUp(): void
     {
         $this->saved = ['server' => $_SERVER['INTAKT_PROVIDER_KEY_DIR'] ?? null, 'env' => $_ENV['INTAKT_PROVIDER_KEY_DIR'] ?? null, 'process' => getenv('INTAKT_PROVIDER_KEY_DIR')];
@@ -42,16 +52,6 @@ final class KeptKeyDirectoryConfigTest extends TestCase
         if (false !== $this->saved['process']) {
             putenv('INTAKT_PROVIDER_KEY_DIR='.$this->saved['process']);
         }
-    }
-
-    public function testAnInstallOutsideTheTestEnvironmentKeepsItsKeyInItsDataFolderWhateverTheVariableSays(): void
-    {
-        self::assertSame(dirname(__DIR__, 2).'/var/data', $this->keptKeyDirectoryIn('prod'));
-    }
-
-    public function testTheTestEnvironmentKeepsItsKeyWhereTheVariableSays(): void
-    {
-        self::assertSame(sys_get_temp_dir().self::MOVED, $this->keptKeyDirectoryIn('test'));
     }
 
     private function keptKeyDirectoryIn(string $environment): mixed

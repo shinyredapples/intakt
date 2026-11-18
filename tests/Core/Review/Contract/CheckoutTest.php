@@ -21,16 +21,6 @@ final class CheckoutTest extends TestCase
 {
     private ReviewCheckout $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-    }
-
     public function testAFileInsideTheCheckoutResolvesToItsRealPath(): void
     {
         $real = $this->fixture->checkout->resolve('src/Cart.php');
@@ -91,5 +81,15 @@ final class CheckoutTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         new Checkout('/nonexistent/checkout');
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
     }
 }

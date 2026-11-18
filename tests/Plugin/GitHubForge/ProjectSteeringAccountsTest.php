@@ -53,11 +53,6 @@ final class ProjectSteeringAccountsTest extends TestCase
 {
     private RecordedTrust $github;
 
-    protected function setUp(): void
-    {
-        $this->github = new RecordedTrust();
-    }
-
     public function testAnAccountWithWriteAccessToTheProjectsRepositorySteers(): void
     {
         self::assertTrue($this->accounts()->steers('alpha', RecordedTrust::WRITER));
@@ -91,6 +86,11 @@ final class ProjectSteeringAccountsTest extends TestCase
         }
 
         self::assertSame([], $this->github->requested);
+    }
+
+    protected function setUp(): void
+    {
+        $this->github = new RecordedTrust();
     }
 
     private function accounts(): ProjectSteeringAccounts

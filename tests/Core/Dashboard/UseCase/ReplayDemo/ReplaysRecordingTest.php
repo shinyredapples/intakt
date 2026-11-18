@@ -61,14 +61,6 @@ final class ReplaysRecordingTest extends TestCase
 
     private ReplayMark $demoProject = ReplayMark::Replay;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock(self::START);
-        $this->ledger = new ClockedLedger($this->clock);
-        $this->locks = new InMemoryStore();
-        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
-    }
-
     public function testReplayingARecordingPublishesEveryCapturedUpdateWithItsRecordedTopicAndStreamInCaptureOrder(): void
     {
         $recording = $this->recordedRun();
@@ -384,6 +376,14 @@ final class ReplaysRecordingTest extends TestCase
         $this->replays()->replay($this->recordedRun(), 1.0);
 
         self::assertTrue(new LockFactory($this->locks)->createLock(ReplaysRecording::LOCK)->acquire());
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock(self::START);
+        $this->ledger = new ClockedLedger($this->clock);
+        $this->locks = new InMemoryStore();
+        $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
     }
 
     private function replays(): ReplaysRecording

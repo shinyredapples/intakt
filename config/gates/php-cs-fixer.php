@@ -31,5 +31,5 @@ return new Config()
             'order' => ['use_trait', 'case', 'constant', 'property', 'construct', 'method_public', 'method_protected', 'method_private'],
             'sort_algorithm' => 'none',
         ],
-        'ordered_imports' =>['imports_order' => ['class', 'function', 'const'], 'sort_algorithm' => 'alpha'],
+        'ordered_imports' => ['imports_order' => ['class', 'function', 'const'], 'sort_algorithm' => 'alpha'],
     ]);

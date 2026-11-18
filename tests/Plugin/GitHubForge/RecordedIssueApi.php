@@ -59,6 +59,13 @@ final class RecordedIssueApi
         return new GitHubIssueHistories($calls, $checked, new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]));
     }
 
+    public static function fixture(string $name): string
+    {
+        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+
+        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
     /**
      * @return array{GitHubCalls, CheckedInstallationTokens}
      */
@@ -76,13 +83,6 @@ final class RecordedIssueApi
         $this->reserve = FreshReadings::reserveOf($readings, $tokens, $clock);
 
         return [new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens)];
-    }
-
-    public static function fixture(string $name): string
-    {
-        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
-
-        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
     }
 
     /**

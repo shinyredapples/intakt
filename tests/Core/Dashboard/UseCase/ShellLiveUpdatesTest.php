@@ -40,26 +40,6 @@ final class ShellLiveUpdatesTest extends DashboardPageTestCase
         yield 'review list of one project' => ['/reviews?project=alpha'];
     }
 
-    #[Override]
-    protected function setUp(): void
-    {
-        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
-        $this->secretBefore = is_string($before) ? $before : null;
-        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
-        parent::setUp();
-        $this->givenTheDownloadedScriptsExist();
-    }
-
-    #[Override]
-    protected function tearDown(): void
-    {
-        $secret = $this->secretBefore ?? '';
-        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
-        $this->removeTheStandIns();
-        parent::tearDown();
-    }
-
     #[DataProvider('pages')]
     public function testADashboardListPageListensOnceToTheShellTopicAsAPrivateStream(string $path): void
     {
@@ -128,6 +108,26 @@ final class ShellLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame([DashboardTopics::SHELL], $published[0]->getTopics());
         self::assertTrue($published[0]->isPrivate());
         self::assertStringContainsString('match='.rawurlencode($published[0]->getTopics()[0]), (string) $page->filter('turbo-mercure-stream-source')->attr('src'));
+    }
+
+    #[Override]
+    protected function setUp(): void
+    {
+        $before = $_SERVER['MERCURE_JWT_SECRET'] ?? null;
+        $this->secretBefore = is_string($before) ? $before : null;
+        // A fresh random key, because a committed one would be a secret; the page only signs a listener's token with it.
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = bin2hex(random_bytes(16));
+        parent::setUp();
+        $this->givenTheDownloadedScriptsExist();
+    }
+
+    #[Override]
+    protected function tearDown(): void
+    {
+        $secret = $this->secretBefore ?? '';
+        $_SERVER['MERCURE_JWT_SECRET'] = $_ENV['MERCURE_JWT_SECRET'] = $secret;
+        $this->removeTheStandIns();
+        parent::tearDown();
     }
 
     /**

@@ -45,16 +45,6 @@ final class PlanJobImageCommandTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->repository->path);
-    }
-
     public function testAGeneratedImageShowsItsSourceAndDockerfile(): void
     {
         $this->repository->commitFile('composer.json', '{"require": {"php": "^8.4", "ext-intl": "*"}}');
@@ -128,6 +118,16 @@ final class PlanJobImageCommandTest extends TestCase
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('nothing to build a job image from', preg_replace('/\s+/', ' ', $tester->getDisplay()) ?? '');
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->repository->path);
     }
 
     /**

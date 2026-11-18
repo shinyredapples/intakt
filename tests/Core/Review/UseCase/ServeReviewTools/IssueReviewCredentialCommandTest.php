@@ -31,12 +31,6 @@ final class IssueReviewCredentialCommandTest extends KernelTestCase
 
     private CommandTester $command;
 
-    protected function setUp(): void
-    {
-        $this->command = new CommandTester(new Application(self::bootKernel())->find('intakt:review:issue-credential'));
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testARoundUnderReviewGetsTheServerPathAndItsOwnCredential(): void
     {
         $round = $this->fixture->start(1)->id()->toRfc4122();
@@ -72,5 +66,11 @@ final class IssueReviewCredentialCommandTest extends KernelTestCase
 
         self::assertSame(Command::FAILURE, $exit);
         self::assertStringContainsString('no longer under review', $this->command->getDisplay());
+    }
+
+    protected function setUp(): void
+    {
+        $this->command = new CommandTester(new Application(self::bootKernel())->find('intakt:review:issue-credential'));
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 }

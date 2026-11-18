@@ -28,6 +28,16 @@ final readonly class PhpRuntime
         );
     }
 
+    public function hasExtension(string $name): bool
+    {
+        return in_array(strtolower($name), $this->extensions, true);
+    }
+
+    public function setting(string $name): ?string
+    {
+        return ($this->setting)($name);
+    }
+
     private static function iniSetting(string $name): ?string
     {
         // Read the applied level because ini_get() returns '' when no ini file sets it, as in the CI image.
@@ -38,15 +48,5 @@ final readonly class PhpRuntime
         $value = ini_get($name);
 
         return false === $value ? null : $value;
-    }
-
-    public function hasExtension(string $name): bool
-    {
-        return in_array(strtolower($name), $this->extensions, true);
-    }
-
-    public function setting(string $name): ?string
-    {
-        return ($this->setting)($name);
     }
 }

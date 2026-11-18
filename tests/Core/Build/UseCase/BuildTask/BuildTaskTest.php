@@ -243,32 +243,6 @@ final class BuildTaskTest extends TestCase
 
     private RecordingChangeOpening $changes;
 
-    protected function setUp(): void
-    {
-        $this->handBackFiles = new Filesystem();
-        $this->changes = new RecordingChangeOpening();
-        $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
-        $this->clone = $this->mirrors.'-clone';
-        $this->output = $this->mirrors.'-output';
-        $this->routing = new ConfiguredBuildRouting(['alpha' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => []]], new ModelRouting());
-        $tiers = self::createStub(TierResolver::class);
-        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $this->tiers = $tiers;
-        $this->runner = new ScriptedJobRunner($this->output);
-        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]);
-        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::BUNDLE, 'BUNDLE');
-        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
-        $this->remote = new TemporaryRepository();
-        $this->remote->commitFile('a.txt', 'one');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->programs?->remove();
-        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
-        $this->remote->remove();
-    }
-
     public function testATaskWhoseStepsAllPassEndsWithTheBranchPushedSignedFromTheCheckedHead(): void
     {
         $this->runner = $this->committingRunner();
@@ -931,6 +905,32 @@ final class BuildTaskTest extends TestCase
         }
 
         self::assertDirectoryDoesNotExist($this->clone);
+    }
+
+    protected function setUp(): void
+    {
+        $this->handBackFiles = new Filesystem();
+        $this->changes = new RecordingChangeOpening();
+        $this->mirrors = sys_get_temp_dir().'/intakt-build-task-'.bin2hex(random_bytes(6));
+        $this->clone = $this->mirrors.'-clone';
+        $this->output = $this->mirrors.'-output';
+        $this->routing = new ConfiguredBuildRouting(['alpha' => ['tier' => 'standard', 'sensitive_paths' => [], 'escalate_on' => []]], new ModelRouting());
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+        $this->tiers = $tiers;
+        $this->runner = new ScriptedJobRunner($this->output);
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]);
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::BUNDLE, 'BUNDLE');
+        new Filesystem()->dumpFile($this->output.'/'.RunBuildJob::PULL_REQUEST_TEXT, "feat: task 7\n");
+        $this->remote = new TemporaryRepository();
+        $this->remote->commitFile('a.txt', 'one');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->programs?->remove();
+        new Filesystem()->remove([$this->mirrors, $this->clone, $this->clone.'-job', $this->output, $this->mirrors.'-prompts', $this->mirrors.'-hand-backs', $this->mirrors.'-key', $this->mirrors.'-key.pub']);
+        $this->remote->remove();
     }
 
     /**

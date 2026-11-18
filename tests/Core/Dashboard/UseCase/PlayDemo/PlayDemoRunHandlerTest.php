@@ -63,20 +63,6 @@ final class PlayDemoRunHandlerTest extends TestCase
 
     private MockClock $clock;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-play-demo-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->ledger = new DashboardLedger();
-        $this->updates = new PublishedLiveEvents();
-        $this->clock = new MockClock(self::START);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAPlayedDemoRunReplaysTheConfiguredRecordingIntoTheDemoProject(): void
     {
         $this->handler($this->recordingFile())();
@@ -151,6 +137,20 @@ final class PlayDemoRunHandlerTest extends TestCase
 
         self::assertCount(4, $this->rows());
         self::assertLoggedError('error', 'The demo run was not played.');
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-play-demo-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->ledger = new DashboardLedger();
+        $this->updates = new PublishedLiveEvents();
+        $this->clock = new MockClock(self::START);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler

@@ -75,22 +75,6 @@ final class JourneyAlarmTest extends TestCase
     /** @var list<array{arguments: list<string>, input: string}> */
     private array $recorded = [];
 
-    protected function setUp(): void
-    {
-        $this->tokenBefore = getenv('GH_TOKEN');
-        putenv('GH_TOKEN=in-process-token');
-        $this->directory = sys_get_temp_dir().'/intakt-journey-alarm-'.bin2hex(random_bytes(6));
-        new Filesystem()->dumpFile($this->directory.'/gh', self::FAKE_GH."\n");
-        chmod($this->directory.'/gh', 0o755);
-        $this->openIssues('[]');
-    }
-
-    protected function tearDown(): void
-    {
-        putenv(false === $this->tokenBefore ? 'GH_TOKEN' : 'GH_TOKEN='.$this->tokenBefore);
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAFirstRedRunCreatesExactlyOneUrgentReadyTaskNamingTheJourneyStepAndTail(): void
     {
         $alarm = $this->alarm([$this->fixture()]);
@@ -332,6 +316,22 @@ final class JourneyAlarmTest extends TestCase
 
         self::assertSame(2, $alarm->getExitCode());
         self::assertSame([], $this->calls());
+    }
+
+    protected function setUp(): void
+    {
+        $this->tokenBefore = getenv('GH_TOKEN');
+        putenv('GH_TOKEN=in-process-token');
+        $this->directory = sys_get_temp_dir().'/intakt-journey-alarm-'.bin2hex(random_bytes(6));
+        new Filesystem()->dumpFile($this->directory.'/gh', self::FAKE_GH."\n");
+        chmod($this->directory.'/gh', 0o755);
+        $this->openIssues('[]');
+    }
+
+    protected function tearDown(): void
+    {
+        putenv(false === $this->tokenBefore ? 'GH_TOKEN' : 'GH_TOKEN='.$this->tokenBefore);
+        new Filesystem()->remove($this->directory);
     }
 
     private function fixture(): string

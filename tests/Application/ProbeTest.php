@@ -26,18 +26,6 @@ final class ProbeTest extends TestCase
         new Filesystem()->remove(self::sharedProject());
     }
 
-    protected function setUp(): void
-    {
-        $this->scratch = sys_get_temp_dir().'/intakt-probe-test-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->scratch.'/tmp');
-        $this->project = $this->copyOfTheProject();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->scratch);
-    }
-
     // One boot holds the script, network and failing-child cases, because each namespaced boot costs seconds.
     public function testAFailingScriptReachesTheInstanceButNotTheNetworkAndItsChildIsKilled(): void
     {
@@ -213,6 +201,18 @@ final class ProbeTest extends TestCase
         self::assertFileExists($child, 'the child never confirmed that it was running');
         self::assertSame([], $this->processesNaming($child));
         self::assertSame([], $this->processesNaming($this->project.'/public'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->scratch = sys_get_temp_dir().'/intakt-probe-test-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->scratch.'/tmp');
+        $this->project = $this->copyOfTheProject();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->scratch);
     }
 
     // Same rule as the gate tests: a host without unprivileged namespaces cannot run a probe, which the refusal test covers.

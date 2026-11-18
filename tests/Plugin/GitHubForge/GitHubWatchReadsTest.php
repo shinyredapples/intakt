@@ -96,11 +96,6 @@ final class GitHubWatchReadsTest extends TestCase
     private ?int $remaining = null;
     private MockClock $clock;
 
-    protected function setUp(): void
-    {
-        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
-    }
-
     public function testBelowTheReserveASecondListingInOneTickMakesNoRequestAndWaitsForTheReset(): void
     {
         $this->remaining = 999;
@@ -472,6 +467,11 @@ final class GitHubWatchReadsTest extends TestCase
         } catch (ForgeReadFailed) {
             self::assertSame([], $this->requested);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
     /**

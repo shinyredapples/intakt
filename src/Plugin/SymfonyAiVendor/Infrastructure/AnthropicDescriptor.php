@@ -15,6 +15,11 @@ use Uri\Rfc3986\Uri;
 
 final readonly class AnthropicDescriptor implements SymfonyAiProvider
 {
+    public function __construct(
+        private Uri $baseUrl = new Uri('https://api.anthropic.com'),
+    ) {
+    }
+
     public function id(): string
     {
         return Provider::Anthropic->value;
@@ -34,11 +39,6 @@ final readonly class AnthropicDescriptor implements SymfonyAiProvider
     public function keyPattern(): string
     {
         return '/^sk-ant-[A-Za-z0-9_-]{8,}$/D';
-    }
-
-    public function __construct(
-        private Uri $baseUrl = new Uri('https://api.anthropic.com'),
-    ) {
     }
 
     public function baseUrl(): Uri

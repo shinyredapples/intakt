@@ -20,11 +20,6 @@ final class ReviewStartedSourceTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testANewRoundsReviewStartedCarriesTheRepositoryBaseAndTask(): void
     {
         $this->fixture->startFromSource(new ChangeSource('/repos/alpha', 'main'));
@@ -43,6 +38,11 @@ final class ReviewStartedSourceTest extends KernelTestCase
         self::assertSame(RoundFixture::TASK, $payload['task']);
         self::assertArrayNotHasKey('repository', $payload);
         self::assertArrayNotHasKey('base', $payload);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     /**

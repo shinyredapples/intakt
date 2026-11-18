@@ -16,12 +16,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StatefulServiceResetRule::class)]
 final class ContainerRegistrationTest extends PhpStanRuleTestCase
 {
-    // no case here runs bin/check, because the end-to-end cases of the rule tests already cover it wired with the analyzed project's root
-    protected function ruleFor(string $root): StatefulServiceResetRule
-    {
-        return new StatefulServiceResetRule(new ContainerRegistration($root));
-    }
-
     public function testEntitiesExceptionsTheKernelAndClassesExcludedFromTheContainerWithMutablePropertiesPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('mutable-data');
@@ -34,5 +28,11 @@ final class ContainerRegistrationTest extends PhpStanRuleTestCase
         self::assertStringContainsString('src/Mailer.php:9 intakt.statefulService Service property $sent', $findings);
         self::assertStringNotContainsString('tests/Support/RecordingMailer.php', $findings);
         self::assertStringNotContainsString('config/gates/src/Timing.php', $findings);
+    }
+
+    // no case here runs bin/check, because the end-to-end cases of the rule tests already cover it wired with the analyzed project's root
+    protected function ruleFor(string $root): StatefulServiceResetRule
+    {
+        return new StatefulServiceResetRule(new ContainerRegistration($root));
     }
 }

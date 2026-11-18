@@ -70,21 +70,6 @@ final class BinaryFileReadReviewTest extends KernelTestCase
      */
     private array $responses = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('feature');
-        $this->repository->commitFile('.evidence/shot.png', self::PNG);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-        parent::tearDown();
-    }
-
     public function testAReviewWhoseReviewerReadsAPngWithReadFileIsJudged(): void
     {
         $round = $this->fixture->start(1);
@@ -106,6 +91,21 @@ final class BinaryFileReadReviewTest extends KernelTestCase
         self::assertIsString($request);
         self::assertStringContainsString('Binary file, not shown: 29 bytes', $request);
         self::assertStringNotContainsString('IHDR', $request);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->repository->commitFile('.evidence/shot.png', self::PNG);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
+        parent::tearDown();
     }
 
     // On the temporary repository's checkout, because the fixture's own checkout holds no binary file to read.

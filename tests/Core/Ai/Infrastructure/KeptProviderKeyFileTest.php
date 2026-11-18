@@ -37,16 +37,6 @@ final class KeptProviderKeyFileTest extends TestCase
 
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/'.uniqid('kept-key-', true);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testAKeptKeyIsWrittenWithPermissionsOnlyItsOwnerHas(): void
     {
         $this->file()->keep($this->key('sk-ant-'.self::BODY));
@@ -205,6 +195,16 @@ final class KeptProviderKeyFileTest extends TestCase
             self::assertNull($notWritten->getPrevious());
             self::assertStringNotContainsString(self::BODY, print_r($notWritten->getTrace(), true).$notWritten);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/'.uniqid('kept-key-', true);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function file(): KeptProviderKeyFile

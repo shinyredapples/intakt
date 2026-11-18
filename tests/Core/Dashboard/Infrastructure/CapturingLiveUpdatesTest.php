@@ -34,19 +34,6 @@ final class CapturingLiveUpdatesTest extends TestCase
 
     private PublishedLiveEvents $hub;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-live-capture-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $this->log = new BufferingLogger();
-        $this->hub = new PublishedLiveEvents();
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testEveryUpdateStillReachesTheHub(): void
     {
         $event = new LiveEvent('review/rounds/r-1', '<turbo-stream></turbo-stream>');
@@ -120,6 +107,19 @@ final class CapturingLiveUpdatesTest extends TestCase
         self::assertCount(1, $this->hub->events);
         self::assertFileDoesNotExist($capture);
         self::assertSame([['warning', 'A live dashboard update was not captured.']], array_map(static fn (mixed $record): array => is_array($record) ? [$record[0] ?? null, $record[1] ?? null] : [], $this->log->cleanLogs()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-live-capture-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $this->log = new BufferingLogger();
+        $this->hub = new PublishedLiveEvents();
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function updates(string $capture): CapturingLiveUpdates

@@ -91,11 +91,6 @@ final class JudgeRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testACompletedRoundIsQueuedForJudgingOnce(): void
     {
         $round = $this->completedRound();
@@ -533,6 +528,11 @@ final class JudgeRoundTest extends KernelTestCase
         }
 
         self::assertSame('the judge saw [redacted] in the diff', $redacted);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function completedRound(): ReviewRound

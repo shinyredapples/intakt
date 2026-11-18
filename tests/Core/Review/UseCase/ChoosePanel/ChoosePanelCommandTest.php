@@ -53,18 +53,6 @@ final class ChoosePanelCommandTest extends TestCase
 
     private string|false $jit;
 
-    protected function setUp(): void
-    {
-        $this->backtrackLimit = ini_get('pcre.backtrack_limit');
-        $this->jit = ini_get('pcre.jit');
-    }
-
-    protected function tearDown(): void
-    {
-        ini_set('pcre.backtrack_limit', (string) $this->backtrackLimit);
-        ini_set('pcre.jit', (string) $this->jit);
-    }
-
     public function testItPrintsTheCorePanelForAChangeNoRuleMatches(): void
     {
         $tester = $this->tester();
@@ -140,6 +128,18 @@ final class ChoosePanelCommandTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('a programming error'));
 
         new CommandTester($application->find('intakt:review:panel'))->execute(['project' => 'alpha']);
+    }
+
+    protected function setUp(): void
+    {
+        $this->backtrackLimit = ini_get('pcre.backtrack_limit');
+        $this->jit = ini_get('pcre.jit');
+    }
+
+    protected function tearDown(): void
+    {
+        ini_set('pcre.backtrack_limit', (string) $this->backtrackLimit);
+        ini_set('pcre.jit', (string) $this->jit);
     }
 
     private function tester(string $glob = 'src/**'): CommandTester

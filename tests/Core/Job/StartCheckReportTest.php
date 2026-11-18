@@ -20,18 +20,6 @@ final class StartCheckReportTest extends TestCase
 {
     private string $output = '';
 
-    protected function setUp(): void
-    {
-        $this->output = sys_get_temp_dir().'/intakt-report-'.bin2hex(random_bytes(4));
-        new Filesystem()->mkdir($this->output);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->chmod($this->output, 0o700);
-        new Filesystem()->remove($this->output);
-    }
-
     public function testAReportWithOnlyItsEndLineHasNoFailure(): void
     {
         self::assertSame([], $this->failuresOf("end\n"));
@@ -134,6 +122,18 @@ final class StartCheckReportTest extends TestCase
         }
 
         self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], $failures);
+    }
+
+    protected function setUp(): void
+    {
+        $this->output = sys_get_temp_dir().'/intakt-report-'.bin2hex(random_bytes(4));
+        new Filesystem()->mkdir($this->output);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->chmod($this->output, 0o700);
+        new Filesystem()->remove($this->output);
     }
 
     /**

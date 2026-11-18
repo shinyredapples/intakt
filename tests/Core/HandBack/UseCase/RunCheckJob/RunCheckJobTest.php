@@ -86,16 +86,6 @@ final class RunCheckJobTest extends TestCase
 
     private ?JobSpec $ran = null;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testAJobWhoseOutputSaysPassedPassesTheCheck(): void
     {
         $this->history->commitFile('feature.txt', "new\n", 'Add a feature');
@@ -463,6 +453,16 @@ final class RunCheckJobTest extends TestCase
 
         self::assertInstanceOf(CheckJobOutcome::class, $outcome);
         self::assertSame([['important.txt', 120, 0]], $this->lostIn($outcome));
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     private function givenMainHolds(string $path, string $content): void

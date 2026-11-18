@@ -17,11 +17,6 @@ final class StreamedTextBatchTest extends TestCase
 
     private RecordedRoundUpdates $updates;
 
-    protected function setUp(): void
-    {
-        $this->updates = new RecordedRoundUpdates();
-    }
-
     public function testManyDeltasOfATurnArePublishedAsOnePieceWhenItIsReleased(): void
     {
         $batch = $this->batch('r1');
@@ -156,6 +151,11 @@ final class StreamedTextBatchTest extends TestCase
         $this->batch('r1')->release();
 
         self::assertSame([], $this->updates->seen);
+    }
+
+    protected function setUp(): void
+    {
+        $this->updates = new RecordedRoundUpdates();
     }
 
     private function released(string $turn): void

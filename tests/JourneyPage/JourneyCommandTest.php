@@ -19,23 +19,6 @@ final class JourneyCommandTest extends TestCase
 
     private string $root = '';
 
-    protected function setUp(): void
-    {
-        $this->root = sys_get_temp_dir().'/intakt-journey-'.bin2hex(random_bytes(6));
-        $files = new Filesystem();
-        $files->mkdir($this->root.'/bin');
-        $files->mkdir($this->root.'/docs/journey');
-        $files->copy(self::COMMAND, $this->root.'/bin/journey');
-        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
-        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
-        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->root);
-    }
-
     public function testTheJourneyCommandIsExecutable(): void
     {
         self::assertTrue(is_executable(self::COMMAND));
@@ -158,6 +141,23 @@ final class JourneyCommandTest extends TestCase
 
         self::assertSame(2, $run->getExitCode());
         self::assertStringContainsString('usage:', $run->getErrorOutput());
+    }
+
+    protected function setUp(): void
+    {
+        $this->root = sys_get_temp_dir().'/intakt-journey-'.bin2hex(random_bytes(6));
+        $files = new Filesystem();
+        $files->mkdir($this->root.'/bin');
+        $files->mkdir($this->root.'/docs/journey');
+        $files->copy(self::COMMAND, $this->root.'/bin/journey');
+        $files->symlink((string) realpath(__DIR__.'/../../vendor'), $this->root.'/vendor');
+        $files->copy(self::FIXTURES.'/journey.md', $this->root.'/docs/journey.md');
+        $files->copy(self::FIXTURES.'/usage.jsonl', $this->root.'/docs/journey/usage.jsonl');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->root);
     }
 
     private function runJourney(string $recorded = self::FIXTURES.'/api'): Process

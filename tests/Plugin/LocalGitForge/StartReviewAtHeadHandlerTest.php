@@ -55,19 +55,6 @@ final class StartReviewAtHeadHandlerTest extends TestCase
     private TemporaryRepository $repository;
     private string $checked;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('7');
-        $this->checked = $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheRoundReviewsTheHeadTheCallerCheckedEvenWhenTheBranchHasMovedPastIt(): void
     {
         $this->repository->commitFile('src/Unchecked.php', "<?php\n");
@@ -118,6 +105,19 @@ final class StartReviewAtHeadHandlerTest extends TestCase
         self::assertSame($next, $answer->identity->commits->head->hash);
         self::assertSame(HeadMoveKind::Commits, $answer->move->kind);
         self::assertSame(['src/Feature.php'], $answer->move->paths);
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('7');
+        $this->checked = $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function startAt(string $head): StartReviewAtHead

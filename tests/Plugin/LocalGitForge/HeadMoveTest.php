@@ -44,19 +44,6 @@ final class HeadMoveTest extends TestCase
 
     private string $reviewed;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('feature');
-        $this->reviewed = $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testAnUnchangedHeadHasNotMoved(): void
     {
         $move = $this->moveSinceReview();
@@ -174,6 +161,19 @@ final class HeadMoveTest extends TestCase
         $this->reviewed = str_repeat('ab', 20);
 
         self::assertSame(HeadMoveKind::Rewritten, $this->moveSinceReview()->kind);
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('feature');
+        $this->reviewed = $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function givenTheBaseMovedOn(): void

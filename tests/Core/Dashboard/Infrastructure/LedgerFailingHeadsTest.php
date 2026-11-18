@@ -21,11 +21,6 @@ final class LedgerFailingHeadsTest extends TestCase
 {
     private DashboardLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testAFailedHeadIsListedWithItsCauseFailuresAndNextTry(): void
     {
         $this->ledger->failHead('alpha', '7', 2);
@@ -139,6 +134,11 @@ final class LedgerFailingHeadsTest extends TestCase
         $this->ledger->failHeadWithoutCause('alpha', '7');
 
         self::assertSame([], $this->failing());
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     /**

@@ -15,17 +15,6 @@ final class ProjectCopyTest extends TestCase
 
     private string $project;
 
-    protected function setUp(): void
-    {
-        $this->project = sys_get_temp_dir().'/intakt-project-copy-test-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->project);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->project);
-    }
-
     public function testAVendorLeftByAnEarlierRunOfTheSharedProjectIsReplacedByTheCheckouts(): void
     {
         new Filesystem()->dumpFile($this->project.'/vendor/stale-marker', 'from an older checkout');
@@ -63,6 +52,17 @@ final class ProjectCopyTest extends TestCase
 
         clearstatcache();
         self::assertSame($copied, fileinode($autoload));
+    }
+
+    protected function setUp(): void
+    {
+        $this->project = sys_get_temp_dir().'/intakt-project-copy-test-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->project);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->project);
     }
 
     private function refresh(): void

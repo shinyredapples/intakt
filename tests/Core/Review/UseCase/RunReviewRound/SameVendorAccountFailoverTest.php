@@ -95,12 +95,6 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
     private RoundFixture $fixture;
     private AccountCooldownWindows $cooldowns;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
-    }
-
     public function testAReviewerWhoseAccountIsOutIsQueuedAgainForAnImmediateRetry(): void
     {
         $this->fixture->start(1);
@@ -187,6 +181,12 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         self::assertSame(ReviewerState::Verdict, $this->fixture->reviewer($second->reviewerId)->state());
         self::assertCount(1, $this->payloadValues(LedgerEventKind::AccountCooledDown, 'account'));
         self::assertSame(['anthropic.team', 'anthropic.team'], $this->usageAccounts());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
     // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.

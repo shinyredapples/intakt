@@ -23,17 +23,6 @@ final class NetworkGitTest extends TestCase
 {
     private string $directory;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-network-'.bin2hex(random_bytes(6));
-        mkdir($this->directory);
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testACallThatSucceedsRunsOnceAndNeverSleeps(): void
     {
         $clock = new RecordingClock();
@@ -165,6 +154,17 @@ final class NetworkGitTest extends TestCase
 
         self::assertSame('', $output);
         self::assertSame(2, $attempts);
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-network-'.bin2hex(random_bytes(6));
+        mkdir($this->directory);
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     private function listRemote(string $remote): GitCall

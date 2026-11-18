@@ -109,21 +109,6 @@ final class PushApprovalCommandTest extends TestCase
     private ScriptedIssue $issue;
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('.github/workflows/checks.yml', $this->fixture('contained.yml'));
-        $this->repository->commitFile('bin/check', "#!/bin/sh\n");
-        $this->repository->checkoutNewBranch('head');
-        $this->issue = new ScriptedIssue();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testACiChangeInsideTheEnvelopePushesWithoutAskingTheOwner(): void
     {
         $this->repository->commitFile('bin/check', "#!/bin/sh\nexit 0\n");
@@ -377,6 +362,21 @@ final class PushApprovalCommandTest extends TestCase
         self::assertSame(Command::INVALID, $tester->getStatusCode());
         self::assertSame("push: held, nothing was decided: Another run is asking the owner about this head.\n", $tester->getDisplay());
         self::assertSame([], $this->issue->requests);
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('.github/workflows/checks.yml', $this->fixture('contained.yml'));
+        $this->repository->commitFile('bin/check', "#!/bin/sh\n");
+        $this->repository->checkoutNewBranch('head');
+        $this->issue = new ScriptedIssue();
+        $this->locks = new LockFactory(new InMemoryStore());
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function fixture(string $name): string

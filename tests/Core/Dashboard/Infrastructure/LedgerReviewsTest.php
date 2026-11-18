@@ -71,11 +71,6 @@ final class LedgerReviewsTest extends TestCase
 {
     private DashboardLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testEventsOfKindsTheDashboardDoesNotReadAreIgnored(): void
     {
         $reviews = $this->reviewsOf(
@@ -306,6 +301,11 @@ final class LedgerReviewsTest extends TestCase
         $reviews = $this->listWith(new UnpricedRoundCosts(), new ReplayMarkBus(), $endings);
 
         self::assertSame([ReviewState::InProgress, ReviewOutcome::Failed], [$reviews[0]->state, $reviews[0]->outcome]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     /**

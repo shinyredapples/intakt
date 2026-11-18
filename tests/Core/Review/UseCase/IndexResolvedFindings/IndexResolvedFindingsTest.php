@@ -80,19 +80,6 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     private StoreProjectMemory $memory;
     private ?RecordingBus $lastQueue = null;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $store = new Store();
-        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
-            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
-        ));
-        $vectorizer = new Vectorizer($platform, 'embedder');
-        $documents = new MemoryDocuments();
-        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
-        $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
-    }
-
     public function testAFindingAReviewerMarksResolvedIsIndexedWithItsCauseAndFileWhenTheRoundCompletes(): void
     {
         $this->roundReporting([$this->finding('a')]);
@@ -232,6 +219,19 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         $listener($event);
 
         self::assertSame([], $bus->messages);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $store = new Store();
+        $platform = MockPlatformFactory::createPlatform(static fn (Model $model, array|string|object $input): VectorResult => new VectorResult(
+            array_map(static fn (): Vector => new Vector([1.0, 0.0]), is_array($input) ? $input : [$input]),
+        ));
+        $vectorizer = new Vectorizer($platform, 'embedder');
+        $documents = new MemoryDocuments();
+        $this->index = new StoreMemoryIndex(new DocumentIndexer(new DocumentProcessor($vectorizer, $store)), $documents);
+        $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
     }
 
     /**

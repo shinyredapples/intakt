@@ -13,16 +13,6 @@ final class GateChildToolsTest extends TestCase
 {
     private string|false $path;
 
-    protected function setUp(): void
-    {
-        $this->path = getenv('PATH');
-    }
-
-    protected function tearDown(): void
-    {
-        putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
-    }
-
     public function testRunningAGateInItsOwnProcessNeedsShAndSetsid(): void
     {
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
@@ -42,5 +32,15 @@ final class GateChildToolsTest extends TestCase
         putenv('PATH='.sys_get_temp_dir().'/intakt-no-such-folder');
 
         self::assertSame([], new RequiredTools(sys_get_temp_dir())->missingToRunEachInItsOwnProcess([]));
+    }
+
+    protected function setUp(): void
+    {
+        $this->path = getenv('PATH');
+    }
+
+    protected function tearDown(): void
+    {
+        putenv(false === $this->path ? 'PATH' : 'PATH='.$this->path);
     }
 }

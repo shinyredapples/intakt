@@ -34,11 +34,6 @@ final class StreamedAnswerTest extends TestCase
 {
     private TextSeenByLaterListeners $later;
 
-    protected function setUp(): void
-    {
-        $this->later = new TextSeenByLaterListeners();
-    }
-
     public function testTheTextStillStreamsPieceByPieceAndOnlyOnce(): void
     {
         $emitted = $this->streamed([$this->textBlock(), $this->text('{"verdict":'), $this->text('"approve"}')]);
@@ -170,6 +165,11 @@ final class StreamedAnswerTest extends TestCase
         $refused = new BadRequestException('Refused.');
 
         self::assertSame($refused, $this->thrownBy($this->brokenAfter([new TextDelta('{"verdict":')], $refused)));
+    }
+
+    protected function setUp(): void
+    {
+        $this->later = new TextSeenByLaterListeners();
     }
 
     /**

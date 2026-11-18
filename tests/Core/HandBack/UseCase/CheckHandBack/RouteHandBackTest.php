@@ -63,17 +63,6 @@ final class RouteHandBackTest extends TestCase
 
     private RecordingLedger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->ledger = new RecordingLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->history->remove();
-    }
-
     public function testATokenInThePullRequestTextIsSentBackWithTheReasonAndWithoutItsValue(): void
     {
         $key = $this->fakeKey();
@@ -215,6 +204,17 @@ final class RouteHandBackTest extends TestCase
         } catch (HandBackNotChecked) {
             self::assertSame([], $this->ledger->kinds());
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->ledger = new RecordingLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->history->remove();
     }
 
     // Built at run time and random, so neither this file nor the repository's history holds a key the secrets gates would find.

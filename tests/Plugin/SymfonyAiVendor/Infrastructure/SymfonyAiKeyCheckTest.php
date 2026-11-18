@@ -64,11 +64,6 @@ final class SymfonyAiKeyCheckTest extends TestCase
 
     private BufferingLogger $log;
 
-    protected function setUp(): void
-    {
-        $this->log = new BufferingLogger();
-    }
-
     /**
      * @return iterable<string, array{string}>
      */
@@ -305,6 +300,11 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $this->check($key, new ArrayObject(), static fn (): MockResponse => self::answer(200, $answer));
 
         self::assertSame([], $this->log->cleanLogs());
+    }
+
+    protected function setUp(): void
+    {
+        $this->log = new BufferingLogger();
     }
 
     /**

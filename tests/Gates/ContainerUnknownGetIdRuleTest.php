@@ -21,11 +21,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class ContainerUnknownGetIdRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): ContainerUnknownGetIdRule
-    {
-        return new ContainerUnknownGetIdRule(new NoServices(), new AskedServiceIds());
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -60,5 +55,10 @@ final class ContainerUnknownGetIdRuleTest extends PhpStanRuleTestCase
     public function testGettingEitherOfTwoParametersFromTheContainerBagIsAllowed(): void
     {
         $this->assertRuleAccepts('container-bag-get-parameters-in-union');
+    }
+
+    protected function ruleFor(string $root): ContainerUnknownGetIdRule
+    {
+        return new ContainerUnknownGetIdRule(new NoServices(), new AskedServiceIds());
     }
 }

@@ -48,17 +48,6 @@ final class ReplayDayCommandTest extends KernelTestCase
 {
     private CommandTester $command;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $kernel = self::$kernel;
-        self::assertNotNull($kernel);
-        $this->command = new CommandTester(new Application($kernel)->find('intakt:budget:replay'));
-    }
-
     public function testTheScriptedDayPrintsEachDecisionOfTheGuardAndEachOutageNoticeOnce(): void
     {
         $this->command->execute(['script' => __DIR__.'/scripted-day.txt']);
@@ -158,6 +147,17 @@ final class ReplayDayCommandTest extends KernelTestCase
             '2026-11-02T08:59 start claude_code.main 0: cooling-down',
             '2026-11-02T09:00 start claude_code.main 0: start',
         ], $this->linesOf($this->command->getDisplay()));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $kernel = self::$kernel;
+        self::assertNotNull($kernel);
+        $this->command = new CommandTester(new Application($kernel)->find('intakt:budget:replay'));
     }
 
     private function executeScript(string $contents): void

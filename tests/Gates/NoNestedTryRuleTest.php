@@ -17,11 +17,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class NoNestedTryRuleTest extends PhpStanRuleTestCase
 {
-    protected function ruleFor(string $root): NoNestedTryRule
-    {
-        return new NoNestedTryRule();
-    }
-
     /**
      * @return iterable<string, non-empty-list<CheckRun|string>>
      */
@@ -52,5 +47,10 @@ final class NoNestedTryRuleTest extends PhpStanRuleTestCase
     public function testATryInAClosureInsideATryPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('try-in-closure');
+    }
+
+    protected function ruleFor(string $root): NoNestedTryRule
+    {
+        return new NoNestedTryRule();
     }
 }

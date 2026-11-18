@@ -142,45 +142,6 @@ final class FirstRunControllerTest extends WebTestCase
         parent::tearDownAfterClass();
     }
 
-    protected function setUp(): void
-    {
-        $this->containers = self::compiledContainers();
-
-        foreach (self::VARIABLES as $name) {
-            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
-            $this->unsetVariable($name);
-        }
-
-        $this->file = sys_get_temp_dir().'/intakt-first-run-'.bin2hex(random_bytes(4)).'.yaml';
-        $_SERVER['INTAKT_CONFIG'] = $this->file;
-        $_SERVER['MCP_OWNER_ACCESS'] = 'mcp_tool_write';
-        $_SERVER['INTAKT_COMPOSE_SERVICE'] = '';
-        $_SERVER['MCP_OWNER_TOKEN'] = '';
-        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = '';
-        $_SERVER['INTAKT_DEMO_RECORDING'] = '';
-        $this->ledger = new DashboardLedger();
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->saved as $name => $before) {
-            $this->unsetVariable($name);
-            if (null !== $before['server']) {
-                $_SERVER[$name] = $before['server'];
-            }
-            if (null !== $before['env']) {
-                $_ENV[$name] = $before['env'];
-            }
-            if (false !== $before['process']) {
-                putenv($name.'='.$before['process']);
-            }
-        }
-
-        parent::tearDown();
-        $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove([$this->file, $this->keptDirectory]);
-    }
-
     public function testWithOneKeyTheProviderStepIsDoneAndNamesTheProviderThatHasIt(): void
     {
         $page = $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY']);
@@ -830,6 +791,45 @@ final class FirstRunControllerTest extends WebTestCase
 
         self::assertCount(0, $page->filter('main b'));
         self::assertSame('<b>bold</b>', $page->filter('#step-project .list .t')->text());
+    }
+
+    protected function setUp(): void
+    {
+        $this->containers = self::compiledContainers();
+
+        foreach (self::VARIABLES as $name) {
+            $this->saved[$name] = ['server' => $_SERVER[$name] ?? null, 'env' => $_ENV[$name] ?? null, 'process' => getenv($name)];
+            $this->unsetVariable($name);
+        }
+
+        $this->file = sys_get_temp_dir().'/intakt-first-run-'.bin2hex(random_bytes(4)).'.yaml';
+        $_SERVER['INTAKT_CONFIG'] = $this->file;
+        $_SERVER['MCP_OWNER_ACCESS'] = 'mcp_tool_write';
+        $_SERVER['INTAKT_COMPOSE_SERVICE'] = '';
+        $_SERVER['MCP_OWNER_TOKEN'] = '';
+        $_SERVER['INTAKT_SAMPLE_REPOSITORY'] = '';
+        $_SERVER['INTAKT_DEMO_RECORDING'] = '';
+        $this->ledger = new DashboardLedger();
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
+        }
+
+        parent::tearDown();
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove([$this->file, $this->keptDirectory]);
     }
 
     /**

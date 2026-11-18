@@ -35,20 +35,6 @@ final class AppendOnlyLedgerTest extends KernelTestCase
 {
     private EntityManagerInterface $manager;
 
-    protected function setUp(): void
-    {
-        $registry = self::getContainer()->get('doctrine');
-        self::assertInstanceOf(ManagerRegistry::class, $registry);
-        $manager = $registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-        $this->manager = $manager;
-
-        $metadata = $manager->getMetadataFactory()->getAllMetadata();
-        $tool = new SchemaTool($manager);
-        $tool->dropDatabase();
-        $tool->createSchema($metadata);
-    }
-
     public function testUpdatingAStoredEventThroughDoctrineIsRefused(): void
     {
         $record = $this->storedEvent();
@@ -131,6 +117,20 @@ final class AppendOnlyLedgerTest extends KernelTestCase
         $this->storedEvent();
 
         self::assertSame(1, $this->manager->getConnection()->fetchOne('SELECT COUNT(*) FROM ledger_event'));
+    }
+
+    protected function setUp(): void
+    {
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+        $manager = $registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+        $this->manager = $manager;
+
+        $metadata = $manager->getMetadataFactory()->getAllMetadata();
+        $tool = new SchemaTool($manager);
+        $tool->dropDatabase();
+        $tool->createSchema($metadata);
     }
 
     // Only SQLite has the triggers and INSERT OR REPLACE, because the migration adds them nowhere else; other engines rely on the Doctrine listener.

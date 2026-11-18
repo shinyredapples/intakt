@@ -22,18 +22,6 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
 
     private string $review = '';
 
-    protected function tearDown(): void
-    {
-        if ('' !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'first run with a key';
-    }
-
     public function testAPastedTokenRunsTheDemoReviewWhoseLiveReviewPageShowsTheVerdict(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
@@ -45,6 +33,18 @@ final class FirstRunWithAKeyJourneyTest extends JourneyTestCase
         $this->step('open the live review page', $this->openTheLiveReviewPage(...));
         $this->step('run the round until the judge has ruled', $this->runTheRound(...));
         $this->step('read the verdict on the review page', $this->readTheVerdict(...));
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'first run with a key';
     }
 
     private function createTheDatabase(): void

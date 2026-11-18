@@ -55,42 +55,6 @@ final class AiProvidersTest extends KernelTestCase
         parent::tearDownAfterClass();
     }
 
-    protected function setUp(): void
-    {
-        $this->containers = self::compiledContainers();
-
-        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET', 'INTAKT_PROVIDER_KEY_DIR'] as $name) {
-            $this->saved[$name] = [
-                'server' => $_SERVER[$name] ?? null,
-                'env' => $_ENV[$name] ?? null,
-                'process' => getenv($name),
-            ];
-        }
-
-        $_SERVER['INTAKT_PROVIDER_KEY_DIR'] = $this->keptKeyDirectory();
-    }
-
-    protected function tearDown(): void
-    {
-        foreach ($this->saved as $name => $before) {
-            $this->unsetVariable($name);
-            if (null !== $before['server']) {
-                $_SERVER[$name] = $before['server'];
-            }
-            if (null !== $before['env']) {
-                $_ENV[$name] = $before['env'];
-            }
-            if (false !== $before['process']) {
-                putenv($name.'='.$before['process']);
-            }
-        }
-
-        parent::tearDown();
-        $this->containers->restoreTheSharedCache();
-        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
-        $this->removeTheVaultsFolderWhenEmpty();
-    }
-
     public function testEveryProviderWithItsKeysIsConfiguredAndNoneIsDisabled(): void
     {
         $container = $this->bootWith($this->allSet());
@@ -431,6 +395,42 @@ final class AiProvidersTest extends KernelTestCase
 
         self::assertSame([], $container->getParameter(AiServices::DISABLED_PROVIDERS));
         self::assertSame(self::KEPT_KEY, $this->resolvedVariable('ANTHROPIC_API_KEY'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->containers = self::compiledContainers();
+
+        foreach ([...self::VARIABLES, 'APP_RUNTIME_ENV', 'SYMFONY_DECRYPTION_SECRET', 'INTAKT_PROVIDER_KEY_DIR'] as $name) {
+            $this->saved[$name] = [
+                'server' => $_SERVER[$name] ?? null,
+                'env' => $_ENV[$name] ?? null,
+                'process' => getenv($name),
+            ];
+        }
+
+        $_SERVER['INTAKT_PROVIDER_KEY_DIR'] = $this->keptKeyDirectory();
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->saved as $name => $before) {
+            $this->unsetVariable($name);
+            if (null !== $before['server']) {
+                $_SERVER[$name] = $before['server'];
+            }
+            if (null !== $before['env']) {
+                $_ENV[$name] = $before['env'];
+            }
+            if (false !== $before['process']) {
+                putenv($name.'='.$before['process']);
+            }
+        }
+
+        parent::tearDown();
+        $this->containers->restoreTheSharedCache();
+        new Filesystem()->remove([$this->vaultDirectory(), $this->keptKeyDirectory()]);
+        $this->removeTheVaultsFolderWhenEmpty();
     }
 
     // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.

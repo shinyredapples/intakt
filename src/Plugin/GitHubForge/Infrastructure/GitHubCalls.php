@@ -45,6 +45,17 @@ final readonly class GitHubCalls
         return $this->inPool(RateLimitReadings::GRAPHQL, fn (): ResponseInterface => $this->http->request('POST', '/graphql', $options));
     }
 
+    // Outside the installation's pause, because a call with the App's own proof spends the App's budget, not the installation's.
+    /**
+     * @param array<string, mixed> $options
+     *
+     * @throws ExceptionInterface
+     */
+    public function asApp(string $url, #[SensitiveParameter] array $options): ResponseInterface
+    {
+        return $this->http->request('GET', $url, $options);
+    }
+
     /**
      * @param callable(): ResponseInterface $request
      *
@@ -61,16 +72,5 @@ final readonly class GitHubCalls
         $this->readings->observe($installationId, $response->getStatusCode(), $response->getHeaders(false) + ['x-ratelimit-resource' => [$pool]]);
 
         return $response;
-    }
-
-    // Outside the installation's pause, because a call with the App's own proof spends the App's budget, not the installation's.
-    /**
-     * @param array<string, mixed> $options
-     *
-     * @throws ExceptionInterface
-     */
-    public function asApp(string $url, #[SensitiveParameter] array $options): ResponseInterface
-    {
-        return $this->http->request('GET', $url, $options);
     }
 }

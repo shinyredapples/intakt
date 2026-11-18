@@ -78,11 +78,6 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
     /** @var list<mixed> */
     private array $limits = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAChangesVerdictWithoutFindingsOnceGivesTheVerdictOfTheRetry(): void
     {
         $this->fixture->start(1);
@@ -145,6 +140,11 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
 
         self::assertSame([ReviewerState::Verdict], $this->states());
         self::assertSame(1, $this->calls);
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function emptyChanges(): string

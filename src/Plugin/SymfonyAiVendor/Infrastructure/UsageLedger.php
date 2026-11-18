@@ -64,19 +64,6 @@ final readonly class UsageLedger
     }
 
     /**
-     * @param Closure(string): UsageStarted $row
-     *
-     * @throws UsageNotRecorded
-     */
-    private function started(Closure $row): UsageReservation
-    {
-        $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
-        $this->record($row($reservation->call));
-
-        return $reservation;
-    }
-
-    /**
      * @throws UsageNotRecorded
      */
     public function settle(UsageReservation $reservation, DeferredResult ...$rounds): void
@@ -100,6 +87,19 @@ final readonly class UsageLedger
     {
         $usages = $this->usagesBeforeFailure($reservation, array_values($rounds));
         $this->record(new UsageUnsettled($reservation->call, 'unsettled', $failure::class, $usages), $failure);
+    }
+
+    /**
+     * @param Closure(string): UsageStarted $row
+     *
+     * @throws UsageNotRecorded
+     */
+    private function started(Closure $row): UsageReservation
+    {
+        $reservation = new UsageReservation(UuidV7::generate($this->clock->now()));
+        $this->record($row($reservation->call));
+
+        return $reservation;
     }
 
     /**

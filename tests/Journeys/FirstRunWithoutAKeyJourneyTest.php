@@ -16,6 +16,14 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
 {
     private string $directory = '';
 
+    public function testADemoInstallWithoutAKeyOpensOnTheFirstRunPageWithItsTwoChoices(): void
+    {
+        $this->step('create the database', $this->createTheDatabase(...));
+        $this->step('start the demo without a key', $this->startTheDemoWithoutAKey(...));
+        $this->step('open the dashboard on the first-run page', $this->openTheDashboard(...));
+        $this->step('read the two choices', $this->readTheTwoChoices(...));
+    }
+
     protected function tearDown(): void
     {
         if ('' !== $this->directory) {
@@ -26,14 +34,6 @@ final class FirstRunWithoutAKeyJourneyTest extends JourneyTestCase
     protected function journey(): string
     {
         return 'first run without a key';
-    }
-
-    public function testADemoInstallWithoutAKeyOpensOnTheFirstRunPageWithItsTwoChoices(): void
-    {
-        $this->step('create the database', $this->createTheDatabase(...));
-        $this->step('start the demo without a key', $this->startTheDemoWithoutAKey(...));
-        $this->step('open the dashboard on the first-run page', $this->openTheDashboard(...));
-        $this->step('read the two choices', $this->readTheTwoChoices(...));
     }
 
     private function createTheDatabase(): void

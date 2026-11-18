@@ -24,16 +24,6 @@ final class UsageReaderTest extends TestCase
 
     private string $file = '';
 
-    protected function setUp(): void
-    {
-        $this->file = sys_get_temp_dir().'/intakt-usage-'.bin2hex(random_bytes(6)).'.jsonl';
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->file);
-    }
-
     public function testTheTokensOfAllRowsAreAdded(): void
     {
         file_put_contents($this->file, self::ROW."\n\n".self::ROW."\n");
@@ -104,5 +94,15 @@ final class UsageReaderTest extends TestCase
         $this->expectExceptionMessageMatches('/'.preg_quote('cannot read', '/').'/');
 
         new UsageReader()->usageIn($this->file);
+    }
+
+    protected function setUp(): void
+    {
+        $this->file = sys_get_temp_dir().'/intakt-usage-'.bin2hex(random_bytes(6)).'.jsonl';
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->file);
     }
 }

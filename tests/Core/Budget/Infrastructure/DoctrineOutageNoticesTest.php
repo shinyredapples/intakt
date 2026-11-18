@@ -34,17 +34,6 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
     private LockFactory $locks;
     private DateTimeImmutable $lastReading;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->locks = new LockFactory(new InMemoryStore());
-        $this->lastReading = new MockClock('2026-11-02 08:00:00 UTC')->now();
-    }
-
     public function testAnOutageIsNoticedToTheOwnerOnce(): void
     {
         $notices = $this->noticesTelling(1);
@@ -113,6 +102,17 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         $notices->noticeOnce($this->outageOf($this->claude('main'), $this->lastReading));
         $notices->noticeOnce($this->outageOf($this->claude('team'), $this->lastReading));
         $notices->noticeOnce($this->outageOf(new Account(Provider::Anthropic, 'main'), $this->lastReading));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->locks = new LockFactory(new InMemoryStore());
+        $this->lastReading = new MockClock('2026-11-02 08:00:00 UTC')->now();
     }
 
     private function noticesTelling(int $times): DoctrineOutageNotices

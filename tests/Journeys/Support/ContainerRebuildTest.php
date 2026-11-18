@@ -26,16 +26,6 @@ final class ContainerRebuildTest extends TestCase
 
     private string $directory = '';
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-container-rebuild-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheSeedSeesTheKeyAfterARebuildInTheSecondAKeylessContainerWasCompiled(): void
     {
         $this->console(['cache:warmup'], $this->withoutKeys());
@@ -76,6 +66,16 @@ final class ContainerRebuildTest extends TestCase
         $this->console(['cache:warmup'], $this->withoutKeys());
 
         self::assertFileExists(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()));
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-container-rebuild-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     // Stamped inside each console process with its own start, because the framework's cache:clear takes a container compiled in the second it starts for one it built itself, as when the instance compiled one just before the rebuild.

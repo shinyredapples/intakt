@@ -51,18 +51,6 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
     private DoctrineHolds $holds;
     private DoctrineInstallWideFailures $failures;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->clock = new MockClock('2026-11-06 08:00:00 UTC');
-        $this->holds = new DoctrineHolds($entities, $this->clock);
-        $this->failures = $this->worker($entities);
-    }
-
     public function testAFailingDatabaseStartsTheFailureBackOff(): void
     {
         $this->failures->databaseFailed(new RuntimeException('connection refused'));
@@ -230,6 +218,18 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
 
         self::assertSame([SharedHold::FailureBackOff], $this->holds->sharedInEffect());
         self::assertLoggedError('error', 'The install-wide failure back-off started because two items failed with the same error within an hour.');
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->clock = new MockClock('2026-11-06 08:00:00 UTC');
+        $this->holds = new DoctrineHolds($entities, $this->clock);
+        $this->failures = $this->worker($entities);
     }
 
     private function worker(EntityManagerInterface $entities): DoctrineInstallWideFailures

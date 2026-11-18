@@ -25,18 +25,6 @@ final class MirrorWorkflowsTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('.github/workflows/ci.yml', "main's ci\n");
-        $this->repository->checkoutNewBranch('head');
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheHeadsMainsAndTheMergedWorkflowsAreReadWithEveryPathWhereTheHeadOrTheMergeDiffersFromMain(): void
     {
         $this->repository->commitFile('.github/workflows/deploy.yml', "head's deploy\n");
@@ -176,6 +164,18 @@ final class MirrorWorkflowsTest extends TestCase
         $this->repository->commitFile('.github/workflows/deploy.yml', "head's deploy\n");
 
         self::assertSame([], $this->readAgainst('head')->changedPaths);
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('.github/workflows/ci.yml', "main's ci\n");
+        $this->repository->checkoutNewBranch('head');
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function read(): CiWorkflows

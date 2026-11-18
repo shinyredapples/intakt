@@ -20,18 +20,6 @@ final class FirstInstallJourneyTest extends JourneyTestCase
 
     private string $directory = '';
 
-    protected function tearDown(): void
-    {
-        if ('' !== $this->directory) {
-            new Filesystem()->remove($this->directory);
-        }
-    }
-
-    protected function journey(): string
-    {
-        return 'first install and setup';
-    }
-
     public function testAFreshInstallIsSetUpAndShowsItsEmptyDashboard(): void
     {
         $this->step('create the database', $this->createTheDatabase(...));
@@ -44,6 +32,18 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         $review = $this->step('start the first review from the first-run page', $this->startTheFirstReview(...));
         $this->step('open the review page the start redirected to', fn () => $this->openTheFirstReview($review));
         $this->step('find the first-run page on the projects page', $this->findTheFirstRunPageOnProjects(...));
+    }
+
+    protected function tearDown(): void
+    {
+        if ('' !== $this->directory) {
+            new Filesystem()->remove($this->directory);
+        }
+    }
+
+    protected function journey(): string
+    {
+        return 'first install and setup';
     }
 
     private function createTheDatabase(): void

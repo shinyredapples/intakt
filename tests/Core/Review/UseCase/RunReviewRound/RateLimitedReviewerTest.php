@@ -39,11 +39,6 @@ final class RateLimitedReviewerTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testARateLimitedReviewerIsQueuedAgainAndItsMessageIsRetriedAfterTheProvidersReset(): void
     {
         $round = $this->fixture->start(1);
@@ -145,5 +140,10 @@ final class RateLimitedReviewerTest extends KernelTestCase
         $stored = $this->fixture->round($round->id()->toRfc4122());
         self::assertSame(ReviewerState::Verdict, $stored->reviewers()[0]->state());
         self::assertContains(LedgerEventKind::VerdictReceived, $this->fixture->ledgerKinds());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 }

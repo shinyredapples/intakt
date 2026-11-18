@@ -18,11 +18,6 @@ final class HeldCredentialRedactorTest extends TestCase
 {
     private const string NAME = 'INTAKT_TEST_API_KEY';
 
-    protected function tearDown(): void
-    {
-        unset($_SERVER[self::NAME]);
-    }
-
     public function testAHeldCredentialWithoutASecretShapeIsRedacted(): void
     {
         $_SERVER[self::NAME] = 'plainheldkeyvalue0123456789';
@@ -48,6 +43,11 @@ final class HeldCredentialRedactorTest extends TestCase
         $_SERVER[self::NAME] = 'plainheldkeyvalue0123456789';
 
         self::assertSame('commit a not fetched', $this->redactor()->redact('commit a not fetched'));
+    }
+
+    protected function tearDown(): void
+    {
+        unset($_SERVER[self::NAME]);
     }
 
     private function redactor(): HeldCredentialRedactor

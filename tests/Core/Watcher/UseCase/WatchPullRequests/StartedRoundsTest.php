@@ -49,19 +49,6 @@ final class StartedRoundsTest extends KernelTestCase
     private RecordingLogger $logger;
     private StartedRounds $rounds;
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->commands = new RecordingCommandBus();
-        $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
-        $this->logger = new RecordingLogger();
-        $this->rounds = new StartedRounds($entities, $this->pending, new DiscardedRounds($this->commands, $this->logger));
-    }
-
     public function testARoundQueuedBeforeItsRecordRolledBackIsDiscardedAndLeavesNoRecord(): void
     {
         $this->entities->getConnection()->executeStatement('DROP TABLE watcher_pending_head');
@@ -333,6 +320,19 @@ final class StartedRoundsTest extends KernelTestCase
 
         self::assertSame('round-1', $this->storedRoundId());
         self::assertSame(1, $this->entities->getRepository(StartedRound::class)->count(['stale' => true]));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->commands = new RecordingCommandBus();
+        $this->pending = new PendingHeads($entities, new MockClock('2026-11-02T10:00:00+00:00'));
+        $this->logger = new RecordingLogger();
+        $this->rounds = new StartedRounds($entities, $this->pending, new DiscardedRounds($this->commands, $this->logger));
     }
 
     private function green(): OpenChange

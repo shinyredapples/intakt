@@ -37,28 +37,6 @@ final class DoctrineQueueTest extends KernelTestCase
     private MessageBusInterface $commands;
     private DoctrineTransport $queue;
 
-    protected function setUp(): void
-    {
-        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
-        $this->configuredDsn = is_string($configured) ? $configured : '';
-        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
-
-        $container = self::getContainer();
-        $this->fixture = new RoundFixture($container);
-        $commands = $container->get('command.bus');
-        $this->commands = $commands;
-        $queue = $container->get('messenger.transport.async');
-        assert($queue instanceof DoctrineTransport);
-        $this->queue = $queue;
-    }
-
-    protected function tearDown(): void
-    {
-        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
-
-        parent::tearDown();
-    }
-
     public function testAFirstSendNeverCreatesTheQueueTableInsideARoundsTransaction(): void
     {
         try {
@@ -137,6 +115,28 @@ final class DoctrineQueueTest extends KernelTestCase
         $this->fixture->startOn($this->commands, 1);
 
         self::assertSame(2, $this->queue->getMessageCount());
+    }
+
+    protected function setUp(): void
+    {
+        $configured = $_ENV[self::TRANSPORT_DSN] ?? '';
+        $this->configuredDsn = is_string($configured) ? $configured : '';
+        $_ENV[self::TRANSPORT_DSN] = 'doctrine://default';
+
+        $container = self::getContainer();
+        $this->fixture = new RoundFixture($container);
+        $commands = $container->get('command.bus');
+        $this->commands = $commands;
+        $queue = $container->get('messenger.transport.async');
+        assert($queue instanceof DoctrineTransport);
+        $this->queue = $queue;
+    }
+
+    protected function tearDown(): void
+    {
+        $_ENV[self::TRANSPORT_DSN] = $this->configuredDsn;
+
+        parent::tearDown();
     }
 
     /**

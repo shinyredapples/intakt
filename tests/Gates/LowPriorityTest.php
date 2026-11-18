@@ -18,18 +18,6 @@ final class LowPriorityTest extends TestCase
 {
     private string $autogroup;
 
-    protected function setUp(): void
-    {
-        $this->autogroup = sys_get_temp_dir().'/intakt-autogroup-'.bin2hex(random_bytes(6));
-    }
-
-    protected function tearDown(): void
-    {
-        if (is_file($this->autogroup)) {
-            unlink($this->autogroup);
-        }
-    }
-
     public function testAGateBesideTheTestsGateIsAskedToRunAtLowPriorityWhenSeveralRunAtOnce(): void
     {
         self::assertSame([LowPriority::VARIABLE => '1'], LowPriority::environmentFor('container', ['container', 'tests'], $this->slots('2')));
@@ -77,6 +65,18 @@ final class LowPriorityTest extends TestCase
     {
         self::assertFalse(new LowPriority($this->autogroup)->takeForTheSession());
         self::assertFileDoesNotExist($this->autogroup);
+    }
+
+    protected function setUp(): void
+    {
+        $this->autogroup = sys_get_temp_dir().'/intakt-autogroup-'.bin2hex(random_bytes(6));
+    }
+
+    protected function tearDown(): void
+    {
+        if (is_file($this->autogroup)) {
+            unlink($this->autogroup);
+        }
     }
 
     private function slots(string $override): GateSlots

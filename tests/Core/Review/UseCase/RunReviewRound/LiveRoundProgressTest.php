@@ -36,11 +36,6 @@ final class LiveRoundProgressTest extends KernelTestCase
 {
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAWorkerThatFinishesWhileAnotherPublishesNeverShowsTheRoundGoingBackwards(): void
     {
         $round = $this->fixture->start(2);
@@ -139,6 +134,11 @@ final class LiveRoundProgressTest extends KernelTestCase
 
         self::assertSame(0, $this->fixture->round($round->id()->toRfc4122())->progress()->reviewersStarted);
         self::assertSame([[1, 0], [0, 0]], array_map(static fn (RoundProgress $progress): array => [$progress->reviewersStarted, $progress->reviewersFinished], $this->fixture->updates->progress));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function state(ReviewRound $round, string $finished): string

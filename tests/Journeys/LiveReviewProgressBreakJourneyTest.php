@@ -20,16 +20,16 @@ final class LiveReviewProgressBreakJourneyTest extends JourneyTestCase
     // The watcher tick can take up to 90 seconds, so this stays under the gate's 240 seconds for a journey.
     private const int CHILD_SECONDS = 200;
 
-    protected function journey(): string
-    {
-        return 'forced break in the live review progress journey';
-    }
-
     public function testABrokenDashboardAddressFailsTheLiveReviewProgressJourneyAtTheStepThatOpensTheRunningRound(): void
     {
         $output = $this->step('run the live review progress journey with a dashboard address that does not exist', $this->runTheBrokenJourney(...));
 
         $this->step('read that only the step that opens the running round is named', fn () => $this->assertOnlyTheBrokenStepIsNamed($output));
+    }
+
+    protected function journey(): string
+    {
+        return 'forced break in the live review progress journey';
     }
 
     private function runTheBrokenJourney(): string

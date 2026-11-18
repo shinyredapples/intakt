@@ -46,29 +46,6 @@ final class ReviewServerContractTest extends KernelTestCase
 
     private ?string $otherRoot = null;
 
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $this->app = $kernel;
-        $this->fixture = new RoundFixture(self::getContainer());
-        $credential = self::getContainer()->get(ReviewCredential::class);
-        self::assertInstanceOf(ReviewCredential::class, $credential);
-        $this->credential = $credential;
-        $this->roundId = $this->fixture->start(1)->id()->toRfc4122();
-        $this->client = $this->clientOf($this->roundId);
-    }
-
-    protected function tearDown(): void
-    {
-        if (null !== $this->otherRoot) {
-            unlink($this->otherRoot.'/marker.txt');
-            rmdir($this->otherRoot);
-        }
-
-        parent::tearDown();
-    }
-
     public function testTheReviewServerListsTheThreeRepositoryToolsOnly(): void
     {
         self::assertSame(['list_directory', 'read_file', 'search_files'], $this->toolNames($this->client));
@@ -288,6 +265,29 @@ final class ReviewServerContractTest extends KernelTestCase
         // Decoding to arrays turns {} into [], so the raw body decides: a client validates against an object.
         self::assertStringContainsString('"properties":{', $this->client->lastBody());
         self::assertStringNotContainsString('"properties":[]', $this->client->lastBody());
+    }
+
+    protected function setUp(): void
+    {
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $this->app = $kernel;
+        $this->fixture = new RoundFixture(self::getContainer());
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
+        $this->roundId = $this->fixture->start(1)->id()->toRfc4122();
+        $this->client = $this->clientOf($this->roundId);
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->otherRoot) {
+            unlink($this->otherRoot.'/marker.txt');
+            rmdir($this->otherRoot);
+        }
+
+        parent::tearDown();
     }
 
     private function freshClient(): McpServerClient

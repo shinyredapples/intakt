@@ -18,16 +18,6 @@ final class CliManifestTest extends TestCase
 {
     private string $manifest = '';
 
-    protected function setUp(): void
-    {
-        $this->manifest = sys_get_temp_dir().'/intakt-cli-manifest-'.bin2hex(random_bytes(4)).'/package.json';
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove(dirname($this->manifest));
-    }
-
     public function testEachDependencyIsInstalledAtItsExactVersion(): void
     {
         $this->givenTheManifest('{"dependencies": {"@scope/tool": "1.2.3", "other": "0.10.0-beta.2"}}');
@@ -117,6 +107,16 @@ final class CliManifestTest extends TestCase
         yield 'scope without name' => ['@scope/'];
         yield 'number' => ['7'];
         yield 'trailing newline' => ["tool\n"];
+    }
+
+    protected function setUp(): void
+    {
+        $this->manifest = sys_get_temp_dir().'/intakt-cli-manifest-'.bin2hex(random_bytes(4)).'/package.json';
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove(dirname($this->manifest));
     }
 
     private function givenTheManifest(string $json): void

@@ -37,13 +37,6 @@ final class KeptProviderKeyVariablesTest extends TestCase
     private const string BODY = 'abcdefgh12345678';
     private const array COMPATIBLE = ['OPENAI_COMPATIBLE_BASE_URL', 'OPENAI_COMPATIBLE_API_KEY'];
 
-    protected function tearDown(): void
-    {
-        foreach (self::COMPATIBLE as $name) {
-            unset($_SERVER[$name], $_ENV[$name]);
-        }
-    }
-
     public function testAKeptAnthropicKeyLoadsAsItsProviderVariable(): void
     {
         $key = 'sk-ant-'.self::BODY;
@@ -157,6 +150,13 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $logger->expects(self::once())->method('warning')->with('The kept provider key could not be read, so it is not used.');
 
         self::assertSame([], new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog(), $logger)->loadEnvVars());
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (self::COMPATIBLE as $name) {
+            unset($_SERVER[$name], $_ENV[$name]);
+        }
     }
 
     /**

@@ -104,11 +104,6 @@ final class StatusReadModelTest extends TestCase
     /** @var array<string, ReplayMark> */
     private array $storedMarks = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testTheStatusValidatesAgainstTheDocumentedSchema(): void
     {
         $this->holds = [SharedHold::Drain, SharedHold::Pause];
@@ -529,6 +524,11 @@ final class StatusReadModelTest extends TestCase
 
         self::assertSame(array_column(BuildStep::cases(), 'value'), $this->schemaAt(...$build, ...['step', 'enum']));
         self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), $this->schemaAt(...$build, ...['outcome', 'enum']));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     private function schemaAt(string ...$path): mixed
