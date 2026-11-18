@@ -103,11 +103,19 @@ final class ShowStatusControllerTest extends WebTestCase
         self::assertStringNotContainsString('"projects"', (string) $this->browser->getResponse()->getContent());
     }
 
-    public function testTheStatusEndpointAnswersOnlyAGetRequest(): void
+    public function testTheStatusEndpointRefusesAPostRequest(): void
     {
         $this->browser->request('POST', '/status');
 
         self::assertResponseStatusCodeSame(405);
+    }
+
+    public function testTheStatusEndpointAnswersAHeadRequestWithoutABody(): void
+    {
+        $this->browser->request('HEAD', '/status');
+
+        self::assertResponseStatusCodeSame(200);
+        self::assertSame('', (string) $this->browser->getResponse()->getContent());
     }
 
     private function queue(): DoctrineTransport
