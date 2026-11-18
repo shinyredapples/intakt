@@ -16,8 +16,9 @@ final readonly class JavaScriptContext
     private const array KEYWORDS_BEFORE_A_CONDITION = ['if', 'while', 'for', 'with'];
     private const string VALUE = '""';
 
+    // Because what a slash after a closing bracket means depends on its opening one, each open bracket keeps that meaning, innermost last.
     /**
-     * @param list<JavaScriptSlash> $closings what a slash after the closing bracket of each open bracket means, innermost last
+     * @param list<JavaScriptSlash> $closings
      */
     public function __construct(
         private JavaScriptSlash $slash = JavaScriptSlash::Regex,
