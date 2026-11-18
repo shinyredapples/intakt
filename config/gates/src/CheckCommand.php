@@ -106,27 +106,17 @@ final readonly class CheckCommand
 
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
         $fullReport = FullReport::start();
-        $reports = $this->reportsOf(new GateChildren($this->home, $root, $slots, $runningTheChangesCode, $fullReport), $fullReport, $names, $arguments);
 
-        return $this->reportOn($reports, $fullReport, $root);
-    }
-
-    /**
-     * @param list<string> $names
-     * @param list<string> $arguments
-     *
-     * @return list<GateReport>
-     */
-    private function reportsOf(GateChildren $children, FullReport $fullReport, array $names, array $arguments): array
-    {
         // Because a run whose children could not be started writes no report, its scratch results must not outlive it.
         try {
-            return $children->reportsOf($names, $arguments);
+            $reports = new GateChildren($this->home, $root, $slots, $runningTheChangesCode, $fullReport)->reportsOf($names, $arguments);
         } catch (Throwable $failure) {
             $fullReport->discard();
 
             throw $failure;
         }
+
+        return $this->reportOn($reports, $fullReport, $root);
     }
 
     /**
