@@ -194,6 +194,37 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($page->filter('#board-octopus')->outerHtml(), trim($pushed->html()));
     }
 
+    public function testTheFirstReviewPushedToAFreshBoardKeepsAnEmptyOctopusTargetInTheHead(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
+
+        self::assertCount(1, $updated->filter('.page-head > #board-octopus[hidden]:empty'));
+    }
+
+    public function testABoardPushedEmptyAfterAReviewBringsTheWaitingOctopusBackWithoutAReload(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+        $empty = $this->lastShellUpdate();
+        $afterAReview = $this->pushedHeadlineAfterAReviewerStarted();
+
+        $updated = $this->replaced($this->replaced($page, $afterAReview), $empty);
+
+        self::assertCount(2, $updated->filter('.page-head > #board-octopus img[src*="octopus-waiting-"]'));
+    }
+
+    public function testABoardPageLoadedAfterAReviewHoldsAnEmptyHiddenOctopusTarget(): void
+    {
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('.page-head > #board-octopus[hidden]:empty'));
+        self::assertCount(0, $page->filter('.page-head > .head-character'));
+    }
+
     public function testTheBoardShowsTheCurrentHeadlineWithoutAStreamSourceWhenLiveUpdatesAreOff(): void
     {
         $this->givenLiveUpdatesAreOff();
