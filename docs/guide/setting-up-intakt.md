@@ -11,9 +11,7 @@ The wizard is planned, not built yet. For now you create the GitHub App yourself
 ```mermaid
 flowchart TD
   run[Start the container] --> open[Open the dashboard]
-  open --> code[Type the setup code<br/>from docker logs]
-  code --> owner[Create your owner secret<br/>or passkey]
-  owner --> repo[1. Enter your repository]
+  open --> repo[1. Enter your repository]
   repo --> app[2. Create Intakt's own GitHub identity<br/>one click to confirm]
   app --> ai[3. Add your AI accounts]
   ai --> read[4. Intakt reads your project]
@@ -21,7 +19,7 @@ flowchart TD
   defaults --> go[It starts on tasks labeled intakt]
 ```
 
-First, the dashboard asks for a one-time **setup code**: run `docker logs intakt` on the computer Intakt runs on and copy it from there, which proves the install is yours. The code works once and expires an hour after it is printed; if it has expired, a command on that computer prints a new one. Then Intakt creates your **owner secret** (shown once) or registers a passkey; only you can change its settings or press a card's buttons with it ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). Then:
+There is no login, password or setup code: the dashboard only answers on the computer Intakt runs on, so whoever can open it there can use it ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). The wizard goes straight to:
 
 1. **Your repository:** paste its address; Intakt detects GitHub or Gitea.
 2. **Its own identity:** Intakt creates a GitHub App that acts as itself, never as you, so its comments and your approvals can always be told apart. It is installed only on the repositories you choose, with the narrowest permissions. You confirm once; you never hand Intakt a personal token. Before its first call to GitHub, Intakt reads the App's installation back and refuses to go on if its permissions or repositories differ from what you configured, naming the difference.
