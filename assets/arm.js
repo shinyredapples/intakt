@@ -23,6 +23,12 @@ export function holdBackDangerButtons(page) {
     }, true);
     // A page Turbo keeps for going back comes back unarmed, so no button waits armed without its timer.
     page.addEventListener('turbo:before-cache', () => page.querySelectorAll(`[${ARMED}]`).forEach(disarm));
+    // Escape takes back the question the first activation asked, so a keyboard user need not wait the four seconds out.
+    page.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            page.querySelectorAll(`[${ARMED}]`).forEach(disarm);
+        }
+    });
 }
 
 function arm(button) {

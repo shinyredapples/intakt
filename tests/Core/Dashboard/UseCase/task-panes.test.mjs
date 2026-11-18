@@ -18,19 +18,38 @@ class FakeTarget extends FakeElement {
     closest(selector) {
         return selector.split(', ').some((part) => this.matches.includes(part)) ? this : null;
     }
+
+    focus() {
+        this.page.focused = this;
+    }
+}
+
+class FakeKey {
+    defaultPrevented = false;
+
+    constructor(target, key, modifiers = {}) {
+        Object.assign(this, { target, key, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false }, modifiers);
+    }
+
+    preventDefault() {
+        this.defaultPrevented = true;
+    }
 }
 
 class FakePage {
     grid = new FakeElement();
     tabs = [];
     entries = [];
+    focused = null;
 
     constructor() {
         this.grid.setAttribute('data-pane', 'timeline');
-        for (const [pane, selected] of [['timeline', 'true'], ['log', 'false']]) {
+        for (const [pane, selected, tabindex] of [['timeline', 'true', '0'], ['log', 'false', '-1']]) {
             const tab = new FakeTarget([TAB]);
+            tab.page = this;
             tab.setAttribute('data-pane', pane);
             tab.setAttribute('aria-selected', selected);
+            tab.setAttribute('tabindex', tabindex);
             this.tabs.push(tab);
         }
         const entry = new FakeElement();
@@ -40,8 +59,19 @@ class FakePage {
     }
 
     addEventListener(type, listener) {
-        assert.equal(type, 'click');
-        this.click = listener;
+        assert.ok(['click', 'keydown'].includes(type));
+        this[type] = listener;
+    }
+
+    press(target, key, modifiers = {}) {
+        const event = new FakeKey(target, key, modifiers);
+        this.keydown(event);
+
+        return event;
+    }
+
+    tabStops() {
+        return this.tabs.map((tab) => tab.getAttribute('tabindex'));
     }
 
     querySelector(selector) {
@@ -156,6 +186,103 @@ test('a click elsewhere keeps the chosen pane', () => {
     page.click({ target: new FakeTarget([]) });
 
     assert.equal(page.grid.getAttribute('data-pane'), 'log');
+});
+
+test('choosing a tab makes it the only tab in the Tab order', () => {
+    const page = reviewPageOnAPhone();
+
+    page.click({ target: page.tabs[1] });
+
+    assert.deepEqual(page.tabStops(), ['-1', '0']);
+});
+
+test('the right arrow on the Timeline tab chooses and focuses the Live log tab', () => {
+    const page = reviewPageOnAPhone();
+
+    const key = page.press(page.tabs[0], 'ArrowRight');
+
+    assert.equal(page.grid.getAttribute('data-pane'), 'log');
+    assert.deepEqual(page.selected(), ['false', 'true']);
+    assert.deepEqual(page.tabStops(), ['-1', '0']);
+    assert.equal(page.focused, page.tabs[1]);
+    assert.equal(key.defaultPrevented, true);
+});
+
+test('the right arrow on the last tab wraps to the first', () => {
+    const page = reviewPageOnAPhone();
+    page.click({ target: page.tabs[1] });
+
+    page.press(page.tabs[1], 'ArrowRight');
+
+    assert.deepEqual(page.selected(), ['true', 'false']);
+    assert.equal(page.focused, page.tabs[0]);
+});
+
+test('the left arrow on the first tab wraps to the last', () => {
+    const page = reviewPageOnAPhone();
+
+    page.press(page.tabs[0], 'ArrowLeft');
+
+    assert.deepEqual(page.selected(), ['false', 'true']);
+    assert.equal(page.focused, page.tabs[1]);
+});
+
+test('the left arrow on the Live log tab goes back to the Timeline tab', () => {
+    const page = reviewPageOnAPhone();
+    page.click({ target: page.tabs[1] });
+
+    page.press(page.tabs[1], 'ArrowLeft');
+
+    assert.equal(page.grid.getAttribute('data-pane'), 'timeline');
+    assert.equal(page.focused, page.tabs[0]);
+});
+
+test('End chooses and focuses the last tab', () => {
+    const page = reviewPageOnAPhone();
+
+    page.press(page.tabs[0], 'End');
+
+    assert.deepEqual(page.selected(), ['false', 'true']);
+    assert.equal(page.focused, page.tabs[1]);
+});
+
+test('Home chooses and focuses the first tab', () => {
+    const page = reviewPageOnAPhone();
+    page.click({ target: page.tabs[1] });
+
+    page.press(page.tabs[1], 'Home');
+
+    assert.deepEqual(page.selected(), ['true', 'false']);
+    assert.equal(page.focused, page.tabs[0]);
+});
+
+test('an arrow key outside the tabs changes nothing and stays the browser\'s', () => {
+    const page = reviewPageOnAPhone();
+
+    const key = page.press(new FakeTarget([]), 'ArrowRight');
+
+    assert.deepEqual(page.selected(), ['true', 'false']);
+    assert.equal(page.focused, null);
+    assert.equal(key.defaultPrevented, false);
+});
+
+test('another key on a tab, Tab and Enter included, stays the browser\'s', () => {
+    const page = reviewPageOnAPhone();
+
+    const keys = ['Tab', 'Enter', ' ', 'ArrowDown', 'constructor'].map((name) => page.press(page.tabs[0], name));
+
+    assert.deepEqual(keys.map((key) => key.defaultPrevented), [false, false, false, false, false]);
+    assert.deepEqual(page.selected(), ['true', 'false']);
+    assert.equal(page.focused, null);
+});
+
+test('an arrow key with a modifier on a tab stays the browser\'s', () => {
+    const page = reviewPageOnAPhone();
+
+    const keys = ['altKey', 'ctrlKey', 'metaKey', 'shiftKey'].map((modifier) => page.press(page.tabs[0], 'ArrowRight', { [modifier]: true }));
+
+    assert.deepEqual(keys.map((key) => key.defaultPrevented), [false, false, false, false]);
+    assert.deepEqual(page.selected(), ['true', 'false']);
 });
 
 test('a page without the task grid ignores a finding link', () => {

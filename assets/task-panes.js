@@ -17,6 +17,37 @@ export function switchTaskPanes(page) {
             show(page, 'timeline');
         }
     });
+    page.addEventListener('keydown', (event) => {
+        const tab = event.target?.closest?.(TAB);
+        const next = tab ? tabFor(page, tab, event) : null;
+        if (!next) {
+            return;
+        }
+        event.preventDefault();
+        show(page, next.getAttribute('data-pane'));
+        next.focus();
+    });
+}
+
+// The ARIA tabs pattern: Left and Right move to the neighbour and wrap, Home and End go to the first and last tab; a key with a modifier stays the browser's.
+function tabFor(page, tab, event) {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+        return null;
+    }
+    const tabs = [...page.querySelectorAll(TAB)];
+    const at = tabs.indexOf(tab);
+    switch (event.key) {
+        case 'ArrowLeft':
+            return tabs.at(at - 1);
+        case 'ArrowRight':
+            return tabs[(at + 1) % tabs.length];
+        case 'Home':
+            return tabs[0];
+        case 'End':
+            return tabs.at(-1);
+        default:
+            return null;
+    }
 }
 
 // A finding of a round still running has no timeline entry until the judge marks it, and hiding the live log would then show nothing in its place.
@@ -34,9 +65,12 @@ function hasTimelineEntry(page, target) {
         : cell.getAttribute('id') === anchor);
 }
 
+// Only the chosen tab stays a Tab stop, so Tab leaves the tabs instead of walking through both.
 function show(page, pane) {
     page.querySelector('.task-grid')?.setAttribute('data-pane', pane);
     for (const tab of page.querySelectorAll(TAB)) {
-        tab.setAttribute('aria-selected', String(tab.getAttribute('data-pane') === pane));
+        const chosen = tab.getAttribute('data-pane') === pane;
+        tab.setAttribute('aria-selected', String(chosen));
+        tab.setAttribute('tabindex', chosen ? '0' : '-1');
     }
 }
