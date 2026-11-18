@@ -6,10 +6,12 @@ namespace Intakt\Tests\Gates;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * @phpstan-type Step array{uses?: string, run?: string}
+ * @phpstan-type Step array{name?: string, uses?: string, run?: string}
  * @phpstan-type Job array{permissions?: array<string, string>, if?: string, environment?: array{name?: string}, steps?: list<Step>}
  * @phpstan-type WorkflowFile array{on: array<string, mixed>, permissions: array<string, string>, jobs: array<string, Job>}
  */
@@ -62,6 +64,72 @@ final class HighlightsWorkflowTest extends TestCase
 
         self::assertSame('github-pages', $publish['environment']['name'] ?? null);
         self::assertSame(['actions/deploy-pages'], array_map(static fn (array $step): string => explode('@', $step['uses'] ?? '')[0], $publish['steps'] ?? []));
+    }
+
+    public function testTheAssembledPageTurnsEveryLiquidOpeningOfTheHighlightsIntoALiquidStringThatPrintsIt(): void
+    {
+        $page = $this->assembledPage("# Highlights\n\nA code span `{{ x }}`, `{% if y %}` and `{{{%`.\n");
+
+        self::assertSame("# Highlights\n\nA code span `{{ \"{{\" }} x }}`, `{{ \"{%\" }} if y %}` and `{{ \"{{\" }}{{ \"{%\" }}`.\n", $page);
+    }
+
+    public function testTheAssembledPageIsTheHighlightsUnchangedWhenTheyHoldNoLiquidOpening(): void
+    {
+        $highlights = "# Highlights\n\nBraces `{ x }`, closings `}}` and `%}`, a percent `%{`.";
+
+        self::assertSame($highlights, $this->assembledPage($highlights));
+    }
+
+    public function testTheAssembledPageRunsBinHighlightsBeforeItWritesThePage(): void
+    {
+        self::assertStringStartsWith('bin/highlights && ', $this->pageCommand());
+    }
+
+    public function testThePageStepFailsWhenTheEscapeFails(): void
+    {
+        self::assertNotSame(0, $this->runPageWrite("# Highlights\n", 'sed() { return 1; }; ')['status']);
+    }
+
+    private function assembledPage(string $highlights): string
+    {
+        $run = $this->runPageWrite($highlights, '');
+        self::assertSame(0, $run['status']);
+
+        return $run['page'];
+    }
+
+    /**
+     * @return array{status: ?int, page: string}
+     */
+    private function runPageWrite(string $highlights, string $prelude): array
+    {
+        $workspace = sys_get_temp_dir().'/intakt highlights '.bin2hex(random_bytes(6));
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($workspace.'/docs/highlights.md', $highlights);
+        $filesystem->mkdir($workspace.'/page');
+
+        try {
+            $write = substr($this->pageCommand(), strlen('bin/highlights && '));
+            $process = new Process(['sh', '-c', $prelude.str_replace(' /page/index.md', ' '.escapeshellarg($workspace.'/page/index.md'), $write)], $workspace);
+            $process->run();
+
+            $page = $workspace.'/page/index.md';
+
+            return ['status' => $process->getExitCode(), 'page' => is_file($page) ? (string) file_get_contents($page) : ''];
+        } finally {
+            $filesystem->remove($workspace);
+        }
+    }
+
+    private function pageCommand(): string
+    {
+        $steps = array_filter($this->workflow()['jobs']['build']['steps'] ?? [], static fn (array $step): bool => 'Assemble the page' === ($step['name'] ?? null));
+        self::assertCount(1, $steps);
+        if (1 !== preg_match("/ sh -c '([^']*)'\\n\$/", array_first($steps)['run'] ?? '', $command)) {
+            self::fail('The step "Assemble the page" ends with no single-quoted sh -c command.');
+        }
+
+        return $command[1];
     }
 
     /**

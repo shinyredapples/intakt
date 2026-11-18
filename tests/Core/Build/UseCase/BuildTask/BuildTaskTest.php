@@ -370,6 +370,56 @@ final class BuildTaskTest extends TestCase
         self::assertSame(0, $this->changes->calls);
     }
 
+    public function testAPrePushCheckThatConflictsWithCurrentMainEndsThereOnTheConflictRouteAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "conflicts-with-main\n", RunCheckJob::LOG => "CONFLICT (content): PLANT-path.txt\n"]);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the branch conflicts with current main, so the check ran no step', $outcome->failure);
+        self::assertSame($outcome->failure, $ledger->payloads()[5]['failure']);
+        self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
+        self::assertNull($this->remoteTip());
+        self::assertSame(0, $this->changes->calls);
+    }
+
+    public function testThePrePushCheckReadsTheMirrorUpdatedAfterTheBuildJobSoMainThatMovedDuringTheBuildIsInIt(): void
+    {
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => $this->remote->commitFile('moved.txt', 'main moved'));
+        $mainInTheMirror = null;
+        $this->checkRunner = self::createStub(JobRunner::class);
+        $this->checkRunner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$mainInTheMirror): JobResult {
+            $mainInTheMirror = $this->git(['rev-parse', 'HEAD'], $spec->inputs[0]->hostPath);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
+        });
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertNull($outcome->failure);
+        self::assertSame($this->git(['rev-parse', 'HEAD'], $this->remote->path), $mainInTheMirror);
+    }
+
+    public function testAMirrorThatCannotBeUpdatedBeforeThePrePushCheckEndsThereAndRunsNoCheckJob(): void
+    {
+        $moved = $this->remote->path.'-moved';
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => rename($this->remote->path, $moved));
+
+        try {
+            $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+        } finally {
+            rename($moved, $this->remote->path);
+        }
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertNotNull($outcome->failure);
+        self::assertNull($this->checked);
+        self::assertNull($this->remoteTip());
+    }
+
     public function testACheckJobThatLeavesNoResultEndsAtThePrePushCheckWithFixedText(): void
     {
         $this->runner = $this->committingRunner();
@@ -1001,6 +1051,20 @@ final class BuildTaskTest extends TestCase
             new Filesystem()->remove([$job, $job.'.bundle']);
 
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
+        });
+
+        return $runner;
+    }
+
+    // Because the remote can move while the build job runs, and only a change after the job shows which mirror the pre-push check reads.
+    private function runnerAfterWhich(JobRunner $built, callable $change): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use ($built, $change): JobResult {
+            $result = $built->run($spec);
+            $change();
+
+            return $result;
         });
 
         return $runner;

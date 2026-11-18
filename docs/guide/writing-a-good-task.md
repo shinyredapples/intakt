@@ -47,6 +47,8 @@ What each part is for:
 | **Evidence** | what the finished change must show, numbered E1, E2, ... | reviewers check each item one by one; missing evidence sends the work back |
 | **Waits for #n** | another task this one needs first (optional); name only the part you build on, never a whole bigger task split into parts | the task isn't started until that one is done, so nothing is built on a missing base, and naming more than you need makes tasks wait in single file |
 
+Planned: when a task needs a change in another repository that Intakt doesn't build (a fix in a library, a release of a tool), write `Waits for release: <owner>/<repo>#<n>` instead, with one or more issues after the colon. Use the same line for a repository Intakt does build when your task needs that change released or deployed, not only merged. The line is all you write: Intakt shows the task as blocked by itself, so don't set a label for it. Intakt starts the task once each of those issues is closed and the change that closed it is in what your project runs: released and in your lock file for a library, deployed for a tool. If it can't tell, it asks rather than guessing. Don't describe such a wait only in a sentence: nothing would start the task again.
+
 ## Evidence the builder can produce
 
 Every evidence item must be something the builder can produce inside its sandbox. The sandbox has no network beyond the AI company and the package registries, no access to GitHub, and no real credentials.
@@ -108,4 +110,4 @@ To park an idea, label the issue `idea`; to turn it into work, remove `idea` and
 - [ ] Every acceptance point can be checked by someone who didn't write it.
 - [ ] The evidence says what the change must show, and anything the builder can't produce is marked `(owner provides)`.
 - [ ] It is one outcome.
-- [ ] Anything it depends on is named with `Waits for #n`, naming only the part it needs, not a whole bigger task.
+- [ ] Anything it depends on is named with `Waits for #n`, naming only the part it needs, not a whole bigger task. A change in a repository Intakt does not build, or one that must be released or deployed and not only merged, is named with `Waits for release: <owner>/<repo>#<n>` (planned, see above).

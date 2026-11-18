@@ -7,7 +7,8 @@ The dashboard and the logs use a handful of words for the loop's machinery: lane
 Think of a workshop with workbenches. Each bench does one job at a time.
 
 - A **build slot** is a bench where a builder works on one task. A project can have one or more.
-- The **review lane** is the bench where finished work is reviewed and merged.
+- The **review lane** is where finished work is reviewed, then handed to the landing step. It has as many **review workers** as your settings allow, so reviews keep up with the builders: each worker reviews a different piece of work, and two workers never review the same one.
+- The **landing step** merges approved work into main, one piece at a time for the whole install, whichever worker approved it.
 
 The benches work **independently**: while one task is being reviewed, the next one is already being built. They hand work to each other, like an assembly line.
 
@@ -17,9 +18,13 @@ flowchart LR
   q --> s2[Build slot 2]
   s1 -- finished work --> rq[(Waiting for review)]
   s2 -- finished work --> rq
-  rq --> rl[Review lane]
-  rl -- approved --> main[(Main)]
-  rl -- changes needed --> q
+  rq --> r1[Review worker 1]
+  rq --> r2[Review worker 2]
+  r1 -- approved --> land[Landing step: one at a time]
+  r2 -- approved --> land
+  land --> main[(Main)]
+  r1 -- changes needed --> q
+  r2 -- changes needed --> q
 ```
 
 How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
@@ -28,7 +33,7 @@ Builders on one machine share its processors. What keeps them apart today is eac
 
 ## Queues: who is next
 
-There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. They are sorted differently. *(Planned:)* The build queue will go milestone by milestone. Today it puts priority before the milestone's due date (`urgent`, then priority, then milestone, then the oldest task); the order described next is designed and arrives with the work-intake task. In it, `urgent` tasks come first, then the tasks of the milestone due soonest (tasks with no milestone, or a milestone without a due date, come last), and only within one milestone does priority decide (`high`, then `normal`, then `low`; a task with no priority counts as `normal`), then the oldest task. So a later milestone only gets build time when every ready task of the earlier one is taken or blocked. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. A task held back because its files are in use never lets a later milestone go ahead (see [the journey of a task](the-journey-of-a-task.md)). Today the review queue goes priority first (`urgent`, `high`, `normal`, `low`), then age. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
+There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. They are sorted differently. *(Planned:)* The build queue will go milestone by milestone. Today it puts priority before the milestone's due date (`urgent`, then priority, then milestone, then the oldest task); the order described next is designed and arrives with the work-intake task. In it, `urgent` tasks come first, then the tasks of the milestone due soonest (tasks with no milestone, or a milestone without a due date, come last), and only within one milestone does priority decide (`high`, then `normal`, then `low`; a task with no priority counts as `normal`), then the oldest task. So a later milestone only gets build time when every ready task of the earlier one is taken or blocked. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. *(Planned:)* A task or open pull request that has waited counts one priority step higher every few days (5 by default, per project), never up to `urgent` and never into another milestone; [the journey of a task](the-journey-of-a-task.md) explains it. A task held back because its files are in use never lets a later milestone go ahead (see [the journey of a task](the-journey-of-a-task.md)). Today the review queue goes priority first (`urgent`, `high`, `normal`, `low`), then age. *(Planned:)* Pull requests waiting for review move up the same way, one priority step every few days, never up to `urgent`. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
 
 Planned: within one priority and milestone, a task that more other tasks wait on, counted down the whole chain, goes before an older one; among finished changes waiting for review, the same holds within one priority (the review queue does not look at milestones). For builds it never moves a task ahead of a higher priority or an earlier milestone; for reviews it never moves one ahead of a higher priority. A follow-up made from a reviewer's nice-to-have note joins the next milestone instead of its original's, unless it fixes something that blocked the original or no later milestone is open.
 
@@ -51,7 +56,9 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 ## CI: the second opinion
 
-**CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Intakt has already run the same checks before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+**CI** (continuous integration) is the project's full check run again on the pushed version after every push, on a machine the builder does not control. Today that is GitHub running the project's checks on its own machines; Intakt runs the same checks (`bin/check --fast` for a PHP project) before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+
+*(Planned; this is the decided design:)* CI is the project's full check, tests included, run on the pushed version after every push: by default a fresh container that Intakt starts itself, or the forge's CI (GitHub's machines) where the project sets it, or both. That run is the builder's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task. For Intakt's own repository it is GitHub's CI, and the checks before the push are only the quick ones that do not run the change's code. Another project runs before the push whatever pre-push command it configures, and its whole check when it configures none.
 
 Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them. A paid runner service that hands out a fresh machine for every job works too; the same page says which two settings it needs. One job always stays on GitHub's machines: the one that files the urgent task when the nightly journeys fail, because it needs GitHub's own command-line tool.
 
@@ -62,7 +69,7 @@ If CI never starts (GitHub occasionally misses an update), Intakt notices after 
 ## Locks: one at a time
 
 A **lock** is a "one at a time" sign on something that must not be used by two jobs at once:
-- the review lane, so two reviews don't merge into main at the same moment;
+- the landing step, so two approved changes never merge into main at the same moment, even while several reviews run side by side;
 - an AI account, so too many calls don't hit the same company at once (a *semaphore*: a lock that lets a set number through);
 - the moment of an update, so no job starts while Intakt is being replaced.
 

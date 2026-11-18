@@ -51,7 +51,7 @@ final readonly class RunCheckJob implements CheckJobs
     private const int SECONDS = 1800;
 
     // Exactly what docker/job/check.sh writes, so anything else the code under test leaves there fails the check.
-    private const string WELL_FORMED = '/\A(?:passed|not-applied|failed ([1-9]\d{0,2}))\n\z/D';
+    private const string WELL_FORMED = '/\A(?:passed|not-applied|conflicts-with-main|not-merged|failed ([1-9]\d{0,2}))\n\z/D';
 
     public function __construct(
         private CheckHandBack $handBacks,
