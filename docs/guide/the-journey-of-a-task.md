@@ -26,7 +26,7 @@ flowchart TD
   r -- yes --> s{Small enough to build<br/>and review in one go?}
   s -- too big --> split[Split into smaller tasks]
   s -- yes --> q[Joins the queue]
-  q --> order[Ordered: urgent first,<br/>then milestone, then age]
+  q --> order[Ordered: urgent first,<br/>then milestone by milestone,<br/>priority within a milestone]
 ```
 
 One exception: a task whose pull request is already open (it needs a fix or an update) goes before every task not started yet, unless that task is `urgent`, so open work lands first. Each time a task joins the queue, Intakt looks its pull request up on the site where the code is hosted (GitHub or Gitea), so a task that comes back after a decision is still treated as a fix to its open pull request, never started over.
@@ -35,7 +35,8 @@ One exception: a task whose pull request is already open (it needs a fix or an u
 - **Too big:** large tasks are split into parts that each work on their own, with their own tests.
 - **Two new tasks touching the same files** are usually built one after the other, so they don't trip over each other; everything else can run in parallel.
 - **A task with an open pull request never waits** because another task is changing the same files.
-- **A task held back for files only lets a task of the same priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway.
+- **A task held back for files only lets a task of the same milestone, priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway, so a later milestone never jumps ahead this way.
+- **A blocked or waiting task** is passed over, and the next task in line is built instead, even one of a later milestone.
 - **Pace:** how many builders run at once depends on how much of the week's AI allowance is left (see [Spending wisely](how-intakt-works.md#spending-wisely)).
 
 ## 2. Building
