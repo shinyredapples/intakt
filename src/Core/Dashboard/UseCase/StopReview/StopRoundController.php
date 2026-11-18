@@ -13,7 +13,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
-// Limit: the owner session of the dashboard design does not exist yet, so the Host check, the CSRF token and the ledger check are all that guard this route.
+// The Host check, the CSRF token and the ledger check guard this route, because the dashboard has no login and reaching its port decides who can act (design: Dashboard, Who can act).
 final readonly class StopRoundController
 {
     public const string TOKEN_ID = 'dashboard_stop_round';

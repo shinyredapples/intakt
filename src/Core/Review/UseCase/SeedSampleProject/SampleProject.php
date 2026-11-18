@@ -92,7 +92,7 @@ final readonly class SampleProject
         $priceDate = $this->data->priceDate();
 
         return '# Written once by intakt:sample:seed; edit it and start again to change the sample project.'.PHP_EOL
-            .'# The prices are list prices read on '.$priceDate.', in US dollars per million tokens.'.PHP_EOL
+            .'# The price table is dated '.$priceDate.'; the prices are list prices in US dollars per million tokens.'.PHP_EOL
             .Yaml::dump(['projects' => [self::NAME => $project], 'budget' => ['price_date' => $priceDate, 'prices' => $this->prices($models)]], 6, 4);
     }
 

@@ -948,8 +948,8 @@ details.ev > summary:hover h3 { text-decoration: underline; text-underline-offse
 .health-sum { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .hrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 16px; padding: 20px 4px; border-bottom: 1px solid var(--hairline); align-items: start; }
 .hrow > .dot { margin-top: 8px; }
-.hrow h2 { font-size: var(--t17); margin-bottom: 8px; display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
-.hrow h2 .red, .hrow h2 .muted { font: 500 var(--t15)/1.3 var(--f-body); }
+.hrow h2, .hrow h3 { font-size: var(--t17); margin-bottom: 8px; display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+.hrow h2 .red, .hrow h2 .muted, .hrow h3 .red, .hrow h3 .muted { font: 500 var(--t15)/1.3 var(--f-body); }
 .hrow .kv { max-width: 760px; }
 .side-actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 @media (max-width: 760px) { .hrow { grid-template-columns: auto minmax(0, 1fr); } .side-actions { grid-column: 1 / -1; } .side-actions .btn { width: 100%; } .hrow .kv { grid-template-columns: 1fr; gap: 2px; } .hrow .kv dd { margin-bottom: 8px; } }

@@ -264,7 +264,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     {
         $cli = RecordedClaudeCodeCli::replaying('complete');
 
-        $this->vendor($cli)->review('alpha', Tier::Strong, $this->request());
+        $this->vendor($cli)->review('alpha', Tier::Strong, $this->requestWithoutRound());
 
         self::assertSame(['tools', 'setting_sources', 'strict_mcp_config', 'no_session_persistence', 'append_system_prompt', 'json_schema'], array_keys($cli->options));
         self::assertSame([[], '', true, true], [$cli->options['tools'], $cli->options['setting_sources'], $cli->options['strict_mcp_config'], $cli->options['no_session_persistence']]);
@@ -567,6 +567,6 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
 
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers);
+        return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, new NoCooldowns(), new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), $servers ?? $this->servers());
     }
 }

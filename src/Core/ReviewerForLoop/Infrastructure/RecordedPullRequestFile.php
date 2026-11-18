@@ -8,7 +8,6 @@ use Intakt\Core\ReviewerForLoop\Contract\PullRequestComment;
 use Intakt\Core\ReviewerForLoop\Domain\PostedComment;
 use Intakt\Core\ReviewerForLoop\Domain\RecordedPullRequest;
 use JsonException;
-use TypeError;
 
 // Read here, not in the domain, because the file format belongs to the weekly report's door alone until a forge reads the comments.
 final readonly class RecordedPullRequestFile
@@ -20,10 +19,13 @@ final readonly class RecordedPullRequestFile
             return null;
         }
 
-        try {
-            $comments = array_map(self::comment(...), array_values($data['comments']));
-        } catch (TypeError) {
-            return null;
+        $comments = [];
+        foreach ($data['comments'] as $raw) {
+            $comment = self::comment($raw);
+            if (!$comment instanceof PostedComment) {
+                return null;
+            }
+            $comments[] = $comment;
         }
 
         return new RecordedPullRequest($data['pullRequest'], $data['loop'], $data['intakt'], $comments);
@@ -48,21 +50,30 @@ final readonly class RecordedPullRequestFile
         return is_array($data) ? $data : [];
     }
 
-    private static function comment(mixed $raw): PostedComment
+    private static function comment(mixed $raw): ?PostedComment
     {
-        $comment = is_array($raw) ? $raw : throw new TypeError('not a comment');
-        $postedAt = RecordedMoment::parse(self::text($comment, 'postedAt')) ?? throw new TypeError('not a moment');
+        if (!is_array($raw)) {
+            return null;
+        }
 
-        return new PostedComment(new PullRequestComment(self::text($comment, 'author'), self::text($comment, 'head'), self::text($comment, 'body')), $postedAt);
+        $author = self::text($raw, 'author');
+        $head = self::text($raw, 'head');
+        $body = self::text($raw, 'body');
+        $postedAt = RecordedMoment::parse(self::text($raw, 'postedAt') ?? '');
+        if (in_array(null, [$author, $head, $body, $postedAt], true)) {
+            return null;
+        }
+
+        return new PostedComment(new PullRequestComment($author, $head, $body), $postedAt);
     }
 
     /**
      * @param array<mixed> $comment
      */
-    private static function text(array $comment, string $key): string
+    private static function text(array $comment, string $key): ?string
     {
         $value = $comment[$key] ?? null;
 
-        return is_string($value) ? $value : throw new TypeError(sprintf('no text for %s', $key));
+        return is_string($value) ? $value : null;
     }
 }
