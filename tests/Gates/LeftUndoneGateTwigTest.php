@@ -28,6 +28,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(LeftUndoneTokens::class)]
 #[UsesClass(Workspace::class)]
 #[UsesClass(Scope::class)]
+#[UsesClass(Sandbox::class)]
 final class LeftUndoneGateTwigTest extends SandboxTestCase
 {
     /**

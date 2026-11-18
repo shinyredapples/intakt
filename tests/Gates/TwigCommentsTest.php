@@ -9,6 +9,7 @@ use Intakt\Gates\ScopeFailure;
 use Intakt\Gates\TwigComments;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Twig\Environment;
 use Twig\Error\SyntaxError;
@@ -17,6 +18,7 @@ use Twig\Source;
 
 #[CoversClass(TwigComments::class)]
 #[CoversClass(LeftUndoneComments::class)]
+#[UsesClass(ScopeFailure::class)]
 final class TwigCommentsTest extends TestCase
 {
     /**
