@@ -127,8 +127,7 @@ final class RunBuildJobTest extends TestCase
     {
         $this->toolTimeLimit = $seconds;
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of 3000 seconds, not %d.', $seconds));
+        $this->expectExceptionObject(new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of 3000 seconds, not %d.', $seconds)));
 
         $this->runBuilds(new JobOutput([]));
     }
@@ -139,8 +138,7 @@ final class RunBuildJobTest extends TestCase
     {
         $this->toolTimeLimit = $seconds;
 
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('at least 1 second');
+        $this->expectExceptionMessageMatches('/must be at least 1 second .*, not '.$seconds.'\.$/');
 
         $this->runBuilds(new JobOutput([]));
     }
