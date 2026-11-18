@@ -32,8 +32,11 @@ final readonly class CheckedReports
 
     private const string PULL_REQUESTS_LINE = '/^- \*\*Pull requests and commits:\*\*[ \t]*(?<rest>\S.*)$/m';
 
-    // Read as the start of the text, like READY, because only a line that found nothing must carry the date of the search; no \b, which "_none found_" would defeat.
-    private const string NONE_FOUND = '/^[`*_\s]*none found(?![\p{L}\p{N}])/iu';
+    // A pull request number, a URL with a host name ("https://" alone names nothing) or a commit hash with at least one letter and one digit, because a line that names none of them ("none", "-") says what was found only through the date of the search, and a word of hex letters alone ("defaced") or a number alone names no commit.
+    private const string REFERENCE = '~#\d+\b|\bhttps?://(?:[\w-]+\.)+[A-Za-z]{2,}|(?<![\w-])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![\w-])~';
+
+    // Read as the start of the text, like READY, because a line that found nothing carries the date of the search even when it names what was searched; no \b, which "_none found_" would defeat.
+    private const string NONE = '/^[`*_\s-]*(?:none|nothing|no)(?![\p{L}\p{N}])/iu';
 
     private const string ANY_DATE = '/\b(?<date>\d{4}-\d{2}-\d{2})\b/';
 
@@ -172,9 +175,9 @@ final readonly class CheckedReports
             return 'but its "Checked" line does not start with a date as YYYY-MM-DD';
         }
 
-        $date = DateTimeImmutable::createFromFormat('!Y-m-d', $match['date'], new DateTimeZone('UTC'));
+        $date = $this->dateOf($match['date']);
 
-        if (false === $date || $date->format('Y-m-d') !== $match['date']) {
+        if (!$date instanceof DateTimeImmutable) {
             return 'but its "Checked" line does not start with a date as YYYY-MM-DD';
         }
 
@@ -196,19 +199,22 @@ final readonly class CheckedReports
             return 'but has no "Pull requests and commits" line (the pull requests and commits the check found, or "none found" with the date of the check)';
         }
 
-        if (1 !== preg_match(self::NONE_FOUND, $match['rest'])) {
+        if (1 !== preg_match(self::NONE, $match['rest']) && 1 === preg_match(self::REFERENCE, $match['rest'])) {
             return null;
         }
 
-        return 1 === preg_match(self::ANY_DATE, $match['rest'], $match) && $this->isDate($match['date'])
+        preg_match_all(self::ANY_DATE, $match['rest'], $dates);
+
+        return array_any($dates['date'], fn (string $date): bool => $this->dateOf($date) instanceof DateTimeImmutable)
             ? null
-            : 'but its "Pull requests and commits" line says "none found" without the date of the check as YYYY-MM-DD';
+            : 'but its "Pull requests and commits" line names no pull request (#n), URL or commit hash and no date of the check as YYYY-MM-DD';
     }
 
-    private function isDate(string $date): bool
+    // The one home of the date rule, so an impossible day such as 2026-02-30 fails on every line that needs a date.
+    private function dateOf(string $date): ?DateTimeImmutable
     {
         $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
 
-        return false !== $parsed && $parsed->format('Y-m-d') === $date;
+        return false !== $parsed && $parsed->format('Y-m-d') === $date ? $parsed : null;
     }
 }

@@ -19,6 +19,7 @@ use Symfony\AI\Platform\Result\ToolCallResult;
 use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\TokenUsage\TokenUsageExtractorInterface;
 use Symfony\Component\Serializer\Encoder\JsonDecode;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Exception\ExceptionInterface;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
@@ -188,10 +189,7 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
     private function deserialized(string $content): Verdict
     {
         try {
-            /** @var Verdict $verdict */
-            $verdict = $this->serializer->deserialize($content, Verdict::class, 'json', self::STRICT);
-
-            return $verdict;
+            return $this->serializer->deserialize($content, Verdict::class, JsonEncoder::FORMAT, self::STRICT);
         } catch (TypeError $error) {
             // Kept so a constructor's type error still fails the mapping, because serializers before 8.2.0-BETA2 passed an object on as a list of findings: upstream/serializer-object-collection-accepts-any-object
             throw new UnexpectedValueException($error->getMessage(), $error->getCode(), $error);

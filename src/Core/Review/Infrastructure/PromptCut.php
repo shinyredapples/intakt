@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\UntrustedSource;
 
 // A constant, not an option: no caller needs another ceiling, and a fixed one keeps the cached prompt prefix and the tests stable.
@@ -16,14 +17,13 @@ final readonly class PromptCut
     {
     }
 
-    // The note stays outside the fence because it is Intakt's own text; inside, the reviewer would have to ignore it as data.
-    public function fenced(UntrustedSource $source, string $text): string
+    public function fenced(UntrustedSource $source, string $text): FencedText
     {
         $fenced = $text
             |> $this->head(...)
-            |> (fn (string $head): string => $this->fence->wrap($source, $head));
+            |> (fn (string $head): FencedText => $this->fence->wrap($source, $head));
 
-        return $fenced.$this->noteFor($text);
+        return $this->cuts($text) ? $fenced->cut(strlen($this->head($text)), strlen($text)) : $fenced;
     }
 
     public function cuts(string $text): bool
@@ -35,18 +35,5 @@ final readonly class PromptCut
     private function head(string $text): string
     {
         return mb_strcut($text, 0, self::CEILING_BYTES, 'UTF-8');
-    }
-
-    private function noteFor(string $text): string
-    {
-        if (!$this->cuts($text)) {
-            return '';
-        }
-
-        return sprintf(
-            "\n\nIntakt cut this text: %d of %d bytes are shown and the rest is left out. Read what you need with your tools; an approval of a review with a cut text is refused.",
-            strlen($this->head($text)),
-            strlen($text),
-        );
     }
 }

@@ -85,11 +85,12 @@ So such a reviewer can ask for more work, but it can never pass a change on its 
 
 ## Layer 5: the rules protect themselves
 
-The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions, the rules for adding libraries, the scripts that start a test copy of the app) are **protected files**. A change to them gets extra care, and one of exactly two answers, given at once:
+The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions, the rules for adding libraries, the scripts that start a test copy of the app) are **protected files**. A change to them gets extra care, and one of exactly two answers, given at once unless the Security engineer cannot run:
 
 | The change... | Who approves it |
 |---|---|
 | passes every mechanical check, the Security engineer's security review agrees, and its penetration test finds no way past the changed check, and it is neither a change to how Intakt approves nor to secrets and permissions | Intakt, at once, and it lists the change on the dashboard for a week (planned: until this is built, every rule change goes to you) |
+| needs the security review or the penetration test, and that session cannot run (for example its account hit its usage limit) | nobody yet: it waits without an answer and carries on by itself when a session runs again (planned, see [below](#when-intakt-asks-you-and-why)) |
 | anything else | you, with the reason |
 
 So a change can never quietly switch off the check that would have caught it, and Intakt can never widen its own powers.
@@ -115,6 +116,8 @@ The reason these two stay with you: the Security engineer reads text an attacker
 Each of these mechanical checks compares the change with the project as it was when the change branched off, so a task that adds one library is asked about that library alone (planned).
 
 On top, the **Security engineer** runs two separate sessions that never see what the builder wrote about its change: a security review, which must agree, and a penetration test, which tries to write an example that the old check stops and the new one lets through. If it finds one, you are asked.
+
+**When the Security engineer cannot run (planned).** If its sessions cannot run at all, for example because its account hit its usage limit or its login expired, the waiting rule changes wait: nothing is approved by waiting, and nothing is sent to you either, since nobody has judged them yet, so they do not fill your queue. Intakt tries again by itself. If the outage lasts longer than a set time (a couple of hours), you get one message for the whole outage, not one per change, saying what you can do: add an account for the Security engineer or free one. When a session runs again, the message clears and the changes carry on without you. A session that did run but gave no usable answer is different: that change comes to you, as before. If no Security engineer is set up at all, every rule change comes to you.
 
 **Trust is earned, one project at a time.** Known bad changes (a weakened check, a leaked secret, a harmful library, a start-up script that drops a safety wall, at least three of each kind) are fed in now and then on purpose and must all reach you. Automatic approval can be switched on for a project only when every one of them reached you and Intakt's answer agreed with your past approvals on at least 20 changes; then you turn it on with one switch. It turns off again by itself the moment it misses one or you overrule it, until both hold again. Even then: a change Intakt approved is undone at once if main's checks catch a problem afterwards and it is clearly the one to blame (otherwise you are asked which to undo), and every such approval stays on the dashboard for a week with a one-line note. There is no daily limit: a limit only sent routine approvals back to you.
 
