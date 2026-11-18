@@ -28,6 +28,8 @@ How many build slots run at the same time depends on the budget (below): when th
 
 There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. Both are sorted the same way: priority first (`urgent`, `high`, `normal`, `low`), then milestone, then age. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
 
+Planned: within one priority and milestone, a task (or a finished change) that more other tasks wait on, counted down the whole chain, goes before an older one; it never moves ahead of a higher priority or an earlier milestone. A follow-up made from a reviewer's nice-to-have note joins the next milestone instead of its original's, unless it fixes something that blocked the original.
+
 **The review cap** stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Work that is waiting for *you*, or on hold, doesn't count towards the cap, because no reviewer can move it.
 
 ## Ticks, events and deadlines: what makes things move

@@ -29,6 +29,8 @@ flowchart TD
   q --> order[Ordered: urgent first,<br/>then milestone, then age]
 ```
 
+Planned: within one priority and milestone, a task that other tasks wait on (directly or further down the chain) goes before an older one, so the work that frees the most tasks starts first. It never jumps ahead of a higher priority or an earlier milestone.
+
 One exception: a task whose pull request is already open (it needs a fix or an update) goes before every task not started yet, unless that task is `urgent`, so open work lands first. Each time a task joins the queue, Intakt looks its pull request up on the site where the code is hosted (GitHub or Gitea), so a task that comes back after a decision is still treated as a fix to its open pull request, never started over.
 
 - **Waiting on another task:** a task can say `Waits for #12`. It isn't picked until #12 is done, so nothing gets built on a missing foundation. *(Planned:)* Intakt learns whether #12 is done from the one list of open tasks it reads each round (a list that comes back incomplete releases no wait), never by asking about each waited-for task on its own, and a worker with no room for new work asks the site nothing, so routine checks never use up the site's hourly allowance.
@@ -130,7 +132,7 @@ flowchart TD
 
 ## 7. Afterwards
 
-- **Follow-ups:** any P3 notes from the reviewers become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks.
+- **Follow-ups:** any P3 notes from the reviewers become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original; it says which stage it came from, so you can move it back.
 - **Project memory:** what was learned (a fixed finding, a recurring failure and its cause) goes into the project memory, so the next builder and reviewers are briefed.
 - **Unblocking:** tasks that said `Waits for` this one become eligible.
 - **Tidying up:** the task's branch is cleaned up.
