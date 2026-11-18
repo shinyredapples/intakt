@@ -114,7 +114,7 @@ Each role has one character, drawn in a light and a dark version:
 | Code reviewer (every panel reviewer, whatever its lens) | `CodeReviewer` (`code_reviewer`) | Meerkat with a magnifying glass |
 | Judge | `Judge` (`judge`) | Owl with a gavel |
 
-The octopus has three poses (`MascotPose`): `waiting`, `conducting`, `bowing`, for empty and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
+The octopus has four poses (`MascotPose`): `waiting`, `conducting`, `bowing`, `asleep`, for empty, idle and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
 
 Places: a reviewer's row and the judge's row on the review page, the live log and the round heading (24 or 48 px), and an octopus pose on an empty or approved state.
 
@@ -173,7 +173,7 @@ Use the plain wording in UI copy. Where the term must stay, mark it with `.term`
 - **Loading**: static skeleton blocks in the shape of the content (cards, lane summary, lead line), with `aria-busy` on the main region. No spinners on whole pages and no pulsing (motion only follows the user). Buttons that wait show their verb in progress ("Saving…", "Approving…").
 - **Errors**: say what failed, the cause in plain words, and what is still true ("Not saved, still 22:00 to 07:00", "Nothing was saved"). Red only for the failed part.
 - **Offline or reconnecting**: a neutral line at the top of the page ("Reconnecting. You are seeing what Intakt knew at 11:12:04; actions wait until it is back. Next try in 5 s.") with Try now, an "Offline" marker in the top bar, action buttons disabled, elapsed times frozen with their timestamp. Content stays at full contrast; never fade the page. After two minutes the line turns red ("Can't reach Intakt").
-- **First day**: no banners, the lead says "Intakt is ready. Nothing to build yet.", and a tinted block gives the three steps to the first task with a link to the repository's issues. Columns show "Nothing here"; lanes show "Idle: nothing to build yet".
+- **First day**: no banners, the lead says "Intakt is ready. Nothing to build yet.", and a tinted block gives the three steps to the first task with a link to the repository's issues. Columns show "Nothing here"; lanes show "Idle: nothing to build yet". The built board instead says in one line, in each empty column and the empty Who is working line, what lands there and when, and shows the waiting octopus on the first day and the asleep one while idle (#2658).
 
 Examples: `index.html?demo=stress`, `?demo=reconnecting`, `?demo=firstday`, `?demo=loading`.
 
