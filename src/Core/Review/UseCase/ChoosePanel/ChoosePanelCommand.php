@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\ChoosePanel;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeDescription;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -30,7 +32,7 @@ final readonly class ChoosePanelCommand
             return Command::FAILURE;
         }
 
-        $change = new ChangeDescription($input->lines, $input->path, $input->label);
+        $change = new ChangeDescription($input->lines, new Paths(...$input->path), new Labels(...$input->label));
 
         try {
             $panel = $this->panels->panelForChange($input->project, $change);

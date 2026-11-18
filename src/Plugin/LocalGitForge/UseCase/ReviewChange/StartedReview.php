@@ -28,6 +28,6 @@ final readonly class StartedReview
 
     public static function of(ChangeReview $review): self
     {
-        return new self($review->roundId, $review->round, $review->decision->value, $review->actList, $review->reasons, $review->end->value);
+        return new self($review->roundId, $review->round, $review->decision->value, $review->actList, [...$review->reasons], $review->end->value);
     }
 }

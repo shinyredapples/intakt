@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\ToolCallCount;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\AI\Platform\Result\ToolCall;
 
 #[CoversClass(ReviewTool::class)]
 #[CoversClass(ToolCallCount::class)]
@@ -20,7 +21,7 @@ final class ReviewToolTest extends TestCase
     #[DataProvider('calls')]
     public function testACallReadsInPlainWords(ReviewTool $tool, array $arguments, string $words): void
     {
-        self::assertSame($words, $tool->callInWords($arguments));
+        self::assertSame($words, $tool->callInWords(new ToolCall('call-1', $tool->value, $arguments)));
     }
 
     /**
@@ -46,7 +47,7 @@ final class ReviewToolTest extends TestCase
     #[DataProvider('malformedCalls')]
     public function testACallWithAMalformedArgumentReadsAsTheCallWithoutIt(ReviewTool $tool, array $arguments, string $words): void
     {
-        self::assertSame($words, $tool->callInWords($arguments));
+        self::assertSame($words, $tool->callInWords(new ToolCall('call-1', $tool->value, $arguments)));
     }
 
     /**

@@ -6,12 +6,15 @@ namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FindingIds;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFinding;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\JudgeNotes;
 use Intakt\Core\Review\Contract\Mark;
+use Intakt\Core\Review\Contract\SameCause;
 use Intakt\Core\Review\Contract\Severity;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -23,6 +26,9 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(JudgedFinding::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(DroppedFinding::class)]
+#[UsesClass(FindingIds::class)]
+#[UsesClass(SameCause::class)]
+#[UsesClass(JudgeNotes::class)]
 final class JudgedFindingsTest extends TestCase
 {
     public function testEveryJudgedFindingIsKeptWhateverItsMark(): void
@@ -112,14 +118,28 @@ final class JudgedFindingsTest extends TestCase
     {
         $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Reject, null, "  Not reachable.\n")]), [$this->finding('a', Severity::P1)]);
 
-        self::assertSame(['a' => "  Not reachable.\n"], $judged->notes);
+        self::assertSame(['a' => "  Not reachable.\n"], iterator_to_array($judged->notes));
     }
 
     public function testTheJudgesNoteOnADeferredP2IsKept(): void
     {
         $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Defer, null, 'Needs its own design.')]), [$this->finding('a', Severity::P2)]);
 
-        self::assertSame(['a' => 'Needs its own design.'], $judged->notes);
+        self::assertSame(['a' => 'Needs its own design.'], iterator_to_array($judged->notes));
+    }
+
+    public function testASameCauseLinkBetweenTwoGivenFindingsIsKept(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Act), new JudgedFinding('b', Mark::Act, 'a')]), $this->findings('a', 'b'));
+
+        self::assertSame(['b' => 'a'], iterator_to_array($judged->sameCause));
+    }
+
+    public function testASameCauseLinkToAFindingNotGivenIsDropped(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('b', Mark::Act, 'ghost')]), $this->findings('b'));
+
+        self::assertSame([], iterator_to_array($judged->sameCause));
     }
 
     public function testANoteOnAP1MarkedActOrOnAP3IsNotKept(): void
@@ -128,14 +148,14 @@ final class JudgedFindingsTest extends TestCase
 
         $judged = JudgedFindings::of($judgement, [$this->finding('a', Severity::P1), $this->finding('b', Severity::P3), $this->finding('c', Severity::P3)]);
 
-        self::assertSame([], $judged->notes);
+        self::assertSame([], iterator_to_array($judged->notes));
     }
 
     public function testARejectedP1WithoutANoteHasNone(): void
     {
         $judged = JudgedFindings::of($this->marks(['a' => Mark::Reject]), [$this->finding('a', Severity::P1)]);
 
-        self::assertSame([], $judged->notes);
+        self::assertNull($judged->notes->of('a'));
     }
 
     /**

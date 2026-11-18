@@ -11,20 +11,18 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class JudgedFindings
 {
     /**
-     * @param list<Finding>         $findings
-     * @param list<Finding>         $actList
-     * @param list<FollowUp>        $followUps
-     * @param list<DroppedFinding>  $dropped
-     * @param array<string, string> $sameCause
-     * @param array<string, string> $notes
+     * @param list<Finding>        $findings
+     * @param list<Finding>        $actList
+     * @param list<FollowUp>       $followUps
+     * @param list<DroppedFinding> $dropped
      */
     private function __construct(
         public array $findings,
         public array $actList,
         public array $followUps,
         public array $dropped,
-        public array $sameCause,
-        public array $notes,
+        public SameCause $sameCause,
+        public JudgeNotes $notes,
     ) {
     }
 
@@ -35,13 +33,13 @@ final readonly class JudgedFindings
     public static function of(Judgement $judgement, array $findings, array $dropped = []): self
     {
         $marks = [];
-        $sameCause = [];
+        $sameCause = new SameCause();
         $given = array_map(static fn (Finding $finding): string => $finding->id, $findings);
 
         foreach ($judgement->marks as $judged) {
             $marks[$judged->id] = $judged->mark;
             if (null !== $judged->same_cause_as && in_array($judged->id, $given, true) && in_array($judged->same_cause_as, $given, true)) {
-                $sameCause[$judged->id] = $judged->same_cause_as;
+                $sameCause = $sameCause->with($judged->id, $judged->same_cause_as);
             }
         }
 
@@ -55,17 +53,15 @@ final readonly class JudgedFindings
     // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
     /**
      * @param list<Finding> $findings
-     *
-     * @return array<string, string>
      */
-    private static function notesOf(Judgement $judgement, array $findings): array
+    private static function notesOf(Judgement $judgement, array $findings): JudgeNotes
     {
         $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, static fn (Finding $finding): bool => Severity::P3 !== $finding->severity));
-        $notes = [];
+        $notes = new JudgeNotes();
 
         foreach ($judgement->marks as $judged) {
             if (null !== $judged->note && Mark::Act !== $judged->mark && in_array($judged->id, $blocking, true)) {
-                $notes[$judged->id] = $judged->note;
+                $notes = $notes->with($judged->id, $judged->note);
             }
         }
 

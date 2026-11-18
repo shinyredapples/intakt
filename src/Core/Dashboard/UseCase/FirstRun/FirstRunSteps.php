@@ -22,10 +22,12 @@ use Intakt\Core\Dashboard\Domain\ProviderStep;
 use Intakt\Core\Dashboard\Domain\TierLine;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Mcp\Contract\McpRoutes;
 use Intakt\Core\Mcp\Contract\ToolAccess;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\PanelConfigurationFailure;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -131,7 +133,7 @@ final readonly class FirstRunSteps
     {
         try {
             // A change with no lines, paths or labels matches no rule, so this is the core panel every change gets.
-            $panel = $this->panels->panelForChange($project, new ChangeDescription(0, [], []));
+            $panel = $this->panels->panelForChange($project, new ChangeDescription(0, new Paths(), new Labels()));
         } catch (PanelConfigurationFailure $failure) {
             return new PanelOfProject($project, $failure->getMessage());
         }

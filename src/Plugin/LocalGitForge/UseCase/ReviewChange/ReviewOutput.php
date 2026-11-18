@@ -68,7 +68,7 @@ final readonly class ReviewOutput
             $review->actList,
             $review->tokens,
             $review->cost,
-            $review->reasons,
+            [...$review->reasons],
             array_map(static fn (FigureKind $kind): string => $kind->value, self::KINDS),
         );
     }

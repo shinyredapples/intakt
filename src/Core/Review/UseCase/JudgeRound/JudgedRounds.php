@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -27,12 +28,9 @@ final readonly class JudgedRounds
     ) {
     }
 
-    /**
-     * @return list<string>
-     */
-    public function filesOf(ReviewRound $round): array
+    public function filesOf(ReviewRound $round): Paths
     {
-        return $this->paths->in($round->diff());
+        return new Paths(...$this->paths->in($round->diff()));
     }
 
     /**

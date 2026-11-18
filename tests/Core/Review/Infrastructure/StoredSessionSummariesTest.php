@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Doctrine\DBAL\Types\Types;
 use Intakt\Core\Budget\Contract\Cost;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
@@ -48,6 +49,7 @@ use Symfony\Component\Uid\Uuid;
 #[CoversClass(RoundToolCall::class)]
 #[UsesClass(ReviewedRepository::class)]
 #[UsesClass(SessionSummary::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(ToolCallCount::class)]
 final class StoredSessionSummariesTest extends KernelTestCase
 {
@@ -107,7 +109,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'read_file', ['path' => 'RecordingBus.php']);
         $this->call($server, 'read_file', ['path' => 'RoundFixture.php']);
 
-        self::assertSame(['RoundFixture.php', 'RecordingBus.php'], $this->summaryOf($round)->filesRead);
+        self::assertSame(['RoundFixture.php', 'RecordingBus.php'], [...$this->summaryOf($round)->filesRead]);
     }
 
     public function testOneFileReadUnderTwoSpellingsIsListedOnce(): void
@@ -118,7 +120,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'read_file', ['path' => 'RoundFixture.php']);
         $this->call($server, 'read_file', ['path' => './RoundFixture.php']);
 
-        self::assertSame(['RoundFixture.php'], $this->summaryOf($round)->filesRead);
+        self::assertSame(['RoundFixture.php'], [...$this->summaryOf($round)->filesRead]);
     }
 
     public function testARefusedReadCountsAsACallButNotAsAFileRead(): void
@@ -129,7 +131,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
         $summary = $this->summaryOf($round);
         self::assertEquals([new ToolCallCount('read_file', 1)], $summary->toolCalls);
-        self::assertSame([], $summary->filesRead);
+        self::assertSame([], [...$summary->filesRead]);
     }
 
     public function testASearchOrAListingReadsNoFile(): void
@@ -140,7 +142,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->call($server, 'list_directory', []);
         $this->call($server, 'search_files', ['text' => 'final readonly class', 'path' => 'RoundFixture.php']);
 
-        self::assertSame([], $this->summaryOf($round)->filesRead);
+        self::assertSame([], [...$this->summaryOf($round)->filesRead]);
     }
 
     public function testTheCallsOfAnotherRoundAreNotCounted(): void
@@ -152,7 +154,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
 
         $summary = $this->summaryOf($round);
         self::assertSame([], $summary->toolCalls);
-        self::assertSame([], $summary->filesRead);
+        self::assertSame([], [...$summary->filesRead]);
         self::assertSame(0, $summary->totalToolCalls());
     }
 

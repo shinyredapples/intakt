@@ -11,6 +11,7 @@ use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -22,6 +23,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -68,6 +70,8 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(ReviewChange::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[CoversClass(ChangeReview::class)]
+#[UsesClass(BlockReasons::class)]
+#[UsesClass(ModelNames::class)]
 #[CoversClass(RoundNotNext::class)]
 #[CoversClass(RoundTierNotMapped::class)]
 #[CoversClass(StoredVerdicts::class)]
@@ -121,7 +125,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole([]));
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([RoundEndReasons::REPLAY], $review->reasons);
+        self::assertSame([RoundEndReasons::REPLAY], [...$review->reasons]);
     }
 
     public function testARoundOfALiveProjectIsApprovedBesideAReplayProject(): void
@@ -131,7 +135,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole([]));
 
         self::assertSame(Decision::Approve, $review->decision);
-        self::assertSame([], $review->reasons);
+        self::assertSame([], [...$review->reasons]);
     }
 
     public function testARoundWithAChangesVerdictBelowQuorumAsksForChanges(): void
@@ -153,14 +157,14 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.'));
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], [...$review->reasons]);
     }
 
     public function testAReviewerThatCouldNotReachItsEndpointIsNamedWithThatCauseInPlainWords(): void
     {
         $review = $this->reviewWith(new UnreachableForRole('Look at part 1.'));
 
-        self::assertSame(['role-1 reviewer failed, the model endpoint could not be reached'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, the model endpoint could not be reached'], [...$review->reasons]);
     }
 
     public function testAFailedReviewerBesideOneAskingForChangesGivesChangesAndStillNamesTheFailure(): void
@@ -170,7 +174,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new StoppingAtTheLimitForRole('Look at part 1.', ['Look at part 2.' => $changes]));
 
         self::assertSame(Decision::Changes, $review->decision);
-        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], $review->reasons);
+        self::assertSame(['role-1 reviewer failed, stopped at its output limit'], [...$review->reasons]);
     }
 
     public function testTheActListHoldsOnlyTheFindingsTheJudgeMarkedAct(): void
@@ -196,7 +200,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 7)));
 
         self::assertCount(1, $review->actList);
-        self::assertSame(['F2'], $review->actList[0]->merged);
+        self::assertSame(['F2'], [...$review->actList[0]->merged]);
     }
 
     public function testAP3TheJudgeRejectsAtThePlaceOfAP1StaysOutOfItsEntry(): void
@@ -204,7 +208,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole($this->bothReportLines(7, 7, Severity::P3)), ['F2']));
 
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
-        self::assertSame([], $review->actList[0]->merged);
+        self::assertSame([], [...$review->actList[0]->merged]);
     }
 
     public function testAP1TheJudgeRejectsAtThePlaceOfAnotherP1StillJoinsItsEntry(): void
@@ -212,7 +216,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole($this->bothReportLines(7, 7)), ['F2']));
 
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
-        self::assertSame(['F2'], $review->actList[0]->merged);
+        self::assertSame(['F2'], [...$review->actList[0]->merged]);
     }
 
     public function testFindingsAtDifferentLinesOfOneFileStaySeparate(): void
@@ -229,7 +233,7 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(Decision::Blocked, $review->decision);
         self::assertSame(RoundEnds::NoOutcomeInTime, $review->end);
         self::assertSame([], $review->actList);
-        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', $review->reasons[0]);
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME.': the round did not end within 5 seconds', [...$review->reasons][0]);
         self::assertSame('2026-10-30 12:00:05', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
     }
 
@@ -252,7 +256,7 @@ final class ReviewChangeTest extends KernelTestCase
 
         $review = $this->reviewChange($work, $this->shortUpperWait())->review($this->request());
 
-        self::assertSame([Decision::Approve, [], RoundEnds::Judged], [$review->decision, $review->reasons, $review->end]);
+        self::assertSame([Decision::Approve, [], RoundEnds::Judged], [$review->decision, [...$review->reasons], $review->end]);
     }
 
     public function testARoundWhoseJudgingFailedForGoodIsBlockedForTheFailedJudgingBeforeTheCeiling(): void
@@ -260,7 +264,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(fn (): string => $this->openRoundId()))->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertSame([RoundEndReasons::JUDGING_FAILED], $review->reasons);
+        self::assertSame([RoundEndReasons::JUDGING_FAILED], [...$review->reasons]);
         self::assertSame(RoundEnds::JudgingFailed, $review->end);
         self::assertSame([], $review->actList);
         self::assertSame('2026-10-30 12:00:01', $this->fixture->clock->now()->format('Y-m-d H:i:s'));
@@ -271,7 +275,7 @@ final class ReviewChangeTest extends KernelTestCase
         $review = $this->reviewChange($this->reviewersFinishAndTheJudgingOf(static fn (): string => '0192a000-0000-7000-8000-0000000000ff'), $this->shortUpperWait())->review($this->request());
 
         self::assertSame(Decision::Blocked, $review->decision);
-        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME, $review->reasons[0]);
+        self::assertStringStartsWith(RoundEndReasons::NO_OUTCOME_IN_TIME, [...$review->reasons][0]);
     }
 
     public function testEachPollReportsTheProgressOfTheRound(): void

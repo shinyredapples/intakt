@@ -27,6 +27,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -65,6 +66,7 @@ use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 #[CoversClass(BenchReview::class)]
 #[CoversClass(BenchReviewerResult::class)]
 #[CoversClass(ReviewerOutcome::class)]
+#[UsesClass(ModelNames::class)]
 #[CoversClass(RoundLedgerReading::class)]
 #[UsesClass(ReviewChange::class)]
 #[UsesClass(ChangeReview::class)]

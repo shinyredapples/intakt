@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\LocalGitForge\UseCase\CheckVerdictIdentity;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\IdentityField;
+use Intakt\Core\Review\Contract\Labels;
 use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\ReviewTerms;
 use Intakt\Core\Review\Contract\VerdictIdentity;
@@ -75,7 +77,7 @@ final readonly class CheckVerdictIdentityCommand
     private function termsOf(Change $change, CheckVerdictIdentityInput $input): ReviewTerms
     {
         $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
-        $description = new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), $paths, []);
+        $description = new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), new Paths(...$paths), new Labels());
 
         return ReviewTerms::of($input->task, $input->checkCommand, $this->panels->panelForChange($input->project, $description));
     }

@@ -24,6 +24,8 @@ use Intakt\Core\Bench\UseCase\ReviewBenchChange\ReviewBenchChange;
 use Intakt\Core\Bench\UseCase\ReviewBenchChange\ReviewBenchChangeCommand;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Git\Contract\HardenedGit;
+use Intakt\Core\Git\Contract\Paths;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDescription;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -31,6 +33,8 @@ use Intakt\Core\Review\Contract\ChangeReviews;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\Labels;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\Panels;
@@ -81,6 +85,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(Cost::class)]
 #[UsesClass(HardenedGit::class)]
 #[UsesClass(ChangeDescription::class)]
+#[UsesClass(Paths::class)]
+#[UsesClass(Labels::class)]
+#[UsesClass(ModelNames::class)]
+#[UsesClass(BlockReasons::class)]
 #[UsesClass(ChangeReviewRequest::class)]
 #[UsesClass(RequestedRound::class)]
 #[UsesClass(ReviewTerms::class)]
@@ -173,9 +181,9 @@ final class ReviewBenchChangeCommandTest extends TestCase
     private function review(): ChangeReview
     {
         $finding = new Finding('F1', Severity::P1, 'src/shipping.js', $this->plantedLine(), null, 'Off by one.', FixableBy::Builder, false, null, null);
-        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, []);
+        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, new ModelNames());
 
-        return new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$reviewer]);
+        return new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), new BlockReasons(), reviewers: [$reviewer]);
     }
 
     private function plantedLine(): int

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ReviewChange;
 
 use Intakt\Core\Ai\Contract\Tier;
+use Intakt\Core\Review\Contract\BlockReasons;
 use Intakt\Core\Review\Contract\ChangeDecision;
 use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
@@ -13,6 +14,7 @@ use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\IgnoredProgress;
+use Intakt\Core\Review\Contract\ModelNames;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
 use Intakt\Core\Review\Contract\PanelVerdict;
@@ -206,14 +208,11 @@ final readonly class ReviewChange implements ChangeReviews
             null === $failure ? null : $this->failures->of($failure),
             $this->ledger->tokensOfReviewer($roundId, $reviewerId),
             $this->ledger->millisecondsOfReviewer($reviewerId),
-            $this->ledger->modelsOfReviewer($roundId, $reviewerId),
+            new ModelNames(...$this->ledger->modelsOfReviewer($roundId, $reviewerId)),
         );
     }
 
-    /**
-     * @return list<string>
-     */
-    private function reasonsOf(ReviewRound $round): array
+    private function reasonsOf(ReviewRound $round): BlockReasons
     {
         $reasons = ReplayMark::Replay === $round->replayMark() ? [$this->reasons->replay()] : [];
 
@@ -223,6 +222,6 @@ final readonly class ReviewChange implements ChangeReviews
             }
         }
 
-        return $reasons;
+        return new BlockReasons(...$reasons);
     }
 }

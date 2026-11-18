@@ -42,7 +42,7 @@ final readonly class RoundLedgerReading implements RoundCosts
      */
     public function actIdsOf(string $roundId): array
     {
-        return $this->judgeDoneOf($roundId)->act ?? [];
+        return [...$this->judgeDoneOf($roundId)->act ?? []];
     }
 
     /**
@@ -50,7 +50,7 @@ final readonly class RoundLedgerReading implements RoundCosts
      */
     public function sameCauseOf(string $roundId): array
     {
-        return $this->judgeDoneOf($roundId)->sameCause ?? [];
+        return iterator_to_array($this->judgeDoneOf($roundId)->sameCause ?? []);
     }
 
     /**
