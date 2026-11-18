@@ -58,6 +58,18 @@ final class ProviderLiteralRuleTest extends PhpStanRuleTestCase
         self::assertStringContainsString("src/Names.php:11 intakt.providerLiteral 'CHATGPT.COM' names a provider host", $findings);
     }
 
+    public function testProviderWordsInTheFormsOfModelIdsPassStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsOf('model-ids-in-other-forms');
+
+        // the router URL above them is still found, so the fixture was analyzed and the absent lines are no vacuous pass
+        self::assertStringContainsString('src/Ids.php:33 ', $findings);
+
+        foreach (range(36, 47) as $line) {
+            self::assertStringNotContainsString(sprintf('src/Ids.php:%d ', $line), $findings);
+        }
+    }
+
     public function testDatedAndPreviewReasoningModelIdsFailStaticAnalysis(): void
     {
         $findings = $this->ruleFindingsOf('reasoning-model-ids-with-suffixes');

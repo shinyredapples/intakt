@@ -32,4 +32,18 @@ final readonly class Ids
     {
         return 'https://router.huggingface.co/v1';
     }
+
+    public function providerWords(string $provider = 'o4-compatible'): string
+    {
+        return $provider.<<<'TEXT'
+
+            openai/openai_compatible:novita
+            TEXT
+            .'us.anthropic.claude_code'
+            .'moonshotai/kimi:deepinfra'
+            .<<<TEXT
+                {$this->light()} gemini-cli
+                TEXT
+            .'https://router.huggingface.example/v1';
+    }
 }
