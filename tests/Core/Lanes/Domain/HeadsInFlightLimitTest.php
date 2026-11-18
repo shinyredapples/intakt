@@ -9,7 +9,6 @@ use Intakt\Core\Lanes\Domain\HeadsInFlightLimit;
 use Intakt\Core\Lanes\Domain\HeadsInFlightLimitMustBePositive;
 use Intakt\Core\Lanes\Domain\ReviewCap;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -19,16 +18,6 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(ReviewCap::class)]
 final class HeadsInFlightLimitTest extends TestCase
 {
-    /**
-     * @return iterable<string, array{HeadWait}>
-     */
-    public static function everyWaitOfAHeadInFlight(): iterable
-    {
-        foreach (HeadWait::cases() as $wait) {
-            yield $wait->value => [$wait];
-        }
-    }
-
     public function testTheLimitHoldsABuilderWhenHeadsWaitingForCiOrLandingFillItBelowTheReviewCap(): void
     {
         $cap = new ReviewCap(2);
@@ -36,29 +25,28 @@ final class HeadsInFlightLimitTest extends TestCase
         $headsInFlight = [HeadWait::ForCi, HeadWait::ForCi, HeadWait::ForLanding, HeadWait::InReview];
 
         self::assertTrue($cap->admitsABuildBeside($headsInFlight));
-        self::assertFalse($limit->admitsABuildBeside($headsInFlight));
+        self::assertFalse($limit->admitsABuildBeside(count($headsInFlight)));
     }
 
-    #[DataProvider('everyWaitOfAHeadInFlight')]
-    public function testEveryHeadInFlightCountsAgainstTheLimitWhateverItWaitsFor(HeadWait $wait): void
+    public function testHeadsWithNoWaitCaseStillFillTheLimit(): void
     {
-        $limit = new HeadsInFlightLimit(1);
+        $limit = new HeadsInFlightLimit(2);
 
-        self::assertFalse($limit->admitsABuildBeside([$wait]));
+        self::assertFalse($limit->admitsABuildBeside(2));
     }
 
     public function testABuilderMayStartWhileFewerHeadsThanTheLimitAreInFlight(): void
     {
         $limit = new HeadsInFlightLimit(3);
 
-        self::assertTrue($limit->admitsABuildBeside([HeadWait::ForCi, HeadWait::ForLanding]));
+        self::assertTrue($limit->admitsABuildBeside(2));
     }
 
     public function testABuilderMayStartWhenNoHeadIsInFlight(): void
     {
         $limit = new HeadsInFlightLimit(1);
 
-        self::assertTrue($limit->admitsABuildBeside([]));
+        self::assertTrue($limit->admitsABuildBeside(0));
     }
 
     public function testTheDefaultLimitIsTwiceTheReviewCap(): void
@@ -86,5 +74,19 @@ final class HeadsInFlightLimitTest extends TestCase
         }
 
         self::fail('A limit of no head was accepted.');
+    }
+
+    public function testANegativeLimitIsRefused(): void
+    {
+        $this->expectException(HeadsInFlightLimitMustBePositive::class);
+
+        new HeadsInFlightLimit(-1);
+    }
+
+    public function testADefaultTooLargeToHoldIsRefusedAsADomainError(): void
+    {
+        $this->expectException(HeadsInFlightLimitMustBePositive::class);
+
+        HeadsInFlightLimit::twiceThe(new ReviewCap(intdiv(PHP_INT_MAX, 2) + 1));
     }
 }
