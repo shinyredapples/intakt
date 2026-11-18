@@ -72,7 +72,7 @@ final readonly class PhpProfile
             return null;
         }
 
-        if (!str_starts_with($intervals[array_key_last($intervals)]->getEnd()->getVersion(), $minor.'.')) {
+        if (!str_starts_with(array_last($intervals)->getEnd()->getVersion(), $minor.'.')) {
             return $minor;
         }
 
