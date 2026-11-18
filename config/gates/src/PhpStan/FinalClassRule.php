@@ -39,7 +39,7 @@ final readonly class FinalClassRule implements Rule
             return [];
         }
 
-        // the whole file is searched because PHPStan never visits a class declared in a method of a trait no class uses
+        // a class can also be declared inside a function body or a condition, so the whole file is searched once instead of relying on where PHPStan visits class nodes
         $classes = new NodeFinder()->findInstanceOf($node->getNodes(), Class_::class);
 
         return array_values(array_map($this->notFinal(...), array_filter($classes, $this->isConcreteNamedClass(...))));

@@ -8,6 +8,7 @@ use Intakt\Gates\PhpStan\FinalClassRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Process\Process;
 
 /**
  * @extends PhpStanRuleTestCase<FinalClassRule>
@@ -71,9 +72,18 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('non-final-script-class', 'bin/Runner.php:7 intakt.finalClass Class Runner is not final');
     }
 
-    public function testANonFinalClassDeclaredInAMethodOfAnUnusedTraitFailsStaticAnalysis(): void
+    public function testANonFinalClassDeclaredInAFunctionFailsStaticAnalysis(): void
     {
-        $this->assertRuleRejects('non-final-class-in-unused-trait', 'src/Factories.php:11 intakt.finalClass Class Product is not final');
+        $this->assertRuleRejects('non-final-class-in-function', 'src/factories.php:9 intakt.finalClass Class Product is not final');
+    }
+
+    public function testTheNestedClassFixturesAreValidPhp(): void
+    {
+        $fixtures = [...glob(__DIR__.'/Fixtures/non-final-class-in-function/src/*.fixture') ?: [], ...glob(__DIR__.'/Fixtures/non-final-conditional-class/src/*.fixture') ?: []];
+        $invalid = array_values(array_filter($fixtures, static fn (string $fixture): bool => 0 !== new Process([PHP_BINARY, '-l', $fixture])->run()));
+
+        $this->assertNotEmpty($fixtures);
+        $this->assertSame([], $invalid);
     }
 
     public function testANonFinalClassDeclaredInsideAConditionFailsStaticAnalysis(): void
