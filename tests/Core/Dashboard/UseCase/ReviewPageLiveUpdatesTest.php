@@ -434,9 +434,29 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame(
-            ReviewOutcome::Approved->value.', 0 findings to fix. See each finding in the round below.',
+            ReviewOutcome::Approved->value.', 0 findings to fix. See the round below.',
             $updated->filter('#round-'.$id.'-now-judge')->text(),
         );
+    }
+
+    public function testTheNowBoxLinksToTheRoundWithoutPromisingFindingsWhenNoneIsLeftToFix(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'defer']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('See the round below.', $updated->filter('#round-'.$id.'-now-judge a')->text());
+    }
+
+    public function testTheNowBoxLinksToEachFindingInTheRoundWhenSomeAreLeftToFix(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('See each finding in the round below.', $updated->filter('#round-'.$id.'-now-judge a')->text());
     }
 
     // A round started without a recorded quorum has no outcome, and a policy must never be guessed.
