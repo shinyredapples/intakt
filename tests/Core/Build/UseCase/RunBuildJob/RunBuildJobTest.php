@@ -50,6 +50,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]
 #[UsesClass(JobSpec::class)]

@@ -188,6 +188,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]
 #[UsesClass(ConfiguredBuildRouting::class)]
