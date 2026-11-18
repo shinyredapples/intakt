@@ -79,6 +79,16 @@ final class TwigCommentsTest extends TestCase
         yield 'a marker behind PHP block comment syntax' => ["{# /* FIXME */ is the PHP syntax #}\n"];
         yield 'a marker behind a hash in a comment' => ["{# # TODO is shell syntax #}\n"];
         yield 'a marker behind PHP syntax in an inline comment' => ["{{ order.total # // TODO is PHP syntax\n}}\n"];
+        yield 'a marker in Markdown emphasis' => ["{## *TODO* is shown in italics in this documentation. ##}\n"];
+        yield 'a marker in Markdown strong emphasis' => ["{# **FIXME** is shown in bold #}\n"];
+        yield 'a marker in emphasis on a starred line' => ["{#\n * *XXX* is shown in italics\n #}\n"];
+    }
+
+    public function testAMarkerBehindAStarAndASpaceIsReportedWhileOneInEmphasisIsNot(): void
+    {
+        $template = "{## *TODO* is shown in italics ##}\n{# * TODO show the total #}\n{#\n *\n #}\n";
+
+        self::assertSame([2 => 'TODO'], $this->markersOn($template));
     }
 
     public function testOnlyTheTwigCommentWhoseTextStartsWithAMarkerIsReported(): void

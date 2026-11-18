@@ -16,8 +16,8 @@ final readonly class TwigComments implements CommentLanguage
     private const string EXPRESSION_STOPS = '\'"#()[]{}%';
     private const string OPENING_BRACKETS = '([{';
     private const string CLOSING_BRACKETS = ')]}';
-    // Because Twig's own delimiters are already cut off, only the stars that frame a multi-line comment are layout; a `//` or `#` is the comment's text.
-    private const string LINE_SYNTAX = '~\G\*++(?!/)\s*+~';
+    // Because Twig's own delimiters are already cut off, only the stars that frame a multi-line comment are layout; a `//` or `#` is the comment's text, and a star right before a word is Markdown emphasis.
+    private const string LINE_SYNTAX = '~\G\*++(?:\s++|$)~';
 
     public function lineSyntax(): string
     {
