@@ -87,21 +87,23 @@ final class CheckedReportsTest extends SandboxTestCase
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineNamesAWordOrNumberThatOnlyLooksLikeAReferenceIsAFinding(): void
     {
-        foreach (['none in issue #, see facade.', 'none in 1234567 lines.', 'none, see deadbeef-cafe.'] as $rest) {
+        foreach (['none in issue #, see facade.', 'none in 1234567 lines.', 'none, see deadbeef-cafe.', 'see effaced', 'n/a, see defaced', 'see ABCDEF1'] as $rest) {
             self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
         }
     }
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundWithAReferenceButWithoutADateIsAFinding(): void
     {
-        foreach (['none found, searched https://github.com/symfony/ai/pulls?q=foo', 'none found among #2800 to #2900', 'none, defaced'] as $rest) {
+        foreach (['none found, searched https://github.com/symfony/ai/pulls?q=foo', 'none found among #2800 to #2900', 'none, defaced', 'No pull requests found among #2800 to #2900', 'Nothing found, searched https://github.com/symfony/ai/pulls?q=foo', '- none, see #12'] as $rest) {
             self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
         }
     }
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundWithAReferenceAndADatePasses(): void
     {
-        self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** none found among #2800 to #2900 (checked 2026-11-07).\n- **Status:** `ready to file`\n"));
+        foreach (['none found among #2800 to #2900 (checked 2026-11-07).', 'No pull requests found among #2800 to #2900 (checked 2026-11-07).'] as $rest) {
+            self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
+        }
     }
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineHoldsOnlyADatedNotePasses(): void

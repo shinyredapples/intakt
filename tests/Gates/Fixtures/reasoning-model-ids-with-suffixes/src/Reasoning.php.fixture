@@ -22,6 +22,9 @@ final readonly class Reasoning
             'openai/o3',
             'openai:o1',
             'azure.o4',
+            '--model=o3',
+            '{"model":"o3"}',
+            'openai/o3:online',
         ];
     }
 
