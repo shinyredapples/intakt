@@ -24,7 +24,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 | After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T81, T32 (optional) | after the deadline |
 | M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
-| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82, T84 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
@@ -327,12 +327,12 @@ Conventions, in addition to the ones above:
 - **The existing loop is a reference, not a source.** Its tests and docs show which behaviors and edge cases matter (bugs hit, races, security fixes). Every task here is an Intakt feature shaped by the design; its **Reference** line names the loop behaviors and test files whose cases become its acceptance cases, rewritten as Intakt tests. Nothing is translated module by module, and nothing that only worked around the loop's own constraints is carried over (see **Not in the switch** below).
 - **Built by human-steered sessions**, reviewed by the existing loop. A task may be larger than a loop issue but stays one mergeable pull request with its own tests.
 - **Deliberate differences** from the loop are listed in `docs/architecture/differences-from-the-existing-loop.md` (created by T44, extended by each task that adds one): typed verdicts instead of parsed review text, job containers instead of system users and sandboxes, database state and Messenger instead of state files and timer locks, the judge instead of end-of-cycle triage, polling with conditional requests before webhooks.
-- **Decided constraints:** an approval is decided by the orchestrator on the spot or goes to the owner, never by a timed default; no decision needs a second AI vendor to be available (a missing vendor sends the decision to the owner); webhooks come last and stay optional; every mechanical check is a plugin per language; merges are signed fast-forwards of main; nothing public without the owner.
+- **Decided constraints:** an approval is decided by the orchestrator on the spot or goes to the owner, never by a timed default; no decision needs a second AI vendor to be available (a missing vendor sends the decision to the owner); webhooks come last and stay optional; every mechanical check is a plugin per language; merges of Intakt's own pull requests are signed fast-forwards of main, and one it did not open merges through the forge's merge API; nothing public without the owner.
 - **Owner decisions (2026-10-31):**
   1. Intakt runs on the owner's host in its own container with nesting, Docker inside and fenced from the local network like the CI runners; not a virtual machine.
   2. While both run, Intakt opens its pull requests under its own GitHub App identity; the existing loop leaves every pull request that identity opened and handles only its own.
   3. New GitHub Apps serve Intakt while both run; at takeover Intakt switches to the loop's Apps and the new ones are removed.
-  4. The two watchdogs trust each other's signed merges by a peer signing key in each one's settings, with no push notice per merge.
+  4. The two watchdogs trust each other's signed merges by a peer signing key in each one's settings, with no push notice per merge. Since the owner decision of 2026-11-04 (#850) Intakt's watchdog checks no signatures, so it names the peer by its forge identity instead (T70).
   5. Intakt's work beside the existing loop stays below 70% of the five-hour window and on weekly pace; M6 exits after at least seven days and 40 compared heads with fewer than 5% failed reviews and at most one head in ten where the loop raised a P1 the builder then fixed and Intakt approved. Since the [reviewer for the loop](#reviewer-for-the-loop-issue-1251) stage (D6 of #1434), Intakt replaces one of the loop's reviewers instead of adding one, so the lower ceiling no longer applies; the exit bar stays.
   6. A project at weekly share 0 is paused (no builds, no reviews); the switch needs no work on it.
   7. Design decision 9 changes to signed fast-forwards of main by a non-force ref update (T62).
@@ -343,7 +343,7 @@ Conventions, in addition to the ones above:
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
 | M6 Reviewer for the loop | Intakt's review takes the place of the existing loop's Claude reviewer on the owner's two projects and counts, and a weekly report compares its published verdicts with the loop's GPT reviews | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
-| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T75 to T80, T82, T84 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M6 Reviewer for the loop
@@ -392,7 +392,7 @@ T44 to T46 run in M6 alongside T37, T38, T40 and T43 (owner decision 2026-11-09,
 
 ## M7 Builder half
 
-M7 holds T39, T47 to T69, T75 to T80 and T82. T75 to T80 moved here from after the hackathon (issue #852), because approving protected changes on the spot belongs to the switch. T39 moved here from M6 with D5 of #1434, while T43 stays in M6. T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); their sections stay here.
+M7 holds T39, T47 to T69, T75 to T80, T82 and T84 (dependency-bot pull requests, issue #850). T75 to T80 moved here from after the hackathon (issue #852), because approving protected changes on the spot belongs to the switch. T39 moved here from M6 with D5 of #1434, while T43 stays in M6. T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); their sections stay here.
 
 ### T39 A Codex subscription reviewer
 - **Description:** A reviewer role runs through the Codex platform bridge on a subscription login: the login file is kept per account in the orchestrator, refreshed there, and given to the call read-only; the model and effort are pinned in config. The vendor's structured errors (usage limit, model not available for the plan, login lost) become an account cooldown or an account error with one owner notice, never a failed review or `changes`; the measured use it reports is recorded per account. The package is a new dependency the owner approves.
@@ -535,10 +535,10 @@ M7 holds T39, T47 to T69, T75 to T80 and T82. T75 to T80 moved here from after t
 - **Waits for:** T57, T54. **Size:** L. **Labels:** `class:core`, `priority:high`, `plan:required`, `model:strong`.
 
 ### T63 Watchdog over main
-- **Description:** A new `Core/Watchdog` checks main's new commits before every step and merge: a merge Intakt recorded, or a commit signed by a key the owner registered, passes (the owner's own push is an info event); an unsigned commit, an unknown key or a rewrite of main's history halts the project with an owner card that only the owner clears.
-- **Reference:** `test_watchdog.py` (a recorded merge is clean, unsigned halts, a foreign key, a force push, an owner-signed commit is a notice given once across clones).
-- **Acceptance:** each case above.
-- **Evidence:** a halt and its card after a seeded unsigned commit on a temporary repository.
+- **Description:** A new `Core/Watchdog` checks main's new commits before every step and merge by how each arrived, never by its signature ([Merge](design/05-architecture/08-merge.md#watching-main)): a merge Intakt recorded passes; a commit the forge reports as part of a pull request merged into main by an account with write access, and one a person with write access pushed to main, are info events (a direct push also shows on the dashboard as "pushed without the gate", and main's CI result on it is watched as for any merge). A rewrite of main's history, a commit the forge cannot attribute to a merged pull request or to a write-access pusher, a merger or pusher without write access, a direct push by a bot or App account, and a commit Intakt's own identity (its App or the maintainer agent's) pushed or merged that Intakt's record lacks halt the project with an owner card that names the commit and the reason and that only the owner clears. Signatures are recorded as the forge reports them; requiring them is an opt-in project setting, off by default, under which the forge's verification counts. The dashboard shows when the watchdog is main's only protection.
+- **Reference:** `test_watchdog.py` (a recorded merge is clean, a force push, a notice given once across clones); its signature cases are not carried over (owner decision 2026-11-04, #850).
+- **Acceptance:** each case above against a recorded forge history, with the tests the [parity](architecture/parity.md) line names.
+- **Evidence:** a halt and its card after a seeded direct push by a bot account, and the info event for a seeded pull request merged by a write-access account, on a temporary repository with a fake forge.
 - **Waits for:** T62. **Size:** M. **Labels:** `class:core`, `priority:high`, `model:strong`.
 
 ### T64 Owner approval of protected heads
@@ -555,6 +555,12 @@ M7 holds T39, T47 to T69, T75 to T80 and T82. T75 to T80 moved here from after t
 - **Acceptance:** each case above; a label from an account without write access changes nothing; `hands-off` on a running build keeps its unpushed work as a bundle and publishes nothing produced after the label; `hands-off` set while a merge is about to publish stops the merge; `hands-off` beats `urgent` and the maintainer agent; after hand-back the head gets one full review and hand-made commits use no cycle; a non-writer's commits reach the builder fenced; `take-over` on a pull request of another author gets reworked and merged, on a fork it makes a linked pull request with the trailers and one comment, on a protected-path change it is refused once naming the files; `take-over` on an issue by a non-writer builds it with the text fenced and an edit afterwards needs the label again.
 - **Evidence:** an owner-opened test pull request reviewed and merged (owner provides: needs a live forge); tests with a fake forge for each hand-over case above.
 - **Waits for:** T64. **Size:** L. **Labels:** `class:core`, `priority:high`.
+
+### T84 Dependency-bot pull requests
+- **Description:** A pull request from a dependency bot the project names (Dependabot, Renovate; on by default for the forge's own bot), authenticated by the forge, is taken without a label ([Merge](design/05-architecture/08-merge.md#dependency-bots)). A diff beyond manifest and lock files (and CI action pins, protected) is refused with one comment. Review, CI and the dependency-policy adapter run as for any change, the owner approves the head once, and it merges in place through the forge's merge API, recorded as Intakt's merge. For a diff that only touches the manifest and lock file, Intakt writes the Evidence (version changes, upstream release notes, lock-file consistency, the dependency audit, CI on the head) and reviewers are told not to ask the bot for it. A red check files one `urgent` task with the failing excerpt and the packages that moved, carrying the earliest open milestone; the pull request is checked again after that task merges, and the task is closed with a comment naming the replacement when the bot closes or supersedes the pull request. Setup recommends a release-age cooldown (security updates exempt) and grouped related packages.
+- **Acceptance:** with a fake forge: a bot pull request is taken without a label, one from an unnamed or unauthenticated author is not; a diff touching another file is refused with one comment; the Evidence lists each moved package; a red check files one urgent task with the earliest open milestone, a second red check on the same pull request files none, and a superseded pull request closes its task naming the replacement.
+- **Evidence:** the taken, refused and superseded cases against a fake forge; a real Dependabot pull request merged in place (owner provides).
+- **Waits for:** T65, T77. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ### T66 Catch-up reviews
 - **Description:** When the T14 substitution replaced a reviewer whose vendor was out, the merge records an owed catch-up review; when that vendor has room again, catch-ups run one at a time, merges touching sensitive paths first, then oldest, never ahead of a live head waiting for that reviewer ([Reviews](design/05-architecture/07-reviews.md)). The record is written before the publish, so a crash neither loses nor doubles a catch-up. A rejecting catch-up files a task naming the merged pull request, with the review inside an external block, redacted and scanned like review text (a hit files nothing and is a failed catch-up); the task inherits no steering label and is built only once a person labels it. An approval's follow-ups go to the follow-up inbox. A catch-up that returns `blocked` or no valid verdict is retried once on another account of the same vendor, then handed to the maintainer agent, and given up after three attempts with one owner notice. Each catch-up's state is on the dashboard.
@@ -635,7 +641,7 @@ T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.m
 Each stage starts with the owner's go and can be rolled back to the previous one by config.
 
 ### T70 Living beside the existing loop
-- **Description:** A project names its own eligibility label (default `intakt`), distinct from the existing loop's; Intakt's watchdog accepts the loop's signing key as a peer (its merges are info events); Intakt leaves pull requests the loop owns and opens its own under its App identity. The loop side needs the matching settings (Intakt's signing key as a peer, without a push notice, and skipping pull requests opened by Intakt's App), outside this repository.
+- **Description:** A project names its own eligibility label (default `intakt`), distinct from the existing loop's; Intakt's watchdog accepts the loop's forge identity as a peer (its merges are info events, never the halt of a bot's direct push); Intakt leaves pull requests the loop owns and opens its own under its App identity. The loop side needs the matching settings (Intakt's signing key as a peer, without a push notice, and skipping pull requests opened by Intakt's App), outside this repository.
 - **Acceptance:** a loop merge on main passes Intakt's watchdog as an info event; a task with the loop's label only is not eligible.
 - **Evidence:** both watchdogs clean after one merge by each, `(owner provides)` the loop side.
 - **Waits for:** T63, T47. **Size:** S. **Labels:** `class:core`, `priority:high`.
@@ -674,5 +680,5 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37.
 - The first weeks of the weekly report (after T43) run while M7 is built.
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
-- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76.
+- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76; T84 after T65 and T77.
 - M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.

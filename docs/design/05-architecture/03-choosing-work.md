@@ -18,6 +18,10 @@ How a task (its issue on the forge) becomes a build. Every step is cheap and run
 
 **A `hands-off` item is never admitted.** Step 1 treats it like a closed one, whatever its other labels, `urgent` included; removing the label gives it back ([Labels](04-labels.md#who-drives-an-item)).
 
+## Dependency-bot pull requests
+
+A pull request from a dependency bot the project names ([Merge](08-merge.md#dependency-bots)) is work without the eligibility label: the forge's authentication of the bot account stands in for the label and the trusted-author check of step 1, and its text is fenced like any third-party text. It is reviewed and merged as it is, never built or reworked. When CI fails on its head, the one task Intakt files for it is `urgent`, so it is picked before any milestone's critical path (step 5), and it carries the earliest open milestone, so it counts toward that milestone. When the bot closes or supersedes the pull request, Intakt closes the task with a comment naming the replacement, so no task stays ready for a pull request that is gone.
+
 ## Taking over an issue Intakt would not build
 
 An issue written or last edited by someone without write access is not eligible (step 1). When a person with write access sets `take-over`, the label stands in for the authorship check: that person has read the issue and vouches for building on it. The reason is that people outside the project report real work, and refusing it until someone retypes it wastes the writer's time. The issue's text stays inside an external block, so the builder reads it as data, never as instructions ([Threat model](14-threat-model.md#third-party-text)). Edits to the issue after the label make it ineligible again until the label is set again, because the label vouched for the text as it was. The other steps (ready, sized, planned, prioritized, scheduled) apply as for any task.

@@ -144,6 +144,14 @@ The CI image cache is written only by runs on main, never by a pull request: a p
 
 A persistent self-hosted runner is not supported. The workflow scan cannot tell an ephemeral runner from a persistent one, so self-hosted runners always need the owner's approval for a CI change ([Merge](08-merge.md)).
 
+## What the watchdog trusts
+
+The watchdog over main ([Merge](08-merge.md#watching-main)) trusts how a commit arrived, not who signed it. It used to require that every commit on main be a merge Intakt recorded or be signed by a key the owner registered, and that signature was the guard against a stolen forge token, which holds no signing key. What makes the new rule safe:
+- **The forge's write-access check.** A commit is accepted only when the forge attributes it to a pull request merged into main by an account with write access, or to a push by such an account; a commit it cannot attribute, or one from an account without write access, halts. The watchdog trusts no account the forge itself would not let merge or push.
+- **The gate approves protected paths.** A protected change is authorized by the approval of exactly its head ([Merge](08-merge.md#pull-requests-intakt-did-not-open)), never by the signing key of its commits, so a contributor's or a bot's commits gain nothing from a key and lose nothing without one.
+- **A stolen token halts.** The token most worth stealing is Intakt's own (its App's or the maintainer agent's), since it has write access to every project. Intakt never lands a commit without recording it, so a commit on main that its own identity pushed or merged and its record lacks halts at once, never as a notice. A direct push to main by any bot or App account halts too, since bots land changes through pull requests; only a person's direct push is an info event. These two rules take the place of the signature.
+- **What stays open.** A taken-over person's account with write access can push to main, as it could merge in the forge's interface. The push is shown as "pushed without the gate" and main's CI on it is watched; the forge's branch protection, which setup recommends, is what stops it. A project that wants signatures turns on the opt-in signed-commit setting, and the forge's verification then counts.
+
 ## Tests of the defenses
 
 - **A fencing gate.** A test lists every input of every prompt builder; a new input fails it until it goes through the fencing helper or is argued onto an allow-list of values Intakt itself writes.

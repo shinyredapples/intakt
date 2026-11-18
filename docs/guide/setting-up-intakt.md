@@ -58,6 +58,13 @@ flowchart LR
 
 The checks the foundation creates become **protected**: you approve them once, and from then on no builder can weaken them ([why](why-the-ai-cant-wreck-your-project.md)).
 
+## Protecting main and package updates
+
+This part is planned, not built yet.
+- **Main's protection:** where your GitHub plan offers it, setup recommends turning on branch protection for main: required checks from Intakt's account, no force-pushes and no deletion. Without it, Intakt's watchdog is main's only guard, and the dashboard says so.
+- **Signed commits are optional:** off by default, so the first install stays simple. You can require them per project; GitHub's own check of the signature then counts.
+- **Robot accounts that update packages** (such as Dependabot or Renovate): Intakt takes their pull requests without a label, as long as they only change package and lock files, reviews and checks them like any change, and asks you to approve once. Setup recommends waiting about 3 days after a release before updating (longer for big version jumps), except security fixes, which go at once, and grouping related packages, such as a framework's, into one update.
+
 ## The smallest setup
 
 One subscription and one modest machine is enough. This part is planned, not built yet. Intakt looks at what the install has each time it starts work, and with one account it runs one builder and one reviewer. It does not run two builds at once, because one build can need about 5 GB of memory. A change to protected files, a security-relevant change or a large change gets a second review by another model of the same vendor; a change that only touches docs or tests gets one review. Tasks that would be big are split earlier, because redoing a large change costs the most.
