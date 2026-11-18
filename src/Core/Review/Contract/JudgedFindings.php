@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Matched by id because the judge's answer is data, and prose of a finding is never read; a P1 or P2 is always on the act list whatever its mark, and a P3 with no mark or marked reject is on neither list.
+// Matched by id because the judge's answer is data, and prose of a finding is never read; a P1 or P2 is always on the act list whatever its mark (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and a P3 with no mark or marked reject is on neither list.
 #[Exclude]
 final readonly class JudgedFindings
 {
@@ -16,6 +16,7 @@ final readonly class JudgedFindings
      * @param list<FollowUp>        $followUps
      * @param list<DroppedFinding>  $dropped
      * @param array<string, string> $sameCause
+     * @param array<string, string> $notes
      */
     private function __construct(
         public array $findings,
@@ -23,6 +24,7 @@ final readonly class JudgedFindings
         public array $followUps,
         public array $dropped,
         public array $sameCause,
+        public array $notes,
     ) {
     }
 
@@ -47,6 +49,26 @@ final readonly class JudgedFindings
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause);
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, self::notesOf($judgement, $findings));
+    }
+
+    // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
+    /**
+     * @param list<Finding> $findings
+     *
+     * @return array<string, string>
+     */
+    private static function notesOf(Judgement $judgement, array $findings): array
+    {
+        $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, static fn (Finding $finding): bool => Severity::P3 !== $finding->severity));
+        $notes = [];
+
+        foreach ($judgement->marks as $judged) {
+            if (null !== $judged->note && Mark::Act !== $judged->mark && in_array($judged->id, $blocking, true)) {
+                $notes[$judged->id] = $judged->note;
+            }
+        }
+
+        return $notes;
     }
 }

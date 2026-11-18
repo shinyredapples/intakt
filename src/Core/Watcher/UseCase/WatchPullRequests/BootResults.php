@@ -15,12 +15,15 @@ use Intakt\Core\Review\Contract\BootHarnessAtMain;
 use Intakt\Core\Review\Contract\BootOutcome;
 use Intakt\Core\Review\Contract\BootState;
 use Intakt\Core\Review\Contract\ChangeSource;
+use Intakt\Core\Watcher\Contract\FailingMain;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\BootRecord;
 use Intakt\Plugin\Forge\Contract\CommitId;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\LockInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 use Throwable;
@@ -37,6 +40,7 @@ final readonly class BootResults
         private Redactor $redactor,
         private LoggerInterface $logger,
         private ManagerRegistry $registry,
+        private LockFactory $locks,
     ) {
     }
 
@@ -52,13 +56,17 @@ final readonly class BootResults
         }
 
         if ($stored instanceof BootRecord && $stored->answersAt($now)) {
+            $outcome = $stored->outcome();
+
             if ($stored->alertPending()) {
-                $this->alert($key, $stored->outcome());
+                $this->alert($key, $outcome);
                 // Forgotten, because the claim changed the row behind the entity manager, which would keep answering with the pending alert.
                 $this->entities->detach($stored);
             }
 
-            return $stored->outcome();
+            $this->recordChangeBackTo($key, $outcome);
+
+            return $outcome;
         }
 
         $outcome = $this->safe($this->boot(new BootHarness(new BootAt($source, $key->main))));
@@ -181,5 +189,45 @@ final readonly class BootResults
         } catch (Throwable $unrecorded) {
             $this->logger->error("Main's computed boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
         }
+    }
+
+    // Recorded only when the board shows otherwise, because the board reads it from the ledger, which a stored result never reaches when main or the tools go back to a pair already seen; a repeated hit of the same state, or a crash, changes nothing the board shows.
+    private function recordChangeBackTo(BootKey $key, BootOutcome $outcome): void
+    {
+        if (BootState::Crashed === $outcome->state) {
+            return;
+        }
+
+        // Not released on destruction, because recordWhileHolding() gives it back itself.
+        $lock = $this->locks->createLock('watcher-main-boot-'.hash('sha256', $key->project), autoRelease: false);
+
+        try {
+            $this->recordWhileHolding($lock, $key, $outcome);
+        } catch (Throwable $unrecorded) {
+            $this->logger->error("Main's stored boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
+        }
+    }
+
+    // Read and appended under one lock per project, because two hits that both read the board before either appends would record the same change twice. Tried without waiting, because the review must not wait on it, and a hit that finds it busy appends nothing: the board then ends as if the dropped hit had come just before the holder's, and the next hit of the current main reads the board again and corrects it.
+    private function recordWhileHolding(LockInterface $lock, BootKey $key, BootOutcome $outcome): void
+    {
+        if (!$lock->acquire(false)) {
+            return;
+        }
+
+        try {
+            if ($this->boardShowsOtherThan($key, $outcome)) {
+                $this->ledger->bootResultReadFromStore($key, $outcome);
+            }
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function boardShowsOtherThan(BootKey $key, BootOutcome $outcome): bool
+    {
+        $shown = $this->ledger->failingMainOf($key->project);
+
+        return BootState::Booted === $outcome->state ? $shown instanceof FailingMain : true !== $shown?->isOf($key->main->hash, $key->toolFingerprint);
     }
 }
