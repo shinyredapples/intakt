@@ -12,7 +12,7 @@ flowchart TD
     open --> queue[("async queue: one ReviewWithReviewer per reviewer")]
     queue --> w1["Worker: reviewer 1 reads the snapshot with the read-only tools"]
     queue --> w2["Worker: reviewer 2"]
-    w1 --> verdicts["Verdicts: approve, changes or blocked, with findings"]
+    w1 --> verdicts["Verdicts: approve or changes with findings (a reviewer's blocked with findings is recorded as changes), or blocked from Intakt"]
     w2 --> verdicts
     verdicts --> complete{"Every reviewer in?"}
     complete -->|no| wait["The round stays collecting"]

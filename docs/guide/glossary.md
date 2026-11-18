@@ -76,6 +76,6 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Take-over** | a label that hands Intakt an issue or pull request it did not create (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Test engineer** (planned, optional) | an AI agent that keeps the tests fast without losing what they prove | [how it works](how-intakt-works.md) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
-| **Verdict** | a reviewer's answer: approve, changes with findings, or blocked (held for a person) | [journey](the-journey-of-a-task.md#5-reviewing) |
+| **Verdict** | a reviewer's answer: approve, or changes with findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings counts as changes | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Waiting on you** | the dashboard column with only what needs a person | [dashboard](a-tour-of-the-dashboard.md#waiting-on-you) |
 | **Window** | an AI allowance that refills: five-hour and weekly | [costs](accounts-and-costs.md) |
