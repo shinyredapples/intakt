@@ -85,11 +85,12 @@ So such a reviewer can ask for more work, but it can never pass a change on its 
 
 ## Layer 5: the rules protect themselves
 
-The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions, the rules for adding libraries, the scripts that start a test copy of the app) are **protected files**. A change to them gets extra care, and one of exactly two answers, given at once:
+The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions, the rules for adding libraries, the scripts that start a test copy of the app) are **protected files**. A change to them gets extra care, and one of exactly two answers, given at once unless the Security engineer cannot run:
 
 | The change... | Who approves it |
 |---|---|
 | passes every mechanical check, the Security engineer's security review agrees, and its penetration test finds no way past the changed check, and it is neither a change to how Intakt approves nor to secrets and permissions | Intakt, at once, and it lists the change on the dashboard for a week (planned: until this is built, every rule change goes to you) |
+| needs the security review or the penetration test, and that session cannot run (for example its account hit its usage limit) | nobody yet: it waits without an answer and carries on by itself when a session runs again (planned, see [below](#when-intakt-asks-you-and-why)) |
 | anything else | you, with the reason |
 
 So a change can never quietly switch off the check that would have caught it, and Intakt can never widen its own powers.
