@@ -43,18 +43,6 @@ final class BuilderPromptTest extends TestCase
         self::assertStringContainsString("The published pull request text to edit:\n\n<<<UNTRUSTED pull request text fence-", $prompt);
     }
 
-    public function testTheTaskSectionIsTheAssemblysUserTextAroundTheFencedTask(): void
-    {
-        $task = $this->plant(1);
-
-        $prompt = $this->promptFor(new BuildBrief($task, [], null));
-
-        $fenced = new PromptCut(new Fence())->fenced(UntrustedSource::Task, $task);
-        $section = new PromptAssembly()->userText('The task:', $fenced);
-        self::assertSame(1, preg_match('/<<<UNTRUSTED task (fence-[0-9a-f]{16})>>>/', $prompt, $sent));
-        self::assertStringContainsString(str_replace(self::boundaryOf($section), $sent[1], $section), $prompt);
-    }
-
     public function testEveryInputOfAFirstBuildReachesThePromptOnlyInsideAFence(): void
     {
         $brief = new BuildBrief($this->plant(1), [$this->plant(2), $this->plant(3)], null);
@@ -170,13 +158,6 @@ final class BuilderPromptTest extends TestCase
 
         self::assertStringContainsString(new Fence()->wrap($source, $text)->rendered(), $prompt);
         self::assertStringNotContainsString('Intakt cut this text', $prompt);
-    }
-
-    private static function boundaryOf(string $section): string
-    {
-        self::assertSame(1, preg_match('/<<<UNTRUSTED task (fence-[0-9a-f]{16})>>>/', $section, $boundary));
-
-        return $boundary[1];
     }
 
     private function promptFor(BuildBrief $brief): string

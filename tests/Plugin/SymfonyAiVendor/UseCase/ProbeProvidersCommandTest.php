@@ -20,6 +20,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\TextResult;
@@ -66,6 +67,7 @@ final class ProbeProvidersCommandTest extends TestCase
 
     public function testTheProbeSendsExactlyOneUserMessageHoldingTheFixedProbePrompt(): void
     {
+        /** @var ArrayObject<int, TierRequest> $requests */
         $requests = new ArrayObject();
         $invoker = self::createStub(TierInvoker::class);
         $invoker->method('invoke')->willReturnCallback(static function (ResolvedModel $model, TierRequest $request) use ($requests): DeferredResult {
@@ -78,7 +80,7 @@ final class ProbeProvidersCommandTest extends TestCase
 
         self::assertCount(2, $requests);
         foreach ($requests as $request) {
-            self::assertInstanceOf(TierRequest::class, $request);
+            self::assertInstanceOf(MessageBag::class, $request->input);
             $messages = $request->input->getMessages();
             self::assertCount(1, $messages);
             self::assertInstanceOf(UserMessage::class, $messages[0]);
