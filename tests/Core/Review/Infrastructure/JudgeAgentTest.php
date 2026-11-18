@@ -211,6 +211,16 @@ final class JudgeAgentTest extends KernelTestCase
         self::assertStringContainsString('give your reason as note', (string) $schema->description);
     }
 
+    public function testThePromptDefinesEveryMarkForAP1OrP2AndForAP3AndAsksForANoteWhenAP1OrP2IsInDoubt(): void
+    {
+        $this->judge(['F1' => Severity::P2], '{"marks":[{"id":"F1","mark":"act"}]}');
+
+        self::assertMatchesRegularExpression('/For a finding of severity P1 or P2:\\\\n- act: [^\\\\]+\\\\n- defer: [^\\\\]+Give your reason as note\.\\\\n- reject: [^\\\\]+Give your reason as note\./', $this->sent[0]);
+        self::assertMatchesRegularExpression('/For a finding of severity P3:\\\\n- act: [^\\\\]+\\\\n- defer: [^\\\\]+\\\\n- reject: /', $this->sent[0]);
+        self::assertStringContainsString('When unsure about a P3 finding, choose act. When you doubt a P1 or P2 finding, mark it defer or reject and say why in note', $this->sent[0]);
+        self::assertStringNotContainsString('When unsure, choose act.', $this->sent[0]);
+    }
+
     /**
      * @param array<string, Severity> $findings
      */
