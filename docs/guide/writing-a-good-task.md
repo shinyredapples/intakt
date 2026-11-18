@@ -19,6 +19,8 @@ flowchart LR
 
 A task that fails one of them is not built. Intakt leaves one comment listing what is missing, and picks the task up again once you have added it.
 
+Planned: before the first build, the Tech lead adds a short brief to a task that passed: the change in a few lines, the files it touches, the one command that shows it works, and how anyone can see that it is done. You do not write the brief, but clear acceptance and evidence in your task make a good one.
+
 ## The template
 
 Copy this into a new issue and fill it in:

@@ -21,7 +21,7 @@ This is the only statement of it; every readiness rule in the design points here
 
 1. It states one outcome, an observable result and acceptance criteria.
 2. It fits the size contract, or it has been split into parts that do ([Choosing work](05-architecture/03-choosing-work.md)).
-3. It has a plan: the files, the approach and the risks.
+3. It has a plan: the files, the approach and the risks; before its first build, also a [brief](05-architecture/03-choosing-work.md#the-brief) that passes its check (planned).
 4. Every item of its Evidence list can be produced inside a job's sandbox; evidence only the owner or the orchestrator can produce is marked as such.
 5. It names the docs the change will touch.
 6. It names what it waits for (`Waits for #n`) and, for a split part, its source.
