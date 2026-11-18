@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Platform\Contract;
 
+use Intakt\Core\Platform\Contract\HeaderSpans;
+use Intakt\Core\Platform\Contract\HeldCredentialSpans;
 use Intakt\Core\Platform\Contract\Redaction;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(Redaction::class)]
+#[CoversClass(HeldCredentialSpans::class)]
+#[CoversClass(HeaderSpans::class)]
 final class RedactionTest extends TestCase
 {
     public function testItRedactsAHeldCredentialWhereverItAppears(): void
