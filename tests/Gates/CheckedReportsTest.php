@@ -92,7 +92,7 @@ final class CheckedReportsTest extends SandboxTestCase
 
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineNamesAWordOrNumberThatOnlyLooksLikeAReferenceIsAFinding(): void
     {
-        foreach (['none in issue #, see facade.', 'none in 1234567 lines.', 'none, see deadbeef-cafe.', 'see effaced', 'n/a, see defaced', 'see ABCDEF1'] as $rest) {
+        foreach (['none in issue #, see facade.', 'none in 1234567 lines.', 'none, see deadbeef-cafe.', 'see effaced', 'n/a, see defaced', 'see ABCDEF1', 'See [search](https://)', 'see https://.', 'see <https://>'] as $rest) {
             self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
         }
     }

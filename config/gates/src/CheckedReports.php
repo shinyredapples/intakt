@@ -32,8 +32,8 @@ final readonly class CheckedReports
 
     private const string PULL_REQUESTS_LINE = '/^- \*\*Pull requests and commits:\*\*[ \t]*(?<rest>\S.*)$/m';
 
-    // A pull request number, a URL or a commit hash with at least one letter and one digit, because a line that names none of them ("none", "-") says what was found only through the date of the search, and a word of hex letters alone ("defaced") or a number alone names no commit.
-    private const string REFERENCE = '~#\d+\b|\bhttps?://\S|(?<![\w-])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![\w-])~';
+    // A pull request number, a URL with a host name ("https://" alone names nothing) or a commit hash with at least one letter and one digit, because a line that names none of them ("none", "-") says what was found only through the date of the search, and a word of hex letters alone ("defaced") or a number alone names no commit.
+    private const string REFERENCE = '~#\d+\b|\bhttps?://(?:[\w-]+\.)+[A-Za-z]{2,}|(?<![\w-])(?=[0-9a-f]*[a-f])(?=[0-9a-f]*\d)[0-9a-f]{7,40}(?![\w-])~';
 
     // Read as the start of the text, like READY, because a line that found nothing carries the date of the search even when it names what was searched; no \b, which "_none found_" would defeat.
     private const string NONE = '/^[`*_\s-]*(?:none|nothing|no)(?![\p{L}\p{N}])/iu';

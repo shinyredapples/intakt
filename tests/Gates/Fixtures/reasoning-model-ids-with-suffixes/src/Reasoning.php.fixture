@@ -27,6 +27,7 @@ final readonly class Reasoning
             'openai/o3:online',
             '--model=o3 --format=json',
             'Use openai/o3 for this request.',
+            'Use openai:o1 for this request.',
         ];
     }
 
