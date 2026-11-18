@@ -145,7 +145,11 @@ final class UsageLedgerTest extends TestCase
     private function textWithUsage(int $promptTokens): TextResult
     {
         $text = new TextResult('{}');
-        $text->getMetadata()->add('token_usage', new TokenUsage(promptTokens: $promptTokens, completionTokens: 20, totalTokens: $promptTokens + 20));
+        $text->getMetadata()->add('token_usage', new TokenUsage(
+            promptTokens: $promptTokens,
+            completionTokens: 20,
+            totalTokens: $promptTokens + 20,
+        ));
 
         return $text;
     }
