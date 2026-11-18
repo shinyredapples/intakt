@@ -55,7 +55,7 @@ final class GitHubConfigurationTest extends TestCase
     public function testAnInvalidReserveIsRefusedWithTheKeysPath(mixed $share): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('intakt.github.reserve_percent');
+        $this->expectExceptionMessageMatches('/path "intakt\.github\.reserve_percent"/');
 
         $this->reserveOf(['github' => ['reserve_percent' => $share]]);
     }
@@ -63,7 +63,7 @@ final class GitHubConfigurationTest extends TestCase
     public function testAnUnknownKeyInTheGithubSectionIsRefused(): void
     {
         $this->expectException(InvalidConfigurationException::class);
-        $this->expectExceptionMessage('reserve_percnt');
+        $this->expectExceptionMessageMatches('/Unrecognized option "reserve_percnt" under "intakt\.github"/');
 
         $this->reserveOf(['github' => ['reserve_percnt' => 30]]);
     }
