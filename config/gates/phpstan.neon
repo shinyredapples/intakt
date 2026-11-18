@@ -28,6 +28,8 @@ rules:
     - Intakt\Gates\PhpStan\ContainerUnknownHasIdRule
     - Intakt\Gates\PhpStan\ContainerUnknownParameterRule
     - Intakt\Gates\PhpStan\ContainerUnknownGetIdRule
+    - Intakt\Gates\PhpStan\FinalClassRule
+    - Intakt\Gates\PhpStan\NoStaticPropertyRule
 
 services:
     -

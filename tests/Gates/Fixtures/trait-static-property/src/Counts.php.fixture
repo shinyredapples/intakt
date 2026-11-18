@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Counts
+{
+    protected static int $seen = 0;
+
+    public function seen(): int
+    {
+        return ++self::$seen;
+    }
+}

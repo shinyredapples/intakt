@@ -18,7 +18,7 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 
 ## Code
 
-- `declare(strict_types=1)`, final classes, `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
+- `declare(strict_types=1)`, final classes (enforced), `readonly` where possible, no public setters, no static state (enforced), no service locator, no magic methods, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
 - Small methods, early returns, no flag parameters, at most three parameters (unless a vendor method's signature fixes more), no `else` after a jump, no nested `try` (enforced). Constructors are exempt from the parameter limit (they hold dependencies or a value's fields); split a service whose dependencies keep growing by responsibility, not by count.
 - Arguments are positional by default. Name one only where its value does not explain itself at the call site: a bare boolean, `null`, an unclear number or string literal, several scalars of the same type in a row, or skipped optional parameters; not when the variable name or type already says it.

@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final class Counter
+{
+    private static int $count = 0;
+
+    public function count(): int
+    {
+        return ++self::$count;
+    }
+}
