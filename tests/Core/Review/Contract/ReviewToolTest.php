@@ -16,7 +16,7 @@ use Symfony\AI\Platform\Result\ToolCall;
 final class ReviewToolTest extends TestCase
 {
     /**
-     * @param array<mixed> $arguments
+     * @param array<string, mixed> $arguments
      */
     #[DataProvider('calls')]
     public function testACallReadsInPlainWords(ReviewTool $tool, array $arguments, string $words): void
@@ -25,7 +25,7 @@ final class ReviewToolTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{ReviewTool, array<mixed>, string}>
+     * @return iterable<string, array{ReviewTool, array<string, mixed>, string}>
      */
     public static function calls(): iterable
     {
@@ -42,7 +42,7 @@ final class ReviewToolTest extends TestCase
 
     // The model writes the arguments, so a malformed one must still give a line and never the raw value.
     /**
-     * @param array<mixed> $arguments
+     * @param array<string, mixed> $arguments
      */
     #[DataProvider('malformedCalls')]
     public function testACallWithAMalformedArgumentReadsAsTheCallWithoutIt(ReviewTool $tool, array $arguments, string $words): void
@@ -51,7 +51,7 @@ final class ReviewToolTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{ReviewTool, array<mixed>, string}>
+     * @return iterable<string, array{ReviewTool, array<string, mixed>, string}>
      */
     public static function malformedCalls(): iterable
     {

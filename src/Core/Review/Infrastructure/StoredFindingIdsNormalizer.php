@@ -42,7 +42,7 @@ final class StoredFindingIdsNormalizer implements NormalizerInterface, Denormali
     /**
      * @param array<string, mixed> $context
      */
-    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): FindingIds|SameCause
+    public function denormalize(mixed $data, string $type, ?string $format = null, array $context = []): mixed
     {
         $strings = $this->stringsIn($data, $type);
 

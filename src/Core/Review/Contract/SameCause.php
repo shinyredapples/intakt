@@ -13,12 +13,15 @@ use Traversable;
  */
 final readonly class SameCause implements IteratorAggregate
 {
-    /** @var array<string, string> */
+    /** @var array<array-key, string> */
     private array $causes;
 
     public function __construct()
     {
-        $this->causes = [];
+        // Typed as the property, because with() fills it through clone() and static analysis would read it as always empty.
+        /** @var array<array-key, string> $none */
+        $none = [];
+        $this->causes = $none;
     }
 
     public function with(string $finding, string $cause): self

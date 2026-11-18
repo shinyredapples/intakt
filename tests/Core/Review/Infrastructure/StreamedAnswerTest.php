@@ -12,6 +12,7 @@ use Intakt\Core\Review\Infrastructure\AnthropicTextBlocks;
 use Intakt\Core\Review\Infrastructure\StreamedAnswer;
 use Intakt\Core\Review\Infrastructure\StreamTally;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Platform\Exception\BadRequestException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
