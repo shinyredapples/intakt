@@ -89,6 +89,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PathGlob;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
@@ -941,7 +942,7 @@ final class BuildTaskTest extends TestCase
 
     private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
     {
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence()), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
