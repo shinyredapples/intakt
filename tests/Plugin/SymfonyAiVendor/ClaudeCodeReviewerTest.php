@@ -351,6 +351,23 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
         yield 'a read without its result' => ['review-server-read-unanswered'];
         yield 'a read through another server' => ['other-server-read'];
         yield 'a read embedded in the answer text' => ['review-server-read-in-text'];
+        yield 'a read from a stream that never reports the server connected' => ['review-server-read-without-status'];
+    }
+
+    public function testAnApprovalFromACliWhoseReviewServerConnectedButReadNothingIsRefused(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('review-server-connected-unread'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
+    }
+
+    public function testAnApprovalFromACliWhoseReviewServerNeverConnectedIsRefused(): void
+    {
+        $verdict = $this->vendor(RecordedClaudeCodeCli::replaying('review-server-not-connected'), servers: $this->servers())->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Blocked, $verdict->verdict);
+        self::assertSame(Verdict::UNREAD_APPROVAL, $verdict->findings[0]->id);
     }
 
     public function testAnApprovalFromACliStartedWithoutTheReviewServerForWantOfARoundIsStillRefused(): void
