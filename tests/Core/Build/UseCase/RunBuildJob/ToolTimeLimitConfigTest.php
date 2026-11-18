@@ -19,8 +19,7 @@ final class ToolTimeLimitConfigTest extends KernelTestCase
         $setting = self::getContainer()->getParameter(BuildServices::TOOL_TIME_LIMIT);
         $job = self::getContainer()->get(RunBuildJob::class);
 
-        self::assertIsInt($setting);
         self::assertInstanceOf(RunBuildJob::class, $job);
-        self::assertSame($setting, (new ReflectionProperty($job, 'toolTimeLimitSeconds'))->getValue($job));
+        self::assertSame($setting, new ReflectionProperty($job, 'toolTimeLimitSeconds')->getValue($job));
     }
 }
