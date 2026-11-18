@@ -85,11 +85,11 @@ Each card shows the task, its size, which builder slot and AI model is on it, ho
 ## Starting a task from the dashboard
 
 *(Planned.)* Next to the project filter at the top sits a **New task** box. Type what you want built in plain words and choose the project (when the filter shows one project, that one is chosen for you; otherwise you pick it). Intakt's Tech lead reads your words and the project, and writes a draft task: a title, what should come out of it, the decisions, how to tell it is done, how big it is, and which milestone, priority and earlier tasks it would wait on.
-- **Nothing happens until you approve.** The draft shows up for you to **edit**, **approve** or **discard**. Only approve puts it on GitHub, as an issue with the labels of a task that is ready. From there it is a task like any other: it is checked, built, reviewed and approved the usual way, and the issue is its record.
+- **Nothing happens until you approve.** The draft shows up for you to **edit**, **approve** or **discard**. Only approve puts it on the project's forge (GitHub, for example), as an issue with the labels of a task that is ready. From there it is a task like any other: it is checked, built, reviewed and approved the usual way, and the issue is its record.
 - **One task per box.** If your words describe work for two projects, you get one draft for each. If they name another project than the one you chose, the draft says so and asks which one you meant.
 - **Too big for one go:** the draft shows the parts it should be split into, and approve files them all at once.
 - **It costs the project's share.** Writing the draft uses a little of that project's share of the week. When the share or the accounts are used up, the box says so and your draft waits until there is room; it is not thrown away.
-- **Only you.** Like the buttons on a card, the box asks for your owner secret or passkey ([steering budgets and pauses](#steering-budgets-and-pauses)), and no other website, agent or job can use it. Your words are treated as text to read, never as orders to the AI, so text you paste from elsewhere can't steer it.
+- **Only you.** Like the buttons on a card, the box asks for your owner secret or passkey ([steering budgets and pauses](#steering-budgets-and-pauses)), and no other website, agent or job can use it. The box, your words and the drafts only show once you are signed in, even on your own computer. Your words are handed to the AI marked as text to read, not as orders. That makes it harder for text you paste from elsewhere to steer the AI, but it is no guarantee: that is why nothing is filed until you have read the draft and approved it yourself.
 
 ## Waiting on you
 
