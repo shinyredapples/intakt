@@ -128,7 +128,7 @@ flowchart TD
 ## Around the board
 
 - **Lanes and slots** (a strip above the board, called **Who is working**): it says how many are working and opens to one card for each reviewer running now, with its change, project, round and the time it started. A small meerkat head sits before each reviewer's role; it is only a picture, and the words beside it say everything. While nobody is working it is just the line "Nobody is working", with nothing to open; on a new install it adds what will show up there: "Nobody is working yet: reviewers appear here while they review a change". The builder slots join it later (planned), so there is no idle count yet.
-- **Budgets:** each AI account's windows (five-hour and weekly), how much is used and reserved, and the forecast for the rest of the window. When a window resets shows only in the admin area.
+- **Budgets:** each AI account's windows (five-hour and weekly), how much is used and reserved, and the forecast for the rest of the window. Planned: next to them, what paid accounts (API keys, overage) spent this day and this week. A window's reset time shows only in the admin area, and so will your optional spending cap and the balance left (planned).
 - **Projects:** with several projects, each card and item carries its project, a filter shows one or all, and each project has a summary: its share of the week against its actual spend, whether it is paused and why, and what it is working on.
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you. Planned: for the last 7 days, how many follow-up tasks were filed per merged change, how many polish rounds started and merged, and the follow-up chain rate, the share of the follow-ups filed that came from changes that were themselves follow-ups. The status JSON carries the same seven-day figures.
@@ -160,7 +160,7 @@ Intakt normally leaves room in each AI account for your own use and spreads the 
 2. Raise its **weekly ceiling** (up to all of the allowance).
 3. Choose **until the window resets**, so it ends with the week.
 
-Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. On an account that can bill past its plan, the ceiling stops at the plan's limit; anything past it counts against the spending cap you set.
+Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. Planned: on an account that can bill past its plan, the ceiling stops at the plan's limit, and anything past it counts against your spending cap, if you set one.
 
 ### Pausing
 
@@ -171,4 +171,4 @@ Running jobs finish, nothing new starts, and finished work that is fully approve
 
 ### Accounts
 
-You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription (its long-lived token, or a login where the company has no such token) or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Intakt spends prepaid credit that is about to expire first, then your subscriptions, then paid usage up to your cap ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.
+You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription (its long-lived token, or a login where the company has no such token) or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Planned: Intakt spends subscription credit that is about to expire first, then your subscriptions, then paid usage, up to your cap if you set one, otherwise until the balance runs out ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.
