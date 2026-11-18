@@ -52,7 +52,7 @@ final readonly class JudgedFindings
         return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, self::notesOf($judgement, $findings));
     }
 
-    // Only a P1 or P2 marked defer or reject keeps a note, because that is the mark plain code does not apply and the reason is all that is left of it.
+    // Only a P1 or P2 marked defer or reject keeps a note, because plain code does not apply that mark (the finding stays on the act list), so the note takes the place of the mark.
     /**
      * @param list<Finding> $findings
      *
