@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\NodeFinder;
 use PHPStan\Analyser\Scope;
@@ -47,7 +48,7 @@ final readonly class FinalClassRule implements Rule
     private function isConcreteNamedClass(Class_ $class): bool
     {
         // PHPStan names an anonymous class, so only isAnonymous(), which it overrides for that node, tells one apart from a named class
-        return null !== $class->name && !$class->isAnonymous() && !$class->isFinal() && !$class->isAbstract();
+        return $class->name instanceof Identifier && !$class->isAnonymous() && !$class->isFinal() && !$class->isAbstract();
     }
 
     private function notFinal(Class_ $class): IdentifierRuleError
