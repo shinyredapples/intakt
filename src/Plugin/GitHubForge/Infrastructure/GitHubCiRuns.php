@@ -16,7 +16,7 @@ final readonly class GitHubCiRuns
 {
     private const string CHECK_SUITE_EVENT = 'check_suite';
 
-    // Each key ends in a number, so a workflow's key and a suite's key can never be equal.
+    // The keys start differently, so a workflow's key and a suite's key can never be equal.
     private const string WORKFLOW_KEY = 'workflow:';
     private const string SUITE_KEY = 'suite:';
 
@@ -34,13 +34,13 @@ final readonly class GitHubCiRuns
 
         return [
             // Two workflows can share a display name and an event, so only the workflow's id tells their runs apart.
-            ...$this->runsOf($repository, $workflowRuns, fn (array $run): array => [$this->text($run, 'name'), $this->text($run, 'event'), $this->workflowOf($run)]),
-            // A suite of a workflow run shares that workflow's key, so the newer run's suite replaces a suite that never started with it; any other suite keeps its own id and is never replaced, because one app can make suites for unrelated checks.
+            ...$this->runsOf($repository, $workflowRuns, fn (array $run): array => [$this->text($run, 'name'), $this->text($run, 'event'), $this->workflowOf($run)], static fn (): bool => false),
+            // A suite of a workflow run takes that run's workflow and trigger event as its key, so only the suite of a newer run of the same workflow and event replaces a suite that never started; any other suite keeps its own id and is never replaced, because one app can make suites for unrelated checks.
             ...$this->runsOf($repository, $this->ofHead($head, $this->entries($answers->checkSuites, 'check_suites')), function (array $suite) use ($workflowOfSuite): array {
                 $id = $this->positiveNumber($suite, 'id');
 
                 return [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $workflowOfSuite[$id] ?? self::SUITE_KEY.$id];
-            }),
+            }, $this->hasCheckRuns(...)),
         ];
     }
 
@@ -54,7 +54,8 @@ final readonly class GitHubCiRuns
         $workflows = [];
         foreach ($workflowRuns as $run) {
             if (array_key_exists('check_suite_id', $run)) {
-                $workflows[$this->positiveNumber($run, 'check_suite_id')] = $this->workflowOf($run);
+                // The number ends at the colon, so a workflow and an event can never read as another pair.
+                $workflows[$this->positiveNumber($run, 'check_suite_id')] = $this->workflowOf($run).':'.$this->text($run, 'event');
             }
         }
 
@@ -67,6 +68,15 @@ final readonly class GitHubCiRuns
     private function workflowOf(array $run): string
     {
         return self::WORKFLOW_KEY.$this->positiveNumber($run, 'workflow_id');
+    }
+
+    /**
+     * @param array<mixed> $suite
+     */
+    private function hasCheckRuns(array $suite): bool
+    {
+        // Only a count of zero shows that no job was made: a queued suite with a check run, or without a count, may still finish red.
+        return 0 !== ($suite['latest_check_runs_count'] ?? null);
     }
 
     /**
@@ -113,15 +123,16 @@ final readonly class GitHubCiRuns
     /**
      * @param list<array<mixed>>                                    $entries
      * @param callable(array<mixed>): array{string, string, string} $originOf
+     * @param callable(array<mixed>): bool                          $hasStarted
      *
      * @return list<CiRun>
      */
-    private function runsOf(RepositoryAddress $repository, array $entries, callable $originOf): array
+    private function runsOf(RepositoryAddress $repository, array $entries, callable $originOf, callable $hasStarted): array
     {
-        return array_map(function (array $entry) use ($repository, $originOf): CiRun {
+        return array_map(function (array $entry) use ($repository, $originOf, $hasStarted): CiRun {
             [$name, $event, $definition] = $originOf($entry);
 
-            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry), $definition), $this->stateOf($entry), $this->moments->parse($this->text($entry, 'created_at')));
+            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry), $definition), $this->stateOf($entry, $hasStarted), $this->moments->parse($this->text($entry, 'created_at')));
         }, $entries);
     }
 
@@ -142,12 +153,13 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param array<mixed> $entry
+     * @param array<mixed>                 $entry
+     * @param callable(array<mixed>): bool $hasStarted
      */
-    private function stateOf(array $entry): CiRunState
+    private function stateOf(array $entry, callable $hasStarted): CiRunState
     {
         return match ($this->text($entry, 'status')) {
-            'queued' => CiRunState::NotStarted,
+            'queued' => $hasStarted($entry) ? CiRunState::Unfinished : CiRunState::NotStarted,
             'completed' => $this->conclusionOf($entry),
             default => CiRunState::Unfinished,
         };

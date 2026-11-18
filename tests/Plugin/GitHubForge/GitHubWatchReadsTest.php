@@ -265,12 +265,37 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Unfinished], $this->statesOfHead());
     }
 
-    public function testAHeadWithAQueuedCheckSuiteIsNotStarted(): void
+    public function testAQueuedCheckSuiteThatAlreadyHasACheckRunIsUnfinished(): void
     {
         $this->runs = 'runs_none.json';
         $this->suites = 'suites_queued.json';
 
-        self::assertSame([CiRunState::NotStarted], $this->statesOfHead());
+        self::assertSame([CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testAQueuedSuiteWithACheckRunStaysUnfinishedNextToTheNewerGreenRunOfItsWorkflow(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+        $this->suites = 'suites_queued_started.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::NotStarted, CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testAQueuedCheckSuiteWithoutACountOfItsCheckRunsIsUnfinished(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+        $this->suites = 'suites_queued_uncounted.json';
+
+        self::assertSame(CiRunState::Unfinished, $this->statesOfHead()[3]);
+    }
+
+    public function testAQueuedSuiteOfAPullRequestRunIsNotReplacedByTheNewerSuiteOfAPushRunOfTheSameWorkflow(): void
+    {
+        $this->runs = 'runs_green_other_event.json';
+        $this->suites = 'suites_queued_replaced.json';
+        $runs = $this->state()->runs;
+
+        self::assertSame([CiRunState::NotStarted, false], [$runs[3]->state, $runs[2]->isNewerRunOf($runs[3])]);
     }
 
     public function testAQueuedWorkflowRunNextToANewerCompletedOneOnTheSameHeadIsNotStartedBesideSucceeded(): void
