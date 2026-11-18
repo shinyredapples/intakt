@@ -48,6 +48,16 @@ final readonly class Verdict
         return array_any($this->findings, static fn (Finding $finding): bool => in_array($finding->id, self::FAILED_REVIEWS, true));
     }
 
+    // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked.
+    public function asRecorded(): self
+    {
+        if (Decision::Blocked !== $this->verdict || [] === $this->findings || $this->isFailedReview()) {
+            return $this;
+        }
+
+        return clone ($this, ['verdict' => Decision::Changes]);
+    }
+
     // A model can name the id too, so a caller that answers a stop request also checks the ledger for one.
     #[Ignore]
     public function isStopped(): bool

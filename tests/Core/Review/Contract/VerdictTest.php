@@ -7,8 +7,11 @@ namespace Intakt\Tests\Core\Review\Contract;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -31,5 +34,64 @@ final class VerdictTest extends TestCase
         $evidence = new Evidence('the call to anthropic, model big', "cut by: platform\nchunks: 2");
 
         self::assertSame($evidence, Verdict::incompleteStream('the stream ended early', $evidence)->findings[0]->evidence);
+    }
+
+    public function testAReviewersBlockedVerdictWithFindingsIsRecordedAsChanges(): void
+    {
+        $verdict = new Verdict(Decision::Blocked, [$this->finding()], ['F0'], ['a follow-up']);
+
+        $recorded = $verdict->asRecorded();
+
+        self::assertSame(Decision::Changes, $recorded->verdict);
+        self::assertEquals([$this->finding()], $recorded->findings);
+        self::assertSame(['F0'], $recorded->resolved);
+        self::assertSame(['a follow-up'], $recorded->follow_ups);
+    }
+
+    public function testABlockedVerdictWithoutFindingsStaysBlocked(): void
+    {
+        $verdict = new Verdict(Decision::Blocked, [], [], []);
+
+        self::assertSame(Decision::Blocked, $verdict->asRecorded()->verdict);
+    }
+
+    /**
+     * @return iterable<string, array{Verdict}>
+     */
+    public static function failureVerdicts(): iterable
+    {
+        yield 'no tools' => [Verdict::noTools()];
+        yield 'stopped reviewer' => [Verdict::reviewerStopped()];
+        yield 'cut approval' => [Verdict::cutApproval()];
+        yield 'unread approval' => [Verdict::unreadApproval()];
+        yield 'incomplete stream' => [Verdict::incompleteStream('cut', new Evidence('the call', 'cut by: platform'))];
+    }
+
+    #[DataProvider('failureVerdicts')]
+    public function testAnIntaktFailureVerdictStaysBlocked(Verdict $failure): void
+    {
+        self::assertSame(Decision::Blocked, $failure->asRecorded()->verdict);
+    }
+
+    public function testAnApprovalAndAChangesVerdictAreRecordedAsGiven(): void
+    {
+        self::assertSame(Decision::Approve, new Verdict(Decision::Approve, [], [], [])->asRecorded()->verdict);
+        self::assertSame(Decision::Changes, new Verdict(Decision::Changes, [$this->finding()], [], [])->asRecorded()->verdict);
+    }
+
+    private function finding(): Finding
+    {
+        return new Finding(
+            id: 'F1',
+            severity: Severity::P1,
+            file: 'src/Cart.php',
+            line: 12,
+            symbol: null,
+            text: 'The total adds the discount.',
+            fixable_by: FixableBy::Builder,
+            repeat: false,
+            requirement: 'Storytelling',
+            evidence: null,
+        );
     }
 }
