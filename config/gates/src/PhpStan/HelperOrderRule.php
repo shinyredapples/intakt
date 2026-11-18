@@ -65,7 +65,7 @@ final readonly class HelperOrderRule implements Rule
         return $helpers;
     }
 
-    // a helper's first caller is the earliest method in the class that calls it, and only that caller's call order places it
+    // a helper's first caller is the earliest method in the class that calls it, and only that caller's call order places it; a helper no other method of the class leads to (an uncalled one, or one the class reaches only through another object) has no caller to sit below, so it starts its own group
     /**
      * @param list<ClassMethod>          $methods
      * @param array<string, ClassMethod> $helpers
@@ -74,20 +74,47 @@ final readonly class HelperOrderRule implements Rule
      */
     private function callsOf(array $methods, array $helpers, string $class): array
     {
-        $calls = [];
-        $placed = [];
+        $called = [];
 
         foreach ($methods as $method) {
-            $caller = $method->name->toLowerString();
-            $firstCalled = array_values(array_filter(
-                $this->calledHelpers($method, $helpers, $class),
-                static fn (string $helper): bool => $helper !== $caller && !isset($placed[$helper]),
-            ));
-            $placed += array_fill_keys($firstCalled, true);
+            $called[$method->name->toLowerString()] = $this->calledHelpers($method, $helpers, $class);
+        }
+
+        $claimed = array_diff_key($called, $helpers);
+        $reachable = $this->reachableFrom($claimed, $called);
+        $calls = [];
+
+        foreach ($called as $caller => $helpersCalled) {
+            $claimed += isset($reachable[$caller]) ? [] : [$caller => []];
+            $firstCalled = array_values(array_filter($helpersCalled, static fn (string $helper): bool => $helper !== $caller && !isset($claimed[$helper])));
+            $claimed += array_fill_keys($firstCalled, []);
             $calls[$caller] = $firstCalled;
         }
 
         return $calls;
+    }
+
+    /**
+     * @param array<string, mixed>        $roots
+     * @param array<string, list<string>> $called
+     *
+     * @return array<string, true>
+     */
+    private function reachableFrom(array $roots, array $called): array
+    {
+        $reached = array_fill_keys(array_keys($roots), true);
+        $queue = array_keys($roots);
+
+        while ([] !== $queue) {
+            foreach ($called[array_shift($queue)] ?? [] as $helper) {
+                if (!isset($reached[$helper])) {
+                    $reached[$helper] = true;
+                    $queue[] = $helper;
+                }
+            }
+        }
+
+        return $reached;
     }
 
     // a closure or first-class callable in the method counts as the method calling, but an anonymous class has its own $this

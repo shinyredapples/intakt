@@ -55,7 +55,7 @@ final class HelperOrderRuleTest extends PhpStanRuleTestCase
         $this->assertRuleAccepts('helper-called-inside-an-anonymous-class');
     }
 
-    public function testARecursiveHelperAndAnUncalledPrivateMethodPassStaticAnalysis(): void
+    public function testARecursiveHelperAndTwoUncalledPrivateMethodsCallingEachOtherPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('recursive-and-uncalled-helpers');
     }

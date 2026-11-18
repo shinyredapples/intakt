@@ -6,9 +6,9 @@ namespace Intakt\Sample;
 
 final readonly class Tree
 {
-    private function unused(): string
+    private function unused(int $left): string
     {
-        return 'never called';
+        return 0 === $left ? 'never called' : $this->echoed($left - 1);
     }
 
     /**
@@ -31,5 +31,10 @@ final readonly class Tree
         }
 
         return $deepest + 1;
+    }
+
+    private function echoed(int $left): string
+    {
+        return $this->unused($left);
     }
 }
