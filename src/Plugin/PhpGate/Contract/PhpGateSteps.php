@@ -12,11 +12,21 @@ final readonly class PhpGateSteps
 
     public const string CHECK = 'bin/check --fast';
 
-    // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran.
-    public const string LOCKED_INSTALL = 'composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader';
+    // Before Composer runs, because without a lock file Composer resolves and writes one, and a path package's lock entry does not pin its contents.
+    public const string LOCK_GUARD = <<<'SH'
+        php -r 'if (!is_file("composer.lock")) { fwrite(STDERR, "composer.lock is missing, so there are no locked packages to install.\n"); exit(1); }
+        $lock = json_decode(file_get_contents("composer.lock"), true, 512, JSON_THROW_ON_ERROR);
+        foreach ([...$lock["packages"] ?? [], ...$lock["packages-dev"] ?? []] as $package) {
+            if ("path" === ($package["dist"]["type"] ?? null) || "path" === ($package["source"]["type"] ?? null)) { fwrite(STDERR, $package["name"]." comes from a path repository, so composer.lock does not pin its contents.\n"); exit(1); }
+        }'
+        SH;
 
-    // Plugins stay on, because symfony/runtime's plugin writes vendor/autoload_runtime.php while the autoloader is dumped.
-    public const string GENERATE = 'composer dump-autoload --no-interaction';
+    // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran.
+    public const string LOCKED_INSTALL = self::LOCK_GUARD.' && composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader';
+
+    // Today's whole install on the populated vendor folder: it downloads nothing, and rewrites the autoloader, symfony/runtime's
+    // vendor/autoload_runtime.php and the root package's metadata in vendor/composer/installed.php from the check's own tree.
+    public const string GENERATE = self::INSTALL;
 
     // Read inside the job image, so the version is the one the check runs on and not the orchestrator's.
     public const string PHP_VERSION_PROBE = "php -r 'echo PHP_VERSION;'";

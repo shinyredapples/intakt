@@ -44,15 +44,15 @@ final class PhpGateTest extends TestCase
 
     public function testTheCleanInstallTakesOnlyTheLockedPackagesWithScriptsPluginsAndTheAutoloaderOff(): void
     {
-        self::assertSame(
-            'composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader',
+        self::assertStringEndsWith(
+            "' && composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader",
             $this->composerStep(null)->install,
         );
     }
 
     public function testTheAutoloadAndRuntimeFilesAreGeneratedApartFromTheInstallFromTheChecksOwnTree(): void
     {
-        self::assertSame('composer dump-autoload --no-interaction', $this->composerStep(null)->generate);
+        self::assertSame('composer install --no-interaction --no-progress', $this->composerStep(null)->generate);
     }
 
     public function testAnEmptyConfiguredCommandStillNamesTheComposerLockInputs(): void
