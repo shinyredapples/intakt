@@ -10,6 +10,10 @@ use Intakt\Gates\TwigComments;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Twig\Environment;
+use Twig\Error\SyntaxError;
+use Twig\Loader\ArrayLoader;
+use Twig\Source;
 
 #[CoversClass(TwigComments::class)]
 #[CoversClass(LeftUndoneComments::class)]
@@ -82,6 +86,20 @@ final class TwigCommentsTest extends TestCase
         $markers = new LeftUndoneComments()->markersOn("<p>\n{# TODO later #}\n", [1], new TwigComments());
 
         self::assertSame([], $markers);
+    }
+
+    public function testAMarkerInACommentTwigRejectsAsUnclosedIsStillReported(): void
+    {
+        $template = "{# TODO EOF\n";
+
+        try {
+            new Environment(new ArrayLoader())->tokenize(new Source($template, 'sample.twig'));
+            self::fail('Twig accepted an unclosed comment.');
+        } catch (SyntaxError $error) {
+            self::assertStringStartsWith('Unclosed comment', $error->getMessage());
+        }
+
+        self::assertSame([1 => 'TODO'], new LeftUndoneComments()->markersOn($template, [1], new TwigComments()));
     }
 
     public function testATemplateThePatternEngineCannotReadFailsInsteadOfPassing(): void
