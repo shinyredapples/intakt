@@ -94,10 +94,10 @@ final readonly class PhpProfile
         foreach ($intervals as $interval) {
             $start = max($released + 1, (int) (explode('.', $interval->getStart()->getVersion())[2] ?? 0));
 
-            foreach ([$start, $start + 1] as $patch) {
-                if ($this->allows($minor.'.'.$patch)) {
-                    return $minor.'.'.$patch;
-                }
+            $patch = array_find([$start, $start + 1], fn (int $patch): bool => $this->allows($minor.'.'.$patch));
+
+            if (null !== $patch) {
+                return $minor.'.'.$patch;
             }
         }
 
