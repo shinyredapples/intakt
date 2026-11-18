@@ -46,6 +46,16 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a comment after a string left open on its line' => ["const a = 'open\n// TODO later\n", [2 => 'TODO']];
         yield 'a comment after a regular expression left open on its line' => ["const re = /[a'\n// TODO later\n", [2 => 'TODO']];
         yield 'a lower-case marker' => ["// todo: later\n", [1 => 'todo']];
+        yield 'a comment after a division of a postfix increment' => ["const n = value++ / 2; /* TODO round */\n", [1 => 'TODO']];
+        yield 'a comment after a division of a postfix decrement' => ["const n = value-- / 2; // TODO round\n", [1 => 'TODO']];
+        yield 'a comment after a division of an object literal' => ["const n = {} / 2; /* TODO round */\n", [1 => 'TODO']];
+        yield 'a comment after a division of an object literal behind return' => ["function f() { return {} / 2; } // TODO round\n", [1 => 'TODO']];
+        yield 'a comment after a division of a property named like a keyword' => ["const n = obj.return / 2; /* TODO round */\n", [1 => 'TODO']];
+        yield 'a comment after a division of a method named like a condition keyword' => ["const n = obj.if(a) / 2; // TODO round\n", [1 => 'TODO']];
+        yield 'a comment after a division of a Unicode identifier' => ["const n = π / 2; /* TODO round */\n", [1 => 'TODO']];
+        yield 'a comment after a regular expression behind a block' => ["function f() {}\n/'/.test(a); // TODO later\n", [2 => 'TODO']];
+        yield 'a comment after a line comment ended by a line separator' => ["// ordinary\u{2028}/* TODO finish */\n", [1 => 'TODO']];
+        yield 'a comment after a line comment ended by a paragraph separator' => ["// ordinary\u{2029}/* TODO finish */\n", [1 => 'TODO']];
     }
 
     /**
@@ -78,6 +88,10 @@ final class JavaScriptCommentsTest extends TestCase
         yield 'a reasoned exception' => ["// TODO(#123): show the total once the forge sends it\n"];
         yield 'a reasoned exception in a block comment' => ["/* FIXME(#123): round once the forge sends cents */\n"];
         yield 'a marker in plain identifiers' => ["const TODO = 1;\n"];
+        yield 'a regular expression after an if condition' => ["if (ok) /[/* TODO */]/.test(input);\n"];
+        yield 'a regular expression after a while condition' => ["while (ok) /[/* TODO */]/.exec(input);\n"];
+        yield 'a regular expression after a block' => ["{}\n/[/* TODO */]/.test(input);\n"];
+        yield 'a comment in a string continued over a carriage return line end' => ["const s = 'one\\\r\n// TODO in string';\n"];
     }
 
     #[DataProvider('scriptsWithoutAMarkerComment')]
