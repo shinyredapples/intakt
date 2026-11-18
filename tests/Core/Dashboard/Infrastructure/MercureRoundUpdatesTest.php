@@ -737,6 +737,7 @@ final class MercureRoundUpdatesTest extends TestCase
         $twig->addFunction(new TwigFunction('asset', static fn (string $path): string => '/'.$path));
         // Registered because a judged finding's text shows its backtick spans as code.
         $twig->addFunction(new TwigFunction('finding_spans', new FindingSpans()->of(...)));
+        $twig->addFunction(new TwigFunction('finding_title_spans', new FindingSpans()->ofATitle(...)));
 
         return new MercureRoundUpdates(
             $this->live($publisher),

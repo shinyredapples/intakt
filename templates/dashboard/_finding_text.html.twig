@@ -1,2 +1,2 @@
-{#- A finding's text with its backtick spans as code, built from finding_spans() so the reviewer's words stay escaped; or the given words when no text was recorded. -#}
-{%- if finding.text is null %}{{ missing }}{% else %}{% for span in finding_spans(finding.text) %}{% if span.code %}<code>{{ span.text }}</code>{% else %}{{ span.text }}{% endif %}{% endfor %}{% endif -%}
+{#- A finding's text with its backtick spans as code and its emphasis marks dropped, built from finding_spans() so the reviewer's words stay escaped; or the given words when no text was recorded. -#}
+{%- if finding.text is null %}{{ missing }}{% else %}{{ include('dashboard/_finding_spans.html.twig', {spans: finding_spans(finding.text)}, with_context = false) }}{% endif -%}
