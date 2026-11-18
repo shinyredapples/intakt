@@ -7,7 +7,7 @@ namespace Intakt\Tests\Core\Platform\Handler;
 use Intakt\Core\Platform\Contract\AsCommandHandler;
 use Symfony\Component\Messenger\MessageBusInterface;
 
-// Dispatches on the command bus from inside a handler, as the dashboard's start reaches RunReviewRound through StartReview.
+// Nested, because the dashboard's start reaches RunReviewRound through StartReview, so a refusal passes two command-bus dispatches.
 #[AsCommandHandler]
 final readonly class RelayRefusalHandler
 {
