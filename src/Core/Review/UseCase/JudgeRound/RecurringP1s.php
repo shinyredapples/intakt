@@ -54,7 +54,7 @@ final readonly class RecurringP1s
     public function recordFor(ReviewRound $round, JudgedFindings $judged, array $p1Keys): void
     {
         $judgedNow = new FlaggedRound($round, $judged->actList, $p1Keys);
-        $others = array_map(fn (ReviewRound $other): FlaggedRound => $this->flagged($other), $this->rounds->judgedBesides($round));
+        $others = array_map($this->flagged(...), $this->rounds->judgedBesides($round));
 
         $this->recordRecurrencesOf($judgedNow, $others);
 
