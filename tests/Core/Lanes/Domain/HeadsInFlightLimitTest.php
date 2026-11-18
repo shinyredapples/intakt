@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Lanes\Domain;
 
 use Intakt\Core\Lanes\Contract\HeadWait;
+use Intakt\Core\Lanes\Domain\HeadsInFlightCountMustNotBeNegative;
 use Intakt\Core\Lanes\Domain\HeadsInFlightLimit;
 use Intakt\Core\Lanes\Domain\HeadsInFlightLimitMustBePositive;
-use Intakt\Core\Lanes\Domain\HeadsInFlightCountMustNotBeNegative;
 use Intakt\Core\Lanes\Domain\ReviewCap;
 use Intakt\Core\Lanes\Domain\ReviewCapTooLargeToDouble;
 use PHPUnit\Framework\Attributes\CoversClass;
