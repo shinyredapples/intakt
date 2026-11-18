@@ -63,11 +63,10 @@ final readonly class FencedPlants
         return array_merge([], ...array_map(static fn ($property): array => self::plantsIn($property->getValue($value)), $properties));
     }
 
-    // A part of a plant can leak on its own (a task's first line used as a title), so each line is checked as well as the whole.
-    // Any line ending splits, so a CRLF line is checked without the "\r" a copied title drops.
+    // A part of a plant can leak on its own (a task's first line used as a title), so each line, without the "\r" a copied title drops, is checked too.
     private static function assertNoLineIsOutside(string $plant, string $outside): void
     {
-        foreach (preg_split('/\R/', $plant) ?: [] as $line) {
+        foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $plant)) as $line) {
             if ('' !== trim($line)) {
                 Assert::assertStringNotContainsString($line, $outside, 'A line of a plant reaches the prompt outside a fence.');
             }
