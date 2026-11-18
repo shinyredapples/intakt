@@ -68,7 +68,7 @@ For PHP, `PhpGate::dependencyInstall()` names `composer.json` and `composer.lock
 - `registryHosts(): list<string>`: the hosts the steps fetch dependencies from.
 - `dependencyInstall(): ?DependencyInstall`: the lock files, the install command and the installed folder of a [dependency snapshot](#dependency-snapshots), or null for a language that installs on every check. `Contract/DependencyInstall` refuses a lock file or folder that is empty, absolute, not canonical or outside the project.
 
-`Plugin/PhpGate/Infrastructure/PhpGate` is the only implementation, so the container autowires it. Without a configured command (null, or only white space) its steps are `composer install --no-interaction --no-progress` and `bin/check --fast` (`Plugin/PhpGate/Contract/PhpGateSteps::INSTALL` and `CHECK`); a configured command (`--check-command`) is the only step, and installs what it needs itself. Its hosts are `repo.packagist.org`, `api.github.com` and `codeload.github.com`. The files a gate protects are not part of the contract yet.
+`Plugin/PhpGate/Infrastructure/PhpGate` is the only implementation, so the container autowires it. Without a configured command (null, or only white space) its steps are `composer install --no-interaction --no-progress` and `bin/check --fast` (`Plugin/PhpGate/Contract/PhpGateSteps::INSTALL` and `CHECK`); a configured command (`--check-command`) is the only step, and installs what it needs itself; a dependency snapshot is copied into the clone before it all the same. Its hosts are `repo.packagist.org`, `api.github.com` and `codeload.github.com`. The files a gate protects are not part of the contract yet.
 
 ## The console door
 
