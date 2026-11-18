@@ -115,6 +115,11 @@ final class JobImageNotBuilt extends RuntimeException implements ReportableFailu
         return new self(sprintf('%s is not a git checkout with a commit that git can read: %s', $directory, $reason));
     }
 
+    public static function contextUnreadable(string $file): self
+    {
+        return new self(sprintf('The build context %s that Intakt just wrote cannot be opened for sending.', $file));
+    }
+
     // With the build's last lines, because the failed step says there what broke (a missing extension names itself).
     public static function buildFailed(string $tag, string $error, string $output): self
     {

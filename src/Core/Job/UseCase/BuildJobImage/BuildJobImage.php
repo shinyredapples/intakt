@@ -9,6 +9,7 @@ use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobRefused;
 use Intakt\Core\Job\Infrastructure\DockerEngine;
+use Intakt\Core\Job\Infrastructure\ImageBuild;
 
 final readonly class BuildJobImage
 {
@@ -34,7 +35,7 @@ final readonly class BuildJobImage
         }
 
         $plan = $this->planner->planFor($directory, $kind);
-        $build = $this->engine->build($this->context->of($plan, $directory), $tag, $plan->dockerfile);
+        $build = $this->context->sentWith($plan, $directory, fn ($context): ImageBuild => $this->engine->build($context, $tag, $plan->dockerfile));
 
         if (null !== $build->error || null === $build->image) {
             throw JobImageNotBuilt::buildFailed($tag, $build->error ?? 'no image', $build->output);

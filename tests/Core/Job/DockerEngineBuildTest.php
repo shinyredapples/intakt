@@ -27,7 +27,9 @@ final class DockerEngineBuildTest extends TestCase
     {
         $response = new MockResponse('{"stream":"Step 1/2 : FROM php:8.5-cli\n"}'."\r\n".'{"aux":{"ID":"'.self::IMAGE.'"}}'."\n".'{"stream":"Successfully tagged intakt-job/demo:main\n"}'."\n");
 
-        $build = $this->engineAnswering($response)->build('tar bytes', 'intakt-job/demo:main', '.devcontainer/Dockerfile');
+        $context = $this->context();
+
+        $build = $this->engineAnswering($response)->build($context, 'intakt-job/demo:main', '.devcontainer/Dockerfile');
 
         self::assertSame("Step 1/2 : FROM php:8.5-cli\nSuccessfully tagged intakt-job/demo:main\n", $build->output);
         self::assertFalse($build->failed());
@@ -35,7 +37,8 @@ final class DockerEngineBuildTest extends TestCase
         self::assertSame('POST', $response->getRequestMethod());
         self::assertSame('http://docker/v1.44/build?t=intakt-job/demo:main&dockerfile=.devcontainer/Dockerfile&rm=true&forcerm=true', $response->getRequestUrl());
         $options = $response->getRequestOptions();
-        self::assertSame('tar bytes', $options['body']);
+        self::assertSame($context, $options['body']);
+        self::assertTrue(feof($context));
         self::assertIsArray($options['headers']);
         self::assertContains('Content-Type: application/x-tar', $options['headers']);
     }
@@ -44,7 +47,7 @@ final class DockerEngineBuildTest extends TestCase
     {
         $response = new MockResponse('{"stream":"missing PHP extension: nosuchext\n"}'."\n".'{"errorDetail":{"code":1,"message":"returned a non-zero code: 1"},"error":"returned a non-zero code: 1"}'."\n");
 
-        $build = $this->engineAnswering($response)->build('tar', 'demo', 'Dockerfile');
+        $build = $this->engineAnswering($response)->build($this->context(), 'demo', 'Dockerfile');
 
         self::assertTrue($build->failed());
         self::assertSame('returned a non-zero code: 1', $build->error);
@@ -57,7 +60,7 @@ final class DockerEngineBuildTest extends TestCase
 
         $this->expectExceptionObject(DockerEngineFailed::refused('build', 400, 'invalid reference format'));
 
-        $this->engineAnswering($response)->build('tar', 'demo', 'Dockerfile');
+        $this->engineAnswering($response)->build($this->context(), 'demo', 'Dockerfile');
     }
 
     public function testALineThatIsNoJsonObjectIsUnexpected(): void
@@ -66,7 +69,7 @@ final class DockerEngineBuildTest extends TestCase
 
         $this->expectExceptionObject(DockerEngineFailed::unexpected('build'));
 
-        $this->engineAnswering($response)->build('tar', 'demo', 'Dockerfile');
+        $this->engineAnswering($response)->build($this->context(), 'demo', 'Dockerfile');
     }
 
     public function testAnErrorThatIsNoTextIsUnexpected(): void
@@ -75,7 +78,7 @@ final class DockerEngineBuildTest extends TestCase
 
         $this->expectExceptionObject(DockerEngineFailed::unexpected('build'));
 
-        $this->engineAnswering($response)->build('tar', 'demo', 'Dockerfile');
+        $this->engineAnswering($response)->build($this->context(), 'demo', 'Dockerfile');
     }
 
     #[DataProvider('incompleteBuilds')]
@@ -83,7 +86,7 @@ final class DockerEngineBuildTest extends TestCase
     {
         $this->expectExceptionObject(DockerEngineFailed::unexpected('build'));
 
-        $this->engineAnswering(new MockResponse($body))->build('tar', 'demo', 'Dockerfile');
+        $this->engineAnswering(new MockResponse($body))->build($this->context(), 'demo', 'Dockerfile');
     }
 
     /**
@@ -97,6 +100,18 @@ final class DockerEngineBuildTest extends TestCase
         yield 'steps without an image id' => ['{"stream":"Step 1/2 : FROM php:8.5-cli\n"}'."\n"];
         yield 'an image id that is no digest' => ['{"aux":{"ID":"sha256:abc"}}'."\n"];
         yield 'a list line after the image id' => ['{"aux":{"ID":"'.self::IMAGE.'"}}'."\n".'[]'."\n"];
+    }
+
+    /**
+     * @return resource
+     */
+    private function context()
+    {
+        $context = fopen('php://memory', 'w+') ?: self::fail('No memory stream.');
+        fwrite($context, 'tar bytes');
+        rewind($context);
+
+        return $context;
     }
 
     private function engineAnswering(MockResponse $response): DockerEngine

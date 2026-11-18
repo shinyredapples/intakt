@@ -94,6 +94,7 @@ final class BuildJobImageCommandTest extends TestCase
     private string $context = '';
     private string $url = '';
     private ?BuildJobImage $racing = null;
+    private ?string $sentFrom = null;
 
     /** @var list<MockResponse> */
     private array $requests = [];
@@ -211,6 +212,25 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertStringContainsString(ReviewDockerfile::PATH, $output);
     }
 
+    public function testTheContextIsStreamedFromAFileThatIsGoneOnceTheRequestIsSent(): void
+    {
+        $tester = $this->whenTheCommandRuns(self::BUILT);
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
+        self::assertIsString($this->sentFrom);
+        self::assertFileDoesNotExist($this->sentFrom);
+        self::assertSame(['Dockerfile'], $this->filesInTheSentContext());
+    }
+
+    public function testTheContextFileIsGoneAlsoWhenTheEngineFails(): void
+    {
+        $tester = $this->whenTheCommandRuns('{"message":"invalid reference format"}', status: 400);
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertIsString($this->sentFrom);
+        self::assertFileDoesNotExist($this->sentFrom);
+    }
+
     public function testAReviewImageWithAnUnusableTagIsRefusedBeforeAnyPlan(): void
     {
         $this->repository->commitFile('composer.json', '{"require": {"ext-intl": "*"}}');
@@ -253,13 +273,15 @@ final class BuildJobImageCommandTest extends TestCase
     /**
      * @param array<string, string> $options
      */
-    private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main', array $options = []): CommandTester
+    private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main', array $options = [], int $status = 200): CommandTester
     {
-        $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream): MockResponse {
+        $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream, $status): MockResponse {
             $this->url = $url;
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
-            new Filesystem()->dumpFile($this->context, is_string($options['body']) ? $options['body'] : self::fail('The build context is no string.'));
-            $response = new MockResponse($stream);
+            $body = is_resource($options['body']) ? $options['body'] : self::fail('The build context is no stream.');
+            $this->sentFrom = stream_get_meta_data($body)['uri'] ?? null;
+            new Filesystem()->dumpFile($this->context, (string) stream_get_contents($body));
+            $response = new MockResponse($stream, ['http_code' => $status]);
             $this->requests[] = $response;
 
             return $response;

@@ -19,4 +19,11 @@ final class JobImageNotBuiltTest extends TestCase
 
         self::assertSame("The image demo was not built: step failed\n".implode("\n", array_map(static fn (int $line): string => 'line '.$line, range(2, 21))), $message);
     }
+
+    public function testAContextThatCannotBeOpenedNamesItsFile(): void
+    {
+        $message = JobImageNotBuilt::contextUnreadable('intakt-image-0a.tar')->getMessage();
+
+        self::assertSame('The build context intakt-image-0a.tar that Intakt just wrote cannot be opened for sending.', $message);
+    }
 }

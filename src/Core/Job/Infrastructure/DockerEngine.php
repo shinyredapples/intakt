@@ -43,8 +43,11 @@ final readonly class DockerEngine
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
     }
 
-    // With rm and forcerm, so no container of a step is left behind, also after a failed one.
-    public function build(string $context, string $tag, string $dockerfile): ImageBuild
+    /**
+     * @param resource $context
+     */
+    // With rm and forcerm, so no container of a step is left behind, also after a failed one; the context is a stream, so a large repository is sent without holding it in memory.
+    public function build($context, string $tag, string $dockerfile): ImageBuild
     {
         return $this->send('POST', 'build', [
             'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],

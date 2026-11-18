@@ -157,6 +157,13 @@ The CI image cache is written only by runs on main, never by a pull request: a p
 
 A persistent self-hosted runner is not supported. The workflow scan cannot tell an ephemeral runner from a persistent one, so self-hosted runners always need the owner's approval for a CI change ([Merge](08-merge.md)).
 
+## Building job images
+
+When Intakt builds a job image (`intakt:job:build-image`, plan task T45), the Dockerfile comes from the project's repository: a root `Dockerfile` or a devcontainer's `build.dockerfile`, read at `HEAD` of the checkout, with the committed tree at `HEAD` as its build context. That file is an untrusted input of its own, even though no model reads it:
+- **What it can reach.** Its `RUN` steps run on the container engine's host during the build, with the engine's default build network: full network access, no egress allowlist and no job proxy. The job container's limits ([Job containers](../../architecture/job-containers.md)) apply only to jobs run from the finished image, not to the build. A step can reach any host the engine's host can reach, the owner's network included, and send out anything the build context holds.
+- **Where it comes from.** Today only a person runs the command, on a checkout they chose, so the Dockerfile is whatever the project's own maintainers committed, and a review image adds only Intakt's fixed job tools after it.
+- **Settled before T49.** Once plan task T49 builds images from a builder's commits, `HEAD` can hold a Dockerfile or devcontainer that a possibly steered builder wrote, run on the host before any review. Before T49 builds an image from a commit no reviewer has passed, this must be settled: build only from a reviewed commit (main), or build on an isolated builder without a route to the owner's network, as for the [self-hosted runners](#self-hosted-ci-runners) above.
+
 ## The product's surface
 
 The sections above cover the loop: what a steered model could do to the project. This one covers the product the loop builds: what an outside attacker could do to it once it runs. The rule is checks first, and the Security engineer for what checks cannot judge (owner decision of 2026-11-04: security matters across all layers). A check that needs a tool beyond PHP and Composer is opt-in per project, so the simplest install stays simple; on Intakt's own repository every check is on as soon as its task lands. Each check family is a task of its own ([plan](../../plan.md#product-security-864)); until its task lands, the role's layer review covers it.

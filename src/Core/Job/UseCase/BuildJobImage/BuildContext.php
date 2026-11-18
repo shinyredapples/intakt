@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\UseCase\BuildJobImage;
 
+use Closure;
+use Intakt\Core\Job\Infrastructure\ImageBuild;
 use PharData;
 use Symfony\Component\Filesystem\Filesystem;
 
@@ -13,18 +15,27 @@ final readonly class BuildContext
     {
     }
 
-    // As a tar, because the engine takes the build context as one in the request body.
-    public function of(JobImagePlan $plan, string $directory): string
+    /**
+     * @param Closure(resource): ImageBuild $send
+     */
+    // As a tar streamed from a temporary file, because the engine takes the build context as one in the request body and a large repository need not fit in memory.
+    public function sentWith(JobImagePlan $plan, string $directory, Closure $send): ImageBuild
     {
         // A name that does not exist yet, because PharData refuses an empty file as a broken archive.
         $file = sys_get_temp_dir().'/intakt-image-'.bin2hex(random_bytes(8)).'.tar';
         $filesystem = new Filesystem();
+        $stream = null;
 
         try {
             $this->write($plan, $directory, $file);
+            $stream = fopen($file, 'r') ?: throw JobImageNotBuilt::contextUnreadable($file);
 
-            return $filesystem->readFile($file);
+            return $send($stream);
         } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+
             $filesystem->remove($file);
         }
     }
