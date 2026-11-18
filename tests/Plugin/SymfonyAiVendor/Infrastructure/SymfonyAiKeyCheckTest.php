@@ -149,8 +149,10 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $calls = $this->callsMadeFor($key, $answer);
 
         self::assertCount(1, $calls);
-        self::assertSame(1, substr_count(json_encode($calls[0][2], JSON_THROW_ON_ERROR), '"Answer with the single word: ok"'));
-        self::assertStringNotContainsString('"system"', json_encode($calls[0][2], JSON_THROW_ON_ERROR));
+        $body = json_encode($calls[0][2], JSON_THROW_ON_ERROR);
+        self::assertSame(1, substr_count($body, '"role":"user"'));
+        self::assertSame(1, substr_count($body, '"Answer with the single word: ok"'));
+        self::assertStringNotContainsString('"system"', $body);
     }
 
     /**
