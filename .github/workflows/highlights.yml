@@ -3,10 +3,11 @@ name: highlights
 on:
   push:
     branches: [main]
+    # .github/ci/run-on-copy.sh and .github/actions/ci-image are left out, because the daily run picks them up within a day.
     paths:
       - docs/highlights.d/**
       - bin/highlights
-      - config/gates/src/HighlightFragments.php
+      - config/gates/src/Highlight*.php
       - .github/workflows/highlights.yml
   schedule:
     - cron: '17 4 * * *'

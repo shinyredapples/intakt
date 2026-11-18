@@ -27,7 +27,7 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertSame(
             [
                 'branches' => ['main'],
-                'paths' => ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/HighlightFragments.php', '.github/workflows/highlights.yml'],
+                'paths' => ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/Highlight*.php', '.github/workflows/highlights.yml'],
             ],
             $workflow['on']['push'],
         );
