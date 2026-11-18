@@ -70,8 +70,9 @@ final readonly class ReviewerOutcome
         return clone ($this, ['progress' => ReviewerProgress::Stopped]);
     }
 
-    public function substitutedBy(string $provider): self
+    // The substitute's model replaces the start's, so the model and the substitute always name the same provider; a catch-up recorded without one keeps the start's model.
+    public function substitutedBy(string $provider, ?string $model): self
     {
-        return clone ($this, ['substitute' => $provider]);
+        return clone ($this, ['substitute' => $provider, 'model' => $model ?? $this->model]);
     }
 }

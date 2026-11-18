@@ -267,7 +267,7 @@ final class LedgerRounds
             $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
             $row instanceof ReviewerStopped => $outcome->stopped(),
-            $row instanceof CatchUpOwed => $outcome->substitutedBy($row->substitute->value),
+            $row instanceof CatchUpOwed => $outcome->substitutedBy($row->substitute->value, $row->model),
         };
     }
 
