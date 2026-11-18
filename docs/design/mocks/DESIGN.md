@@ -173,7 +173,7 @@ Use the plain wording in UI copy. Where the term must stay, mark it with `.term`
 - **Loading**: static skeleton blocks in the shape of the content (cards, lane summary, lead line), with `aria-busy` on the main region. No spinners on whole pages and no pulsing (motion only follows the user). Buttons that wait show their verb in progress ("Saving…", "Approving…").
 - **Errors**: say what failed, the cause in plain words, and what is still true ("Not saved, still 22:00 to 07:00", "Nothing was saved"). Red only for the failed part.
 - **Offline or reconnecting**: a neutral line at the top of the page ("Reconnecting. You are seeing what Intakt knew at 11:12:04; actions wait until it is back. Next try in 5 s.") with Try now, an "Offline" marker in the top bar, action buttons disabled, elapsed times frozen with their timestamp. Content stays at full contrast; never fade the page. After two minutes the line turns red ("Can't reach Intakt").
-- **First day**: no banners, the lead says "Intakt is ready. Nothing to build yet.", and a tinted block gives the three steps to the first task with a link to the repository's issues. Columns show "Nothing here"; lanes show "Idle: nothing to build yet".
+- **First day**: no banners, the lead says "Intakt is ready. Nothing to build yet.", and a tinted block gives the three steps to the first task with a link to the repository's issues. Each empty column, and the Who is working line while nobody works, says in one line what lands there and when (such as "Reviews appear here while a panel reviews a change"), on the first day and after; the waiting octopus sits in the page head while the board is empty.
 
 Examples: `index.html?demo=stress`, `?demo=reconnecting`, `?demo=firstday`, `?demo=loading`.
 
