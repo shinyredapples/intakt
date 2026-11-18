@@ -73,7 +73,7 @@ final class ReadmeTeamPictureTest extends TestCase
     {
         $readme = $this->readme();
 
-        $opening = (int) strpos($readme, 'Intakt gives you one verdict');
+        $opening = (int) strpos($readme, 'Your coding agent says it is done.');
         $picture = (int) strpos($readme, '<picture>', $opening);
         $links = (int) strpos($readme, 'PHP 8.5, Symfony AI');
         $line = 'Tech lead, Developer, Code reviewer, Judge, Security engineer, Designer, AI engineer and Maintainer';

@@ -5,7 +5,9 @@
   </picture>
 </h1>
 
-Intakt gives you one verdict on a change that you can trust: a panel of reviewers on models of different makers reviews it, and a judge marks every finding against the task, but every P1 and P2 finding that passes the quote check reaches the act list whatever the judge answers, even when its answer is invalid; only a P3 finding can be deferred or rejected. Finding ids survive every round, enforced in code, so the goalposts never move; every figure is labelled measured, counted or estimated; and any agent runs the whole review loop through the MCP server.
+Your coding agent says it is done. Intakt tells you whether to believe it.
+
+A panel of reviewers on models from different makers reviews the change, a judge marks every finding against the task, and every P1 and P2 finding whose quote checks out reaches the act list whatever the judge answers. Your own agent runs this loop over MCP until the verdict is clean.
 
 <p align="center">
   <picture>
@@ -20,20 +22,20 @@ PHP 8.5, Symfony AI Â· [Status](#status): what works today and what is planned Â
 
 ## Five-minute start
 
-**No provider key?** Take the tour first: start the demo below with no key in `.env.local`, open `http://localhost:7781/demo` and press **Play the demo run**. It plays a recorded review onto the dashboard without calling any model, with a caption at the bottom of every page that names each stage, from the change arriving to the act list of round 1 and the closed findings of round 2. It needs a recording: none ships with Intakt yet, so set `INTAKT_DEMO_RECORDING` in `.env.local` to one written by `intakt:demo:record` ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
-
-The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)):
-
 ```
 git clone https://github.com/shinyredapples/intakt.git && cd intakt
 docker compose up -d --wait
 ```
 
-Then open http://localhost:7781. A new install opens on the first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above once a recording is installed; until then the page says why it cannot play), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+With your agent: `claude mcp add --transport http intakt http://localhost:7781/mcp/owner --header "Authorization: Bearer <the token>"` and say *intakt review the demo*.
 
-From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)).
+**No provider key?** Start the demo above with no key in `.env.local`, open `http://localhost:7781/demo` and press **Play the demo run**. It plays a recorded review onto the dashboard without calling any model, with a caption at the bottom of every page that names each stage, from the change arriving to the act list of round 1 and the closed findings of round 2. It needs a recording: none ships with Intakt yet, so set `INTAKT_DEMO_RECORDING` in `.env.local` to one written by `intakt:demo:record` ([details](docs/user/README.md#playing-the-demo-run-in-the-dashboard)).
 
-MCP: step 4 of the first-run page and `intakt:demo` show the `claude mcp add` line that connects your agent; then say "intakt review the demo" and your agent loops, fixes and reports ([skill](skills/intakt-review/README.md), [details](docs/user/mcp.md)).
+The demo reviews a sample change with two reviewers ([how long it takes](#timed-run)): open http://localhost:7781. A new install opens on the first-run page with two choices: **watch a recorded real review now**, with no key (its **Play the demo run** button plays the tour above once a recording is installed; until then the page says why it cannot play), or **paste one provider key or Hugging Face token and run the demo review**, which opens its live review page. Calls are billed to the key's or token's owner; a Hugging Face token alone puts the reviewers on two makers ([Hugging Face details](docs/user/README.md#running-the-demo-on-a-hugging-face-token)).
+
+From the terminal: `docker compose exec intakt php bin/console intakt:demo` runs the same demo review and prints its verdict ([read it](docs/user/README.md#reading-a-verdict)). The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words; [the review flow](docs/architecture/review-flow.md) draws how a review runs inside.
+
+MCP: the first-run page (step 4) and `intakt:demo` show this line with its token; your agent then loops, fixes and reports ([skill](skills/intakt-review/README.md), [details](docs/user/mcp.md)).
 
 <details>
 <summary>Screenshot: the dashboard's review page for the sample change</summary>
@@ -41,8 +43,6 @@ MCP: step 4 of the first-run page and `intakt:demo` show the `claude mcp add` li
 ![The dashboard's review page for the sample feat/cart change: two rounds with two reviewers each, their verdicts, the findings with the judge's call on each, and the tokens per round, measured](docs/assets/dashboard-review.png)
 
 </details>
-
-The [demo walkthrough](docs/guide/demo-walkthrough.md) tells the same path in plain words; [the review flow](docs/architecture/review-flow.md) draws how a review runs inside.
 
 ### Timed run
 
@@ -91,7 +91,7 @@ Date of the run: 2026-11-16. Models (the demo's Hugging Face mapping): `correctn
 Built for the [Symfony AI & MCP Hackathon](docs/spec.md) (deadline 2026-11-22):
 
 - Point Intakt at a change, a branch of a local repository. A configurable panel of reviewers, each a provider, a model tier and a prompt through Symfony AI's Platform, returns structured JSON verdicts.
-- Findings keep their ids across rounds, so reviewers cannot move the goalposts. A judge step tells the builder what to act on.
+- Findings keep their ids across rounds, enforced in code, so reviewers cannot move the goalposts. A judge step tells the builder what to act on, and only a P3 finding can be deferred or rejected: P1 and P2 findings reach the act list even when the judge's answer is invalid.
 - Agents start reviews and read findings through an MCP server.
 - A small live dashboard shows each round as it streams.
 - Every figure says what kind it is: token counts the provider reported are `measured`, rounds and findings from the ledger are `counted`, and a cost from your price list is `estimated`, with the date of the prices. Figures of different kinds are never added into one total.
