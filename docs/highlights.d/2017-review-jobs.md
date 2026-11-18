@@ -1,0 +1,3 @@
+## Symfony components
+| Validator | checks typed verdicts from structured output, and the verdict a review job's reviewer wrote, which no platform validated | in progress | T1 (#5), `src/Core/Review/Contract/VerdictParser.php`, `src/Core/Review/Contract/Verdict.php`, `src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php`; T5 (#10, part #98); T58 (#2017), `src/Core/Review/Infrastructure/ReviewerInJob.php` |
+| Serializer (`ALLOW_EXTRA_ATTRIBUTES`, `REQUIRE_ALL_PROPERTIES`, `JsonDecode::ASSOCIATIVE`) | maps a verdict strictly: no unknown and no left-out fields, no object as a list; the same rules for a platform's answer and a review job's answer | in progress | T1 (#5), T58 (#2017), `src/Core/Review/Infrastructure/VerdictInText.php` |

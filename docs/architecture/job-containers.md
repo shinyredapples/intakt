@@ -1,6 +1,6 @@
 # Job containers
 
-`Core/Job` runs each job (a build, a check, a review) in a fresh container through the Docker Engine API (plan task T44). No lane starts a job through it yet; `intakt:check:run` runs a [check job](check-job.md) through it, `intakt:build:run` a [build job](build-job.md), and `ReviewJob` a [review job](review-job.md), which nothing calls yet. Part 2 added the egress allowlist with a per-job proxy ([Egress](#egress)); part 3 added the [start check](#start-check) and its reduced mode. How this differs from the existing loop is in [Differences from the existing loop](differences-from-the-existing-loop.md).
+`Core/Job` runs each job (a build, a check, a review) in a fresh container through the Docker Engine API (plan task T44). No lane starts a job through it yet; `intakt:check:run` runs a [check job](check-job.md) through it, `intakt:build:run` a [build job](build-job.md), and `ReviewJob` a [review job](review-job.md), which the review flow calls for each reviewer on an install whose `INTAKT_CONTAINER_ENGINE` names an engine ([Review flow](review-flow.md#where-a-reviewer-runs)). Part 2 added the egress allowlist with a per-job proxy ([Egress](#egress)); part 3 added the [start check](#start-check) and its reduced mode. How this differs from the existing loop is in [Differences from the existing loop](differences-from-the-existing-loop.md).
 
 ## Surface
 

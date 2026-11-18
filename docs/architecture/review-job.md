@@ -1,6 +1,6 @@
 # Review job
 
-Plan task T58, the review job's script (#1923, part 2 of #1861) and its runner (#1862, part 2 of #1840; design: [overview](../design/05-architecture/01-overview.md), [reviews](../design/05-architecture/07-reviews.md)). A review job runs one reviewer in a [job container](job-containers.md) built from [the review job image](job-images.md#the-review-job-image), against a read-only checkout of the exact head, reaching only its vendor through the job's proxy ([Egress](job-containers.md#egress)). `ReviewJob` runs one, but nothing calls it yet: the choice between review jobs and the in-process reviewer, and the review's output and schema, come with the runner's issue (part 2 of #1650). The job holds no account credential yet, so a real reviewer CLI cannot sign in to its vendor from it.
+Plan task T58, the review job's script (#1923, part 2 of #1861) and its runner (#1862, part 2 of #1840; design: [overview](../design/05-architecture/01-overview.md), [reviews](../design/05-architecture/07-reviews.md)). A review job runs one reviewer in a [job container](job-containers.md) built from [the review job image](job-images.md#the-review-job-image), against a read-only checkout of the exact head, reaching only its vendor through the job's proxy ([Egress](job-containers.md#egress)). `ReviewJob` runs one; `ReviewerInJob` calls it for each reviewer on an install whose `INTAKT_CONTAINER_ENGINE` names an engine, on a clone of the head of its own (#2017, part A of #2012, see [Review flow](review-flow.md#where-a-reviewer-runs)), and an install without one reviews in the app's own process. Turning each job failure into a reviewer failure of its own is part B of #2012, and the review's output and schema change with part 2 of #1841. The job holds no account credential yet, so a real reviewer CLI cannot sign in to its vendor from it.
 
 ## The job
 
@@ -41,7 +41,7 @@ Plan task T58, the review job's script (#1923, part 2 of #1861) and its runner (
 
 ## Open
 
-These are decided by the runner's issue (part 2 of #1650), not here: how a `codex` reviewer reads the checkout while its shell tools are off; whether `--setting-sources ''` keeps a `CLAUDE.md` or `.claude/` folder of the head out of Claude Code's prompt; how far Claude Code's `Read` tool reaches outside the checkout; and the statement that the review image is built from main's tree, not from the head under review.
+These are still open, not decided by the review flow's choice of a job (#2017): how a `codex` reviewer reads the checkout while its shell tools are off; whether `--setting-sources ''` keeps a `CLAUDE.md` or `.claude/` folder of the head out of Claude Code's prompt; how far Claude Code's `Read` tool reaches outside the checkout; and the statement that the review image is built from main's tree, not from the head under review.
 
 ## Tests
 
