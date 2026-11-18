@@ -61,7 +61,7 @@ use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 
-// Issue #2757: a scripted model answers blocked with a finding through the real reviewer, the console's use case runs the round, and the page and the console report are read from what it stored.
+// Runs the real reviewer and the console's use case, because the page and the console report must both read the stored verdict, never the model's own word (#2757).
 #[Group('persistence')]
 #[CoversClass(ReviewWithReviewerHandler::class)]
 #[CoversClass(Verdict::class)]
