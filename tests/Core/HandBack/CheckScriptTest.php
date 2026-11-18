@@ -180,7 +180,7 @@ final class CheckScriptTest extends TestCase
     public function testARefusedMergeOfABranchNamedLikeGitsMergeStateFileLeavesNotMerged(): void
     {
         $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
-        // A branch of this name answers a revision lookup of MERGE_HEAD although no merge is in progress.
+        // This name, because a branch called MERGE_HEAD answers a revision lookup of it although no merge is in progress.
         $this->history->startBranch('MERGE_HEAD', 'task');
         $bundle = $this->history->bundle('main..MERGE_HEAD');
         $this->mainMovesWith('added-on-main.txt', "main moved\n");
