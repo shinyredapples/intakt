@@ -161,7 +161,7 @@ final class SymfonyAiVendorJudgeTest extends KernelTestCase
         return new JudgeRequest('Add a cart.', [
             new Finding('F1', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null),
             new Finding('F2', Severity::P3, null, null, null, 'Nit.', FixableBy::Builder, false, null, null),
-        ], Uuid::fromString(self::ROUND));
+        ], Uuid::fromString(self::ROUND), []);
     }
 
     private function vendor(Closure $answer, InMemoryLedger $ledger = new InMemoryLedger()): SymfonyAiVendor
