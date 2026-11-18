@@ -1052,7 +1052,7 @@ final class BuildTaskTest extends TestCase
         return $runner;
     }
 
-    // Runs the given runner's job, then the change, as when the remote moves while the build job runs.
+    // Because the remote can move while the build job runs, and only a change after the job shows which mirror the pre-push check reads.
     private function runnerAfterWhich(JobRunner $built, callable $change): JobRunner
     {
         $runner = self::createStub(JobRunner::class);
