@@ -39,7 +39,7 @@ flowchart TD
 
 ## In the container
 
-`docker/job/check.sh` (POSIX `sh`, with `git`) runs as the job's command after the [start check](job-containers.md#start-check):
+`docker/job/check.sh` (POSIX `sh`, with `git` and `grep`) runs as the job's command after the [start check](job-containers.md#start-check):
 
 1. `git clone --quiet --no-hardlinks` of the mirror into `$TMPDIR/clone` (`/work/clone`), a fresh clone from a read-only mount, then `git rev-parse --verify --quiet HEAD`, the commit of current main (the mirror's `HEAD`, also a detached one); a mirror whose `HEAD` names no commit has no main to merge. The job reads the mirror as it is: `intakt:check:run` does not update it, while `intakt:build:task` updates it right before its pre-push check ([Build task](build-task.md));
 2. `git fetch --quiet --update-head-ok <bundle> +refs/heads/<branch>:refs/heads/<branch>` and `git checkout --quiet --force <branch>`, which applies the bundle. The bundle's commits keep their attribution lines; the head the hand-back check accepted has the same tree.
