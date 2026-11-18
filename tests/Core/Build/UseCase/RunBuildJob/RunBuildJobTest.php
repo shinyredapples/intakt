@@ -73,7 +73,7 @@ final class RunBuildJobTest extends TestCase
 
     private GatesAtOnce $gatesAtOnce;
 
-    private int $toolTimeLimit = 1500;
+    private mixed $toolTimeLimit = 1500;
 
     protected function setUp(): void
     {
@@ -128,6 +128,18 @@ final class RunBuildJobTest extends TestCase
         $this->toolTimeLimit = $seconds;
 
         $this->expectExceptionObject(new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of 3000 seconds, not %d.', $seconds)));
+
+        $this->runBuilds(new JobOutput([]));
+    }
+
+    #[TestWith([true])]
+    #[TestWith(['1500'])]
+    #[TestWith([1500.0])]
+    public function testAToolTimeLimitThatIsNotAWholeNumberIsRefusedAsGiven(mixed $given): void
+    {
+        $this->toolTimeLimit = $given;
+
+        $this->expectExceptionMessageMatches('/tool time limit must be a whole number of seconds, not /');
 
         $this->runBuilds(new JobOutput([]));
     }

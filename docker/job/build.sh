@@ -48,7 +48,7 @@ if [ -n "$gates" ]; then
     INTAKT_GATE_SLOTS="$gates"
     export INTAKT_GATE_SLOTS
 fi
-# The CLI's default and its most for one command, both at the orchestrator's limit, so the builder can ask for neither more nor less than Intakt set.
+# The CLI's default and its most for one command, both at the orchestrator's limit, so the builder gets that limit by default and cannot ask for more (it may still ask for less, or run a command in the background).
 BASH_DEFAULT_TIMEOUT_MS="$((tool_time_limit * 1000))"
 BASH_MAX_TIMEOUT_MS="$BASH_DEFAULT_TIMEOUT_MS"
 export BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS

@@ -60,6 +60,8 @@ final readonly class RunBuildJob
     // Beyond the allowance for the script's cleanup and bundle, so the runner's kill, which keeps no output, is a backstop that never fires first.
     private const int SECONDS = self::ALLOWANCE_SECONDS + 600;
 
+    private int $toolTimeLimitSeconds;
+
     public function __construct(
         private TierResolver $tiers,
         private BuilderPrompt $prompts,
@@ -67,7 +69,7 @@ final readonly class RunBuildJob
         private Gate $gate,
         private GatesAtOnce $gatesAtOnce,
         #[Autowire(param: BuildServices::TOOL_TIME_LIMIT)]
-        private int $toolTimeLimitSeconds,
+        mixed $toolTimeLimitSeconds,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
@@ -75,10 +77,15 @@ final readonly class RunBuildJob
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
     ) {
+        // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
+        if (!is_int($toolTimeLimitSeconds)) {
+            throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be a whole number of seconds, not %s.', get_debug_type($toolTimeLimitSeconds)));
+        }
         // Below the allowance, because a tool call that outlives the session is cut with it anyway.
         if ($toolTimeLimitSeconds < 1 || $toolTimeLimitSeconds >= self::ALLOWANCE_SECONDS) {
             throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of %d seconds, not %d.', self::ALLOWANCE_SECONDS, $toolTimeLimitSeconds));
         }
+        $this->toolTimeLimitSeconds = $toolTimeLimitSeconds;
     }
 
     /**
