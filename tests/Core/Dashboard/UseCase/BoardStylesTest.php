@@ -68,6 +68,15 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.page-head > .head-character + div'] ?? '');
     }
 
+    // The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md).
+    public function testOnAPhoneTheFirstDayHeadlineLinkIsAtLeast44PxTall(): void
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
+        $rules = $this->rulesOf(implode("\n", $blocks[1]));
+
+        self::assertMatchesRegularExpression('/^\s*display:\s*inline-block;\s*min-height:\s*44px;\s*$/', $rules['.page-head .lead .headline-setup'] ?? '');
+    }
+
     public function testABoardWithACardKeepsTheWrapRuleOnTheTitleColumnBehindTheHiddenOctopusTarget(): void
     {
         $rules = $this->rulesOf($this->sheet());

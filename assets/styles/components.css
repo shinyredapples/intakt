@@ -502,6 +502,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .page-head > .head-character + div { flex: 1 1 0; }
   .headline-long { display: none; }
   .headline-short { display: inline; }
+  /* The first-day headline is a link alone in its line, so no sentence exempts it from the phone's 44 px touch target (DESIGN.md). */
+  .page-head .lead .headline-setup { display: inline-block; min-height: 44px; }
 }
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */
