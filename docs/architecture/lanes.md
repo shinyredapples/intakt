@@ -1,5 +1,7 @@
 # The build lane's review cap
 
+Until part 2 of #965 (D3) changes the design text, `docs/design/05-architecture/08-merge.md` still describes the cap as heads "whose CI has finished"; the code follows D1 of #2573, which counts only heads waiting for a reviewer.
+
 The `Core/Lanes` module holds the admission rule of the build lane's review cap (plan T56, issue #2573). The build lane itself (slots, Messenger, the Workflow state machine, the `urgent` exception, pause and drain) is not built yet, so nothing calls the rule today.
 
 **Which heads count.** `Contract\HeadWait` is the closed set of phases a pushed head waits in:
