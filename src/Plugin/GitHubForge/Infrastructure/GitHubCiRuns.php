@@ -124,7 +124,7 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param list<array<mixed>>                                       $entries
+     * @param list<array<mixed>>                                     $entries
      * @param callable(array<mixed>): array{CiRunOrigin, CiRunState} $runOf
      *
      * @return list<CiRun>
