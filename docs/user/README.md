@@ -228,7 +228,7 @@ Each gate's line shows at most 10 findings (`omitted` says how many more there a
 {"result":"fail","failed":["dashes"],"report":"var/check/report.json"}
 ```
 
-The file holds `result` and `failed`, then under `gates` one entry per gate with `gate`, `ok`, every finding in full, and the gate's `note` and `slowest` when it has them. Letters outside plain ASCII are written as `\u` escapes (a long dash shows as `—`). For a gate whose process crashed or timed out, the entry is the gate's line as printed. Each run replaces the file. Only the gate lines decide whether the check passes; when the file cannot be written, the last line simply has no `report`, and the result and exit code are the same. `bin/check --static-gates`, a usage error and a missing tool write no report.
+The file holds `result` and `failed`, then under `gates` one entry per gate with `gate`, `ok`, every finding in full, and the gate's `note` and `slowest` when it has them. Letters outside plain ASCII are written as `\u` escapes followed by their four-digit code (a long dash shows as backslash, `u2014`). For a gate whose process crashed or timed out, the entry is the gate's line as printed. Each run replaces the file. Only the gate lines decide whether the check passes; when the file cannot be written, the last line simply has no `report`, and the result and exit code are the same. `bin/check --static-gates`, a usage error and a missing tool write no report.
 
 ## Listing the static gates and the gate order
 
