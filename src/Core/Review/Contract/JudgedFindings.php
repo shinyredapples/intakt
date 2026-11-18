@@ -67,8 +67,9 @@ final readonly class JudgedFindings
 
         $notes = [];
         foreach ($judgement->marks as $judged) {
-            $reason = trim($judged->reason ?? '');
-            if (Mark::Act !== $judged->mark && ($blocking[$judged->id] ?? false) && '' !== $reason) {
+            // Kept untrimmed, because a credential this install holds is matched with its own edge whitespace when the note is redacted.
+            $reason = $judged->reason ?? '';
+            if (Mark::Act !== $judged->mark && ($blocking[$judged->id] ?? false) && '' !== trim($reason)) {
                 $notes[$judged->id] = $reason;
             }
         }

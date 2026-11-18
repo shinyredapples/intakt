@@ -92,11 +92,11 @@ final class JudgedFindingsTest extends TestCase
         self::assertSame([], $judged->followUps);
     }
 
-    public function testAP1RejectedWithAReasonKeepsTheJudgesNote(): void
+    public function testAP1RejectedWithAReasonKeepsTheJudgesNoteAsTheJudgeGaveIt(): void
     {
         $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Reject, null, '  Not a bug here.  ')]), [$this->finding('a', Severity::P1)]);
 
-        self::assertSame(['a' => 'Not a bug here.'], $judged->judgeNotes);
+        self::assertSame(['a' => '  Not a bug here.  '], $judged->judgeNotes);
         self::assertCount(1, $judged->actList);
     }
 

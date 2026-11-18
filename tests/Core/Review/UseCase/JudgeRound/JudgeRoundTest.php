@@ -177,6 +177,48 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame(['F1' => 'The configured value is [redacted].'], $this->judgeDonePayloads()[0]['judge_notes']);
     }
 
+    public function testAJudgesNoteIsStoredWithItsEdgeWhitespaceTrimmed(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, "  Not a bug here. \n")])))($this->judgingOf($round));
+
+        self::assertSame(['F1' => 'Not a bug here.'], $this->judgeDonePayloads()[0]['judge_notes']);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function reasonsHoldingACredentialWithEdgeWhitespace(): array
+    {
+        return [
+            'credential at the end' => ['The value was:%s', 'The value was:[redacted]'],
+            'credential at the start' => ['%sis the value.', '[redacted]is the value.'],
+            'credential in the middle' => ['Value:%sand more.', 'Value:[redacted]and more.'],
+        ];
+    }
+
+    #[DataProvider('reasonsHoldingACredentialWithEdgeWhitespace')]
+    public function testAJudgesNoteIsRedactedBeforeItsEdgeWhitespaceIsTrimmed(string $format, string $redacted): void
+    {
+        $round = $this->completedRound();
+        $held = " synthetic opaque credential \n";
+        $original = $_ENV['APP_SECRET'] ?? null;
+        $_ENV['APP_SECRET'] = $held;
+
+        try {
+            $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, sprintf($format, $held))])))($this->judgingOf($round));
+        } finally {
+            if (null === $original) {
+                unset($_ENV['APP_SECRET']);
+            } else {
+                $_ENV['APP_SECRET'] = $original;
+            }
+        }
+
+        self::assertSame(['F1' => $redacted], $this->judgeDonePayloads()[0]['judge_notes']);
+    }
+
     public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
     {
         $round = $this->completedRound();

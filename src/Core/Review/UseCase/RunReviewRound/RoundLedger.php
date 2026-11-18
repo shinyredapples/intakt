@@ -120,8 +120,8 @@ final readonly class RoundLedger
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
-            // Redacted before it is stored, the install's own credentials included, because the note is model text that every reader of the act list gets back.
-            array_map($this->redactor->redact(...), $judged->judgeNotes),
+            // Redacted before it is stored, the install's own credentials included, because the note is model text that every reader of the act list gets back; trimmed only afterwards, because a held credential is matched with its own edge whitespace.
+            array_map(fn (string $note): string => trim($this->redactor->redact($note)), $judged->judgeNotes),
         ));
     }
 
