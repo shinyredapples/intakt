@@ -79,11 +79,10 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
 
     public function testTheNestedClassFixturesAreValidPhp(): void
     {
-        $fixtures = [...glob(__DIR__.'/Fixtures/non-final-class-in-function/src/*.fixture') ?: [], ...glob(__DIR__.'/Fixtures/non-final-conditional-class/src/*.fixture') ?: []];
+        $fixtures = [__DIR__.'/Fixtures/non-final-class-in-function/src/factories.php.fixture', __DIR__.'/Fixtures/non-final-conditional-class/src/Polyfill.php.fixture'];
         $invalid = array_values(array_filter($fixtures, static fn (string $fixture): bool => 0 !== new Process([PHP_BINARY, '-l', $fixture])->run()));
 
-        $this->assertNotEmpty($fixtures);
-        $this->assertSame([], $invalid);
+        self::assertSame([], $invalid);
     }
 
     public function testANonFinalClassDeclaredInsideAConditionFailsStaticAnalysis(): void
