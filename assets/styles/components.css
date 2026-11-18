@@ -502,6 +502,8 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
   .page-head > .head-character + div { flex: 1 1 0; }
   .headline-long { display: none; }
   .headline-short { display: inline; }
+  /* The first-day headline is a link alone on its line, wrapped to two lines a little under a touch target. */
+  .page-head .lead .headline-start { display: inline-block; min-height: 44px; }
 }
 
 /* The pages' sections, data tables (the mocks' .ledger), the failing-head cards and the live log of a running review. */

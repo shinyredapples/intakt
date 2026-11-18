@@ -122,6 +122,11 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $link->text());
     }
 
+    public function testAFreshInstallsHeadlineLinkCarriesTheClassThatMakesItATouchTargetOnAPhone(): void
+    {
+        self::assertSame(['headline-start'], $this->rendered(new Headline(new WhoIsWorking([]), [], 0))->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('class')));
+    }
+
     private function rendered(Headline $headline): Crawler
     {
         $twig = self::getContainer()->get(Environment::class);
