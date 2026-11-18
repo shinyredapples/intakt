@@ -216,6 +216,43 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(2, $updated->filter('main > #board-octopus.firstday img[src*="octopus-waiting-"]'));
     }
 
+    public function testABoardPushedEmptyToAPageLoadedAfterAReviewBringsBackTheSetUpActionItsPanelAsksFor(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+        $empty = $this->lastShellUpdate();
+        $this->ledger->startRoundOf('feat/a', self::ROUND, 1);
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(0, $page->filter('.page-head .actions a[href="/setup"]'));
+
+        $updated = $this->replaced($page, $empty);
+
+        self::assertStringContainsString('Choose Set up Intakt', $updated->filter('.firstday ol > li')->first()->text());
+        self::assertCount(1, $updated->filter('.page-head .actions a[href="/setup"]'));
+        self::assertCount(1, $updated->filter('.page-head .actions a[href="/reviews"]'));
+    }
+
+    public function testTheFirstReviewPushedToAFreshBoardTakesTheSetUpActionOutOfTheHead(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(1, $page->filter('.page-head .actions a[href="/setup"]'));
+
+        $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
+
+        self::assertCount(0, $updated->filter('.page-head .actions a[href="/setup"]'));
+        self::assertCount(1, $updated->filter('.page-head .actions a[href="/reviews"]'));
+    }
+
+    public function testThePushedHeadActionsAreTheSameMarkupAsTheActionsOfAPageLoadedAfterThem(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $pushed = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][target="board-actions"] template');
+
+        $page = $this->browser->request('GET', '/');
+        self::assertCount(1, $pushed);
+        self::assertSame($page->filter('#board-actions')->outerHtml(), trim($pushed->html()));
+    }
+
     public function testABoardPageLoadedAfterAReviewHoldsAnEmptyHiddenOctopusTarget(): void
     {
         $this->ledger->startRoundOf('feat/a', self::ROUND, 1);

@@ -11,11 +11,7 @@
         {# The id is the target of the pushed headline (LiveBoardHeadline), which updates only the words inside, so the line rendered here stays when live updates are off. #}
         <p class="lead" id="board-headline">{{ include('dashboard/_board_headline.html.twig', {headline: board.headline}, with_context = false) }}</p>
     </div>
-    <div class="actions">
-        {# Only while no review has run, because after that the Projects page carries the link (#2067, D3). #}
-        {% if board.firstDay %}<a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Set up Intakt</a>{% endif %}
-        <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
-    </div>
+    {{ include('dashboard/_board_actions.html.twig', {board: board}, with_context = false) }}
 </div>
 {% for main in failing_mains %}
     {% set headline = 'Main of ' ~ main.project ~ ' does not boot' %}
