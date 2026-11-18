@@ -19,6 +19,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Evidence;
+use Intakt\Core\Review\Contract\JobReview;
 use Intakt\Core\Review\Contract\Judge;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -156,7 +157,7 @@ final readonly class SymfonyAiVendor implements Vendor
         $stopped = $request->conversation;
         $conversation = new ReviewerConversation($stopped->rolePrompt, new UuidV7(UuidV7::generate($this->clock->now())), $stopped->round, $stopped->reviewerId, askedAgain: true);
 
-        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+        return new ReviewRequest($request->checkout, $request->brief, $conversation, $request->job);
     }
 
     // Told what its answer lacked, so the same reviewer names its findings or approves instead of repeating an empty changes answer.
@@ -172,7 +173,7 @@ final readonly class SymfonyAiVendor implements Vendor
             askedToNameFindings: true,
         );
 
-        return new ReviewRequest($request->checkout, $request->brief, $conversation);
+        return new ReviewRequest($request->checkout, $request->brief, $conversation, $request->job);
     }
 
     private function answering(string $project, Tier $tier): ResolvedModel
@@ -213,7 +214,7 @@ final readonly class SymfonyAiVendor implements Vendor
     private function verdictThrough(TierRoutedPlatform $platform, UsageReservation $reservation, ReviewRequest $request): Verdict
     {
         try {
-            $verdict = $this->reviewer->review($request, $platform, $platform->answering->model);
+            $verdict = $this->reviewer->review($request, $platform, $platform->answering);
         } catch (VerdictUnreadable $unreadable) {
             // Settled, because the call ended with an answer and its usage is known.
             $this->usage->settle($reservation, ...$platform->rounds());
@@ -229,7 +230,7 @@ final readonly class SymfonyAiVendor implements Vendor
 
         $this->usage->settle($reservation, ...$platform->rounds());
 
-        return $this->readOrRefused($platform, $this->namingAFinding($verdict));
+        return $this->readOrRefused($platform, $request, $this->namingAFinding($verdict));
     }
 
     // Refused after the usage is settled, because the call itself finished and was paid for.
@@ -238,7 +239,7 @@ final readonly class SymfonyAiVendor implements Vendor
         return $verdict->withholdsApprovalWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
     }
 
-    // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
+    // Only a subscription CLI in the app's own process is given the review server, because every other provider reaches it through the reviewer's own toolbox and a review job's CLI reads its checkout directly; the judge reads no repository.
     /**
      * @return array<string, mixed>
      */
@@ -246,7 +247,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $round = $request->conversation->round;
 
-        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid) {
+        if ($answering->provider->readsTheCheckout() || $request->job instanceof JobReview || !$round instanceof Uuid) {
             return [];
         }
 
@@ -300,10 +301,10 @@ final readonly class SymfonyAiVendor implements Vendor
         return true;
     }
 
-    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.
-    private function readOrRefused(TierRoutedPlatform $platform, Verdict $verdict): Verdict
+    // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI in the app's own process reads the change only through the review server this call gave it, while in a review job it reads the checkout mounted into the job.
+    private function readOrRefused(TierRoutedPlatform $platform, ReviewRequest $request, Verdict $verdict): Verdict
     {
-        if (Decision::Approve !== $verdict->verdict || $platform->answering->provider->readsTheCheckout()) {
+        if (Decision::Approve !== $verdict->verdict || $platform->answering->provider->readsTheCheckout() || $request->job instanceof JobReview) {
             return $verdict;
         }
 

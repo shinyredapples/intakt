@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
+use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
@@ -26,7 +28,7 @@ final readonly class AgentVendor implements Vendor
     #[Override]
     public function review(string $project, Tier $tier, ReviewRequest $request): VendorReview
     {
-        return new VendorReview($this->reviewer->review($request, $this->platform, 'reviewer-model'));
+        return new VendorReview($this->reviewer->review($request, $this->platform, new ResolvedModel(Provider::Anthropic, 'reviewer-model')));
     }
 
     #[Override]
