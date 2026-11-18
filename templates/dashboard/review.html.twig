@@ -106,8 +106,8 @@
 </div></div>
 {% endif %}
 <div class="task-grid" data-pane="timeline">
-{# A tab panel only while the tabs exist, so its label never names a tab the page lacks. #}
-<section class="tl-pane" id="timeline-pane"{% if active is not null %} role="tabpanel" aria-labelledby="timeline-tab"{% else %} aria-labelledby="timeline-title"{% endif %}>
+{# A tab panel only while the tabs exist, so its label never names a tab the page lacks. A pane is rendered as a phone shows it; assets/task-panes.js names it by its data-heading while both panes are shown. #}
+<section class="tl-pane" id="timeline-pane"{% if active is not null %} role="tabpanel" aria-labelledby="timeline-tab" tabindex="0" data-heading="timeline-title"{% else %} aria-labelledby="timeline-title"{% endif %}>
 <h2 class="timeline-title" id="timeline-title">Timeline</h2>
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
@@ -149,7 +149,7 @@
 {% endfor %}
 </section>
 {% if active is not null %}
-<aside class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab">
+<aside class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab" tabindex="0" data-heading="live-log-title">
     <h2 id="live-log-title">Live log of round {{ active.number ?? '(number not recorded)' }}</h2>
     <div class="log-main">
     {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}

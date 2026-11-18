@@ -8,6 +8,8 @@ const TAB = '.ttabs [data-pane]';
 const FINDING_BUTTON = '[data-highlight-finding]';
 const FINDING_LINK = 'a.sb-finding';
 const TIMELINE_ENTRY = 'li[data-finding]';
+const ROUND = 'details.ev';
+const PHONE = '(max-width: 760px)';
 
 class FakeTarget extends FakeElement {
     constructor(matches) {
@@ -36,21 +38,71 @@ class FakeKey {
     }
 }
 
+class FakeView {
+    constructor(phone) {
+        this.matches = phone;
+    }
+
+    matchMedia(query) {
+        assert.equal(query, PHONE);
+
+        return this;
+    }
+
+    addEventListener(type, listener) {
+        assert.equal(type, 'change');
+        this.change = listener;
+    }
+
+    resize(phone) {
+        this.matches = phone;
+        this.change({ matches: phone });
+    }
+}
+
+class FakeRound extends FakeElement {
+    open = true;
+
+    constructor(page) {
+        super();
+        this.summary = new FakeTarget([]);
+        this.summary.page = page;
+    }
+
+    querySelector(selector) {
+        assert.equal(selector, 'summary');
+
+        return this.summary;
+    }
+}
+
 class FakePage {
     grid = new FakeElement();
     tabs = [];
+    panes = new Map();
     entries = [];
     focused = null;
 
     constructor() {
         this.grid.setAttribute('data-pane', 'timeline');
-        for (const [pane, selected, tabindex] of [['timeline', 'true', '0'], ['log', 'false', '-1']]) {
+        for (const [pane, selected, tabindex, id, paneId, heading] of [
+            ['timeline', 'true', '0', 'timeline-tab', 'timeline-pane', 'timeline-title'],
+            ['log', 'false', '-1', 'live-log-tab', 'live-log-pane', 'live-log-title'],
+        ]) {
             const tab = new FakeTarget([TAB]);
             tab.page = this;
             tab.setAttribute('data-pane', pane);
             tab.setAttribute('aria-selected', selected);
             tab.setAttribute('tabindex', tabindex);
+            tab.setAttribute('id', id);
+            tab.setAttribute('aria-controls', paneId);
             this.tabs.push(tab);
+            const panel = new FakeElement();
+            panel.setAttribute('role', 'tabpanel');
+            panel.setAttribute('aria-labelledby', id);
+            panel.setAttribute('tabindex', '0');
+            panel.setAttribute('data-heading', heading);
+            this.panes.set(paneId, panel);
         }
         const entry = new FakeElement();
         entry.setAttribute('id', 'round-1-finding-F1');
@@ -59,8 +111,25 @@ class FakePage {
     }
 
     addEventListener(type, listener) {
-        assert.ok(['click', 'keydown'].includes(type));
+        assert.ok(['click', 'keydown', 'turbo:load', 'turbo:render'].includes(type));
         this[type] = listener;
+    }
+
+    getElementById(id) {
+        return this.panes.get(id) ?? null;
+    }
+
+    pane(id) {
+        const pane = this.panes.get(id);
+
+        return ['role', 'aria-labelledby', 'tabindex'].map((name) => pane.getAttribute(name));
+    }
+
+    inRound(round) {
+        const target = new FakeTarget([]);
+        target.closest = (selector) => (selector === ROUND ? round : null);
+
+        return target;
     }
 
     press(target, key, modifiers = {}) {
@@ -92,11 +161,107 @@ class FakePage {
 }
 
 function reviewPageOnAPhone() {
+    return reviewPage(new FakeView(true));
+}
+
+function reviewPage(view) {
     const page = new FakePage();
-    switchTaskPanes(page);
+    page.view = view;
+    switchTaskPanes(page, view);
 
     return page;
 }
+
+test('on a phone each pane is a tab panel labelled by its tab and a Tab stop', () => {
+    const page = reviewPageOnAPhone();
+
+    assert.deepEqual(page.pane('timeline-pane'), ['tabpanel', 'timeline-tab', '0']);
+    assert.deepEqual(page.pane('live-log-pane'), ['tabpanel', 'live-log-tab', '0']);
+});
+
+test('beside each other the panes are no tab panels and their headings label them', () => {
+    const page = reviewPage(new FakeView(false));
+
+    assert.deepEqual(page.pane('timeline-pane'), [null, 'timeline-title', null]);
+    assert.deepEqual(page.pane('live-log-pane'), [null, 'live-log-title', null]);
+});
+
+test('narrowing the window to a phone makes the panes tab panels again', () => {
+    const page = reviewPage(new FakeView(false));
+
+    page.view.resize(true);
+
+    assert.deepEqual(page.pane('live-log-pane'), ['tabpanel', 'live-log-tab', '0']);
+});
+
+test('widening the window past a phone drops the tab panels', () => {
+    const page = reviewPageOnAPhone();
+
+    page.view.resize(false);
+
+    assert.deepEqual(page.pane('live-log-pane'), [null, 'live-log-title', null]);
+});
+
+test('a review page a visit puts in later fits the width too', () => {
+    const page = reviewPage(new FakeView(false));
+    const fresh = page.panes.get('live-log-pane');
+    fresh.setAttribute('role', 'tabpanel');
+    fresh.setAttribute('aria-labelledby', 'live-log-tab');
+
+    page['turbo:load']();
+
+    assert.deepEqual(page.pane('live-log-pane'), [null, 'live-log-title', null]);
+});
+
+test('a page without the tabs keeps its panes as rendered', () => {
+    const page = new FakePage();
+    page.tabs = [];
+
+    switchTaskPanes(page, new FakeView(false));
+
+    assert.deepEqual(page.pane('timeline-pane'), ['tabpanel', 'timeline-tab', '0']);
+});
+
+test('Escape in an open round folds it and puts focus on its head', () => {
+    const page = reviewPageOnAPhone();
+    const round = new FakeRound(page);
+
+    const key = page.press(page.inRound(round), 'Escape');
+
+    assert.equal(round.open, false);
+    assert.equal(page.focused, round.summary);
+    assert.equal(key.defaultPrevented, true);
+});
+
+test('Escape in a folded round stays the browser\'s', () => {
+    const page = reviewPageOnAPhone();
+    const round = new FakeRound(page);
+    round.open = false;
+
+    const key = page.press(page.inRound(round), 'Escape');
+
+    assert.equal(round.open, false);
+    assert.equal(page.focused, null);
+    assert.equal(key.defaultPrevented, false);
+});
+
+test('Escape outside any round stays the browser\'s', () => {
+    const page = reviewPageOnAPhone();
+
+    const key = page.press(page.inRound(null), 'Escape');
+
+    assert.equal(key.defaultPrevented, false);
+});
+
+test('another key in an open round keeps it open', () => {
+    const page = reviewPageOnAPhone();
+    const round = new FakeRound(page);
+
+    const key = page.press(page.inRound(round), 'Enter');
+
+    assert.equal(round.open, true);
+    assert.equal(key.defaultPrevented, false);
+});
 
 function findingButton(id) {
     const button = new FakeTarget([FINDING_BUTTON]);

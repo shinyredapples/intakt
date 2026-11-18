@@ -53,6 +53,31 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertSame(['timeline-tab', 'live-log-tab'], $crawler->filter('.ttabs button[role="tab"]')->each(static fn (Crawler $tab): ?string => $tab->attr('id')));
     }
 
+    public function testTheLiveLogIsATabStopBeforeAnyReviewerHasStarted(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $log = $crawler->filter('#live-log-pane');
+        self::assertSame('tabpanel', $log->attr('role'));
+        self::assertSame('0', $log->attr('tabindex'));
+        self::assertCount(0, $crawler->filter('#live-log-pane :is(a[href], button, summary, [tabindex])'));
+    }
+
+    public function testEachTabPanelNamesTheHeadingThatLabelsItWhileBothPanesAreShown(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $headings = $crawler->filter('.task-grid > [role="tabpanel"]')->each(static fn (Crawler $pane): ?string => $pane->attr('data-heading'));
+        self::assertSame(['timeline-title', 'live-log-title'], $headings);
+        foreach ($headings as $heading) {
+            self::assertCount(1, $crawler->filter('h2#'.$heading));
+        }
+    }
+
     public function testOnlyTheChosenTabStartsInTheTabOrder(): void
     {
         $this->givenARunningRound();

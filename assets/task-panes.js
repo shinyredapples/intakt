@@ -2,9 +2,19 @@ const TAB = '.ttabs [data-pane]';
 const FINDING_BUTTON = '[data-highlight-finding]';
 const FINDING_LINK = 'a.sb-finding';
 const TIMELINE_ENTRY = 'li[data-finding]';
+const ROUND = 'details.ev';
+// The width below which the stylesheet shows the tabs and only one pane.
+const PHONE = '(max-width: 760px)';
 
 // Not a Stimulus controller, because a review page the hub cannot reach loads no import map and a phone could never reach its live log. Listens on the page once.
-export function switchTaskPanes(page) {
+export function switchTaskPanes(page, view) {
+    const phone = view.matchMedia(PHONE);
+    const fit = () => fitPanes(page, phone.matches);
+    phone.addEventListener('change', fit);
+    // A visit or a refresh puts the panes in again as the server rendered them, which is the phone's form.
+    page.addEventListener('turbo:load', fit);
+    page.addEventListener('turbo:render', fit);
+    fit();
     page.addEventListener('click', (event) => {
         const tab = event.target?.closest?.(TAB);
         if (tab) {
@@ -18,6 +28,11 @@ export function switchTaskPanes(page) {
         }
     });
     page.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            foldRound(event);
+
+            return;
+        }
         const tab = event.target?.closest?.(TAB);
         const next = tab ? tabFor(page, tab, event) : null;
         if (!next) {
@@ -63,6 +78,36 @@ function hasTimelineEntry(page, target) {
     return [...page.querySelectorAll(TIMELINE_ENTRY)].some((cell) => finding
         ? cell.getAttribute('data-finding').split(' ').includes(finding)
         : cell.getAttribute('id') === anchor);
+}
+
+// Escape closes the round the reader opened, and focus goes back to its head so the next Tab goes on from there instead of from a hidden element.
+function foldRound(event) {
+    const round = event.target?.closest?.(ROUND);
+    if (!round?.open) {
+        return;
+    }
+    event.preventDefault();
+    round.open = false;
+    round.querySelector('summary').focus();
+}
+
+// The tabs are hidden while both panes are shown, so the panes are then a section and an aside named by their headings; on a phone each is a tab panel named by its tab and a Tab stop, so a live log with nothing focusable in it yet is still reached.
+function fitPanes(page, onPhone) {
+    for (const tab of page.querySelectorAll(TAB)) {
+        const pane = page.getElementById(tab.getAttribute('aria-controls'));
+        if (!pane) {
+            continue;
+        }
+        if (onPhone) {
+            pane.setAttribute('role', 'tabpanel');
+            pane.setAttribute('aria-labelledby', tab.getAttribute('id'));
+            pane.setAttribute('tabindex', '0');
+        } else {
+            pane.removeAttribute('role');
+            pane.setAttribute('aria-labelledby', pane.getAttribute('data-heading'));
+            pane.removeAttribute('tabindex');
+        }
+    }
 }
 
 // Only the chosen tab stays a Tab stop, so Tab leaves the tabs instead of walking through both.
