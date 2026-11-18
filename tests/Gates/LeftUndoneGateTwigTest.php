@@ -40,6 +40,7 @@ final class LeftUndoneGateTwigTest extends SandboxTestCase
         yield 'an XXX comment' => ['{# XXX breaks on empty orders #}', 'XXX'];
         yield 'a comment trimming whitespace' => ['{#- TODO show the total -#}', 'TODO'];
         yield 'an inline comment' => ['{{ order.total # TODO round it', 'TODO'];
+        yield 'a comment inside an HTML comment' => ['<!-- {# TODO finish this #} -->', 'TODO'];
     }
 
     #[DataProvider('addedTwigMarkerComments')]
