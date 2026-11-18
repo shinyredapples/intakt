@@ -39,6 +39,8 @@ Planned: within one priority and milestone, a task that more other tasks wait on
 
 **The review cap** (planned: the rule is written, but the build lane does not use it yet) stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Only work that is waiting for a reviewer, or being read by one, counts. Work that is waiting for its checks (CI), for a machine to run them, or to be merged doesn't count towards the cap, and neither does work waiting for *you* or on hold, because no reviewer can move it: otherwise the builders would pause while the reviewers have nothing to read.
 
+**The in-flight limit** (planned: the rule is written, but the build lane does not use it yet) is a second, higher bound beside the review cap. It counts every piece of finished work that is pushed but not merged yet, whatever it waits for: a reviewer, a review in progress, its checks, a machine to run them, or the merge. When that count reaches the limit, the builders pause too, even if the review cap is not full. By default the limit is twice the review cap. The two limits do different jobs: the review cap keeps builders from outrunning the reviewers, and the in-flight limit keeps the pile of unmerged work small, because every piece of it may clash with the others when they are merged, and each one needs its checks run.
+
 ## Ticks, events and deadlines: what makes things move
 
 Some loops run on a **tick**: a clock that wakes every lane every few minutes ("anything to do?"). Intakt mostly doesn't need one. It reacts to **events** the moment they happen:
@@ -157,4 +159,5 @@ While a slot drains, the dashboard says "draining" on that slot; it usually take
 | **Hand-over** | the task goes to the maintainer agent, which decides what happens next |
 | **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
 | **Review cap** (planned) | at most a few pieces of finished work wait for a reviewer (or are being reviewed) before the builders pause; work waiting for its checks or to be merged doesn't count |
+| **In-flight limit** (planned) | at most a few more pieces of finished but unmerged work exist, whatever they wait for, before the builders pause; twice the review cap by default |
 | **Parked** | a job that is waiting for something outside (CI, you) and has given its bench back |
