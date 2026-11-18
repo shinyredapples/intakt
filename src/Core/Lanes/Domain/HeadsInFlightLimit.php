@@ -18,7 +18,7 @@ final readonly class HeadsInFlightLimit
     public static function twiceThe(ReviewCap $cap): self
     {
         if ($cap->heads > intdiv(PHP_INT_MAX, 2)) {
-            throw HeadsInFlightLimitMustBePositive::twiceTooLarge($cap->heads);
+            throw ReviewCapTooLargeToDouble::given($cap->heads);
         }
 
         return new self($cap->heads * 2);
@@ -27,6 +27,10 @@ final readonly class HeadsInFlightLimit
     // A count, not a list of waits, because heads awaiting owner approval, on hold or queued for rework have no HeadWait case but still conflict and use CI.
     public function admitsABuildBeside(int $headsInFlight): bool
     {
+        if ($headsInFlight < 0) {
+            throw HeadsInFlightCountMustNotBeNegative::given($headsInFlight);
+        }
+
         return $headsInFlight < $this->heads;
     }
 }

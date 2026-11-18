@@ -7,13 +7,17 @@ namespace Intakt\Tests\Core\Lanes\Domain;
 use Intakt\Core\Lanes\Contract\HeadWait;
 use Intakt\Core\Lanes\Domain\HeadsInFlightLimit;
 use Intakt\Core\Lanes\Domain\HeadsInFlightLimitMustBePositive;
+use Intakt\Core\Lanes\Domain\HeadsInFlightCountMustNotBeNegative;
 use Intakt\Core\Lanes\Domain\ReviewCap;
+use Intakt\Core\Lanes\Domain\ReviewCapTooLargeToDouble;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(HeadsInFlightLimit::class)]
 #[CoversClass(HeadsInFlightLimitMustBePositive::class)]
+#[CoversClass(HeadsInFlightCountMustNotBeNegative::class)]
+#[CoversClass(ReviewCapTooLargeToDouble::class)]
 #[UsesClass(HeadWait::class)]
 #[UsesClass(ReviewCap::class)]
 final class HeadsInFlightLimitTest extends TestCase
@@ -85,8 +89,15 @@ final class HeadsInFlightLimitTest extends TestCase
 
     public function testADefaultTooLargeToHoldIsRefusedAsADomainError(): void
     {
-        $this->expectException(HeadsInFlightLimitMustBePositive::class);
+        $this->expectException(ReviewCapTooLargeToDouble::class);
 
         HeadsInFlightLimit::twiceThe(new ReviewCap(intdiv(PHP_INT_MAX, 2) + 1));
+    }
+
+    public function testANegativeCountOfHeadsInFlightIsRefused(): void
+    {
+        $this->expectException(HeadsInFlightCountMustNotBeNegative::class);
+
+        new HeadsInFlightLimit(2)->admitsABuildBeside(-1);
     }
 }
