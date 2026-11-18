@@ -28,7 +28,11 @@ final readonly class BuildContext
 
         try {
             $this->write($plan, $directory, $file);
-            $stream = fopen($file, 'r') ?: throw JobImageNotBuilt::contextUnreadable($file);
+            $stream = fopen($file, 'r');
+
+            if (false === $stream) {
+                throw JobImageNotBuilt::contextUnreadable($file);
+            }
 
             return $send($stream);
         } finally {

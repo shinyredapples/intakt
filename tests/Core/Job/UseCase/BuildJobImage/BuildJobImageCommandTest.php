@@ -95,6 +95,7 @@ final class BuildJobImageCommandTest extends TestCase
     private string $url = '';
     private ?BuildJobImage $racing = null;
     private ?string $sentFrom = null;
+    private int $status = 200;
 
     /** @var list<MockResponse> */
     private array $requests = [];
@@ -224,7 +225,9 @@ final class BuildJobImageCommandTest extends TestCase
 
     public function testTheContextFileIsGoneAlsoWhenTheEngineFails(): void
     {
-        $tester = $this->whenTheCommandRuns('{"message":"invalid reference format"}', status: 400);
+        $this->status = 400;
+
+        $tester = $this->whenTheCommandRuns('{"message":"invalid reference format"}');
 
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertIsString($this->sentFrom);
@@ -273,15 +276,15 @@ final class BuildJobImageCommandTest extends TestCase
     /**
      * @param array<string, string> $options
      */
-    private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main', array $options = [], int $status = 200): CommandTester
+    private function whenTheCommandRuns(string $stream, string $tag = 'intakt-job/demo:main', array $options = []): CommandTester
     {
-        $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream, $status): MockResponse {
+        $client = new MockHttpClient(function (string $method, string $url, array $options) use ($stream): MockResponse {
             $this->url = $url;
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
             $body = is_resource($options['body']) ? $options['body'] : self::fail('The build context is no stream.');
             $this->sentFrom = stream_get_meta_data($body)['uri'] ?? null;
             new Filesystem()->dumpFile($this->context, (string) stream_get_contents($body));
-            $response = new MockResponse($stream, ['http_code' => $status]);
+            $response = new MockResponse($stream, ['http_code' => $this->status]);
             $this->requests[] = $response;
 
             return $response;

@@ -107,7 +107,8 @@ final class DockerEngineBuildTest extends TestCase
      */
     private function context()
     {
-        $context = fopen('php://memory', 'w+') ?: self::fail('No memory stream.');
+        $context = fopen('php://memory', 'w+');
+        self::assertIsResource($context);
         fwrite($context, 'tar bytes');
         rewind($context);
 
