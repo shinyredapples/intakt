@@ -230,6 +230,15 @@ final class BuildScriptTest extends TestCase
         self::assertSame([$process], $stillRunning);
     }
 
+    public function testTheWaitForTheWatchdogCountsAProcessWhoseStateCannotBeReadOnceCheckedAsEnded(): void
+    {
+        // A folder passes a readability check and then fails the read, as the stat file of a process reaped in between does.
+        $stat = $this->history->folder.'/reaped';
+        new Filesystem()->mkdir($stat);
+
+        self::assertFalse($this->statShowsALiveProcess($stat));
+    }
+
     public function testTheCliWorksInAFreshCloneOnTheTasksBranchWithOnlyTheBuildClonesBranches(): void
     {
         $head = $this->history->commit('Earlier build work');
@@ -427,13 +436,13 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/sleep', 0o755);
     }
 
-    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it ends after ten seconds at the latest, so a failed test leaves nothing.
+    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and ends once tearDown removes the folder, so a failed test leaves nothing.
     private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(): void
     {
         $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
         file_put_contents($this->bin.'/sleep', <<<SH
             #!/bin/sh
-            setsid sh -c 'echo \$\$ > "\$RECORD/stand-in.\$2"; i=0; until [ -e "\$RECORD/build-returned" ] || [ "\$i" -ge 200 ]; do i=\$((i + 1)); "\$1" 0.05; done' stand-in {$sleep} \$\$ > /dev/null 2>&1 &
+            setsid sh -c 'echo \$\$ > "\$RECORD/stand-in.\$2"; until [ -e "\$RECORD/build-returned" ] || [ ! -d "\$RECORD" ]; do "\$1" 0.05; done' stand-in {$sleep} \$\$ > /dev/null 2>&1 &
             until [ -s "\$RECORD/stand-in.\$\$" ]; do :; done
             cat "\$RECORD/stand-in.\$\$" >> "\$RECORD/sleeps"
             echo \$\$ >> "\$RECORD/sleeps"
@@ -471,10 +480,16 @@ final class BuildScriptTest extends TestCase
 
     private function isRunning(int $process): bool
     {
-        $stat = is_readable('/proc/'.$process.'/stat') ? file_get_contents('/proc/'.$process.'/stat') : false;
+        return $this->statShowsALiveProcess('/proc/'.$process.'/stat');
+    }
+
+    // One read and no check before it, because a process reaped between a check and the read would turn the read into a warning.
+    private function statShowsALiveProcess(string $stat): bool
+    {
+        $state = @file_get_contents($stat);
 
         // A zombie counts as ended, because a container's first process may never reap what the killed watchdog left.
-        return false !== $stat && 'Z' !== substr($stat, (int) strrpos($stat, ')') + 2, 1);
+        return is_string($state) && '' !== $state && 'Z' !== substr($state, (int) strrpos($state, ')') + 2, 1);
     }
 
     private function givenGitLeavesAPartialBundleAndFails(): void
