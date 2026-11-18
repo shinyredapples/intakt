@@ -105,6 +105,12 @@ final class FindingKeysTest extends TestCase
         yield 'a missing file name without a directory' => ['Kernel.php is not restart safe.'];
         yield 'plain words' => ['The save is not restart safe.'];
         yield 'a missing file name without a directory or an extension' => ['The target in `Makefile` skips the lock.'];
+        yield 'a static call in backticks' => ['`Money::from()` rounds wrongly.'];
+        yield 'a value with a space in backticks' => ['The ACL wrongly allows `Admin User`.'];
+        yield 'a missing path with a space in backticks' => ['The rule in `docs/Release Notes` is unsafe.'];
+        yield 'a directory with a space in backticks' => ['Everything in `src/Sub Folder` is affected.'];
+        yield 'a path with a space leaving the checkout in backticks' => ['Reads `../Release Notes` first.'];
+        yield 'a null byte in backticks' => ["Prints `a\0b` first."];
     }
 
     #[DataProvider('proseThatIsNoPathOfTheCheckout')]
@@ -149,6 +155,48 @@ final class FindingKeysTest extends TestCase
 
         self::assertNotNull($before);
         self::assertNotSame($before, $this->keyOf($finding));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function citedPathsNoFragmentHolds(): iterable
+    {
+        yield 'a space, in backticks' => ['docs/Release Notes.md', 'The rule in `docs/Release Notes.md` is unsafe.'];
+        yield 'a space, in backticks with a line' => ['docs/Release Notes.md', 'The rule in `docs/Release Notes.md:12` is unsafe.'];
+        yield 'a space and no directory, in backticks' => ['Release Notes.md', 'See `Release Notes.md.`'];
+        yield 'a letter outside ASCII, in backticks' => ['docs/Überblick.md', 'The rule in `docs/Überblick.md` is unsafe.'];
+        yield 'a letter outside ASCII, in plain text' => ['docs/Überblick.md', 'The rule in docs/Überblick.md is unsafe.'];
+        yield 'a letter outside ASCII and no directory' => ['Überblick.md', 'Überblick.md still states the old rule.'];
+        yield 'a sign no fragment holds, in backticks' => ['docs/a+b.md', 'The rule in `docs/a+b.md` is unsafe.'];
+    }
+
+    #[DataProvider('citedPathsNoFragmentHolds')]
+    public function testTheKeyChangesWhenACitedFileWithANameNoPlainWordHoldsChanges(string $path, string $text): void
+    {
+        $this->repository->commitFile($path, "before\n");
+        $finding = $this->finding('src/Thing.php', $text);
+        $before = $this->keyOf($finding);
+        $this->repository->commitFile($path, "after\n");
+
+        self::assertNotNull($before);
+        self::assertNotSame($before, $this->keyOf($finding));
+    }
+
+    public function testAnUnreadableFileNamedByAnInlineCodeSpanGetsNoKey(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('The superuser reads every file.');
+        }
+
+        $this->repository->commitFile('docs/Release Notes.md', "before\n");
+        chmod($this->repository->path.'/docs/Release Notes.md', 0o000);
+
+        try {
+            self::assertNull($this->keyOf($this->finding('src/Thing.php', 'The rule in `docs/Release Notes.md` is unsafe.')));
+        } finally {
+            chmod($this->repository->path.'/docs/Release Notes.md', 0o644);
+        }
     }
 
     public function testAnUnreadableFileNamedByAWordOfTheTextGetsNoKey(): void

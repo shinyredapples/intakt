@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
+use Doctrine\DBAL\Logging\Middleware as LoggingMiddleware;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -74,6 +75,7 @@ use Intakt\Tests\Application\EmptyDatabase;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\TestContainer;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\ErrorHandler\BufferingLogger;
@@ -235,9 +237,22 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        $recurring = new RecurringP1s($this->rounds($this->entities), $this->storedFindingsOn($this->entities), new RoundLedgerReading($this->ledger, $this->ledgerPayloads(), new ConfiguredPrices([])), new FindingKeys(), $this->roundLedger($this->ledger));
+        return $this->judgeOn($this->entities, $this->ledger, $vendor);
+    }
 
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), $recurring), $vendor, $this->events);
+    // A judging on its own connection that logs every statement it sends, so a test sees what it read before it took a lock; its ledger is in memory because the Doctrine ledger writes through the first connection.
+    public function judgeLoggingStatements(Vendor $vendor, LoggerInterface $statements): JudgeRoundHandler
+    {
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new LoggingMiddleware($statements)]));
+
+        return $this->judgeOn(new EntityManager($connection, $this->entities->getConfiguration()), new InMemoryLedger(), $vendor);
+    }
+
+    private function judgeOn(EntityManagerInterface $entities, Ledger $ledger, Vendor $vendor): JudgeRoundHandler
+    {
+        $recurring = new RecurringP1s($this->rounds($entities), $this->storedFindingsOn($entities), new RoundLedgerReading($ledger, $this->ledgerPayloads(), new ConfiguredPrices([])), new FindingKeys(), $this->roundLedger($ledger));
+
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($entities), $this->storedFindingsOn($entities), $this->roundLedger($ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths(), $recurring), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

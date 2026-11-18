@@ -12,6 +12,7 @@ final readonly class JudgeDone
      * @param list<JudgeDoneFinding> $findings
      * @param list<DroppedFinding>   $dropped
      * @param array<string, string>  $sameCause
+     * @param array<string, string>  $p1Keys
      */
     public function __construct(
         public string $round,
@@ -22,6 +23,8 @@ final readonly class JudgeDone
         public array $dropped = [],
         // Empty by default, because a judge_done row written before the judge named causes links no findings.
         public array $sameCause = [],
+        // The key of each P1 on the act list that has one, by finding id, taken at the judging, because the round's checkout may be removed before a recurrence of the finding is recorded. Empty by default, because a judge_done row written before the keys were recorded holds none.
+        public array $p1Keys = [],
     ) {
     }
 }

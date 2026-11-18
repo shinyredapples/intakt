@@ -307,6 +307,21 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([], $this->reading()->sameCauseOf(self::ROUND));
     }
 
+    public function testTheKeysOfTheP1sAreReadFromTheRoundsJudgeDoneRow(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['p1_keys' => ['F1' => 'aaa']] + $this->judgeDone('another-round'));
+        $this->append(LedgerEventKind::JudgeDone, ['p1_keys' => ['F1' => 'bbb']] + $this->judgeDone(self::ROUND));
+
+        self::assertSame(['F1' => 'bbb'], $this->reading()->p1KeysOf(self::ROUND));
+    }
+
+    public function testAJudgeDoneRowWrittenBeforeKeysWereRecordedReadsAsNoKeys(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
+
+        self::assertSame([], $this->reading()->p1KeysOf(self::ROUND));
+    }
+
     public function testARoundTheJudgeHasNotAnsweredHasNoDroppedFindings(): void
     {
         self::assertSame([], $this->reading()->droppedOf(self::ROUND));

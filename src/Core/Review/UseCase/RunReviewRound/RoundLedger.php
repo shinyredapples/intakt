@@ -108,7 +108,10 @@ final readonly class RoundLedger
     }
 
     // The judged findings go with the call, because the dashboard renders from the ledger alone and needs what each act id stands for.
-    public function judgeDone(ReviewRound $round, JudgedFindings $judged): void
+    /**
+     * @param array<string, string> $p1Keys
+     */
+    public function judgeDone(ReviewRound $round, JudgedFindings $judged, array $p1Keys): void
     {
         $act = array_map(static fn (Finding $finding): string => $finding->id, $judged->actList);
 
@@ -119,6 +122,7 @@ final readonly class RoundLedger
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
+            $p1Keys,
         ));
     }
 

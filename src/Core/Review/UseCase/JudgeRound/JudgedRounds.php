@@ -69,9 +69,13 @@ final readonly class JudgedRounds
     public function record(ReviewRound $round, JudgedFindings $judged): void
     {
         $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged): void {
+            // The change's lock right after the round's, before anything else is read, because the first plain read starts the transaction's snapshot under REPEATABLE READ, and a round of the change judged while this one waited for the lock would stay unseen in a snapshot from before the wait.
+            $this->findings->lockChangeOf($locked);
+
             if ($this->findings->markJudged($locked)) {
-                $this->ledger->judgeDone($locked, $judged);
-                $this->recurring->recordFor($locked, $judged);
+                $p1Keys = $this->recurring->keysOf($locked, $judged);
+                $this->ledger->judgeDone($locked, $judged, $p1Keys);
+                $this->recurring->recordFor($locked, $judged, $p1Keys);
             }
         });
     }

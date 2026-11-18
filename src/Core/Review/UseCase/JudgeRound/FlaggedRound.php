@@ -13,11 +13,14 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class FlaggedRound
 {
     /**
-     * @param list<Finding> $act
+     * @param list<Finding>         $act
+     * @param array<string, string> $p1Keys
      */
     public function __construct(
         public ReviewRound $round,
         public array $act,
+        // By finding id, as taken when the round was judged.
+        public array $p1Keys,
     ) {
     }
 

@@ -110,10 +110,10 @@ final readonly class StoredFindings
         return $ids;
     }
 
-    // For work that reads the other rounds of the change and must not run beside another round's, in the caller's transaction after the round's lock, the order every writer takes them in.
+    // For work that reads the other rounds of the change and must not run beside another round's, in the caller's transaction after the round's lock, the order every writer takes them in. The stored row is locked without looking it up first, because a plain read before the lock would start the transaction's snapshot under REPEATABLE READ before the wait for the lock; the row is created only when it is missing, which no round whose verdicts were recorded meets.
     public function lockChangeOf(ReviewRound $round): void
     {
-        $this->locked($round->project(), $round->change());
+        $this->lockedIfStored($round->project(), $round->change()) ?? $this->locked($round->project(), $round->change());
     }
 
     // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.
@@ -169,11 +169,16 @@ final readonly class StoredFindings
     private function locked(string $project, string $change): ChangeFindings
     {
         $this->createIfMissing($project, $change);
+
+        return $this->lockedIfStored($project, $change) ?? throw ChangeFindingsNotFound::for($project, $change);
+    }
+
+    private function lockedIfStored(string $project, string $change): ?ChangeFindings
+    {
         // Locked with a write, because on SQLite only a write takes the lock, and a snapshot gone stale then fails here, where the transaction starts over, rather than in the flush, which closes the entity manager.
         $this->entities->getConnection()->executeStatement('UPDATE change_findings SET rounds = rounds WHERE project = ? AND change_ref = ?', [$project, $change]);
-        $stored = $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
 
-        return $stored ?? throw ChangeFindingsNotFound::for($project, $change);
+        return $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
     }
 
     // A row that does not exist yet cannot be locked, so two first rounds of a change can both find none; the one whose insert loses takes the other's row instead of failing.

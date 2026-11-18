@@ -17,6 +17,7 @@ use Intakt\Core\Review\Domain\FindingKey;
 use Intakt\Core\Review\Domain\RecurringP1;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
+use Intakt\Core\Review\UseCase\JudgeRound\FlaggedRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgedRounds;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
@@ -32,21 +33,23 @@ use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\ErrorHandler\BufferingLogger;
 
 #[Group('persistence')]
 #[CoversClass(RecurringP1s::class)]
 #[CoversClass(ReviewRounds::class)]
 #[CoversClass(RoundLedger::class)]
 #[CoversClass(RecurringP1Found::class)]
+#[CoversClass(JudgedRounds::class)]
+#[CoversClass(StoredFindings::class)]
+#[CoversClass(FlaggedRound::class)]
 #[UsesClass(RecurringP1::class)]
 #[UsesClass(FindingKey::class)]
 #[UsesClass(FindingKeys::class)]
-#[UsesClass(JudgedRounds::class)]
 #[UsesClass(JudgeRoundHandler::class)]
 #[UsesClass(JudgeRound::class)]
 #[UsesClass(JudgedFindings::class)]
 #[UsesClass(RoundLedgerReading::class)]
-#[UsesClass(StoredFindings::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReviewRound::class)]
@@ -184,6 +187,52 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame([['F3', 'RoundFixture::judge']], array_map(static fn (array $one): array => [$one['finding'], $one['symbol']], $this->recurringP1s()));
     }
 
+    public function testTwoP1sOfARoundAtOnePlaceAreRecordedAsOneRecurrenceNamingTheFirst(): void
+    {
+        $this->judgedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', 'RoundFixture::judge'));
+        $also = new Finding('B', Severity::P1, 'RoundFixture.php', 9, 'RoundFixture::judge', 'The judging loses its lock.', FixableBy::Builder, false, 'A judging keeps its lock.', null);
+        $this->judgedRoundAt(SampleIdentity::NEW_HEAD, $this->p1('RoundFixture.php', 'RoundFixture::judge'), $also);
+
+        self::assertSame(['F2'], array_column($this->recurringP1s(), 'finding'));
+    }
+
+    public function testTheKeyTakenWhenTheNewerHeadWasJudgedIsKeptAfterItsCheckoutIsRemoved(): void
+    {
+        $first = $this->reviewedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', null));
+        $second = $this->reviewedRoundAt(SampleIdentity::NEW_HEAD, $this->p1('RoundFixture.php', null));
+        $root = sys_get_temp_dir().'/review-head-'.bin2hex(random_bytes(8));
+        mkdir($root);
+        file_put_contents($root.'/RoundFixture.php', '<?php');
+        $this->moveCheckoutOf($second, $root);
+        $key = new FindingKeys()->keyOf($this->p1('RoundFixture.php', null), $root);
+
+        $this->judge($second);
+        unlink($root.'/RoundFixture.php');
+        rmdir($root);
+        $this->judge($first);
+
+        self::assertNotNull($key);
+        self::assertSame([$key], array_column($this->recurringP1s(), 'key'));
+    }
+
+    public function testAJudgingReadsNothingButItsRoundBeforeItHoldsTheLockOfItsChange(): void
+    {
+        $roundId = $this->reviewedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', null));
+        $log = new BufferingLogger();
+
+        $this->fixture->judgeLoggingStatements(new VerdictPerRole([]), $log)(new JudgeRound($roundId));
+
+        $sent = array_map(static fn (array $entry): string => (string) ($entry[2]['sql'] ?? $entry[1]), $log->cleanLogs());
+        $lock = array_find_key($sent, static fn (string $sql): bool => str_starts_with($sql, 'UPDATE change_findings'));
+        self::assertIsInt($lock);
+        $begun = array_find_key(array_reverse($sent, true), static fn (string $sql, int $at): bool => 'Beginning transaction' === $sql && $at < $lock);
+        self::assertIsInt($begun);
+        $readBeforeLock = array_values(array_filter(array_slice($sent, $begun + 1, $lock - $begun - 1), static fn (string $sql): bool => str_starts_with($sql, 'SELECT')));
+
+        self::assertCount(1, $readBeforeLock);
+        self::assertStringContainsString(' review_round ', $readBeforeLock[0]);
+    }
+
     public function testAJudgingDeliveredAgainRecordsNoSecondRecurringP1(): void
     {
         $this->judgedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', null));
@@ -218,6 +267,16 @@ final class RecurringP1sTest extends KernelTestCase
     private function judge(string $roundId): void
     {
         $this->fixture->judge(new VerdictPerRole([]))(new JudgeRound($roundId));
+    }
+
+    private function moveCheckoutOf(string $roundId, string $root): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        $entities->createQuery('UPDATE '.ReviewRound::class.' r SET r.subject.checkoutRoot = :root WHERE r.id = :id')
+            ->setParameter('root', $root)
+            ->setParameter('id', $this->fixture->round($roundId)->id(), 'uuid')
+            ->execute();
+        $entities->clear();
     }
 
     /**
