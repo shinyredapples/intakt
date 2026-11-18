@@ -270,9 +270,14 @@ final class DashboardLedger implements Ledger
         $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => $toolFingerprint, 'state' => 'booted', 'reason' => '']);
     }
 
-    public function readMainFromStore(string $project, string $main, string $state, string $reason = ''): void
+    public function readMainFromStore(string $project, string $main, string $state): void
     {
-        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => $reason, 'read_from' => 'store']);
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => $state, 'reason' => '', 'read_from' => 'store']);
+    }
+
+    public function readFailedMainFromStore(string $project, string $main, string $reason): void
+    {
+        $this->add(LedgerEventKind::BootResultComputed, ['project' => $project, 'main' => $main, 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => $reason, 'read_from' => 'store']);
     }
 
     public function computeFailedMain(string $project, string $main, string $reason): void

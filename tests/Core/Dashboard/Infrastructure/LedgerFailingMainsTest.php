@@ -88,7 +88,7 @@ final class LedgerFailingMainsTest extends TestCase
         $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
         $this->ledger->bootMain('alpha', 'b');
 
-        $this->ledger->readMainFromStore('alpha', 'a', 'failed', 'A fails.');
+        $this->ledger->readFailedMainFromStore('alpha', 'a', 'A fails.');
 
         self::assertSame([['a', 'A fails.']], array_map(static fn (FailingMain $main): array => [$main->main, $main->reason], $this->failing()));
     }
@@ -116,7 +116,7 @@ final class LedgerFailingMainsTest extends TestCase
     {
         $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
 
-        $this->ledger->readMainFromStore('alpha', 'b', 'crashed', 'composer could not run');
+        $this->ledger->readMainFromStore('alpha', 'b', 'crashed');
 
         self::assertSame(['A fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
     }

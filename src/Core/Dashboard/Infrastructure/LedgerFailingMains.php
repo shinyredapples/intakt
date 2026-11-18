@@ -39,22 +39,18 @@ final readonly class LedgerFailingMains
     {
         $payload = LedgerPayload::of($recorded);
         $pair = $this->pairOf($payload);
-        $reason = $payload['reason'] ?? null;
-        $result = LedgerEventKind::BootResultComputed === $recorded->event->kind;
-        // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when the state changed.
-        $fromStore = $result && 'store' === ($payload['read_from'] ?? null);
-        $failed = is_string($reason) && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $fromStore && 'failed' === ($payload['state'] ?? null));
-        $booted = $result && 'booted' === ($payload['state'] ?? null);
+        $reason = $this->failureReasonOf($recorded, $payload);
+        $booted = LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null);
 
-        if (null === $pair || !$failed && !$booted) {
+        if (null === $pair || null === $reason && !$booted) {
             return [$failing, $seen];
         }
 
         [$project, $main, $tools] = $pair;
 
-        if ($failed) {
+        if (null !== $reason) {
             $failing[$project] = new FailingMain($project, $main, $tools, $reason);
-        } elseif ($fromStore || !isset($seen[$project][$main][$tools])) {
+        } elseif ($this->readFromStore($payload) || !isset($seen[$project][$main][$tools])) {
             // Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
             unset($failing[$project]);
         }
@@ -62,6 +58,26 @@ final readonly class LedgerFailingMains
         $seen[$project][$main][$tools] = true;
 
         return [$failing, $seen];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function failureReasonOf(RecordedEvent $recorded, array $payload): ?string
+    {
+        $reason = $payload['reason'] ?? null;
+        $failedFromStore = LedgerEventKind::BootResultComputed === $recorded->event->kind && $this->readFromStore($payload) && 'failed' === ($payload['state'] ?? null);
+
+        return is_string($reason) && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
+    }
+
+    // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when the state changed.
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function readFromStore(array $payload): bool
+    {
+        return 'store' === ($payload['read_from'] ?? null);
     }
 
     /**
