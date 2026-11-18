@@ -37,7 +37,7 @@ final readonly class GitHubCiRuns
      */
     public function ofCheckSuites(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
-        // A queued suite without check runs is kept, because its first job may still start and the other runs alone would make the head green too early.
+        // A queued suite without check runs is kept as not started, because its first job may still start and the other runs alone would make the head green too early.
         return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
     }
 
@@ -108,10 +108,18 @@ final readonly class GitHubCiRuns
      */
     private function stateOf(array $entry): CiRunState
     {
-        if ('completed' !== $this->text($entry, 'status')) {
-            return CiRunState::Unfinished;
-        }
+        return match ($this->text($entry, 'status')) {
+            'queued' => CiRunState::NotStarted,
+            'completed' => $this->conclusionOf($entry),
+            default => CiRunState::Unfinished,
+        };
+    }
 
+    /**
+     * @param array<mixed> $entry
+     */
+    private function conclusionOf(array $entry): CiRunState
+    {
         return match ($this->text($entry, 'conclusion')) {
             'success', 'neutral', 'skipped' => CiRunState::Succeeded,
             'cancelled' => CiRunState::Cancelled,

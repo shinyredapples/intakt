@@ -263,12 +263,27 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Unfinished], $this->statesOfHead());
     }
 
-    public function testAHeadWithAQueuedCheckSuiteIsUnfinished(): void
+    public function testAHeadWithAQueuedCheckSuiteIsNotStarted(): void
     {
         $this->runs = 'runs_none.json';
         $this->suites = 'suites_queued.json';
 
-        self::assertSame([CiRunState::Unfinished], $this->statesOfHead());
+        self::assertSame([CiRunState::NotStarted], $this->statesOfHead());
+    }
+
+    public function testAQueuedWorkflowRunNextToANewerCompletedOneOnTheSameHeadIsNotStartedBesideSucceeded(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::NotStarted], $this->statesOfHead());
+    }
+
+    public function testAQueuedWorkflowRunIsReplacedByTheNewerCompletedRunOfTheSameOrigin(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+        $runs = $this->state()->runs;
+
+        self::assertTrue($runs[0]->isNewerRunOf($runs[1]));
     }
 
     public function testAFailedWorkflowRunIsFailed(): void
@@ -306,11 +321,11 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Succeeded], $this->statesOfHead());
     }
 
-    public function testAQueuedCheckSuiteBeforeItsFirstCheckRunKeepsAGreenHeadUnfinished(): void
+    public function testAQueuedCheckSuiteBeforeItsFirstCheckRunIsKeptAsNotStarted(): void
     {
         $this->suites = 'suites_empty_queue.json';
 
-        self::assertSame([CiRunState::Succeeded, CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+        self::assertSame([CiRunState::Succeeded, CiRunState::Succeeded, CiRunState::NotStarted], $this->statesOfHead());
     }
 
     public function testARunKeepsItsOriginAndStartTime(): void
