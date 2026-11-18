@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -40,6 +41,32 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
         self::assertSame(['Lock::acquire()', 'write()'], $title->filter('code')->each(static fn (Crawler $code): string => $code->text()));
         self::assertSame('F1 Call Lock::acquire() before <b>write()</b>.', $title->text());
         self::assertStringNotContainsString('`', $crawler->filter('#round-round-1 .finding-cards')->text());
+    }
+
+    public function testAFindingsCardAndTheNowBlockShowItsEmphasisWithoutTheMarks(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', 'the amount is **greater than** 100, not *why*');
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-2');
+
+        self::assertSame('F1 the amount is greater than 100, not why', $crawler->filter('#round-round-1 .finding-card .fc-title')->text());
+        self::assertSame('P1F1 the amount is greater than 100, not why', $crawler->filter('.state-block a.sb-finding')->text());
+    }
+
+    #[TestWith(['Copy *.php…'])]
+    #[TestWith(['Match **kwargs…'])]
+    #[TestWith(['Use _private and more…'])]
+    #[TestWith(['Copy *.php and *.twig…'])]
+    public function testACardEndingInAnEllipsisTheReviewerWroteKeepsItsWildcards(string $written): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', $written);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame($written, $crawler->filter('#round-round-1 .finding-card .fc-text')->text());
     }
 
     public function testAnUnmatchedBacktickLeavesNoLiteralBacktickInACard(): void
