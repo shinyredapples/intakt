@@ -27,6 +27,7 @@ use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
+use ValueError;
 
 #[Group('persistence')]
 #[CoversClass(ReviewedRepository::class)]
@@ -85,6 +86,15 @@ final class ReviewedRepositoryTest extends KernelTestCase
         self::assertInstanceOf(CheckoutNotADirectory::class, $this->refusalOf(static fn (): string => $repository->readFile('README.md')));
     }
 
+    public function testAHeadPathTheFilesystemCannotTakePassesThroughInsteadOfBecomingAnUnavailableHead(): void
+    {
+        $repository = $this->repositoryFor($this->roundWithHeadAt(sys_get_temp_dir()."/intakt-head-\0-broken"));
+
+        $this->expectException(ValueError::class);
+
+        $repository->readFile('README.md');
+    }
+
     private function repositoryFor(string $roundId): ReviewedRepository
     {
         $storage = self::getContainer()->get('security.token_storage');
@@ -113,8 +123,13 @@ final class ReviewedRepositoryTest extends KernelTestCase
     // Never created, because the snapshot of a round can be removed while its credential is still valid.
     private function roundWithoutHead(): string
     {
+        return $this->roundWithHeadAt(sys_get_temp_dir().'/intakt-gone-head-'.Uuid::v4()->toRfc4122());
+    }
+
+    private function roundWithHeadAt(string $checkoutRoot): string
+    {
         $id = Uuid::v4();
-        $this->fixture->entities->persist(new ReviewRound($id, new ReviewTarget(new ReviewSubject('beta', sys_get_temp_dir().'/intakt-gone-head-'.$id->toRfc4122(), 'Task', ''), SampleIdentity::any()), new ChangeRound('gone', 1, null)));
+        $this->fixture->entities->persist(new ReviewRound($id, new ReviewTarget(new ReviewSubject('beta', $checkoutRoot, 'Task', ''), SampleIdentity::any()), new ChangeRound('gone', 1, null)));
         $this->fixture->entities->flush();
 
         return $id->toRfc4122();

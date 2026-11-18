@@ -97,8 +97,42 @@ final class LogFailedJudgingTest extends TestCase
         $dispatcher->addSubscriber(new SendFailedMessageToFailureTransportListener(new ServiceLocator(['async' => static fn (): InMemoryTransport => $failed])));
         $dispatcher->addSubscriber(new StopWorkerOnMessageLimitListener(1));
 
+        $this->phpErrorLog();
+
         new Worker(['async' => $incoming], new FailingBus(), $dispatcher, clock: new MockClock('2026-10-30 12:00:00', 'UTC'))->run(['sleep' => 0]);
 
         self::assertCount(1, $failed->getSent());
+    }
+
+    public function testALogThatCannotBeWrittenIsWrittenToThePhpErrorLogNamingTheRoundAndTheFailure(): void
+    {
+        $log = self::createStub(LoggerInterface::class);
+        $log->method('error')->willThrowException(new RuntimeException('log storage unavailable'));
+        $errorLog = $this->phpErrorLog();
+
+        new LogFailedJudging($log)(new WorkerMessageFailedEvent(new Envelope(new JudgeRound(self::ROUND)), 'async', new RuntimeException('gave up')));
+
+        self::assertStringContainsString(sprintf('The judging of round %s failed for good, and its log could not be written: log storage unavailable', self::ROUND), (string) file_get_contents($errorLog));
+    }
+
+    protected function tearDown(): void
+    {
+        if (null !== $this->errorLog) {
+            ini_set('error_log', $this->previousErrorLog);
+            unlink($this->errorLog);
+        }
+    }
+
+    private ?string $errorLog = null;
+
+    private string $previousErrorLog = '';
+
+    private function phpErrorLog(): string
+    {
+        $this->errorLog = (string) tempnam(sys_get_temp_dir(), 'intakt-error-log-');
+        $this->previousErrorLog = (string) ini_get('error_log');
+        ini_set('error_log', $this->errorLog);
+
+        return $this->errorLog;
     }
 }

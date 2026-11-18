@@ -113,10 +113,10 @@ final readonly class SearchFiles
      */
     private function matchesIn(SplFileInfo $file, string $text): Generator
     {
-        $content = $file->getSize() <= self::MAX_FILE_BYTES ? file_get_contents($file->getPathname()) : false;
+        $content = $this->contentOf($file);
 
         // Because the answer reaches the provider as JSON, which carries only valid UTF-8, a binary file is not searched.
-        if (false === $content || !mb_check_encoding($content, 'UTF-8')) {
+        if (false === $content || strlen($content) > self::MAX_FILE_BYTES || !mb_check_encoding($content, 'UTF-8')) {
             return;
         }
 
@@ -126,6 +126,18 @@ final readonly class SearchFiles
             if (str_contains($line, $text)) {
                 yield sprintf('%s:%d:%s', $relative, $number, $this->cut(rtrim($line, "\r")));
             }
+        }
+    }
+
+    // A file can go or become unreadable between the listing and its reading, so it is skipped like a binary one instead of failing the whole search.
+    private function contentOf(SplFileInfo $file): string|false
+    {
+        set_error_handler(static fn (): bool => true);
+
+        try {
+            return file_get_contents($file->getPathname(), length: self::MAX_FILE_BYTES + 1);
+        } finally {
+            restore_error_handler();
         }
     }
 
