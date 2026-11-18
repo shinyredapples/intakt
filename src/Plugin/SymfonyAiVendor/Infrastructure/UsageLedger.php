@@ -83,7 +83,7 @@ final readonly class UsageLedger
     {
         try {
             $usages = $this->usagesOfRounds(...$rounds);
-            // Boundary: records the call as unsettled with the failure, because unreadable usage must not lose the call from the ledger.
+            // Boundary: the catch below records the call as unsettled with the failure, because unreadable usage must not lose the call from the ledger.
         } catch (Throwable $unreadable) {
             $this->leaveUnreadableUnsettled($reservation, $unreadable, ...$rounds);
 
@@ -114,9 +114,9 @@ final readonly class UsageLedger
         foreach ($rounds as $index => $round) {
             try {
                 $usages[] = $this->usagesOf($round);
-                // Boundary: logs the unreadable round and goes on with the others, because the call already failed and its own failure must not be replaced.
+                // Boundary: the catch below logs the unreadable round and goes on with the others, because the call already failed and its own failure must not be replaced.
             } catch (Throwable $unreadable) {
-                $this->logger->warning('Token usage of a round of a failed call could not be read.', ['call' => $reservation->call, 'round' => $index, 'exception' => $unreadable]);
+                $this->logger->warning('Token usage of a round could not be read.', ['call' => $reservation->call, 'round' => $index, 'exception' => $unreadable]);
             }
         }
 

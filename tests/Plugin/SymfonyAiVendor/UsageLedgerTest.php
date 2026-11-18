@@ -28,6 +28,7 @@ use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\TokenUsage\StreamListener;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Component\Clock\MockClock;
+use Symfony\Component\HttpClient\Exception\TransportException;
 use Throwable;
 
 #[CoversClass(UsageLedger::class)]
@@ -86,6 +87,17 @@ final class UsageLedgerTest extends TestCase
         $ledger = new InMemoryLedger();
         $converter = self::createStub(ResultConverterInterface::class);
         $converter->method('convert')->willThrowException(new RuntimeException('cannot convert'));
+
+        $this->settle($ledger, new DeferredResult($converter, new InMemoryRawResult()));
+
+        self::assertSame('settled', $ledger->payloads()[0]['phase']);
+    }
+
+    public function testAnHttpClientFailureWhileReadingAStreamedResultFallsBackToTheRecordedUsage(): void
+    {
+        $ledger = new InMemoryLedger();
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willThrowException(new TransportException('connection lost'));
 
         $this->settle($ledger, new DeferredResult($converter, new InMemoryRawResult()));
 
