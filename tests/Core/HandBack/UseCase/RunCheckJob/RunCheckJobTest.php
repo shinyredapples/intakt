@@ -174,6 +174,15 @@ final class RunCheckJobTest extends TestCase
         self::assertEquals(new CheckJobOutcome(CheckVerdict::NotApplied), $outcome);
     }
 
+    public function testABranchTheJobCouldNotMergeWithCurrentMainFailsTheCheckAsAConflictWithMain(): void
+    {
+        $this->history->commit('Build work');
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "conflicts-with-main\n"]);
+
+        self::assertEquals(new CheckJobOutcome(CheckVerdict::ConflictsWithMain), $outcome);
+    }
+
     public function testTheResultIsReadFromTheOutputDirectoryAndNotFromTheContainersExitCode(): void
     {
         $this->history->commit('Build work');

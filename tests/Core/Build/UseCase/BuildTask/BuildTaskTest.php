@@ -366,6 +366,22 @@ final class BuildTaskTest extends TestCase
         self::assertSame(0, $this->changes->calls);
     }
 
+    public function testAPrePushCheckThatConflictsWithCurrentMainEndsThereOnTheConflictRouteAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "conflicts-with-main\n", RunCheckJob::LOG => "CONFLICT (content): PLANT-path.txt\n"]);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the branch conflicts with current main, so the check ran no step', $outcome->failure);
+        self::assertSame($outcome->failure, $ledger->payloads()[5]['failure']);
+        self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
+        self::assertNull($this->remoteTip());
+        self::assertSame(0, $this->changes->calls);
+    }
+
     public function testACheckJobThatLeavesNoResultEndsAtThePrePushCheckWithFixedText(): void
     {
         $this->runner = $this->committingRunner();

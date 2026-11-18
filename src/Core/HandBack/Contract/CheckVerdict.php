@@ -11,6 +11,7 @@ enum CheckVerdict: string
     case Failed = 'failed';
     case LostContent = 'lost-content';
     case NotApplied = 'not-applied';
+    case ConflictsWithMain = 'conflicts-with-main';
     case NoResult = 'no-result';
     case MemoryKilled = 'oom';
     case TimedOut = 'timed-out';
@@ -22,6 +23,7 @@ enum CheckVerdict: string
             self::Failed => 'the check command failed',
             self::LostContent => 'a file lost most of its content, and the task\'s plan names it neither removed nor rewritten',
             self::NotApplied => 'the bundle could not be applied in a fresh clone of the mirror',
+            self::ConflictsWithMain => 'the branch conflicts with current main, so the check ran no step',
             self::NoResult => 'the job left no well-formed result in its output directory',
             self::MemoryKilled => 'the job was killed at its memory limit',
             self::TimedOut => 'the job ran out of time',
