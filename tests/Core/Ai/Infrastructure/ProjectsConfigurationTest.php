@@ -182,7 +182,7 @@ final class ProjectsConfigurationTest extends TestCase
 
     public function testTheCodexModelAndEffortAreKept(): void
     {
-        self::assertSame(['model' => 'gpt-5.3-codex', 'effort' => 'high'], $this->process(['codex' => ['model' => 'gpt-5.3-codex', 'effort' => 'high']])['codex']);
+        self::assertSame(['model' => 'gpt-6.2-sol', 'effort' => 'high'], $this->process(['codex' => ['model' => 'gpt-6.2-sol', 'effort' => 'high']])['codex']);
     }
 
     /**
@@ -190,11 +190,11 @@ final class ProjectsConfigurationTest extends TestCase
      */
     public static function refusedCodexSections(): iterable
     {
-        yield 'no effort' => [['model' => 'gpt-5.3-codex']];
+        yield 'no effort' => [['model' => 'gpt-6.2-sol']];
         yield 'no model' => [['effort' => 'high']];
         yield 'a blank model' => [['model' => ' ', 'effort' => 'high']];
-        yield 'an unknown effort' => [['model' => 'gpt-5.3-codex', 'effort' => 'huge']];
-        yield 'an unknown key' => [['model' => 'gpt-5.3-codex', 'effort' => 'high', 'sandbox' => 'none']];
+        yield 'an unknown effort' => [['model' => 'gpt-6.2-sol', 'effort' => 'huge']];
+        yield 'an unknown key' => [['model' => 'gpt-6.2-sol', 'effort' => 'high', 'sandbox' => 'none']];
     }
 
     /**
@@ -210,9 +210,9 @@ final class ProjectsConfigurationTest extends TestCase
 
     public function testATierOnCodexThatMapsThePinnedModelIsKept(): void
     {
-        $processed = $this->process(['codex' => ['model' => 'gpt-5.3-codex', 'effort' => 'high'], 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.3-codex']]]]]);
+        $processed = $this->process(['codex' => ['model' => 'gpt-6.2-sol', 'effort' => 'high'], 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-6.2-sol']]]]]);
 
-        self::assertStringContainsString('"strong":{"provider":"codex","model":"gpt-5.3-codex"', json_encode($processed['projects'] ?? null, JSON_THROW_ON_ERROR));
+        self::assertStringContainsString('"strong":{"provider":"codex","model":"gpt-6.2-sol"', json_encode($processed['projects'] ?? null, JSON_THROW_ON_ERROR));
     }
 
     /**
@@ -220,11 +220,11 @@ final class ProjectsConfigurationTest extends TestCase
      */
     public static function codexMappingsOffThePin(): iterable
     {
-        $pinned = ['model' => 'gpt-5.3-codex', 'effort' => 'high'];
+        $pinned = ['model' => 'gpt-6.2-sol', 'effort' => 'high'];
 
         yield 'a tier on another model' => [['codex' => $pinned, 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.4']]]]]];
         yield 'a substitute on another model' => [['codex' => $pinned, 'projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'openai', 'model' => 'gpt-5', 'substitutes' => [['provider' => 'codex', 'model' => 'gpt-5.4']]]]]]]];
-        yield 'a tier without the codex section' => [['projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.3-codex']]]]]];
+        yield 'a tier without the codex section' => [['projects' => ['alpha' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-6.2-sol']]]]]];
     }
 
     /**

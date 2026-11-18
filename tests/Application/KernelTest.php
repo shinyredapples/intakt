@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Application;
 
+use Doctrine\Deprecations\Deprecation;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Tools\SchemaTool;
 use Intakt\Core\Mcp\Infrastructure\AuthorizeToolCallsPass;
 use Intakt\Kernel;
 use Intakt\Tests\Support\KernelTestCase;
@@ -17,6 +20,8 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 #[CoversClass(Kernel::class)]
 final class KernelTest extends KernelTestCase
 {
+    private const string SCHEMA_EDITOR_DEPRECATION = 'https://github.com/doctrine/orm/pull/12780';
+
     public function testTheKernelBootsWithTheAiAndMcpBundles(): void
     {
         $kernel = self::bootKernel();
@@ -41,6 +46,18 @@ final class KernelTest extends KernelTestCase
         self::assertIsInt($position);
         self::assertSame($earlier::class, $passes[$position - 1]);
         self::assertSame($later::class, $passes[$position + 1]);
+    }
+
+    public function testTheSchemaToolOfTheEntityManagerTriggersNoSchemaEditorDeprecation(): void
+    {
+        $entities = self::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        Deprecation::enableTrackingDeprecations();
+        $before = Deprecation::getTriggeredDeprecations()[self::SCHEMA_EDITOR_DEPRECATION] ?? 0;
+
+        new SchemaTool($entities);
+
+        self::assertSame($before, Deprecation::getTriggeredDeprecations()[self::SCHEMA_EDITOR_DEPRECATION] ?? 0);
     }
 
     public function testTheDefaultDatabaseIsSqlite(): void

@@ -6,12 +6,12 @@
 router_url: https://router.huggingface.co
 
 # The day the prices below were read, written into the seeded file as budget.price_date.
-price_date: '2026-11-13'
+price_date: '2026-11-17'
 
 # The router models name their router provider, because the router's default provider may refuse tools together with structured output.
 models:
     anthropic: { strong: claude-opus-5-5, standard: claude-sonnet-5-5, light: claude-haiku-5-5 }
-    openai: { strong: gpt-5, standard: gpt-5-mini, light: gpt-5-nano }
+    openai: { strong: gpt-6.2-sol, standard: gpt-6.1-terra, light: gpt-6-luna }
     openai_compatible: { strong: 'moonshotai/Kimi-K3:deepinfra', standard: 'moonshotai/Kimi-K3:deepinfra', light: 'moonshotai/Kimi-K3:deepinfra' }
 
 # Another maker's model for the second reviewer when the router carries the whole panel, so the panel still has two makers.
@@ -22,8 +22,8 @@ prices:
     claude-opus-5-5: { input: 5, output: 25, cache_read: 0.5, cache_write: 6.25 }
     claude-sonnet-5-5: { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 }
     claude-haiku-5-5: { input: 1, output: 5, cache_read: 0.1, cache_write: 1.25 }
-    gpt-5: { input: 1.25, output: 10, cache_read: 0.125 }
-    gpt-5-mini: { input: 0.25, output: 2, cache_read: 0.025 }
-    gpt-5-nano: { input: 0.05, output: 0.4, cache_read: 0.005 }
+    gpt-6.2-sol: { input: 2, output: 10 }
+    gpt-6.1-terra: { input: 1, output: 5 }
+    gpt-6-luna: { input: 0.1, output: 0.5 }
     'moonshotai/Kimi-K3:deepinfra': { input: 0.6, output: 2.5 }
     'openai/gpt-oss-120b:novita': { input: 0.15, output: 0.6 }
