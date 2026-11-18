@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ai\Infrastructure\ConfiguredTierResolver;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
@@ -110,7 +111,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::Anthropic, 'resolved-model'));
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->reviewerStarted($reviewer);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->reviewerStarted($reviewer);
 
         self::assertSame('resolved-model', $ledger->payloads()[0]['model']);
     }
@@ -122,7 +123,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('resolve')->willThrowException(new ProjectNotConfigured('alpha'));
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->reviewerStarted($reviewer);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->reviewerStarted($reviewer);
 
         self::assertSame(['round', 'reviewer', 'role', 'tier'], array_keys($ledger->payloads()[0]));
     }
@@ -173,7 +174,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('substitutes')->willReturn([new ResolvedModel(Provider::ClaudeCode, 'code-model'), new ResolvedModel(Provider::OpenAi, 'openai-model'), new ResolvedModel(Provider::OpenAi, 'later-model')]);
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->catchUpOwed($reviewer, Provider::OpenAi);
 
         self::assertSame(['openai', 'openai-model'], [$ledger->payloads()[0]['substitute'], $ledger->payloads()[0]['model']]);
     }
@@ -185,7 +186,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('substitutes')->willReturn([new ResolvedModel(Provider::ClaudeCode, 'code-model')]);
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->catchUpOwed($reviewer, Provider::OpenAi);
 
         self::assertArrayNotHasKey('model', $ledger->payloads()[0]);
     }
@@ -197,7 +198,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         $tiers->method('substitutes')->willThrowException(new ProjectNotConfigured('alpha'));
         $ledger = new InMemoryLedger();
 
-        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers, $this->redactor())->catchUpOwed($reviewer, Provider::OpenAi);
 
         self::assertSame(['round', 'reviewer', 'role', 'tier', 'substitute'], array_keys($ledger->payloads()[0]));
     }
@@ -302,7 +303,15 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private function roundLedger(InMemoryLedger $ledger): RoundLedger
     {
-        return new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'standard-model']]]], []));
+        return new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'standard-model']]]], []), $this->redactor());
+    }
+
+    private function redactor(): Redactor
+    {
+        $redactor = self::getContainer()->get(Redactor::class);
+        self::assertInstanceOf(Redactor::class, $redactor);
+
+        return $redactor;
     }
 
     private function written(object $payload): string

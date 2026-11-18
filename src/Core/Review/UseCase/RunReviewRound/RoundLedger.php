@@ -12,7 +12,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
-use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Finding;
@@ -45,6 +45,7 @@ final readonly class RoundLedger
         #[Target('stored')]
         private SerializerInterface $serializer,
         private TierResolver $tiers,
+        private Redactor $redactor,
     ) {
     }
 
@@ -119,8 +120,8 @@ final readonly class RoundLedger
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
-            // Redacted before it is stored, because the note is model text that every reader of the act list gets back.
-            array_map(static fn (string $note): string => new Redaction()->redact($note), $judged->judgeNotes),
+            // Redacted before it is stored, the install's own credentials included, because the note is model text that every reader of the act list gets back.
+            array_map($this->redactor->redact(...), $judged->judgeNotes),
         ));
     }
 

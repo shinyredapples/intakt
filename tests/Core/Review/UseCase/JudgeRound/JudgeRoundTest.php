@@ -157,6 +157,26 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame(['F1' => 'Authorization: [redacted]'], $this->judgeDonePayloads()[0]['judge_notes']);
     }
 
+    public function testAJudgesNoteIsStoredWithACredentialThisInstallHoldsRedactedThoughItHasNoKnownShape(): void
+    {
+        $round = $this->completedRound();
+        $held = 'fixture value without a recognizable secret format';
+        $original = $_ENV['APP_SECRET'] ?? null;
+        $_ENV['APP_SECRET'] = $held;
+
+        try {
+            $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'The configured value is '.$held.'.')])))($this->judgingOf($round));
+        } finally {
+            if (null === $original) {
+                unset($_ENV['APP_SECRET']);
+            } else {
+                $_ENV['APP_SECRET'] = $original;
+            }
+        }
+
+        self::assertStringNotContainsString($held, $this->judgeDonePayloads()[0]['judge_notes']['F1']);
+    }
+
     public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
     {
         $round = $this->completedRound();
