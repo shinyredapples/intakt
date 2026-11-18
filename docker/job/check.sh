@@ -38,11 +38,19 @@ merge_main() {
     # The check's own identity, because the job's clone and HOME carry none, and a conventional subject, because the commit-subject gate reads this commit too.
     # No hook and no signature, as CI's merge has neither: a refusing hook or a failing signer of the image would stop a merge whose trees merged cleanly.
     # LC_ALL=C, because the conflict test below reads git's English CONFLICT lines.
+    # --commit and --no-squash, because merge options of git configuration (branch.<name>.mergeOptions) come first and would end a clean merge without its commit.
     merged=$(LC_ALL=C git -c core.hooksPath=/dev/null -c commit.gpgSign=false -c user.name=intakt-check -c user.email=check@intakt.invalid \
-        merge --no-ff --no-edit -m 'chore(check): merge the branch into current main' "$head" 2>&1)
+        merge --no-ff --commit --no-squash --no-edit -m 'chore(check): merge the branch into current main' "$head" 2>&1)
     status=$?
     printf '%s\n' "$merged"
-    return "$status"
+    if [ "$status" -ne 0 ]; then
+        return "$status"
+    fi
+    # A merge can exit with 0 and leave no commit, and the steps would then run on main alone while reading history as if it held the branch.
+    if [ "$(git rev-parse --verify --quiet 'HEAD^1')" != "$main" ] || [ "$(git rev-parse --verify --quiet 'HEAD^2')" != "$head" ]; then
+        printf 'the merge left no merge commit of %s and %s\n' "$main" "$head"
+        return 1
+    fi
 }
 
 result() {
@@ -57,7 +65,7 @@ fi
 cd "$clone" || exit 1
 
 if ! merge_main >> "$log" 2>&1; then
-    # Only git's own conflict report means the branch has something to resolve, so a refused merge or a failed merge commit is not-merged; the CONFLICT line counts too, because a directory renamed to two places leaves no unmerged path.
+    # Only git's own conflict report means the branch has something to resolve, so a refused merge, a failed merge commit or a merge that left no commit is not-merged; the CONFLICT line counts too, because a directory renamed to two places leaves no unmerged path.
     if [ -n "$(git diff --name-only --diff-filter=U)" ] || printf '%s\n' "$merged" | grep -q '^CONFLICT ('; then
         result 'conflicts-with-main'
     else

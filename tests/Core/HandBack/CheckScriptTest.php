@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\HandBack;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 
 // The script runs inside the job's container, so it is tested by running it with sh -c as the container does.
@@ -18,6 +19,7 @@ final class CheckScriptTest extends TestCase
     private BuildHistory $history;
     private string $output = '';
     private string $work = '';
+    private string $path = '';
 
     /** @var array<string, string> */
     private array $gitConfiguration = [];
@@ -227,6 +229,81 @@ final class CheckScriptTest extends TestCase
         self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
     }
 
+    public function testAMergeOptionOfTheJobsGitConfigurationThatLeavesOutTheCommitDoesNotKeepACleanMergeFromItsMergeCommit(): void
+    {
+        $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $main = $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        $this->gitConfiguration = ['branch.task.mergeOptions' => '--no-commit'];
+
+        $run = $this->whenTheCheckRuns(
+            $this->history->bundle('main..task'),
+            'task',
+            'test "$(git rev-parse HEAD^1)" = '.$main,
+            'test "$(git rev-parse HEAD^2)" = '.$head,
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+    }
+
+    public function testASquashMergeOptionOfTheJobsGitConfigurationDoesNotKeepACleanMergeFromItsMergeCommit(): void
+    {
+        $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $main = $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        $this->gitConfiguration = ['branch.task.mergeOptions' => '--squash'];
+
+        $run = $this->whenTheCheckRuns(
+            $this->history->bundle('main..task'),
+            'task',
+            'test "$(git rev-parse HEAD^1)" = '.$main,
+            'test "$(git rev-parse HEAD^2)" = '.$head,
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+    }
+
+    public function testAMergeThatExitsWithSuccessButLeavesNoMergeCommitLeavesNotMergedAndRunsNoStep(): void
+    {
+        $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        // A git in front of the real one that ends every merge before its commit, as an option the script does not override would.
+        $git = (string) new ExecutableFinder()->find('git');
+        $shim = $this->history->folder.'/shim';
+        new Filesystem()->dumpFile($shim.'/git', "#!/bin/sh\nfor argument; do\n    if [ \"\$argument\" = merge ]; then\n        exec '$git' \"\$@\" --no-commit\n    fi\ndone\nexec '$git' \"\$@\"\n");
+        new Filesystem()->chmod($shim.'/git', 0o700);
+        $this->path = $shim.\PATH_SEPARATOR.getenv('PATH');
+
+        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'touch ran');
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("not-merged\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+        self::assertStringContainsString('the merge left no merge commit of', $this->outputFile('check.log'));
+        self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
+    public function testAFileTheBranchChangedAndMainDeletedLeavesConflictsWithMainAndRunsNoStep(): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile('shared.txt', "base\n", 'Add the shared file');
+        $this->history->push('main');
+        $this->history->checkout('task');
+        $this->history->merge('main');
+        $this->history->commitFile('shared.txt', "the branch's line\n", 'Change the shared file');
+        $bundle = $this->history->bundle('main..task');
+        $this->history->checkout('main');
+        $this->history->removeFile('shared.txt', 'Delete the shared file');
+        $this->history->push('main');
+        $this->history->checkout('task');
+
+        $run = $this->whenTheCheckRuns($bundle, 'task', 'touch ran');
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("conflicts-with-main\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+        self::assertStringContainsString('CONFLICT (modify/delete)', $this->outputFile('check.log'));
+        self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
     public function testAMirrorWhoseHeadIsDetachedAtAMainThatMovedRunsTheStepsOnTheHeadMergedIntoThatMain(): void
     {
         $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
@@ -339,7 +416,11 @@ final class CheckScriptTest extends TestCase
             }
         }
 
-        $environment['GIT_CONFIG_COUNT'] = (string) count($this->gitConfiguration);
+        if ('' !== $this->path) {
+            $environment['PATH'] = $this->path;
+        }
+
+        $environment['GIT_CONFIG_COUNT'] =(string) count($this->gitConfiguration);
         foreach (array_keys($this->gitConfiguration) as $index => $key) {
             $environment['GIT_CONFIG_KEY_'.$index] = $key;
             $environment['GIT_CONFIG_VALUE_'.$index] = $this->gitConfiguration[$key];
