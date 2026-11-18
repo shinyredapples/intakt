@@ -164,7 +164,7 @@ final class CountedVoteTest extends TestCase
     private function counted(array $reported, array $marks, array $dropped = [], array $shown = []): CountedVote
     {
         $kept = array_values(array_filter($reported, static fn (Finding $finding): bool => !in_array($finding, $dropped, true)));
-        $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding((string) $id, $mark), array_keys($marks), $marks));
+        $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding($id, $mark), array_keys($marks), $marks));
         $judged = JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
 
         return new CountedVote($reported, $shown, $judged);

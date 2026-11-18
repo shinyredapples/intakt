@@ -85,7 +85,7 @@ final readonly class VerdictForTheLoop
     private function voteOf(RoundReviewer $reviewer): PanelVerdict
     {
         $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
-        $vote = null === $given ? Decision::Blocked : $this->ledger->voteOf($reviewer->round()->id()->toRfc4122(), $reviewer->id()->toRfc4122(), $given);
+        $vote = $given instanceof Decision ? $this->ledger->voteOf($reviewer->round()->id()->toRfc4122(), $reviewer->id()->toRfc4122(), $given) : Decision::Blocked;
 
         return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
     }
