@@ -280,7 +280,7 @@ A boolean parameter that switches what a function does hides two behaviors behin
 
 ## When `bin/check` reports a class that is not final
 
-A class is closed for extension unless it is built to be extended, so the `phpstan` gate of `bin/check` reports a finding `intakt.finalClass` for every class declared neither `final` nor `abstract` in a PHP file under `src/`, `tests/`, `bin/` or `config/gates/src/`. Services, `readonly` value objects, Doctrine entities and test classes are all reported alike. An abstract class is not reported, and neither is an anonymous class (`new class { ... }`), an interface, an enum or a trait. The finding names the class. To resolve it, declare the class `final` (`final readonly class` for a service), or `abstract` when it is meant to be extended.
+A class is closed for extension unless it is built to be extended, so the `phpstan` gate of `bin/check` reports a finding `intakt.finalClass` for every class declared neither `final` nor `abstract` in a file the gate analyzes under `src/`, `tests/`, `bin/` or `config/gates/src/`: the `.php` files there plus `bin/check`, `bin/instance` and `bin/probe`, but not the gate test fixtures under `tests/Gates/Fixtures/` or other files without an extension, such as `bin/console`. Services, `readonly` value objects, Doctrine entities and test classes are all reported alike. An abstract class is not reported, and neither is an anonymous class (`new class { ... }`), an interface, an enum or a trait. The finding names the class. To resolve it, declare the class `final` (`final readonly class` for a service), or `abstract` when it is meant to be extended.
 
 ## When `bin/check` reports a re-spelled name
 
