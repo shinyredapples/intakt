@@ -121,7 +121,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 - **Waits for:** T9. **Size:** M. **Labels:** `class:core`, `priority:high`.
 
 ### T11 Verdict identity
-- **Description:** Each verdict records head, base, task revision, check command and panel policy. A change to any of them makes it stale; a clean merge of the base or a docs-only change keeps it for the untouched parts.
+- **Description:** Each verdict records head, base, task revision, check command and panel policy. A change to any of them makes it stale; a clean merge of the base or a docs-only change keeps it for the untouched parts, but never its class of the protected part, which counts only for the head it was given on (D1 of #1072).
 - **Acceptance:** each identity field invalidates on change; the two exceptions are covered.
 - **Evidence:** a stale verdict shown as stale after a new commit on the sample branch.
 - **Waits for:** T9. **Size:** S. **Labels:** `class:core`, `priority:normal`.
