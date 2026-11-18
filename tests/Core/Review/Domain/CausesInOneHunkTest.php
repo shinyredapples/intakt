@@ -86,6 +86,15 @@ final class CausesInOneHunkTest extends TestCase
         self::assertEquals([new JudgedFinding('F1', Mark::Defer), new JudgedFinding('F2', Mark::Reject)], $checked->marks);
     }
 
+    public function testADroppedLinkKeepsTheJudgesNote(): void
+    {
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Reject, 'F1', 'Not reachable.')]);
+
+        $checked = new CausesInOneHunk()->checked($judgement, [$this->finding('F1', 'src/discount.js', 12), $this->finding('F2', 'src/cart.js', 12)], self::HUNKS);
+
+        self::assertEquals(new JudgedFinding('F2', Mark::Reject, null, 'Not reachable.'), $checked->marks[1]);
+    }
+
     /**
      * @param array{string, ?int} $cause
      * @param array{string, ?int} $linked
