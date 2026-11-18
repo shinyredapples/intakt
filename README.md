@@ -61,7 +61,7 @@ What works without Docker or a provider key:
 
 ```
 composer install
-bin/check            # the quality gates every change passes (not the journeys), one JSON line per gate
+bin/check            # the quality gates every change passes (not the journeys), one JSON line per gate, all findings in var/check/report.json
 bin/check --journeys # the user journeys, each on a fresh install, run separately
 bin/console about    # the app boots on SQLite
 ```
