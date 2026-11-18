@@ -15,6 +15,7 @@ Think of it as a small software team that works around the clock:
 | **Builder** | an AI agent | writes the code for one task |
 | **Reviewers** | a panel of AI agents you configure (by default two, from different companies when available) | check the builder's work, independently of each other, each with its own focus |
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
+| **AI engineer** (planned) | an AI agent that reports once a week | looks at where model tokens go and tries cheaper prompts or model choices as experiments against the old ones; keeps a change only if it costs fewer tokens per merged task without more send-backs, escaped defects or broken main. Changes to prompts still need your approval like any protected change |
 | **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
 
 ```mermaid

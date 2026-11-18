@@ -721,4 +721,12 @@ The Security engineer covers the security of the product being built, across inf
 - **Evidence:** the panel chosen for three changes (one per layer) by a dry-run command, and a scripted audit's filed tasks on a temporary repository.
 - **Waits for:** T8, T66. **Size:** L. **Labels:** `class:core`, `priority:normal`, `plan:required`.
 
+## AI engineer (#865)
+
+### T89 The AI engineer: token measures and experiments
+- **Description:** Every model call records cached-read, fresh-input and output tokens, turns and its largest tool outputs; the dashboard shows tokens per merged task by role and model, cache-read share and context growth per turn. The AI engineer owns role prompts, focus files, skills, context limits and model routing as experiments with a holdout, kept only when tokens per merged task fall and send-backs, escaped defects and red main do not worsen, else reverted automatically; prompt and skill changes go through the approval of protected changes; one weekly session reads a deterministic report, and findings outside its settings become ready tasks. Design: [the AI engineer](design/05-architecture/06-budget-and-model-planner.md#the-ai-engineer-planned), [Dashboard](design/05-architecture/13-dashboard.md).
+- **Acceptance:** a recorded call holds the token split and the largest tool outputs; a change that cuts tokens but worsens a counter-metric is reverted by plain code; a prompt change reaches main only through protected approval; the role cannot change review strictness, checks, approval rules or its own limits.
+- **Evidence:** the dashboard's measures on a running install, and a scripted experiment kept and one reverted.
+- **Waits for:** T60, T69. **Size:** L. **Labels:** `class:core`, `priority:normal`, `plan:required`.
+
 Parallel paths: T84, T85 and T86 in parallel after T51; T87 after T85; T88 after T8 and T66, alongside the checks, its reviews covering a layer until that layer's checks land.
