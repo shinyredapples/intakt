@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\PhpGate;
 
+use Composer\InstalledVersions;
 use Intakt\Plugin\Gate\Contract\DependencyStep;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -51,7 +52,7 @@ final class PhpGateDependencyStepTest extends TestCase
 
         $this->mustRun($this->step->generate);
 
-        self::assertSame(['After', 'Composer\InstalledVersions'], array_keys($this->required('vendor/composer/autoload_classmap.php')));
+        self::assertSame(['After', InstalledVersions::class], array_keys($this->required('vendor/composer/autoload_classmap.php')));
         $installed = $this->required('vendor/composer/installed.php');
         self::assertIsArray($installed['root'] ?? null);
         self::assertSame(trim($this->mustRun('git rev-parse HEAD')), $installed['root']['reference'] ?? null);
