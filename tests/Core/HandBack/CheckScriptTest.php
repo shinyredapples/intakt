@@ -210,6 +210,41 @@ final class CheckScriptTest extends TestCase
         self::assertStringNotContainsString('merge hook refused', $this->outputFile('check.log'));
     }
 
+    public function testTheMergeWithCurrentMainIsNotSignedSoAFailingSignerOfTheEnvironmentDoesNotStopACleanMerge(): void
+    {
+        $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $main = $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        $this->gitConfiguration = ['commit.gpgSign' => 'true', 'gpg.program' => 'false'];
+
+        $run = $this->whenTheCheckRuns(
+            $this->history->bundle('main..task'),
+            'task',
+            'test "$(git rev-parse HEAD^1)" = '.$main,
+            'test "$(git rev-parse HEAD^2)" = '.$head,
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+    }
+
+    public function testAMirrorWhoseHeadIsDetachedAtAMainThatMovedRunsTheStepsOnTheHeadMergedIntoThatMain(): void
+    {
+        $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $main = $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        $this->history->inMirror('update-ref', '--no-deref', 'HEAD', $main);
+
+        $run = $this->whenTheCheckRuns(
+            $this->history->bundle('main..task'),
+            'task',
+            'test -f added-on-main.txt',
+            'test "$(git rev-parse HEAD^1)" = '.$main,
+            'test "$(git rev-parse HEAD^2)" = '.$head,
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+    }
+
     public function testTheMergeWithCurrentMainTakesTheChecksOwnIdentityAndNoneFromTheJob(): void
     {
         $this->history->commit('Build work');

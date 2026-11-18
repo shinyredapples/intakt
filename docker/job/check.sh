@@ -16,6 +16,7 @@ output="${INTAKT_JOB_OUTPUT:-/output}"
 clone="${TMPDIR:-/work}/clone"
 log="$output/check.log"
 main=''
+merged=''
 
 apply() {
     git clone --quiet --no-hardlinks -- "$mirror" "$clone" || return 1
@@ -35,8 +36,13 @@ merge_main() {
     # Main as the first parent, as CI merges, because a merge driver such as union orders the two sides by it.
     git reset --quiet --hard "$main" || return 1
     # The check's own identity, because the job's clone and HOME carry none, and a conventional subject, because the commit-subject gate reads this commit too.
-    # No hook, as CI's merge runs none: a hook of the image that refuses would stop a merge whose trees merged cleanly.
-    git -c core.hooksPath=/dev/null -c user.name=intakt-check -c user.email=check@intakt.invalid merge --no-ff --no-edit -m 'chore(check): merge the branch into current main' "$head"
+    # No hook and no signature, as CI's merge has neither: a refusing hook or a failing signer of the image would stop a merge whose trees merged cleanly.
+    # LC_ALL=C, because the conflict test below reads git's English CONFLICT lines.
+    merged=$(LC_ALL=C git -c core.hooksPath=/dev/null -c commit.gpgSign=false -c user.name=intakt-check -c user.email=check@intakt.invalid \
+        merge --no-ff --no-edit -m 'chore(check): merge the branch into current main' "$head" 2>&1)
+    status=$?
+    printf '%s\n' "$merged"
+    return "$status"
 }
 
 result() {
@@ -51,8 +57,8 @@ fi
 cd "$clone" || exit 1
 
 if ! merge_main >> "$log" 2>&1; then
-    # A merge git stopped to have it resolved is a conflict, and its MERGE_HEAD state file tells it, because some conflicts (a directory renamed to two places) leave no unmerged path; any other refusal of the merge is not the branch's to resolve. The file and not the revision name, because a task branch named MERGE_HEAD answers the name without a merge in progress.
-    if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
+    # Only git's own conflict report means the branch has something to resolve, so a refused merge or a failed merge commit is not-merged; the CONFLICT line counts too, because a directory renamed to two places leaves no unmerged path.
+    if [ -n "$(git diff --name-only --diff-filter=U)" ] || printf '%s\n' "$merged" | grep -q '^CONFLICT ('; then
         result 'conflicts-with-main'
     else
         result 'not-merged'
