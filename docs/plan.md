@@ -23,7 +23,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M4 Live dashboard | rounds, streaming progress, verdicts and cost, live | T20, T21 | 2026-11-17 |
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 | After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T81, T32 (optional) | after the deadline |
-| M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
+| M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, T89, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
 | M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 | Product security | see [Product security](#product-security-864) | T84 to T88 | after M7, set by the owner |
@@ -343,7 +343,7 @@ Conventions, in addition to the ones above:
 
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
-| M6 Reviewer for the loop | Intakt's review takes the place of the existing loop's Claude reviewer on the owner's two projects and counts, and a weekly report compares its published verdicts with the loop's GPT reviews | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
+| M6 Reviewer for the loop | Intakt's review takes the place of the existing loop's Claude reviewer on the owner's two projects and counts, and a weekly report compares its published verdicts with the loop's GPT reviews | T37, T38, T40, T43 to T46, T89, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
 | M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
@@ -365,6 +365,12 @@ T44 to T46 run in M6 alongside T37, T38, T40 and T43 (owner decision 2026-11-09,
 - **Acceptance:** an unchanged pull request causes no further reads; a new head with pending CI starts no round and is read again after the interval; a green head starts exactly one round; a head that moves during the round makes its verdicts stale (T11).
 - **Evidence:** the ledger of a tick over two recorded pull requests, one pending and one green.
 - **Waits for:** T37, T9. **Size:** M. **Labels:** `class:core`, `priority:high`.
+
+### T89 Pending-aware polling
+- **Description:** When a step of a lane ends with an outside event pending (CI of a head, an approval, a new head of a bot pull request, the default branch's CI), the Scheduler arms one early re-check of that lane: 30 s, 60 s, 120 s, 240 s, then the normal interval of T38; any work on the lane resets it. One re-check per lane is armed at a time and it runs under the lane's lock; below a configured share of the installation's hourly forge calls none is armed. An owner setting, on by default. The dashboard's lane strip shows "next check in <n>s, waiting for <what>" ([Merge](design/05-architecture/08-merge.md#waiting-for-ci), [Dashboard](design/05-architecture/13-dashboard.md)).
+- **Acceptance:** with a controlled clock, a review postponed for pending CI is re-checked after 30 s, then 60 s, 120 s and 240 s, then at the normal interval; any work on the lane resets the backoff; arming twice leaves one re-check armed; a re-check that finds the lane's lock taken runs nothing (forced order); below the configured budget share no re-check is armed; with the setting off only the normal interval runs; the lane shows the next check and what it waits for.
+- **Evidence:** the ledger of a scripted run against a recorded forge double: a head with pending CI re-checked at 30 s and 60 s, CI green at the second, the review started then.
+- **Waits for:** T38. **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
 ### T40 Measured use and the start ceiling
 - **Description:** `Core/Budget` keeps per account the measured use of each window (Claude's five-hour and weekly windows from its rate-limit events, Codex's from its token counts; T81 later adds a best-effort read of Codex's own usage endpoint) with the reading's age and the reset time. A call starts only while the measured use is below the window's ceiling (five-hour default 90%, the weekly one paced over the week); a second parallel start needs a fresher reading and a margin; without a trusted reading only one call runs at a time, and after a long outage the owner is told once. A structured usage-limit answer puts the account in cooldown until its reset; a shared back-off still lets approved heads merge. Ceilings are owner config.
@@ -672,7 +678,7 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 
 ## Parallel paths (M6 to M8)
 
-- From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37.
+- From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T89 after T38.
 - The first weeks of the weekly report (after T43) run while M7 is built.
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
 - M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76.

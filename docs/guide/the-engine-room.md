@@ -43,6 +43,8 @@ Some loops run on a **tick**: a clock that wakes every lane every few minutes ("
 
 Everything that waits has a **deadline** that wakes it, for example "check again in 2 minutes whether CI started". A slow **heartbeat** runs as a safety net, in case GitHub forgets to send an event. When nothing needs doing, nothing runs.
 
+*(Planned:)* GitHub does not tell Intakt when CI finishes or you approve something unless webhooks are set up, so Intakt has to look. While a bench waits for GitHub (CI, an approval, a new version of a bot's pull request), it will look again within seconds: after 30 seconds, then 1, 2 and 4 minutes, then at its usual pace. Anything the bench does starts the count again. Each bench has at most one such early look waiting, and it never runs at the same time as the bench's usual look. When the hour's GitHub allowance runs low, the early looks stop until it refills. You can turn them off in your settings; they are on unless you do. The dashboard says when a bench looks next and what for, for example "next check in 60s, waiting for CI".
+
 ## CI: the second opinion
 
 **CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Intakt has already run the same checks before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
