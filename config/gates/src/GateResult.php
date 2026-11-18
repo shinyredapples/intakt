@@ -73,10 +73,26 @@ final readonly class GateResult
             'omitted' => count($this->findings) - count($shown),
         ];
 
-        $report += isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
-        $report += [] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()];
+        return json_encode($report + $this->extrasShown(), self::JSON_FLAGS);
+    }
 
-        return json_encode($report, self::JSON_FLAGS);
+    // Because the full report keeps what the gate line cuts: every finding, as the gate wrote it.
+    /**
+     * @return array<string, mixed>
+     */
+    public function whole(): array
+    {
+        return ['gate' => $this->gate, 'ok' => $this->isPassing(), 'findings' => $this->findings] + $this->extrasShown();
+    }
+
+    /**
+     * @return array{note?: string, slowest?: list<array{file: string, seconds: float}>}
+     */
+    private function extrasShown(): array
+    {
+        $extras = isset($this->extras['note']) ? ['note' => $this->extras['note']] : [];
+
+        return $extras + ([] === ($this->extras['slowest'] ?? []) ? [] : ['slowest' => $this->slowestList()]);
     }
 
     /**

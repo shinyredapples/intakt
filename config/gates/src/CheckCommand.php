@@ -74,11 +74,14 @@ final readonly class CheckCommand
             return 2;
         }
 
+        $fullResult = FullReport::fileAskedFor();
+
         if (LowPriority::isAskedIn(getenv())) {
             new LowPriority()->take();
         }
 
         $result = $this->resultOf($gate, new Workspace($options->root ?? $this->home, $this->home, $options->mode, $options->base));
+        FullReport::keep($result, $fullResult);
         fwrite(STDOUT, $result->toJson()."\n");
 
         return $result->isPassing() ? 0 : 1;
@@ -91,7 +94,8 @@ final readonly class CheckCommand
     {
         $selected = $this->selectedGates($options);
         $names = array_map(static fn (Gate $gate): string => $gate->name(), $selected);
-        $missing = new RequiredTools($options->root ?? $this->home)->missingToRunEachInItsOwnProcess($names);
+        $root = $options->root ?? $this->home;
+        $missing = new RequiredTools($root)->missingToRunEachInItsOwnProcess($names);
 
         if ([] !== $missing) {
             $this->print(['error' => 'missing tools', 'missing' => $missing]);
@@ -100,19 +104,20 @@ final readonly class CheckCommand
         }
 
         $runningTheChangesCode = array_map(static fn (Gate $gate): string => $gate->name(), array_values(array_filter($selected, static fn (Gate $gate): bool => $gate instanceof RunsTheChangesCode)));
+        $fullReport = FullReport::start();
+        $reports = new GateChildren($this->home, $root, $slots, $runningTheChangesCode, $fullReport)->reportsOf($names, $arguments);
 
-        return $this->runGates($names, $arguments, new GateChildren($this->home, $options->root ?? $this->home, $slots, $runningTheChangesCode));
+        return $this->reportOn($reports, $fullReport, $root);
     }
 
     /**
-     * @param list<string> $names
-     * @param list<string> $arguments
+     * @param list<GateReport> $reports
      */
-    private function runGates(array $names, array $arguments, GateChildren $children): int
+    private function reportOn(array $reports, FullReport $fullReport, string $root): int
     {
         $failed = [];
 
-        foreach ($children->reportsOf($names, $arguments) as $report) {
+        foreach ($reports as $report) {
             fwrite(STDOUT, $report->line."\n");
 
             if (!$report->isPassing()) {
@@ -120,7 +125,8 @@ final readonly class CheckCommand
             }
         }
 
-        $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
+        $summary = ['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed];
+        $this->print($fullReport->writeTo($root, $summary, $reports) ? $summary + ['report' => FullReport::PATH] : $summary);
 
         return [] === $failed ? 0 : 1;
     }
