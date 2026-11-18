@@ -5,114 +5,232 @@ declare(strict_types=1);
 namespace Intakt\Gates;
 
 // Because JavaScript reads a slash as division or as the start of a regular expression by the code before it, the scanner carries that code's context.
-final readonly class JavaScriptContext
+// Because copying the bracket stack on every bracket made deep nesting quadratic, one context per scan changes in place.
+final class JavaScriptContext
 {
-    private const string WORD_CHARACTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$';
     // Because after these words an expression starts, so a slash there opens a regular expression, while after any other word it divides.
-    private const array KEYWORDS_BEFORE_AN_EXPRESSION = ['return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'throw', 'case', 'do', 'else', 'yield', 'await'];
-    // Because these words start a statement, a brace after them opens a block and not an object literal.
-    private const array KEYWORDS_BEFORE_A_BLOCK = ['do', 'else'];
-    // Because the parentheses after these words hold a condition, a slash after them starts the statement's body.
-    private const array KEYWORDS_BEFORE_A_CONDITION = ['if', 'while', 'for', 'with'];
-    private const string VALUE = '""';
+    private const array KEYWORDS_BEFORE_AN_EXPRESSION = ['return', 'typeof', 'instanceof', 'in', 'new', 'delete', 'void', 'throw', 'case', 'yield', 'await', 'extends'];
+    // Because after these words a statement starts, a brace there opens a block and a function or class there is a declaration.
+    private const array KEYWORDS_BEFORE_A_STATEMENT = ['do', 'else', 'try', 'finally', 'export', 'default'];
+    // Because the parentheses after these words hold a condition or a head, a statement starts after them.
+    private const array KEYWORDS_BEFORE_A_CONDITION = ['if', 'while', 'with', 'switch', 'catch'];
 
-    // Because what a slash after a closing bracket means depends on its opening one, each open bracket keeps that meaning, innermost last.
-    /**
-     * @param list<JavaScriptSlash> $closings
-     */
-    public function __construct(
-        private JavaScriptSlash $slash = JavaScriptSlash::Regex,
-        private array $closings = [],
-        private string $before = '',
+    private JavaScriptOpening $opening = JavaScriptOpening::Nothing;
+    private bool $isExpression = false;
+    private bool $afterDot = false;
+    private ?JavaScriptPosition $beforeAsync = null;
+    private int $ternaries = 0;
+    /** @var list<JavaScriptBracket> */
+    private array $brackets = [];
+
+    private function __construct(
+        private JavaScriptPosition $position,
+        private JavaScriptFrame $frame,
+        private readonly JavaScriptCode $code,
     ) {
+    }
+
+    public static function forScript(): self
+    {
+        return new self(JavaScriptPosition::StatementStart, JavaScriptFrame::Statements, new JavaScriptCode());
+    }
+
+    public static function forTemplateExpression(): self
+    {
+        return new self(JavaScriptPosition::ExpressionStart, JavaScriptFrame::Expression, new JavaScriptCode());
     }
 
     public function slashStartsARegex(): bool
     {
-        return JavaScriptSlash::Regex === $this->slash;
+        return JavaScriptPosition::AfterOperand !== $this->position;
     }
 
     public function isOutermost(): bool
     {
-        return [] === $this->closings;
+        return [] === $this->brackets;
     }
 
-    public function afterCode(string $code): self
+    public function read(string $code): void
     {
-        return '' === $code ? $this : new self($this->slashAfter($code), $this->closings, $code);
+        foreach ($this->code->tokensIn($code) as $token) {
+            $this->take($token);
+        }
     }
 
-    public function afterValue(): self
+    public function readValue(): void
     {
-        return new self(JavaScriptSlash::Division, $this->closings, self::VALUE);
+        $this->moveTo(JavaScriptPosition::AfterOperand);
     }
 
-    public function afterDivision(): self
+    public function readDivision(): void
     {
-        return new self(JavaScriptSlash::Regex, $this->closings, '/');
+        $this->moveTo(JavaScriptPosition::ExpressionStart);
     }
 
-    public function afterOpening(string $opening): self
+    public function open(string $bracket): void
     {
-        return new self(JavaScriptSlash::Regex, [...$this->closings, $this->slashAfterClosing($opening)], $opening);
+        [$frame, $bracket] = '{' === $bracket ? $this->braceOpened() : $this->bracketOpened($bracket);
+        $this->brackets[] = $bracket;
+        $this->frame = $frame;
+        $this->ternaries = 0;
+        $this->opening = JavaScriptOpening::Nothing;
+        $this->afterDot = false;
+        $this->beforeAsync = null;
+        $this->position = JavaScriptFrame::Statements === $frame ? JavaScriptPosition::StatementStart : JavaScriptPosition::ExpressionStart;
     }
 
-    public function afterClosing(string $closing): self
+    public function close(): void
     {
-        return new self(array_last($this->closings) ?? JavaScriptSlash::Division, array_slice($this->closings, 0, -1), $closing);
-    }
+        $bracket = array_pop($this->brackets);
 
-    // Because a postfix increment or decrement ends an operand, a slash after it divides.
-    private function slashAfter(string $code): JavaScriptSlash
-    {
-        $word = $this->wordAtEnd($code);
+        if (null === $bracket) {
+            $this->moveTo(JavaScriptPosition::AfterOperand);
 
-        if ('' === $word) {
-            return str_ends_with($code, '++') || str_ends_with($code, '--') ? JavaScriptSlash::Division : JavaScriptSlash::Regex;
+            return;
         }
 
-        return $this->isKeyword($code, $word, self::KEYWORDS_BEFORE_AN_EXPRESSION) ? JavaScriptSlash::Regex : JavaScriptSlash::Division;
+        $this->frame = $bracket->enclosing;
+        $this->ternaries = $bracket->enclosingTernaries;
+        $this->position = $bracket->after;
+        $this->opening = $bracket->opensAfter;
+        $this->isExpression = $bracket->isExpressionAfter;
+        $this->afterDot = false;
+        $this->beforeAsync = null;
     }
 
-    private function slashAfterClosing(string $opening): JavaScriptSlash
+    private function take(string $token): void
     {
-        $word = $this->wordAtEnd($this->before);
+        $isWord = ord($token[0]) >= 0x80 || ctype_alnum($token[0]) || str_contains('_$#', $token[0]);
+        $afterDot = $this->afterDot;
+        $beforeAsync = $this->beforeAsync;
+        $this->afterDot = false;
+        $this->beforeAsync = null;
 
-        return match ($opening) {
-            '(' => $this->isKeyword($this->before, $word, self::KEYWORDS_BEFORE_A_CONDITION) ? JavaScriptSlash::Regex : JavaScriptSlash::Division,
-            '{' => $this->opensBlock($word) ? JavaScriptSlash::Regex : JavaScriptSlash::Division,
-            default => JavaScriptSlash::Division,
+        if (!$isWord) {
+            $this->punctuator($token);
+        } elseif ($afterDot || ctype_digit($token[0])) {
+            $this->moveTo(JavaScriptPosition::AfterOperand);
+        } else {
+            $this->word($token, $beforeAsync);
+        }
+    }
+
+    private function punctuator(string $token): void
+    {
+        $position = match ($token) {
+            '++', '--' => JavaScriptPosition::AfterOperand === $this->position ? JavaScriptPosition::AfterOperand : JavaScriptPosition::ExpressionStart,
+            ':' => $this->afterColon(),
+            ';' => JavaScriptPosition::StatementStart,
+            '?' => $this->afterQuestionMark(),
+            default => JavaScriptPosition::ExpressionStart,
+        };
+
+        $this->afterDot = '.' === $token || '?.' === $token;
+
+        if ('=>' === $token) {
+            $this->expect(JavaScriptOpening::ArrowBody, true);
+        } elseif ('*' !== $token || JavaScriptOpening::FunctionHead !== $this->opening) {
+            $this->moveTo($position);
+        }
+    }
+
+    private function word(string $word, ?JavaScriptPosition $beforeAsync): void
+    {
+        $before = $beforeAsync ?? $this->position;
+        $atStatementStart = JavaScriptPosition::StatementStart === $before;
+
+        match (true) {
+            JavaScriptOpening::FunctionHead === $this->opening => $this->position = JavaScriptPosition::AfterOperand,
+            'function' === $word => $this->expect(JavaScriptOpening::FunctionHead, !$atStatementStart),
+            'class' === $word => $this->expect(JavaScriptOpening::ClassBody, !$atStatementStart),
+            'for' === $word => $this->expect(JavaScriptOpening::ForHead, false),
+            in_array($word, self::KEYWORDS_BEFORE_A_CONDITION, true) => $this->expect(JavaScriptOpening::Condition, false),
+            in_array($word, self::KEYWORDS_BEFORE_A_STATEMENT, true) => $this->moveTo(JavaScriptPosition::StatementStart),
+            in_array($word, self::KEYWORDS_BEFORE_AN_EXPRESSION, true), 'of' === $word && JavaScriptFrame::ForHead === $this->frame => $this->moveTo(JavaScriptPosition::ExpressionStart),
+            default => $this->moveTo(JavaScriptPosition::AfterOperand),
+        };
+
+        // Because `async function` declares a function where `async` stood, the position before it decides.
+        if ('async' === $word) {
+            $this->beforeAsync = $before;
+        }
+    }
+
+    private function afterColon(): JavaScriptPosition
+    {
+        if ($this->ternaries > 0) {
+            --$this->ternaries;
+
+            return JavaScriptPosition::ExpressionStart;
+        }
+
+        return JavaScriptFrame::Statements === $this->frame ? JavaScriptPosition::StatementStart : JavaScriptPosition::ExpressionStart;
+    }
+
+    private function afterQuestionMark(): JavaScriptPosition
+    {
+        ++$this->ternaries;
+
+        return JavaScriptPosition::ExpressionStart;
+    }
+
+    private function expect(JavaScriptOpening $opening, bool $isExpression): void
+    {
+        $this->position = JavaScriptPosition::ExpressionStart;
+        $this->opening = $opening;
+        $this->isExpression = $isExpression;
+    }
+
+    // Because a class heritage such as `extends mixin(a).b` may stand between `class` and its body, the class body stays expected until its brace.
+    private function moveTo(JavaScriptPosition $position): void
+    {
+        $this->position = $position;
+
+        if (JavaScriptOpening::ClassBody !== $this->opening) {
+            $this->opening = JavaScriptOpening::Nothing;
+        }
+    }
+
+    /**
+     * @return array{JavaScriptFrame, JavaScriptBracket}
+     */
+    private function braceOpened(): array
+    {
+        $isBody = in_array($this->opening, [JavaScriptOpening::FunctionBody, JavaScriptOpening::ClassBody, JavaScriptOpening::ArrowBody], true);
+
+        if (!$isBody && JavaScriptPosition::ExpressionStart === $this->position) {
+            return [JavaScriptFrame::Expression, $this->bracket(JavaScriptPosition::AfterOperand, JavaScriptOpening::Nothing)];
+        }
+
+        $isValue = $isBody && $this->isExpression && JavaScriptOpening::ArrowBody !== $this->opening;
+
+        return [JavaScriptFrame::Statements, $this->bracket($isValue ? JavaScriptPosition::AfterOperand : JavaScriptPosition::StatementStart, JavaScriptOpening::Nothing)];
+    }
+
+    /**
+     * @return array{JavaScriptFrame, JavaScriptBracket}
+     */
+    private function bracketOpened(string $bracket): array
+    {
+        if ('[' === $bracket) {
+            return [JavaScriptFrame::Expression, $this->bracket(JavaScriptPosition::AfterOperand, $this->classBodyOrNothing())];
+        }
+
+        return match ($this->opening) {
+            JavaScriptOpening::FunctionHead => [JavaScriptFrame::Expression, $this->bracket(JavaScriptPosition::AfterOperand, JavaScriptOpening::FunctionBody)],
+            JavaScriptOpening::Condition => [JavaScriptFrame::Expression, $this->bracket(JavaScriptPosition::StatementStart, JavaScriptOpening::Nothing)],
+            JavaScriptOpening::ForHead => [JavaScriptFrame::ForHead, $this->bracket(JavaScriptPosition::StatementStart, JavaScriptOpening::Nothing)],
+            default => [JavaScriptFrame::Expression, $this->bracket(JavaScriptPosition::AfterOperand, $this->classBodyOrNothing())],
         };
     }
 
-    // Because a brace where an expression is expected opens an object literal, which a slash then divides, while any other brace opens a block.
-    private function opensBlock(string $word): bool
+    private function classBodyOrNothing(): JavaScriptOpening
     {
-        if ('' === $this->before || str_ends_with($this->before, '=>') || str_contains(';{})', $this->before[-1])) {
-            return true;
-        }
-
-        return '' !== $word && (in_array($word, self::KEYWORDS_BEFORE_A_BLOCK, true) || !in_array($word, self::KEYWORDS_BEFORE_AN_EXPRESSION, true));
+        return JavaScriptOpening::ClassBody === $this->opening ? JavaScriptOpening::ClassBody : JavaScriptOpening::Nothing;
     }
 
-    // Because a keyword after a dot is only a property name, it does not count as the keyword.
-    /**
-     * @param list<string> $keywords
-     */
-    private function isKeyword(string $code, string $word, array $keywords): bool
+    private function bracket(JavaScriptPosition $after, JavaScriptOpening $opensAfter): JavaScriptBracket
     {
-        return in_array($word, $keywords, true) && '.' !== substr($code, -strlen($word) - 1, 1);
-    }
-
-    // Because identifiers may hold any Unicode letter, every byte of a multibyte character counts as part of a word.
-    private function wordAtEnd(string $code): string
-    {
-        $start = strlen($code);
-
-        while ($start > 0 && (ord($code[$start - 1]) >= 0x80 || str_contains(self::WORD_CHARACTERS, $code[$start - 1]))) {
-            --$start;
-        }
-
-        return substr($code, $start);
+        return new JavaScriptBracket($this->frame, $this->ternaries, $after, $opensAfter, $this->isExpression);
     }
 }

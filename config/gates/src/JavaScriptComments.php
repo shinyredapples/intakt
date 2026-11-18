@@ -31,11 +31,11 @@ final readonly class JavaScriptComments implements CommentLanguage
     private function code(string $source, int $offset, ?string $closer): Generator
     {
         $length = strlen($source);
-        $context = new JavaScriptContext();
+        $context = null === $closer ? JavaScriptContext::forScript() : JavaScriptContext::forTemplateExpression();
 
         while (true) {
             $stop = $offset + strcspn($source, self::CODE_STOPS, $offset);
-            $context = $context->afterCode(rtrim(substr($source, $offset, $stop - $offset)));
+            $context->read(substr($source, $offset, $stop - $offset));
 
             if ($stop >= $length) {
                 return $length;
@@ -45,28 +45,38 @@ final readonly class JavaScriptComments implements CommentLanguage
                 return $stop + 1;
             }
 
-            [$offset, $context] = yield from $this->afterStop($source, $stop, $context);
+            $offset = yield from $this->afterStop($source, $stop, $context);
         }
     }
 
     /**
-     * @return Generator<int, array{int, string}, mixed, array{int, JavaScriptContext}>
+     * @return Generator<int, array{int, string}, mixed, int>
      */
     private function afterStop(string $source, int $stop, JavaScriptContext $context): Generator
     {
         $char = $source[$stop];
 
-        return match ($char) {
-            "'", '"' => [$this->afterQuoted($source, $stop + 1, $char), $context->afterValue()],
-            '`' => [yield from $this->template($source, $stop + 1), $context->afterValue()],
-            '/' => yield from $this->slash($source, $stop, $context),
-            '(', '[', '{' => [$stop + 1, $context->afterOpening($char)],
-            default => [$stop + 1, $context->afterClosing($char)],
+        if ('/' === $char) {
+            return yield from $this->slash($source, $stop, $context);
+        }
+
+        $end = match ($char) {
+            "'", '"' => $this->afterQuoted($source, $stop + 1, $char),
+            '`' => yield from $this->template($source, $stop + 1),
+            default => $stop + 1,
         };
+
+        match ($char) {
+            '(', '[', '{' => $context->open($char),
+            ')', ']', '}' => $context->close(),
+            default => $context->readValue(),
+        };
+
+        return $end;
     }
 
     /**
-     * @return Generator<int, array{int, string}, mixed, array{int, JavaScriptContext}>
+     * @return Generator<int, array{int, string}, mixed, int>
      */
     private function slash(string $source, int $offset, JavaScriptContext $context): Generator
     {
@@ -77,12 +87,35 @@ final readonly class JavaScriptComments implements CommentLanguage
         };
 
         if (null !== $end) {
-            yield [$offset, substr($source, $offset, $end - $offset)];
+            yield from $this->commentLines($offset, substr($source, $offset, $end - $offset));
 
-            return [$end, $context];
+            return $end;
         }
 
-        return $context->slashStartsARegex() ? [$this->afterRegex($source, $offset + 1), $context->afterValue()] : [$offset + 1, $context->afterDivision()];
+        if (!$context->slashStartsARegex()) {
+            $context->readDivision();
+
+            return $offset + 1;
+        }
+
+        $context->readValue();
+
+        return $this->afterRegex($source, $offset + 1);
+    }
+
+    // Because JavaScript also ends a line at U+2028 and U+2029, each part of a block comment between them is a comment line of its own, on the same git line.
+    /**
+     * @return Generator<int, array{int, string}>
+     */
+    private function commentLines(int $offset, string $comment): Generator
+    {
+        $start = 0;
+        $parts = explode(self::SEPARATOR_LINE_ENDS[0], str_replace(self::SEPARATOR_LINE_ENDS[1], self::SEPARATOR_LINE_ENDS[0], $comment));
+
+        foreach ($parts as $part) {
+            yield [$offset + $start, $part];
+            $start += strlen($part) + strlen(self::SEPARATOR_LINE_ENDS[0]);
+        }
     }
 
     private function afterLineComment(string $source, int $offset): int
