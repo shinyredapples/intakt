@@ -47,6 +47,7 @@ final readonly class AccountPlatform implements PlatformInterface
 
         try {
             $result = $this->platform->invoke($model, $input, $options);
+            // Boundary: records every failure of the account and rethrows it, because a cooldown or a log must follow whatever the platform threw.
         } catch (Throwable $failure) {
             $this->failed($failure);
 
@@ -113,11 +114,23 @@ final readonly class AccountPlatform implements PlatformInterface
     private function coolDownAfter(Throwable $failure): ?Closure
     {
         return match (true) {
-            $failure instanceof RateLimitExceededException => fn () => $this->cooldowns->coolDown($this->account, $failure->getRetryAfter()),
+            $failure instanceof RateLimitExceededException => fn () => $this->coolDownLimited($failure->getRetryAfter()),
             // A revoked or wrong key will not work on the next call either, so the account is out like a limited one and the call goes elsewhere; remembered as a rejection so no call waits for it.
             $failure instanceof AuthenticationException => fn () => $this->cooldowns->coolDownRejected($this->account),
             $failure instanceof RetryableExceptionInterface => fn () => $this->cooldowns->coolDown($this->account, null),
             default => null,
         };
+    }
+
+    // A spent subscription plan is raised as a limit without a reset (CodexAccountFailure), so only that limit waits for the plan's measured reset; any other failure keeps its own wait.
+    private function coolDownLimited(?int $retryAfter): void
+    {
+        if (null === $retryAfter && $this->account->provider->spendsAPlan()) {
+            $this->cooldowns->coolDownUntilPlanResets($this->account);
+
+            return;
+        }
+
+        $this->cooldowns->coolDown($this->account, $retryAfter);
     }
 }

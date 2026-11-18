@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 
 // The latest event of a reviewer decides its row, because a reviewer started again after a stopped worker runs anew.
 final readonly class ReviewerOutcome
 {
     public ReviewerProgress $progress;
-    public ?string $decision;
+    public ?Decision $decision;
     public ?int $findings;
     public ?string $note;
     public ?string $substitute;
@@ -49,7 +50,7 @@ final readonly class ReviewerOutcome
         return ReviewOutcome::ofReviewer($this);
     }
 
-    public function answered(string $decision, int $findings, ProjectMode $mode): self
+    public function answered(Decision $decision, int $findings, ProjectMode $mode): self
     {
         return clone ($this, ['progress' => ReviewerProgress::Answered, 'decision' => $decision, 'findings' => $findings, 'mode' => $mode]);
     }
@@ -69,8 +70,9 @@ final readonly class ReviewerOutcome
         return clone ($this, ['progress' => ReviewerProgress::Stopped]);
     }
 
-    public function substitutedBy(string $provider): self
+    // The substitute's model replaces the start's, so the model and the substitute always name the same provider; a catch-up recorded without one keeps the start's model.
+    public function substitutedBy(string $provider, ?string $model): self
     {
-        return clone ($this, ['substitute' => $provider]);
+        return clone ($this, ['substitute' => $provider, 'model' => $model ?? $this->model]);
     }
 }

@@ -15,6 +15,8 @@ use Intakt\Core\Build\Contract\BuildRoutingNotConfigured;
 use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
@@ -87,6 +89,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PathGlob;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
@@ -182,7 +185,10 @@ use Symfony\Component\Process\Process;
 #[UsesClass(BuildVerdict::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]
 #[UsesClass(ConfiguredBuildRouting::class)]
@@ -364,6 +370,56 @@ final class BuildTaskTest extends TestCase
         self::assertSame(array_fill(0, 6, LedgerEventKind::BuildStepEnded), $ledger->kinds());
         self::assertNull($this->remoteTip());
         self::assertSame(0, $this->changes->calls);
+    }
+
+    public function testAPrePushCheckThatConflictsWithCurrentMainEndsThereOnTheConflictRouteAndPushesNothing(): void
+    {
+        $this->runner = $this->committingRunner();
+        $this->checkRunner = $this->checkLeaving([RunCheckJob::RESULT => "conflicts-with-main\n", RunCheckJob::LOG => "CONFLICT (content): PLANT-path.txt\n"]);
+        $ledger = new InMemoryLedger();
+
+        $outcome = $this->taskOf($ledger, [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertSame('the branch conflicts with current main, so the check ran no step', $outcome->failure);
+        self::assertSame($outcome->failure, $ledger->payloads()[5]['failure']);
+        self::assertStringNotContainsString('PLANT', (string) json_encode($ledger->payloads()));
+        self::assertNull($this->remoteTip());
+        self::assertSame(0, $this->changes->calls);
+    }
+
+    public function testThePrePushCheckReadsTheMirrorUpdatedAfterTheBuildJobSoMainThatMovedDuringTheBuildIsInIt(): void
+    {
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => $this->remote->commitFile('moved.txt', 'main moved'));
+        $mainInTheMirror = null;
+        $this->checkRunner = self::createStub(JobRunner::class);
+        $this->checkRunner->method('run')->willReturnCallback(function (JobSpec $spec) use (&$mainInTheMirror): JobResult {
+            $mainInTheMirror = $this->git(['rev-parse', 'HEAD'], $spec->inputs[0]->hostPath);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunCheckJob::RESULT => "passed\n", RunCheckJob::LOG => "ok\n"]));
+        });
+
+        $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+
+        self::assertNull($outcome->failure);
+        self::assertSame($this->git(['rev-parse', 'HEAD'], $this->remote->path), $mainInTheMirror);
+    }
+
+    public function testAMirrorThatCannotBeUpdatedBeforeThePrePushCheckEndsThereAndRunsNoCheckJob(): void
+    {
+        $moved = $this->remote->path.'-moved';
+        $this->runner = $this->runnerAfterWhich($this->committingRunner(), fn () => rename($this->remote->path, $moved));
+
+        try {
+            $outcome = $this->taskOf(new InMemoryLedger(), [Issues::task(7)])->run($this->request(7, $this->remote->path));
+        } finally {
+            rename($moved, $this->remote->path);
+        }
+
+        self::assertSame(BuildStep::PrePushCheck, $outcome->last);
+        self::assertNotNull($outcome->failure);
+        self::assertNull($this->checked);
+        self::assertNull($this->remoteTip());
     }
 
     public function testACheckJobThatLeavesNoResultEndsAtThePrePushCheckWithFixedText(): void
@@ -666,7 +722,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame([realpath($this->clone), RunBuildJob::CLONE], [$ran->inputs[0]->hostPath, $ran->inputs[0]->containerPath]);
         self::assertSame(self::IMAGE, $ran->image);
         self::assertSame('feat/task', $ran->command[6]);
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body"), $prompt);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body")->rendered(), $prompt);
     }
 
     public function testATierLabelOfTheIssueChoosesTheBuildsTier(): void
@@ -887,7 +943,7 @@ final class BuildTaskTest extends TestCase
 
     private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
     {
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence()), $this->runner, new PhpGate(), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
         $git = new RepositoryGit(new HardenedGit());
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
@@ -997,6 +1053,20 @@ final class BuildTaskTest extends TestCase
             new Filesystem()->remove([$job, $job.'.bundle']);
 
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
+        });
+
+        return $runner;
+    }
+
+    // Because the remote can move while the build job runs, and only a change after the job shows which mirror the pre-push check reads.
+    private function runnerAfterWhich(JobRunner $built, callable $change): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use ($built, $change): JobResult {
+            $result = $built->run($spec);
+            $change();
+
+            return $result;
         });
 
         return $runner;

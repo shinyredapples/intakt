@@ -22,7 +22,8 @@ flowchart TD
 | What you see | What it means | What to do |
 |---|---|---|
 | A card in **Waiting on you** | only a person can move it on | do what the card says |
-| **Draining** | Intakt is updating itself; running jobs finish first | nothing: it resumes in minutes |
+| **Draining** on one builder slot | Intakt is updating itself: that slot lets its job finish, then moves to the new version, while the other slots and the reviews go on; after that first slot the remaining builder slots drain together, so several slots can show draining while the reviews go on (planned) | nothing: it resumes in minutes, and a job that runs too long is saved and continues on the new version |
+| **Draining** everywhere | an update that changes stored data, which the old version could not read, pauses all work while it switches (planned) | nothing: it resumes in minutes; only if such an update fails after work has resumed does work stay paused until a newer version is installed, and Intakt tells you |
 | **Paused** | someone paused the project or the install | resume it from the dashboard |
 | **budget** badge | the AI allowance is near its limit, or this week is spending fast | wait for the refill, or add an account ([costs](accounts-and-costs.md)) |
 | **Only one builder** is running | the week's pace says slow down | normal; it speeds up when there is room |
@@ -31,7 +32,7 @@ flowchart TD
 | **CI** badge for a long time | GitHub hasn't finished, or never started, the checks | Intakt nudges GitHub after a few minutes and, if that didn't help, hands it to the maintainer agent |
 | A task went **back in line** after waiting too long | it waited past the time limit for its checks, a reviewer or the latest changes from main, so Intakt freed the place for other work and kept the task's spot | nothing: it is picked up again in turn. You hear about it only if it happens three times in a row |
 | **CI was cancelled** | a newer push stopped the checks of the older version; that is not a failure | nothing: Intakt waits for the newer checks, starts them again once if nothing does, and otherwise hands it to the maintainer agent |
-| A banner **Main of <project> does not boot** | main's latest commit failed its boot check, so pull requests are reviewed without that check until main boots again | fix main so `bin/instance` boots; the banner goes away once a new main commit boots |
+| A banner **Main of <project> does not boot** | main's latest commit failed its boot check, so pull requests are reviewed without that check until main boots again | fix main so `bin/instance` boots; the banner goes away once a new main commit boots, or main or Intakt's tools go back to a commit and tool version that booted before (and comes back if they go back to one that failed) |
 | **on hold** | the task needs something outside it (another task, a change to Intakt) | nothing: it comes back by itself when the reason is gone |
 | **dependency** badge | it `Waits for` another task | finish or unblock that task |
 | An item labelled **hands-off** (planned) | a person is driving it, so Intakt neither builds nor reworks it ([details](../design/05-architecture/08-merge.md#hands-off-and-take-over)) | remove `hands-off` to hand it back |
@@ -44,13 +45,26 @@ flowchart TD
 | A red item on the board | a part of Intakt itself is failing (a sandbox, a package install, the boot gate); the maintainer agent tries to fix it first | nothing, unless it also turns up in Waiting on you |
 | A red card in Waiting on you | a broken part only you can fix (an expired login, a credential, the host), or one the maintainer agent could not fix | follow the card: it names the step and the cause |
 
+## When work stops moving (planned)
+
+None of this is built yet. Each rule in one sentence:
+
+- **Every stall gets a reason and a next step:** when a task or the chain of tasks behind it has not moved for a while, Intakt names one reason and acts on it: the builder fixes its own work, the maintainer agent prepares a fix to protected files or to the shared toolbox as its own pull request, you decide, or the task waits for another one.
+- **You are asked early:** a decision only you can make (a new package from an outside company, a change to protected files) is asked as soon as it shows up, while other fixes go on, and your answer holds for later versions that leave that part unchanged.
+- **The nearest milestone goes first:** builders start with the tasks on the longest chain that still has to finish before the nearest milestone is due.
+- **The task others wait on goes next:** among tasks of the same priority and milestone, the one that frees the most waiting tasks is built first, then the oldest (finished changes waiting for review follow the same rule within one priority, whatever their milestone); the board shows how long build slots sat empty because the ready work was waiting on other tasks.
+- **Follow-ups wait for the next stage:** a follow-up from a reviewer's nice-to-have note joins the next milestone, so the stage being finished does not keep refilling; one that fixes something blocking stays, and so does one when no later milestone is open, and the board counts the follow-ups in each milestone.
+- **The builder has the same tools as CI:** a tool a test needs is listed in the requirements, and a missing one stops the builder's own check before the push, never first in CI.
+- **A task waits only for what it needs:** a `Waits for` line names the one part it builds on, never a whole bigger task split into parts.
+- **The board shows a milestone at risk:** it names the stalled task, its reason and who is fixing it (for example "M5 at risk: #N stalled 3 h, needs the environment, fix in review"), and you get a message only when you must act.
+
 ## Is the server itself busy?
 
 If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.
 
 ## What is Intakt doing right now?
 
-Run `php bin/console intakt:status --format=json`. It prints one line of JSON: for each project, the reviews in progress, the tasks `intakt:build:task` worked on with the last step each reached (and why it failed, if it did), the pull requests the watcher holds back and why, the ones handed over to you and the last results, plus any pause or drain in effect and how many messages wait in each background queue. It reads only Intakt's database, so it answers even when no background worker runs; a growing count in the `async` queue then tells you the workers are stopped. It never shows a secret. The fields are described in the [user documentation](../user/README.md#the-status-document-in-progress).
+Run `php bin/console intakt:status --format=json`. It prints one line of JSON: for each project, the reviews in progress, the tasks `intakt:build:task` worked on with the last step each reached (and why it failed, if it did), the pull requests the watcher holds back and why, the ones handed over to you and the last results, plus any pause or drain in effect and how many messages wait in each background queue. It reads only Intakt's database, so it answers even when no background worker runs; a growing count in the `async` queue then tells you the workers are stopped. It never shows a secret. The dashboard gives the same JSON at `http://localhost:7780/status`, for a script or another dashboard on the same computer. The fields are described in the [user documentation](../user/README.md#the-status-document).
 
 ## Reading Intakt's log
 

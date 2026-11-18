@@ -45,7 +45,9 @@ What each part is for:
 | **The first lines** | the outcome and the reason, in plain words | the builder and the reviewers both judge against it |
 | **Acceptance** | results anyone can check: a command's output, a page that shows something, a test that passes | "it works" can't be checked; "prints the verdict as JSON" can |
 | **Evidence** | what the finished change must show, numbered E1, E2, ... | reviewers check each item one by one; missing evidence sends the work back |
-| **Waits for #n** | another task this one needs first (optional) | the task isn't started until that one is done, so nothing is built on a missing base |
+| **Waits for #n** | another task this one needs first (optional); name only the part you build on, never a whole bigger task split into parts | the task isn't started until that one is done, so nothing is built on a missing base, and naming more than you need makes tasks wait in single file |
+
+Planned: when a task needs a change in another repository that Intakt doesn't build (a fix in a library, a release of a tool), write `Waits for release: <owner>/<repo>#<n>` instead, with one or more issues after the colon. Use the same line for a repository Intakt does build when your task needs that change released or deployed, not only merged. The line is all you write: Intakt shows the task as blocked by itself, so don't set a label for it. Intakt starts the task once each of those issues is closed and the change that closed it is in what your project runs: released and in your lock file for a library, deployed for a tool. If it can't tell, it asks rather than guessing. Don't describe such a wait only in a sentence: nothing would start the task again.
 
 ## Evidence the builder can produce
 
@@ -62,6 +64,8 @@ Evidence only you or Intakt itself can produce is marked `(owner provides)`. It 
 | the diff, for a change to documentation only | |
 
 An item marked `(owner provides)` still belongs in the list: it tells reviewers what you check before the merge.
+
+Planned: when Intakt sizes a task, it also checks each evidence item. If one is something the builder can't produce and it isn't marked `(owner provides)`, the task comes back to you with one comment naming those items, before any build starts. Fix the item or add the mark, and the task goes on. A marked item is listed for you, and Intakt's reviewers never send the work back for it.
 
 ## Good and not so good
 
@@ -106,4 +110,4 @@ To park an idea, label the issue `idea`; to turn it into work, remove `idea` and
 - [ ] Every acceptance point can be checked by someone who didn't write it.
 - [ ] The evidence says what the change must show, and anything the builder can't produce is marked `(owner provides)`.
 - [ ] It is one outcome.
-- [ ] Anything it depends on is named with `Waits for #n`.
+- [ ] Anything it depends on is named with `Waits for #n`, naming only the part it needs, not a whole bigger task. A change in a repository Intakt does not build, or one that must be released or deployed and not only merged, is named with `Waits for release: <owner>/<repo>#<n>` (planned, see above).

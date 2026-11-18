@@ -6,6 +6,8 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -14,8 +16,8 @@ use Intakt\Core\Review\Contract\VerdictParser;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
-use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\MultiPartResult;
 use Symfony\AI\Platform\Result\ObjectResult;
 
@@ -40,14 +42,17 @@ final readonly class ReviewerPrompt
         - No overengineering: no config option, column, parameter or extension point without a caller today; plain PHP and Symfony features before custom abstractions.
         - Comments say why, never what: a comment gives a reason (a constraint, a trade-off, a link) on one line; a comment that restates the code, commented-out code and TODOs are findings; docblocks hold types only.
 
-        Do not re-flag what `bin/check` passes: a rule a `bin/check` gate enforces and passes is no finding (for example a constructor with more than three parameters, which the parameter limit exempts on purpose), unless the gate itself is wrong; then name the gate in the requirement field.
+        Do not re-flag what `bin/check` passes: a rule a `bin/check` gate enforces and passes is no finding (for example a constructor with more than three parameters, which the parameter limit exempts on purpose), also when the gate is wrong or misses a case: that gap gets a gate issue, not a send-back, so report it at most as a P3 that names the gate in the requirement field.
 
         From the second round on you are given the open findings of earlier rounds, each under a persistent id. List the id of every one that is fixed under "resolved". A finding that is still there goes in "findings" with its id and "repeat" set to true. A new problem gets a new id and "repeat" false. From the second round on, a new P1 or P2 must cite a requirement or set "regression" to true (the change broke something that worked before); otherwise it is lowered to P3. Under "resolved" and in a finding with "repeat" true, use only ids you were given.
 
         Every finding names the file and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing that must change.
         TEXT;
 
-    public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review asked for changes without naming a finding. Name every finding that must change, each with its file, line and rule, or answer approve.';
+    // Every field a finding needs, so a model that left "findings" empty sees the shape it must fill.
+    public const string EXAMPLE_FINDING = '{"id":"F1","severity":"P2","file":"src/Cart.php","line":12,"symbol":"Cart::total","text":"The total adds the discount instead of subtracting it.","fixable_by":"builder","repeat":false,"requirement":"Storytelling","evidence":null,"regression":false}';
+
+    public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review gave no approval but its "findings" list was empty. A changes or blocked verdict must put every problem that must change into "findings", one object per problem with its file, line and rule, for example: '.self::EXAMPLE_FINDING.'. If nothing must change, answer approve.';
 
     public function __construct(
         private Fence $fence,
@@ -55,32 +60,34 @@ final readonly class ReviewerPrompt
         private VerdictParser $parser,
         // Optional because memory only helps a review: the container wires it in, and a prompt without it reviews from the task and diff alone.
         private ?ReviewerMemory $memory = null,
+        // Defaulted because the assembly has no state or settings to wire, so every place that builds the prompt gets the same one.
+        private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }
 
     public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief): MessageBag
     {
         $messages = [
-            Message::forSystem(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt),
-            Message::ofUser("The task of the change:\n\n".$this->cut->fenced(UntrustedSource::Task, $brief->change->task)),
-            Message::ofUser("The diff of the change:\n\n".$this->cut->fenced(UntrustedSource::Diff, $brief->change->diff)),
+            $this->assembly->systemWithRole(self::INSTRUCTIONS, $conversation),
+            $this->assembly->user('The task of the change:', $this->cut->fenced(UntrustedSource::Task, $brief->change->task)),
+            $this->assembly->user('The diff of the change:', $this->cut->fenced(UntrustedSource::Diff, $brief->change->diff)),
         ];
 
         // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.
         $briefing = $this->memory?->briefingOn($brief);
 
-        if (null !== $briefing) {
-            $messages[] = Message::ofUser($briefing);
+        if ($briefing instanceof UserMessage) {
+            $messages[] = $briefing;
         }
 
         // After the task and the diff, so the cached prefix of the first round stays the same.
         if ([] !== $brief->open) {
-            $messages[] = Message::ofUser("The open findings of earlier rounds:\n\n".$this->fence->wrap(UntrustedSource::EarlierFindings, $this->listOf($brief->open)));
+            $messages[] = $this->assembly->user('The open findings of earlier rounds:', $this->fence->wrap(UntrustedSource::EarlierFindings, $this->listOf($brief->open)));
         }
 
         // Last and unfenced, because it is Intakt's own text about the answer it refused, never input from the change.
         if ($conversation->askedToNameFindings) {
-            $messages[] = Message::ofUser(self::NAME_FINDINGS_OR_APPROVE);
+            $messages[] = $this->assembly->notice(self::NAME_FINDINGS_OR_APPROVE);
         }
 
         return MessageBag::forId($conversation->id, ...$messages);
@@ -102,7 +109,7 @@ final readonly class ReviewerPrompt
     // The tool answers are prompt input too, so they reach the model through the same fence as the task.
     public function fenced(ToolboxInterface $toolbox): FencedToolbox
     {
-        return new FencedToolbox($toolbox, $this->cut, $this->fence);
+        return new FencedToolbox($toolbox, $this->cut, $this->fence, $this->assembly);
     }
 
     // The instructions ask for a verdict, so an answer that is not one is refused here as unreadable.

@@ -36,6 +36,8 @@ use Intakt\Core\ReviewerForLoop\Contract\ReviewerForLoopServices;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ProjectModeConfiguration;
 use Intakt\Core\Watcher\Contract\WatcherServices;
 use Intakt\Core\Watcher\Infrastructure\WatchConfiguration;
+use Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices;
+use Intakt\Plugin\GitHubForge\Infrastructure\GitHubConfiguration;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiProviderCatalog;
 use Symfony\AI\Platform\Bridge\Anthropic\Factory as AnthropicFactory;
 use Symfony\AI\Platform\Bridge\OpenAi\Factory as OpenAiFactory;
@@ -169,6 +171,11 @@ return static function (ContainerConfigurator $container): void {
     unset($contents['budget']);
     /** @var array{budget: array{ceilings: array<string, float>, prices: array<string, array{input: float, output: float, cache_read: float, cache_write: float}>, price_date: string|null}} $ceilings */
     $ceilings = new Processor()->processConfiguration(new BudgetConfiguration(), [$budget]);
+    // The installation's reserve is the owner's too, so it sits beside the projects and goes to the GitHub tree only.
+    $github = array_key_exists('github', $contents) ? ['github' => $contents['github']] : [];
+    unset($contents['github']);
+    /** @var array{github: array{reserve_percent: int}} $githubSettings */
+    $githubSettings = new Processor()->processConfiguration(new GitHubConfiguration(), [$github]);
 
     /** @var array{projects: array<string, array{tiers: array<string, array{provider: string, model: non-empty-string, substitutes: list<array{provider: string, model: non-empty-string}>}>}>, accounts: array<string, list<string>>, codex?: array{model: non-empty-string, effort: string}} $configuration */
     $configuration = new Processor()->processConfiguration(new ProjectsConfiguration(), [$contents]);
@@ -345,6 +352,7 @@ return static function (ContainerConfigurator $container): void {
     $container->parameters()->set(BudgetServices::CEILINGS, $ceilings['budget']['ceilings']);
     $container->parameters()->set(BudgetServices::PRICES, $ceilings['budget']['prices']);
     $container->parameters()->set(BudgetServices::PRICE_DATE, $ceilings['budget']['price_date']);
+    $container->parameters()->set(GitHubForgeServices::RESERVE_PERCENT, $githubSettings['github']['reserve_percent']);
     // A Domain class carries no container attributes, so its ceilings are bound here; the scan builds BudgetGuard around it for the start guard.
     $container->services()->set(CeilingStartGuard::class)
         ->autowire()

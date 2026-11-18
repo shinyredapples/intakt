@@ -15,6 +15,7 @@ use Intakt\Core\Review\Domain\TrackedFinding;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Exception\UnexpectedValueException;
 use Symfony\Component\Serializer\SerializerInterface;
 
@@ -28,14 +29,14 @@ final class StoredJsonTest extends KernelTestCase
     {
         $verdict = new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']);
 
-        $read = $this->serializer()->deserialize($this->serializer()->serialize($verdict, 'json'), Verdict::class, 'json');
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($verdict, JsonEncoder::FORMAT), Verdict::class, JsonEncoder::FORMAT);
 
         self::assertEquals($verdict, $read);
     }
 
     public function testAStoredVerdictKeepsTheSnakeCaseKeysOfTheWireFormat(): void
     {
-        $json = $this->serializer()->serialize(new Verdict(Decision::Changes, [$this->finding()], [], ['later']), 'json');
+        $json = $this->serializer()->serialize(new Verdict(Decision::Changes, [$this->finding()], [], ['later']), JsonEncoder::FORMAT);
 
         /** @var array<string, mixed> $stored */
         $stored = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
@@ -48,7 +49,7 @@ final class StoredJsonTest extends KernelTestCase
     {
         $tracked = [new TrackedFinding('a', $this->finding(), [1, 3], FindingStatus::Resolved)];
 
-        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, 'json'), TrackedFinding::class.'[]', 'json');
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, JsonEncoder::FORMAT), TrackedFinding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertEquals($tracked, $read);
     }
@@ -57,21 +58,21 @@ final class StoredJsonTest extends KernelTestCase
     {
         $tracked = [new TrackedFinding('a', $this->finding(), [1, 3], FindingStatus::Open)];
 
-        self::assertSame(json_encode($tracked, JSON_THROW_ON_ERROR), $this->serializer()->serialize($tracked, 'json'));
+        self::assertSame(json_encode($tracked, JSON_THROW_ON_ERROR), $this->serializer()->serialize($tracked, JsonEncoder::FORMAT));
     }
 
     public function testAFindingWithoutEvidenceKeepsTheNullKeyThatJsonEncodeWrote(): void
     {
         $finding = new Finding('a', Severity::P3, null, null, null, 'Text.', FixableBy::Owner, true, null, null);
 
-        $json = $this->serializer()->serialize($finding, 'json');
+        $json = $this->serializer()->serialize($finding, JsonEncoder::FORMAT);
 
         self::assertSame(json_encode($finding, JSON_THROW_ON_ERROR), $json);
     }
 
     public function testAFindingRowWrittenByJsonEncodeStillReadsBack(): void
     {
-        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', 'json');
+        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertEquals([$this->finding()], $read);
     }
@@ -80,7 +81,7 @@ final class StoredJsonTest extends KernelTestCase
     {
         $row = '{"verdict":"changes","findings":['.self::TODAYS_FINDING.'],"resolved":["b"],"follow_ups":["later"]}';
 
-        $read = $this->serializer()->deserialize($row, Verdict::class, 'json');
+        $read = $this->serializer()->deserialize($row, Verdict::class, JsonEncoder::FORMAT);
 
         self::assertEquals(new Verdict(Decision::Changes, [$this->finding()], ['b'], ['later']), $read);
     }
@@ -89,7 +90,7 @@ final class StoredJsonTest extends KernelTestCase
     {
         $row = '[{"id":"a","latest":'.self::TODAYS_FINDING.',"rounds":[1,3],"status":"resolved"}]';
 
-        $read = $this->serializer()->deserialize($row, TrackedFinding::class.'[]', 'json');
+        $read = $this->serializer()->deserialize($row, TrackedFinding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertEquals([new TrackedFinding('a', $this->finding(), [1, 3], FindingStatus::Resolved)], $read);
     }
@@ -98,7 +99,7 @@ final class StoredJsonTest extends KernelTestCase
     {
         $finding = $this->finding()->withMerged(['F2', 'F3']);
 
-        $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], 'json'), Finding::class.'[]', 'json');
+        $read = $this->serializer()->deserialize($this->serializer()->serialize([$finding], JsonEncoder::FORMAT), Finding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertEquals([$finding], $read);
     }
@@ -107,21 +108,21 @@ final class StoredJsonTest extends KernelTestCase
     {
         $tracked = [new TrackedFinding('a', $this->finding()->withMerged(['F2']), [1], FindingStatus::Open)];
 
-        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, 'json'), TrackedFinding::class.'[]', 'json');
+        $read = $this->serializer()->deserialize($this->serializer()->serialize($tracked, JsonEncoder::FORMAT), TrackedFinding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertEquals($tracked, $read);
     }
 
     public function testAFindingIsWrittenWithItsMergedIdsUnderTheKeyMerged(): void
     {
-        $json = $this->serializer()->serialize($this->finding()->withMerged(['F2']), 'json');
+        $json = $this->serializer()->serialize($this->finding()->withMerged(['F2']), JsonEncoder::FORMAT);
 
         self::assertStringEndsWith(',"regression":true,"merged":["F2"]}', $json);
     }
 
     public function testAFindingRowWithoutMergedIdsReadsWithNone(): void
     {
-        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', 'json');
+        $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertInstanceOf(Finding::class, $read[0]);
         self::assertSame([], $read[0]->merged);
@@ -147,7 +148,7 @@ final class StoredJsonTest extends KernelTestCase
 
         $this->expectException(UnexpectedValueException::class);
 
-        $this->serializer()->deserialize($row, Finding::class.'[]', 'json');
+        $this->serializer()->deserialize($row, Finding::class.'[]', JsonEncoder::FORMAT);
     }
 
     private function finding(): Finding

@@ -11,6 +11,8 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -29,6 +31,7 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -48,7 +51,10 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuilderNotOnClaudeCode::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(TierNotMapped::class)]
 #[UsesClass(PhpGate::class)]
@@ -95,8 +101,8 @@ final class RunBuildJobCommandTest extends TestCase
     {
         $this->executed(new JobOutput([]), ['--decision' => ['PLANT-first', 'PLANT-second']]);
 
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task'), $this->promptSeen);
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Decisions, "D1: PLANT-first\nD2: PLANT-second"), $this->promptSeen);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task')->rendered(), $this->promptSeen);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Decisions, "D1: PLANT-first\nD2: PLANT-second")->rendered(), $this->promptSeen);
     }
 
     public function testTheTierOptionPicksTheModel(): void
@@ -172,9 +178,10 @@ final class RunBuildJobCommandTest extends TestCase
         $application = new Application();
         $application->addCommand(new RunBuildJobCommand(new RunBuildJob(
             $tiers ?? $this->tiers(),
-            new BuilderPrompt(new Fence()),
+            new BuilderPrompt(new Fence(), new PromptCut(new Fence())),
             $runner,
             new PhpGate(),
+            new GatesAtOnce(12, 1),
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',

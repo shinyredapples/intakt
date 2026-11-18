@@ -17,13 +17,13 @@
 <div class="page-head">
   <div>
     <h1>History</h1>
-    <p class="lead">Every change you or Intakt made to how work runs, newest first.</p>
+    <p class="lead">Every change made on the dashboard or by Intakt to how work runs, newest first.</p>
   </div>
 </div>
 <nav class="subtabs" aria-label="History views"><a href="history.html" aria-current="page">Ledger</a><a href="trends.html">Trends</a></nav>
 <div class="filters" role="toolbar" aria-label="Filter history">
   <button class="fchip" type="button" aria-pressed="true" data-f="all">Everything</button>
-  <button class="fchip" type="button" aria-pressed="false" data-f="you">By you</button>
+  <button class="fchip" type="button" aria-pressed="false" data-f="dash">From the dashboard</button>
   <button class="fchip" type="button" aria-pressed="false" data-f="sys">By Intakt</button>
   <button class="fchip" type="button" aria-pressed="false" data-f="limits">Limits</button>
   <button class="fchip" type="button" aria-pressed="false" data-f="projects">Projects</button>
@@ -32,17 +32,17 @@
   <input class="input" id="hq" type="search" placeholder="Filter by text" style="max-width:240px;margin-left:auto;height:32px">
 </div>
 <table class="ledger">
-  <thead><tr><th>When</th><th>Who</th><th>What</th><th>Change</th><th>Until</th></tr></thead>
+  <thead><tr><th>When</th><th>Source</th><th>What</th><th>Change</th><th>Until</th></tr></thead>
   <tbody id="ledger">
     <tr data-who="sys" data-k="projects"><td class="when">Today 11:02</td><td class="who-sys">Intakt</td><td>Started review round 2 of #598</td><td class="change">Round <b>1</b><span class="arrow">→</span><b>2</b></td><td class="muted">None</td></tr>
-    <tr data-who="sys" data-k="projects"><td class="when">Today 09:40</td><td class="who-sys">Maintainer</td><td>Held new acme-shop checks while the CI image fails</td><td class="change">CI <b>running</b><span class="arrow">→</span><b>held</b></td><td class="muted">Until the image builds</td></tr>
+    <tr data-who="sys" data-k="projects"><td class="when">Today 09:40</td><td class="who-sys">Intakt</td><td>Maintainer held new acme-shop checks while the CI image fails</td><td class="change">CI <b>running</b><span class="arrow">→</span><b>held</b></td><td class="muted">Until the image builds</td></tr>
     <tr data-who="sys" data-k="accounts"><td class="when">Today 06:40</td><td class="who-sys">Intakt</td><td>Stopped using Home subscription, login expired</td><td class="change">Build slots <b>3</b><span class="arrow">→</span><b>2</b></td><td class="muted">Until you log in</td></tr>
     <tr data-who="sys" data-k="limits"><td class="when">Today 00:00</td><td class="who-sys">Intakt</td><td>acme-shop weekly share used up</td><td class="change">acme-shop <b>building</b><span class="arrow">→</span><b>waiting for share</b></td><td>Monday 00:00</td></tr>
-    <tr data-who="you" data-k="limits"><td class="when">Yesterday 21:14</td><td>You</td><td>Capped Model L on Work subscription</td><td class="change">Model L cap <b>none</b><span class="arrow">→</span><b>70% of weekly</b></td><td>Monday 09:00</td></tr>
-    <tr data-who="you" data-k="limits"><td class="when">Yesterday 18:30</td><td>You</td><td>Set a daily cap on Overflow key</td><td class="change">Daily cap <b>$60</b><span class="arrow">→</span><b>$40</b></td><td>Friday 23:59</td></tr>
-    <tr data-who="you" data-k="projects"><td class="when">Mon 08:12</td><td>You</td><td>Paused field-notes</td><td class="change">field-notes <b>running</b><span class="arrow">→</span><b>paused</b></td><td class="muted">Until you resume</td></tr>
-    <tr data-who="you" data-k="projects"><td class="when">Mon 08:10</td><td>You</td><td>Changed weekly shares</td><td class="change">intakt <b>40%</b><span class="arrow">→</span><b>50%</b></td><td class="muted">None</td></tr>
-    <tr data-who="you" data-k="accounts"><td class="when">28 Oct</td><td>You</td><td>Added Home subscription</td><td class="change">Accounts <b>2</b><span class="arrow">→</span><b>3</b></td><td class="muted">None</td></tr>
+    <tr data-who="dash" data-k="limits"><td class="when">Yesterday 21:14</td><td>Dashboard</td><td>Capped Model L on Work subscription</td><td class="change">Model L cap <b>none</b><span class="arrow">→</span><b>70% of weekly</b></td><td>Monday 09:00</td></tr>
+    <tr data-who="dash" data-k="limits"><td class="when">Yesterday 18:30</td><td>Dashboard</td><td>Set a weekly cap on Overflow key</td><td class="change">Weekly cap <b>none</b><span class="arrow">→</span><b>$150</b></td><td>Until removed</td></tr>
+    <tr data-who="dash" data-k="projects"><td class="when">Mon 08:12</td><td>Dashboard</td><td>Paused field-notes</td><td class="change">field-notes <b>running</b><span class="arrow">→</span><b>paused</b></td><td class="muted">Until you resume</td></tr>
+    <tr data-who="dash" data-k="projects"><td class="when">Mon 08:10</td><td>Dashboard</td><td>Changed weekly shares</td><td class="change">intakt <b>40%</b><span class="arrow">→</span><b>50%</b></td><td class="muted">None</td></tr>
+    <tr data-who="dash" data-k="accounts"><td class="when">28 Oct</td><td>Dashboard</td><td>Added Home subscription</td><td class="change">Accounts <b>2</b><span class="arrow">→</span><b>3</b></td><td class="muted">None</td></tr>
     <tr data-who="sys" data-k="limits"><td class="when">27 Oct</td><td class="who-sys">Intakt</td><td>Slowed builds to stay inside the weekly window</td><td class="change">Pace <b>normal</b><span class="arrow">→</span><b>slow</b></td><td>27 Oct 18:00</td></tr>
   </tbody>
 </table>

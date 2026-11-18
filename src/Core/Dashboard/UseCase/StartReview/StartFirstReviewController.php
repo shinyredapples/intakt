@@ -13,7 +13,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
-// Limit: the owner session of the dashboard design does not exist yet, so the Host check and the CSRF token are all that guard this route.
+// The Host check and the CSRF token guard this route, because the dashboard has no login and reaching its port decides who can act (design: Dashboard, Who can act).
 final readonly class StartFirstReviewController
 {
     public const string TOKEN_ID = 'dashboard_start_first_review';

@@ -37,6 +37,7 @@ use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Psr\Log\NullLogger;
 use Symfony\Bridge\Doctrine\Types\UuidType;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 
@@ -358,7 +359,7 @@ final class StoredSessionSummariesTest extends KernelTestCase
     {
         $this->fixture->entities->getConnection()->executeStatement(
             'UPDATE review_round SET resolved_findings = ?, resolved_finding_ids = NULL WHERE id = ?',
-            [$this->storedSerializer()->serialize([$kept], 'json'), Uuid::fromString($round)],
+            [$this->storedSerializer()->serialize([$kept], JsonEncoder::FORMAT), Uuid::fromString($round)],
             [Types::TEXT, UuidType::NAME],
         );
         $this->fixture->entities->clear();

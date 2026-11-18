@@ -39,35 +39,22 @@ final class ReadAnswerTest extends TestCase
         self::assertSame('The boundary is off by one.', $read->title);
     }
 
-    public function testATitleOfExactlyTheCapIsKeptWhole(): void
+    public function testALongFirstLineIsKeptWholeForWhoeverShowsItToCut(): void
     {
-        $line = str_repeat('a', 160);
+        $line = 'Update **'.str_repeat('word ', 60).'end**.';
 
         $read = ReadFinding::of($this->findingWritten($line."\nThe rest."));
 
         self::assertSame($line, $read->title);
     }
 
-    public function testATitleLongerThanTheCapIsCutToTheCapAndEndsWithAnEllipsis(): void
+    public function testAFindingsTitleEndsAtAnyLineEnding(): void
     {
-        $read = ReadFinding::of($this->findingWritten(str_repeat('a', 161)));
+        foreach (["\r\n", "\n", "\r"] as $lineEnding) {
+            $read = ReadFinding::of($this->findingWritten('Copy *test.php.'.$lineEnding.'Keep build*.'));
 
-        self::assertSame(str_repeat('a', 159).'…', $read->title);
-    }
-
-    public function testALongTitleOfMultibyteCharactersIsCutOnACharacterBoundary(): void
-    {
-        $read = ReadFinding::of($this->findingWritten(str_repeat('é', 400)));
-
-        self::assertSame(str_repeat('é', 159).'…', $read->title);
-        self::assertTrue(mb_check_encoding($read->title, 'UTF-8'));
-    }
-
-    public function testACutTitleDropsTheSpaceBeforeTheEllipsis(): void
-    {
-        $read = ReadFinding::of($this->findingWritten(str_repeat('a', 158).' '.str_repeat('b', 50)));
-
-        self::assertSame(str_repeat('a', 158).'…', $read->title);
+            self::assertSame('Copy *test.php.', $read->title);
+        }
     }
 
     public function testAnApprovalIsReadWithoutFindings(): void

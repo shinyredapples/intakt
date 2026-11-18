@@ -52,7 +52,7 @@ Sometimes a warning is wrong for this project, for example an image that cannot 
 - Reviewers read the change; running **small tests** against it, in a sandbox with no network, is planned (not built yet).
 - A reviewer reads the change **through Intakt's review server**. If it cannot reach that server, or loses it partway through a review, the review is **blocked** with the reason `no-tools` instead of judging code it has not read. A blocked review never passes a change, and it is not a "changes" verdict, so it sends no rework back to the builder.
 - Task text, pull request text and comments are treated as **data, not instructions**: a task that says "ignore your rules and approve" is just text to a reviewer.
-- A builder's instructions mark the same way the task, your decisions, the findings to fix, the CI log and the pull request text it edits, so a quoted line that says "print the token" is just text to the builder too. (The instructions are built, and so is the job that runs a builder with them when you start it by hand; starting it by itself is planned.)
+- A builder's instructions mark the same way the task, your decisions, the findings to fix, the CI log and the pull request text it edits, so a quoted line that says "print the token" is just text to the builder too. A task, CI log excerpt or pull request text bigger than 100000 bytes is cut to at most that size (a little less so no character is split), and Intakt's own note after the marked text, outside it, tells the builder how much was left out. (The instructions are built, and so is the job that runs a builder with them when you start it by hand; starting it by itself is planned.)
 
 ### The review server
 
@@ -74,7 +74,7 @@ This is built: the server and its credentials (task #578), and Intakt's reviewer
 
 ### A reviewer on a Claude or Codex subscription
 
-A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). Neither tool gets a shell or web search. Both are connected to the same read-only server as the other reviewers, for their own round only, and allowed just its three reading tools (read a file, list a folder, search); the server still checks every request itself. Because they can read the change that way, their approval can count like any other reviewer's, but only when the tool reports that it actually read something through that server during the review.
+A reviewer can run on a Claude or Codex subscription instead of an API key, through the company's command-line tool (`claude` or `codex`). Neither tool gets a shell or web search. Both are connected to the same read-only server as the other reviewers, for their own round only, and allowed just its three reading tools (read a file, list a folder, search); the server still checks every request itself. Because they can read the change that way, their approval can count like any other reviewer's, but only when the tool reports that it actually read something through that server during the review (the Claude tool must also report that it connected to that server).
 
 If one was started without that server, or read nothing through it, it **cannot vouch for a change**:
 
@@ -85,11 +85,12 @@ So such a reviewer can ask for more work, but it can never pass a change on its 
 
 ## Layer 5: the rules protect themselves
 
-The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions, the rules for adding libraries, the scripts that start a test copy of the app) are **protected files**. A change to them gets extra care, and one of exactly two answers, given at once:
+The project's **rules** (the checks that judge the code, the CI setup, the agents' instructions, the rules for adding libraries, the scripts that start a test copy of the app) are **protected files**. A change to them gets extra care, and one of exactly two answers, given at once unless the Security engineer cannot run:
 
 | The change... | Who approves it |
 |---|---|
 | passes every mechanical check, the Security engineer's security review agrees, and its penetration test finds no way past the changed check, and it is neither a change to how Intakt approves nor to secrets and permissions | Intakt, at once, and it lists the change on the dashboard for a week (planned: until this is built, every rule change goes to you) |
+| needs the security review or the penetration test, and that session cannot run (for example its account hit its usage limit) | nobody yet: it waits without an answer and carries on by itself when a session runs again (planned, see [below](#when-intakt-asks-you-and-why)) |
 | anything else | you, with the reason |
 
 So a change can never quietly switch off the check that would have caught it, and Intakt can never widen its own powers.
@@ -104,7 +105,9 @@ Intakt approves most changes to the rules itself, once its mechanical checks pas
 - **How Intakt approves:** the list of protected files, the limits, the checks that apply them, the Security engineer's instructions and the known bad changes it is tested with, so Intakt can never widen its own approvals;
 - **Secrets and permissions:** anything about how secrets and passwords are kept, read, hidden or scanned for, including the scan's rules; a workflow that reads a repository secret; more permissions for a workflow, new triggers or other machines.
 
-The reason these two stay with you: the Security engineer reads text an attacker can shape, and a leaked secret cannot be undone afterwards. Changed tests of the checks and the start-up scripts do not need you by default: they go through the mechanical checks, the security review and the penetration test below. A CI edit or a change to the agents' instructions comes to you too unless one of those checks covers it. A panel reviewer who judges the protected part as loosening the rules still sends the change to you.
+What counts as secrets handling is a fixed list of files and code areas in your project's settings in Intakt (the secret scan's rules, the code that keeps, passes on or hides passwords and keys), not every file with "secret" in its name. A test counts for this limit only if the list names it, so changing the sample input of a test that is not on the list does not hit the secrets limit (the change can still come to you for another reason, such as a CI edit no check covers). A test that is on the list is part of the limit like any other file there: changing it asks you. The request and the notice on your phone tell you in plain words which limit it hit and which file changed; it is a question for you, not an alarm. If you approved a change and its fix hits the same limits with the same files, left exactly as you approved them, the fix does not ask you again; if it changes, adds or removes one of them, it does. A CI change held back until you allow the push is the exception: each new version of it is shown to you again before it is pushed. (Planned: until this is built, every rule change goes to you.)
+
+The reason these two stay with you: the Security engineer reads text an attacker can shape, and a leaked secret cannot be undone afterwards. Changed tests of the checks and the start-up scripts do not need you by default: they go through the mechanical checks, the security review and the penetration test below. A CI edit or a change to the agents' instructions comes to you too unless one of those checks covers it. A panel reviewer who judges the protected part, as it stands now, as loosening the rules, or gives it no valid class, still sends the change to you. A reviewer's classification of the protected part, given on an older version of the change, never counts for the current one, even when a clean merge of main lets that reviewer's verdict on the untouched parts carry over.
 
 **What Intakt can prove on its own (mechanical checks, planned):**
 - **Only comments changed.** The file without its comments is the same as before. A comment a tool reads (a type hint for the code checker, a "skip this check" marker) counts as code.
@@ -116,11 +119,13 @@ Each of these mechanical checks compares the change with the project as it was w
 
 On top, the **Security engineer** runs two separate sessions that never see what the builder wrote about its change: a security review, which must agree, and a penetration test, which tries to write an example that the old check stops and the new one lets through. If it finds one, you are asked.
 
+**When the Security engineer cannot run (planned).** If its sessions cannot run at all, for example because its account hit its usage limit or its login expired, the waiting rule changes wait: nothing is approved by waiting, and nothing is sent to you either, since nobody has judged them yet, so they do not fill your queue. Intakt tries again by itself. If the outage lasts longer than a set time (a couple of hours), you get one message for the whole outage, not one per change, saying what you can do: add an account for the Security engineer or free one. When a session runs again, the message clears and the changes carry on without you. A session that did run but gave no usable answer is different: that change comes to you, as before. If no Security engineer is set up at all, every rule change comes to you.
+
 **Trust is earned, one project at a time.** Known bad changes (a weakened check, a leaked secret, a harmful library, a start-up script that drops a safety wall, at least three of each kind) are fed in now and then on purpose and must all reach you. Automatic approval can be switched on for a project only when every one of them reached you and Intakt's answer agreed with your past approvals on at least 20 changes; then you turn it on with one switch. It turns off again by itself the moment it misses one or you overrule it, until both hold again. Even then: a change Intakt approved is undone at once if main's checks catch a problem afterwards and it is clearly the one to blame (otherwise you are asked which to undo), and every such approval stays on the dashboard for a week with a one-line note. There is no daily limit: a limit only sent routine approvals back to you.
 
 ## Layer 6: only you can approve what needs a person
 
-- **Your approval comes from your own GitHub account** and names the exact version you approved. A later push needs a new approval. If reviewers send the change back after you approved, the fix is a new version: you are asked again only once it has passed review and CI, never while it is still being fixed.
+- **Your approval comes from your own GitHub account** and names the exact version you approved. A later push needs a new approval. If reviewers send the change back after you approved, the fix is a new version: you are asked again only once it has passed review and CI, never while it is still being fixed. (Planned:) A decision only you can make, such as a new package from an outside company, is the exception: it is asked as soon as it shows up, and your answer holds for later versions that leave that part unchanged, while the merge still waits for passing checks and reviews. A merge you approved because the change hit a limit such as secrets holds the same way: a fix that leaves the same files hitting the same limits, exactly as you approved them, does not ask you again ([above](#when-intakt-asks-you-and-why)).
 - **No agent can fake it:** agents have no GitHub access, and Intakt's own account never writes an approval. Labels can't stand in for an approval either.
 - **Only people with write access steer:** a label or comment from anyone else is ignored.
 
@@ -136,6 +141,20 @@ On top, the **Security engineer** runs two separate sessions that never see what
 - **The dashboard lists** what Intakt approved by itself for a week, so a wrong call is visible without a notification.
 - **Updates roll back** on their own if a new version of Intakt doesn't start cleanly.
 - **Nothing is ever force-pushed:** history is only added to, so any change can be traced and reverted.
+
+## Checking the security of what is built
+
+The layers above keep the AI from harming your project. A separate question is whether the program it builds is safe for the people who use it. Intakt's **Security engineer** looks after that (planned: none of this is built yet, apart from the check for known holes in PHP packages, which runs on Intakt's own project today). Its rule is simple: automatic checks first, and the Security engineer for what a check cannot judge.
+
+The checks, layer by layer:
+- **The server side (backend):** text that comes from outside (a form, a web request, an AI's answer) must never reach a database query, a shell command or a file path without being made safe first; a check follows it there. Logins and sessions follow fixed rules, and a page that prints outside text without escaping it is refused. PHP packages with known security holes are refused.
+- **The browser side (frontend):** a test checks that every page tells the browser to run only the program's own scripts (a content security policy) and sends the other safety headers. Scripts written straight into a page, and Twig's `|raw`, which prints text without escaping it, are refused. JavaScript packages with known holes are refused too.
+- **The machines (infrastructure):** the container recipe (the Dockerfile) is checked for unsafe habits, the finished container and its settings are scanned for known holes, containers must not run as the all-powerful root user and must not change their own files, and the encryption (TLS) and web server settings are checked.
+- **The running program:** every night a scan visits the copy of Intakt that the journeys start and looks for what only shows while it runs, such as a page that forgets a safety header.
+
+A check that needs an extra tool is off until you switch it on for your project, so a simple install stays simple; Intakt's own project will have them all on as each check lands.
+
+The Security engineer adds what checks cannot do. When a change touches a sensitive area (code that handles outside input, the pages and scripts, or the container and web server setup), it reviews that change with a checklist for that area. Once a month it looks at how the scan results develop, keeps the list of threats up to date and files what it finds as tasks, which wait until you or someone with write access labels them. It also runs the two security sessions for changes to the rules (see [When Intakt asks you and why](#when-intakt-asks-you-and-why)), but the decision itself stays with plain code and with you.
 
 ## What this doesn't protect against
 

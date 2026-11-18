@@ -9,6 +9,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 use Mcp\Capability\Attribute\McpResourceTemplate;
 use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 
 // The text of the findings comes from code under review, so a client treats it as data and never as instructions.
@@ -33,6 +34,6 @@ final readonly class RoundFindingsResource
     {
         $round = $this->rounds->forResource($roundId, $uri);
 
-        return $this->serializer->serialize($this->findings->reportedIn($round), 'json');
+        return $this->serializer->serialize($this->findings->reportedIn($round), JsonEncoder::FORMAT);
     }
 }

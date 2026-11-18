@@ -15,6 +15,8 @@ Think of it as a small software team that works around the clock:
 | **Builder** | an AI agent | writes the code for one task |
 | **Reviewers** | a panel of AI agents you configure (by default two, from different companies when available) | check the builder's work, independently of each other, each with its own focus |
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
+| **AI engineer** (planned) | an AI agent that reports once a week and looks at the worst-scored tasks once a day | looks at where model tokens go and how the agents work, and tries better prompts, skills or model choices as experiments against the old ones. After every merge, Intakt scores how that task went (how often checks and tests ran, repeated runs, wordiness, rounds and send-backs) without any AI, and shows the scorecard on the dashboard and on the pull request within a minute (the pull request comment waits only in the rare hour when the forge refuses every call, and is posted as soon as it allows calls again). Intakt keeps a change by itself only on numbers it records itself, not on what an agent's own log says. On a subscription account the token counts come from the agent's own log, so there Intakt can still undo a change by itself but asks the owner before keeping one. Once a day the AI engineer reads the worst few of these in depth and proposes changes, citing what happened. Intakt itself, not the AI engineer, compares the numbers: it keeps a change only if it improves what it aimed at (fewer tokens, fewer check runs or less check CPU per merged task) without more tokens, send-backs, escaped defects or broken main, and undoes it otherwise. It decides only after enough merged tasks on each side, so one unlucky task never decides. The AI engineer never loosens checks or reviews to save work, and cannot change its own settings (how often it reviews, how many tasks it reads), which have defaults that need no setup. A change to a prompt goes through the same checks and approval as any change to protected files, so it cannot drop a safety rule |
+| **Test engineer** (planned, optional) | an AI agent that audits the tests on a schedule | a new project starts without it. It looks at how long the tests take, which ones repeat each other and whether the CI runs are slow, and files a task for each finding; a person with write access labels a task before it is built. It never changes a test itself, and a task that removes a test must name the test that still proves the same thing, so nothing the tests prove is lost |
 | **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
 
 ```mermaid
@@ -53,7 +55,7 @@ flowchart TD
 In words:
 1. **A task is written.** You, or Intakt with you, describe one piece of work: what should happen, and how to tell it is done.
 2. **Intakt checks the task.** Is it clear? Is it small enough to build and review in one go? If not, it asks or splits it before any work is paid for.
-3. **It waits its turn.** Urgent tasks go first, then the rest by milestone and age.
+3. **It waits its turn.** Urgent tasks go first, then open pull requests (see [the engine room](the-engine-room.md#queues-who-is-next)), then priority, the milestone's due date and the older task. *(Planned:)* The rest will go milestone by milestone, with priority deciding within one milestone; among tasks of the same priority and stage, the one other tasks are waiting on goes first, then the older task. A follow-up from a reviewer's nice-to-have note waits for the next stage unless it fixes something that blocked the original or no later stage is open.
 4. **The builder writes the change** in a sealed-off workspace: it can't reach your accounts, your keys or the internet beyond what it needs.
 5. **The checks run.** Your project's own tests and rules either pass or they don't. A failure goes straight back to the builder.
 6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies when you have both, so one company's blind spot doesn't decide; with one account it is one reviewer, plus a second model of the same company for protected, security-relevant and large changes (planned: not built yet). A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
@@ -67,17 +69,17 @@ Every change gets the same **core panel**. On top of that, **specialist reviewer
 flowchart LR
   pr[A change] --> core[Core panel<br/>reviews every change]
   pr --> rules{What is it about?}
-  rules -- "touches security code" --> sec[Security reviewer]
+  rules -- "touches input handling, pages or containers" --> sec[Security engineer]
   rules -- "label review:performance" --> perf[Performance reviewer]
   rules -- "changes the project's checks" --> gates[Checks reviewer]
   rules -- "changes the user guide" --> docs[Docs reviewer]
 ```
 
 What brings in a specialist:
-- **the files the change touches**, for example security code;
+- **the files the change touches**, for example code that handles outside input, the pages and scripts, or the container setup, which bring in the Security engineer with the checklist for that area (planned, see [Checking the security of what is built](why-the-ai-cant-wreck-your-project.md#checking-the-security-of-what-is-built));
 - **a label on the task**, such as `review:security`, set by you or the maintainer agent;
 - **the kind or size of the task**, for example changes to the project's checks, or a very large change;
-- **the task's own wording**: when Intakt reads the task before building it, it can recommend a specialist (for example "parses user input" calls for the security reviewer).
+- **the task's own wording**: when Intakt reads the task before building it, it can recommend a specialist (for example "parses user input" calls for the Security engineer).
 
 A specialist can be **blocking** (it must approve, like the core panel) or **advisory** (its notes become small follow-up tasks), and it judges only its own area, so a docs reviewer never blocks a change over performance. These rules only ever add reviewers: nothing can make the core panel smaller, and the rules themselves are protected, so a change can't switch off the reviewer that would catch it.
 
@@ -98,11 +100,11 @@ flowchart TD
 
 | The change... | Who approves it |
 |---|---|
-| passes the mechanical checks, the Security engineer's security review and penetration test, and no reviewer calls it loosening (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week |
+| passes the mechanical checks, the Security engineer's security review and penetration test, and every reviewer with a blocking vote classes it as tightening or neutral on the current head (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week |
 | changes how Intakt approves (the list of protected files, the limits, the checks that apply them, the Security engineer's instructions, the known bad changes), or touches secrets and permissions (how secrets are kept or scanned, a workflow that reads a secret, more workflow permissions, new triggers, other machines) | always you |
-| fails a check, or the security review or penetration test finds a way around it | you |
+| fails a check, the security review or penetration test finds a way around it, or a reviewer with a blocking vote classes it as loosening or gives it no class on the current head | you |
 
-You never approve something whose checks are failing: Intakt asks you only once the checks are green and the review panel has approved.
+You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the review panel has approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
 ## When something gets stuck
 
@@ -116,14 +118,15 @@ flowchart LR
   h -- "Intakt was updated" --> retry[One more review]
   rebuild -- fixed --> go
   retry -- fixed --> go
-  rebuild -- still stuck --> h
+  rebuild -- "still stuck (needs the project)" --> m
+  rebuild -- "still stuck (other reason)" --> h
   retry -- still stuck --> h
   h -- "stuck after a few tries" --> m[Maintainer agent decides]
 ```
 
-(Planned: none of this paragraph is built yet; until the hold task is built, a held task gets one more review.) A task never waits for its own pull request: if the builder names it as the thing to wait for, Intakt does not hold the task but hands it over with the builder's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
+(Planned: none of this paragraph is built yet; until the hold task is built, a held task gets one more review.) A task never waits for its own pull request: if the builder names it as the thing to wait for, Intakt does not hold the task but hands it over with the builder's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. A change that clashes with the newest project, or needs something from it, is rebuilt from it once or split by the maintainer agent, never reviewed again unchanged, and a task handed over again for the same reason is split, or goes to you when it cannot be. When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
 
-Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the builder, who cannot split it, and does not hold it either: the maintainer agent splits it into smaller tasks (planned: until this is built, you split it).
+Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the builder, who cannot split it, and does not hold it either: the maintainer agent splits it into smaller tasks (planned: until this is built, you split it). A change that is big only because it moves documentation text from one page to others is not split: a check confirms the text moved unchanged, and reviewers read only the rest (also planned).
 
 A finished pull request is never kept waiting for a much bigger task. If only one part of it needs that task (say, a screenshot of a screen not built yet), that part becomes its own follow-up task, and the rest is reviewed and merged now.
 

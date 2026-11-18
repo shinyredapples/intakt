@@ -12,6 +12,7 @@ use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Infrastructure\StopRequests;
 use NoDiscard;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Workflow\WorkflowInterface;
 
@@ -39,7 +40,7 @@ final readonly class ReviewerMoves
     #[NoDiscard]
     public function receive(RoundReviewer $reviewer, Verdict $verdict, ?Provider $substitute): bool
     {
-        $reviewer->recordVerdict($this->serializer->serialize($verdict, 'json'), $substitute);
+        $reviewer->recordVerdict($this->serializer->serialize($verdict, JsonEncoder::FORMAT), $substitute);
         $this->machine->apply($reviewer, ReviewerTransition::Receive->value);
         $this->ledger->verdictReceived($reviewer, $verdict);
         $stopped = $this->answerStopRequest($reviewer, $verdict);

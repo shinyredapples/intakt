@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Finding;
@@ -31,6 +33,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 
 // Called inside the caller's transaction, so a refused event rolls the move it reports back with it.
@@ -42,6 +45,7 @@ final readonly class RoundLedger
         #[Target('stored')]
         private SerializerInterface $serializer,
         private TierResolver $tiers,
+        private Redactor $redactor,
     ) {
     }
 
@@ -78,10 +82,14 @@ final readonly class RoundLedger
         ));
     }
 
-    // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up.
+    // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up; the substitute's model goes with it, because the dashboard then names the reviewer by the model that answered.
     public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
     {
-        $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(...$this->identify($reviewer), substitute: $substitute));
+        $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(
+            ...$this->identify($reviewer),
+            substitute: $substitute,
+            model: $this->substituteModelOf($reviewer, $substitute),
+        ));
     }
 
     public function reviewerFailed(RoundReviewer $reviewer, string $failure): void
@@ -131,7 +139,19 @@ final readonly class RoundLedger
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line), $shown);
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes[$finding->id] ?? null)), $shown);
+    }
+
+    // Redacted and then trimmed, because the note is model text that may quote a held credential, and a credential held with edge whitespace leaves that whitespace behind.
+    private function storedNote(?string $note): ?string
+    {
+        if (null === $note) {
+            return null;
+        }
+
+        $stored = trim($this->redactor->redact($note));
+
+        return '' === $stored ? null : $stored;
     }
 
     // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
@@ -144,6 +164,18 @@ final readonly class RoundLedger
         }
     }
 
+    // The first substitute on that provider, because the vendor tries the tier's substitutes in order and an outage takes a whole provider out.
+    private function substituteModelOf(RoundReviewer $reviewer, Provider $substitute): ?string
+    {
+        try {
+            $substitutes = $this->tiers->substitutes($reviewer->round()->project(), $reviewer->tier());
+        } catch (TierResolutionFailure) {
+            return null;
+        }
+
+        return array_find($substitutes, static fn (ResolvedModel $model): bool => $substitute === $model->provider)?->model;
+    }
+
     /**
      * @return array{round: string, reviewer: string, role: string, tier: Tier}
      */
@@ -154,7 +186,7 @@ final readonly class RoundLedger
 
     private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
     {
-        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, 'json')));
+        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 
         if (!$result->succeeded()) {
             throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);

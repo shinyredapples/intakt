@@ -12,8 +12,11 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -30,7 +33,6 @@ use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Core\Review\Infrastructure\LiveProgress;
 use Intakt\Core\Review\Infrastructure\MalformedToolCalls;
-use Intakt\Core\Review\Infrastructure\PromptCut;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\ReviewerAgent;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
@@ -113,6 +115,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReadFile::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(UnstreamedModelCatalog::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ReviewerVerdictTest extends WebTestCase
 {
     use AiAssertionsTrait;
@@ -187,7 +191,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->conversation = new UuidV7();
         $unstreamed = $this->review('Add a cart.', $reads, self::APPROVE);
 
-        self::assertSame(['tool '.$reviewer.' read_file', 'answer '.$reviewer.' approve'], $published);
+        self::assertSame(['tool '.$reviewer.' read src/Cart.php', 'answer '.$reviewer.' approve'], $published);
         self::assertEquals($unstreamed, $streamed, json_encode($streamed->findings, JSON_THROW_ON_ERROR));
         self::assertSame(Decision::Approve, $streamed->verdict);
         self::assertSame([], $this->ledger->kinds());
@@ -256,7 +260,7 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testTheStreamedNarrationBeforeAToolCallIsPublishedBeforeTheCallInTheOrderItArrived(): void
@@ -266,7 +270,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        self::assertSame([$this->seen('text', 'I read the cart first.'), $this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+        self::assertSame([$this->seen('text', 'I read the cart first.'), $this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testAReviewersStructuredAnswerIsPublishedAsTheTypedAnswerAndItsJsonIsNeverStreamedAsText(): void
@@ -277,7 +281,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], $this->streamed(...str_split($answer, 40)));
 
         self::assertEquals([ReadAnswer::of($verdict)], $this->updates->answers);
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'changes [P1 src/Cart.php:12 The discount ends one day early.]')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'changes [P1 src/Cart.php:12 The discount ends one day early.]')], $this->updates->seen);
         self::assertStringNotContainsString('"verdict"', implode("\n", $this->updates->seen));
     }
 
@@ -288,7 +292,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testAnUnreadableStreamedAnswerPublishesOnlyTheMarkerAndStillFailsTheReviewWithItsReason(): void
@@ -304,7 +308,7 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->refused('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], 'Looks good to me.');
 
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'unreadable')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'unreadable')], $this->updates->seen);
     }
 
     public function testAStreamCutOffMidAnswerPublishesNeitherItsTextNorAnAnswer(): void
@@ -637,14 +641,23 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('including any marker with another boundary or none', $this->sent[0]);
     }
 
-    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPassesUnlessItNamesTheWrongGate(): void
+    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPasses(): void
     {
         $this->review('Add a cart.', [], self::APPROVE);
 
         $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
         self::assertIsString($system);
         self::assertStringContainsString('Do not re-flag what `bin/check` passes', $system);
-        self::assertStringContainsString('unless the gate itself is wrong; then name the gate in the requirement field', $system);
+    }
+
+    public function testTheSystemMessageTellsTheReviewerThatAGateThatMissesACaseIsAP3NamingTheGateNotASendBack(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
+        self::assertIsString($system);
+        self::assertStringContainsString('also when the gate is wrong or misses a case: that gap gets a gate issue, not a send-back, so report it at most as a P3 that names the gate in the requirement field', $system);
+        self::assertStringNotContainsString('unless the gate itself is wrong', $system);
     }
 
     public function testTheDiffReachesThePromptInsideItsOwnFenceAfterTheTask(): void
@@ -669,7 +682,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $messages = $this->conversations->load($this->conversation)->getMessages();
         self::assertInstanceOf(UserMessage::class, $messages[2]);
-        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff), $messages[2]->asText());
+        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff)->rendered(), $messages[2]->asText());
     }
 
     public function testAnEndMarkerInsideTheDiffCannotCloseItsFence(): void

@@ -37,15 +37,15 @@ final readonly class ReviewedRound
     public Cost $cost;
     public ?Decision $outcome;
     public ?DateTimeImmutable $judgedAt;
+    public ?ReplayMark $mark;
 
-    // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay; the speed factor is null for every round but a demo replay that stored one.
+    // The mark is null until the round is read with its review, because the start row does not say whether the round is a replay. The speed factor is null for every round but a demo replay that stored one.
     public function __construct(
         RoundStart $start,
         RoundPlace $place,
         public DateTimeImmutable $startedAt,
         public ?QuorumPolicy $quorum,
         public ?RoundEnding $ending = null,
-        public ?ReplayMark $mark = null,
         public ?float $speedFactor = null,
     ) {
         $this->round = $start->round;
@@ -63,12 +63,13 @@ final readonly class ReviewedRound
         $this->cost = Cost::none();
         $this->outcome = null;
         $this->judgedAt = null;
+        $this->mark = null;
     }
 
     // A replay shows like a live round, so the pages mark it, because its verdicts were never given on the change.
     public function isReplay(): bool
     {
-        return ReplayMark::Replay === $this->mark;
+        return $this->isReplayMarked($this);
     }
 
     // Refused for a round never marked, so the status cannot report an unread round as live.
@@ -178,5 +179,11 @@ final readonly class ReviewedRound
     public function markedAs(ReplayMark $mark): self
     {
         return clone ($this, ['mark' => $mark]);
+    }
+
+    // Read through a round rather than `$this`, because PHPStan keeps the constructor's null for `$this->mark` although `markedAs()` sets it (upstream/phpstan-clone-with-readonly-constructor-type).
+    private function isReplayMarked(self $round): bool
+    {
+        return ReplayMark::Replay === $round->mark;
     }
 }

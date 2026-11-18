@@ -27,6 +27,7 @@ use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
+use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
@@ -46,6 +47,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Plugin\Vendor\Contract\ProviderUnreachable;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Review\Contract\RecordedAnswer;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
@@ -191,8 +193,50 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
 
         self::assertInstanceOf(ChangesWithoutFindings::class, $failure);
-        self::assertSame('asked for changes without naming a finding', new FailureInWords()->of($failure::class));
+        self::assertSame('gave no approval without naming a finding', new FailureInWords()->of($failure::class));
         self::assertCount(2, $this->askedToNameFindings);
+    }
+
+    public function testARecordedVerdictOnlyAnswerIsAskedAgainWithTheExpectedFindingShapeAndTheNamedFindingCounts(): void
+    {
+        $verdict = $this->vendor($this->answering($this->recordedVerdictOnly(...), static fn (): TextResult => new TextResult(RecordedAnswer::named(RecordedAnswer::RETRY_WITH_A_FINDING))))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Changes, ['F1']], [$verdict->verdict, array_column($verdict->findings, 'id')]);
+        self::assertSame([false, true], $this->askedToNameFindings);
+        self::assertStringContainsString(ReviewerPrompt::EXAMPLE_FINDING, ReviewerPrompt::NAME_FINDINGS_OR_APPROVE);
+    }
+
+    public function testTheExampleFindingOfTheRequestToNameFindingsIsReadAsAFinding(): void
+    {
+        $verdict = $this->vendor($this->answering($this->recordedVerdictOnly(...), $this->exampleFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(['F1', 'src/Cart.php', 12], [$verdict->findings[0]->id, $verdict->findings[0]->file, $verdict->findings[0]->line]);
+    }
+
+    public function testABlockedAnswerWithoutAFindingIsAskedOnceMoreToNameItsFindingsOrApprove(): void
+    {
+        $verdict = $this->vendor($this->answering($this->blockedWithoutFindings(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame([Decision::Changes, 1], [$verdict->verdict, count($verdict->findings)]);
+        self::assertSame([false, true], $this->askedToNameFindings);
+    }
+
+    public function testASecondBlockedAnswerWithoutAFindingFailsTheReviewerWithTheSameCauseAsAChangesAnswer(): void
+    {
+        $vendor = $this->vendor($this->answering($this->changesWithoutFindings(...), $this->blockedWithoutFindings(...)));
+
+        $failure = $this->thrownBy(fn (): VendorReview => $vendor->review('alpha', Tier::Strong, $this->request()));
+
+        self::assertInstanceOf(ChangesWithoutFindings::class, $failure);
+        self::assertSame('gave no approval without naming a finding', new FailureInWords()->of($failure::class));
+    }
+
+    public function testAnApprovalWithoutAFindingIsNotAskedAgain(): void
+    {
+        $verdict = $this->vendor($this->answering($this->approvalWithoutFindings(...), $this->namedFinding(...)))->review('alpha', Tier::Strong, $this->request())->verdict;
+
+        self::assertSame(Decision::Approve, $verdict->verdict);
+        self::assertSame([false], $this->askedToNameFindings);
     }
 
     /**
@@ -214,7 +258,7 @@ final class ReviewerRetryVendorTest extends KernelTestCase
      */
     private function asksToNameFindings(array|string|object $input): bool
     {
-        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), ReviewerPrompt::NAME_FINDINGS_OR_APPROVE);
+        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
     }
 
     private function unreachable(): never
@@ -225,6 +269,27 @@ final class ReviewerRetryVendorTest extends KernelTestCase
     private function changesWithoutFindings(): TextResult
     {
         return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->with('findings', [])->json());
+    }
+
+    // In the shape the live log of #2450 showed, because the default correctness model answered a verdict with no finding on both tries of a first review.
+    private function recordedVerdictOnly(): TextResult
+    {
+        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_CHANGES));
+    }
+
+    private function blockedWithoutFindings(): TextResult
+    {
+        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_BLOCKED));
+    }
+
+    private function approvalWithoutFindings(): TextResult
+    {
+        return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('resolved', [])->with('findings', [])->json());
+    }
+
+    private function exampleFinding(): TextResult
+    {
+        return new TextResult('{"verdict":"changes","findings":['.ReviewerPrompt::EXAMPLE_FINDING.'],"resolved":[],"follow_ups":[]}');
     }
 
     private function namedFinding(): TextResult
@@ -262,6 +327,6 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW));
+        return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
     }
 }

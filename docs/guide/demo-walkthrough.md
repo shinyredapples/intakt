@@ -34,6 +34,26 @@ A replay shows a review that already happened, without calling any AI, so it nee
 
 Its reviews never count. The reviewers in a recording judged some change at another time, not the change on the card, so their verdicts say nothing about it. That is why every replayed round carries a **Replay** label in the dashboard, and its decision is always blocked, with the reason that a replay never counts as a verdict.
 
+### Recording a review of your own
+
+A recording is made from a live review, in three steps:
+
+1. Before the review, set `INTAKT_LIVE_CAPTURE` to the name of a file. While the review runs, every live update the dashboard shows is also written to that file. Set it empty again once you have recorded, because the file keeps growing while it is set; the compose demo needs `docker compose up -d` to pick up the change ([details](../user/README.md#recording-a-review-for-the-demo)).
+2. After the review, `docker compose exec intakt php bin/console intakt:demo:record <project> <change> <recording>` reads that file and the project's ledger and writes one recording file holding the review's events and its live updates.
+3. Play the recording back as described above, with `intakt:demo:replay` or the `/demo` page.
+
+```mermaid
+flowchart LR
+  a[Live review] --> b[Capture file]
+  a --> c[Ledger]
+  b --> d[intakt:demo:record]
+  c --> d
+  d --> e[Recording file]
+  e --> f[intakt:demo:replay]
+  f --> g[demo-replay project]
+  g --> h[Dashboard, labeled Replay]
+```
+
 ## What to point out in a demo
 
 | Moment | What it shows |

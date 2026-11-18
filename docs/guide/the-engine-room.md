@@ -7,7 +7,8 @@ The dashboard and the logs use a handful of words for the loop's machinery: lane
 Think of a workshop with workbenches. Each bench does one job at a time.
 
 - A **build slot** is a bench where a builder works on one task. A project can have one or more.
-- The **review lane** is the bench where finished work is reviewed and merged.
+- The **review lane** is where finished work is reviewed, then handed to the landing step. It has as many **review workers** as your settings allow, so reviews keep up with the builders: each worker reviews a different piece of work, and two workers never review the same one.
+- The **landing step** merges approved work into main, one piece at a time for the whole install, whichever worker approved it.
 
 The benches work **independently**: while one task is being reviewed, the next one is already being built. They hand work to each other, like an assembly line.
 
@@ -17,18 +18,26 @@ flowchart LR
   q --> s2[Build slot 2]
   s1 -- finished work --> rq[(Waiting for review)]
   s2 -- finished work --> rq
-  rq --> rl[Review lane]
-  rl -- approved --> main[(Main)]
-  rl -- changes needed --> q
+  rq --> r1[Review worker 1]
+  rq --> r2[Review worker 2]
+  r1 -- approved --> land[Landing step: one at a time]
+  r2 -- approved --> land
+  land --> main[(Main)]
+  r1 -- changes needed --> q
+  r2 -- changes needed --> q
 ```
 
 How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
 
+Builders on one machine share its processors. What keeps them apart today is each build job's own limit: 2 processors and 4 GiB of memory, from which the builder's check sizes itself (one gate at a time, the tests gate included). Intakt also works out a ceiling for the checks a builder runs at a time when more slots share the machine: the machine's processors divided by the number of slots, rounded down to a whole number (11 processors and 3 slots give 3), at least 2 and at most 8. A build job passes this number on to its builder's check only when there is more than one slot and the number is lower than what the check would pick by itself from the job's limits; it never raises that pick, because the job's memory would not hold more. With today's job limits the ceiling (2 or more) is never lower than the check's own pick (1), so the number of slots does not change a build job's check yet. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)).
+
 ## Queues: who is next
 
-There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. Both are sorted the same way: priority first (`urgent`, `high`, `normal`, `low`), then milestone, then age. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
+There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. They are sorted differently. *(Planned:)* The build queue will go milestone by milestone. Today it puts priority before the milestone's due date (`urgent`, then priority, then milestone, then the oldest task); the order described next is designed and arrives with the work-intake task. In it, `urgent` tasks come first, then the tasks of the milestone due soonest (tasks with no milestone, or a milestone without a due date, come last), and only within one milestone does priority decide (`high`, then `normal`, then `low`; a task with no priority counts as `normal`), then the oldest task. So a later milestone only gets build time when every ready task of the earlier one is taken or blocked. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. *(Planned:)* A task or open pull request that has waited counts one priority step higher every few days (5 by default, per project), never up to `urgent` and never into another milestone; [the journey of a task](the-journey-of-a-task.md) explains it. A task held back because its files are in use never lets a later milestone go ahead (see [the journey of a task](the-journey-of-a-task.md)). Today the review queue goes priority first (`urgent`, `high`, `normal`, `low`), then age. *(Planned:)* Pull requests waiting for review move up the same way, one priority step every few days, never up to `urgent`. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
 
-**The review cap** stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Work that is waiting for *you*, or on hold, doesn't count towards the cap, because no reviewer can move it.
+Planned: within one priority and milestone, a task that more other tasks wait on, counted down the whole chain, goes before an older one; among finished changes waiting for review, the same holds within one priority (the review queue does not look at milestones). For builds it never moves a task ahead of a higher priority or an earlier milestone; for reviews it never moves one ahead of a higher priority. A follow-up made from a reviewer's nice-to-have note joins the next milestone instead of its original's, unless it fixes something that blocked the original or no later milestone is open.
+
+**The review cap** (planned: the rule is written, but the build lane does not use it yet) stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Only work that is waiting for a reviewer, or being read by one, counts. Work that is waiting for its checks (CI), for a machine to run them, or to be merged doesn't count towards the cap, and neither does work waiting for *you* or on hold, because no reviewer can move it: otherwise the builders would pause while the reviewers have nothing to read.
 
 ## Ticks, events and deadlines: what makes things move
 
@@ -43,9 +52,13 @@ Some loops run on a **tick**: a clock that wakes every lane every few minutes ("
 
 Everything that waits has a **deadline** that wakes it, for example "check again in 2 minutes whether CI started". A slow **heartbeat** runs as a safety net, in case GitHub forgets to send an event. When nothing needs doing, nothing runs.
 
+*(Planned:)* GitHub does not tell Intakt when CI finishes or you approve something unless webhooks are set up, so Intakt has to look. While a bench waits for GitHub (CI, an approval, a new version of a bot's pull request), it will look again within seconds: after 30 seconds, then 1, 2 and 4 minutes, then at its usual pace. When its usual pace is already quicker than the next early look, the usual look takes over sooner. A look that finds GitHub still busy moves on to the next, longer wait, counted from that look, and the bench's usual look leaves alone whatever is not due yet, so the two never add up. A look that falls between two usual looks happens at its own time, not at the next usual look. If the bench is busy with something else when a look is due, the look happens as soon as the bench is free. Anything the bench actually does starts the count again, but never pushes a look later: a look that is already due still happens as soon as the bench is free. Each bench has at most one such early look waiting, and it never runs at the same time as the bench's usual look. When the hour's GitHub allowance runs low, the early looks stop until it refills. You can turn them off in your settings; they are on unless you do. The dashboard says when a bench looks next and what for, for example "next check in 60s, waiting for CI".
+
 ## CI: the second opinion
 
-**CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Intakt has already run the same checks before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+**CI** (continuous integration) is the project's full check run again on the pushed version after every push, on a machine the builder does not control. Today that is GitHub running the project's checks on its own machines; Intakt runs the same checks (`bin/check --fast` for a PHP project) before pushing, so CI is a second, independent opinion, and the reviewers only start once it is green.
+
+*(Planned; this is the decided design:)* CI is the project's full check, tests included, run on the pushed version after every push: by default a fresh container that Intakt starts itself, or the forge's CI (GitHub's machines) where the project sets it, or both. That run is the builder's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task. For Intakt's own repository it is GitHub's CI, and the checks before the push are only the quick ones that do not run the change's code. Another project runs before the push whatever pre-push command it configures, and its whole check when it configures none.
 
 Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them. A paid runner service that hands out a fresh machine for every job works too; the same page says which two settings it needs. One job always stays on GitHub's machines: the one that files the urgent task when the nightly journeys fail, because it needs GitHub's own command-line tool.
 
@@ -56,7 +69,7 @@ If CI never starts (GitHub occasionally misses an update), Intakt notices after 
 ## Locks: one at a time
 
 A **lock** is a "one at a time" sign on something that must not be used by two jobs at once:
-- the review lane, so two reviews don't merge into main at the same moment;
+- the landing step, so two approved changes never merge into main at the same moment, even while several reviews run side by side;
 - an AI account, so too many calls don't hit the same company at once (a *semaphore*: a lock that lets a set number through);
 - the moment of an update, so no job starts while Intakt is being replaced.
 
@@ -66,7 +79,7 @@ Locks are short-lived: a job that waits for something outside (CI, you) gives it
 
 - The **review panel** is the set of reviewers for a change: a fixed core panel plus specialists the change calls for ([which reviewers](how-intakt-works.md#which-reviewers-look-at-a-change)).
 - When a reviewer's account is over its limit, the same company's next account takes over, if you added one. That is just a move to another account: the same reviewer, no catch-up owed.
-- A **substitute** steps in only when every account of that company is out: another company's reviewer, one you named as a substitute in your settings, reviews in its place, so work doesn't stall. Without a named substitute the reviewer waits instead. A review never changes company halfway: if a limit or a temporary error cuts it off before the reviewer starts answering, it starts again from the beginning, on its own company if that has room again, else on the substitute. If a limit or a temporary error cuts it off while the answer is being written, the review ends blocked with the reason on it, because a half-written answer cannot be picked up again. If the answer breaks off on its own, the same reviewer is asked once more from the beginning, without streaming the answer; if that answer is cut too, the review ends blocked as well. Two more cases get one more try: a reviewer whose AI company cannot be reached at all is asked once more, and fails if it still cannot be reached; and a reviewer that asks for changes without naming a single problem gets one more chance to name them or approve, and fails if it names none again.
+- A **substitute** steps in only when every account of that company is out: another company's reviewer, one you named as a substitute in your settings, reviews in its place, so work doesn't stall. Without a named substitute the reviewer waits instead. A review never changes company halfway: if a limit or a temporary error cuts it off before the reviewer starts answering, it starts again from the beginning, on its own company if that has room again, else on the substitute. If a limit or a temporary error cuts it off while the answer is being written, the review ends blocked with the reason on it, because a half-written answer cannot be picked up again. If the answer breaks off on its own, the same reviewer is asked once more from the beginning, without streaming the answer; if that answer is cut too, the review ends blocked as well. Two more cases get one more try: a reviewer whose AI company cannot be reached at all is asked once more, and fails if it still cannot be reached; and a reviewer that asks for changes, or says it is blocked, without naming a single problem gets one more chance to name them or approve, with an example of how to write one, and fails if it names none again.
 - A **stand-in** is something else: a cheaper reviewer on an in-between version while a company's allowance is tight. The usual reviewer still reviews the final version, so a stand-in never has the last word.
 - A **catch-up review** is the missing reviewer's review, done later once its company is available again. Today Intakt only notes that a catch-up is owed, each time a substitute reviews. Planned: Intakt runs it by itself and checks the change as it was merged. It will never block a merge; if it finds a real problem, that becomes a new task, which waits for you to label it before the builders pick it up; smaller suggestions go to the [follow-up inbox](the-journey-of-a-task.md#7-afterwards) like any review's.
 
@@ -104,24 +117,37 @@ flowchart LR
 ```
 
 - **Shares:** with several projects, each gets a share of the week, for example 70% and 30%. A project with nothing to do lends its share to the others. A share of 0 pauses the project: a running job finishes, then no builds and no reviews, open pull requests included. Its work resumes when the share is above 0.
-- **Ceilings:** near the top of a window, no new job starts on that account. Another account with room takes the work first (a build may move to any company's account; a review stays with its own company), and jobs wait for a refill only when no account has room. A job already running is never stopped just because the window is nearly full or its estimate was too low. It is stopped when it makes no progress for a set number of steps, when it reaches its own ceiling (a few times its allowance), or when the task reaches its total across attempts, and it keeps its commits. On an account that bills overage, a missing usage reading or a call running past the ceiling stops work instead of being let through, and your spending cap applies ([costs](accounts-and-costs.md)).
+- **Ceilings:** near the top of a window, no new job starts on that account. Another account with room takes the work first (a build may move to any company's account; a review stays with its own company), and jobs wait for a refill only when no account has room. A job already running is never stopped just because the window is nearly full or its estimate was too low. It is stopped when it makes no progress for a set number of steps, when it reaches its own ceiling (a few times its allowance), or when the task reaches its total across attempts, and it keeps its commits. On an account that bills overage, a missing usage reading or a call running past the ceiling stops work instead of being let through, and your spending cap applies if you set one ([costs](accounts-and-costs.md)).
 - **Back-off:** after a failure (an AI company error, a broken environment), a bench waits a little before trying again (a minute for a quick internal hiccup, longer for real failures) instead of hammering. Four failures in a row stop it and call the maintainer agent. When one pull request fails (its checks cannot be read, or its review cannot start), only that pull request waits, a minute and then twice as long each time but never more than half an hour, while the others go on; four failures in a row send it to the maintainer agent (planned), and it is still tried at those waits, so it moves on by itself once the problem is gone. The Reviews page shows a card with the reason. A failing reviewer is set aside alone in the same way, so one broken item never stops the rest.
 
 ## Draining and updates
 
-**Draining** is how Intakt updates itself without breaking work in progress:
+**Draining** means a part of Intakt starts no new jobs and lets the running ones finish. Intakt uses it to update itself without stopping your work (planned; this is the decided design):
 
 ```mermaid
 flowchart LR
-  a[New version ready] --> b[Drain:<br/>start no new jobs]
-  b --> c[Running jobs finish<br/>work waiting on CI or you is parked]
-  c --> d[Swap in the new version]
-  d --> e{Starts and works?}
-  e -- yes --> f[Resume]
-  e -- no --> g[Roll back to the old version,<br/>resume, alert]
+  a[New version ready] --> b[Installed beside the old one<br/>the old one keeps working]
+  b --> c{Its own check passes?<br/>a failure the old one<br/>has too doesn't count}
+  c -- no --> g[Drop the new version,<br/>alert you]
+  c -- yes --> d[One builder slot<br/>tries the new version]
+  d --> e{First build fine,<br/>or quiet for a while?}
+  e -- yes --> f[The other slots follow,<br/>each when its job is done]
+  e -- no --> h[Roll back,<br/>alert you]
+  f --> k{A job still running<br/>at its slot's deadline?}
+  k -- yes --> i[That job is saved<br/>and picked up<br/>on the new version]
+  k -- no --> j[Intakt's control process<br/>switches in seconds,<br/>running reviews keep going]
+  i --> j
 ```
 
-While a drain is on, the dashboard says "draining" and nothing new starts; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold the drain up.
+- **Beside the old one:** the new version is checked while the old one keeps building and reviewing. Intakt compares the two checks test by test: if a test fails the same way on the old version too (the same test, stopping at the same line with the same failure message), that is a problem of your project, not of the update, so you hear about it and the update goes on. A test that fails only on the new version, or fails there at a different line or with a different message, stops the update.
+- **The old one stays in charge:** until the end of the update, the old version alone hands out work and keeps the records, so nothing is picked up twice. At the end, Intakt's own control process switches in seconds (an old one that hangs is stopped after a short deadline, so new work never waits on it; if it hung before handing over, the old version starts again and carries on); reviews that are running keep running and their results arrive as usual.
+- **One slot first:** one builder slot tries the new version. The others follow once its first build ended without trouble from Intakt itself, or after a set time with no failure. A job always finishes on the version it started on.
+- **Only switching slots wait:** while a slot switches, it starts nothing new. First that is the one slot trying the new version; after it, the remaining builder slots switch together, so the dashboard can show several slots draining at once while the reviews go on. A slot waits only up to a deadline: a job still running then is stopped with its work kept, and continues on the new version.
+- **Everything pauses only rarely:** an update that changes stored data so the old version could not read it says so, and only such an update pauses all work, as one short drain of everything.
+- **Update windows:** updates that are not urgent wait for the times of day you set in the settings, at most a few a day; at the next window Intakt installs the newest version published by then. An urgent release (a security fix, or a fix for something that stops work) and a version you pick yourself install right away.
+- **If anything fails,** Intakt goes back to the old version, which stays installed until the update has proved itself, and tells you at once. One case cannot go back: when an update that changes stored data fails after work has resumed, the old version can no longer read the data, so Intakt pauses all work, tells you, and a newer version fixes it.
+
+While a slot drains, the dashboard says "draining" on that slot; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold a drain up.
 
 ## Holds, hand-overs and caps
 
@@ -130,5 +156,5 @@ While a drain is on, the dashboard says "draining" and nothing new starts; it us
 | **Hold** | a pause with a reason, which lifts by itself when the reason is gone |
 | **Hand-over** | the task goes to the maintainer agent, which decides what happens next |
 | **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
-| **Review cap** | at most a few pieces of finished work wait for a reviewer before the builders pause |
+| **Review cap** (planned) | at most a few pieces of finished work wait for a reviewer (or are being reviewed) before the builders pause; work waiting for its checks or to be merged doesn't count |
 | **Parked** | a job that is waiting for something outside (CI, you) and has given its bench back |

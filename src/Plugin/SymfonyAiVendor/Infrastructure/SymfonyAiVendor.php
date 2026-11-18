@@ -67,7 +67,7 @@ final readonly class SymfonyAiVendor implements Vendor
         private UsageLedger $usage,
         private VendorAccountLimit $accounts,
         private ClockInterface $clock,
-        private ?ReviewServerAccesses $servers = null,
+        private ReviewServerAccesses $servers,
     ) {
     }
 
@@ -219,6 +219,7 @@ final readonly class SymfonyAiVendor implements Vendor
             $this->usage->settle($reservation, ...$platform->rounds());
 
             throw $unreadable;
+            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
         } catch (Throwable $failure) {
             // Left unsettled, never settled as well, so the call's usage is counted once, also for a cut stream.
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
@@ -234,7 +235,7 @@ final readonly class SymfonyAiVendor implements Vendor
     // Refused after the usage is settled, because the call itself finished and was paid for.
     private function namingAFinding(Verdict $verdict): Verdict
     {
-        return $verdict->asksForChangesWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
+        return $verdict->withholdsApprovalWithoutFinding() ? throw ChangesWithoutFindings::fromTheReviewer() : $verdict;
     }
 
     // Only a subscription CLI is given the review server, because every other provider reaches it through the reviewer's own toolbox; the judge reads no repository.
@@ -245,7 +246,7 @@ final readonly class SymfonyAiVendor implements Vendor
     {
         $round = $request->conversation->round;
 
-        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid || !$this->servers instanceof ReviewServerAccesses) {
+        if ($answering->provider->readsTheCheckout() || !$round instanceof Uuid) {
             return [];
         }
 
@@ -274,6 +275,7 @@ final readonly class SymfonyAiVendor implements Vendor
             $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
 
             return Judgement::everyBlockingFindingActs($request->findings);
+            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 

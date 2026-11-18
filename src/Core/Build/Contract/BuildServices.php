@@ -8,4 +8,6 @@ namespace Intakt\Core\Build\Contract;
 final readonly class BuildServices
 {
     public const string ROUTING = 'intakt.build.routing';
+
+    public const string SLOTS = 'intakt.build.slots';
 }

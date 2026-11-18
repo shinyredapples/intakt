@@ -92,6 +92,7 @@ use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
 #[CoversClass(WatchPullRequestsHandler::class)]
@@ -278,6 +279,45 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
 
         self::assertSame([], new DoctrineHolds($this->entities, $this->clock)->sharedInEffect());
         self::assertSame([], $this->ledger->kinds());
+    }
+
+    public function testAHeadWhoseForgePauseCannotBeStoredIsBackedOffAloneWhileTheNextHeadOfTheTickStartsItsRound(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->checks->pausedUntil = $this->clock->now()->modify('+30 minutes');
+        $this->checks->pausedHead = str_repeat(self::PENDING, 40);
+        $this->handler = $this->handler(waits: new PendingHeads(new UnwritableQueries($this->entities), $this->clock));
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::HeadFailed, LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame(['1', '2'], array_column($this->ledger->payloads(), 'change'));
+        self::assertSame(1, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z')));
+        $failed = array_find($this->logger->logged, static fn (array $line): bool => 'A head failed; it backs off alone.' === $line[0]);
+        self::assertIsArray($failed);
+        $exception = $failed[1]['exception'] ?? null;
+        self::assertInstanceOf(RuntimeException::class, $exception);
+        self::assertSame('the pending head cannot be written', $exception->getMessage());
+    }
+
+    public function testAHeadWhoseForgePauseAndBackOffCannotBeStoredStaysDueWhileTheNextHeadOfTheTickStartsItsRound(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->checks->pausedUntil = $this->clock->now()->modify('+30 minutes');
+        $this->checks->pausedHead = str_repeat(self::PENDING, 40);
+        $unwritable = new PendingHeads(new UnwritableQueries($this->entities), $this->clock);
+        $this->handler = $this->handler(
+            waits: $unwritable,
+            backOffs: $unwritable,
+        );
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame(['2'], array_column($this->ledger->payloads(), 'change'));
+        self::assertSame(0, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z')));
+        self::assertContainsEquals(RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), new PendingHeads($this->entities, $this->clock)->dueFor('alpha'));
+        self::assertIsArray(array_find($this->logger->logged, static fn (array $line): bool => 'A head\'s back-off could not be stored; it stays due for the next tick.' === $line[0]));
     }
 
     public function testAPendingHeadIsNotReadAgainBeforeItsReadAgainTime(): void
@@ -1426,7 +1466,8 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         return (bool) $this->entities->getConnection()->fetchOne('SELECT stale FROM watcher_started_round WHERE head = ?', [str_repeat($head, 40)]);
     }
 
-    private function handler(?InstallWideFailures $installWide = null): WatchPullRequestsHandler
+    // The waits may go to their own pending heads, so a test can break the wait for a forge pause and nothing else.
+    private function handler(?InstallWideFailures $installWide = null, ?PendingHeads $waits = null, ?PendingHeads $backOffs = null): WatchPullRequestsHandler
     {
         $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
@@ -1439,13 +1480,13 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
         $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $pending, $doctrine, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
         $authors = self::createStub(AuthorTrust::class);
         $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
-        $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine), $ledger, $logger);
+        $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore())), $ledger, $logger);
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 

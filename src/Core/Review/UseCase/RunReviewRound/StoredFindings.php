@@ -18,6 +18,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundTransition;
 use Intakt\Core\Review\Domain\TrackedFinding;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Workflow\WorkflowInterface;
 
@@ -136,7 +137,7 @@ final readonly class StoredFindings
         // The round still keeps what it reported, under its ledger's ids, so its judge sees its findings although its verdicts must not undo the newer round's; it keeps nothing as resolved, because a resolution its ledger accepted never reaches the stored one, where the newer round may hold the finding open.
         if ($stored->hasRecordedAfter($round->number())) {
             $round->keepResolvedFindings($this->written([]));
-            $round->keepResolvedFindingIds($this->serializer->serialize([], 'json'));
+            $round->keepResolvedFindingIds($this->serializer->serialize([], JsonEncoder::FORMAT));
 
             return;
         }
@@ -144,7 +145,7 @@ final readonly class StoredFindings
         $resolved = $this->resolvedIn($round, $ledger);
         // Under the ledger's id, because reviewers name findings by it and two findings may read alike.
         $round->keepResolvedFindings($this->written(array_map(static fn (TrackedFinding $tracked): Finding => $tracked->latest->withId($tracked->id), $resolved)));
-        $round->keepResolvedFindingIds($this->serializer->serialize(array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $resolved), 'json'));
+        $round->keepResolvedFindingIds($this->serializer->serialize(array_map(static fn (TrackedFinding $tracked): string => $tracked->id, $resolved), JsonEncoder::FORMAT));
         $stored->recordFindings($round->number(), $this->written($ledger->all()));
     }
 
@@ -192,7 +193,7 @@ final readonly class StoredFindings
      */
     private function written(array $findings): string
     {
-        return $this->serializer->serialize($findings, 'json');
+        return $this->serializer->serialize($findings, JsonEncoder::FORMAT);
     }
 
     /**
@@ -204,10 +205,7 @@ final readonly class StoredFindings
             return [];
         }
 
-        /** @var list<Finding> $findings */
-        $findings = $this->serializer->deserialize($json, Finding::class.'[]', 'json');
-
-        return $findings;
+        return array_values($this->serializer->deserialize($json, Finding::class.'[]', JsonEncoder::FORMAT));
     }
 
     // A round overtaken by a newer recorded one gives its new findings ids of its own, because the ids of its ledger, which is never stored, would name other findings of the stored one later.
@@ -230,10 +228,7 @@ final readonly class StoredFindings
      */
     private function trackedIn(ChangeFindings $stored): array
     {
-        /** @var list<TrackedFinding> $tracked */
-        $tracked = $this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json');
-
-        return $tracked;
+        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', JsonEncoder::FORMAT));
     }
 
     /**
@@ -243,6 +238,6 @@ final readonly class StoredFindings
     {
         $stored = array_filter(array_map(static fn ($reviewer): ?string => $reviewer->verdictJson(), $round->reviewers()), static fn (?string $json): bool => null !== $json);
 
-        return array_values(array_map(fn (string $json): Verdict => $this->serializer->deserialize($json, Verdict::class, 'json'), $stored));
+        return array_values(array_map(fn (string $json): Verdict => $this->serializer->deserialize($json, Verdict::class, JsonEncoder::FORMAT), $stored));
     }
 }

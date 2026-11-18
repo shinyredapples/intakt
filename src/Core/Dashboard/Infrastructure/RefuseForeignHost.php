@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 
-// A page answering any Host would hand the ledger to a site that rebinds its name to loopback (design: Dashboard, Only the owner).
+// A page answering any Host would hand the ledger to a site that rebinds its name to loopback (design: Dashboard, Who can act).
 #[AsEventListener]
 final readonly class RefuseForeignHost
 {

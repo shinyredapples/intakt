@@ -32,6 +32,7 @@ use Symfony\AI\Platform\Bridge\ClaudeCode\TokenUsageExtractor as ClaudeCodeUsage
 use Symfony\AI\Platform\Bridge\Generic\Completions\TokenUsageExtractor as CompletionsUsage;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 
 #[Group('persistence')]
 #[CoversClass(RoundLedgerReading::class)]
@@ -348,7 +349,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $serializer = StoredSerializerFactory::create();
 
         foreach ([new UsageStarted($call, 'started', 'alpha', Tier::Standard, self::ROUND, $tierModel), new UsageSettled($call, 'settled', [$row])] as $payload) {
-            self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $serializer->serialize($payload, 'json')))->succeeded());
+            self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $serializer->serialize($payload, JsonEncoder::FORMAT)))->succeeded());
         }
     }
 

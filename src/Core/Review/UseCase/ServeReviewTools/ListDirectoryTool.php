@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ServeReviewTools;
 
 use Intakt\Core\Mcp\Contract\ToolAccess;
+use Intakt\Core\Review\Contract\ReviewTool;
 use Mcp\Capability\Attribute\McpTool;
 use Mcp\Capability\Attribute\Schema;
 use Mcp\Schema\ToolAnnotations;
@@ -18,7 +19,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 #[IsGrantedTool(ToolAccess::Read->value)]
 final readonly class ListDirectoryTool
 {
-    public const string NAME = 'list_directory';
+    public const string NAME = ReviewTool::ListDirectory->value;
 
     public function __construct(private ReviewedRepository $repository)
     {

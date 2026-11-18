@@ -2,17 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Dashboard\UseCase\RecordDemo;
+namespace Intakt\Core\Dashboard\Infrastructure;
 
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
-use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
+use Intakt\Core\Dashboard\UseCase\RecordDemo\ReviewRows;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 
 // A row belongs to the review when it names one of its rounds, or names no round and one of the model calls made in them, because a call's settled usage names only the call.
-final readonly class ReviewRowsOfChange
+final readonly class ReplayedReviewRows
 {
     public function __construct(
         private Ledger $ledger,

@@ -17,12 +17,17 @@ use Symfony\Component\Process\Process;
 final class BuildScriptTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../docker/job/build.sh';
+    // Seconds a killed watchdog's sleep may take to end, because the kill is delivered asynchronously and a loaded runner may finish its exit only after the script returned.
+    private const int WATCHDOG_DEADLINE = 5;
 
     private BuildHistory $history;
     private string $output = '';
     private string $work = '';
     private string $bin = '';
     private string $prompt = '';
+    private string $gates = '4';
+    // False removes the variable, so a value the test run itself was started with never reaches the script.
+    private string|false $inherited = false;
 
     protected function setUp(): void
     {
@@ -69,6 +74,49 @@ final class BuildScriptTest extends TestCase
             ['-p', '--model', 'claude-opus-5-5', '--max-turns', '7', '--output-format', 'json', '--dangerously-skip-permissions'],
             explode("\n", trim((string) file_get_contents($this->history->folder.'/arguments'))),
         );
+    }
+
+    public function testTheBuildScriptExportsTheGateCountItIsGivenAsIntaktGateSlots(): void
+    {
+        $this->givenTheCli('printf "%s\n" "$INTAKT_GATE_SLOTS" > "$RECORD/gates"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("4\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
+    public function testTheBuildScriptGivenNoGateCountLeavesIntaktGateSlotsUnset(): void
+    {
+        $this->givenTheCli('printf "%s\n" "${INTAKT_GATE_SLOTS-unset}" > "$RECORD/gates"');
+
+        $this->gates = '';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("unset\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
+    public function testTheBuildScriptGivenNoGateCountKeepsAnIntaktGateSlotsItsEnvironmentAlreadySets(): void
+    {
+        $this->givenTheCli('printf "%s\n" "${INTAKT_GATE_SLOTS-unset}" > "$RECORD/gates"');
+
+        $this->gates = '';
+        $this->inherited = '3';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("3\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
+    public function testTheBuildScriptGivenAGateCountReplacesAnIntaktGateSlotsItsEnvironmentAlreadySets(): void
+    {
+        $this->givenTheCli('printf "%s\n" "${INTAKT_GATE_SLOTS-unset}" > "$RECORD/gates"');
+
+        $this->inherited = '3';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("4\n", (string) file_get_contents($this->history->folder.'/gates'));
     }
 
     public function testASessionCutAtItsAllowanceAfterCommittingHandsBackABundleOfItsCommits(): void
@@ -150,10 +198,85 @@ final class BuildScriptTest extends TestCase
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
 
         self::assertSame(0, $run->getExitCode());
-        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
-        $sleeps = array_map(intval(...), false === $recorded ? [] : $recorded);
+        $sleeps = $this->recordedSleeps();
         self::assertNotSame([], $sleeps);
-        self::assertSame([], array_values(array_filter($sleeps, $this->isRunning(...))));
+        self::assertSame([], $this->stillRunningAfter($sleeps, self::WATCHDOG_DEADLINE));
+    }
+
+    public function testAWatchdogSleepStillEndingWhenTheBuildReturnsIsNotLeftBehindOnceItHasEnded(): void
+    {
+        $this->givenTheCli('until [ -s "$RECORD/sleeps" ]; do :; done; exit 0');
+        $this->givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
+        $sleeps = $this->recordedSleeps();
+        $runningWhenTheBuildReturned = array_values(array_filter($sleeps, $this->isRunning(...)));
+        touch($this->history->folder.'/build-returned');
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertNotSame([], $runningWhenTheBuildReturned);
+        self::assertSame([], $this->stillRunningAfter($sleeps, self::WATCHDOG_DEADLINE));
+    }
+
+    public function testTheStandInEndsOnceItsTestRunnerIsGoneWhileTheRecordFolderStillExists(): void
+    {
+        $runner = new Process([(string) new ExecutableFinder()->find('sleep'), '30']);
+        $runner->start();
+        $this->givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild((int) $runner->getPid());
+        new Process([$this->bin.'/sleep', '0'], env: ['RECORD' => $this->history->folder])->mustRun();
+        $standIn = $this->recordedSleeps()[0];
+        $runningWhileTheRunnerLived = $this->isRunning($standIn);
+
+        $runner->stop(0);
+
+        self::assertTrue($runningWhileTheRunnerLived);
+        self::assertSame([], $this->stillRunningAfter([$standIn], self::WATCHDOG_DEADLINE));
+        self::assertDirectoryExists($this->history->folder);
+        self::assertFileDoesNotExist($this->history->folder.'/build-returned');
+    }
+
+    public function testTheStandInEndsOnceItsTestRunnerIsAZombieItsParentHasNotReaped(): void
+    {
+        // proc_open, because Symfony's Process reaps its child on every status read and the runner must stay unreaped.
+        $runner = proc_open([(string) new ExecutableFinder()->find('sleep'), '30'], [], $pipes);
+        self::assertNotFalse($runner);
+        $pid = proc_get_status($runner)['pid'];
+        $this->givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild($pid);
+        new Process([$this->bin.'/sleep', '0'], env: ['RECORD' => $this->history->folder])->mustRun();
+        $standIn = $this->recordedSleeps()[0];
+        $runningWhileTheRunnerLived = $this->isRunning($standIn);
+
+        proc_terminate($runner, SIGKILL);
+        $runnerEnded = [] === $this->stillRunningAfter([$pid], self::WATCHDOG_DEADLINE);
+        $runnerUnreaped = is_dir('/proc/'.$pid);
+        $standInStillRunning = $this->stillRunningAfter([$standIn], self::WATCHDOG_DEADLINE);
+        proc_close($runner);
+
+        self::assertTrue($runningWhileTheRunnerLived);
+        self::assertTrue($runnerEnded);
+        self::assertTrue($runnerUnreaped);
+        self::assertSame([], $standInStillRunning);
+    }
+
+    public function testTheWaitForTheWatchdogStillReportsAProcessThatOutlivesItsDeadline(): void
+    {
+        $lingering = new Process([(string) new ExecutableFinder()->find('sleep'), '30']);
+        $lingering->start();
+        $process = (int) $lingering->getPid();
+
+        $stillRunning = $this->stillRunningAfter([$process], 1);
+        $lingering->stop(0);
+
+        self::assertSame([$process], $stillRunning);
+    }
+
+    public function testTheWaitForTheWatchdogCountsAProcessWhoseStateCannotBeReadOnceCheckedAsEnded(): void
+    {
+        // A folder, because it passes a readability check and then fails the read, as the stat file of a process reaped in between does.
+        $stat = $this->history->folder.'/reaped';
+        new Filesystem()->mkdir($stat);
+
+        self::assertFalse($this->statShowsALiveProcess($stat));
     }
 
     public function testTheCliWorksInAFreshCloneOnTheTasksBranchWithOnlyTheBuildClonesBranches(): void
@@ -353,12 +476,73 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/sleep', 0o755);
     }
 
+    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and also ends once tearDown removes the folder or the test runner's process is gone or a zombie, because a failed test must leave nothing and a killed runner never reaches tearDown, and its parent may not reap it.
+    private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(?int $runner = null): void
+    {
+        $runner ??= (int) getmypid();
+        $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
+        file_put_contents($this->bin.'/stand-in', <<<'SH'
+            #!/bin/sh
+            echo $$ > "$RECORD/stand-in.$2"
+            while [ ! -e "$RECORD/build-returned" ] && [ -d "$RECORD" ]; do
+                case "$(sed -n 's/.*) \(.\).*/\1/p' "/proc/$3/stat" 2>/dev/null)" in
+                    ''|Z|X) exit 0 ;;
+                esac
+                "$1" 0.05
+            done
+            SH);
+        chmod($this->bin.'/stand-in', 0o755);
+        $standIn = escapeshellarg($this->bin.'/stand-in');
+        file_put_contents($this->bin.'/sleep', <<<SH
+            #!/bin/sh
+            setsid {$standIn} {$sleep} \$\$ {$runner} > /dev/null 2>&1 &
+            until [ -s "\$RECORD/stand-in.\$\$" ]; do :; done
+            cat "\$RECORD/stand-in.\$\$" >> "\$RECORD/sleeps"
+            echo \$\$ >> "\$RECORD/sleeps"
+            exec {$sleep} "\$@"
+            SH);
+        chmod($this->bin.'/sleep', 0o755);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function recordedSleeps(): array
+    {
+        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
+
+        return array_map(intval(...), false === $recorded ? [] : $recorded);
+    }
+
+    /**
+     * @param list<int> $processes
+     *
+     * @return list<int>
+     */
+    private function stillRunningAfter(array $processes, int $seconds): array
+    {
+        $deadline = hrtime(true) + $seconds * 1_000_000_000;
+        $running = array_values(array_filter($processes, $this->isRunning(...)));
+        while ([] !== $running && hrtime(true) < $deadline) {
+            usleep(20_000);
+            $running = array_values(array_filter($running, $this->isRunning(...)));
+        }
+
+        return $running;
+    }
+
     private function isRunning(int $process): bool
     {
-        $stat = is_readable('/proc/'.$process.'/stat') ? file_get_contents('/proc/'.$process.'/stat') : false;
+        return $this->statShowsALiveProcess('/proc/'.$process.'/stat');
+    }
+
+    // One read and no check before it, because a process reaped between a check and the read would turn the read into a warning.
+    private function statShowsALiveProcess(string $stat): bool
+    {
+        $state = @file_get_contents($stat);
 
         // A zombie counts as ended, because a container's first process may never reap what the killed watchdog left.
-        return false !== $stat && 'Z' !== substr($stat, (int) strrpos($stat, ')') + 2, 1);
+        return is_string($state) && '' !== $state && 'Z' !== substr($state, (int) strrpos($state, ')') + 2, 1);
     }
 
     private function givenGitLeavesAPartialBundleAndFails(): void
@@ -378,7 +562,7 @@ final class BuildScriptTest extends TestCase
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
             null,
             $this->environment(),
             timeout: 20,
@@ -400,6 +584,7 @@ final class BuildScriptTest extends TestCase
             'INTAKT_JOB_OUTPUT' => $this->output,
             'PATH' => $this->bin.':'.getenv('PATH'),
             'RECORD' => $this->history->folder,
+            'INTAKT_GATE_SLOTS' => $this->inherited,
         ];
         foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
             if (is_string($name) && str_starts_with($name, 'GIT_')) {
