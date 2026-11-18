@@ -54,6 +54,7 @@ use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeText;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
@@ -109,6 +110,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]
 #[UsesClass(BuildFacts::class)]
@@ -321,7 +323,7 @@ final class BuildTaskCommandTest extends TestCase
         $routing->method('tierFor')->willReturn(new TierChoice(Tier::Standard, TierReason::Default));
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn(new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
-        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence()), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        $builds = new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), new ScriptedJobRunner($this->folder.'/output'), new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
         $checks = self::createStub(HandBackChecks::class);
         $checks->method('check')->willReturn($this->checked);
         $checkJobs = self::createStub(CheckJobs::class);
