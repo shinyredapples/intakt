@@ -16,6 +16,7 @@ final readonly class LeftUndoneGate implements Gate
         private AddedLines $addedLines = new AddedLines(),
         private LeftUndoneComments $comments = new LeftUndoneComments(),
         private LeftUndoneCode $code = new LeftUndoneCode(),
+        private CommentLanguages $languages = new CommentLanguages(),
     ) {
     }
 
@@ -52,7 +53,7 @@ final readonly class LeftUndoneGate implements Gate
     {
         $findings = [];
 
-        foreach ($this->scannedLinesSince($workspace, $mergeBase) as [$path, $addedLines]) {
+        foreach ($this->scannedLinesSince($workspace, $mergeBase) as [$path, $addedLines, $language]) {
             $source = $this->sourceOf($workspace, $path);
 
             if (null === $source) {
@@ -63,11 +64,14 @@ final readonly class LeftUndoneGate implements Gate
 
             $lines = $addedLines ?? $this->everyLineOf($source);
 
-            foreach ($this->comments->markersOn($source, $lines) as $line => $marker) {
+            foreach ($this->comments->markersOn($source, $lines, $language) as $line => $marker) {
                 $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
             }
 
-            foreach ($this->code->findingsOn($path, $source, $lines) as $line => $finding) {
+            // Because skips and not-implemented throws are PHP code, a template holds none.
+            $code = $language instanceof PhpComments ? $this->code->findingsOn($path, $source, $lines) : [];
+
+            foreach ($code as $line => $finding) {
                 $findings[] = $path.':'.$line.': '.$finding;
             }
         }
@@ -76,7 +80,7 @@ final readonly class LeftUndoneGate implements Gate
     }
 
     /**
-     * @return list<array{string, ?list<int>}>
+     * @return list<array{string, ?list<int>, CommentLanguage}>
      */
     private function scannedLinesSince(Workspace $workspace, string $mergeBase): array
     {
@@ -84,16 +88,22 @@ final readonly class LeftUndoneGate implements Gate
         $patch = $this->gitOutput($workspace, ['diff', '--unified=0', ...self::DIFF_OPTIONS, $mergeBase]);
         // Because a file git does not track yet has no lines on the base, every line of it is added.
         $untracked = array_map(static fn (string $path): array => [$path, null], $workspace->untrackedPaths());
+        $scanned = [];
 
-        return array_values(array_filter(
-            [...$this->addedLines->byPath($paths, $patch), ...$untracked],
-            fn (array $file): bool => $this->isScanned($workspace, $file[0]),
-        ));
+        foreach ([...$this->addedLines->byPath($paths, $patch), ...$untracked] as [$path, $addedLines]) {
+            $language = $this->isFixture($path) ? null : $this->languages->languageOf($workspace, $path);
+
+            if (null !== $language) {
+                $scanned[] = [$path, $addedLines, $language];
+            }
+        }
+
+        return $scanned;
     }
 
-    private function isScanned(Workspace $workspace, string $path): bool
+    private function isFixture(string $path): bool
     {
-        return $workspace->isPhpFileInScope($path) && !array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
+        return array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
     }
 
     private function sourceOf(Workspace $workspace, string $path): ?string

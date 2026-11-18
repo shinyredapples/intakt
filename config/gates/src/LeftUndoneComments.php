@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-use PhpToken;
-
 final readonly class LeftUndoneComments
 {
     private const string WHITESPACE = " \t\n\r\v\f";
@@ -19,12 +17,12 @@ final readonly class LeftUndoneComments
      *
      * @return array<int, string>
      */
-    public function markersOn(string $source, array $addedLines): array
+    public function markersOn(string $source, array $addedLines, CommentLanguage $language = new PhpComments()): array
     {
         $added = array_flip($addedLines);
         $markers = [];
 
-        foreach ($this->commentLines($source) as [$number, $text]) {
+        foreach ($this->commentLines($source, $language) as [$number, $text]) {
             $marker = isset($added[$number]) ? $this->unreasonedMarkerIn($text) : null;
 
             if (null !== $marker) {
@@ -38,22 +36,18 @@ final readonly class LeftUndoneComments
     /**
      * @return list<array{int, string}>
      */
-    private function commentLines(string $source): array
+    private function commentLines(string $source, CommentLanguage $language): array
     {
         $lines = [];
         $line = 1;
         $counted = 0;
 
-        foreach (PhpToken::tokenize($source) as $token) {
-            if (!$token->is([T_COMMENT, T_DOC_COMMENT])) {
-                continue;
-            }
-
+        foreach ($language->commentsIn($source) as [$position, $comment]) {
             // Because git numbers lines by line feeds only, while PHP also breaks a line at a lone carriage return.
-            $line += substr_count($source, "\n", $counted, $token->pos - $counted);
-            $counted = $token->pos;
+            $line += substr_count($source, "\n", $counted, $position - $counted);
+            $counted = $position;
 
-            foreach (explode("\n", $token->text) as $offset => $gitLine) {
+            foreach (explode("\n", $comment) as $offset => $gitLine) {
                 foreach (explode("\r", $gitLine) as $text) {
                     $lines[] = [$line + $offset, $text];
                 }
