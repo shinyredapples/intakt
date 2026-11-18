@@ -50,6 +50,20 @@ final class SearchFilesTest extends TestCase
         }
     }
 
+    public function testANamedFileThatCannotBeReadIsRefusedAsAnEntryNotReadable(): void
+    {
+        $this->fixture->write('held/Locked.php', 'cart');
+        $this->fixture->chmod('held/Locked.php', 0000);
+
+        try {
+            $this->expectExceptionObject(EntryNotReadable::because('held/Locked.php', 'cannot be read'));
+
+            new SearchFiles($this->fixture->checkout)('cart', 'held/Locked.php');
+        } finally {
+            $this->fixture->chmod('held/Locked.php', 0644);
+        }
+    }
+
     public function testADirectoryTheSearchCannotOpenIsRefusedAsAnEntryNotReadable(): void
     {
         $this->fixture->write('locked/Hidden.php', 'cart');

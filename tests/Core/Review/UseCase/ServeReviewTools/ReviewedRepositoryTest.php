@@ -17,6 +17,7 @@ use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewedRepository;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\RunReviewRound\RoundFixture;
 use Intakt\Tests\Support\KernelTestCase;
+use InvalidArgumentException;
 use Mcp\Exception\ToolCallException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
@@ -27,7 +28,6 @@ use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Http\Authenticator\Token\PostAuthenticationToken;
 use Symfony\Component\Uid\Uuid;
 use Throwable;
-use ValueError;
 
 #[Group('persistence')]
 #[CoversClass(ReviewedRepository::class)]
@@ -86,13 +86,19 @@ final class ReviewedRepositoryTest extends KernelTestCase
         self::assertInstanceOf(CheckoutNotADirectory::class, $this->refusalOf(static fn (): string => $repository->readFile('README.md')));
     }
 
-    public function testAHeadPathTheFilesystemCannotTakePassesThroughInsteadOfBecomingAnUnavailableHead(): void
+    public function testAnUnexpectedInvalidArgumentWhileOpeningTheHeadPassesThroughInsteadOfBecomingAnUnavailableHead(): void
     {
-        $repository = $this->repositoryFor($this->roundWithHeadAt(sys_get_temp_dir()."/intakt-head-\0-broken"));
+        $repository = $this->repositoryFor($this->roundWithHeadAt(HeadThatFailsUnexpectedly::SCHEME.'://head'));
+        HeadThatFailsUnexpectedly::register();
 
-        $this->expectException(ValueError::class);
-
-        $repository->readFile('README.md');
+        try {
+            $repository->readFile('README.md');
+            self::fail('Reading the head did not fail.');
+        } catch (Throwable $failure) {
+            self::assertSame(InvalidArgumentException::class, $failure::class);
+        } finally {
+            HeadThatFailsUnexpectedly::unregister();
+        }
     }
 
     private function repositoryFor(string $roundId): ReviewedRepository

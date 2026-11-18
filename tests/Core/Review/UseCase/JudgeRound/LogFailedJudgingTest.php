@@ -104,7 +104,7 @@ final class LogFailedJudgingTest extends TestCase
         self::assertCount(1, $failed->getSent());
     }
 
-    public function testALogThatCannotBeWrittenIsWrittenToThePhpErrorLogNamingTheRoundAndTheFailure(): void
+    public function testALogThatCannotBeWrittenIsWrittenToThePhpErrorLogNamingTheRoundAndTheFailureClass(): void
     {
         $log = self::createStub(LoggerInterface::class);
         $log->method('error')->willThrowException(new RuntimeException('log storage unavailable'));
@@ -112,7 +112,20 @@ final class LogFailedJudgingTest extends TestCase
 
         new LogFailedJudging($log)(new WorkerMessageFailedEvent(new Envelope(new JudgeRound(self::ROUND)), 'async', new RuntimeException('gave up')));
 
-        self::assertStringContainsString(sprintf('The judging of round %s failed for good, and its log could not be written: log storage unavailable', self::ROUND), (string) file_get_contents($errorLog));
+        self::assertStringContainsString(sprintf('The judging of round %s failed for good, and its log could not be written (RuntimeException).', self::ROUND), (string) file_get_contents($errorLog));
+    }
+
+    public function testThePhpErrorLogLineCopiesNoMessageThatCouldQuoteACredential(): void
+    {
+        $log = self::createStub(LoggerInterface::class);
+        $log->method('error')->willThrowException(new RuntimeException('connect failed for token-of-the-logger'));
+        $errorLog = $this->phpErrorLog();
+
+        new LogFailedJudging($log)(new WorkerMessageFailedEvent(new Envelope(new JudgeRound(self::ROUND)), 'async', new RuntimeException('token-of-the-judging')));
+
+        $line = (string) file_get_contents($errorLog);
+        self::assertStringNotContainsString('token-of-the-logger', $line);
+        self::assertStringNotContainsString('token-of-the-judging', $line);
     }
 
     protected function tearDown(): void

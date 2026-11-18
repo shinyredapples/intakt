@@ -65,10 +65,19 @@ final readonly class SearchFiles
      */
     private function matches(string $real, string $text): Generator
     {
+        if (is_file($real)) {
+            // The file the search names is refused when it cannot be read, as read_file refuses it, because "No match." would claim it was searched.
+            yield from $this->matchesIn($real, $this->contentOf($real) ?? throw EntryNotReadable::because($this->checkout->relative($real), 'cannot be read'), $text);
+            $this->fileSearched?->__invoke(1);
+
+            return;
+        }
+
         $searched = 0;
 
         foreach ($this->files($real) as $file) {
-            yield from $this->matchesIn($file, $text);
+            // A file can go or become unreadable between the listing and its reading, so it is skipped like a binary one instead of failing the whole search.
+            yield from $this->matchesIn($file->getPathname(), $this->contentOf($file->getPathname()) ?? '', $text);
             $this->fileSearched?->__invoke(++$searched);
         }
     }
@@ -78,12 +87,6 @@ final readonly class SearchFiles
      */
     private function files(string $real): Generator
     {
-        if (is_file($real)) {
-            yield new SplFileInfo($real);
-
-            return;
-        }
-
         // Because a link in the code under review can point out of the checkout, symlinks are not followed.
         $entries = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
             $this->directory($real),
@@ -111,16 +114,14 @@ final readonly class SearchFiles
     /**
      * @return Generator<string>
      */
-    private function matchesIn(SplFileInfo $file, string $text): Generator
+    private function matchesIn(string $path, string $content, string $text): Generator
     {
-        $content = $this->contentOf($file);
-
         // Because the answer reaches the provider as JSON, which carries only valid UTF-8, a binary file is not searched.
-        if (false === $content || strlen($content) > self::MAX_FILE_BYTES || !mb_check_encoding($content, 'UTF-8')) {
+        if (strlen($content) > self::MAX_FILE_BYTES || !mb_check_encoding($content, 'UTF-8')) {
             return;
         }
 
-        $relative = mb_scrub($this->checkout->relative($file->getPathname()), 'UTF-8');
+        $relative = mb_scrub($this->checkout->relative($path), 'UTF-8');
 
         foreach ($this->lines($content) as $number => $line) {
             if (str_contains($line, $text)) {
@@ -129,13 +130,15 @@ final readonly class SearchFiles
         }
     }
 
-    // A file can go or become unreadable between the listing and its reading, so it is skipped like a binary one instead of failing the whole search.
-    private function contentOf(SplFileInfo $file): string|false
+    // Null for a file that is gone or unreadable, because the caller decides whether that refuses the search or skips the file.
+    private function contentOf(string $path): ?string
     {
         set_error_handler(static fn (): bool => true);
 
         try {
-            return file_get_contents($file->getPathname(), length: self::MAX_FILE_BYTES + 1);
+            $content = file_get_contents($path, length: self::MAX_FILE_BYTES + 1);
+
+            return false === $content ? null : $content;
         } finally {
             restore_error_handler();
         }

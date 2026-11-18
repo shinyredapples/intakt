@@ -13,9 +13,8 @@ final readonly class Checkout
 
     public function __construct(string $root)
     {
-        $real = realpath($root);
-
-        if (false === $real || !is_dir($real)) {
+        // The root is asked through the filesystem before it is resolved, because realpath() reads every failure, also one the filesystem raises, as a missing directory.
+        if (!is_dir($root) || false === $real = realpath($root)) {
             throw CheckoutNotADirectory::make();
         }
 
