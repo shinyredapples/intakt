@@ -66,7 +66,7 @@ When a builder needs a decision the task doesn't cover, it doesn't guess: it pos
 
 ## Approving
 
-When something needs you, the dashboard's "Waiting on you" column says exactly what to do. You are asked only about a version that has passed review and CI; one that reviewers sent back reaches you again once its fix has passed, as a new version to approve. The approvals are:
+When something needs you, the dashboard's "Waiting on you" column says exactly what to do. You are asked only about a version that has passed review and CI; one that reviewers sent back reaches you again once its fix has passed, as a new version to approve. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up instead, and your answer holds for later versions that leave that part unchanged. The approvals are:
 
 | What | How |
 |---|---|
@@ -74,7 +74,7 @@ When something needs you, the dashboard's "Waiting on you" column says exactly w
 | a plan, when plan approval is on | approve the plan comment on the issue |
 | a CI change that could reach more than a throwaway machine | on the task's issue, where Intakt shows the whole change: a comment `approve <sha>` naming that exact version, before it is pushed (`intakt:build:task` already pushes a build, but this check before a push of a CI change is still planned) |
 
-An approval always names one exact version. If the change itself is pushed again, Intakt asks again. For a merge, a clean update from main that leaves the change identical keeps your approval; for a CI change before its push, every new commit (an update from main too) needs a new approval.
+An approval always names one exact version. If the change itself is pushed again, Intakt asks again (planned: an early answer about a package or a protected file carries over to later versions while that part stays unchanged, so the merge does not ask about it again). For a merge, a clean update from main that leaves the change identical keeps your approval; for a CI change before its push, every new commit (an update from main too) needs a new approval.
 
 ## Pausing and priorities across projects
 
