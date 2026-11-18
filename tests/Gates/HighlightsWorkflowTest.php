@@ -24,12 +24,14 @@ final class HighlightsWorkflowTest extends TestCase
         $workflow = $this->workflow();
 
         self::assertSame(['push', 'schedule', 'workflow_dispatch'], array_keys($workflow['on']));
-        self::assertSame(['main'], $workflow['on']['push']['branches']);
         self::assertSame(
-            ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/HighlightFragments.php', '.github/workflows/highlights.yml'],
-            $workflow['on']['push']['paths'],
+            [
+                'branches' => ['main'],
+                'paths' => ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/HighlightFragments.php', '.github/workflows/highlights.yml'],
+            ],
+            $workflow['on']['push'],
         );
-        self::assertCount(1, $workflow['on']['schedule']);
+        self::assertSame([['cron' => '17 4 * * *']], $workflow['on']['schedule']);
     }
 
     public function testTheWorkflowTokenIsReadOnlyByDefault(): void

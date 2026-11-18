@@ -13,8 +13,9 @@ final class ReleaseLabelsTriggersTest extends TestCase
 {
     public function testAPullRequestEditTriggersNoReleaseLabelsRun(): void
     {
+        /** @var array{on?: array<string, mixed>} $workflow */
         $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/release-labels.yml');
 
-        self::assertSame(['opened', 'reopened', 'synchronize'], $workflow['on']['pull_request']['types']);
+        self::assertSame(['pull_request' => ['types' => ['opened', 'reopened', 'synchronize']]], $workflow['on'] ?? null);
     }
 }
