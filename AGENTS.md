@@ -28,11 +28,12 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - Two or more named arguments in a call: each on its own line with a trailing comma, enforced by `bin/check` (`cs`).
 - Classes imported, global functions and constants written plain, class aliases only for a short-name clash and Doctrine's `ORM`: enforced by `bin/check` (`cs`, `phpstan`).
 - Time only through Symfony's `ClockInterface`: enforced by `bin/check` (`phpstan`).
-- A service with state that is not readonly implements `ResetInterface`: enforced by `bin/check` (`phpstan`).
+- A service property that is not readonly needs `ResetInterface` on its class, or `#[KeptForTheProcess]` for state meant to last the whole process: enforced by `bin/check` (`phpstan`).
 - A `Provider` case value is derived from the case, never re-spelled, and an `intakt.` container id or parameter name comes from the module's ids class (`<Module>Services` in its `Contract/`): enforced by `bin/check` (`phpstan`).
 - Handlers use `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler`: enforced by `bin/check` (`architecture`).
 - Final classes, `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
+- Worker mode: services keep no per-request state, also not in readonly properties, and `#[KeptForTheProcess]` marks only state that is the same for every request.
 - Small methods, early returns; split a service whose dependencies keep growing by responsibility, not by count.
 - Arguments are positional by default. Name one only where its value does not explain itself at the call site: a bare boolean, `null`, an unclear number or string literal, several scalars of the same type in a row, or skipped optional parameters; not when the variable name or type already says it.
 - Named arguments are no fix for a long parameter list: past the limit, split the method, or group values that form a real concept into a readonly value object (never an artificial parameter object).
@@ -47,9 +48,11 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 
 ## Tests
 
-- Every test class declares `#[CoversClass]` (or `#[CoversNothing]`): enforced by `bin/check` (`tests`).
+- Every test declares coverage metadata (any `Covers` attribute): enforced by `bin/check` (`tests`).
 - A mock without expectations fails: enforced by `bin/check` (`tests`); `#[AllowMockObjectsWithoutExpectations]` is refused by `bin/check` (`phpstan`).
-- A test that ends with an unasserted error log record fails: enforced by `bin/check` (`tests`); assert it with `AssertsLoggedErrors`.
+- A test that ends with an unasserted error log record fails: enforced by `bin/check` (`tests`).
+- Coverage metadata is `#[CoversClass]` on the test class (or `#[CoversNothing]`); strict coverage metadata waits until CI collects coverage.
+- An expected error log is asserted with `AssertsLoggedErrors`, never printed.
 - Every change brings tests named as sentences (`test...`), one behavior each, given/when/then, builders over long setup.
 - `#[UsesClass]` where a test exercises other classes. `createStub` by default; `createMock` only to assert a call on an outside boundary.
 - SQLite by default; persistence tests in the `persistence` group. Races proven by forced order, never repetition. No shipped config, real credentials or live providers in tests.
