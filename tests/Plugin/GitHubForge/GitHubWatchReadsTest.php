@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Plugin\GitHubForge;
 
+use Intakt\Core\Watcher\Domain\AdmissionDecision;
+use Intakt\Core\Watcher\Domain\HeadAdmission;
 use Intakt\Plugin\Forge\Contract\ChangeId;
 use Intakt\Plugin\Forge\Contract\ChangeNotFound;
 use Intakt\Plugin\Forge\Contract\CiRun;
@@ -54,6 +56,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 #[CoversClass(GitHubMoments::class)]
 #[CoversClass(WatchedRepositories::class)]
 #[UsesClass(PullRequestAddress::class)]
+#[UsesClass(AdmissionDecision::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(ChangeNotFound::class)]
 #[UsesClass(CiRun::class)]
@@ -328,6 +331,56 @@ final class GitHubWatchReadsTest extends TestCase
         $runs = $this->state()->runs;
 
         self::assertTrue($runs[2]->isNewerRunOf($runs[3]));
+    }
+
+    public function testAQueuedSuiteOfARunForOnePullRequestIsNotReplacedByTheNewerSuiteOfARunForAnother(): void
+    {
+        $this->runs = 'runs_green_other_pull_request.json';
+        $this->suites = 'suites_queued_replaced_without_pull_requests.json';
+        $runs = $this->state()->runs;
+
+        self::assertSame([CiRunState::NotStarted, false], [$runs[3]->state, $runs[2]->isNewerRunOf($runs[3])]);
+    }
+
+    public function testAQueuedSuiteWithoutItsOwnPullRequestsIsReplacedByTheSuiteOfTheNewerRunOfTheSamePullRequest(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+        $this->suites = 'suites_queued_replaced_without_pull_requests.json';
+        $runs = $this->state()->runs;
+
+        self::assertTrue($runs[2]->isNewerRunOf($runs[3]));
+    }
+
+    public function testAHeadWhoseQueuedRunAndSuiteANewerGreenRunReplacedIsAdmittedGreen(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+        $this->suites = 'suites_queued_replaced.json';
+
+        self::assertSame(HeadAdmission::Green, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAHeadWithAQueuedSuiteOfARunForAnotherEventThanTheNewerGreenSuiteStaysPending(): void
+    {
+        $this->runs = 'runs_green_other_event.json';
+        $this->suites = 'suites_queued_replaced.json';
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAHeadWithAQueuedSuiteThatHasACheckRunStaysPendingNextToANewerGreenRun(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+        $this->suites = 'suites_queued_started.json';
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf($this->state()));
+    }
+
+    public function testAHeadWithAQueuedSuiteOfARunForAnotherPullRequestThanTheNewerGreenSuiteStaysPending(): void
+    {
+        $this->runs = 'runs_green_other_pull_request.json';
+        $this->suites = 'suites_queued_replaced_without_pull_requests.json';
+
+        self::assertSame(HeadAdmission::Pending, new AdmissionDecision()->admissionOf($this->state()));
     }
 
     public function testAQueuedSuiteWithoutAWorkflowRunIsNotReplacedByANewerSuiteOfTheSameApp(): void
