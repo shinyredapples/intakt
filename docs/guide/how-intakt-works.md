@@ -15,7 +15,7 @@ Think of it as a small software team that works around the clock:
 | **Builder** | an AI agent | writes the code for one task |
 | **Reviewers** | a panel of AI agents you configure (by default two, from different companies when available) | check the builder's work, independently of each other, each with its own focus |
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
-| **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
+| **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you, and looks at speed and quality every week (planned) |
 
 ```mermaid
 flowchart LR
@@ -127,6 +127,12 @@ flowchart LR
 Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the builder, who cannot split it, and does not hold it either: the maintainer agent splits it into smaller tasks (planned: until this is built, you split it).
 
 A finished pull request is never kept waiting for a much bigger task. If only one part of it needs that task (say, a screenshot of a screen not built yet), that part becomes its own follow-up task, and the rest is reviewed and merged now.
+
+## A weekly look at speed and quality (planned)
+
+Besides sorting out stuck work, the maintainer agent looks at the whole loop once a week, and sooner when a milestone falls behind or a number moves too far. Intakt first counts, without any AI: how long tasks take at each step, how often work is sent back and why, how often a builder seat sat empty and why, how long things waited, how many tasks came in and went out, what one finished task costs, which checks fail only on GitHub, and for each milestone whether it will be done by its date. Next to speed it counts quality: fixes to code that was merged recently, changes taken back, a broken main, problems a later review found, and bugs filed against finished tasks. Once a month it also looks at whether the code is getting harder to change. The maintainer agent reads these numbers and, for each thing it finds, says the cause, what to change and how to tell whether it helped.
+
+It can change only the settings you allowed it, and only within the limits you set, for example how follow-up tasks are sorted. Each change is a trial with a date to look at it again, and Intakt takes it back by itself when quality gets worse. Which AI model does what, and the instructions the agents get, are not its to change. Everything else becomes a task. It never makes the reviews or checks easier, never changes who approves what, never lowers the limits you set, and never gives itself more power. When a milestone will miss its date, you get one card to decide: drop some work, move the date, or add capacity.
 
 ## Spending wisely
 

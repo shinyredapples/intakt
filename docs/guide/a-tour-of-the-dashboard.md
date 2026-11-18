@@ -89,6 +89,7 @@ This is the only column that needs you. A card here and a notification on your p
 - a plan to approve;
 - a change to the project's rules that only you may approve;
 - a decision the maintainer agent couldn't make, with its options and recommendation;
+- (planned) a milestone that will miss its date, with three choices: drop some work, move the date, or add capacity;
 - a broken part of Intakt itself (red), such as an expired login, with the cause and since when;
 - a dated chore, such as renewing an AI token or login before it expires.
 
@@ -124,6 +125,7 @@ flowchart TD
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you.
 - **Rework** (planned): per project, how many tokens one merged change costs and how much of them went into fixing changes the reviewers sent back, so you can see whether the checks before review pay off.
+- **Quality and health** (planned): next to the speed figures, each week's fixes to recently merged code, changes taken back, times main broke, problems a later review found and bugs filed against finished tasks; once a month, whether the code is getting harder to change; each milestone's forecast against its date; and the trial changes the maintainer agent made, each kept or taken back ([a weekly look at speed and quality](how-intakt-works.md#a-weekly-look-at-speed-and-quality-planned)).
 - **Approved by Intakt:** the protected changes Intakt approved by itself in the last week, one line each with the reviewers' reasons.
 
 ## Steering budgets and pauses

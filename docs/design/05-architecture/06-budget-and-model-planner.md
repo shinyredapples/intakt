@@ -84,6 +84,14 @@ Limits and accounting:
 - **The usage report can be shared.** Tokens and cost per project, vendor, model and role, from the ledger; it shows no limits, plan shares or reset times.
 - **Usage is recorded per vendor call** with three states: started, settled, unsettled. Prices are fixed when the call is admitted. A crash in the middle of a call is settled from the vendor's usage later, never billed twice and never lost.
 
+## Bounded tuning
+
+The maintainer's weekly review ([The maintainer agent](09-maintainer-agent.md)) may tune the loop's flow, never its rules:
+- **Only what the owner listed, within its bounds.** The owner's config lists the flow settings that may be tuned and the bounds of each (for example follow-up routing and pick weights). The maintainer agent asks for a value; the orchestrator applies it only when the setting is on the list and the value within its bounds, and refuses anything else. The agent cannot edit that list or the config. Model routing, prompts and context limits are not on it: they belong to the AI engineer (#865).
+- **Every tuning is an experiment.** It is recorded in the ledger with the setting, the value before and after, the measured cause, the figure it should move and a review date, and it shows on the dashboard ([Dashboard](13-dashboard.md)).
+- **Quality undoes it.** When the weekly quality counter-metric (fixes to recently merged code, reverts, red main, catch-up findings, bugs filed against merged tasks) worsens while a tuning is in effect, plain code restores the value before and records the undo. At the review date the next review keeps it or undoes it from the measured figures.
+- **What it never touches:** review strictness, checks, the approval rules, the maintainer's own powers and the owner floors. A finding about them, or about any setting not on the list, becomes a ready task.
+
 ## CI (design for later)
 
 Not in the first release. What a merge needs is an independent second run of the checks, on a machine the builder does not control; the forge's CI is one way to get it, not a requirement. A loop on a private repository's hosted runners spent a month's included minutes in under two days.
