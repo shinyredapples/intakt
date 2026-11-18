@@ -10,6 +10,8 @@ use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -31,6 +33,7 @@ use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -43,6 +46,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildJob::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]
@@ -64,8 +69,11 @@ final class RunBuildJobTest extends TestCase
 
     private string $promptSeen = '';
 
+    private GatesAtOnce $gatesAtOnce;
+
     protected function setUp(): void
     {
+        $this->gatesAtOnce = new GatesAtOnce(12, 1);
         $this->folder = sys_get_temp_dir().'/intakt-build-'.bin2hex(random_bytes(6));
         new Filesystem()->mkdir($this->folder.'/clone');
     }
@@ -91,9 +99,23 @@ final class RunBuildJobTest extends TestCase
 
         self::assertNotNull($this->ran);
         self::assertSame(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000'],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', ''],
             $this->ran->command,
         );
+    }
+
+    #[TestWith([12, 2])]
+    #[TestWith([12, 3])]
+    #[TestWith([2, 3])]
+    public function testABuildJobHandsItsBuilderNoGateCountBecauseSeveralSlotsWouldRaiseTheOneGateItsLimitsAllow(int $processors, int $slots): void
+    {
+        $this->gatesAtOnce = new GatesAtOnce($processors, $slots);
+
+        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+
+        self::assertNotNull($this->ran);
+        self::assertSame('', $this->ran->command[10]);
+        self::assertSame(1, new GatesByDefault($processors, $this->ran->limits->cpus, $this->ran->limits->memoryBytes)->count);
     }
 
     public function testTheJobsTimeLimitLeavesRoomToBundleAfterTheAllowance(): void
@@ -258,6 +280,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence()), $runner, new PhpGate(), new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence()), $runner, new PhpGate(), $this->gatesAtOnce, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }

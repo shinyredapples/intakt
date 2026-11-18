@@ -100,12 +100,14 @@
 {% endif %}
 {% if active is not null %}
 <div class="ttabs"><div class="seg" role="tablist" aria-label="Task views">
-    <button type="button" role="tab" aria-selected="true" aria-controls="timeline-pane" data-pane="timeline">Timeline</button>
-    <button type="button" role="tab" aria-selected="false" aria-controls="live-log-pane" data-pane="log">Live log</button>
+    {# Only the chosen tab is a Tab stop, because the arrow keys move between the tabs (the ARIA tabs pattern, decision 1 of #2638). #}
+    <button type="button" role="tab" id="timeline-tab" aria-selected="true" tabindex="0" aria-controls="timeline-pane" data-pane="timeline">Timeline</button>
+    <button type="button" role="tab" id="live-log-tab" aria-selected="false" tabindex="-1" aria-controls="live-log-pane" data-pane="log">Live log</button>
 </div></div>
 {% endif %}
 <div class="task-grid" data-pane="timeline">
-<section class="tl-pane" id="timeline-pane" aria-labelledby="timeline-title">
+{# A tab panel only while the tabs exist, so its label never names a tab the page lacks. A pane is rendered as a phone shows it; assets/task-panes.js names it by its data-heading while both panes are shown. #}
+<section class="tl-pane" id="timeline-pane"{% if active is not null %} role="tabpanel" aria-labelledby="timeline-tab" tabindex="0" data-heading="timeline-title"{% else %} aria-labelledby="timeline-title"{% endif %}>
 <h2 class="timeline-title" id="timeline-title">Timeline</h2>
 {% for reviewed in review.rounds %}
 {% if reviewed.isJudged %}
@@ -147,7 +149,7 @@
 {% endfor %}
 </section>
 {% if active is not null %}
-<aside class="log log-pane" id="live-log-pane" aria-labelledby="live-log-title">
+<aside class="log log-pane" id="live-log-pane" role="tabpanel" aria-labelledby="live-log-tab" tabindex="0" data-heading="live-log-title">
     <h2 id="live-log-title">Live log of round {{ active.number ?? '(number not recorded)' }}</h2>
     <div class="log-main">
     {# Outside the streams' container, so a reviewer's first update cannot remove it; the stylesheet hides it once a reviewer is placed. #}

@@ -29,6 +29,10 @@ class FakePage {
     cacheForGoingBack() {
         this.listeners.get('turbo:before-cache').listener();
     }
+
+    press(key) {
+        this.listeners.get('keydown').listener({ key });
+    }
 }
 
 class FakeButton extends FakeElement {
@@ -119,6 +123,45 @@ test('an armed button on a page kept for going back comes back unarmed', () => {
     page.cacheForGoingBack();
 
     assert.equal(button.hasAttribute('data-armed'), false);
+    assert.equal(button.textContent, 'Pause everything');
+});
+
+test('Escape disarms an armed button and restores its label', () => {
+    const { page, button } = pageWithADangerButton();
+    page.click(button);
+
+    page.press('Escape');
+
+    assert.equal(button.hasAttribute('data-armed'), false);
+    assert.equal(button.textContent, 'Pause everything');
+});
+
+test('a click after Escape is held back again', () => {
+    const { page, button } = pageWithADangerButton();
+    page.click(button);
+    page.press('Escape');
+
+    const next = page.click(button);
+
+    assert.equal(next.defaultPrevented, true);
+    assert.equal(button.textContent, 'Click again to pause');
+});
+
+test('another key leaves an armed button armed', () => {
+    const { page, button } = pageWithADangerButton();
+    page.click(button);
+
+    page.press('Tab');
+
+    assert.equal(button.hasAttribute('data-armed'), true);
+    assert.equal(button.textContent, 'Click again to pause');
+});
+
+test('Escape with no armed button keeps every label', () => {
+    const { page, button } = pageWithADangerButton();
+
+    page.press('Escape');
+
     assert.equal(button.textContent, 'Pause everything');
 });
 
