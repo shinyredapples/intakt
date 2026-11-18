@@ -309,9 +309,8 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     public function testTheJudgesNotesAreReadFromTheRoundsJudgeDoneRow(): void
     {
-        $row = $this->judgeDone(self::ROUND);
-        $row['findings'][0]['judge_note'] = 'The branch is unreachable.';
-        $this->append(LedgerEventKind::JudgeDone, $row);
+        $findings = [['id' => 'F1', 'severity' => 'P1', 'text' => 'Broken.', 'judge_note' => 'The branch is unreachable.'], ['id' => 'F2', 'severity' => 'P3', 'text' => 'Later.'], ['id' => 'F3', 'severity' => 'P2', 'text' => 'Untested.', 'judge_note' => null]];
+        $this->append(LedgerEventKind::JudgeDone, ['findings' => $findings] + $this->judgeDone(self::ROUND));
 
         $findings = $this->reading()->judgeDoneOf(self::ROUND)->findings ?? [];
 

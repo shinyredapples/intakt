@@ -34,7 +34,7 @@ final readonly class StartedReview implements JsonSerializable
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     public function jsonSerialize(): array
     {
