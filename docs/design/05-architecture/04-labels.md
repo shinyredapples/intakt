@@ -14,7 +14,7 @@ Default families (names are configurable per project; one value per family, exce
 | `class:` | `core`, `feature`, `tooling`, `process` | slot allocation by class (step 5); the Tech lead's sizing call proposes one when missing |
 | `model:` | a capability tier, for example `strong`, `standard`, `light` | the start tier for every build of the task; escalations can still raise it |
 | `plan:` | `required`, `skip` | overrides the per-size plan approval default (step 4) |
-| `review:` | `full`, or a specialist such as `security` | `full`: the full panel of Code reviewers (formerly the review panel) on every round, even for small diffs; a specialist: adds that specialist to the panel, a setting of the panel and not a role of the team (see [Reviews](07-reviews.md)) |
+| `review:` | `full`, or a specialist such as `security` | `full`: the full panel of Code reviewers (formerly the review panel) on every round, even for small diffs; a specialist such as `review:security`: adds that specialist to the panel, a setting of the panel and not a role of the team (see [Reviews](07-reviews.md)) |
 | driver (two independent labels, not one value family) | `hands-off`, `take-over` | who drives an item. `hands-off`: a person drives it, on any issue or pull request, Intakt's own included. `take-over`: Intakt drives an item it did not create (see "Who drives an item" below) |
 | keep | `keep` | on a closed, unmerged pull request: its branch is not deleted (see [Branch cleanup](08-merge.md#branch-cleanup)) |
 | `status:` (Intakt only) | `queued`, `building`, `in-review`, `waiting-on-you`, `parked`, `blocked`, `merged` | mirror of the row; exactly one at a time |
