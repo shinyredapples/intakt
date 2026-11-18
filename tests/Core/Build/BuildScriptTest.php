@@ -232,7 +232,7 @@ final class BuildScriptTest extends TestCase
 
     public function testTheWaitForTheWatchdogCountsAProcessWhoseStateCannotBeReadOnceCheckedAsEnded(): void
     {
-        // A folder passes a readability check and then fails the read, as the stat file of a process reaped in between does.
+        // A folder, because it passes a readability check and then fails the read, as the stat file of a process reaped in between does.
         $stat = $this->history->folder.'/reaped';
         new Filesystem()->mkdir($stat);
 
