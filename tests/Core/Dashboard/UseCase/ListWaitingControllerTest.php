@@ -16,6 +16,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListWaiting\ListWaitingController;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\DomCrawler\Crawler;
 
 #[CoversClass(ListWaitingController::class)]
 #[UsesClass(WaitingItem::class)]
@@ -35,11 +36,11 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertResponseIsSuccessful();
         $item = $page->filter('.wait-item');
         self::assertCount(1, $item);
-        self::assertSame('No usage of account claude_code.main has been read for hours', $item->filter('h3')->text());
+        self::assertSame('No usage of account claude_code.main has been read since 2026-11-02 08:00 UTC', $item->filter('h3')->text());
         self::assertSame('All projects', $item->filter('.meta span')->first()->text());
         self::assertStringContainsString('Waiting', $item->filter('.meta')->text());
         self::assertStringContainsString('only one call at a time', $item->filter('.conseq')->text());
-        self::assertSame('bin/console intakt:vendor:probe', $item->filter('.act .copy code')->text());
+        self::assertSame('php bin/console intakt:vendor:probe', $item->filter('.act .copy code')->text());
         self::assertSame('Recommended', $item->filter('.act li')->first()->filter('.recommended')->text());
         self::assertNotNull($item->filter('details.why')->attr('open'));
         self::assertSame('Why', $item->filter('details.why summary')->text());
@@ -89,31 +90,30 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertSame('page', $page->filter('.rail a.nav[data-k="waiting"]')->attr('aria-current'));
     }
 
-    public function testAPhoneOpeningTheAddressFromOutsideLandsOnWaitingOnYou(): void
+    public function testAKnownProjectFilterLeavesWaitingOnYouTheOnlyCurrentRailEntry(): void
     {
-        $this->browser->request('GET', '/', server: ['HTTP_SEC_CH_UA_MOBILE' => '?1']);
+        $this->noticesAre();
+        $this->ledger->startRound('round-1', 'acme');
 
-        self::assertResponseRedirects('/waiting', 303);
+        $page = $this->browser->request('GET', '/waiting?project=acme');
+
+        self::assertCount(1, $page->filter('[data-project-trail]'));
+        self::assertSame(['waiting'], $page->filter('.rail a.nav[aria-current]')->each(static fn (Crawler $entry): ?string => $entry->attr('data-k')));
     }
 
-    public function testAPhoneClickingBoardInsideTheDashboardStillReachesTheBoard(): void
+    public function testEachItemLinksToWhereItsConsequenceShows(): void
     {
-        $this->browser->request('GET', '/', server: ['HTTP_SEC_CH_UA_MOBILE' => '?1', 'HTTP_REFERER' => 'http://localhost:7780/waiting']);
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
 
-        self::assertResponseIsSuccessful();
-    }
+        $page = $this->browser->request('GET', '/waiting');
 
-    public function testADesktopOpeningTheAddressStillGetsTheBoard(): void
-    {
-        $this->browser->request('GET', '/', server: ['HTTP_SEC_CH_UA_MOBILE' => '?0']);
-
-        self::assertResponseIsSuccessful();
+        self::assertSame(['/'], $page->filter('.wait-item .act a[href]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
     }
 
     private function noticesAre(OutageNotice ...$notices): void
     {
         $stub = self::createStub(OwnerNotices::class);
-        $stub->method('oldestFirst')->willReturn(array_values($notices));
+        $stub->method('stillRunningOldestFirst')->willReturn(array_values($notices));
         self::getContainer()->set(OwnerNotices::class, $stub);
     }
 

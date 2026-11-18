@@ -2,9 +2,7 @@
 
 {% block title %}Waiting on you - Intakt{% endblock %}
 
-{# The same project link handling as Reviews; the notices on this page belong to no project, so no filter hides them. #}
-{% set rail_section = project_trail is not empty ? 'projects' : null %}
-
+{# The same project trail as Reviews, but no rail section: this page has its own rail entry, so Projects is not marked current beside it. The notices on this page belong to no project, so no filter hides them. #}
 {% block body %}
 {% if project_trail is not empty %}
 {{ include('dashboard/components/breadcrumb.html.twig', {crumbs: [
@@ -38,6 +36,7 @@
             <span class="outcome">{{ choice.outcome }}</span>
         </li>
     {% endfor %}
+        <li><a class="btn secondary sm" href="{{ path(item.linkRoute) }}">{{ item.linkLabel }}</a></li>
     </ul>
     <details class="why" open><summary>Why</summary>
         <p>{{ item.why }}</p>
@@ -47,6 +46,5 @@
 </div>
 {% endif %}
 {# Only this page shows a command to copy and a Why that a phone folds, so only it loads the script; imported by its own address like the shell's, because the import map is absent when the hub is down. #}
-{# Only this page shows a command to copy and a Why that a phone folds, so only it loads the script; imported by its own address like the shell's, because the import map is absent when the hub is down. #}
-<script type="module">import { copyCommands } from '{{ asset('copy-command.js') }}'; copyCommands(document, navigator.clipboard, matchMedia);</script>
+<script type="module">import { copyCommands } from '{{ asset('copy-command.js') }}'; copyCommands(document, navigator.clipboard ?? {}, matchMedia, getSelection());</script>
 {% endblock %}

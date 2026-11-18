@@ -20,9 +20,12 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Uri\WhatWg\Url;
 
 final readonly class ShowBoardController
 {
+    private const array LANDING_HEADERS = ['Sec-CH-UA-Mobile', 'User-Agent', 'Referer'];
+
     public function __construct(
         private Ledger $ledger,
         private LedgerReviewPages $reviewPages,
@@ -39,10 +42,6 @@ final readonly class ShowBoardController
     #[Route('/', name: DashboardRoutes::SHOW_BOARD, methods: ['GET'])]
     public function __invoke(Request $request): Response
     {
-        if ($this->isPhoneLanding($request)) {
-            return new RedirectResponse($this->urls->generate(DashboardRoutes::LIST_WAITING), Response::HTTP_SEE_OTHER);
-        }
-
         $events = $this->ledger->readInOrder();
         $board = $this->reviewPages->boardOf($events);
 
@@ -51,19 +50,39 @@ final readonly class ShowBoardController
             return new RedirectResponse($this->urls->generate(DashboardRoutes::FIRST_RUN), Response::HTTP_SEE_OTHER);
         }
 
-        return new Response($this->pages->render($request, 'dashboard/board.html.twig', [
-            'board' => $board,
-            'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
-            'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
-            'working' => $board->whoIsWorking(),
-            'columns' => BoardColumn::cases(),
-        ]));
+        $answer = $this->isPhoneLanding($request)
+            ? new RedirectResponse($this->urls->generate(DashboardRoutes::LIST_WAITING), Response::HTTP_SEE_OTHER)
+            : new Response($this->pages->render($request, 'dashboard/board.html.twig', [
+                'board' => $board,
+                'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
+                'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
+                'working' => $board->whoIsWorking(),
+                'columns' => BoardColumn::cases(),
+            ]));
+        $answer->setVary(self::LANDING_HEADERS, false);
+
+        return $answer;
     }
 
-    // A phone's home is Waiting on you (DESIGN.md), so a phone that opens the address from outside lands there; a click inside the dashboard sends a referrer and still reaches the board.
+    // A phone's home is Waiting on you (DESIGN.md), so a phone that opens the address lands there, and a click inside the dashboard, whose referrer is this host, still reaches the board.
+    // The user agent's "Mobi" (MDN's advice), because Safari and Firefox send no Sec-CH-UA-Mobile and Chromium sends it only on a secure origin.
     private function isPhoneLanding(Request $request): bool
     {
-        return '?1' === $request->headers->get('Sec-CH-UA-Mobile') && !$request->headers->has('Referer');
+        $phone = '?1' === $request->headers->get('Sec-CH-UA-Mobile') || str_contains($request->headers->get('User-Agent') ?? '', 'Mobi');
+
+        return $phone && !$this->comesFromThisHost($request);
+    }
+
+    private function comesFromThisHost(Request $request): bool
+    {
+        $referrer = Url::parse($request->headers->get('Referer') ?? '');
+        if (null === $referrer) {
+            return false;
+        }
+
+        $port = $referrer->getPort();
+
+        return $referrer->getAsciiHost().(null === $port ? '' : ':'.$port) === $request->getHttpHost();
     }
 
     private function redactedMain(FailingMain $main): FailingMain

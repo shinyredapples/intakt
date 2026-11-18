@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
+use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\WaitingChoice;
 use Intakt\Core\Dashboard\Domain\WaitingItem;
 use Intakt\Core\Dashboard\Domain\WaitingItemNeedsOneToFourChoices;
@@ -30,7 +31,22 @@ final class WaitingItemTest extends TestCase
         self::assertStringContainsString('claude_code.main', $item->lead);
         self::assertStringContainsString('08:00 UTC', $item->why);
         self::assertTrue($item->choices[0]->recommended);
-        self::assertSame('bin/console intakt:vendor:probe', $item->choices[0]->command);
+    }
+
+    public function testTheRecommendedChoiceForAnOutageRunsNoPaidCall(): void
+    {
+        $item = WaitingItem::ofOutage(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        self::assertNull($item->choices[0]->command);
+        self::assertSame('php bin/console intakt:vendor:probe', $item->choices[1]->command);
+        self::assertStringContainsString('paid call', $item->choices[1]->outcome);
+    }
+
+    public function testAnOutageItemLinksToTheBoard(): void
+    {
+        $item = WaitingItem::ofOutage(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        self::assertSame(DashboardRoutes::SHOW_BOARD, $item->linkRoute);
     }
 
     public function testAnItemWithNoChoiceIsRefused(): void
@@ -86,11 +102,11 @@ final class WaitingItemTest extends TestCase
      */
     private function itemOf(array $choices): WaitingItem
     {
-        return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), $choices);
+        return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), $choices, 'Open the board', DashboardRoutes::SHOW_BOARD);
     }
 
     private function choice(bool $recommended): WaitingChoice
     {
-        return new WaitingChoice('Does a thing.', null, $recommended);
+        return new WaitingChoice(outcome: 'Does a thing.', command: null, recommended: $recommended);
     }
 }

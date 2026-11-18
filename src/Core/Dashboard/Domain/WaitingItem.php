@@ -6,6 +6,7 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\OutageNotice;
+use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 
 // At most four choices, because more would make the owner compare instead of act, and the recommended one first because it is the one to take.
 final readonly class WaitingItem
@@ -24,6 +25,8 @@ final readonly class WaitingItem
         public string $why,
         public DateTimeImmutable $since,
         public array $choices,
+        public string $linkLabel,
+        public string $linkRoute,
     ) {
         $count = count($choices);
         if ($count < 1 || $count > self::MOST_CHOICES || !$choices[0]->recommended) {
@@ -31,20 +34,23 @@ final readonly class WaitingItem
         }
     }
 
-    // The wording repeats what the budget guard does after an outage because the owner must read the real consequence: one call at a time runs on the account.
+    // Only a running outage becomes an item (OwnerNotices), so the present tense holds. Leaving it is recommended because no command brings a reading back, and the probe is offered with its cost because it only tells whether the provider answers.
     public static function ofOutage(OutageNotice $notice): self
     {
         $account = $notice->account->key();
+        $since = $notice->lastReadingAt->format('Y-m-d H:i');
 
         return new self(
-            'No usage of account '.$account.' has been read for hours',
-            'Until readings return, only one call at a time runs on this account, so builds queue.',
-            'Intakt last read the usage of '.$account.' at '.$notice->lastReadingAt->format('Y-m-d H:i').' UTC. Without a reading it cannot tell how much of the limit is left, so it runs one call at a time on the account. It applies to every project.',
+            'No usage of account '.$account.' has been read since '.$since.' UTC',
+            'Until a reading arrives, the budget guard lets only one call at a time start on this account, so builds queue.',
+            'Intakt last read the usage of '.$account.' at '.$since.' UTC. Without a reading it cannot tell how much of the limit is left. It applies to every project, and this item leaves the page when a newer reading of the account arrives.',
             $notice->noticedAt,
             [
-                new WaitingChoice('Shows whether the account still answers and what usage it reports.', 'bin/console intakt:vendor:probe', true),
-                new WaitingChoice('Leaves it: builds keep running one call at a time.', null, false),
+                new WaitingChoice(outcome: 'Leave it: builds keep running one call at a time until the next reading.', command: null, recommended: true),
+                new WaitingChoice(outcome: 'Makes one paid call per configured provider and prints its token usage, so you see whether the provider still answers. It records no usage reading.', command: 'php bin/console intakt:vendor:probe', recommended: false),
             ],
+            'See the queue on the board',
+            DashboardRoutes::SHOW_BOARD,
         );
     }
 

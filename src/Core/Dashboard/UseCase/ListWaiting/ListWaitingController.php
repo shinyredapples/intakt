@@ -32,7 +32,7 @@ final readonly class ListWaitingController
         $now = $this->clock->now();
 
         return new Response($this->pages->render($request, 'dashboard/waiting.html.twig', [
-            'items' => array_map(WaitingItem::ofOutage(...), $this->notices->oldestFirst()),
+            'items' => array_map(WaitingItem::ofOutage(...), $this->notices->stillRunningOldestFirst()),
             'now' => $now,
             'linked_project' => $project,
             'project_trail' => in_array($project, $this->filterProjects->names(), true) ? $project : null,
