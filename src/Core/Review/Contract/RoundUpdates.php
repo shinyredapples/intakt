@@ -9,7 +9,8 @@ use Symfony\Component\Uid\Uuid;
 // A port, because Review only says what happened and whoever shows it live is not its concern; an implementation never throws, because a lost update must not change a verdict or a round.
 interface RoundUpdates
 {
-    public function toolCalled(Uuid $round, string $reviewer, string $tool): void;
+    // The call in plain words ("read src/A.php"), because the live log is read by people and a tool's name is an internal.
+    public function toolCalled(Uuid $round, string $reviewer, string $call): void;
 
     public function textStreamed(Uuid $round, string $reviewer, string $text): void;
 
