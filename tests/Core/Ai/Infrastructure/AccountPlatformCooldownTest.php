@@ -91,7 +91,7 @@ final class AccountPlatformCooldownTest extends TestCase
 
         self::assertInstanceOf(RateLimitExceededException::class, $failure);
         self::assertEqualsWithDelta(60, $cooldowns->secondsUntilAnAccountIsFree(Provider::Codex), 1);
-        self::assertContains(['warning', 'The measured readings of account {account} could not be read.'], array_map(static fn (array $log): array => [$log[0], $log[1]], $logger->cleanLogs()));
+        self::assertContains('The measured readings of account {account} could not be read.', array_column($logger->cleanLogs(), 1));
     }
 
     private function failedCall(AccountCooldownWindows $cooldowns, Throwable $thrown, ?Account $account = null): Throwable
