@@ -55,7 +55,18 @@ final readonly class HeadBackOff
         try {
             $this->pending->waitUntil($project, $head, $paused->resetsAt);
         } catch (Throwable $failure) {
+            $this->backOffAfterAFailedWait($project, $head, $failure);
+        }
+    }
+
+    // Contained, because a database error of this head's row can reject the back-off as it rejected the wait, and the heads after it must still run; nothing was stored, so the head stays due for the next tick.
+    private function backOffAfterAFailedWait(string $project, OpenChange $head, Throwable $failure): void
+    {
+        try {
             $this->backOffAlone($project, $head, $failure);
+        } catch (Throwable $notBackedOff) {
+            $this->logger->error('A head\'s back-off could not be stored; it stays due for the next tick.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $notBackedOff]);
+            $this->reopenEntityManager();
         }
     }
 

@@ -299,6 +299,22 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame('the pending head cannot be written', $exception->getMessage());
     }
 
+    public function testAHeadWhoseForgePauseAndBackOffCannotBeStoredStaysDueWhileTheNextHeadOfTheTickStartsItsRound(): void
+    {
+        $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), RecordedForge::change('2', self::GREEN, '2026-11-02T09:00:00Z'));
+        $this->checks->pausedUntil = $this->clock->now()->modify('+30 minutes');
+        $this->checks->pausedHead = str_repeat(self::PENDING, 40);
+        $unwritable = new PendingHeads(new UnwritableQueries($this->entities), $this->clock);
+        $this->handler = $this->handler(waits: $unwritable, backOffs: $unwritable);
+
+        $this->tick();
+
+        self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
+        self::assertSame(['2'], array_column($this->ledger->payloads(), 'change'));
+        self::assertSame(0, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z')));
+        self::assertIsArray(array_find($this->logger->logged, static fn (array $line): bool => 'A head\'s back-off could not be stored; it stays due for the next tick.' === $line[0]));
+    }
+
     public function testAPendingHeadIsNotReadAgainBeforeItsReadAgainTime(): void
     {
         $this->listing->opens('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'));
@@ -1446,7 +1462,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
     }
 
     // The waits may go to their own pending heads, so a test can break the wait for a forge pause and nothing else.
-    private function handler(?InstallWideFailures $installWide = null, ?PendingHeads $waits = null): WatchPullRequestsHandler
+    private function handler(?InstallWideFailures $installWide = null, ?PendingHeads $waits = null, ?PendingHeads $backOffs = null): WatchPullRequestsHandler
     {
         $locks = new LockFactory($this->locks);
         $ledger = new WatcherLedger($this->ledger);
@@ -1459,7 +1475,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $redactor = self::createStub(Redactor::class);
         $redactor->method('redact')->willReturnArgument(0);
         $installWide ??= new DoctrineInstallWideFailures($this->entities, $doctrine, new DoctrineHolds($this->entities, $this->clock), $this->clock, $logger);
-        $backOff = new HeadBackOff(new FailedHeads($pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
+        $backOff = new HeadBackOff(new FailedHeads($backOffs ?? $pending, $ledger, $this->clock, $redactor, $this->entities->getConnection(), $installWide, $logger, $doctrine), $waits ?? $pending, $doctrine, $logger);
         $decisions = new HeadDecisions(new AdmitHeads($this->checks, new AdmissionDecision(), $this->clock, $logger), new AdmissionDecision(), $backOff);
         $starts = new RoundStarts($this->commands, $rounds, $ledger);
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
