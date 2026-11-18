@@ -34,7 +34,7 @@ For a new project, the spec is Ready to plan when the Tech lead can break it int
 This is the only statement of it; every self-check rule in the design points here. The Developer owns it together with the checks. A change is *Done* when the Developer hands it back with:
 
 1. Every acceptance criterion met, and every Evidence item the Developer can produce shown from a running install in the pull request; evidence marked as the owner's or the orchestrator's is theirs to provide, not the Developer's.
-2. The Developer's own run of the fast checks passing.
+2. The Developer's own run of the fast checks passing; with targeted verify (planned), its one run of the project's whole check command at the end ([Overview](05-architecture/01-overview.md), Build job).
 3. The docs it touches stating what the code now does: every name and behavior it changed was searched for in the docs and corrected, and every hit of the docs report resolved ([Overview](05-architecture/01-overview.md), Build job).
 4. The recurring blocking findings in the Developer's briefing checked against it.
 

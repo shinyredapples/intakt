@@ -49,4 +49,10 @@ A part split from a larger change can name a source: a line `Source: <branch>@<s
 
 **A split happens once.** The split plan is recorded before any part is created. After a crash the split resumes from the record, and a part whose create answer was lost is found by its part marker before anything is created, so no part exists twice. The original stays open as an umbrella that is never built, and closes on its own once every part is closed.
 
-<a id="split-parts"></a>**Split parts share one line form** (planned). The split plan lists each part on one line of one form: its title, its done-when, its verify command, its files and the parts it depends on. Plain code refuses a split plan whose chain of parts, followed along the depends-on links, is longer than two (a part that depends on a part that itself depends on another); a refused plan is not recorded, so no part is created, and the Tech lead splits again.
+<a id="split-parts"></a>**Split parts share one line form** (planned). The split plan lists each part on one line of one form, its fields in this order, each label exactly once:
+
+```
+2. <title>. Done when: <text>. Verify: `<command>`. Files: `<path>`, `<path>`. Depends on: 1
+```
+
+The line starts with the part's number (1, 2, ... in plan order); the verify command and each file path sit in single backticks, the paths separated by commas; `Depends on:` lists part numbers separated by commas, each lower than the line's own, or says `none`. Plain code parses every line before anything is recorded and refuses the whole plan when a line is malformed: a label missing, repeated or out of order, a command or path outside backticks or holding a backtick, an empty field, or a dependency on a number that is not an earlier part. It also refuses a split plan whose chain of parts, followed along the depends-on links, is longer than two (a part that depends on a part that itself depends on another); a refused plan is not recorded, so no part is created, and the Tech lead splits again.

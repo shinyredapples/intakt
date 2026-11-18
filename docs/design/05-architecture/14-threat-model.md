@@ -80,7 +80,7 @@ The Security engineer (#864; team names in #862) covers the security of the prod
 - **Checks:** its output is a plan capped in size, which reaches the builder fenced as another model's advice, never as the task ([Budget and model planner](06-budget-and-model-planner.md)). It is advice only: it cannot pick a model, make a task eligible or approve anything, and the build it informs is checked, reviewed and merged like any other, so a steered plan can only produce a build that the same gates judge.
 
 ### Brief (Tech lead, planned)
-- **Reads:** the task text with its fenced external blocks, and the code at main; both are untrusted, so the brief is steerable model output.
+- **Reads:** the task text with its fenced external blocks, and the code at main; after a build ended by the stop, also its two causes, redacted, scanned and fenced as builder output ([Overview](01-overview.md), Build job). All of it is untrusted, so the brief is steerable model output.
 - **Can:** read-only repository tools (read, search) within a turn cap; no writes, no network beyond its vendor, no credentials of the project or the forge.
 - **Checks:** its output is a typed object validated against its schema, and plain code refuses it without a verify command or a done-when, or over its line cap ([Choosing work](03-choosing-work.md#the-brief)). It reaches the builder fenced as the Tech lead's output. A steered verify command adds nothing the builder could not already run inside its job container, and the brief cannot pick a model, make a task eligible or approve anything: the build it informs is checked, reviewed and merged like any other.
 
