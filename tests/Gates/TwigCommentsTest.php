@@ -37,7 +37,7 @@ final class TwigCommentsTest extends TestCase
         yield 'an inline comment in an output tag' => ["{{ order.total # TODO round it\n}}\n", [1 => 'TODO']];
         yield 'an inline comment behind a star and a space' => ["{{ total # * TODO round it\n}}\n", [1 => 'TODO']];
         yield 'a one-line comment behind a star and a space' => ["{# * TODO show the total #}\n", [1 => 'TODO']];
-        yield 'an inline comment in a block tag' => ["{% set total = 3 # FIXME read the total %}\n", [1 => 'FIXME']];
+        yield 'an inline comment in a block tag' => ["{% set total = 3 # FIXME read the total\n%}\n", [1 => 'FIXME']];
         yield 'a comment after a string holding a comment end' => ["{{ '#}' }}{# TODO show the total #}\n", [1 => 'TODO']];
         yield 'a comment after nested brackets' => ["{{ {a: {b: 1}}|length }}{# TODO show the total #}\n", [1 => 'TODO']];
         yield 'a comment after an interpolated string' => ["{{ \"a #{ \"}}\" } b\" }}\n{# XXX later #}\n", [2 => 'XXX']];
@@ -104,6 +104,28 @@ final class TwigCommentsTest extends TestCase
     public function testATwigTemplateWithoutAMarkerCommentHasNoMarkers(string $template): void
     {
         self::assertSame([], $this->markersOn($template));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function templatesTwigAccepts(): iterable
+    {
+        foreach (self::templatesWithAMarkerComment() as $name => [$template]) {
+            if ('an unclosed comment' !== $name) {
+                yield $name => [$template];
+            }
+        }
+
+        yield from self::templatesWithoutAMarkerComment();
+    }
+
+    #[DataProvider('templatesTwigAccepts')]
+    public function testEveryTemplateSampleExceptTheUnclosedCommentIsValidTwig(string $template): void
+    {
+        new Environment(new ArrayLoader())->tokenize(new Source($template, 'sample.twig'));
+
+        $this->addToAssertionCount(1);
     }
 
     public function testAMarkerOnALineThatWasNotAddedIsNotReported(): void

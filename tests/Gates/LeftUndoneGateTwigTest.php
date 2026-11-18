@@ -17,6 +17,9 @@ use Intakt\Gates\Workspace;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Twig\Environment;
+use Twig\Loader\ArrayLoader;
+use Twig\Source;
 
 #[CoversClass(LeftUndoneGate::class)]
 #[CoversClass(CommentLanguages::class)]
@@ -40,7 +43,7 @@ final class LeftUndoneGateTwigTest extends SandboxTestCase
         yield 'a FIXME comment' => ['{# FIXME the total is off by one #}', 'FIXME'];
         yield 'an XXX comment' => ['{# XXX breaks on empty orders #}', 'XXX'];
         yield 'a comment trimming whitespace' => ['{#- TODO show the total -#}', 'TODO'];
-        yield 'an inline comment' => ['{{ order.total # TODO round it', 'TODO'];
+        yield 'an inline comment' => ["{{ order.total # TODO round it\n}}", 'TODO'];
         yield 'a comment inside an HTML comment' => ['<!-- {# TODO finish this #} -->', 'TODO'];
     }
 
@@ -75,6 +78,28 @@ final class LeftUndoneGateTwigTest extends SandboxTestCase
         yield 'a marker in an HTML comment' => ['<!-- TODO show the total -->'];
         yield 'a reasoned exception' => ['{# TODO(#123): show the total once the forge sends it #}'];
         yield 'a not-implemented throw in plain text' => ["throw new LogicException('Not implemented');"];
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function twigLineSamples(): iterable
+    {
+        foreach (self::addedTwigMarkerComments() as $name => [$comment]) {
+            yield $name => [$comment];
+        }
+
+        yield from self::twigLinesWithoutALeftUndoneComment();
+    }
+
+    #[DataProvider('twigLineSamples')]
+    public function testEveryTwigLineSampleIsValidTwigInItsTemplate(string $line): void
+    {
+        $template = $this->templateWithLine($line);
+
+        new Environment(new ArrayLoader())->tokenize(new Source($template, 'order.html.twig'));
+
+        $this->addToAssertionCount(1);
     }
 
     #[DataProvider('twigLinesWithoutALeftUndoneComment')]
