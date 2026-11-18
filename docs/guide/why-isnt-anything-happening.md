@@ -44,6 +44,17 @@ flowchart TD
 | A red item on the board | a part of Intakt itself is failing (a sandbox, a package install, the boot gate); the maintainer agent tries to fix it first | nothing, unless it also turns up in Waiting on you |
 | A red card in Waiting on you | a broken part only you can fix (an expired login, a credential, the host), or one the maintainer agent could not fix | follow the card: it names the step and the cause |
 
+## When work stops moving (planned)
+
+None of this is built yet. Each rule in one sentence:
+
+- **Every stall gets a reason and a next step:** when a task or the chain of tasks behind it has not moved for a while, Intakt names one reason and acts on it: the builder fixes its own work, the maintainer agent prepares a fix to protected files or to the shared toolbox as its own pull request, you decide, or the task waits for another one.
+- **You are asked early:** a decision only you can make (a new package from an outside company, a change to protected files) is asked as soon as it shows up, while other fixes go on, and your answer holds for later versions that leave that part unchanged.
+- **The nearest milestone goes first:** builders start with the tasks on the longest chain that still has to finish before the nearest milestone is due.
+- **The builder has the same tools as CI:** a tool a test needs is listed in the requirements, and a missing one stops the builder's own check before the push, never first in CI.
+- **A task waits only for what it needs:** a `Waits for` line names the one part it builds on, never a whole bigger task split into parts.
+- **The board shows a milestone at risk:** it names the stalled task, its reason and who is fixing it (for example "M5 at risk: #N stalled 3 h, needs the environment, fix in review"), and you get a message only when you must act.
+
 ## Is the server itself busy?
 
 If the dashboard is slow or does not answer, ask the web server how it is doing. Inside the container, run `php bin/console intakt:server:status`. It shows how many of the server's workers are busy and how many are free, how many requests are waiting, how often a worker was restarted, and whether the live-update service (the Mercure hub) is healthy. A line that says `down` names what could not be read and why. Planned: the same numbers in a row on the dashboard, and a container health check built on them.

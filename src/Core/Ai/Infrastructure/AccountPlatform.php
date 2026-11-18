@@ -47,6 +47,7 @@ final readonly class AccountPlatform implements PlatformInterface
 
         try {
             $result = $this->platform->invoke($model, $input, $options);
+            // Boundary: records every failure of the account and rethrows it, because a cooldown or a log must follow whatever the platform threw.
         } catch (Throwable $failure) {
             $this->failed($failure);
 

@@ -26,16 +26,18 @@ flowchart TD
   r -- yes --> s{Small enough to build<br/>and review in one go?}
   s -- too big --> split[Split into smaller tasks]
   s -- yes --> q[Joins the queue]
-  q --> order[Ordered: urgent first,<br/>then milestone, then age]
+  q --> order[Ordered: urgent first,<br/>then priority, then milestone<br/>planned: milestone by milestone,<br/>priority within a milestone]
 ```
 
 One exception: a task whose pull request is already open (it needs a fix or an update) goes before every task not started yet, unless that task is `urgent`, so open work lands first. Each time a task joins the queue, Intakt looks its pull request up on the site where the code is hosted (GitHub or Gitea), so a task that comes back after a decision is still treated as a fix to its open pull request, never started over.
 
 - **Waiting on another task:** a task can say `Waits for #12`. It isn't picked until #12 is done, so nothing gets built on a missing foundation. *(Planned:)* Intakt learns whether #12 is done from the one list of open tasks it reads each round (a list that comes back incomplete releases no wait), never by asking about each waited-for task on its own, and a worker with no room for new work asks the site nothing, so routine checks never use up the site's hourly allowance.
 - **Too big:** large tasks are split into parts that each work on their own, with their own tests.
+- **Evidence the builder can't produce** *(planned)*: if the task asks for evidence only you could produce (a real AI call, a run on your own install) without marking it `(owner provides)`, it comes back to you with one comment naming those items, before any build. Marked items are yours to check before the merge, and reviewers never send the work back for them.
 - **Two new tasks touching the same files** are usually built one after the other, so they don't trip over each other; everything else can run in parallel.
 - **A task with an open pull request never waits** because another task is changing the same files.
-- **A task held back for files only lets a task of the same priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway.
+- *(Planned:)* **A task held back for files only lets a task of the same milestone, priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway, so a later milestone never jumps ahead this way. Today no task is held back for its files; the whole rule arrives with the build lane.
+- **A blocked or waiting task** is passed over, and the next task in line is built instead, even one of a later milestone.
 - **Pace:** how many builders run at once depends on how much of the week's AI allowance is left (see [Spending wisely](how-intakt-works.md#spending-wisely)).
 
 ## 2. Building
@@ -53,7 +55,7 @@ It produces two things, and nothing else leaves the workspace:
 
 Before it finishes, it runs a **self-check**: no merge commits, nothing that looks like a password or key, description not too long. Catching those itself is much cheaper than being refused afterwards.
 
-Planned: the self-check also runs the project's quick checks, ticks off every piece of evidence the task asks for, and looks for documentation the change made wrong. Intakt checks before it asks the reviewers because every round of fixes after a review costs about as much as four reviews, and with one account that comes straight out of new work. When the same kind of problem keeps coming back from the reviewers, Intakt suggests a new automatic check as a task; label it to accept it, and the problem is caught before review from then on.
+Planned: the self-check also runs the project's quick checks, ticks off every piece of evidence the task asks for, and looks for documentation the change made wrong. That last part is a plain report, not an AI's guess: it takes the names, settings and numbers the change removed or changed, lists every place in the project's documentation that still mentions one, and the builder fixes or confirms each before it hands back. Intakt checks before it asks the reviewers because every round of fixes after a review costs about as much as four reviews, and with one account that comes straight out of new work. When the same kind of problem keeps coming back from the reviewers, Intakt suggests a new automatic check as a task; label it to accept it, and the problem is caught before review from then on.
 
 ## 3. Checking
 
