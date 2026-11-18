@@ -56,8 +56,8 @@ final readonly class MakeBuildClone
 
             $this->addSource($directory, $mirror, $source);
             $this->checkOut($directory);
+            // Boundary: removes the half-made clone and rethrows, because a clone that failed half-way must never be taken for a build clone.
         } catch (Throwable $failed) {
-            // Because a clone that failed half-way must never be taken for a build clone.
             $this->filesystem->remove($directory);
 
             throw $failed;

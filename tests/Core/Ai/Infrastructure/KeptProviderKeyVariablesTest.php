@@ -133,6 +133,23 @@ final class KeptProviderKeyVariablesTest extends TestCase
         self::assertSame(['HF_TOKEN' => 'hf_'.self::BODY], $this->variablesOf('hf_'.self::BODY, [$failing]));
     }
 
+    public function testALoaderThatFailsIsLoggedByClassOnlyAndItsVariableCountsAsSet(): void
+    {
+        $failing = self::createStub(EnvVarLoaderInterface::class);
+        $failing->method('loadEnvVars')->willThrowException(new RuntimeException('secret-text-from-the-vault'));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::atLeastOnce())->method('warning')->with(
+            self::anything(),
+            self::callback(static fn (array $context): bool => !str_contains(json_encode($context, JSON_THROW_ON_ERROR), 'secret-text-from-the-vault') && RuntimeException::class === $context['exception_class']),
+        );
+        $keys = self::createStub(KeptProviderKeys::class);
+        $keys->method('read')->willReturn(ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog()));
+
+        $variables = new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog(), $logger, [$failing])->loadEnvVars();
+
+        self::assertSame(['HF_TOKEN' => 'hf_'.self::BODY], $variables);
+    }
+
     public function testAKeptKeyOfAProviderTheCatalogNoLongerListsLoadsNoVariable(): void
     {
         $keys = self::createStub(KeptProviderKeys::class);

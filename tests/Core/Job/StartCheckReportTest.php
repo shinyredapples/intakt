@@ -8,6 +8,7 @@ use ErrorException;
 use Intakt\Core\Job\Infrastructure\StartCheck;
 use Intakt\Core\Job\Infrastructure\StartCheckFailure;
 use Intakt\Core\Job\Infrastructure\StartCheckReport;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -134,6 +135,17 @@ final class StartCheckReportTest extends TestCase
         }
 
         self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], $failures);
+    }
+
+    public function testAFailureOtherThanAnIoErrorWhileReadingTheReportPassesThrough(): void
+    {
+        file_put_contents($this->output.'/'.StartCheckReport::FILE, "end\n");
+        $filesystem = self::createStub(Filesystem::class);
+        $filesystem->method('readFile')->willThrowException(new LogicException('not an I/O error'));
+
+        $this->expectException(LogicException::class);
+
+        new StartCheckReport($filesystem)->failuresIn($this->output);
     }
 
     /**

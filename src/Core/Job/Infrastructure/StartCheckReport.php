@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
-use RuntimeException;
 use SplFileInfo;
+use Symfony\Component\Filesystem\Exception\IOException;
+use Symfony\Component\Filesystem\Filesystem;
 
 // Reads what docker/job/start-check.sh left in the output directory; the job ran after it and could rewrite it, so anything malformed is a failure, never a pass.
 final readonly class StartCheckReport
@@ -18,6 +19,10 @@ final readonly class StartCheckReport
     private const int MAX_BYTES = 64 * 1024;
     private const int MAX_REASON_BYTES = 255;
     private const string END = 'end';
+
+    public function __construct(private Filesystem $filesystem = new Filesystem())
+    {
+    }
 
     /**
      * @return list<StartCheckFailure>
@@ -45,16 +50,16 @@ final readonly class StartCheckReport
             : array_slice($this->failuresListedIn($contents), 0, self::MAX_FAILURES);
     }
 
-    // SplFileObject throws instead of warning, so an unreadable report never reaches the runner's error handler; one byte over the limit keeps a report that grew after the size check from passing.
+    // The Filesystem throws instead of warning, so an unreadable report never reaches the runner's error handler; a length check after the read, because a report that grew after the size check must not pass; one byte over the limit keeps a report that grew after the size check from passing.
     private function contentsOf(SplFileInfo $report): ?string
     {
         try {
-            $contents = $report->openFile('r')->fread(self::MAX_BYTES + 1);
-        } catch (RuntimeException) {
+            $contents = $this->filesystem->readFile($report->getPathname());
+        } catch (IOException) {
             return null;
         }
 
-        return false === $contents || strlen($contents) > self::MAX_BYTES ? null : $contents;
+        return strlen($contents) > self::MAX_BYTES ? null : $contents;
     }
 
     /**

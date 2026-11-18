@@ -28,8 +28,8 @@ final readonly class GitHubAuthorTrust implements AuthorTrust
     {
         try {
             return $this->trustOfAuthor(PullRequestAddress::of($change))->steers();
+            // Boundary: logs any failure and answers untrusted, because a check that cannot answer must never let a head run.
         } catch (Throwable $unanswered) {
-            // Any failure counts as untrusted, because a check that cannot answer must never let a head run.
             $this->logger->warning('The pull request author counts as untrusted, because the trust check could not answer.', ['change' => $change->value, 'exception' => $unanswered]);
 
             return false;
