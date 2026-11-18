@@ -17,7 +17,7 @@ final readonly class FindingKey
     // A letter after the last dot, so a version such as 8.6 is no file extension.
     private const string FILE_EXTENSION = '~\.[A-Za-z]\w*$~';
 
-    // The finding's file and every fragment with a slash and a file extension, which prose never reads like; such a path that is missing or outside the checkout refuses the key.
+    // Only fragments with a slash and a file extension count as certain, because prose never reads like that, so such a path that is missing or outside the checkout may refuse the key.
     /**
      * @return list<string>
      */
