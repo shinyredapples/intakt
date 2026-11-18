@@ -147,7 +147,7 @@ The checks, layer by layer:
 - **The machines (infrastructure):** the container recipe (the Dockerfile) is checked for unsafe habits, the finished container and its settings are scanned for known holes, containers must not run as the all-powerful root user and must not change their own files, and the encryption (TLS) and web server settings are checked.
 - **The running program:** every night a scan visits the copy of Intakt that the journeys start and looks for what only shows while it runs, such as a page that forgets a safety header.
 
-A check that needs an extra tool is off until you switch it on for your project, so a simple install stays simple; Intakt's own project has them all on.
+A check that needs an extra tool is off until you switch it on for your project, so a simple install stays simple; Intakt's own project will have them all on as each check lands.
 
 The Security engineer adds what checks cannot do. When a change touches a sensitive area (code that handles outside input, the pages and scripts, or the container and web server setup), it reviews that change with a checklist for that area. Once a month it looks at how the scan results develop, keeps the list of threats up to date and files what it finds as tasks, which wait until you or someone with write access labels them. It also runs the two security sessions for changes to the rules (see [When Intakt asks you and why](#when-intakt-asks-you-and-why)), but the decision itself stays with plain code and with you.
 
