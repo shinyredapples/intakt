@@ -60,7 +60,7 @@ final readonly class RecordedPullRequestFile
         $head = self::text($raw, 'head');
         $body = self::text($raw, 'body');
         $postedAt = RecordedMoment::parse(self::text($raw, 'postedAt') ?? '');
-        if (null === $author || null === $head || null === $body || null === $postedAt) {
+        if (in_array(null, [$author, $head, $body, $postedAt], true)) {
             return null;
         }
 
