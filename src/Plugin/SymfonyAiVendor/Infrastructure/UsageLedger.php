@@ -17,6 +17,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\UsageUnsettled;
 use Intakt\Plugin\Vendor\Contract\UsageNotRecorded;
 use NoDiscard;
 use Psr\Log\LoggerInterface;
+use Symfony\AI\Platform\Exception\ExceptionInterface;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\RawResultInterface;
 use Symfony\AI\Platform\Result\ResultInterface;
@@ -28,6 +29,7 @@ use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Uid\UuidV7;
+use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpClientExceptionInterface;
 use Throwable;
 
 final readonly class UsageLedger
@@ -81,6 +83,7 @@ final readonly class UsageLedger
     {
         try {
             $usages = $this->usagesOfRounds(...$rounds);
+            // Boundary: records the call as unsettled with the failure, because unreadable usage must not lose the call from the ledger.
         } catch (Throwable $unreadable) {
             $this->leaveUnreadableUnsettled($reservation, $unreadable);
 
@@ -109,6 +112,7 @@ final readonly class UsageLedger
     {
         try {
             return $this->usagesOfRounds(...$rounds);
+            // Boundary: logs the failure and goes on without usages, because the call already failed and its own failure must not be replaced.
         } catch (Throwable $unreadable) {
             $this->logger->warning('Token usage of the rounds before a failed call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
 
@@ -174,7 +178,7 @@ final readonly class UsageLedger
     {
         try {
             $converted = $result->getResult();
-        } catch (Throwable) {
+        } catch (ExceptionInterface | HttpClientExceptionInterface) {
             return null;
         }
 

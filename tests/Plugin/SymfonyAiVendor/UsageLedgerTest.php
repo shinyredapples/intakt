@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Generator;
+use LogicException;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
@@ -15,6 +16,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\AI\Platform\Exception\RuntimeException;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\InMemoryRawResult;
 use Symfony\AI\Platform\Result\ResultInterface;
@@ -64,6 +66,28 @@ final class UsageLedgerTest extends TestCase
         $this->settle($unstreamed, $this->roundAnswering($text));
 
         self::assertSame($streamed->payloads()[0]['usages'], $unstreamed->payloads()[0]['usages']);
+    }
+
+    public function testAProgrammingErrorWhileReadingAStreamedResultIsNotReadAsNoUsage(): void
+    {
+        $ledger = new InMemoryLedger();
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willThrowException(new LogicException('a bug'));
+
+        $this->settle($ledger, new DeferredResult($converter, new InMemoryRawResult()));
+
+        self::assertSame(['unsettled', LogicException::class], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure']]);
+    }
+
+    public function testALibraryFailureWhileReadingAStreamedResultFallsBackToTheRecordedUsage(): void
+    {
+        $ledger = new InMemoryLedger();
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willThrowException(new RuntimeException('cannot convert'));
+
+        $this->settle($ledger, new DeferredResult($converter, new InMemoryRawResult()));
+
+        self::assertSame('settled', $ledger->payloads()[0]['phase']);
     }
 
     private function settle(InMemoryLedger $ledger, DeferredResult $round): void
