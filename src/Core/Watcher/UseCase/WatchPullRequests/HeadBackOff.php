@@ -23,7 +23,6 @@ final readonly class HeadBackOff
     ) {
     }
 
-    // Boundary: catches every failure of one head's step, because any of them must back off only that head and let the tick go on to the next.
     /**
      * @template T
      *
@@ -39,6 +38,7 @@ final readonly class HeadBackOff
             $this->waitForTheReset($project, $head, $paused);
 
             return null;
+            // Boundary: backs off only this head on any failure of its step, because it must not end the tick for the heads after it.
         } catch (Throwable $failure) {
             $this->backOffAlone($project, $head, $failure);
 
@@ -51,9 +51,9 @@ final readonly class HeadBackOff
     {
         $this->logger->info('A head waits for the forge\'s rate-limit reset.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'resets_at' => $paused->resetsAt->format(DATE_ATOM)]);
 
-        // Boundary too, because a wait that cannot be stored is a failure of this head alone and must not end the tick for the heads after it.
         try {
             $this->pending->waitUntil($project, $head, $paused->resetsAt);
+            // Boundary: backs off this head when its wait cannot be stored, because that is a failure of this head alone and must not end the tick for the heads after it.
         } catch (Throwable $failure) {
             $this->backOffAfterAFailedWait($project, $head, $failure);
         }
@@ -64,6 +64,7 @@ final readonly class HeadBackOff
     {
         try {
             $this->backOffAlone($project, $head, $failure);
+            // Boundary: logs a back-off that cannot be stored and reopens the entity manager, so the head stays due and the next heads still run.
         } catch (Throwable $notBackedOff) {
             $this->logger->error('A head\'s back-off could not be stored; it stays due for the next tick.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $notBackedOff]);
             $this->reopenEntityManager();

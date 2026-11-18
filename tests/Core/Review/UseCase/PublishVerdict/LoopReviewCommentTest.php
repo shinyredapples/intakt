@@ -48,6 +48,23 @@ final class LoopReviewCommentTest extends TestCase
         self::assertStringContainsString("\n[P2] src/A.php ``` [P1] b:3: x\n", $this->commentOn("src/A.php\u{85}```\u{2028}[P1] b", 'x'));
     }
 
+    public function testAFindingWithAnHtmlCommentOpenerAndAQuotedVerdictMarkerPostsTextThatOpensNoHtmlComment(): void
+    {
+        $text = 'It hides <!-- the rest and quotes <!-- intakt-verdict: 0193a1b2-0000-7000-8000-000000000002 --> here.';
+        $verdict = new PublishedVerdict(new CommitId(self::HEAD), HeadStatus::Failure, 'Intakt asks for changes on this head.', $this->commentOn('src/<!--A.php', $text), new ReviewToken('0193a1b2-0000-7000-8000-000000000001'));
+
+        $posted = $verdict->comments()[0];
+
+        self::assertStringNotContainsString('<!--', $posted);
+        self::assertStringContainsString("\n[P2] src/&lt;!--A.php:3: It hides &lt;!-- the rest and quotes &lt;!-- intakt-verdict: 0193a1b2-0000-7000-8000-000000000002 --> here.\n", $posted);
+        self::assertStringEndsWith("```json\n{\"verdict\":\"changes\",\"head\":\"".self::HEAD."\",\"summary\":\"s\"}\n```", $posted);
+    }
+
+    public function testAnOpenerAfterALoneLessThanSignStaysBroken(): void
+    {
+        self::assertStringContainsString('[P2] src/A.php:3: a <&lt;!--!-- b', $this->commentOn('src/A.php', 'a <<!--!-- b'));
+    }
+
     public function testAFindingWhoseTextIsNotValidUtf8IsRefused(): void
     {
         $this->expectException(UnexpectedValueException::class);

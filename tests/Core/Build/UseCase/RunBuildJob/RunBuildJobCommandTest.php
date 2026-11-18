@@ -31,6 +31,7 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -53,6 +54,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(GatesAtOnce::class)]
 #[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(PromptCut::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(TierNotMapped::class)]
 #[UsesClass(PhpGate::class)]
@@ -176,7 +178,7 @@ final class RunBuildJobCommandTest extends TestCase
         $application = new Application();
         $application->addCommand(new RunBuildJobCommand(new RunBuildJob(
             $tiers ?? $this->tiers(),
-            new BuilderPrompt(new Fence()),
+            new BuilderPrompt(new Fence(), new PromptCut(new Fence())),
             $runner,
             new PhpGate(),
             new GatesAtOnce(12, 1),

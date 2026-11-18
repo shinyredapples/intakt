@@ -52,6 +52,29 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.task-actions .btn'] ?? '');
     }
 
+    // Needed because a one-line open finding measured 41.75 px at 390 wide in the UI check, under the 44 px floor of a touch target.
+    public function testOnAPhoneAnOpenFindingLinkOfTheNowBlockIsAtLeast44PxTall(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/^\s*min-height:\s*44px;\s*$/', $rules['.sb-finding'] ?? '');
+    }
+
+    // Needed because the browser scrolled a card followed from the Now block to the very top, under the sticky top bar.
+    public function testAFindingCardFollowedFromTheNowBlockStopsBelowTheTopBar(): void
+    {
+        $rules = $this->rulesOf($this->sheetOutside('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/scroll-margin-top:\s*calc\(var\(--top\) \+ var\(--s16\)\);/', $rules['.finding-card'] ?? '');
+    }
+
+    public function testOnAPhoneAFindingCardFollowedFromTheNowBlockStopsBelowTheTimelineAndLiveLogSwitch(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/^\s*scroll-margin-top:\s*calc\(var\(--top\) \+ 66px \+ var\(--s16\)\);\s*$/', $rules['.ttabs ~ .task-grid .finding-card'] ?? '');
+    }
+
     public function testTheStylesheetHidesTheStartOfARoundWhileARoundIsInReview(): void
     {
         $css = (string) file_get_contents(__DIR__.'/../../../../assets/styles/components.css');

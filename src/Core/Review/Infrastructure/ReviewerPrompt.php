@@ -7,6 +7,7 @@ namespace Intakt\Core\Review\Infrastructure;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
