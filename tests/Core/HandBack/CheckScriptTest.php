@@ -177,6 +177,39 @@ final class CheckScriptTest extends TestCase
         self::assertFileDoesNotExist($this->work.'/clone/ran');
     }
 
+    public function testARefusedMergeOfABranchNamedLikeGitsMergeStateFileLeavesNotMerged(): void
+    {
+        $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        // A branch of this name answers a revision lookup of MERGE_HEAD although no merge is in progress.
+        $this->history->startBranch('MERGE_HEAD', 'task');
+        $bundle = $this->history->bundle('main..MERGE_HEAD');
+        $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        $this->gitConfiguration = ['merge.verifySignatures' => 'true'];
+
+        $run = $this->whenTheCheckRuns($bundle, 'MERGE_HEAD', 'touch ran');
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("not-merged\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+        self::assertStringContainsString('does not have a GPG signature', $this->outputFile('check.log'));
+        self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
+    public function testTheMergeWithCurrentMainRunsNoHookSoARefusingMergeHookDoesNotStopACleanMerge(): void
+    {
+        $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        $hooks = $this->history->folder.'/hooks';
+        new Filesystem()->dumpFile($hooks.'/pre-merge-commit', "#!/bin/sh\necho 'merge hook refused' >&2\nexit 1\n");
+        new Filesystem()->chmod($hooks.'/pre-merge-commit', 0o700);
+        $this->gitConfiguration = ['core.hooksPath' => $hooks];
+
+        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'test -f made.txt', 'test -f added-on-main.txt');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+        self::assertStringNotContainsString('merge hook refused', $this->outputFile('check.log'));
+    }
+
     public function testTheMergeWithCurrentMainTakesTheChecksOwnIdentityAndNoneFromTheJob(): void
     {
         $this->history->commit('Build work');

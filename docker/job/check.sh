@@ -35,7 +35,8 @@ merge_main() {
     # Main as the first parent, as CI merges, because a merge driver such as union orders the two sides by it.
     git reset --quiet --hard "$main" || return 1
     # The check's own identity, because the job's clone and HOME carry none, and a conventional subject, because the commit-subject gate reads this commit too.
-    git -c user.name=intakt-check -c user.email=check@intakt.invalid merge --no-ff --no-edit -m 'chore(check): merge the branch into current main' "$head"
+    # No hook, as CI's merge runs none: a hook of the image that refuses would stop a merge whose trees merged cleanly.
+    git -c core.hooksPath=/dev/null -c user.name=intakt-check -c user.email=check@intakt.invalid merge --no-ff --no-edit -m 'chore(check): merge the branch into current main' "$head"
 }
 
 result() {
@@ -50,8 +51,8 @@ fi
 cd "$clone" || exit 1
 
 if ! merge_main >> "$log" 2>&1; then
-    # A merge git stopped to have it resolved is a conflict, and MERGE_HEAD tells it, because some conflicts (a directory renamed to two places) leave no unmerged path; any other refusal of the merge is not the branch's to resolve.
-    if git rev-parse --verify --quiet MERGE_HEAD > /dev/null 2>> "$log"; then
+    # A merge git stopped to have it resolved is a conflict, and its MERGE_HEAD state file tells it, because some conflicts (a directory renamed to two places) leave no unmerged path; any other refusal of the merge is not the branch's to resolve. The file and not the revision name, because a task branch named MERGE_HEAD answers the name without a merge in progress.
+    if [ -f "$(git rev-parse --git-path MERGE_HEAD)" ]; then
         result 'conflicts-with-main'
     else
         result 'not-merged'
