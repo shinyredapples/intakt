@@ -760,7 +760,7 @@ Intakt posts the outcome of a review round as one review comment on the pull req
 
 ## Releases
 
-Releases normally come from the [release train](../releasing.md#the-release-train): twice a day it cuts a release from a green `main`, but only when a `feat` or `fix` commit landed since the previous tag. The owner cuts milestone versions by hand. Every release is a signed tag and a GitHub release marked pre-release before `v1.0.0`. `v0.1.0` has hand-written notes; every later release uses generated notes. A pull request is labeled `feat`, `fix` or `docs` from the type in its title, so the notes list it under Features, Fixes or Docs; anything else lands under "Other changes". No CHANGELOG file is kept. See [Releasing](../releasing.md).
+Releases normally come from the [release train](../releasing.md#the-release-train): twice a day it cuts a release from a green `main`, but only when a `feat` or `fix` commit landed since the previous tag. The owner cuts milestone versions by hand. Every release is a signed tag and a GitHub release marked pre-release before `v1.0.0`. `v0.1.0` has hand-written notes; every later release uses generated notes. A pull request is labeled `feat`, `fix` or `docs` from the type in its title when it is opened, reopened or gets a new push, so the notes list it under Features, Fixes or Docs; anything else lands under "Other changes". Editing only the title does not change the label: the label follows the new title after the next push, so a pull request merged right after a title-only edit keeps its old label and is listed under it in the notes. No CHANGELOG file is kept. See [Releasing](../releasing.md).
 
 ## The weekly report: the loop's reviews and Intakt's
 
