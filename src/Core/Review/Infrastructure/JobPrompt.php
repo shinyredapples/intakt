@@ -38,6 +38,6 @@ final readonly class JobPrompt
     {
         $format = $this->formats->create(Verdict::class);
 
-        return sprintf(self::ANSWER_FORM, json_encode($format['json_schema']['schema'],JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        return sprintf(self::ANSWER_FORM, json_encode($format['json_schema']['schema'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 }
