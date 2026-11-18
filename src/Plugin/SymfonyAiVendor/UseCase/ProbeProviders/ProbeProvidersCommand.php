@@ -10,7 +10,7 @@ use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
-use Symfony\AI\Platform\Message\Message;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\TokenUsage\TokenUsageInterface;
@@ -29,6 +29,7 @@ final readonly class ProbeProvidersCommand
         private TierResolver $resolver,
         private TierInvoker $tiers,
         private NormalizerInterface $normalizer,
+        private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }
 
@@ -88,7 +89,7 @@ final readonly class ProbeProvidersCommand
         [$project, $tier] = $target;
 
         try {
-            $result = $this->tiers->invoke($this->resolver->resolve($project, $tier), new TierRequest(new MessageBag(Message::ofUser(self::PROMPT))));
+            $result = $this->tiers->invoke($this->resolver->resolve($project, $tier), new TierRequest(new MessageBag($this->assembly->notice(self::PROMPT))));
             $result->asText();
             $io->writeln(sprintf('%s: %s', $provider, $this->usageLine($result)));
             // Boundary: reports the failure class and fails this provider only, because the probe must go on to the next provider.

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Dashboard\Domain;
+namespace Intakt\Core\Watcher\Contract;
 
 final readonly class FailingMain
 {

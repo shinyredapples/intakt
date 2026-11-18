@@ -16,6 +16,7 @@ final readonly class LeftUndoneGate implements Gate
         private AddedLines $addedLines = new AddedLines(),
         private LeftUndoneComments $comments = new LeftUndoneComments(),
         private LeftUndoneCode $code = new LeftUndoneCode(),
+        private CommentLanguages $languages = new CommentLanguages(),
     ) {
     }
 
@@ -52,31 +53,46 @@ final readonly class LeftUndoneGate implements Gate
     {
         $findings = [];
 
-        foreach ($this->scannedLinesSince($workspace, $mergeBase) as [$path, $addedLines]) {
-            $source = $this->sourceOf($workspace, $path);
-
-            if (null === $source) {
-                $findings[] = $path.' cannot be read';
-
-                continue;
-            }
-
-            $lines = $addedLines ?? $this->everyLineOf($source);
-
-            foreach ($this->comments->markersOn($source, $lines) as $line => $marker) {
-                $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
-            }
-
-            foreach ($this->code->findingsOn($path, $source, $lines) as $line => $finding) {
-                $findings[] = $path.':'.$line.': '.$finding;
-            }
+        foreach ($this->scannedLinesSince($workspace, $mergeBase) as $file) {
+            array_push($findings, ...$this->findingsIn($workspace, $file));
         }
 
         return $findings;
     }
 
     /**
-     * @return list<array{string, ?list<int>}>
+     * @param array{string, ?list<int>, CommentLanguage} $file
+     *
+     * @return list<string>
+     */
+    private function findingsIn(Workspace $workspace, array $file): array
+    {
+        [$path, $addedLines, $language] = $file;
+        $source = $this->sourceOf($workspace, $path);
+
+        if (null === $source) {
+            return [$path.' cannot be read'];
+        }
+
+        $lines = $addedLines ?? $this->everyLineOf($source);
+        $findings = [];
+
+        foreach ($this->comments->markersOn($source, $lines, $language) as $line => $marker) {
+            $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
+        }
+
+        // Because skips and not-implemented throws are PHP code, a template holds none.
+        $code = $language instanceof PhpComments ? $this->code->findingsOn($path, $source, $lines) : [];
+
+        foreach ($code as $line => $finding) {
+            $findings[] = $path.':'.$line.': '.$finding;
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @return list<array{string, ?list<int>, CommentLanguage}>
      */
     private function scannedLinesSince(Workspace $workspace, string $mergeBase): array
     {
@@ -84,16 +100,22 @@ final readonly class LeftUndoneGate implements Gate
         $patch = $this->gitOutput($workspace, ['diff', '--unified=0', ...self::DIFF_OPTIONS, $mergeBase]);
         // Because a file git does not track yet has no lines on the base, every line of it is added.
         $untracked = array_map(static fn (string $path): array => [$path, null], $workspace->untrackedPaths());
+        $scanned = [];
 
-        return array_values(array_filter(
-            [...$this->addedLines->byPath($paths, $patch), ...$untracked],
-            fn (array $file): bool => $this->isScanned($workspace, $file[0]),
-        ));
+        foreach ([...$this->addedLines->byPath($paths, $patch), ...$untracked] as [$path, $addedLines]) {
+            $language = $this->isFixture($path) ? null : $this->languages->languageOf($workspace, $path);
+
+            if ($language instanceof CommentLanguage) {
+                $scanned[] = [$path, $addedLines, $language];
+            }
+        }
+
+        return $scanned;
     }
 
-    private function isScanned(Workspace $workspace, string $path): bool
+    private function isFixture(string $path): bool
     {
-        return $workspace->isPhpFileInScope($path) && !array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
+        return array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
     }
 
     private function sourceOf(Workspace $workspace, string $path): ?string

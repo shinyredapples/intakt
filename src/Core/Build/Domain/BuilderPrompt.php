@@ -9,7 +9,9 @@ use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
+use Intakt\Core\Review\Contract\PromptPart;
 use Intakt\Core\Review\Contract\UntrustedSource;
 
 // Every value of the brief must reach the text only through the fence: docs/design/05-architecture/14-threat-model.md#builder
@@ -30,21 +32,22 @@ final readonly class BuilderPrompt
     public function __construct(
         private Fence $fence,
         private PromptCut $cut,
+        private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }
 
     public function textFor(BuildBrief $brief): string
     {
-        return implode("\n\n", [
-            self::INSTRUCTIONS,
-            "The task:\n\n".$this->cut->fenced(UntrustedSource::Task, $brief->task)->rendered(),
+        return $this->assembly->document(
+            new PromptPart(self::INSTRUCTIONS),
+            new PromptPart('The task:', $this->cut->fenced(UntrustedSource::Task, $brief->task)),
             ...$this->decisionsOf($brief),
             ...$this->closingOf($brief->rework),
-        ]);
+        );
     }
 
     /**
-     * @return list<string>
+     * @return list<PromptPart>
      */
     private function decisionsOf(BuildBrief $brief): array
     {
@@ -58,28 +61,28 @@ final readonly class BuilderPrompt
             $brief->decisions,
         );
 
-        return ["The maintainer's decisions on this task; apply each one:\n\n".$this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered))->rendered()];
+        return [new PromptPart("The maintainer's decisions on this task; apply each one:", $this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered)))];
     }
 
     /**
-     * @return list<string>
+     * @return list<PromptPart>
      */
     private function closingOf(?Rework $rework): array
     {
         if (!$rework instanceof Rework) {
-            return [self::FIRST_BUILD];
+            return [new PromptPart(self::FIRST_BUILD)];
         }
 
         return [
-            self::REWORK,
+            new PromptPart(self::REWORK),
             ...$this->actListOf($rework),
             ...$this->ciLogOf($rework),
-            "The published pull request text to edit:\n\n".$this->cut->fenced(UntrustedSource::PullRequestText, $rework->publishedText)->rendered(),
+            new PromptPart('The published pull request text to edit:', $this->cut->fenced(UntrustedSource::PullRequestText, $rework->publishedText)),
         ];
     }
 
     /**
-     * @return list<string>
+     * @return list<PromptPart>
      */
     private function actListOf(Rework $rework): array
     {
@@ -89,7 +92,7 @@ final readonly class BuilderPrompt
 
         $entries = array_map($this->actEntryOf(...), $rework->actList);
 
-        return ["The findings to act on:\n\n".$this->fence->wrap(UntrustedSource::ActList, implode("\n\n", $entries))->rendered()];
+        return [new PromptPart('The findings to act on:', $this->fence->wrap(UntrustedSource::ActList, implode("\n\n", $entries)))];
     }
 
     private function actEntryOf(Finding $finding): string
@@ -102,7 +105,7 @@ final readonly class BuilderPrompt
     }
 
     /**
-     * @return list<string>
+     * @return list<PromptPart>
      */
     private function ciLogOf(Rework $rework): array
     {
@@ -110,6 +113,6 @@ final readonly class BuilderPrompt
             return [];
         }
 
-        return ["The excerpt of the failed CI log:\n\n".$this->cut->fenced(UntrustedSource::CiLog, $rework->ciExcerpt)->rendered()];
+        return [new PromptPart('The excerpt of the failed CI log:', $this->cut->fenced(UntrustedSource::CiLog, $rework->ciExcerpt))];
     }
 }
