@@ -17,7 +17,7 @@ enum GlossaryTerm: string
     public function explanation(): string
     {
         return match ($this) {
-            self::Version => 'The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval.',
+            self::Version => 'The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval, unless it leaves what you approved exactly as it was (for a limit like secrets: the same files, unchanged).',
             self::PushOnHold => 'Intakt stopped this push before checks ran, because it changes something only you can allow, such as CI files or protected files.',
             self::WeeklyShare => "This project's part of the week's AI budget. Intakt paces work so spend follows it.",
             self::Round => 'One build, its checks and its review. Sending work back starts the next round.',
