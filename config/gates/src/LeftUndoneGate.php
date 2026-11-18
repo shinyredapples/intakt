@@ -81,7 +81,7 @@ final readonly class LeftUndoneGate implements Gate
             $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
         }
 
-        // Because skips and not-implemented throws are PHP code, a template holds none.
+        // Because skips and not-implemented throws are PHP code, a template or a script holds none.
         $code = $language instanceof PhpComments ? $this->code->findingsOn($path, $source, $lines) : [];
 
         foreach ($code as $line => $finding) {

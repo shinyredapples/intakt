@@ -9,6 +9,7 @@ final readonly class CommentLanguages
     public function __construct(
         private PhpComments $php = new PhpComments(),
         private TwigComments $twig = new TwigComments(),
+        private JavaScriptComments $javaScript = new JavaScriptComments(),
     ) {
     }
 
@@ -18,11 +19,14 @@ final readonly class CommentLanguages
             return $this->php;
         }
 
-        return $this->isTwigTemplateInScope($path) ? $this->twig : null;
-    }
+        if (array_any(Scope::EXCLUDED_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix))) {
+            return null;
+        }
 
-    private function isTwigTemplateInScope(string $path): bool
-    {
-        return str_ends_with($path, '.twig') && !array_any(Scope::EXCLUDED_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
+        return match (true) {
+            str_ends_with($path, '.twig') => $this->twig,
+            str_ends_with($path, '.js'), str_ends_with($path, '.mjs'), str_ends_with($path, '.cjs') => $this->javaScript,
+            default => null,
+        };
     }
 }
