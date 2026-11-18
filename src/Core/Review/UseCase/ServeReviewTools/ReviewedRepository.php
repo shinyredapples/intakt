@@ -8,6 +8,7 @@ use Closure;
 use DomainException;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -35,6 +36,7 @@ final readonly class ReviewedRepository
         private Fence $fence,
         private RoundToolCalls $calls,
         private RoundUpdates $updates,
+        private PromptAssembly $assembly,
         private ?Closure $fileSearched = null,
     ) {
     }
@@ -128,7 +130,7 @@ final readonly class ReviewedRepository
      */
     private function answer(ReviewRound $round, string $tool, Closure $read): string
     {
-        return $this->refusedAsCall($round, $tool, fn (): string => $this->fence->wrap(UntrustedSource::ToolResult, $read()));
+        return $this->refusedAsCall($round, $tool, fn (): string => $this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $read())));
     }
 
     // A refusal is still recorded as a call, because the reviewer made it.
@@ -142,7 +144,7 @@ final readonly class ReviewedRepository
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
             $this->recordedCall($round, $tool);
 
-            throw new ToolCallException($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage()), $refused->getCode(), previous: $refused);
+            throw new ToolCallException($this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage())),$refused->getCode(), previous: $refused);
         }
     }
 }

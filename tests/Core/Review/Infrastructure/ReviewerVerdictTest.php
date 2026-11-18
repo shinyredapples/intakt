@@ -669,7 +669,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $messages = $this->conversations->load($this->conversation)->getMessages();
         self::assertInstanceOf(UserMessage::class, $messages[2]);
-        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff), $messages[2]->asText());
+        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff)->rendered(), $messages[2]->asText());
     }
 
     public function testAnEndMarkerInsideTheDiffCannotCloseItsFence(): void

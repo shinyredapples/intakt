@@ -168,7 +168,7 @@ final class ReviewerMemoryTest extends TestCase
             $query->maxBytes,
         ));
 
-        $briefing = (string) new ReviewerMemory($memory, new Fence(), new DiffPaths())->briefingOn($this->brief(self::DIFF));
+        $briefing = (string) new ReviewerMemory($memory, new Fence(), new DiffPaths())->briefingOn($this->brief(self::DIFF))?->asText();
 
         self::assertLessThanOrEqual(4_000, strlen($briefing));
         self::assertStringNotContainsString('[note shortened]', $briefing);
@@ -260,7 +260,7 @@ final class ReviewerMemoryTest extends TestCase
 
     private function briefing(string $diff): string
     {
-        return (string) $this->memory->briefingOn($this->brief($diff));
+        return (string) $this->memory->briefingOn($this->brief($diff))?->asText();
     }
 
     private function messages(ReviewerPrompt $prompt): MessageBag

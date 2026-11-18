@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\PromptCut;
@@ -21,7 +22,7 @@ final class FencedToolboxTest extends TestCase
 {
     public function testAnAnswerTheReviewServerFencedJustUnderTheCeilingIsNotCut(): void
     {
-        $toolbox = $this->answering(new Fence()->wrap(UntrustedSource::ToolResult, str_repeat('a', 99_990)));
+        $toolbox = $this->answering(new Fence()->wrap(UntrustedSource::ToolResult, str_repeat('a', 99_990))->rendered());
 
         $toolbox->execute(new ToolCall('1', 'read_file'));
 
@@ -32,14 +33,14 @@ final class FencedToolboxTest extends TestCase
     {
         $text = "final class Cart {}\n";
 
-        $result = $this->answering(new Fence()->wrap(UntrustedSource::ToolResult, $text))->execute(new ToolCall('1', 'read_file'));
+        $result = $this->answering(new Fence()->wrap(UntrustedSource::ToolResult, $text)->rendered())->execute(new ToolCall('1', 'read_file'));
 
-        self::assertSame(new Fence()->wrap(UntrustedSource::ToolResult, $text), $result->getResult());
+        self::assertSame(new Fence()->wrap(UntrustedSource::ToolResult, $text)->rendered(), $result->getResult());
     }
 
     public function testAnAnswerTheReviewServerFencedOverTheCeilingIsCutInsideOneFenceThatStillCloses(): void
     {
-        $toolbox = $this->answering(new Fence()->wrap(UntrustedSource::ToolResult, str_repeat('a', PromptCut::CEILING_BYTES + 1)));
+        $toolbox = $this->answering(new Fence()->wrap(UntrustedSource::ToolResult, str_repeat('a', PromptCut::CEILING_BYTES + 1))->rendered());
 
         $result = $toolbox->execute(new ToolCall('1', 'read_file'))->getResult();
 
@@ -66,6 +67,6 @@ final class FencedToolboxTest extends TestCase
         $inner = self::createStub(ToolboxInterface::class);
         $inner->method('execute')->willReturnCallback(static fn (ToolCall $call): ToolResult => new ToolResult($call, $answer));
 
-        return new FencedToolbox($inner, new PromptCut(new Fence()), new Fence());
+        return new FencedToolbox($inner, new PromptCut(new Fence()), new Fence(), new PromptAssembly());
     }
 }
