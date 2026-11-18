@@ -35,16 +35,15 @@ Treat the backup like a password manager's file: it holds keys. Store it encrypt
 
 ## Upgrading
 
-A new version of Intakt may change how its database is laid out. It does that by itself when it starts, and it only goes forward: an older version cannot read data a newer one has changed. So keep a copy from before the update.
+A new version of Intakt may change how its database is laid out. It does that by itself when it starts, and it only adds: the version you ran before can still read and write the data. There are three cases, and they are not the same ([updates](the-engine-room.md#draining-and-updates)).
 
-1. Pause Intakt and wait until nothing is running.
-2. Stop the container (`docker stop intakt`) and copy the data volume, as in [Backing up](#backing-up).
-3. Update to the new version and start it on the volume. It updates the data on its first start.
-4. Keep the copy until the new version has run a normal day.
+- **An ordinary update** needs nothing from you: no pause, no waiting, no copy. Intakt restarts once on the new version, running jobs finish on the version they started with, and new jobs use the new one. If the update fails, Intakt goes back to the previous version by itself, on the same data, and keeps everything recorded since the update (a job that finished, a merge). Do not restore a copy to undo an update: the copy lacks what happened after it was made.
+- **An update that needs a drain** is the rare one whose release notes say so. Intakt lets nothing new start, waits for the running jobs and then installs it; the dashboard says why. It also needs no copy, and it rolls back the same way.
+- **A backup is for a broken volume**, not for an update: a lost disk, a damaged database, a volume deleted by mistake. Take one regularly, as in [Backing up](#backing-up); taking one before an update is a sensible habit, not a step of it. Restoring a copy loses what was recorded after it, so restore one only when the data itself is gone or damaged, and then start the version that wrote the copy or a newer one on it.
 
-**If something is wrong:** stop the new version and go back to the previous version on the copy you made in step 2. Never start the previous version on the data the new version has already updated.
+An install that is several versions behind does not jump to the newest one: Intakt installs the versions in between first, one at a time, because a version is only tested to go back to the versions it may be installed from directly.
 
-Intakt's own changes are checked this way: the version before it writes data, the new version starts on a copy of that data and must read the same, and the version before it starts again on the untouched original. A change to the database migrations, a stored class, the image or the locked dependencies is checked before it is merged; every change is checked again on the main branch right after it is merged.
+Intakt's own changes are checked this way today; the test of the older version on the updated data, which the automatic rollback relies on, arrives with the updater: the version before it writes data, the new version starts on a copy of that data and must read the same, and the version before it starts again on the untouched original. A change to the database migrations, a stored class, the image or the locked dependencies is checked before it is merged; every change is checked again on the main branch right after it is merged.
 
 ## Moving to another machine
 
