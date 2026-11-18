@@ -315,6 +315,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         self::assertSame([LedgerEventKind::RoundQueued], $this->ledger->kinds());
         self::assertSame(['2'], array_column($this->ledger->payloads(), 'change'));
         self::assertSame(0, new PendingHeads($this->entities, $this->clock)->failuresOf('alpha', RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z')));
+        self::assertContainsEquals(RecordedForge::change('1', self::PENDING, '2026-11-02T09:00:00Z'), new PendingHeads($this->entities, $this->clock)->dueFor('alpha'));
         self::assertIsArray(array_find($this->logger->logged, static fn (array $line): bool => 'A head\'s back-off could not be stored; it stays due for the next tick.' === $line[0]));
     }
 
