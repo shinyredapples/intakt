@@ -50,25 +50,6 @@ final class HeldCredentialRedactorTest extends TestCase
         self::assertSame('commit a not fetched', $this->redactor()->redact('commit a not fetched'));
     }
 
-    public function testAHeldAppSecretWithATrailingNewlineIsRedactedWhereItIsQuotedWithoutIt(): void
-    {
-        $previous = $_SERVER['APP_SECRET'] ?? null;
-        $_SERVER['APP_SECRET'] = "probe-app-secret-value\n";
-
-        try {
-            $redacted = new HeldCredentialRedactor(new Redaction(), new HeldCredentials(['APP_SECRET']))
-                ->redact('the judge saw probe-app-secret-value in the diff');
-        } finally {
-            if (null === $previous) {
-                unset($_SERVER['APP_SECRET']);
-            } else {
-                $_SERVER['APP_SECRET'] = $previous;
-            }
-        }
-
-        self::assertSame('the judge saw [redacted] in the diff', $redacted);
-    }
-
     private function redactor(): HeldCredentialRedactor
     {
         return new HeldCredentialRedactor(new Redaction(), new HeldCredentials([self::NAME]));

@@ -59,6 +59,55 @@ final class RedactionTest extends TestCase
         self::assertSame('ab', new Redaction()->redact('ab', "\n"));
     }
 
+    public function testItStillRedactsTheCookieValueWhenAHeldCredentialSpellsTheHeaderName(): void
+    {
+        $redacted = new Redaction()->redact('Cookie: session=example-value', "Cookie\n");
+
+        self::assertSame('[redacted]: [redacted]', $redacted);
+    }
+
+    public function testItStillRedactsTheUserinfoOfAUrlWhenAHeldCredentialSpellsItsScheme(): void
+    {
+        $redacted = new Redaction()->redact('https://sample-user:example-value@host.invalid', "https\n");
+
+        self::assertSame('[redacted]://[redacted]@host.invalid', $redacted);
+    }
+
+    public function testItStillRedactsABearerTokenWhenAHeldCredentialSpellsItsScheme(): void
+    {
+        $redacted = new Redaction()->redact('sent Bearer abcdefgh12345678 once', "Bearer\n");
+
+        self::assertSame('sent [redacted] once', $redacted);
+    }
+
+    public function testItRedactsTwoOverlappingHeldCredentialsAsOneMarker(): void
+    {
+        $redacted = new Redaction()->redact('quoted cedar-amber-key here', "cedar-amber\n", 'amber-key');
+
+        self::assertSame('quoted [redacted] here', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialThatSpellsTheMarkerAsOneMarker(): void
+    {
+        $redacted = new Redaction()->redact("before redacted\n after", "redacted\n");
+
+        self::assertSame('before [redacted] after', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialThatRunsPastTheEndOfAHeaderValue(): void
+    {
+        $redacted = new Redaction()->redact("Authorization: held-start\nheld-end and more", "held-start\nheld-end");
+
+        self::assertSame('Authorization: [redacted] and more', $redacted);
+    }
+
+    public function testItKeepsTwoHeldCredentialsThatOnlyTouchAsTwoMarkers(): void
+    {
+        $redacted = new Redaction()->redact('key-onekey-two', 'key-one', 'key-two');
+
+        self::assertSame('[redacted][redacted]', $redacted);
+    }
+
     public function testItRedactsAHeldCredentialEncodedTwice(): void
     {
         $credential = 'pa"ss/wo\\rd';
