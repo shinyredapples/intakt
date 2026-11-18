@@ -68,6 +68,13 @@ final class ReviewOutcomeTest extends TestCase
         self::assertSame(ReviewOutcome::Blocked, ReviewOutcome::of($ended));
     }
 
+    public function testARoundEndedAsJudgedShowsItsQuorumOutcomeNotBlocked(): void
+    {
+        $ended = $this->judged()->decidedAs(Decision::Approve)->endedAs(new RoundEnding(RoundEnds::Judged, 'Judged.'));
+
+        self::assertSame(ReviewOutcome::Approved, ReviewOutcome::of($ended));
+    }
+
     public function testARoundWhoseReviewersAllFailedHasFailedRatherThanBlocked(): void
     {
         $round = $this->judged()->withOutcomes([$this->reviewer('a')->failed('timeout'), $this->reviewer('b')->failed('timeout')])->decidedAs(Decision::Blocked);

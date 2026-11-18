@@ -30,17 +30,17 @@ final class ReviewRowTest extends TestCase
 
     public function testARowIsTitledByItsChangeAndRoundNumber(): void
     {
-        self::assertSame('sample-change, round 2', $this->row(new RoundPlace('sample-change', 2), self::STARTED)->title());
+        self::assertSame('sample-change, round 2', $this->row(new RoundPlace('sample-change', 2), self::STARTED)->review->title());
     }
 
     public function testARoundStartedBeforeTheLedgerNamedItsChangeIsTitledAsAnUnnamedChange(): void
     {
-        self::assertSame('Unnamed change, round 2', $this->row(new RoundPlace('', 2), self::STARTED)->title());
+        self::assertSame('Unnamed change, round 2', $this->row(new RoundPlace('', 2), self::STARTED)->review->title());
     }
 
     public function testARoundWithoutARecordedNumberSaysSoInItsTitle(): void
     {
-        self::assertSame('sample-change, round not numbered', $this->row(new RoundPlace('sample-change', null), self::STARTED)->title());
+        self::assertSame('sample-change, round not numbered', $this->row(new RoundPlace('sample-change', null), self::STARTED)->review->title());
     }
 
     /**

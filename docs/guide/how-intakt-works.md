@@ -102,7 +102,7 @@ flowchart TD
 | changes how Intakt approves (the list of protected files, the limits, the checks that apply them, the Security engineer's instructions, the known bad changes), or touches secrets and permissions (how secrets are kept or scanned, a workflow that reads a secret, more workflow permissions, new triggers, other machines) | always you |
 | fails a check, or the security review or penetration test finds a way around it | you |
 
-You never approve something whose checks are failing: Intakt asks you only once the checks are green and the review panel has approved.
+You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the review panel has approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
 ## When something gets stuck
 
