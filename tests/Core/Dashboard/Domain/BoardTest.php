@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\Headline;
 use Intakt\Core\Dashboard\Domain\Lane;
+use Intakt\Core\Dashboard\Domain\MascotPose;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
@@ -162,6 +163,31 @@ final class BoardTest extends TestCase
     public function testABoardWithOneReviewIsNoLongerTheFirstDay(): void
     {
         self::assertFalse(new Board([new Review([$this->round('r1', 'feat/a', 1)])])->isFirstDay());
+    }
+
+    public function testAFirstDayBoardShowsTheWaitingOctopus(): void
+    {
+        self::assertSame(MascotPose::Waiting, new Board([])->mascot());
+    }
+
+    public function testABoardWhoseReviewsAreAllDoneWithNobodyWorkingShowsTheAsleepOctopus(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertSame(MascotPose::Asleep, $board->mascot());
+    }
+
+    public function testABoardWithAReviewerAtWorkShowsNoOctopus(): void
+    {
+        $running = $this->round('r2', 'feat/b', 1)->withOutcomes([new ReviewerOutcome('r2-a', 'correctness', 'standard', $this->morning())]);
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())]), new Review([$running])]);
+
+        self::assertNull($board->mascot());
+    }
+
+    public function testABoardWithACardInReviewBeforeItsReviewersStartShowsNoOctopus(): void
+    {
+        self::assertNull(new Board([new Review([$this->round('r1', 'feat/a', 1)])])->mascot());
     }
 
     public function testBacklogStillStartsCollapsedWhenEveryOtherColumnIsEmpty(): void

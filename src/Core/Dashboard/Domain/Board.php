@@ -52,6 +52,16 @@ final readonly class Board
         return [] === $this->cards;
     }
 
+    // One home for the choice, because the page and the pushed board both show it. Idle is read board-wide, since no column holds a project's ready tasks yet: nobody works and every card is Done (#2658).
+    public function mascot(): ?MascotPose
+    {
+        return match (true) {
+            $this->isFirstDay() => MascotPose::Waiting,
+            0 === $this->whoIsWorking()->working() && $this->everyColumnButDoneIsEmpty() => MascotPose::Asleep,
+            default => null,
+        };
+    }
+
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.
     public function startsCollapsed(BoardColumn $column): bool
     {

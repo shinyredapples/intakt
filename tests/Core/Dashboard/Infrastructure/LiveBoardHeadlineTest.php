@@ -55,6 +55,17 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.head-character'));
     }
 
+    public function testTheBoardPublishedOnceEveryReviewIsDoneCarriesTheAsleepOctopus(): void
+    {
+        $live = new PublishedLiveEvents();
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, 1);
+
+        $this->headlineOn($ledger, $live)->publishTheBoard();
+
+        self::assertCount(2, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.head-character img[src*="octopus-asleep-"]'));
+    }
+
     public function testAPushedDoneColumnCarriesAtMostThePageLimitOfCards(): void
     {
         $done = $this->pushedDoneColumnOf(Board::PAGE_LIMIT + 3);

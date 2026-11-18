@@ -94,12 +94,25 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('0', $this->browser->request('GET', '/')->filter('.board')->attr('tabindex'));
     }
 
-    public function testABoardAfterAReviewShowsNoOctopus(): void
+    public function testABoardWhileAReviewRunsShowsNoOctopus(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        self::assertSame(0, $this->browser->request('GET', '/')->filter('img[src*="octopus-"]')->count());
+    }
+
+    public function testAnIdleBoardWithEveryReviewDoneShowsTheAsleepOctopusInBothThemesAsDecoration(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
-        self::assertSame(0, $this->browser->request('GET', '/')->filter('img[src*="octopus-"]')->count());
+        $images = $this->browser->request('GET', '/')->filter('img[src*="octopus-"]');
+
+        self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
+        self::assertSame(['144', '144'], $images->each(static fn (Crawler $image): ?string => $image->attr('height')));
+        self::assertSame(1, preg_match('~octopus-asleep-light[^"]*\.webp$~', $images->eq(0)->attr('src') ?? ''));
+        self::assertSame(1, preg_match('~octopus-asleep-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
     }
 
     public function testADemoInstallWithoutAReviewOpensOnTheFirstRunPage(): void
@@ -245,17 +258,17 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame([], $this->cardNumbersIn($page, 'Done'));
     }
 
-    public function testEveryFlowColumnWithoutACardSaysNothingHere(): void
+    public function testEveryFlowColumnWithoutACardAfterTheFirstReviewSaysWhatLandsThereInsteadOfNothingHere(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
         $page = $this->browser->request('GET', '/');
 
+        $empty = [BoardColumn::Backlog, BoardColumn::Ready, BoardColumn::Planned, BoardColumn::Building, BoardColumn::Checking, BoardColumn::Merging, BoardColumn::Done];
         self::assertSame(
-            ['Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'Merging', 'Done'],
-            $page->filter('.board > section.col:not(.col-needs)')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text()),
+            array_map(static fn (BoardColumn $column): string => $column->emptyLine(), $empty),
+            $page->filter('.board > section.col:not(.col-needs) .col-empty')->each(static fn (Crawler $line): string => $line->text()),
         );
-        self::assertSame(['Nothing here'], array_values(array_unique($page->filter('.col:not(.col-needs) .col-empty')->each(static fn (Crawler $empty): string => $empty->text()))));
     }
 
     public function testAnEmptyWaitingOnYouColumnSaysNothingNeedsYou(): void
@@ -619,14 +632,14 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('2 working', $summary->text());
     }
 
-    public function testABoardWithNobodyRunningSaysNobodyIsWorkingInAPlainLineAboveTheColumns(): void
+    public function testABoardWithNobodyRunningSaysInAPlainLineAboveTheColumnsThatReviewersAppearWhileTheyReview(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
         $page = $this->browser->request('GET', '/');
 
-        self::assertSame('Nobody is working', $page->filter('p.working-none')->text());
+        self::assertSame('Nobody is working: reviewers appear here while they review a change', $page->filter('p.working-none')->text());
         self::assertCount(0, $page->filter('details.working, .working summary, .working .chev'));
         self::assertCount(1, $page->filter('p.working-none + section .board-wrap > .board'));
     }
@@ -672,7 +685,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(
-            array_map(static fn (BoardColumn $column): string => $column->firstDayLine(), BoardColumn::cases()),
+            array_map(static fn (BoardColumn $column): string => $column->emptyLine(), BoardColumn::cases()),
             $page->filter('.board > section.col .col-empty')->each(static fn (Crawler $empty): string => $empty->text()),
         );
     }
