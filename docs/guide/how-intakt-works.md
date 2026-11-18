@@ -136,8 +136,10 @@ AI agents cost money, usually as a subscription with a weekly allowance. Intakt 
 
 ```mermaid
 flowchart LR
-  pace{Ahead of pace or behind?} -- "behind: room would go unused" --> strong["First attempts on a stronger model<br/>(planned)"]
-  strong --> extra{"Room for an extra builder too,<br/>and the reviewers' company<br/>keeps enough of its week?"}
+  pace{Ahead of pace or behind?} -- "behind: room would go unused" --> left{"More than one build's worth<br/>left over at the refill?"}
+  left -- no --> same
+  left -- yes --> strong["First attempts on a stronger model<br/>(planned)"]
+  strong --> extra{"Room for an extra builder too,<br/>and the reviewers' companies<br/>keep enough of their week?"}
   extra -- yes --> more["One more builder<br/>(planned)"]
   extra -- no --> same[The usual builders]
   pace -- ahead: spending fast --> less[One builder,<br/>a cheaper model]
