@@ -65,11 +65,18 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertSame(['actions/deploy-pages'], array_map(static fn (array $step): string => explode('@', $step['uses'] ?? '')[0], $publish['steps'] ?? []));
     }
 
-    public function testTheAssembledPageIsTheHighlightsBehindAFrontMatterThatTurnsOffLiquid(): void
+    public function testTheAssembledPageTurnsEveryLiquidOpeningOfTheHighlightsIntoALiquidStringThatPrintsIt(): void
     {
-        $page = $this->assembledPage("# Highlights\n\nA code span `{{ x }}` and `{% if y %}`.\n");
+        $page = $this->assembledPage("# Highlights\n\nA code span `{{ x }}`, `{% if y %}` and `{{{%`.\n");
 
-        self::assertSame("---\nrender_with_liquid: false\n---\n# Highlights\n\nA code span `{{ x }}` and `{% if y %}`.\n", $page);
+        self::assertSame("# Highlights\n\nA code span `{{ \"{{\" }} x }}`, `{{ \"{%\" }} if y %}` and `{{ \"{{\" }}{{ \"{%\" }}`.\n", $page);
+    }
+
+    public function testTheAssembledPageIsTheHighlightsUnchangedWhenTheyHoldNoLiquidOpening(): void
+    {
+        $highlights = "# Highlights\n\nBraces `{ x }`, closings `}}` and `%}`, a percent `%{`.";
+
+        self::assertSame($highlights, $this->assembledPage($highlights));
     }
 
     public function testTheAssembledPageRunsBinHighlightsBeforeItWritesThePage(): void
@@ -77,20 +84,37 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertStringStartsWith('bin/highlights && ', $this->pageCommand());
     }
 
+    public function testThePageStepFailsWhenTheEscapeFails(): void
+    {
+        self::assertNotSame(0, $this->runPageWrite("# Highlights\n", 'sed() { return 1; }; ')['status']);
+    }
+
     private function assembledPage(string $highlights): string
     {
-        $workspace = sys_get_temp_dir().'/intakt-highlights-'.bin2hex(random_bytes(6));
-        mkdir($workspace.'/docs', 0o777, true);
-        mkdir($workspace.'/page');
-        file_put_contents($workspace.'/docs/highlights.md', $highlights);
+        $run = $this->runPageWrite($highlights, '');
+        self::assertSame(0, $run['status']);
+
+        return $run['page'];
+    }
+
+    /**
+     * @return array{status: ?int, page: string}
+     */
+    private function runPageWrite(string $highlights, string $prelude): array
+    {
+        $workspace = sys_get_temp_dir().'/intakt highlights '.bin2hex(random_bytes(6));
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($workspace.'/docs/highlights.md', $highlights);
+        $filesystem->mkdir($workspace.'/page');
 
         try {
             $write = substr($this->pageCommand(), strlen('bin/highlights && '));
-            new Process(['sh', '-c', str_replace(' /page/', ' '.$workspace.'/page/', $write)], $workspace)->mustRun();
+            $process = new Process(['sh', '-c', $prelude.str_replace(' /page/index.md', ' '.escapeshellarg($workspace.'/page/index.md'), $write)], $workspace);
+            $process->run();
 
-            return (string) file_get_contents($workspace.'/page/index.md');
+            return ['status' => $process->getExitCode(), 'page' => (string) @file_get_contents($workspace.'/page/index.md')];
         } finally {
-            new Filesystem()->remove($workspace);
+            $filesystem->remove($workspace);
         }
     }
 
