@@ -148,7 +148,7 @@ final readonly class OnePerPlace
 
             return match (count($notes)) {
                 0 => $entry,
-                1 => $entry->withJudgeNote((string) array_first($notes)),
+                1 => $entry->withJudgeNote(array_first($notes)),
                 default => $entry->withJudgeNote(implode('; ', array_map(static fn (string $id, string $note): string => $id.': '.$note, array_keys($notes), $notes))),
             };
         }, $entries);
