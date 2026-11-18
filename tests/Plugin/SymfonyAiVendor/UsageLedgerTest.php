@@ -11,6 +11,7 @@ use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use JsonException;
 use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -27,6 +28,7 @@ use Symfony\AI\Platform\ResultConverterInterface;
 use Symfony\AI\Platform\TokenUsage\StreamListener;
 use Symfony\AI\Platform\TokenUsage\TokenUsage;
 use Symfony\Component\Clock\MockClock;
+use Throwable;
 
 #[CoversClass(UsageLedger::class)]
 #[UsesClass(FinalStreamedUsage::class)]
@@ -90,9 +92,70 @@ final class UsageLedgerTest extends TestCase
         self::assertSame('settled', $ledger->payloads()[0]['phase']);
     }
 
+    public function testAnAnsweredRoundKeepsItsUsageWhenALaterRoundOfAFailedCallFailsWithANonLibraryException(): void
+    {
+        $ledger = new InMemoryLedger();
+        $failure = new JsonException('Syntax error in tool call arguments');
+
+        $this->usageLedger($ledger)->leaveUnsettled(new UsageReservation('a call'), $failure, $this->roundAnswering($this->textWithUsage(100)), $this->roundFailingWith($failure));
+
+        self::assertSame([100], $this->promptTokensOf($ledger));
+    }
+
+    public function testAnAnsweredRoundKeepsItsUsageWhenAnEarlierRoundOfAFailedCallFailsWithANonLibraryException(): void
+    {
+        $ledger = new InMemoryLedger();
+        $failure = new JsonException('Syntax error in tool call arguments');
+
+        $this->usageLedger($ledger)->leaveUnsettled(new UsageReservation('a call'), $failure, $this->roundFailingWith($failure), $this->roundAnswering($this->textWithUsage(200)));
+
+        self::assertSame([200], $this->promptTokensOf($ledger));
+    }
+
+    public function testAnAnsweredCallWithOneUnreadableRoundIsUnsettledAndKeepsTheUsageOfItsOtherRounds(): void
+    {
+        $ledger = new InMemoryLedger();
+
+        $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $this->roundAnswering($this->textWithUsage(100)), $this->roundFailingWith(new LogicException('a bug')), $this->roundAnswering($this->textWithUsage(300)));
+
+        self::assertSame(['unsettled', LogicException::class, [100, 300]], [$ledger->payloads()[0]['phase'], $ledger->payloads()[0]['failure'], $this->promptTokensOf($ledger)]);
+    }
+
     private function settle(InMemoryLedger $ledger, DeferredResult $round): void
     {
-        new UsageLedger($ledger, new MockClock('2026-01-01T00:00:00+00:00'), new NullLogger(), StoredSerializerFactory::create())->settle(new UsageReservation('a call'), $round);
+        $this->usageLedger($ledger)->settle(new UsageReservation('a call'), $round);
+    }
+
+    private function usageLedger(InMemoryLedger $ledger): UsageLedger
+    {
+        return new UsageLedger($ledger, new MockClock('2026-01-01T00:00:00+00:00'), new NullLogger(), StoredSerializerFactory::create());
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function promptTokensOf(InMemoryLedger $ledger): array
+    {
+        /** @var list<array<string, int>> $usages */
+        $usages = $ledger->payloads()[0]['usages'];
+
+        return array_column($usages, 'prompt');
+    }
+
+    private function textWithUsage(int $promptTokens): TextResult
+    {
+        $text = new TextResult('{}');
+        $text->getMetadata()->add('token_usage', new TokenUsage(promptTokens: $promptTokens, completionTokens: 20, totalTokens: $promptTokens + 20));
+
+        return $text;
+    }
+
+    private function roundFailingWith(Throwable $failure): DeferredResult
+    {
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('convert')->willThrowException($failure);
+
+        return new DeferredResult($converter, new InMemoryRawResult());
     }
 
     private function roundAnswering(ResultInterface $answer): DeferredResult
