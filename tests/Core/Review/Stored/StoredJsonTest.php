@@ -58,7 +58,7 @@ final class StoredJsonTest extends KernelTestCase
     {
         $tracked = [new TrackedFinding('a', $this->finding(), [1, 3], FindingStatus::Open)];
 
-        self::assertSame(json_encode($tracked, JSON_THROW_ON_ERROR),$this->serializer()->serialize($tracked, JsonEncoder::FORMAT));
+        self::assertSame(json_encode($tracked, JSON_THROW_ON_ERROR), $this->serializer()->serialize($tracked, JsonEncoder::FORMAT));
     }
 
     public function testAFindingWithoutEvidenceKeepsTheNullKeyThatJsonEncodeWrote(): void
