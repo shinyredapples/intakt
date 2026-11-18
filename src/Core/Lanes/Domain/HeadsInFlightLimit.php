@@ -24,7 +24,7 @@ final readonly class HeadsInFlightLimit
         return new self($cap->heads * 2);
     }
 
-    // A count, not a list of waits: heads awaiting owner approval, on hold or queued for rework have no HeadWait case but still conflict and use CI.
+    // A count, not a list of waits, because heads awaiting owner approval, on hold or queued for rework have no HeadWait case but still conflict and use CI.
     public function admitsABuildBeside(int $headsInFlight): bool
     {
         return $headsInFlight < $this->heads;
