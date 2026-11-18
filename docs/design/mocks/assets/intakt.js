@@ -527,7 +527,8 @@
       document.querySelectorAll(".banner").forEach((b) => b.remove());
       lead.innerHTML = '<a href="setup.html">Nothing is running yet. Start the first review.</a>';
       main.querySelector(".page-head .actions").innerHTML = '<a class="btn primary" href="setup.html">Set up Intakt</a>';
-      const octopus = (theme) => `<img class="octopus-${theme}" src="../../../assets/images/mascot/octopus-waiting-${theme}-144.webp" alt="" width="144" height="144">`;
+      const files = { light: "assets/octopus-waiting-light-144.webp", dark: "assets/octopus-waiting-dark-144.webp" };
+      const octopus = (theme) => `<img class="octopus-${theme}" src="${files[theme]}" alt="" width="144" height="144">`;
       document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday" aria-labelledby="firstday-h">${octopus("light")}${octopus("dark")}<div><h2 id="firstday-h">Give Intakt its first task</h2>
         <ol><li>Choose <strong>Set up Intakt</strong> and add an AI provider and a project.</li>
         <li>Start the first review there. It shows up in In review while the panel reviews the change, then in Done once the judge decides.</li>
