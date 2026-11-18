@@ -63,14 +63,24 @@ final class ProjectModelCatalogTest extends TestCase
         self::assertContains(Capability::OUTPUT_STRUCTURED, $models['sonnet']['capabilities']);
     }
 
+    public function testAnOpenAiTierOnGpt62SolIsAddedAsAGptModelWithStructuredOutput(): void
+    {
+        $catalog = new ProjectModelCatalog(['gamma' => ['tiers' => ['strong' => ['provider' => 'openai', 'model' => 'gpt-6.2-sol']]]]);
+
+        $models = $catalog->models(Provider::OpenAi);
+
+        self::assertSame(Gpt::class, $models['gpt-6.2-sol']['class']);
+        self::assertContains(Capability::OUTPUT_STRUCTURED, $models['gpt-6.2-sol']['capabilities']);
+    }
+
     public function testACodexModelIsAddedEvenWhenTheBridgeKnowsItSoItSupportsStructuredOutput(): void
     {
-        $catalog = new ProjectModelCatalog(['gamma' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-5.3-codex']]]]);
+        $catalog = new ProjectModelCatalog(['gamma' => ['tiers' => ['strong' => ['provider' => 'codex', 'model' => 'gpt-6.2-sol']]]]);
 
         $models = $catalog->models(Provider::Codex);
 
-        self::assertSame(Codex::class, $models['gpt-5.3-codex']['class']);
-        self::assertContains(Capability::OUTPUT_STRUCTURED, $models['gpt-5.3-codex']['capabilities']);
+        self::assertSame(Codex::class, $models['gpt-6.2-sol']['class']);
+        self::assertContains(Capability::OUTPUT_STRUCTURED, $models['gpt-6.2-sol']['capabilities']);
     }
 
     public function testAProviderNoProjectMapsGetsNoModels(): void

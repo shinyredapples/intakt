@@ -543,6 +543,60 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertStringStartsWith('correctness', $lanes->filter('.who')->text());
     }
 
+    public function testEachLaneShowsADecorative24PixelMeerkatInBothThemes(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $images = $this->browser->request('GET', '/')->filter('.working .lane .who img.character');
+
+        self::assertSame(
+            [['', '24', '24', 'lazy', null, null], ['', '24', '24', 'lazy', null, null]],
+            $images->each(static fn (Crawler $image): array => [$image->attr('alt'), $image->attr('width'), $image->attr('height'), $image->attr('loading'), $image->attr('role'), $image->attr('aria-label')]),
+        );
+        self::assertSame(1, preg_match('~^\S*/roles/code_reviewer-light-\S+\.webp 1x, \S*/roles/code_reviewer-light-\S+\.webp 2x$~', $images->eq(0)->attr('srcset') ?? ''));
+        self::assertSame(1, preg_match('~^\S*/roles/code_reviewer-dark-\S+\.webp 1x, \S*/roles/code_reviewer-dark-\S+\.webp 2x$~', $images->eq(1)->attr('srcset') ?? ''));
+    }
+
+    public function testTheMeerkatSitsAfterTheLiveDotAndBeforeTheRole(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $who = $this->browser->request('GET', '/')->filter('.working .lane .who');
+
+        self::assertSame(['span dot ok', 'img character character-light', 'img character character-dark', 'span elapsed'], $who->children()->each(static fn (Crawler $child): string => $child->nodeName().' '.$child->attr('class')));
+        self::assertSame('correctness, standard', $who->getNode(0)?->childNodes->item(3)?->textContent);
+    }
+
+    public function testTheLanesRoleTierAndTimeReadTheSameBesideTheMeerkat(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $who = $this->browser->request('GET', '/')->filter('.working .lane .who');
+
+        self::assertSame('correctness, standardsince 12:00 UTC', $who->text());
+    }
+
+    public function testTheWhoIsWorkingSummaryAndTheCardsShowNoCharacter(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->startReviewer('round-1', 'correctness');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('.working summary img, .board .card img, .working .lane .meta img, .working .lane .what img'));
+    }
+
+    public function testABoardWithNobodyWorkingShowsNoMeerkat(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        self::assertCount(0, $this->browser->request('GET', '/')->filter('img[src*="/roles/"]'));
+    }
+
     public function testAReviewerThatHasAnsweredIsNoLane(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
