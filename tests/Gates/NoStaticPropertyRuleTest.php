@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\NoStaticPropertyRule;
+use Intakt\Gates\PhpStan\RepositoryCode;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -15,11 +16,12 @@ use PHPUnit\Framework\Attributes\UsesClass;
  */
 #[CoversClass(NoStaticPropertyRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
+#[UsesClass(RepositoryCode::class)]
 final class NoStaticPropertyRuleTest extends PhpStanRuleTestCase
 {
     protected function ruleFor(string $root): NoStaticPropertyRule
     {
-        return new NoStaticPropertyRule();
+        return new NoStaticPropertyRule(new RepositoryCode($root));
     }
 
     /**
@@ -30,8 +32,18 @@ final class NoStaticPropertyRuleTest extends PhpStanRuleTestCase
         return self::casesOfOnePhpstanRun([
             'InstancePropertiesAndConstantsPassStaticAnalysis' => ['instance-properties'],
             'StaticMethodsAndClosuresPassStaticAnalysis' => ['static-method'],
-            'APrivateStaticPropertyFailsStaticAnalysis' => ['static-property', 'src/Counter.php:9 intakt.noStaticProperty'],
-        ]);
+            'APrivateStaticPropertyFailsStaticAnalysis' => ['static-property', 'src/Counter.php:9 intakt.noStaticProperty', 'src/Counter.php:9 intakt.statefulService'],
+        ], 'src/');
+    }
+
+    public function testAStaticPropertyOutsideTheFoldersOfRepositoryCodePassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'static-property-outside-repository-code');
+    }
+
+    public function testAStaticPropertyInAClassOfTheGatesFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'gate-static-property', 'config/gates/src/Counter.php:9 intakt.noStaticProperty');
     }
 
     #[DataProvider('casesOfOneRun')]

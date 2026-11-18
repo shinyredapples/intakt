@@ -19,6 +19,10 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final readonly class NoStaticPropertyRule implements Rule
 {
+    public function __construct(private RepositoryCode $repositoryCode)
+    {
+    }
+
     public function getNodeType(): string
     {
         return FileNode::class;
@@ -29,6 +33,10 @@ final readonly class NoStaticPropertyRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
+        if (!$this->repositoryCode->holds($scope->getFile())) {
+            return [];
+        }
+
         // because the analyser enters a trait body only through a class that uses it, the file is read whole
         $statics = array_filter(new NodeFinder()->findInstanceOf($node->getNodes(), Property::class), static fn (Property $property): bool => $property->isStatic());
 

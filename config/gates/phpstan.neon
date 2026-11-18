@@ -39,6 +39,10 @@ services:
         arguments:
             root: %currentWorkingDirectory%
     -
+        class: Intakt\Gates\PhpStan\RepositoryCode
+        arguments:
+            root: %currentWorkingDirectory%
+    -
         class: Intakt\Gates\PhpStan\ParameterLimitRule
         arguments:
             root: %currentWorkingDirectory%

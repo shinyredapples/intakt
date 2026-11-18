@@ -17,6 +17,10 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final readonly class FinalClassRule implements Rule
 {
+    public function __construct(private RepositoryCode $repositoryCode)
+    {
+    }
+
     public function getNodeType(): string
     {
         return Class_::class;
@@ -27,7 +31,7 @@ final readonly class FinalClassRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if ($node->isAnonymous() || !$node->name instanceof Identifier || $node->isFinal() || $node->isAbstract()) {
+        if (!$this->repositoryCode->holds($scope->getFile()) || $node->isAnonymous() || !$node->name instanceof Identifier || $node->isFinal() || $node->isAbstract()) {
             return [];
         }
 

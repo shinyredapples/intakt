@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\PhpStan\FinalClassRule;
+use Intakt\Gates\PhpStan\RepositoryCode;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -15,11 +16,12 @@ use PHPUnit\Framework\Attributes\UsesClass;
  */
 #[CoversClass(FinalClassRule::class)]
 #[UsesClass(StaticAnalysisGate::class)]
+#[UsesClass(RepositoryCode::class)]
 final class FinalClassRuleTest extends PhpStanRuleTestCase
 {
     protected function ruleFor(string $root): FinalClassRule
     {
-        return new FinalClassRule();
+        return new FinalClassRule(new RepositoryCode($root));
     }
 
     /**
@@ -33,7 +35,17 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
             'AnAbstractClassPassesStaticAnalysis' => ['abstract-class'],
             'AReadonlyClassWithoutFinalFailsStaticAnalysis' => ['non-final-readonly-class', 'src/Mailer.php:7 intakt.finalClass'],
             'AnEntityWithoutFinalFailsStaticAnalysis' => ['non-final-entity', 'src/Note.php:10 intakt.finalClass'],
-        ]);
+        ], 'src/');
+    }
+
+    public function testANonFinalClassOutsideTheFoldersOfRepositoryCodePassesStaticAnalysis(): void
+    {
+        $this->assertAcceptedBy('phpstan', 'non-final-class-outside-repository-code');
+    }
+
+    public function testANonFinalClassOfTheGatesFailsStaticAnalysis(): void
+    {
+        $this->assertRejectedBy('phpstan', 'non-final-gate-class', 'config/gates/src/Shape.php:7 intakt.finalClass');
     }
 
     #[DataProvider('casesOfOneRun')]
