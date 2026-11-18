@@ -530,13 +530,14 @@
       const actions = main.querySelector(".page-head .actions");
       actions.classList.remove("hide-phone");
       actions.innerHTML = '<a class="btn primary" href="setup.html">Set up Intakt</a><a class="btn secondary" href="history.html">Open the review list</a>';
-      document.getElementById("wsum").classList.add("w-sum-wrap");
       const files = { light: "assets/octopus-waiting-light-144.webp", dark: "assets/octopus-waiting-dark-144.webp" };
       const octopus = (theme) => `<img class="octopus-${theme}" src="${files[theme]}" alt="" width="144" height="144">`;
       document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday" aria-labelledby="firstday-h">${octopus("light")}${octopus("dark")}<div><h2 id="firstday-h">Give Intakt its first task</h2>
         <ol><li>Choose <strong>Set up Intakt</strong> and add an AI provider and a project.</li>
         <li>Start the first review there. It shows up in In review while the panel reviews the change, then in Done once the judge decides.</li>
         <li>Reviewers show up under Who is working while they review it.</li></ol></div></section>`);
+      // With no lane the strip would open to nothing, so it is a plain line without a chevron, as the built board renders it.
+      document.getElementById("working").outerHTML = '<p class="working working-none" id="working">Nobody is working yet: reviewers appear here while they review a change</p>';
     }
     if (DEMO === "loading") {
       document.querySelectorAll(".banner").forEach((b) => b.remove());
