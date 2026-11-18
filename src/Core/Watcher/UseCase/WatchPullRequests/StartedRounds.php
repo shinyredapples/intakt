@@ -41,6 +41,7 @@ final readonly class StartedRounds
             $this->record($project, $change, $queued);
             $this->endTheWait($project, $change, $stored);
             $connection->commit();
+            // Boundary: rolls back, discards the kept snapshot and rethrows, because a round that was not recorded must leave nothing behind.
         } catch (Throwable $failure) {
             $this->undo($connection);
             $this->discarded->discard($queued);
