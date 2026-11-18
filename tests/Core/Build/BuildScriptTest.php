@@ -235,6 +235,29 @@ final class BuildScriptTest extends TestCase
         self::assertFileDoesNotExist($this->history->folder.'/build-returned');
     }
 
+    public function testTheStandInEndsOnceItsTestRunnerIsAZombieItsParentHasNotReaped(): void
+    {
+        // proc_open, because Symfony's Process reaps its child on every status read and the runner must stay unreaped.
+        $runner = proc_open([(string) new ExecutableFinder()->find('sleep'), '30'], [], $pipes);
+        self::assertNotFalse($runner);
+        $pid = proc_get_status($runner)['pid'];
+        $this->givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild($pid);
+        new Process([$this->bin.'/sleep', '0'], env: ['RECORD' => $this->history->folder])->mustRun();
+        $standIn = $this->recordedSleeps()[0];
+        $runningWhileTheRunnerLived = $this->isRunning($standIn);
+
+        proc_terminate($runner, 9);
+        $runnerEnded = [] === $this->stillRunningAfter([$pid], self::WATCHDOG_DEADLINE);
+        $runnerUnreaped = is_dir('/proc/'.$pid);
+        $standInStillRunning = $this->stillRunningAfter([$standIn], self::WATCHDOG_DEADLINE);
+        proc_close($runner);
+
+        self::assertTrue($runningWhileTheRunnerLived);
+        self::assertTrue($runnerEnded);
+        self::assertTrue($runnerUnreaped);
+        self::assertSame([], $standInStillRunning);
+    }
+
     public function testTheWaitForTheWatchdogStillReportsAProcessThatOutlivesItsDeadline(): void
     {
         $lingering = new Process([(string) new ExecutableFinder()->find('sleep'), '30']);
@@ -453,14 +476,26 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/sleep', 0o755);
     }
 
-    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and also ends once tearDown removes the folder or the test runner's process is gone, because a failed test must leave nothing and a killed runner never reaches tearDown.
+    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and also ends once tearDown removes the folder or the test runner's process is gone or a zombie, because a failed test must leave nothing and a killed runner never reaches tearDown, and its parent may not reap it.
     private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(?int $runner = null): void
     {
         $runner ??= (int) getmypid();
         $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
+        file_put_contents($this->bin.'/stand-in', <<<'SH'
+            #!/bin/sh
+            echo $$ > "$RECORD/stand-in.$2"
+            while [ ! -e "$RECORD/build-returned" ] && [ -d "$RECORD" ]; do
+                case "$(sed -n 's/.*) \(.\).*/\1/p' "/proc/$3/stat" 2>/dev/null)" in
+                    ''|Z|X) exit 0 ;;
+                esac
+                "$1" 0.05
+            done
+            SH);
+        chmod($this->bin.'/stand-in', 0o755);
+        $standIn = escapeshellarg($this->bin.'/stand-in');
         file_put_contents($this->bin.'/sleep', <<<SH
             #!/bin/sh
-            setsid sh -c 'echo \$\$ > "\$RECORD/stand-in.\$2"; until [ -e "\$RECORD/build-returned" ] || [ ! -d "\$RECORD" ] || [ ! -d "/proc/\$3" ]; do "\$1" 0.05; done' stand-in {$sleep} \$\$ {$runner} > /dev/null 2>&1 &
+            setsid {$standIn} {$sleep} \$\$ {$runner} > /dev/null 2>&1 &
             until [ -s "\$RECORD/stand-in.\$\$" ]; do :; done
             cat "\$RECORD/stand-in.\$\$" >> "\$RECORD/sleeps"
             echo \$\$ >> "\$RECORD/sleeps"

@@ -1,5 +1,0 @@
-sleep 1074642 stopped at PTRACE_EVENT_EXIT: True
-build.sh fragment returned: status=0 cut=137
-state in /proc right after the fragment returned: t
-immediate check (old test): [1074642]
-bounded check (5 s): [] after 1.01 s (sleep released from its exit at 1 s)
