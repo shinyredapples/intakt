@@ -11,8 +11,6 @@ use Intakt\Core\Review\Contract\UntrustedSource;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
-use ReflectionNamedType;
 use Symfony\AI\Platform\Message\Role;
 use Symfony\Component\Uid\UuidV7;
 
@@ -48,21 +46,14 @@ final class PromptAssemblyTest extends TestCase
         self::assertSame(self::INSTRUCTIONS, $message->getContent());
     }
 
-    public function testASystemMessageWithARoleHoldsTheInstructionsThenTheRolePromptOfTheConversation(): void
+    public function testASystemMessageWithARoleIsTheInstructionsABlankLineThenTheRolePromptOfTheConversation(): void
     {
-        $conversation = new ReviewerConversation('Look at security.', new UuidV7());
+        $conversation = new ReviewerConversation("Look at security.\nName the file.", new UuidV7());
 
         $message = new PromptAssembly()->systemWithRole(self::INSTRUCTIONS, $conversation);
 
-        self::assertSame(self::INSTRUCTIONS."\n\nLook at security.", $message->getContent());
-    }
-
-    public function testTheRolePromptOfASystemMessageIsTakenOnlyFromAReviewerConversationNeverFromAString(): void
-    {
-        $role = new ReflectionMethod(PromptAssembly::class, 'systemWithRole')->getParameters()[1]->getType();
-
-        self::assertInstanceOf(ReflectionNamedType::class, $role);
-        self::assertSame(ReviewerConversation::class, $role->getName());
+        self::assertSame(Role::System, $message->getRole());
+        self::assertSame(self::INSTRUCTIONS."\n\n".$conversation->rolePrompt, $message->getContent());
     }
 
     public function testANoticeIsAUserMessageOfIntaktsOwnTextAlone(): void

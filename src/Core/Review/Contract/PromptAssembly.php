@@ -19,7 +19,7 @@ final readonly class PromptAssembly
         return Message::forSystem($instructions);
     }
 
-    // The role prompt is the owner's panel configuration, read from protected skill files; it is taken only from the conversation that carries the panel's role, never as a plain string, so no other runtime text can reach the system message.
+    // D2 exception (#2518): the role prompt is trusted owner configuration, the `prompt` key of a panel member in the panel configuration, so it enters verbatim; it is taken only from the conversation that carries the panel's role, never as a plain string, so no other runtime text can reach the system message.
     /**
      * @param literal-string $instructions
      */
