@@ -119,6 +119,10 @@ final class WaitingItemTest extends TestCase
 
     private function choice(bool $recommended): WaitingChoice
     {
-        return new WaitingChoice(outcome: 'Does a thing.', command: null, recommended: $recommended);
+        return new WaitingChoice(
+            outcome: 'Does a thing.',
+            command: null,
+            recommended: $recommended,
+        );
     }
 }

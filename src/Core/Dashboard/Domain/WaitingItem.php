@@ -46,8 +46,16 @@ final readonly class WaitingItem
             'Intakt last read the usage of '.$account.' at '.$since.' UTC. Without a reading it cannot tell how much of the limit is left. It applies to every project, and this item leaves the page when a newer reading of the account arrives.',
             $notice->noticedAt,
             [
-                new WaitingChoice(outcome: 'Leave it: builds keep running one call at a time until the next reading.', command: null, recommended: true),
-                new WaitingChoice(outcome: 'Makes one paid call per configured provider and prints its token usage, so you see whether the provider still answers. It records no usage reading.', command: 'php bin/console intakt:vendor:probe', recommended: false),
+                new WaitingChoice(
+                    outcome: 'Leave it: builds keep running one call at a time until the next reading.',
+                    command: null,
+                    recommended: true,
+                ),
+                new WaitingChoice(
+                    outcome: 'Makes one paid call per configured provider and prints its token usage, so you see whether the provider still answers. It records no usage reading.',
+                    command: 'php bin/console intakt:vendor:probe',
+                    recommended: false,
+                ),
             ],
             null === self::statusPageOf($notice->account->provider) ? 'See the queue on the board' : 'Open the provider\'s status page',
             self::statusPageOf($notice->account->provider),
