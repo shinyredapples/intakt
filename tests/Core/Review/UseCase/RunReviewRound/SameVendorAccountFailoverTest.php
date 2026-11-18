@@ -46,6 +46,7 @@ use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
+use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -97,7 +98,7 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
     protected function setUp(): void
     {
         $this->fixture = new RoundFixture(self::getContainer());
-        $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()),new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
     public function testAReviewerWhoseAccountIsOutIsQueuedAgainForAnImmediateRetry(): void

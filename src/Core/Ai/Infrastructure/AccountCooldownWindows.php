@@ -9,6 +9,8 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -36,10 +38,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     // At most a day, so a huge reset never puts an account out of reach and the window stays inside its one-month period.
     private const int LONGEST_SECONDS = 86400;
 
+    private const float SPENT_PERCENT = 100.0;
+
     /**
      * @param array<string, list<string>> $accounts
      */
     public function __construct(
+        private MeasuredUse $measured,
         #[Autowire(service: AiServices::ACCOUNT_COOLDOWNS)]
         private CacheItemPoolInterface $pool,
         private LockFactory $locks,
@@ -55,25 +60,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     public function coolDown(Account $account, ?int $resetInSeconds): void
     {
-        $seconds = min(self::LONGEST_SECONDS, $resetInSeconds ?? self::SECONDS_WITHOUT_RESET);
-        if ($seconds <= 0) {
-            return;
-        }
-
-        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
-
-        // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
-        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
-            return;
-        }
-
-        $this->record($account, $until);
+        $this->coolDownFor($account, $resetInSeconds ?? $this->secondsUntilSpentWindowResets($account) ?? self::SECONDS_WITHOUT_RESET);
     }
 
     // The marker ends with the window that runs, the rejection's minute or a limit set before it, so the account is retried when its cooldown ends like any other.
     public function coolDownRejected(Account $account): void
     {
-        $this->coolDown($account, null);
+        $this->coolDownFor($account, self::SECONDS_WITHOUT_RESET);
 
         $marker = $this->pool->getItem($this->rejectionKey($account))->set(true)->expiresAt($this->window($account)->getRetryAfter());
         $this->pool->save($marker);
@@ -110,6 +103,37 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $waits = array_map(fn (string $name): int => $this->secondsUntilFree(new Account($provider, $name)), $this->accounts[$provider->value] ?? []);
 
         return [] === $waits ? 0 : min($waits);
+    }
+
+    // A spent plan's limit comes without a reset (issue #1749), so the account's measured readings say when it is usable again: the latest reset of a spent window still ahead.
+    private function secondsUntilSpentWindowResets(Account $account): ?int
+    {
+        $now = $this->clock->now()->getTimestamp();
+        $waits = array_map(function (UsageWindow $window) use ($account, $now): int {
+            $usage = $this->measured->of($account, $window)?->usage;
+
+            return null !== $usage && $usage->usedPercent >= self::SPENT_PERCENT && null !== $usage->resetsAt ? $usage->resetsAt->getTimestamp() - $now : 0;
+        }, UsageWindow::cases());
+        $longest = max(0, ...$waits);
+
+        return 0 < $longest ? $longest : null;
+    }
+
+    private function coolDownFor(Account $account, int $resetInSeconds): void
+    {
+        $seconds = min(self::LONGEST_SECONDS, $resetInSeconds);
+        if ($seconds <= 0) {
+            return;
+        }
+
+        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+
+        // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
+        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
+            return;
+        }
+
+        $this->record($account, $until);
     }
 
     // At least a second while the window runs, so a cooling account is never reported free and retried at once.

@@ -74,6 +74,7 @@ use Intakt\Plugin\Vendor\Contract\ProviderRateLimited;
 use Intakt\Plugin\Vendor\Contract\ProviderRejectedTheKey;
 use Intakt\Plugin\Vendor\Contract\VendorReview;
 use Intakt\Tests\Core\Ai\Infrastructure\CodexLoginTest;
+use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
@@ -178,7 +179,7 @@ final class CodexReviewerTest extends KernelTestCase
         putenv('PATH='.$this->root.'/bin:'.$this->path);
         $this->ledger = new InMemoryLedger();
         $this->tokenEndpoint = new MockHttpClient();
-        $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), ['codex' => ['team']]);
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)),new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), ['codex' => ['team']]);
     }
 
     protected function tearDown(): void

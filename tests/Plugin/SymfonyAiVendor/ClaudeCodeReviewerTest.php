@@ -67,6 +67,7 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\VendorAccountLimit;
 use Intakt\Tests\Core\Ai\Infrastructure\NoCooldowns;
+use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Infrastructure\RemembersNothing;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
@@ -247,7 +248,7 @@ final class ClaudeCodeReviewerTest extends KernelTestCase
     public function testAnAnswerIntaktCouldNotReadLeavesTheAccountUsable(string $recording): void
     {
         $logger = new BufferingLogger();
-        $cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT]]);
+        $cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new MockClock(self::NOW)),new ArrayAdapter(), new LockFactory(new InMemoryStore()), new MockClock(self::NOW), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::ClaudeCode->value => [Account::DEFAULT]]);
         $accounts = new AccountFailoverPlatform(Provider::ClaudeCode, [Account::DEFAULT => $this->claudeCodePlatform(RecordedClaudeCodeCli::replaying($recording))], $cooldowns, new MockClock(self::NOW), $logger);
 
         try {

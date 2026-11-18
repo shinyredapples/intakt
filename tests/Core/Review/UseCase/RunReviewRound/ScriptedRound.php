@@ -49,6 +49,7 @@ use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\RecordedRoundUpdates;
 use Intakt\Tests\Core\Review\SampleIdentity;
 use Intakt\Tests\Core\Review\UseCase\ReviewChange\WorkerOnSleep;
+use Intakt\Tests\Core\Budget\ReadingsInMemory;
 use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use LogicException;
@@ -91,7 +92,7 @@ final class ScriptedRound
 
     public function __construct(public readonly RoundFixture $fixture, private readonly TestContainer $container)
     {
-        $this->cooldowns = new AccountCooldownWindows(new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT]]);
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()),new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT]]);
     }
 
     // Reviewed through ReviewChange, the use case behind intakt:review, so the decision and the reasons are the ones the console prints.
