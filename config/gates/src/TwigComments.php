@@ -147,7 +147,7 @@ final readonly class TwigComments implements CommentLanguage
     }
 
     /**
-     * @return array<int, array{string, int}>|null
+     * @return array<array{string, int}>|null
      */
     private function matchIn(string $pattern, string $source, int $offset): ?array
     {

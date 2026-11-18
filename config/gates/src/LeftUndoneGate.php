@@ -53,27 +53,39 @@ final readonly class LeftUndoneGate implements Gate
     {
         $findings = [];
 
-        foreach ($this->scannedLinesSince($workspace, $mergeBase) as [$path, $addedLines, $language]) {
-            $source = $this->sourceOf($workspace, $path);
+        foreach ($this->scannedLinesSince($workspace, $mergeBase) as $file) {
+            array_push($findings, ...$this->findingsIn($workspace, $file));
+        }
 
-            if (null === $source) {
-                $findings[] = $path.' cannot be read';
+        return $findings;
+    }
 
-                continue;
-            }
+    /**
+     * @param array{string, ?list<int>, CommentLanguage} $file
+     *
+     * @return list<string>
+     */
+    private function findingsIn(Workspace $workspace, array $file): array
+    {
+        [$path, $addedLines, $language] = $file;
+        $source = $this->sourceOf($workspace, $path);
 
-            $lines = $addedLines ?? $this->everyLineOf($source);
+        if (null === $source) {
+            return [$path.' cannot be read'];
+        }
 
-            foreach ($this->comments->markersOn($source, $lines, $language) as $line => $marker) {
-                $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
-            }
+        $lines = $addedLines ?? $this->everyLineOf($source);
+        $findings = [];
 
-            // Because skips and not-implemented throws are PHP code, a template holds none.
-            $code = $language instanceof PhpComments ? $this->code->findingsOn($path, $source, $lines) : [];
+        foreach ($this->comments->markersOn($source, $lines, $language) as $line => $marker) {
+            $findings[] = $path.':'.$line.': '.$marker.self::HOW_TO_COMPLY;
+        }
 
-            foreach ($code as $line => $finding) {
-                $findings[] = $path.':'.$line.': '.$finding;
-            }
+        // Because skips and not-implemented throws are PHP code, a template holds none.
+        $code = $language instanceof PhpComments ? $this->code->findingsOn($path, $source, $lines) : [];
+
+        foreach ($code as $line => $finding) {
+            $findings[] = $path.':'.$line.': '.$finding;
         }
 
         return $findings;
