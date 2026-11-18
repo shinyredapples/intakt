@@ -6,9 +6,6 @@ namespace Intakt\Core\Review\Contract;
 
 final readonly class ReadFinding
 {
-    // In characters, so a finding written as one long line still reads as a title wherever it is shown.
-    private const int TITLE_LENGTH = 160;
-
     public function __construct(
         public Severity $severity,
         public ?string $file,
@@ -22,16 +19,12 @@ final readonly class ReadFinding
         return new self($finding->severity, $finding->file, $finding->line, self::titleOf($finding->text));
     }
 
-    // The first line of its text, because a finding has no title of its own and the rest of its text is the explanation.
+    // The first line of its text, because a finding has no title of its own and the rest of its text is the explanation; uncut, so whoever shows it cuts what the reader sees, after reading its marks.
     private static function titleOf(string $text): string
     {
-        $title = trim(explode("\n", trim($text), 2)[0]);
+        // Split on the line endings by name rather than \R, which without UTF-8 mode would also split a multibyte character holding byte 0x85.
+        $lines = preg_split('/\r\n|\r|\n/', trim($text), 2);
 
-        if (mb_strlen($title) <= self::TITLE_LENGTH) {
-            return $title;
-        }
-
-        // Cut by characters, so a multibyte character is never split, and marked so a reader sees the title goes on.
-        return rtrim(mb_substr($title, 0, self::TITLE_LENGTH - 1)).'…';
+        return trim(false === $lines ? $text : $lines[0]);
     }
 }
