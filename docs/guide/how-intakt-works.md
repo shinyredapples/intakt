@@ -53,7 +53,7 @@ flowchart TD
 In words:
 1. **A task is written.** You, or Intakt with you, describe one piece of work: what should happen, and how to tell it is done.
 2. **Intakt checks the task.** Is it clear? Is it small enough to build and review in one go? If not, it asks or splits it before any work is paid for.
-3. **It waits its turn.** Urgent tasks go first, then the rest by milestone and age.
+3. **It waits its turn.** Urgent tasks go first, then open pull requests (see [the engine room](the-engine-room.md#queues-who-is-next)), then priority, the milestone's due date and the older task. *(Planned:)* The rest will go milestone by milestone, with priority and then the older task deciding within one milestone.
 4. **The builder writes the change** in a sealed-off workspace: it can't reach your accounts, your keys or the internet beyond what it needs.
 5. **The checks run.** Your project's own tests and rules either pass or they don't. A failure goes straight back to the builder.
 6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies when you have both, so one company's blind spot doesn't decide; with one account it is one reviewer, plus a second model of the same company for protected, security-relevant and large changes (planned: not built yet). A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
@@ -116,12 +116,13 @@ flowchart LR
   h -- "Intakt was updated" --> retry[One more review]
   rebuild -- fixed --> go
   retry -- fixed --> go
-  rebuild -- still stuck --> h
+  rebuild -- "still stuck (needs the project)" --> m
+  rebuild -- "still stuck (other reason)" --> h
   retry -- still stuck --> h
   h -- "stuck after a few tries" --> m[Maintainer agent decides]
 ```
 
-(Planned: none of this paragraph is built yet; until the hold task is built, a held task gets one more review.) A task never waits for its own pull request: if the builder names it as the thing to wait for, Intakt does not hold the task but hands it over with the builder's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
+(Planned: none of this paragraph is built yet; until the hold task is built, a held task gets one more review.) A task never waits for its own pull request: if the builder names it as the thing to wait for, Intakt does not hold the task but hands it over with the builder's reason. When a task waits for a pull request, Intakt looks up the task that pull request belongs to. When the project moves on, a held task is rebuilt with the newest project rather than reviewed again unchanged, since only a rebuild can change it. A change that clashes with the newest project, or needs something from it, is rebuilt from it once or split by the maintainer agent, never reviewed again unchanged, and a task handed over again for the same reason is split, or goes to you when it cannot be. When a hand-over is about failed checks and Intakt's safety check of the workflow files does not clear the change, it says only how many checks failed, never their names, because the change itself wrote those names.
 
 Holds are for reasons outside the change. If a change grows too big while it is being fixed, Intakt does not send it back to the builder, who cannot split it, and does not hold it either: the maintainer agent splits it into smaller tasks (planned: until this is built, you split it).
 

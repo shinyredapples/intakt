@@ -63,6 +63,8 @@ Evidence only you or Intakt itself can produce is marked `(owner provides)`. It 
 
 An item marked `(owner provides)` still belongs in the list: it tells reviewers what you check before the merge.
 
+Planned: when Intakt sizes a task, it also checks each evidence item. If one is something the builder can't produce and it isn't marked `(owner provides)`, the task comes back to you with one comment naming those items, before any build starts. Fix the item or add the mark, and the task goes on. A marked item is listed for you, and Intakt's reviewers never send the work back for it.
+
 ## Good and not so good
 
 | Not so good | Better |

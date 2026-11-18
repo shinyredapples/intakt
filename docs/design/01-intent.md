@@ -34,7 +34,7 @@ This is the only statement of it; every self-check rule in the design points her
 
 1. Every acceptance criterion met, and every Evidence item the Developer can produce shown from a running install in the pull request; evidence marked as the owner's or the orchestrator's is theirs to provide, not the Developer's.
 2. The Developer's own run of the fast checks passing.
-3. The docs it touches stating what the code now does: every name and behavior it changed was searched for in the docs and corrected.
+3. The docs it touches stating what the code now does: every name and behavior it changed was searched for in the docs and corrected, and every hit of the docs report resolved ([Overview](05-architecture/01-overview.md), Build job).
 4. The recurring blocking findings in the Developer's briefing checked against it.
 
 After the hand-back, the trusted verification follows: the check job in a clean place and CI must pass, the Code reviewers judge the change, and only a merge ends the task.
