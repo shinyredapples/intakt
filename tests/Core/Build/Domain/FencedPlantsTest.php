@@ -32,7 +32,7 @@ final class FencedPlantsTest extends TestCase
 
     public function testAPlantBesideItsOwnFenceFailsTheGate(): void
     {
-        $prompt = new Fence()->wrap(UntrustedSource::Task, self::PLANT)."\n\nAgain: ".self::PLANT;
+        $prompt = new Fence()->wrap(UntrustedSource::Task, self::PLANT)->rendered()."\n\nAgain: ".self::PLANT;
 
         $refusal = $this->refusalOf($this->brief(self::PLANT), $prompt);
 
@@ -64,7 +64,7 @@ final class FencedPlantsTest extends TestCase
 
     public function testAPlantInsideARealFencePassesTheGate(): void
     {
-        $prompt = "Build this task:\n\n".new Fence()->wrap(UntrustedSource::Task, self::PLANT);
+        $prompt = "Build this task:\n\n".new Fence()->wrap(UntrustedSource::Task, self::PLANT)->rendered();
 
         FencedPlants::assertEveryPlantIsOnlyFenced($this->brief(self::PLANT), $prompt);
 

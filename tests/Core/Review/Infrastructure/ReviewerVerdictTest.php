@@ -12,8 +12,10 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -113,6 +115,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReadFile::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(UnstreamedModelCatalog::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ReviewerVerdictTest extends WebTestCase
 {
     use AiAssertionsTrait;
@@ -678,7 +682,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $messages = $this->conversations->load($this->conversation)->getMessages();
         self::assertInstanceOf(UserMessage::class, $messages[2]);
-        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff), $messages[2]->asText());
+        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff)->rendered(), $messages[2]->asText());
     }
 
     public function testAnEndMarkerInsideTheDiffCannotCloseItsFence(): void
