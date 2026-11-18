@@ -38,22 +38,6 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @return list<string>
-     */
-    public function actIdsOf(string $roundId): array
-    {
-        return $this->judgeDoneOf($roundId)->act ?? [];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    public function sameCauseOf(string $roundId): array
-    {
-        return $this->judgeDoneOf($roundId)->sameCause ?? [];
-    }
-
-    /**
      * @return list<DroppedFinding>
      */
     public function droppedOf(string $roundId): array

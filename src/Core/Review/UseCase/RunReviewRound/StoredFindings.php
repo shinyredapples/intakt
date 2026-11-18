@@ -73,17 +73,6 @@ final readonly class StoredFindings
     }
 
     // One entry per place and per cause, because two reviewers reporting one file and line, or one change the judge linked, send the builder one fix; the act ids and the links are the judge's.
-    /**
-     * @param list<string>          $actIds
-     * @param array<string, string> $sameCause
-     *
-     * @return list<Finding>
-     */
-    public function actListOf(ReviewRound $round, array $actIds, array $sameCause): array
-    {
-        return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause);
-    }
-
     // The act list as the judge left it, from one judge_done row, so every reader of a round's act list builds it the same way; none before the judge answered.
     /**
      * @return list<Finding>

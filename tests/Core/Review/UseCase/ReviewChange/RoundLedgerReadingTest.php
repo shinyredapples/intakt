@@ -251,7 +251,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['round' => self::OTHER_ROUND, 'act' => ['F9'], 'follow_ups' => [], 'findings' => []]);
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+        self::assertSame(['F1', 'F3'], $this->reading()->judgeDoneOf(self::ROUND)?->act);
     }
 
     public function testAJudgeDoneRowThatIsNotJsonIsSkipped(): void
@@ -259,14 +259,14 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round": "'.self::ROUND.'", "act": ["F2"]'))->succeeded());
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+        self::assertSame(['F1', 'F3'], $this->reading()->judgeDoneOf(self::ROUND)?->act);
     }
 
     public function testAJudgeDoneRowWithAFindingOfAnUnknownSeverityIsSkipped(): void
     {
         $this->append(LedgerEventKind::JudgeDone, ['act' => ['F2'], 'findings' => [['id' => 'F2', 'severity' => 'P9', 'text' => 'Odd.']]] + $this->judgeDone(self::ROUND));
 
-        self::assertSame([], $this->reading()->actIdsOf(self::ROUND));
+        self::assertNull($this->reading()->judgeDoneOf(self::ROUND));
     }
 
     public function testTheDroppedFindingsOfAJudgeDoneRowAreReadWithTheirReasons(): void
@@ -281,7 +281,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
         self::assertSame([], $this->reading()->droppedOf(self::ROUND));
-        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+        self::assertSame(['F1', 'F3'], $this->reading()->judgeDoneOf(self::ROUND)?->act);
     }
 
     public function testTheDroppedFindingsOfAnotherRoundAreNotRead(): void
@@ -297,7 +297,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F1' => 'F2']] + $this->judgeDone('another-round'));
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F3' => 'F1']] + $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F3' => 'F1'], $this->reading()->sameCauseOf(self::ROUND));
+        self::assertSame(['F3' => 'F1'], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
     }
 
     public function testTheJudgesNotesAreReadFromTheRoundsJudgeDoneRowAndAnOlderRowHasNone(): void
@@ -313,7 +313,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
     {
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame([], $this->reading()->sameCauseOf(self::ROUND));
+        self::assertSame([], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
     }
 
     public function testARoundTheJudgeHasNotAnsweredHasNoDroppedFindings(): void
