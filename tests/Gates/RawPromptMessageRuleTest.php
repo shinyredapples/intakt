@@ -108,11 +108,31 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         $this->assertEachCaseRefused($findings, 'intakt.reviewerConversation');
     }
 
-    public function testTheReviewHandlerMayBuildAConversationFromThePanelRole(): void
+    public function testTheReviewHandlerMayBuildAConversationFromTheRoundReviewersRolePrompt(): void
     {
-        $findings = $this->ruleFindingsIn($this->sampleSandbox(ReviewWithReviewerHandler::class, self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]));
+        $expressions = ['new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId())', 'new ReviewerConversation(id: new UuidV7(), rolePrompt: $reviewer->rolePrompt())'];
+
+        $findings = $this->ruleFindingsIn($this->sampleSandbox(ReviewWithReviewerHandler::class, self::CONVERSATION_IMPORTS, $expressions));
 
         self::assertSame('', $findings);
+    }
+
+    public function testTheReviewHandlerMayNotBuildAConversationFromAnyOtherText(): void
+    {
+        $expressions = [
+            self::NEW_CONVERSATION,
+            'new ReviewerConversation($text, $previous->id)',
+            "new ReviewerConversation(\$reviewer->rolePrompt().'!', \$reviewer->conversationId())",
+            'new ReviewerConversation(...[$reviewer->rolePrompt(), $reviewer->conversationId()])',
+            'new ReviewerConversation(id: $reviewer->conversationId(), rolePrompt: $text)',
+            'new ReviewerConversation($previous->rolePrompt, $previous->id)',
+            'new ReviewerConversation($call->rolePrompt(), $reviewer->conversationId())',
+            'new ReviewerConversation($reviewer?->rolePrompt(), $reviewer->conversationId())',
+        ];
+
+        $findings = $this->ruleFindingsIn($this->sampleSandbox(ReviewWithReviewerHandler::class, self::CONVERSATION_IMPORTS, $expressions));
+
+        $this->assertEachCaseRefused($findings, 'intakt.reviewerConversation');
     }
 
     public function testTheVendorRetryMayCopyAConversationsRolePrompt(): void
@@ -126,7 +146,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
 
     public function testTheVendorMayNotBuildAConversationFromAnyOtherText(): void
     {
-        $expressions = [self::NEW_CONVERSATION, 'new ReviewerConversation($text, $previous->id)', 'new ReviewerConversation(id: $previous->id, rolePrompt: $text)', 'new ReviewerConversation(...[$previous->rolePrompt, $previous->id])', "new ReviewerConversation(\$previous->rolePrompt.'!', \$previous->id)"];
+        $expressions = [self::NEW_CONVERSATION, 'new ReviewerConversation($text, $previous->id)', 'new ReviewerConversation(id: $previous->id, rolePrompt: $text)', 'new ReviewerConversation(...[$previous->rolePrompt, $previous->id])', "new ReviewerConversation(\$previous->rolePrompt.'!', \$previous->id)", 'new ReviewerConversation($reviewer->rolePrompt(), $reviewer->conversationId())'];
 
         $findings = $this->ruleFindingsIn($this->sampleSandbox(SymfonyAiVendor::class, self::CONVERSATION_IMPORTS, $expressions));
 

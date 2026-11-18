@@ -7,7 +7,7 @@ namespace Intakt\Tests\Gates;
 // shared by the two rules that guard prompt messages, so both analyze sample classes of the same shape
 trait PromptSamples
 {
-    private const string SAMPLE_PARAMETERS = 'string $text, \Intakt\Core\Review\Contract\PromptAssembly $assembly, \Intakt\Core\Review\Contract\FencedText $body, \Symfony\AI\Platform\Result\ToolCall $call, \Intakt\Core\Review\Contract\ReviewerConversation $previous';
+    private const string SAMPLE_PARAMETERS = 'string $text, \Intakt\Core\Review\Contract\PromptAssembly $assembly, \Intakt\Core\Review\Contract\FencedText $body, \Symfony\AI\Platform\Result\ToolCall $call, \Intakt\Core\Review\Contract\ReviewerConversation $previous, \Intakt\Core\Review\Domain\RoundReviewer $reviewer';
 
     private string $samplePath = '';
 
