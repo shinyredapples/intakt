@@ -49,14 +49,13 @@ final class InterruptedReportStream
         return $this->url_stat();
     }
 
-    public function stream_read(int $count): string|false
+    public function stream_read(): string|false
     {
         if (!$this->started) {
             $this->started = true;
 
             return self::READ_BEFORE_THE_FAILURE;
         }
-
         ++self::$warnings;
         trigger_error('report read failed', E_USER_WARNING);
 
