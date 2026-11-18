@@ -41,7 +41,7 @@ final readonly class ReviewerPrompt
         - No overengineering: no config option, column, parameter or extension point without a caller today; plain PHP and Symfony features before custom abstractions.
         - Comments say why, never what: a comment gives a reason (a constraint, a trade-off, a link) on one line; a comment that restates the code, commented-out code and TODOs are findings; docblocks hold types only.
 
-        Do not re-flag what `bin/check` passes: a rule a `bin/check` gate enforces and passes is no finding (for example a constructor with more than three parameters, which the parameter limit exempts on purpose), unless the gate itself is wrong; then name the gate in the requirement field.
+        Do not re-flag what `bin/check` passes: a rule a `bin/check` gate enforces and passes is no finding (for example a constructor with more than three parameters, which the parameter limit exempts on purpose), also when the gate is wrong or misses a case: that gap gets a gate issue, not a send-back, so report it at most as a P3 that names the gate in the requirement field.
 
         From the second round on you are given the open findings of earlier rounds, each under a persistent id. List the id of every one that is fixed under "resolved". A finding that is still there goes in "findings" with its id and "repeat" set to true. A new problem gets a new id and "repeat" false. From the second round on, a new P1 or P2 must cite a requirement or set "regression" to true (the change broke something that worked before); otherwise it is lowered to P3. Under "resolved" and in a finding with "repeat" true, use only ids you were given.
 

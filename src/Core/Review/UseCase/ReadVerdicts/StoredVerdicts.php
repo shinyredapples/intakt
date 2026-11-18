@@ -9,6 +9,7 @@ use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 
 final readonly class StoredVerdicts
@@ -41,6 +42,6 @@ final readonly class StoredVerdicts
     {
         $json = $reviewer->verdictJson();
 
-        return null === $json ? null : $this->serializer->deserialize($json, Verdict::class, 'json');
+        return null === $json ? null : $this->serializer->deserialize($json, Verdict::class, JsonEncoder::FORMAT);
     }
 }
