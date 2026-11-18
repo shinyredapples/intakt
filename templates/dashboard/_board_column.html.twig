@@ -19,8 +19,8 @@
     {% for review in cards %}
         {{ include('dashboard/_board_card.html.twig', {review: review, past_limit: loop.index > limit}, with_context = false) }}
     {% else %}
-        {# An empty column says what it will hold, so a reader learns the board before it has a card (#2067, D7; #2658); Waiting on you says Nothing needs you once a review has run, as the headline does. #}
-        {{ include('dashboard/components/column_empty.html.twig', {text: needs and not board.firstDay ? 'Nothing needs you' : column.emptyLine}, with_context = false) }}
+        {# An empty column says what it will hold and when, on the first day and after it, so a reader learns the board before it has a card (#2067, D7; #2658). #}
+        {{ include('dashboard/components/column_empty.html.twig', {text: column.emptyLine}, with_context = false) }}
     {% endfor %}
     {% if crowded %}<button type="button" class="btn secondary sm more-btn">Show {{ cards|length - limit }} more</button>{% endif %}
     {% if left_out > 0 %}<a class="btn secondary sm more-link" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">Show {{ left_out }} more</a>{% endif %}

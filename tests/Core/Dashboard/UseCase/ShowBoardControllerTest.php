@@ -72,7 +72,57 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
     }
 
-    public function testAFreshInstallsBoardShowsTheWaitingOctopusBesideItsOneSetUpLink(): void
+    public function testAFreshInstallsBoardShowsTheWaitingOctopusAboveItsOneLineEmptyStateText(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('.page-head h1 + #board-octopus.head-character + p.lead#board-headline'));
+    }
+
+    public function testTheMascotGoesFromWaitingToHiddenToAsleepAsTheFirstReviewRunsAndEnds(): void
+    {
+        $this->browser->disableReboot();
+        self::assertCount(2, $this->browser->request('GET', '/')->filter('#board-octopus img[alt=""][src*="octopus-waiting-"]'));
+
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+        self::assertCount(1, $this->browser->request('GET', '/')->filter('#board-octopus[hidden]:empty'));
+
+        $this->ledger->judgeRound('round-1');
+        self::assertCount(2, $this->browser->request('GET', '/')->filter('#board-octopus:not([hidden]) img[alt=""][src*="octopus-asleep-"]'));
+    }
+
+    public function testAnIdleProjectBesideABusyOneGetsAHiddenAsleepOctopusTheProjectFilterShows(): void
+    {
+        $this->ledger->startRound('round-1', 'beta');
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('42', 'round-2', 1);
+
+        $octopus = $this->browser->request('GET', '/')->filter('#board-octopus');
+
+        self::assertSame(['["beta"]', ''], [$octopus->attr('data-idle-projects'), $octopus->attr('hidden')]);
+        self::assertCount(2, $octopus->filter('img[alt=""][src*="octopus-asleep-"]'));
+    }
+
+    public function testABoardWithoutAnIdleProjectGivesTheOctopusNoProjectList(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        self::assertNull($this->browser->request('GET', '/')->filter('#board-octopus')->attr('data-idle-projects'));
+    }
+
+    public function testTheBoardWiresTheIdleProjectOctopusToItsScriptWhichTheInstallServes(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+        $script = $this->browser->request('GET', '/')->filter('script[type="module"]')->first()->text();
+
+        $this->browser->request('GET', $packages->getUrl('board-octopus.js'));
+
+        self::assertStringContainsString('showIdleProjectOctopus(document);', $script);
+        self::assertStringContainsString('export function showIdleProjectOctopus(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
+    public function testAFreshInstallsBoardShowsTheWaitingOctopusInBothThemesWithItsOneSetUpLink(): void
     {
         $head = $this->browser->request('GET', '/')->filter('.page-head');
         $images = $head->filter('img.character');
@@ -271,13 +321,18 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         );
     }
 
-    public function testAnEmptyWaitingOnYouColumnSaysNothingNeedsYou(): void
+    public function testWaitingOnYouKeepsItsFirstDayExplanationAfterAReview(): void
     {
+        $this->browser->disableReboot();
+        $expected = $this->browser->request('GET', '/')->filter('.col-needs .col-empty')->text();
         $this->ledger->startRoundOf('42', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
 
-        $column = $this->column($this->browser->request('GET', '/'), 'Waiting on you');
+        $idle = $this->browser->request('GET', '/');
 
-        self::assertSame('Nothing needs you', $column->filter('.col-empty')->text());
+        self::assertSame(BoardColumn::WaitingOnYou->emptyLine(), $expected);
+        self::assertSame($expected, $idle->filter('.col-needs .col-empty')->text());
+        self::assertSame('Nothing is running. Nothing needs you.', $idle->filter('.page-head .lead')->text());
     }
 
     public function testOnlyTheFirstColumnIsPinnedAsWaitingOnYou(): void

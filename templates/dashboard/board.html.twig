@@ -6,9 +6,9 @@
 
 {% block body %}
 <div class="page-head">
-    {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
     <div>
         <h1>Board</h1>
+        {{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}
         {# The id is the target of the pushed headline (LiveBoardHeadline), which updates only the words inside, so the line rendered here stays when live updates are off. #}
         <p class="lead" id="board-headline">{{ include('dashboard/_board_headline.html.twig', {headline: board.headline}, with_context = false) }}</p>
     </div>

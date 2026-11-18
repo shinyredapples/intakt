@@ -190,6 +190,26 @@ final class BoardTest extends TestCase
         self::assertNull(new Board([new Review([$this->round('r1', 'feat/a', 1)])])->mascot());
     }
 
+    public function testAProjectWhoseEveryReviewIsDoneIsIdleWhileAnotherProjectHasAReviewInFlight(): void
+    {
+        $done = $this->started(new RoundStart('r1', 'beta', 2), new RoundPlace('feat/a', 1), $this->morning())->judgedWith([], $this->morning());
+        $board = new Board([new Review([$done]), new Review([$this->round('r2', 'feat/b', 1)])]);
+
+        self::assertSame(['beta'], $board->idleProjects());
+    }
+
+    public function testAProjectWithOneReviewInFlightBesideADoneOneIsNotIdle(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())]), new Review([$this->round('r2', 'feat/b', 1)])]);
+
+        self::assertSame([], $board->idleProjects());
+    }
+
+    public function testAFirstDayBoardHasNoIdleProject(): void
+    {
+        self::assertSame([], new Board([])->idleProjects());
+    }
+
     public function testBacklogStillStartsCollapsedWhenEveryOtherColumnIsEmpty(): void
     {
         $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);

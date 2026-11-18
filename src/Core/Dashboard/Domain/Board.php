@@ -62,6 +62,17 @@ final readonly class Board
         };
     }
 
+    // The projects whose every review is Done, so the project filter shows the asleep octopus for one of them while another project still works (#2658). A working review is never Done, so none of them has a lane.
+    /**
+     * @return list<string>
+     */
+    public function idleProjects(): array
+    {
+        $projects = array_values(array_unique(array_map(static fn (Review $card): string => $card->project, $this->cards)));
+
+        return array_values(array_filter($projects, fn (string $project): bool => array_all($this->cards, static fn (Review $card): bool => $card->project !== $project || BoardColumn::Done === $card->column())));
+    }
+
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.
     public function startsCollapsed(BoardColumn $column): bool
     {

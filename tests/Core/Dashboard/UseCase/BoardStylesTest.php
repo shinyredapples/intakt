@@ -59,13 +59,21 @@ final class BoardStylesTest extends TestCase
         self::assertArrayNotHasKey('.board .col.collapsed', $this->rulesOf($this->sheetOutside('min-width: 761px')));
     }
 
-    public function testOnAPhoneTheHeadsOctopusShrinksTo96PxAndKeepsTheTitleBesideIt(): void
+    public function testOnAPhoneTheHeadsOctopusShrinksTo96Px(): void
     {
         preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
         $rules = $this->rulesOf(implode("\n", $blocks[1]));
 
-        self::assertMatchesRegularExpression('/max-height:\s*96px;\s*width:\s*auto;/', $rules['.page-head > .head-character > .character'] ?? '');
-        self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.page-head > .head-character + div'] ?? '');
+        self::assertMatchesRegularExpression('/max-height:\s*96px;\s*width:\s*auto;/', $rules['.page-head .head-character > .character'] ?? '');
+    }
+
+    // The octopus sits on its own line between the title and the one-line empty-state text, so it is a block, and a hidden one leaves no gap.
+    public function testTheHeadsOctopusIsABlockAboveTheLeadThatAHiddenOneRemoves(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+
+        self::assertMatchesRegularExpression('/display:\s*block;/', $rules['.page-head .head-character'] ?? '');
+        self::assertMatchesRegularExpression('/^\s*display:\s*none;\s*$/', $rules['.page-head .head-character[hidden]'] ?? '');
     }
 
     // The first-day headline is one link on a line of its own, so bin/ui-check measured it as a 42 px touch target at 390 wide.
@@ -75,14 +83,6 @@ final class BoardStylesTest extends TestCase
         $rules = $this->rulesOf(implode("\n", $blocks[1]));
 
         self::assertMatchesRegularExpression('/display:\s*inline-block;\s*min-height:\s*44px;/', $rules['.page-head .lead .headline-start'] ?? '');
-    }
-
-    public function testABoardWithACardKeepsTheWrapRuleOnTheTitleColumnBehindTheHiddenOctopusTarget(): void
-    {
-        $rules = $this->rulesOf($this->sheet());
-        $selector = '.page-head > #board-octopus[hidden] + div';
-
-        self::assertMatchesRegularExpression('/min-width:\s*0;\s*overflow-wrap:\s*anywhere;/', $rules[$selector] ?? '');
     }
 
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void

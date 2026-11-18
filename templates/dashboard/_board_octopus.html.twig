@@ -1,8 +1,12 @@
-{#- One home for the board's octopus, because the page renders it on load and the pushed board replaces it, so the first review takes the waiting one away and an idle board gets the asleep one without a reload. It sits in the head beside the title, because the board has no empty block of its own and a second one would add a second title and action (#2067, #2658). -#}
+{#- One home for the board's octopus, because the page renders it on load and the pushed board replaces it, so the first review takes the waiting one away and an idle board gets the asleep one without a reload. It sits between the title and the one-line empty-state text, as the 2026-11-14 decision asks (#2658). -#}
 {%- set pose = board.mascot -%}
+{%- set idle = board.idleProjects -%}
 {%- if pose is not null -%}
 <span class="head-character" id="board-octopus">{{ include('dashboard/components/character.html.twig', {character: pose, size: 144}, with_context = false) }}</span>
+{%- elseif idle is not empty -%}
+{#- Some projects are idle while another works, so the asleep octopus waits hidden and assets/board-octopus.js shows it while the project filter shows one of them. -#}
+<span class="head-character" id="board-octopus" data-idle-projects="{{ idle|json_encode }}" hidden>{{ include('dashboard/components/character.html.twig', {character: enum('Intakt\\Core\\Dashboard\\Domain\\MascotPose').Asleep, size: 144}, with_context = false) }}</span>
 {%- else -%}
-{#- An empty hidden target stays, so a board that becomes empty again gets its octopus back on the next push (#2437); it has no head-character class, so the head's flex rules leave no gap for it. -#}
+{#- An empty hidden target stays, so a board that becomes empty again gets its octopus back on the next push (#2437). -#}
 <span id="board-octopus" hidden></span>
 {%- endif -%}
