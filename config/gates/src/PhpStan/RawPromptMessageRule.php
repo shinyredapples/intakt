@@ -5,13 +5,9 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use Intakt\Core\Review\Contract\PromptAssembly;
-use Symfony\AI\Platform\Message\Message;
-use Symfony\AI\Platform\Message\UserMessage;
-use Symfony\AI\Platform\Message\SystemMessage;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
-use PHPStan\Reflection\ClassReflection;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\New_;
@@ -19,10 +15,13 @@ use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\StaticMethodCallableNode;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\SystemMessage;
+use Symfony\AI\Platform\Message\UserMessage;
 
 /**
  * @implements Rule<Expr>
@@ -66,8 +65,6 @@ final readonly class RawPromptMessageRule implements Rule
 
         return match (true) {
             $node instanceof StaticCall => $this->messageFactoryFindings($node, $scope),
-            // PHPStan hands `Message::ofUser(...)` over as this node instead of a static call
-            $node instanceof StaticMethodCallableNode => $this->messageFactoryFindings($node->getOriginalNode(), $scope),
             $node instanceof New_ => $this->constructionFindings($node, $scope),
             default => [],
         };
