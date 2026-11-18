@@ -142,7 +142,7 @@ final readonly class FullReport
      */
     private function resultOf(GateReport $report): array
     {
-        $kept = GateLineSource::Child === $report->source ?$this->keptResultOf($report->gate) : null;
+        $kept = GateLineSource::Child === $report->source ? $this->keptResultOf($report->gate) : null;
 
         if (null !== $kept && $kept['ok'] === $report->isPassing()) {
             return $kept;
