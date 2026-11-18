@@ -1,7 +1,7 @@
 # Principles
 
 Kept:
-- **Lanes.** A review lane and N build slots run independently and chain into each other, instead of one round at a time.
+- **Lanes.** Review workers (as many as the configuration allows) and N build slots run independently and chain into each other, instead of one round at a time; merges stay one at a time ([Reviews](05-architecture/07-reviews.md)).
 - **Ledger.** An append-only event log (starts, reserves, ends, merges) from which budget, history and recovery are derived. The one exception is the compose demo's replay project: the rows a recording played into it can be removed with it, because they record no work done on this install.
 - **Code reviewers from different vendors**, with a substitute when one is out of budget and a later catch-up review.
 - **Kept commits.** A build that fails the pre-push check keeps its commits for the next cycle instead of starting over.

@@ -25,8 +25,9 @@ This is the only statement of it; every readiness rule in the design points here
 4. Every item of its Evidence list can be produced inside a job's sandbox; evidence only the owner or the orchestrator can produce is marked as such.
 5. It names the docs the change will touch.
 6. It names what it waits for (`Waits for #n`) and, for a split part, its source.
+7. It still holds on today's main: it is not done on main already, not superseded by another issue and not contradicted by a later decision ([Choosing work](05-architecture/03-choosing-work.md), step 3).
 
-For a new project, the spec is Ready to plan when the Tech lead can break it into tasks that meet the six points above.
+For a new project, the spec is Ready to plan when the Tech lead can break it into tasks that meet the seven points above.
 
 ## Definition of Done
 
