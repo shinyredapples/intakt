@@ -15,6 +15,8 @@ class FakeCard extends FakeElement {
 class FakeColumn extends FakeElement {
     line = new FakeElement('Reviews in flight appear here.');
 
+    moreLink = null;
+
     constructor(projects) {
         super();
         this.cards = projects.map((project) => new FakeCard(project));
@@ -22,6 +24,9 @@ class FakeColumn extends FakeElement {
     }
 
     querySelector(selector) {
+        if (selector === '.more-link') {
+            return this.moreLink;
+        }
         assert.equal(selector, '.col-empty');
 
         return this.line;
@@ -57,8 +62,9 @@ class FakePage {
     }
 }
 
-function boardWith(projects) {
+function boardWith(projects, moreLink = null) {
     const column = new FakeColumn(projects);
+    column.moreLink = moreLink;
     const page = new FakePage([column]);
     showEmptyLines(page);
 
@@ -87,6 +93,14 @@ test('choosing a project none of the column\'s cards belongs to shows its empty-
 
 test('choosing the project of one of the column\'s cards hides its empty-state line', () => {
     const { page, column } = boardWith(['alpha', 'beta']);
+
+    page.showProject('beta');
+
+    assert.equal(column.line.hidden, true);
+});
+
+test('a column with a Show n more link keeps its empty-state line hidden though no card of it is shown', () => {
+    const { page, column } = boardWith(['alpha'], new FakeElement('Show 3 more'));
 
     page.showProject('beta');
 
