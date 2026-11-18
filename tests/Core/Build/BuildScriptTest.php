@@ -427,8 +427,7 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/sleep', 0o755);
     }
 
-    // A stand-in in a session of its own, so the group kill misses it and it stays running until the build has returned, as a killed sleep still in its exit does.
-    // The stand-in reports itself only once it is in that session, because the group kill would otherwise reach it before setsid; it ends after ten seconds at the latest, so a failed test leaves nothing running.
+    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it ends after ten seconds at the latest, so a failed test leaves nothing.
     private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(): void
     {
         $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
