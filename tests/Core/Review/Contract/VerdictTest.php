@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
@@ -71,6 +72,34 @@ final class VerdictTest extends TestCase
     public function testAnIntaktFailureVerdictStaysBlocked(Verdict $failure): void
     {
         self::assertSame(Decision::Blocked, $failure->asRecorded()->verdict);
+    }
+
+    #[DataProvider('failureIds')]
+    public function testAReviewersBlockedAnswerNamingAFailureIdIsStillRecordedAsChanges(string $failureId): void
+    {
+        $answer = VerdictDocument::fromTheDesign()
+            ->with('verdict', 'blocked')
+            ->with('resolved', [])
+            ->withFinding('id', $failureId)
+            ->withFinding('file', 'src/Thing.php');
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, 'json');
+
+        self::assertSame(Decision::Changes, $verdict->asRecorded()->verdict);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function failureIds(): iterable
+    {
+        yield 'no tools' => [Verdict::NO_TOOLS];
+        yield 'stopped reviewer' => [Verdict::REVIEWER_STOPPED];
+        yield 'invalid output' => [Verdict::INVALID_OUTPUT];
+    }
+
+    public function testAFailureVerdictWithItsFindingsReplacedStaysBlocked(): void
+    {
+        self::assertSame(Decision::Blocked, Verdict::noTools()->withFindings([$this->finding()])->asRecorded()->verdict);
     }
 
     public function testAnApprovalAndAChangesVerdictAreRecordedAsGiven(): void

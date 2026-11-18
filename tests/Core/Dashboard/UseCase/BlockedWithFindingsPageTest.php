@@ -10,13 +10,13 @@ use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use Intakt\Core\Review\Contract\ChangeDecision;
-use Intakt\Core\Review\Contract\ChangeReview;
 use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\IgnoredProgress;
 use Intakt\Core\Review\Contract\Panel;
 use Intakt\Core\Review\Contract\PanelReviewer;
+use Intakt\Core\Review\Contract\Panels;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\RequestedRound;
@@ -38,7 +38,11 @@ use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Core\Review\UseCase\RunReviewRound\RunReviewRound;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\LocalChangeReview;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewChangeCommand;
+use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewExit;
 use Intakt\Plugin\LocalGitForge\UseCase\ReviewChange\ReviewReport;
+use Intakt\Tests\Core\Git\TemporaryRepository;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
 use Intakt\Tests\Core\Review\Contract\VerdictDocument;
 use Intakt\Tests\Core\Review\SampleIdentity;
@@ -56,6 +60,8 @@ use Symfony\AI\Agent\MessageStore\InMemoryMessageStore;
 use Symfony\AI\Platform\Model;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
@@ -70,6 +76,8 @@ use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(ReviewChange::class)]
 #[UsesClass(ReviewReport::class)]
+#[UsesClass(ReviewChangeCommand::class)]
+#[UsesClass(LocalChangeReview::class)]
 #[UsesClass(ReviewerAgent::class)]
 #[UsesClass(ReviewerPrompt::class)]
 #[UsesClass(LiveProgress::class)]
@@ -84,6 +92,8 @@ final class BlockedWithFindingsPageTest extends WebTestCase
     /** @var list<string> */
     private array $nowStates = [];
 
+    private string $roundId = '';
+
     protected function setUp(): void
     {
         $this->browser = self::createClient(server: ['HTTP_HOST' => 'localhost:7780']);
@@ -95,15 +105,16 @@ final class BlockedWithFindingsPageTest extends WebTestCase
 
     public function testAReviewerAnsweringBlockedWithFindingsShowsChangesRequestedOnThePageAndInTheConsole(): void
     {
-        $review = $this->reviewed();
+        $console = $this->reviewedByTheCommand();
 
-        $page = $this->browser->request('GET', '/reviews/'.$review->roundId);
-        $lines = new ReviewReport(StoredSerializerFactory::create())->asLines($review);
+        $page = $this->browser->request('GET', '/reviews/'.$this->roundId);
+        $lines = explode("\n", rtrim($console->getDisplay(), "\n"));
 
         self::assertResponseIsSuccessful();
         self::assertSame([['role-1', 'Changes requested'], ['role-2', 'Approved']], $this->rows($page, 'table.reviewers tbody tr', 'td'));
         self::assertEqualsCanonicalizing(['Changes requested', 'Approved'], $this->nowStates);
-        self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $page->filter('#round-'.$review->roundId.'-outcome')->text());
+        self::assertSame('Outcome: Changes requested, decided by the quorum policy all over all 2 reviewers.', $page->filter('#round-'.$this->roundId.'-outcome')->text());
+        self::assertSame(ReviewExit::Changes->value, $console->getStatusCode());
         self::assertSame('changes (round 1 counted)', $lines[0]);
         self::assertContains('standard reviewer: changes, 1 findings counted', $lines);
         self::assertContains('standard reviewer: approve, 0 findings counted', $lines);
@@ -111,12 +122,34 @@ final class BlockedWithFindingsPageTest extends WebTestCase
 
     public function testTheLiveLogKeepsTheModelsOwnBlocked(): void
     {
-        $this->reviewed();
+        $this->reviewChange()->review($this->request(), new IgnoredProgress());
 
         self::assertCount(1, array_filter($this->fixture->updates->seen, static fn (string $line): bool => str_starts_with($line, 'answer ') && str_contains($line, ' blocked')));
     }
 
-    private function reviewed(): ChangeReview
+    // Runs intakt:review on a branch of a temporary repository, so the console lines are the command's own output.
+    private function reviewedByTheCommand(): CommandTester
+    {
+        $repository = new TemporaryRepository();
+        $repository->commitFile('README.md', "base\n");
+        $repository->checkoutNewBranch(RoundFixture::CHANGE);
+        $repository->commitFile('src/Thing.php', "<?php\n");
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn($this->panel());
+        $application = new Application();
+        $application->addCommand(new ReviewChangeCommand(new LocalChangeReview($panels, $this->reviewChange()), new ReviewReport(StoredSerializerFactory::create())));
+        $tester = new CommandTester($application->find('intakt:review'));
+
+        try {
+            $tester->execute(['change' => RoundFixture::CHANGE, '--project' => 'alpha', '--task' => RoundFixture::TASK, '--repository' => $repository->path]);
+        } finally {
+            $repository->remove();
+        }
+
+        return $tester;
+    }
+
+    private function reviewChange(): ReviewChange
     {
         $fixture = $this->fixture;
         $vendor = $this->scriptedReviewer();
@@ -129,12 +162,14 @@ final class BlockedWithFindingsPageTest extends WebTestCase
 
             foreach ($fixture->judgings() as $judging) {
                 // Read before the judge's call, because the Now box shows a round only until it is judged.
+                $this->roundId = $judging->roundId;
                 $this->nowStates = $this->browser->request('GET', '/reviews/'.$judging->roundId)->filter('[id$="-now-reviewers"] [id*="-now-reviewer-"]')->each(static fn (Crawler $state): string => $state->text());
                 $fixture->judge($vendor)($judging);
             }
         };
         $serializer = self::getContainer()->get('serializer.stored');
-        $reviewChange = new ReviewChange(
+
+        return new ReviewChange(
             new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$fixture->startHandlerOn($fixture->bus)]]))]),
             $fixture->transactions(),
             new StoredFindings($fixture->entities, $serializer, $fixture->machine('state_machine.review_round')),
@@ -146,8 +181,6 @@ final class BlockedWithFindingsPageTest extends WebTestCase
             $vendor,
             $fixture->noFailedJudgings(),
         );
-
-        return $reviewChange->review($this->request(), new IgnoredProgress());
     }
 
     // The first role's reviewer answers blocked with a finding and the second approves, so the quorum all shows that the blocked answer counts as changes.
@@ -164,13 +197,19 @@ final class BlockedWithFindingsPageTest extends WebTestCase
 
     private function request(): ChangeReviewRequest
     {
+        $panel = $this->panel();
+
+        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+    }
+
+    private function panel(): Panel
+    {
         $members = array_map(
             static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
             [1, 2],
         );
-        $panel = new Panel($members, QuorumPolicy::All);
 
-        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+        return new Panel($members, QuorumPolicy::All);
     }
 
     /**
