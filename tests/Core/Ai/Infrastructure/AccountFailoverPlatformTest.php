@@ -79,7 +79,7 @@ final class AccountFailoverPlatformTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()),new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
+        $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
     public function testACallGoesToTheFirstAccountInTheOwnersOrder(): void
@@ -684,7 +684,7 @@ final class AccountFailoverPlatformTest extends TestCase
     // The cooldowns read the same mocked clock as the calls, so the order of a send and a report is the one the test forces.
     private function reporting(ClockInterface $clock, InMemoryLedger $ledger): AccountCooldownWindows
     {
-        return new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()),new ArrayAdapter(), new LockFactory(new InMemoryStore()), $clock, $ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT]]);
+        return new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), $clock, $ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT]]);
     }
 
     private function onDefault(PlatformInterface $platform, AccountCooldowns $cooldowns, ClockInterface $clock): AccountPlatform

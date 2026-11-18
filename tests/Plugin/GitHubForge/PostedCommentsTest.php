@@ -54,7 +54,7 @@ final class PostedCommentsTest extends TestCase
 
     public function testTheAppsCommentOfAnotherRoundQuotingThisRoundsMarkerInAFindingDoesNotStopThePost(): void
     {
-        $otherRound = ['body' => "[P2] src/A.php: it quotes ".self::MARKER." here\n\n<!-- intakt-verdict: another-round -->", 'performed_via_github_app' => ['id' => self::APP_ID]];
+        $otherRound = ['body' => '[P2] src/A.php: it quotes '.self::MARKER." here\n\n<!-- intakt-verdict: another-round -->", 'performed_via_github_app' => ['id' => self::APP_ID]];
 
         self::assertSame([self::COMMENT], $this->toPost($this->comments($this->listing([1 => [$otherRound]]))));
     }

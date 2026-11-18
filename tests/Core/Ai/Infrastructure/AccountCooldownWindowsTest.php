@@ -303,7 +303,7 @@ final class AccountCooldownWindowsTest extends TestCase
     public function testACooldownTheLedgerRefusesIsLoggedAndStillHolds(): void
     {
         $logger = new BufferingLogger();
-        $cooldowns = new AccountCooldownWindows($this->readings,$this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(accepted: 0), $logger, StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(accepted: 0), $logger, StoredSerializerFactory::create(), $this->accounts());
 
         $cooldowns->coolDown($this->default(), 300);
 
@@ -375,7 +375,7 @@ final class AccountCooldownWindowsTest extends TestCase
     public function testAnAnswerToACallSentAtTheMomentOfTheReportKeepsTheErrorReported(): void
     {
         $clock = new MockClock();
-        $cooldowns = new AccountCooldownWindows($this->readings,$this->pool, new LockFactory(new InMemoryStore()), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
         $cooldowns->coolDownRejected($this->team());
 
         $cooldowns->answered($this->team(), $clock->now());
@@ -400,7 +400,7 @@ final class AccountCooldownWindowsTest extends TestCase
         $store = new InMemoryStore();
         $reporting = new LockFactory($store)->createLock('account-cooldown-reported-anthropic.team');
         $reporting->acquire();
-        $cooldowns = new AccountCooldownWindows($this->readings,$this->pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
 
         $cooldowns->coolDownRejected($this->team());
 
@@ -413,8 +413,8 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         $pool = new SteppingInAfterDeleting('account-cooldown-reported-anthropic.team');
         $store = new InMemoryStore();
-        $cooldowns = new AccountCooldownWindows($this->readings,$pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
-        $otherWorker = new AccountCooldownWindows($this->readings,$pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->readings, $pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($this->readings, $pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
         $cooldowns->coolDownRejected($this->team());
         $pool->step = fn () => $otherWorker->coolDownRejected($this->team());
 
@@ -428,8 +428,8 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         $pool = new SteppingInAfterDeleting('account-cooldown-pending-anthropic.team');
         $store = new InMemoryStore();
-        $cooldowns = new AccountCooldownWindows($this->readings,$pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
-        $otherWorker = new AccountCooldownWindows($this->readings,$pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->readings, $pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($this->readings, $pool, new LockFactory($store), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
         $pool->step = fn () => $otherWorker->coolDownRejected($this->team());
 
         $cooldowns->coolDownRejected($this->team());
@@ -444,8 +444,8 @@ final class AccountCooldownWindowsTest extends TestCase
         $pool = new SteppingInAfterReading('account-cooldown-pending-anthropic.team');
         $store = new InMemoryStore();
         $clock = new MockClock('2026-11-04T12:00:00Z');
-        $cooldowns = new AccountCooldownWindows($this->readings,$pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
-        $otherWorker = new AccountCooldownWindows($this->readings,$pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->readings, $pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        $otherWorker = new AccountCooldownWindows($this->readings, $pool, new LockFactory($store), $clock, $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
         $pool->step = function () use ($otherWorker, $clock): void {
             $otherWorker->coolDownRejected($this->team());
             $clock->sleep(1);
@@ -461,7 +461,7 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         $logger = new BufferingLogger();
         $ledger = new InMemoryLedger(accepted: 1);
-        $cooldowns = new AccountCooldownWindows($this->readings,$this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
+        $cooldowns = new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $ledger, $logger, StoredSerializerFactory::create(), $this->accounts());
         $cooldowns->coolDownRejected($this->team());
 
         $cooldowns->coolDownRejected($this->team());
@@ -487,7 +487,7 @@ final class AccountCooldownWindowsTest extends TestCase
     // Alone on its provider, so the provider's wait is the account's own.
     private function secondsUntilFree(Account $account): int
     {
-        return new AccountCooldownWindows($this->readings,$this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [$account->name]])
+        return new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [$account->name]])
             ->secondsUntilAnAccountIsFree(Provider::Anthropic);
     }
 
@@ -503,7 +503,7 @@ final class AccountCooldownWindowsTest extends TestCase
 
     private function cooldowns(): AccountCooldownWindows
     {
-        return new AccountCooldownWindows($this->readings,$this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
+        return new AccountCooldownWindows($this->readings, $this->pool, new LockFactory(new InMemoryStore()), new NativeClock(), $this->ledger, new NullLogger(), StoredSerializerFactory::create(), $this->accounts());
     }
 
     /**

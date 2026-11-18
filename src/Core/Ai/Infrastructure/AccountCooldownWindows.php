@@ -10,6 +10,7 @@ use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\Usage;
 use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
@@ -112,7 +113,7 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $waits = array_map(function (UsageWindow $window) use ($account, $now): int {
             $usage = $this->measured->of($account, $window)?->usage;
 
-            return null !== $usage && $usage->usedPercent >= self::SPENT_PERCENT && null !== $usage->resetsAt ? $usage->resetsAt->getTimestamp() - $now : 0;
+            return $usage instanceof Usage && $usage->usedPercent >= self::SPENT_PERCENT && $usage->resetsAt instanceof DateTimeImmutable ? $usage->resetsAt->getTimestamp() - $now : 0;
         }, UsageWindow::cases());
         $longest = max(0, ...$waits);
 
