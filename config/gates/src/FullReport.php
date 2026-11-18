@@ -71,7 +71,7 @@ final readonly class FullReport
     {
         $gates = array_map($this->resultOf(...), $reports);
         $this->discard();
-        $directory = self::directoryIn($root);
+        $directory = $this->directoryIn($root);
         $file = $root.'/'.$this->path;
 
         // Because Filesystem::dumpFile() writes through a link, a link planted in the checked tree could have it overwrite a file outside it.
@@ -85,7 +85,7 @@ final readonly class FullReport
             return null;
         }
 
-        self::pruneOlderReportsIn($directory);
+        $this->pruneOlderReportsIn($directory);
 
         return $this->path;
     }
@@ -96,7 +96,7 @@ final readonly class FullReport
         $this->results?->remove();
     }
 
-    private static function directoryIn(string $root): ?string
+    private function directoryIn(string $root): ?string
     {
         $directory = $root;
 
@@ -117,7 +117,7 @@ final readonly class FullReport
         return $directory;
     }
 
-    private static function pruneOlderReportsIn(string $directory): void
+    private function pruneOlderReportsIn(string $directory): void
     {
         $reports = array_filter(glob($directory.'/report-*.json') ?: [], static fn (string $file): bool => is_file($file) && !is_link($file));
         $ages = array_map(static fn (string $file): int => (int) filemtime($file), $reports);
@@ -171,10 +171,10 @@ final readonly class FullReport
             && is_array($findings) && array_is_list($findings) && array_all($findings, static fn (mixed $finding): bool => is_string($finding))
             && ([] === $findings) === ($kept['ok'] ?? null)
             && (!array_key_exists('note', $kept) || is_string($kept['note']))
-            && (!array_key_exists('slowest', $kept) || self::isSlowestList($kept['slowest']));
+            && (!array_key_exists('slowest', $kept) || $this->isSlowestList($kept['slowest']));
     }
 
-    private static function isSlowestList(mixed $slowest): bool
+    private function isSlowestList(mixed $slowest): bool
     {
         return is_array($slowest) && array_is_list($slowest) && array_all($slowest, static fn (mixed $entry): bool => is_array($entry)
             && ['file', 'seconds'] === array_keys($entry)
