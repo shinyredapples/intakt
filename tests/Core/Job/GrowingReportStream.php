@@ -33,12 +33,12 @@ final class GrowingReportStream
     /**
      * @return array{mode: int, size: int}
      */
-    public function url_stat(string $path, int $flags): array
+    public function url_stat(): array
     {
         return ['mode' => 0o100644, 'size' => 4];
     }
 
-    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
+    public function stream_open(): bool
     {
         return true;
     }
@@ -48,7 +48,7 @@ final class GrowingReportStream
      */
     public function stream_stat(): array
     {
-        return $this->url_stat('', 0);
+        return $this->url_stat();
     }
 
     public function stream_read(int $count): string
