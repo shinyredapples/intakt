@@ -251,7 +251,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['round' => self::OTHER_ROUND, 'act' => ['F9'], 'follow_ups' => [], 'findings' => []]);
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+        self::assertSame(['F1', 'F3'], $this->actIdsOf(self::ROUND));
     }
 
     public function testAJudgeDoneRowThatIsNotJsonIsSkipped(): void
@@ -259,14 +259,14 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertTrue($this->ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round": "'.self::ROUND.'", "act": ["F2"]'))->succeeded());
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+        self::assertSame(['F1', 'F3'], $this->actIdsOf(self::ROUND));
     }
 
     public function testAJudgeDoneRowWithAFindingOfAnUnknownSeverityIsSkipped(): void
     {
         $this->append(LedgerEventKind::JudgeDone, ['act' => ['F2'], 'findings' => [['id' => 'F2', 'severity' => 'P9', 'text' => 'Odd.']]] + $this->judgeDone(self::ROUND));
 
-        self::assertSame([], $this->reading()->actIdsOf(self::ROUND));
+        self::assertSame([], $this->actIdsOf(self::ROUND));
     }
 
     public function testTheDroppedFindingsOfAJudgeDoneRowAreReadWithTheirReasons(): void
@@ -281,7 +281,7 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
         self::assertSame([], $this->reading()->droppedOf(self::ROUND));
-        self::assertSame(['F1', 'F3'], $this->reading()->actIdsOf(self::ROUND));
+        self::assertSame(['F1', 'F3'], $this->actIdsOf(self::ROUND));
     }
 
     public function testTheDroppedFindingsOfAnotherRoundAreNotRead(): void
@@ -297,14 +297,32 @@ final class RoundLedgerReadingTest extends KernelTestCase
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F1' => 'F2']] + $this->judgeDone('another-round'));
         $this->append(LedgerEventKind::JudgeDone, ['same_cause' => ['F3' => 'F1']] + $this->judgeDone(self::ROUND));
 
-        self::assertSame(['F3' => 'F1'], $this->reading()->sameCauseOf(self::ROUND));
+        self::assertSame(['F3' => 'F1'], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
     }
 
     public function testAJudgeDoneRowWrittenBeforeCausesWereLinkedReadsAsNoLinks(): void
     {
         $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame([], $this->reading()->sameCauseOf(self::ROUND));
+        self::assertSame([], $this->reading()->judgeDoneOf(self::ROUND)?->sameCause);
+    }
+
+    public function testTheJudgesNotesAreReadFromTheRoundsJudgeDoneRow(): void
+    {
+        $row = $this->judgeDone(self::ROUND);
+        $row['findings'][0]['judge_note'] = 'The branch is unreachable.';
+        $this->append(LedgerEventKind::JudgeDone, $row);
+
+        $findings = $this->reading()->judgeDoneOf(self::ROUND)->findings ?? [];
+
+        self::assertSame(['The branch is unreachable.', null, null], array_map(static fn (JudgeDoneFinding $finding): ?string => $finding->judgeNote, $findings));
+    }
+
+    public function testARoundTheJudgeHasNotAnsweredHasNoJudgeDone(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::OTHER_ROUND));
+
+        self::assertNull($this->reading()->judgeDoneOf(self::ROUND));
     }
 
     public function testARoundTheJudgeHasNotAnsweredHasNoDroppedFindings(): void
@@ -326,6 +344,14 @@ final class RoundLedgerReadingTest extends KernelTestCase
     private function judgeDone(string $round): array
     {
         return ['round' => $round, 'act' => ['F1', 'F3'], 'follow_ups' => ['F2'], 'findings' => [['id' => 'F1', 'severity' => 'P1', 'text' => 'Broken.'], ['id' => 'F2', 'severity' => 'P3', 'text' => 'Later.'], ['id' => 'F3', 'severity' => 'P2', 'text' => 'Untested.']]];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function actIdsOf(string $round): array
+    {
+        return $this->reading()->judgeDoneOf($round)->act ?? [];
     }
 
     private function reading(): RoundLedgerReading
