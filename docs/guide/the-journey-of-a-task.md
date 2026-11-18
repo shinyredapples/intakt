@@ -133,7 +133,7 @@ flowchart TD
 
 ## 7. Afterwards
 
-- **Follow-ups:** any P3 notes from the reviewers become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original; it says which stage it came from, so you can move it back.
+- **Follow-ups:** any P3 notes from the reviewers become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original or no later stage is open; it says which stage it came from, so you can move it back.
 - **Project memory:** what was learned (a fixed finding, a recurring failure and its cause) goes into the project memory, so the next builder and reviewers are briefed.
 - **Unblocking:** tasks that said `Waits for` this one become eligible.
 - **Tidying up:** the task's branch is cleaned up.
