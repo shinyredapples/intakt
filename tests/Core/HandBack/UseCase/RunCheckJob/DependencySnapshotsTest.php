@@ -65,7 +65,7 @@ final class DependencySnapshotsTest extends TestCase
 
     private MockClock $clock;
 
-    private InMemoryStore $locks;
+    private PersistingStoreInterface $locks;
 
     // Held for the whole test, because a lock nobody references is released at once.
     private ?SharedLockInterface $otherCheck = null;
@@ -282,10 +282,10 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
         $entry = $this->root.'/'.$this->keyOf('{"packages": ["acme/lib"]}');
-        $this->locks = new InMemoryStore();
-        $store = $this->store($this->runnerInstalling(), locks: new SavingWhileLocking($this->locks, static function () use ($entry): void {
+        $this->locks = new SavingWhileLocking(new InMemoryStore(), static function () use ($entry): void {
             new Filesystem()->dumpFile($entry.'/vendor/acme/lib/Lib.php', "<?php\n");
-        }));
+        });
+        $store = $this->store($this->runnerInstalling());
 
         $snapshot = $store->of($this->history->work.'/.git', $head, 'job-image');
 
@@ -325,10 +325,7 @@ final class DependencySnapshotsTest extends TestCase
 
     private function keyOf(string $lock): string
     {
-        $install = new PhpGate()->dependencyInstall();
-        self::assertNotNull($install);
-
-        return new DependencySource($install, 'job-image', ['composer.json' => self::MANIFEST, 'composer.lock' => $lock."\n"])->key();
+        return new DependencySource(new PhpGate()->dependencyInstall(), 'job-image', ['composer.json' => self::MANIFEST, 'composer.lock' => $lock."\n"])->key();
     }
 
     private function runnerInstalling(): JobRunner
@@ -348,8 +345,7 @@ final class DependencySnapshotsTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($install): JobResult {
             $this->ran[] = $spec;
-            $lockInputs = $spec->inputs[0]->hostPath;
-            $this->lockInputsSeen = array_values(array_diff((array) scandir($lockInputs), ['.', '..']));
+            $this->lockInputsSeen = $this->namesIn($spec->inputs[0]->hostPath);
 
             return $install((string) $spec->keptDirectory);
         });
@@ -357,7 +353,7 @@ final class DependencySnapshotsTest extends TestCase
         return $runner;
     }
 
-    private function store(JobRunner $runner, ?Gate $gate = null, int $kept = 10, ?PersistingStoreInterface $locks = null): DependencySnapshots
+    private function store(JobRunner $runner, ?Gate $gate = null, int $kept = 10): DependencySnapshots
     {
         $gate ??= new PhpGate();
 
@@ -365,7 +361,7 @@ final class DependencySnapshotsTest extends TestCase
             $gate,
             new RepositoryGit(new HardenedGit()),
             new DependencyInstallJob($runner, $gate, new Filesystem(), self::SCRIPT),
-            new LockFactory($locks ?? $this->locks),
+            new LockFactory($this->locks),
             $this->clock,
             new Filesystem(),
             $this->root,
@@ -378,6 +374,16 @@ final class DependencySnapshotsTest extends TestCase
      */
     private function entries(): array
     {
-        return is_dir($this->root) ? array_values(array_diff((array) scandir($this->root), ['.', '..'])) : [];
+        return is_dir($this->root) ? $this->namesIn($this->root) : [];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function namesIn(string $directory): array
+    {
+        $names = scandir($directory);
+
+        return false === $names ? [] : array_values(array_diff($names, ['.', '..']));
     }
 }

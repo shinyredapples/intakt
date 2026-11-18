@@ -45,13 +45,11 @@ use Intakt\Plugin\Gate\Contract\DependencyInstall;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\HandBack\DependencyStore;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(RunCheckJob::class)]
 #[CoversClass(LostContentCheck::class)]
@@ -92,8 +90,6 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 final class RunCheckJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
-
-    private const string INSTALL_SCRIPT = __DIR__.'/../../../../../docker/job/install-dependencies.sh';
 
     private BuildHistory $history;
 
@@ -550,16 +546,7 @@ final class RunCheckJobTest extends TestCase
             new LostContentCheck($git),
             $runner,
             $gate,
-            new DependencySnapshots(
-                $gate,
-                $git,
-                new DependencyInstallJob($runner, $gate, new Filesystem(), self::INSTALL_SCRIPT),
-                new LockFactory(new InMemoryStore()),
-                new MockClock(),
-                new Filesystem(),
-                $this->history->folder.'/dependencies',
-                10,
-            ),
+            DependencyStore::in($this->history->folder.'/dependencies', $runner, $gate),
             new Filesystem(),
             self::SCRIPT,
         );

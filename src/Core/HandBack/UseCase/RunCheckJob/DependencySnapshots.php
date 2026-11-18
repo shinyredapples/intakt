@@ -158,7 +158,9 @@ final readonly class DependencySnapshots
         // Cleared first, because another check touched its snapshot since this process last read the times.
         clearstatcache();
 
-        foreach (scandir($this->root) ?: [] as $name) {
+        $names = scandir($this->root);
+
+        foreach (false === $names ? [] : $names as $name) {
             if (1 === preg_match(self::ENTRY, $name)) {
                 $used[$name] = (int) filemtime($this->root.'/'.$name);
             }

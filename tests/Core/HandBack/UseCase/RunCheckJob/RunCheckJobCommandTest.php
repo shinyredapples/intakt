@@ -25,7 +25,6 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
-use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyInstallJob;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
@@ -45,16 +44,14 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
+use Intakt\Tests\Core\HandBack\DependencyStore;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(RunCheckJobCommand::class)]
 #[CoversClass(RunCheckJobInput::class)]
@@ -225,16 +222,7 @@ final class RunCheckJobCommandTest extends TestCase
             new LostContentCheck($git),
             $runner,
             new PhpGate(),
-            new DependencySnapshots(
-                new PhpGate(),
-                $git,
-                new DependencyInstallJob($runner, new PhpGate(), new Filesystem(), __DIR__.'/../../../../../docker/job/install-dependencies.sh'),
-                new LockFactory(new InMemoryStore()),
-                new MockClock(),
-                new Filesystem(),
-                $this->history->folder.'/dependencies',
-                10,
-            ),
+            DependencyStore::in($this->history->folder.'/dependencies', $runner, new PhpGate()),
             new Filesystem(),
             self::SCRIPT,
         );
