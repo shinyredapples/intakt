@@ -8,22 +8,33 @@ use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
+use ReflectionParameter;
 
 #[CoversClass(SymfonyAiVendor::class)]
 final class SymfonyAiVendorRequiresServersTest extends TestCase
 {
     public function testTheVendorCannotBeBuiltWithoutReviewServerAccesses(): void
     {
-        $parameter = new ReflectionMethod(SymfonyAiVendor::class, '__construct')->getParameters()[7];
+        $parameter = $this->serversParameter();
 
-        self::assertSame('servers', $parameter->getName());
         self::assertFalse($parameter->isOptional());
     }
 
     public function testTheVendorRejectsNullReviewServerAccesses(): void
     {
-        $parameter = new ReflectionMethod(SymfonyAiVendor::class, '__construct')->getParameters()[7];
+        $parameter = $this->serversParameter();
 
         self::assertFalse($parameter->allowsNull());
+    }
+
+    private function serversParameter(): ReflectionParameter
+    {
+        foreach (new ReflectionMethod(SymfonyAiVendor::class, '__construct')->getParameters() as $parameter) {
+            if ('servers' === $parameter->getName()) {
+                return $parameter;
+            }
+        }
+
+        self::fail('The vendor constructor has no servers parameter.');
     }
 }
