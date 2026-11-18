@@ -74,11 +74,25 @@ final class ProviderLiteralRuleTest extends PhpStanRuleTestCase
     {
         $findings = $this->ruleFindingsOf('reasoning-model-ids-with-suffixes');
 
-        foreach ([15 => 'o3', 16 => 'o3-2025-04-16', 17 => 'o1-preview', 18 => 'o4-mini-2025-04-16', 19 => 'o3-pro-2025-06-10', 20 => 'o3-deep-research', 21 => 'O1-MINI'] as $line => $id) {
+        foreach ([15 => 'o3', 16 => 'o3-2025-04-16', 17 => 'o1-preview', 18 => 'o4-mini-2025-04-16', 19 => 'o3-pro-2025-06-10', 20 => 'o3-deep-research', 21 => 'O1-MINI', 22 => 'o3', 23 => 'o1', 24 => 'o4', 25 => 'o3', 26 => 'o3', 27 => 'o3:online', 28 => 'o3', 29 => 'o3', 30 => 'o1'] as $line => $id) {
             self::assertStringContainsString(sprintf("src/Reasoning.php:%d intakt.providerLiteral '%s' names a model", $line, $id), $findings);
         }
 
-        self::assertStringNotContainsString('src/Reasoning.php:30', $findings);
+        self::assertStringNotContainsString('src/Reasoning.php:39', $findings);
+    }
+
+    public function testEmbeddingCodexAndDeepSeekModelIdsFailStaticAnalysis(): void
+    {
+        $findings = $this->ruleFindingsOf('model-ids-of-more-families');
+
+        foreach ([15 => 'text-embedding-3-small', 16 => 'codex-mini-latest', 17 => 'deepseek-chat', 18 => 'deepseek-reasoner', 19 => 'deepseek-coder', 20 => 'text-embedding-ada-002'] as $line => $id) {
+            self::assertStringContainsString(sprintf("src/Families.php:%d intakt.providerLiteral '%s' names a model", $line, $id), $findings);
+        }
+    }
+
+    public function testReasoningSeriesWordsInProsePassStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('reasoning-series-words-in-prose');
     }
 
     public function testProviderHostsAreFoundAtTheirBoundariesOnly(): void
