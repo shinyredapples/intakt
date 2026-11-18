@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
+use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
-use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 
 // At most four choices, because more would make the owner compare instead of act, and the recommended one first because it is the one to take.
 final readonly class WaitingItem
@@ -26,7 +26,7 @@ final readonly class WaitingItem
         public DateTimeImmutable $since,
         public array $choices,
         public string $linkLabel,
-        public string $linkRoute,
+        public ?string $link,
     ) {
         $count = count($choices);
         if ($count < 1 || $count > self::MOST_CHOICES || !$choices[0]->recommended) {
@@ -49,9 +49,19 @@ final readonly class WaitingItem
                 new WaitingChoice(outcome: 'Leave it: builds keep running one call at a time until the next reading.', command: null, recommended: true),
                 new WaitingChoice(outcome: 'Makes one paid call per configured provider and prints its token usage, so you see whether the provider still answers. It records no usage reading.', command: 'php bin/console intakt:vendor:probe', recommended: false),
             ],
-            'See the queue on the board',
-            DashboardRoutes::SHOW_BOARD,
+            null === self::statusPageOf($notice->account->provider) ? 'See the queue on the board' : 'Open the provider\'s status page',
+            self::statusPageOf($notice->account->provider),
         );
+    }
+
+    // Null for an OpenAI-compatible server, because its address is the owner's own choice and has no public status page; the page then links to the board.
+    private static function statusPageOf(Provider $provider): ?string
+    {
+        return match ($provider) {
+            Provider::Anthropic, Provider::ClaudeCode => 'https://status.anthropic.com',
+            Provider::OpenAi, Provider::Codex => 'https://status.openai.com',
+            Provider::OpenAiCompatible => null,
+        };
     }
 
     // Whole units, rounded down, because an item must never read as older than it is.

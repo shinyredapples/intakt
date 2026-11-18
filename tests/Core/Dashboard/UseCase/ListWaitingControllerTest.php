@@ -101,13 +101,22 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertSame(['waiting'], $page->filter('.rail a.nav[aria-current]')->each(static fn (Crawler $entry): ?string => $entry->attr('data-k')));
     }
 
-    public function testEachItemLinksToWhereItsConsequenceShows(): void
+    public function testTheOutageCardLinksToTheStatusPageOfItsProvider(): void
     {
         $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
 
         $page = $this->browser->request('GET', '/waiting');
 
-        self::assertSame(['/'], $page->filter('.wait-item .act a[href]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
+        self::assertSame(['https://status.anthropic.com'], $page->filter('.wait-item a[href]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
+    }
+
+    public function testAnOutageOfAnOpenAiCompatibleServerLinksToTheBoardWithItsFlag(): void
+    {
+        $this->noticesAre(new OutageNotice(new Account(Provider::OpenAiCompatible, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        self::assertSame(['/?board=1'], $page->filter('.wait-item a[href]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
     }
 
     private function noticesAre(OutageNotice ...$notices): void

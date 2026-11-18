@@ -20,11 +20,11 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
-use Uri\WhatWg\Url;
 
 final readonly class ShowBoardController
 {
-    private const array LANDING_HEADERS = ['Sec-CH-UA-Mobile', 'User-Agent', 'Referer'];
+    private const array LANDING_HEADERS = ['Sec-CH-UA-Mobile', 'User-Agent'];
+    private const string BOARD_FLAG = 'board';
 
     public function __construct(
         private Ledger $ledger,
@@ -64,25 +64,15 @@ final readonly class ShowBoardController
         return $answer;
     }
 
-    // A phone's home is Waiting on you (DESIGN.md), so a phone that opens the address lands there, and a click inside the dashboard, whose referrer is this host, still reaches the board.
+    // A phone's home is Waiting on you (DESIGN.md), so a phone that opens the address lands there; the dashboard's own Board entries send the board flag and still reach the board.
     // The user agent's "Mobi" (MDN's advice), because Safari and Firefox send no Sec-CH-UA-Mobile and Chromium sends it only on a secure origin.
     private function isPhoneLanding(Request $request): bool
     {
-        $phone = '?1' === $request->headers->get('Sec-CH-UA-Mobile') || str_contains($request->headers->get('User-Agent') ?? '', 'Mobi');
-
-        return $phone && !$this->comesFromThisHost($request);
-    }
-
-    private function comesFromThisHost(Request $request): bool
-    {
-        $referrer = Url::parse($request->headers->get('Referer') ?? '');
-        if (null === $referrer) {
+        if ($request->query->has(self::BOARD_FLAG)) {
             return false;
         }
 
-        $port = $referrer->getPort();
-
-        return $referrer->getAsciiHost().(null === $port ? '' : ':'.$port) === $request->getHttpHost();
+        return '?1' === $request->headers->get('Sec-CH-UA-Mobile') || str_contains($request->headers->get('User-Agent') ?? '', 'Mobi');
     }
 
     private function redactedMain(FailingMain $main): FailingMain

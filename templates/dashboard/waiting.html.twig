@@ -36,7 +36,7 @@
             <span class="outcome">{{ choice.outcome }}</span>
         </li>
     {% endfor %}
-        <li><a class="btn secondary sm" href="{{ path(item.linkRoute) }}">{{ item.linkLabel }}</a></li>
+        <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD'), {board: 1}) }}"{% if item.link is not null %} rel="noopener noreferrer"{% endif %}>{{ item.linkLabel }}</a></li>
     </ul>
     <details class="why" open><summary>Why</summary>
         <p>{{ item.why }}</p>

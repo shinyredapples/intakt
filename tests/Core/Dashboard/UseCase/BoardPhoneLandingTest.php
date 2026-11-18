@@ -60,13 +60,22 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
         yield 'Firefox on Android, which sends no client hint' => [['HTTP_USER_AGENT' => self::ANDROID_FIREFOX]];
         yield 'Chromium on a phone, by its client hint' => [['HTTP_SEC_CH_UA_MOBILE' => '?1']];
         yield 'a link from another site' => [['HTTP_USER_AGENT' => self::IPHONE, 'HTTP_REFERER' => 'https://mail.example/inbox']];
+        yield 'a link from inside the dashboard without the board flag' => [['HTTP_USER_AGENT' => self::IPHONE, 'HTTP_REFERER' => 'http://localhost:7780/waiting']];
     }
 
-    public function testAPhoneClickingBoardInsideTheDashboardStillReachesTheBoard(): void
+    public function testAPhoneFollowingTheBoardEntryStillReachesTheBoard(): void
     {
-        $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::IPHONE, 'HTTP_REFERER' => 'http://localhost:7780/waiting']);
+        $page = $this->browser->request('GET', '/?board=1', server: ['HTTP_USER_AGENT' => self::IPHONE, 'HTTP_SEC_CH_UA_MOBILE' => '?1']);
 
         self::assertResponseIsSuccessful();
+        self::assertSame('page', $page->filter('.rail a.nav[data-k="board"]')->attr('aria-current'));
+    }
+
+    public function testTheBoardEntryOfTheRailAndBottomBarCarriesTheBoardFlag(): void
+    {
+        $page = $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::DESKTOP]);
+
+        self::assertSame('/?board=1', $page->filter('.rail a.nav[data-k="board"]')->attr('href'));
     }
 
     public function testADesktopOpeningTheAddressGetsTheBoard(): void
@@ -93,7 +102,6 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
         $vary = $this->browser->getResponse()->getVary();
         self::assertContains('Sec-CH-UA-Mobile', $vary);
         self::assertContains('User-Agent', $vary);
-        self::assertContains('Referer', $vary);
     }
 
     public function testThePhoneRedirectVariesByTheHeadersThatChooseIt(): void

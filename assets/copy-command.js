@@ -47,7 +47,7 @@ function show(button, message, shown) {
     });
 }
 
-// Esc closes the Why the reader opened on a phone and hands focus back to its summary; a desktop shows no summary that could open it again (DESIGN.md), so it stays open there.
+// Esc closes the Why the reader opened on a phone and hands focus back to its summary; a desktop shows every Why open (DESIGN.md), so Esc leaves it there.
 function closeWhyOnEscape(event, phone) {
     const why = 'Escape' === event.key && phone(PHONE).matches ? event.target?.closest?.(WHY) : null;
     if (why?.open) {
