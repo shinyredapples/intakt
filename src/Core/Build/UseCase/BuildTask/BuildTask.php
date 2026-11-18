@@ -80,7 +80,8 @@ final readonly class BuildTask
                 BuildStep::Clone => $this->makeClone($request),
                 BuildStep::BuildJob => $this->runBuildJob($request, $task),
                 BuildStep::HandBackCheck => $this->handBacks->check($request, $this->bundleIn($results)),
-                BuildStep::PrePushCheck => $this->prePushChecks->failureOf($request, $this->bundleIn($results)),
+                // The mirror again first, because main can move while the build job runs and the check merges the branch with current main.
+                BuildStep::PrePushCheck => $this->updateMirror($request) ?? $this->prePushChecks->failureOf($request, $this->bundleIn($results)),
                 BuildStep::Push => $this->push($request, $results),
             };
 
