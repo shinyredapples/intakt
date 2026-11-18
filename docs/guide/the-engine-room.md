@@ -30,7 +30,7 @@ There are two queues: tasks **waiting to be built** and finished work **waiting 
 
 Planned: within one priority and milestone, a task that more other tasks wait on, counted down the whole chain, goes before an older one; among finished changes waiting for review, the same holds within one priority (the review queue does not look at milestones). For builds it never moves a task ahead of a higher priority or an earlier milestone; for reviews it never moves one ahead of a higher priority. A follow-up made from a reviewer's nice-to-have note joins the next milestone instead of its original's, unless it fixes something that blocked the original or no later milestone is open.
 
-**The review cap** stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Work that is waiting for *you*, or on hold, doesn't count towards the cap, because no reviewer can move it.
+**The review cap** (planned: the rule is written, but the build lane does not use it yet) stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Only work that is waiting for a reviewer, or being read by one, counts. Work that is waiting for its checks (CI), for a machine to run them, or to be merged doesn't count towards the cap, and neither does work waiting for *you* or on hold, because no reviewer can move it: otherwise the builders would pause while the reviewers have nothing to read.
 
 ## Ticks, events and deadlines: what makes things move
 
@@ -132,5 +132,5 @@ While a drain is on, the dashboard says "draining" and nothing new starts; it us
 | **Hold** | a pause with a reason, which lifts by itself when the reason is gone |
 | **Hand-over** | the task goes to the maintainer agent, which decides what happens next |
 | **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
-| **Review cap** | at most a few pieces of finished work wait for a reviewer before the builders pause |
+| **Review cap** (planned) | at most a few pieces of finished work wait for a reviewer (or are being reviewed) before the builders pause; work waiting for its checks or to be merged doesn't count |
 | **Parked** | a job that is waiting for something outside (CI, you) and has given its bench back |
