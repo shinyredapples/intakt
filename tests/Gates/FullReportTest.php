@@ -38,7 +38,9 @@ final class FullReportTest extends SandboxTestCase
         $run = $sandbox->check('--only=dashes');
 
         self::assertSame((string) (self::DASHED_LINES - 10), $run->omittedOf('dashes'), $run->output());
-        self::assertCount(self::DASHED_LINES, $this->reportedGate($sandbox, 'dashes')['findings']);
+        $findings = $this->reportedGate($sandbox, 'dashes')['findings'];
+        self::assertIsArray($findings);
+        self::assertCount(self::DASHED_LINES, $findings);
     }
 
     public function testAPassingCheckStillWritesTheReportAndNamesIt(): void
