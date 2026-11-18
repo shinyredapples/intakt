@@ -117,7 +117,7 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         $this->measured(UsageWindow::FiveHour, 100.0, 3000);
 
-        $this->cooldowns()->coolDown($this->default(), null);
+        $this->cooldowns()->coolDownUntilPlanResets($this->default());
 
         self::assertEqualsWithDelta(3000, $this->secondsUntilFree($this->default()), 1);
     }
@@ -126,7 +126,7 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         $this->measured(UsageWindow::Weekly, 100.0, 5 * 86400);
 
-        $this->cooldowns()->coolDown($this->default(), null);
+        $this->cooldowns()->coolDownUntilPlanResets($this->default());
 
         self::assertEqualsWithDelta(86400, $this->secondsUntilFree($this->default()), 1);
     }
@@ -136,7 +136,7 @@ final class AccountCooldownWindowsTest extends TestCase
         $this->measured(UsageWindow::FiveHour, 100.0, 3000);
         $this->measured(UsageWindow::Weekly, 104.0, 7000);
 
-        $this->cooldowns()->coolDown($this->default(), null);
+        $this->cooldowns()->coolDownUntilPlanResets($this->default());
 
         self::assertEqualsWithDelta(7000, $this->secondsUntilFree($this->default()), 1);
     }
@@ -145,7 +145,7 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         $this->measured(UsageWindow::FiveHour, 99.9, 3000);
 
-        $this->cooldowns()->coolDown($this->default(), null);
+        $this->cooldowns()->coolDownUntilPlanResets($this->default());
 
         self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
     }
@@ -154,7 +154,7 @@ final class AccountCooldownWindowsTest extends TestCase
     {
         $this->measured(UsageWindow::FiveHour, 100.0, -10);
 
-        $this->cooldowns()->coolDown($this->default(), null);
+        $this->cooldowns()->coolDownUntilPlanResets($this->default());
 
         self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
     }
@@ -162,6 +162,22 @@ final class AccountCooldownWindowsTest extends TestCase
     public function testAnExhaustedReadingWithoutAResetLeavesTheDefaultMinute(): void
     {
         $this->readings->record(new WindowReading($this->default(), UsageWindow::FiveHour, new Usage(100.0, null)));
+
+        $this->cooldowns()->coolDownUntilPlanResets($this->default());
+
+        self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
+    }
+
+    public function testAnAccountWithoutReadingsWaitingForItsPlanStillCoolsDownForTheDefaultMinute(): void
+    {
+        $this->cooldowns()->coolDownUntilPlanResets($this->default());
+
+        self::assertEqualsWithDelta(60, $this->secondsUntilFree($this->default()), 1);
+    }
+
+    public function testALimitWithoutAResetIgnoresAnExhaustedReadingAndCoolsDownForOneMinute(): void
+    {
+        $this->measured(UsageWindow::FiveHour, 100.0, 3000);
 
         $this->cooldowns()->coolDown($this->default(), null);
 

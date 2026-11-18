@@ -26,6 +26,7 @@ use Symfony\Component\RateLimiter\RateLimit;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
 use Symfony\Component\Serializer\SerializerInterface;
+use Throwable;
 
 // A RateLimiter window of one call per account, anchored at the vendor's reset, in a cache every worker shares, so all reviewers on an account wait together.
 #[AsAlias(AccountCooldowns::class)]
@@ -61,7 +62,12 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     public function coolDown(Account $account, ?int $resetInSeconds): void
     {
-        $this->coolDownFor($account, $resetInSeconds ?? $this->secondsUntilSpentWindowResets($account) ?? self::SECONDS_WITHOUT_RESET);
+        $this->coolDownFor($account, $resetInSeconds ?? self::SECONDS_WITHOUT_RESET);
+    }
+
+    public function coolDownUntilPlanResets(Account $account): void
+    {
+        $this->coolDownFor($account, $this->secondsUntilSpentWindowResets($account) ?? self::SECONDS_WITHOUT_RESET);
     }
 
     // The marker ends with the window that runs, the rejection's minute or a limit set before it, so the account is retried when its cooldown ends like any other.
@@ -106,15 +112,20 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return [] === $waits ? 0 : min($waits);
     }
 
-    // A spent plan's limit comes without a reset (issue #1749), so the account's measured readings say when it is usable again: the latest reset of a spent window still ahead.
+    // Asked only for a spent plan's limit, which comes without a reset (issue #1749), so the account's measured readings say when it is usable again: the latest reset of a spent window still ahead.
     private function secondsUntilSpentWindowResets(Account $account): ?int
     {
-        $now = $this->clock->now()->getTimestamp();
-        $waits = array_map(function (UsageWindow $window) use ($account, $now): int {
-            $usage = $this->measured->of($account, $window)?->usage;
+        try {
+            $usages = array_map(fn (UsageWindow $window): ?Usage => $this->measured->of($account, $window)?->usage, UsageWindow::cases());
+            // Boundary: logs the failed read and keeps the default minute, because the provider's own limit must still reach the caller and the account must still pause.
+        } catch (Throwable $unreadable) {
+            $this->logger->warning('The measured readings of account {account} could not be read.', ['account' => $account->key(), 'exception' => $unreadable]);
 
-            return $usage instanceof Usage && $usage->usedPercent >= self::SPENT_PERCENT && $usage->resetsAt instanceof DateTimeImmutable ? $usage->resetsAt->getTimestamp() - $now : 0;
-        }, UsageWindow::cases());
+            return null;
+        }
+
+        $now = $this->clock->now()->getTimestamp();
+        $waits = array_map(static fn (?Usage $usage): int => $usage instanceof Usage && $usage->usedPercent >= self::SPENT_PERCENT && $usage->resetsAt instanceof DateTimeImmutable ? $usage->resetsAt->getTimestamp() - $now : 0, $usages);
         $longest = max(0, ...$waits);
 
         return 0 < $longest ? $longest : null;
