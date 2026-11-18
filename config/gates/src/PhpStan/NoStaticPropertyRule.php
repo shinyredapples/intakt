@@ -32,7 +32,7 @@ final readonly class NoStaticPropertyRule implements Rule
         // because the analyser enters a trait body only through a class that uses it, the file is read whole
         $statics = array_filter(new NodeFinder()->findInstanceOf($node->getNodes(), Property::class), static fn (Property $property): bool => $property->isStatic());
 
-        return array_values(array_merge(...array_map($this->findingsOf(...), $statics)));
+        return array_merge(...array_map($this->findingsOf(...), $statics));
     }
 
     /**
@@ -45,7 +45,7 @@ final readonly class NoStaticPropertyRule implements Rule
                 ->identifier('intakt.noStaticProperty')
                 ->line($property->getStartLine())
                 ->build(),
-            $declaration->props,
+            array_values($declaration->props),
         );
     }
 }
