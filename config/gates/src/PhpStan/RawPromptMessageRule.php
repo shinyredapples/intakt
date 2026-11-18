@@ -141,7 +141,7 @@ final readonly class RawPromptMessageRule implements Rule
         return $rolePrompt?->value;
     }
 
-    // only `$reviewer->rolePrompt()` on the round's reviewer, which records the panel member's role, proves the text is the owner's configuration
+    // the type of the receiver is checked too, because the round's reviewer records the panel member's role, so only its `rolePrompt()` proves the text is the owner's configuration
     private function readsTheRoundReviewersRolePrompt(Expr $rolePrompt, Scope $scope): bool
     {
         return $rolePrompt instanceof MethodCall
@@ -150,7 +150,7 @@ final readonly class RawPromptMessageRule implements Rule
             && new ObjectType(self::ROUND_REVIEWER)->isSuperTypeOf($scope->getType($rolePrompt->var))->yes();
     }
 
-    // only `$conversation->rolePrompt` of an existing conversation proves where the text came from
+    // a changed copy is refused, because only the unchanged `$conversation->rolePrompt` of an existing conversation proves where the text came from
     private function copiesARolePrompt(Expr $rolePrompt, Scope $scope): bool
     {
         return $rolePrompt instanceof PropertyFetch
