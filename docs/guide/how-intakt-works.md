@@ -116,7 +116,8 @@ flowchart LR
   h -- "Intakt was updated" --> retry[One more review]
   rebuild -- fixed --> go
   retry -- fixed --> go
-  rebuild -- still stuck --> h
+  rebuild -- "still stuck (needs the project)" --> m
+  rebuild -- "still stuck (other reason)" --> h
   retry -- still stuck --> h
   h -- "stuck after a few tries" --> m[Maintainer agent decides]
 ```
