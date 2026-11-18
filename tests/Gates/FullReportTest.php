@@ -11,6 +11,7 @@ use Intakt\Gates\GateLineSource;
 use Intakt\Gates\GateReport;
 use Intakt\Gates\GateResult;
 use Intakt\Gates\ProcessResult;
+use Intakt\Gates\ScratchDirectory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Filesystem\Filesystem;
@@ -19,6 +20,7 @@ use Symfony\Component\Process\Process;
 #[CoversClass(FullReport::class)]
 #[CoversClass(CheckCommand::class)]
 #[CoversClass(GateChildren::class)]
+#[CoversClass(ScratchDirectory::class)]
 #[UsesClass(GateReport::class)]
 #[UsesClass(GateLineSource::class)]
 #[UsesClass(GateResult::class)]
@@ -76,6 +78,19 @@ final class FullReportTest extends SandboxTestCase
 
         self::assertSame(1, $run->exitCode(), $run->output());
         self::assertSame(['result' => 'fail', 'failed' => ['dashes']], $this->summaryOf($run));
+    }
+
+    public function testACheckWhoseSystemTempFolderIsMissingNamesNoReportAndPrintsOnlyJson(): void
+    {
+        $sandbox = $this->sandboxWithDashedLines();
+        $home = dirname(__DIR__, 2);
+
+        $run = new CheckRun($sandbox->run(PHP_BINARY, '-d', 'display_errors=1', '-d', 'sys_temp_dir='.$sandbox->root.'/missing-temp', $home.'/bin/check', '--root='.$sandbox->root, '--only=dashes'));
+
+        self::assertSame(1, $run->exitCode(), $run->output());
+        self::assertTrue(array_all($run->lines(), static fn (string $line): bool => json_validate($line)), $run->output());
+        self::assertSame(['result' => 'fail', 'failed' => ['dashes']], $this->summaryOf($run));
+        self::assertDirectoryDoesNotExist($sandbox->root.'/var/check');
     }
 
     public function testTwoChecksOfTheSameTreeKeepTheirOwnReports(): void

@@ -71,6 +71,11 @@ final readonly class FullReport
      */
     public function writeTo(string $root, array $summary, array $reports): ?string
     {
+        // Because without scratch results the report could hold only the shortened gate lines, and a named report always holds the whole results.
+        if (!$this->results instanceof ScratchDirectory) {
+            return null;
+        }
+
         $gates = array_map($this->resultOf(...), $reports);
         $this->discard();
         $directory = $this->directoryIn($root);
