@@ -14,6 +14,7 @@ enum LedgerEventKind: string
     case CatchUpOwed = 'catch_up_owed';
     case StreamingFellBack = 'streaming_fell_back';
     case JudgeDone = 'judge_done';
+    case RecurringP1Found = 'recurring_p1_found';
     case UsageRecorded = 'usage_recorded';
     case AccountCooledDown = 'account_cooled_down';
     case AccountErrorReported = 'account_error_reported';

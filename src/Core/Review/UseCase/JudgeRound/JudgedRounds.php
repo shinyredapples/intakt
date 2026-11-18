@@ -24,6 +24,7 @@ final readonly class JudgedRounds
         private ChangeText $change,
         private DiffHunks $hunks,
         private DiffPaths $paths,
+        private RecurringP1s $recurring,
     ) {
     }
 
@@ -70,6 +71,7 @@ final readonly class JudgedRounds
         $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged): void {
             if ($this->findings->markJudged($locked)) {
                 $this->ledger->judgeDone($locked, $judged);
+                $this->recurring->recordFor($locked, $judged);
             }
         });
     }
