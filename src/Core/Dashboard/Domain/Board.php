@@ -12,9 +12,9 @@ final readonly class Board
     /** @var list<Review> */
     private array $cards;
 
+    // Tasks are counted apart from the cards, because a task the build has worked on has no card yet but still ends the first day (#1792, D5).
     /**
      * @param list<Review> $reviews
-     * @param int          $tasks   the tasks the build has recorded a step of, which hold no card yet but end the first day (#2658, D5)
      */
     public function __construct(array $reviews, private int $tasks = 0)
     {
