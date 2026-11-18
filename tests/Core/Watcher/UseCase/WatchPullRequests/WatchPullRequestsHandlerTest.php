@@ -305,7 +305,10 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         $this->checks->pausedUntil = $this->clock->now()->modify('+30 minutes');
         $this->checks->pausedHead = str_repeat(self::PENDING, 40);
         $unwritable = new PendingHeads(new UnwritableQueries($this->entities), $this->clock);
-        $this->handler = $this->handler(waits: $unwritable, backOffs: $unwritable);
+        $this->handler = $this->handler(
+            waits: $unwritable,
+            backOffs: $unwritable,
+        );
 
         $this->tick();
 
