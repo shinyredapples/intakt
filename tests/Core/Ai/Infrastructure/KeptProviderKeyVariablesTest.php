@@ -158,9 +158,10 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $failing->method('loadEnvVars')->willThrowException(new RuntimeException('secret-text-from-the-vault'));
         $keys = self::createStub(KeptProviderKeys::class);
         $keys->method('read')->willReturn(ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog()));
-        $written = fopen('php://memory', 'w+') ?: self::fail('No memory stream.');
+        $written = fopen('php://memory', 'w+');
+        self::assertIsResource($written);
 
-        // The logger config/packages/ai.php builds before the logger service exists, on a stream that can be read back.
+        // Symfony's logger without a formatter, because config/packages/ai.php builds that one before the logger service exists.
         new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog(), new Logger(LogLevel::WARNING, $written), [$failing])->loadEnvVars();
 
         $line = (string) stream_get_contents($written, offset: 0);
