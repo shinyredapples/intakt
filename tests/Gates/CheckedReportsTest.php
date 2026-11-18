@@ -92,6 +92,18 @@ final class CheckedReportsTest extends SandboxTestCase
         }
     }
 
+    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundWithAReferenceButWithoutADateIsAFinding(): void
+    {
+        foreach (['none found, searched https://github.com/symfony/ai/pulls?q=foo', 'none found among #2800 to #2900', 'none, defaced'] as $rest) {
+            self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** ".$rest."\n- **Status:** `ready to file`\n"), $rest);
+        }
+    }
+
+    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineSaysNoneFoundWithAReferenceAndADatePasses(): void
+    {
+        self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** none found among #2800 to #2900 (checked 2026-11-07).\n- **Status:** `ready to file`\n"));
+    }
+
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineHoldsOnlyADatedNotePasses(): void
     {
         self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** searched on 2026-11-07, nothing touches this path.\n- **Status:** `ready to file`\n"));

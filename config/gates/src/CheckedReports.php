@@ -35,6 +35,9 @@ final readonly class CheckedReports
     // A pull request number, a URL or a commit hash with at least one letter, because a line that names none of them ("none", "-") says what was found only through the date of the search.
     private const string REFERENCE = '~#\d+\b|\bhttps?://\S|(?<![\w-])(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}(?![\w-])~';
 
+    // Read as the start of the text, like READY, because a line that found nothing carries the date of the search even when it names what was searched; no \b, which "_none found_" would defeat.
+    private const string NONE = '/^[`*_\s]*none(?![\p{L}\p{N}])/iu';
+
     private const string ANY_DATE = '/\b(?<date>\d{4}-\d{2}-\d{2})\b/';
 
     public function __construct(
@@ -196,7 +199,7 @@ final readonly class CheckedReports
             return 'but has no "Pull requests and commits" line (the pull requests and commits the check found, or "none found" with the date of the check)';
         }
 
-        if (1 === preg_match(self::REFERENCE, $match['rest'])) {
+        if (1 !== preg_match(self::NONE, $match['rest']) && 1 === preg_match(self::REFERENCE, $match['rest'])) {
             return null;
         }
 
