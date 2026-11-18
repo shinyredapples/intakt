@@ -88,9 +88,14 @@ final class ReviewCapTest extends TestCase
 
     public function testACapOfNoHeadIsRefused(): void
     {
-        $this->expectException(ReviewCapMustBePositive::class);
-        $this->expectExceptionMessage('The review cap must allow at least one head, 0 given.');
+        try {
+            new ReviewCap(0);
+        } catch (ReviewCapMustBePositive $refused) {
+            self::assertSame('The review cap must allow at least one head, 0 given.', $refused->getMessage());
 
-        new ReviewCap(0);
+            return;
+        }
+
+        self::fail('A cap of no head was accepted.');
     }
 }
