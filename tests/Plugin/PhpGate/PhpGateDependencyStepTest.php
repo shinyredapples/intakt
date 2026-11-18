@@ -12,6 +12,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
+use ZipArchive;
 
 // The dependency step's commands run by Composer itself on offline fixture projects, because the strings alone cannot show what an install holds.
 #[CoversClass(PhpGate::class)]
@@ -84,6 +85,62 @@ final class PhpGateDependencyStepTest extends TestCase
         self::assertDirectoryDoesNotExist($this->directory.'/vendor');
     }
 
+    public function testTheLockedInstallRefusesAManifestThatTurnsTheLockOffBecauseComposerThenIgnoresTheLockFile(): void
+    {
+        $package = ['name' => 'fixture/pkg', 'version' => '1.0.0', 'type' => 'metapackage'];
+        $manifest = ['require' => ['fixture/pkg' => '*']];
+        $this->project([...$manifest, 'repositories' => [['packagist.org' => false], ['type' => 'package', 'package' => $package]]]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->project([
+            ...$manifest,
+            'config' => ['lock' => false],
+            'repositories' => [['packagist.org' => false], ['type' => 'package', 'package' => [...$package, 'version' => '2.0.0']]],
+        ]);
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertStringContainsString('config.lock', $install->getErrorOutput());
+        self::assertDirectoryDoesNotExist($this->directory.'/vendor');
+    }
+
+    public function testTheLockedInstallRefusesALocalArchiveWithoutAChecksumBecauseTheLockDoesNotPinItsContents(): void
+    {
+        $this->archive('first');
+        $this->projectWithArchive([]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertStringContainsString('fixture/archive', $install->getErrorOutput());
+        self::assertDirectoryDoesNotExist($this->directory.'/vendor');
+    }
+
+    public function testTheLockedInstallAcceptsALocalArchiveWhoseChecksumIsInTheLockFile(): void
+    {
+        $this->archive('first');
+        $this->projectWithArchive(['shasum' => (string) sha1_file($this->directory.'/package.zip')]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+
+        $this->mustRun($this->step->install);
+
+        self::assertStringEqualsFile($this->directory.'/vendor/fixture/archive/contents.txt', 'first');
+    }
+
+    public function testALocalArchiveThatChangedAfterItsChecksumWasLockedFailsTheInstall(): void
+    {
+        $this->archive('first');
+        $this->projectWithArchive(['shasum' => (string) sha1_file($this->directory.'/package.zip')]);
+        $this->mustRun('composer update --no-interaction --no-plugins --no-scripts --no-install');
+        $this->archive('second');
+
+        $install = $this->runInProject($this->step->install);
+
+        self::assertFalse($install->isSuccessful());
+        self::assertFileDoesNotExist($this->directory.'/vendor/fixture/archive/contents.txt');
+    }
+
     public function testTheLockedInstallAcceptsALockFileWithOnlyPinnedPackages(): void
     {
         $this->project([
@@ -108,6 +165,28 @@ final class PhpGateDependencyStepTest extends TestCase
     {
         $manifest = ['name' => 'fixture/root', 'repositories' => [['packagist.org' => false]], ...$manifest];
         new Filesystem()->dumpFile($this->directory.'/composer.json', json_encode($manifest, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function archive(string $contents): void
+    {
+        $zip = new ZipArchive();
+        self::assertTrue($zip->open($this->directory.'/package.zip', ZipArchive::CREATE | ZipArchive::OVERWRITE));
+        $zip->addFromString('contents.txt', $contents);
+        $zip->close();
+    }
+
+    /**
+     * @param array<string, string> $checksum
+     */
+    private function projectWithArchive(array $checksum): void
+    {
+        $this->project([
+            'repositories' => [['packagist.org' => false], ['type' => 'package', 'package' => [
+                'name' => 'fixture/archive', 'version' => '1.0.0',
+                'dist' => ['type' => 'zip', 'url' => './package.zip', ...$checksum],
+            ]]],
+            'require' => ['fixture/archive' => '1.0.0'],
+        ]);
     }
 
     /**
