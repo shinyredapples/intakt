@@ -18,11 +18,6 @@ final readonly class ReviewRow
     ) {
     }
 
-    public function title(): string
-    {
-        return $this->review->title();
-    }
-
     // Whole units, rounded down, so a round never reads as older than it is; a clock behind the start reads as just now.
     public function startedAgo(): string
     {
