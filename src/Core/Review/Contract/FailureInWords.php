@@ -18,7 +18,7 @@ final readonly class FailureInWords
         ProviderFailedTransiently::class => 'the provider kept failing',
         ProviderUnreachable::class => 'the model endpoint could not be reached',
         VerdictUnreadable::class => VerdictUnreadable::IN_WORDS,
-        ChangesWithoutFindings::class => 'asked for changes without naming a finding',
+        ChangesWithoutFindings::class => 'gave no approval without naming a finding',
     ];
 
     public function of(string $failure): string
