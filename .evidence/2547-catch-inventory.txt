@@ -128,8 +128,8 @@ src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php:42:      
 src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php-43-            $event->deny($refused->getMessage());
 src/Core/Review/Infrastructure/Repository/DenyPathsOutsideCheckout.php:44:        } catch (PathNotInCheckout) {
 --
-src/Core/Review/Infrastructure/Repository/SearchFiles.php-105-            return new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS);
-src/Core/Review/Infrastructure/Repository/SearchFiles.php:106:        } catch (UnexpectedValueException $unopened) {
+src/Core/Review/Infrastructure/Repository/SearchFiles.php-108-            return new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS);
+src/Core/Review/Infrastructure/Repository/SearchFiles.php:109:        } catch (UnexpectedValueException $unopened) {
 --
 src/Core/Review/Infrastructure/ReviewJob.php-134-            return $this->jobs->run($spec);
 src/Core/Review/Infrastructure/ReviewJob.php:135:        } catch (JobOutputRefused) {
