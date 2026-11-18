@@ -3,6 +3,13 @@ name: highlights
 on:
   push:
     branches: [main]
+    paths:
+      - docs/highlights.d/**
+      - bin/highlights
+      - config/gates/src/HighlightFragments.php
+      - .github/workflows/highlights.yml
+  schedule:
+    - cron: '17 4 * * *'
   workflow_dispatch:
 concurrency:
   group: highlights

@@ -19,12 +19,17 @@ final class HighlightsWorkflowTest extends TestCase
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/highlights.yml';
     private const string MAIN_ONLY = "github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'";
 
-    public function testTheWorkflowRunsOnlyOnPushesToMainAndOnDemand(): void
+    public function testTheWorkflowRunsOnPushesToMainThatTouchItsInputsDailyAndOnDemand(): void
     {
         $workflow = $this->workflow();
 
-        self::assertSame(['push', 'workflow_dispatch'], array_keys($workflow['on']));
-        self::assertSame(['branches' => ['main']], $workflow['on']['push']);
+        self::assertSame(['push', 'schedule', 'workflow_dispatch'], array_keys($workflow['on']));
+        self::assertSame(['main'], $workflow['on']['push']['branches']);
+        self::assertSame(
+            ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/HighlightFragments.php', '.github/workflows/highlights.yml'],
+            $workflow['on']['push']['paths'],
+        );
+        self::assertCount(1, $workflow['on']['schedule']);
     }
 
     public function testTheWorkflowTokenIsReadOnlyByDefault(): void
