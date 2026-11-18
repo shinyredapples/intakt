@@ -119,13 +119,13 @@ final readonly class FullReport
         return $directory;
     }
 
-    // Because only files this check names may go: a hand-made file beside them stays, and the report just written stays whatever its modification time says.
+    // Because only files this check names may go: a file named otherwise beside them stays, and the report just written stays whatever its modification time says. The folder is listed as it is, never as a pattern, because a checked tree's path may hold pattern characters that would match another tree.
     private function pruneOlderReportsIn(string $directory, string $written): void
     {
-        $found = glob($directory.'/report-*.json');
-        $reports = array_filter(false === $found ? [] : $found, static fn (string $file): bool => $file !== $written
-            && 1 === preg_match('/\Areport-[0-9a-f]{16}\.json\z/', basename($file))
-            && is_file($file) && !is_link($file));
+        $entries = is_dir($directory) && is_readable($directory) ? scandir($directory) : false;
+        $names = array_filter(false === $entries ? [] : $entries, static fn (string $name): bool => 1 === preg_match('/\Areport-[0-9a-f]{16}\.json\z/', $name));
+        $files = array_map(static fn (string $name): string => $directory.'/'.$name, $names);
+        $reports = array_values(array_filter($files, static fn (string $file): bool => $file !== $written && is_file($file) && !is_link($file)));
         $ages = array_map(static fn (string $file): int => (int) filemtime($file), $reports);
         arsort($ages);
 

@@ -125,6 +125,25 @@ final class FullReportTest extends SandboxTestCase
         self::assertFileExists($sandbox->root.'/var/check/report-manual.json');
     }
 
+    public function testPruningATreeNamedWithBracketsLeavesItsSiblingTreeAlone(): void
+    {
+        $sandbox = $this->emptySandbox();
+
+        foreach (['tree[a]', 'treea'] as $tree) {
+            foreach (range(1, 25) as $older) {
+                $sandbox->write(sprintf('%s/var/check/report-%016x.json', $tree, $older), "{}\n");
+                touch($sandbox->root.sprintf('/%s/var/check/report-%016x.json', $tree, $older), 1000 + $older);
+            }
+        }
+
+        $name = FullReport::start()->writeTo($sandbox->root.'/tree[a]', ['result' => 'pass', 'failed' => []], []);
+
+        self::assertNotNull($name);
+        self::assertFileExists($sandbox->root.'/tree[a]/'.$name);
+        self::assertCount(FullReport::KEPT_REPORTS, array_diff((array) scandir($sandbox->root.'/tree[a]/var/check'), ['.', '..']));
+        self::assertCount(25, array_diff((array) scandir($sandbox->root.'/treea/var/check'), ['.', '..']));
+    }
+
     public function testPruningKeepsTheReportJustWrittenWhenOthersAreDatedInTheFuture(): void
     {
         $sandbox = $this->emptySandbox();
