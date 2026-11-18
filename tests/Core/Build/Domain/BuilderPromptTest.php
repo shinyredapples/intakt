@@ -128,7 +128,10 @@ final class BuilderPromptTest extends TestCase
         $prompt = $this->promptFor($this->briefWith($source, $text));
 
         $fence = '/<<<UNTRUSTED '.$source->value.' (fence-[0-9a-f]{16})>>>\n(.*?)\n<<<END \1>>>\n\nIntakt cut this text: (\d+) of (\d+) bytes are shown/s';
-        self::assertSame(1, preg_match($fence, $prompt, $cut));
+        if (1 !== preg_match($fence, $prompt, $cut)) {
+            self::fail('The prompt holds no cut fence of the '.$source->value.' followed by the cut note.');
+        }
+
         self::assertSame('a'.str_repeat('é', PromptCut::CEILING_BYTES / 2 - 1), $cut[2]);
         self::assertSame([(string) (PromptCut::CEILING_BYTES - 1), (string) (PromptCut::CEILING_BYTES + 1)], [$cut[3], $cut[4]]);
     }
