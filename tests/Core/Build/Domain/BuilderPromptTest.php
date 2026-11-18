@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\Contract\PromptPart;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -30,6 +31,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 #[UsesClass(PromptAssembly::class)]
+#[UsesClass(PromptPart::class)]
 final class BuilderPromptTest extends TestCase
 {
     public function testEachFenceOfAReworkFollowsItsOwnLeadAndOneBlankLine(): void

@@ -53,6 +53,12 @@ final readonly class PromptAssembly
         return $lead."\n\n".$body->rendered();
     }
 
+    // A whole prompt text, for an agent that takes its prompt as one string rather than as messages.
+    public function document(PromptPart ...$parts): string
+    {
+        return implode("\n\n", array_map(static fn (PromptPart $part): string => $part->rendered(), $parts));
+    }
+
     public function toolAnswer(FencedText $answer): string
     {
         return $answer->rendered();
