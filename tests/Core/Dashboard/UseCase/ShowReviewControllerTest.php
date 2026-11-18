@@ -25,6 +25,7 @@ use Intakt\Core\Dashboard\Infrastructure\ReplayedStart;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\ListReviews\ListReviewsController;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEndings;
@@ -268,6 +269,19 @@ final class ShowReviewControllerTest extends DashboardPageTestCase
 
         self::assertSame(['Changes requested', 'Failed'], $crawler->filter('#round-round-1 table.reviewers .chip')->each(static fn (Crawler $chip): string => $chip->text()));
         self::assertSame(['The provider is down.'], $crawler->filter('#round-round-1 table.reviewers .reviewer-outcome .muted')->each(static fn (Crawler $cause): string => $cause->text()));
+    }
+
+    public function testAReviewerThatGaveNoApprovalWithoutNamingAFindingIsLabelledFailedAndNeverBlocked(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->startReviewerOn('round-1', 'correctness', 'model-a');
+        $this->ledger->failReviewer('round-1', 'correctness', ChangesWithoutFindings::class);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $state = $crawler->filter('#round-round-1-reviewer-round-1-correctness-state');
+        self::assertSame(['Failed', 'gave no approval without naming a finding'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
+        self::assertStringNotContainsString('Blocked', $crawler->filter('#round-round-1')->text());
     }
 
     public function testARunningReviewerHasNoFindingCountYetButSaysSo(): void

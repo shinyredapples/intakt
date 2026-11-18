@@ -47,7 +47,10 @@ final readonly class ReviewerPrompt
         Every finding names the file and line where you saw the problem and the rule it breaks. Answer "approve" only when you found nothing that must change.
         TEXT;
 
-    public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review asked for changes without naming a finding. Name every finding that must change, each with its file, line and rule, or answer approve.';
+    // Every field a finding needs, so a model that left "findings" empty sees the shape it must fill.
+    public const string EXAMPLE_FINDING = '{"id":"F1","severity":"P2","file":"src/Cart.php","line":12,"symbol":"Cart::total","text":"The total adds the discount instead of subtracting it.","fixable_by":"builder","repeat":false,"requirement":"Storytelling","evidence":null,"regression":false}';
+
+    public const string NAME_FINDINGS_OR_APPROVE = 'An earlier answer to this review gave no approval but its "findings" list was empty. A changes or blocked verdict must put every problem that must change into "findings", one object per problem with its file, line and rule, for example: '.self::EXAMPLE_FINDING.'. If nothing must change, answer approve.';
 
     public function __construct(
         private Fence $fence,

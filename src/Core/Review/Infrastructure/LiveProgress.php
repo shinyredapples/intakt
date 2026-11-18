@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\Contract\ReviewTool;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Symfony\AI\Agent\Execution\ExecutionInterface;
 use Symfony\AI\Agent\Execution\Update\Progress;
@@ -42,7 +43,7 @@ final readonly class LiveProgress
 
             if ($payload instanceof ToolCall) {
                 $text->release();
-                $this->updates->toolCalled($round, $name, $payload->getName());
+                $this->updates->toolCalled($round, $name, $this->inWords($payload));
             }
 
             if ($payload instanceof TextDelta) {
@@ -58,6 +59,15 @@ final readonly class LiveProgress
         if ($round instanceof Uuid) {
             $this->updates->answerRead($round, $this->nameOf($reviewer), $answer);
         }
+    }
+
+    // The prefix is dropped, because over MCP the tools carry the server's prefix (review_read_file) and the live log names neither.
+    private function inWords(ToolCall $call): string
+    {
+        $name = $call->getName();
+        $tool = ReviewTool::tryFrom(str_starts_with($name, ReviewerMcpToolboxFactory::TOOL_PREFIX) ? substr($name, strlen(ReviewerMcpToolboxFactory::TOOL_PREFIX)) : $name);
+
+        return $tool?->callInWords($call->getArguments()) ?? 'used a tool';
     }
 
     // The ledger's reviewer id when there is one, because the dashboard places a reviewer by it and a retry runs under a new conversation id.
