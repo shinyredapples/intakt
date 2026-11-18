@@ -39,6 +39,10 @@ final readonly class ShowBoardController
     #[Route('/', name: DashboardRoutes::SHOW_BOARD, methods: ['GET'])]
     public function __invoke(Request $request): Response
     {
+        if ($this->isPhoneLanding($request)) {
+            return new RedirectResponse($this->urls->generate(DashboardRoutes::LIST_WAITING), Response::HTTP_SEE_OTHER);
+        }
+
         $events = $this->ledger->readInOrder();
         $board = $this->reviewPages->boardOf($events);
 
@@ -54,6 +58,12 @@ final readonly class ShowBoardController
             'working' => $board->whoIsWorking(),
             'columns' => BoardColumn::cases(),
         ]));
+    }
+
+    // A phone's home is Waiting on you (DESIGN.md), so a phone that opens the address from outside lands there; a click inside the dashboard sends a referrer and still reaches the board.
+    private function isPhoneLanding(Request $request): bool
+    {
+        return '?1' === $request->headers->get('Sec-CH-UA-Mobile') && !$request->headers->has('Referer');
     }
 
     private function redactedMain(FailingMain $main): FailingMain
