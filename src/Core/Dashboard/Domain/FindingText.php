@@ -97,7 +97,8 @@ final readonly class FindingText
         $at = 0;
         foreach ($matches as [[$whole, $start], , [$code]]) {
             array_push($spans, ...$this->plainSpans(substr($this->text, $at, $start - $at)));
-            $spans[] = ['text' => trim($code), 'code' => true];
+            // Trimmed only once the marks are read, so a blank line at its edge still parts two paragraphs.
+            $spans[] = ['text' => $code, 'code' => true];
             $at = $start + strlen($whole);
         }
 
@@ -145,7 +146,7 @@ final readonly class FindingText
 
             $result[] = ['text' => $text, 'code' => false];
             if (isset($codes[$index])) {
-                $result[] = $codes[$index];
+                $result[] = ['text' => trim($codes[$index]['text']), 'code' => true];
             }
         }
 
@@ -169,7 +170,7 @@ final readonly class FindingText
      */
     private function holdsAParagraph(array $span): bool
     {
-        return 1 === preg_match('/'.self::PARAGRAPH.'/', $span['text']);
+        return 1 === preg_match('/'.self::PARAGRAPH.'/u', $span['text']);
     }
 
     /**

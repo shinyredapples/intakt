@@ -1,2 +1,1 @@
-{#- The spans of a finding's text, code spans as code, every span escaped. -#}
 {%- for span in spans %}{% if span.code %}<code>{{ span.text }}</code>{% else %}{{ span.text }}{% endif %}{% endfor -%}

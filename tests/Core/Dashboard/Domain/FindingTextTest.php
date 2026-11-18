@@ -228,6 +228,26 @@ final class FindingTextTest extends TestCase
         );
     }
 
+    public function testStarsOnEitherSideOfACodeSpanWithABlankLineAtItsEdgeNeverPair(): void
+    {
+        foreach (["a\n\n" => 'a', "\n\na" => 'a'] as $code => $shown) {
+            self::assertSame(
+                [['text' => 'Copy *test.php. Example: ', 'code' => false], ['text' => $shown, 'code' => true], ['text' => '. Keep build*.', 'code' => false]],
+                new FindingText('Copy *test.php. Example: `'.$code.'`. Keep build*.')->spans(),
+            );
+        }
+    }
+
+    public function testStarsOnEitherSideOfACodeSpanHoldingUnicodeParagraphSeparatorsNeverPair(): void
+    {
+        foreach (["a\u{2028}\u{2028}b", "a\u{2029}\u{2029}b"] as $code) {
+            self::assertSame(
+                [['text' => 'Copy *test.php. Example: ', 'code' => false], ['text' => $code, 'code' => true], ['text' => '. Keep build*.', 'code' => false]],
+                new FindingText('Copy *test.php. Example: `'.$code.'`. Keep build*.')->spans(),
+            );
+        }
+    }
+
     public function testEmphasisAroundACodeSpanWithoutABlankLineStillLosesItsMarks(): void
     {
         self::assertSame(

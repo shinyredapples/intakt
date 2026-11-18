@@ -22,6 +22,9 @@ final readonly class ReadFinding
     // The first line of its text, because a finding has no title of its own and the rest of its text is the explanation; uncut, so whoever shows it cuts what the reader sees, after reading its marks.
     private static function titleOf(string $text): string
     {
-        return trim(explode("\n", trim($text), 2)[0]);
+        // Split on the line endings by name rather than \R, which without UTF-8 mode would also split a multibyte character holding byte 0x85.
+        $lines = preg_split('/\r\n|\r|\n/', trim($text), 2);
+
+        return trim(false === $lines ? $text : $lines[0]);
     }
 }

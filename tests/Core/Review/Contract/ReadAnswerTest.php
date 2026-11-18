@@ -48,6 +48,15 @@ final class ReadAnswerTest extends TestCase
         self::assertSame($line, $read->title);
     }
 
+    public function testAFindingsTitleEndsAtAnyLineEnding(): void
+    {
+        foreach (["\r\n", "\n", "\r"] as $lineEnding) {
+            $read = ReadFinding::of($this->findingWritten('Copy *test.php.'.$lineEnding.'Keep build*.'));
+
+            self::assertSame('Copy *test.php.', $read->title);
+        }
+    }
+
     public function testAnApprovalIsReadWithoutFindings(): void
     {
         $answer = ReadAnswer::of(new Verdict(Decision::Approve, [], [], []));
