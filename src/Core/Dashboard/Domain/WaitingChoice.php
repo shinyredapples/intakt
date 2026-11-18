@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Domain;
 
-// What the owner may pick and what happens then; the command is null where the choice is to do nothing.
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+// The command is null because one choice is to do nothing, and the outcome is shown with it because a choice must say what happens when picked.
+#[Exclude]
 final readonly class WaitingChoice
 {
     public function __construct(

@@ -28,7 +28,7 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
 {
     public function testTheWaitingPageListsEachOwnerNoticeWithItsLeadMetaConsequenceActionAndWhy(): void
     {
-        $this->noticesAre($this->notice('main', '2026-11-02 08:00:00 UTC', '2026-11-02 11:00:00 UTC'));
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
         $page = $this->browser->request('GET', '/waiting');
 
@@ -48,8 +48,8 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
     public function testTheOldestNoticeComesFirst(): void
     {
         $this->noticesAre(
-            $this->notice('first', '2026-11-01 08:00:00 UTC', '2026-11-01 11:00:00 UTC'),
-            $this->notice('second', '2026-11-02 08:00:00 UTC', '2026-11-02 11:00:00 UTC'),
+            $this->notice('first', new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')),
+            $this->notice('second', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')),
         );
 
         $page = $this->browser->request('GET', '/waiting');
@@ -70,7 +70,7 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
 
     public function testAnUnknownProjectInTheQueryLeavesTheFilterOnEveryProject(): void
     {
-        $this->noticesAre($this->notice('main', '2026-11-02 08:00:00 UTC', '2026-11-02 11:00:00 UTC'));
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
         $page = $this->browser->request('GET', '/waiting?project=missing');
 
@@ -117,8 +117,8 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::getContainer()->set(OwnerNotices::class, $stub);
     }
 
-    private function notice(string $account, string $lastReading, string $noticed): OutageNotice
+    private function notice(string $account, DateTimeImmutable $lastReading, DateTimeImmutable $noticed): OutageNotice
     {
-        return new OutageNotice(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable($lastReading), new DateTimeImmutable($noticed));
+        return new OutageNotice(new Account(Provider::ClaudeCode, $account), $lastReading, $noticed);
     }
 }

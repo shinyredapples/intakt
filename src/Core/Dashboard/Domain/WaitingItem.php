@@ -7,7 +7,7 @@ namespace Intakt\Core\Dashboard\Domain;
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\OutageNotice;
 
-// One thing only the owner can act on: a bottom line, what happens if they act, and at most four choices with the recommended one first.
+// At most four choices, because more would make the owner compare instead of act, and the recommended one first because it is the one to take.
 final readonly class WaitingItem
 {
     private const int MOST_CHOICES = 4;
@@ -31,7 +31,7 @@ final readonly class WaitingItem
         }
     }
 
-    // The wording follows what the budget guard does after an outage: only one call at a time runs on the account.
+    // The wording repeats what the budget guard does after an outage because the owner must read the real consequence: one call at a time runs on the account.
     public static function ofOutage(OutageNotice $notice): self
     {
         $account = $notice->account->key();
@@ -48,7 +48,7 @@ final readonly class WaitingItem
         );
     }
 
-    // Whole units, rounded down, so an item never reads as older than it is.
+    // Whole units, rounded down, because an item must never read as older than it is.
     public function waitingFor(DateTimeImmutable $now): string
     {
         $seconds = max(0, $now->getTimestamp() - $this->since->getTimestamp());

@@ -25,7 +25,7 @@ final class WaitingItemTest extends TestCase
 {
     public function testAnOutageNoticeBecomesAnItemWhoseRecommendedChoiceComesFirst(): void
     {
-        $item = WaitingItem::ofOutage(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02 08:00:00 UTC'), new DateTimeImmutable('2026-11-02 11:00:00 UTC')));
+        $item = WaitingItem::ofOutage(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
 
         self::assertStringContainsString('claude_code.main', $item->lead);
         self::assertStringContainsString('08:00 UTC', $item->why);
@@ -62,23 +62,23 @@ final class WaitingItemTest extends TestCase
     }
 
     #[DataProvider('waits')]
-    public function testTheWaitIsTheWholeUnitsSinceTheItemAppeared(string $now, string $expected): void
+    public function testTheWaitIsTheWholeUnitsSinceTheItemAppeared(DateTimeImmutable $now, string $expected): void
     {
         $item = $this->itemOf([$this->choice(true)]);
 
-        self::assertSame($expected, $item->waitingFor(new DateTimeImmutable($now)));
+        self::assertSame($expected, $item->waitingFor($now));
     }
 
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{DateTimeImmutable, string}>
      */
     public static function waits(): iterable
     {
-        yield 'under a minute' => ['2026-11-02 11:00:59 UTC', 'Waiting less than a minute'];
-        yield 'a clock behind the notice' => ['2026-11-02 10:00:00 UTC', 'Waiting less than a minute'];
-        yield 'minutes' => ['2026-11-02 11:52:30 UTC', 'Waiting 52 min'];
-        yield 'hours and minutes' => ['2026-11-02 15:12:00 UTC', 'Waiting 4 h 12 min'];
-        yield 'days and hours' => ['2026-11-04 14:30:00 UTC', 'Waiting 2 d 3 h'];
+        yield 'under a minute' => [new DateTimeImmutable('2026-11-02T11:00:59+00:00'), 'Waiting less than a minute'];
+        yield 'a clock behind the notice' => [new DateTimeImmutable('2026-11-02T10:00:00+00:00'), 'Waiting less than a minute'];
+        yield 'minutes' => [new DateTimeImmutable('2026-11-02T11:52:30+00:00'), 'Waiting 52 min'];
+        yield 'hours and minutes' => [new DateTimeImmutable('2026-11-02T15:12:00+00:00'), 'Waiting 4 h 12 min'];
+        yield 'days and hours' => [new DateTimeImmutable('2026-11-04T14:30:00+00:00'), 'Waiting 2 d 3 h'];
     }
 
     /**
@@ -86,7 +86,7 @@ final class WaitingItemTest extends TestCase
      */
     private function itemOf(array $choices): WaitingItem
     {
-        return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02 11:00:00 UTC'), $choices);
+        return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), $choices);
     }
 
     private function choice(bool $recommended): WaitingChoice

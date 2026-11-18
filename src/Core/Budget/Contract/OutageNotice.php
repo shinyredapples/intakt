@@ -7,7 +7,7 @@ namespace Intakt\Core\Budget\Contract;
 use DateTimeImmutable;
 use Intakt\Core\Ai\Contract\Account;
 
-// One noticed outage of usage readings: the account, the last reading before it and the moment Intakt noticed.
+// The last reading is kept with the account because it tells the owner how long the account has been unread.
 final readonly class OutageNotice
 {
     public function __construct(

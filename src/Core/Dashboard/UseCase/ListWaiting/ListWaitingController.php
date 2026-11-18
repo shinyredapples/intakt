@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\ListWaiting;
 
-use Intakt\Core\Budget\Contract\OutageNotice;
 use Intakt\Core\Budget\Contract\OwnerNotices;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\WaitingItem;
@@ -33,7 +32,7 @@ final readonly class ListWaitingController
         $now = $this->clock->now();
 
         return new Response($this->pages->render($request, 'dashboard/waiting.html.twig', [
-            'items' => array_map(static fn (OutageNotice $notice): WaitingItem => WaitingItem::ofOutage($notice), $this->notices->oldestFirst()),
+            'items' => array_map(WaitingItem::ofOutage(...), $this->notices->oldestFirst()),
             'now' => $now,
             'linked_project' => $project,
             'project_trail' => in_array($project, $this->filterProjects->names(), true) ? $project : null,

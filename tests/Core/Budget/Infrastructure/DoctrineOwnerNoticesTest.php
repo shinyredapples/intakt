@@ -38,8 +38,8 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
     public function testOutageNoticesAreListedOldestFirst(): void
     {
-        $this->store('later', '2026-11-02 12:00:00 UTC');
-        $this->store('first', '2026-11-02 09:00:00 UTC');
+        $this->store('later', new DateTimeImmutable('2026-11-02T12:00:00+00:00'));
+        $this->store('first', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
 
         $accounts = array_map(static fn (OutageNotice $notice): string => $notice->account->name, $this->notices()->oldestFirst());
 
@@ -48,8 +48,8 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
     public function testNoticesNoticedTogetherKeepTheOrderTheyWereStoredIn(): void
     {
-        $this->store('b', '2026-11-02 09:00:00 UTC');
-        $this->store('a', '2026-11-02 09:00:00 UTC');
+        $this->store('b', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
+        $this->store('a', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
 
         $accounts = array_map(static fn (OutageNotice $notice): string => $notice->account->name, $this->notices()->oldestFirst());
 
@@ -58,7 +58,7 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
 
     public function testANoticeCarriesItsAccountAndTheLastReading(): void
     {
-        $this->store('main', '2026-11-02 09:00:00 UTC');
+        $this->store('main', new DateTimeImmutable('2026-11-02T09:00:00+00:00'));
 
         $notice = $this->notices()->oldestFirst()[0];
 
@@ -76,9 +76,9 @@ final class DoctrineOwnerNoticesTest extends KernelTestCase
         return new DoctrineOwnerNotices($this->entities);
     }
 
-    private function store(string $account, string $noticedAt): void
+    private function store(string $account, DateTimeImmutable $noticedAt): void
     {
-        $this->entities->persist(new OutageNoticeRecord(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable('2026-11-02 08:00:00 UTC'), new DateTimeImmutable($noticedAt)));
+        $this->entities->persist(new OutageNoticeRecord(new Account(Provider::ClaudeCode, $account), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), $noticedAt));
         $this->entities->flush();
     }
 }
