@@ -113,6 +113,6 @@ final readonly class BuilderPrompt
             return [];
         }
 
-        return [new PromptPart('The excerpt of the failed CI log:',$this->cut->fenced(UntrustedSource::CiLog, $rework->ciExcerpt))];
+        return [new PromptPart('The excerpt of the failed CI log:', $this->cut->fenced(UntrustedSource::CiLog, $rework->ciExcerpt))];
     }
 }
