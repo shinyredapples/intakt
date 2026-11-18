@@ -52,6 +52,20 @@ final class PostedCommentsTest extends TestCase
         self::assertSame([self::COMMENT], $this->toPost($this->comments($this->listing([1 => [$this->postedBy(54321)]]))));
     }
 
+    public function testTheAppsCommentOfAnotherRoundQuotingThisRoundsMarkerInAFindingDoesNotStopThePost(): void
+    {
+        $otherRound = ['body' => "[P2] src/A.php: it quotes ".self::MARKER." here\n\n<!-- intakt-verdict: another-round -->", 'performed_via_github_app' => ['id' => self::APP_ID]];
+
+        self::assertSame([self::COMMENT], $this->toPost($this->comments($this->listing([1 => [$otherRound]]))));
+    }
+
+    public function testTheAppsCommentWhoseMarkerIsFollowedByTrailingWhitespaceIsNotPostedAgain(): void
+    {
+        $posted = ['body' => self::COMMENT."\n\n".self::MARKER."\n", 'performed_via_github_app' => ['id' => self::APP_ID]];
+
+        self::assertSame([], $this->toPost($this->comments($this->listing([1 => [$posted]]))));
+    }
+
     public function testNoCommentToPostReadsNothing(): void
     {
         $comments = $this->comments(static fn (): ResponseInterface => throw new LogicException('No comment, no read.'));
