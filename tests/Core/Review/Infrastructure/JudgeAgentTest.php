@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\JudgeRequest;
 use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
 use Intakt\Tests\Core\Review\Contract\ScriptedReviewer;
@@ -31,6 +32,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(JudgeRequest::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(DiffPaths::class)]
 #[UsesClass(UntrustedSource::class)]
 final class JudgeAgentTest extends KernelTestCase
 {
@@ -51,6 +53,39 @@ final class JudgeAgentTest extends KernelTestCase
         $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/the-journey-of-a-task.md')], new UuidV7(), ['docs/guide/the-journey-of-a-task.md', 'src/A.php']), '{"marks":[{"id":"F1","mark":"act"}]}');
 
         self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\n\\\\"docs\\\\\/guide\\\\\/the-journey-of-a-task\.md\\\\"\\\\n\\\\"src\\\\\/A\.php\\\\"\\\\n<<<END \1>>>/', $this->sent[0]);
+    }
+
+    public function testAChangeWithALatin1FileNameIsStillJudged(): void
+    {
+        $diff = "diff --git \"a/docs/caf\\351.txt\" \"b/docs/caf\\351.txt\"\n--- \"a/docs/caf\\351.txt\"\n+++ \"b/docs/caf\\351.txt\"\n@@ -1 +1 @@\n-a\n+b\n";
+        $files = new DiffPaths()->in($diff);
+        self::assertSame(["docs/caf\xE9.txt"], $files);
+
+        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/caf\xE9.txt')], new UuidV7(), $files), '{"marks":[{"id":"F1","mark":"act"}]}');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+    }
+
+    public function testAChangedPathHoldingANewlineOrAQuoteStaysOnOneLineOfTheFileList(): void
+    {
+        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7(), ["docs/a\nb.md", 'docs/say "hi".md']), '{"marks":[{"id":"F1","mark":"act"}]}');
+
+        self::assertStringContainsString('\\"docs\\/a\\\\nb.md\\"', $this->sent[0]);
+        self::assertStringContainsString('say \\\\\\"hi\\\\\\"', $this->sent[0]);
+    }
+
+    public function testAP3WordingFindingInAListedFileComesBackAct(): void
+    {
+        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/a.md')], new UuidV7(), ['docs/guide/a.md']), '{"marks":[{"id":"F1","mark":"act"}]}');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+    }
+
+    public function testAP3FindingInAFileOutsideTheListComesBackDefer(): void
+    {
+        $judgement = $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/Other.php')], new UuidV7(), ['docs/guide/a.md']), '{"marks":[{"id":"F1","mark":"defer"}]}');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Defer)], $judgement->marks);
     }
 
     public function testAnEmptyChangedFilesListIsSentAsADashInsideItsFence(): void

@@ -238,7 +238,7 @@ final class JudgeRoundTest extends KernelTestCase
 
         $asked = $vendor->asked;
         self::assertInstanceOf(JudgeRequest::class, $asked);
-        self::assertNotSame([], $asked->changedFiles);
+        self::assertSame(['src/Thing.php'], $asked->changedFiles);
     }
 
     public function testTwoReviewersReportingDifferentFindingsUnderOneIdBothReachTheJudge(): void

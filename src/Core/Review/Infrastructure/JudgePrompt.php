@@ -39,9 +39,25 @@ final readonly class JudgePrompt
         return new MessageBag(
             Message::forSystem(self::INSTRUCTIONS),
             Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $request->task)),
-            Message::ofUser("The files the change touches:\n\n".$this->fence->wrap(UntrustedSource::ChangedFiles, [] === $request->changedFiles ? '-' : implode("\n", array_map(static fn (string $path): string => json_encode($path, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $request->changedFiles)))),
+            Message::ofUser("The files the change touches:\n\n".$this->fence->wrap(UntrustedSource::ChangedFiles, $this->fileListOf($request->changedFiles))),
             Message::ofUser("The findings to judge:\n\n".$this->fence->wrap(UntrustedSource::FindingsToJudge, $this->listOf($request->findings))),
         );
+    }
+
+    /**
+     * @param list<string> $paths
+     */
+    private function fileListOf(array $paths): string
+    {
+        if ([] === $paths) {
+            return '-';
+        }
+
+        // A path from git may hold bytes that are not UTF-8, so they are substituted instead of failing the judging.
+        return implode("\n", array_map(
+            static fn (string $path): string => json_encode($path, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR),
+            $paths,
+        ));
     }
 
     /**
