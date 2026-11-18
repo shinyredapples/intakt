@@ -1,0 +1,32 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Invoice
+{
+    public function __construct(private int $cents)
+    {
+    }
+
+    public function summary(string $customer): string
+    {
+        return $this->greeting($customer).' '.$this->amount();
+    }
+
+    private function greeting(string $customer): string
+    {
+        return 'Dear '.$this->capitalized($customer).',';
+    }
+
+    private function capitalized(string $customer): string
+    {
+        return ucfirst($customer);
+    }
+
+    private function amount(): string
+    {
+        return sprintf('you owe %d.%02d.', intdiv($this->cents, 100), $this->cents % 100);
+    }
+}

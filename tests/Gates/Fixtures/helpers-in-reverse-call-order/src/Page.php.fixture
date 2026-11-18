@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Page
+{
+    public function render(string $name): string
+    {
+        return self::header($name).static::body($name);
+    }
+
+    private static function body(string $name): string
+    {
+        return 'Body of '.$name;
+    }
+
+    private static function header(string $name): string
+    {
+        return 'Header of '.$name;
+    }
+}

@@ -1,0 +1,35 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Runner
+{
+    public function run(string $input): string
+    {
+        $step = new class {
+            public function go(string $input): string
+            {
+                return $this->tidy($input);
+            }
+
+            private function tidy(string $input): string
+            {
+                return trim($input);
+            }
+        };
+
+        return $this->prepare($step->go($input));
+    }
+
+    private function prepare(string $input): string
+    {
+        return $this->tidy($input).'.';
+    }
+
+    private function tidy(string $input): string
+    {
+        return rtrim($input, '.');
+    }
+}

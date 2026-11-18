@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Greeting
+{
+    public function hello(string $name): string
+    {
+        return 'Hello '.$this->polite($name);
+    }
+
+    public function goodbye(string $name): string
+    {
+        return 'Goodbye '.$this->polite($name).$this->closing();
+    }
+
+    private function polite(string $name): string
+    {
+        return 'dear '.$name;
+    }
+
+    private function closing(): string
+    {
+        return '.';
+    }
+}
