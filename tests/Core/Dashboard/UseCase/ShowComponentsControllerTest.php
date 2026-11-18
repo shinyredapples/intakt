@@ -98,11 +98,11 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
         foreach (['light', 'dark'] as $theme) {
             $section = $page->filter('#c-characters .spec[data-theme="'.$theme.'"]');
             self::assertSame(
-                ['Code reviewer: Meerkat with a magnifying glass', 'Judge: Owl with a gavel', 'Waiting', 'Conducting', 'Bowing'],
+                ['Code reviewer: Meerkat with a magnifying glass', 'Judge: Owl with a gavel', 'Waiting', 'Conducting', 'Bowing', 'Asleep'],
                 $section->filter('.character-row')->each(static fn (Crawler $row): string => $row->text()),
                 $theme,
             );
-            self::assertCount(2 * (2 * 2 + 3), $section->filter('img.character[alt=""]'), $theme);
+            self::assertCount(2 * (2 * 2 + 4),$section->filter('img.character[alt=""]'), $theme);
         }
     }
 
