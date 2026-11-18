@@ -682,7 +682,7 @@ final class JudgeRoundTest extends KernelTestCase
     /**
      * @param array<string, mixed> $payload
      *
-     * @return array<string, mixed>
+     * @return array<mixed>
      */
     private function notesOf(array $payload): array
     {

@@ -36,7 +36,6 @@ final readonly class JudgedFindings
     {
         $marks = [];
         $sameCause = [];
-        $notes = [];
         $given = array_map(static fn (Finding $finding): string => $finding->id, $findings);
 
         foreach ($judgement->marks as $judged) {
@@ -50,13 +49,26 @@ final readonly class JudgedFindings
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
 
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, self::notesOf($judgement, $findings));
+    }
+
+    // Only a P1 or P2 marked defer or reject keeps a note, because that is the mark plain code does not apply and the reason is all that is left of it.
+    /**
+     * @param list<Finding> $findings
+     *
+     * @return array<string, string>
+     */
+    private static function notesOf(Judgement $judgement, array $findings): array
+    {
+        $blocking = array_map(static fn (Finding $finding): string => $finding->id, array_filter($findings, static fn (Finding $finding): bool => Severity::P3 !== $finding->severity));
+        $notes = [];
+
         foreach ($judgement->marks as $judged) {
-            $finding = array_find($findings, static fn (Finding $finding): bool => $finding->id === $judged->id);
-            if (null !== $judged->note && null !== $finding && $blocking($finding) && Mark::Act !== $judged->mark) {
+            if (null !== $judged->note && Mark::Act !== $judged->mark && in_array($judged->id, $blocking, true)) {
                 $notes[$judged->id] = $judged->note;
             }
         }
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $notes);
+        return $notes;
     }
 }
