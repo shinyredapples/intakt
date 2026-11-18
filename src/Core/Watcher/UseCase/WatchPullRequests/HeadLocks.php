@@ -52,7 +52,7 @@ final readonly class HeadLocks
             }
 
             $work($heads);
-            // Boundary: gives every held lock back and rethrows, because a lock left held would keep its head from every later tick.
+            // Boundary: tries to give every held lock back and rethrows, because a lock left held would keep its head from later ticks until it expires.
         } catch (Throwable $failure) {
             $this->giveBackAfter($failure, $held);
 

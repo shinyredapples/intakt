@@ -18,7 +18,6 @@ final readonly class DiscardedRounds
     ) {
     }
 
-    // A failed discard must not replace the failure that caused it, so it is logged and the caller rethrows the original.
     public function discard(?QueuedRound $queued): void
     {
         if (!$queued instanceof QueuedRound) {

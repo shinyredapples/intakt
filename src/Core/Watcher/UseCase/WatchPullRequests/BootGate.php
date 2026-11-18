@@ -71,12 +71,11 @@ final readonly class BootGate implements HeadGate
         return BootState::Failed === $head->state ? $green->sentBackFor(new FailedBoot($head->reason)) : $green;
     }
 
-    // A check that throws counts as untrusted, because a check that cannot answer must never let a head run.
     private function authorTrusted(HeadDecision $green): bool
     {
         try {
             return $this->authors->isAuthorTrusted($green->change->id);
-            // Boundary: logs any failure of the trust check and counts the author as untrusted, because a check that cannot answer must never let a head run.
+            // Boundary: logs a failed trust check and counts the author as untrusted, so the head is not booted (its review still starts), because a check that cannot answer must never let a head boot.
         } catch (Throwable $unanswered) {
             $this->logger->warning('The pull request author counts as untrusted, because the trust check failed.', ['change' => $green->change->id->value, 'exception' => $unanswered]);
 

@@ -110,7 +110,7 @@ final readonly class FailedHeads
                     $this->record($headFailure, $failures, $retryAt);
                 }
             });
-            // Boundary: reports a failed hand-over and rethrows, because the head must stay due so the tick fails and the next one tries again.
+            // Boundary: rethrows after the rollback, and first reports a failed hand-over when the count reaches the hand-over threshold, because the head must stay due so the tick fails and the next one tries again.
         } catch (Throwable $notRecorded) {
             // After the rollback, because the failure back-off must outlast it.
             if (self::HAND_OVER_AFTER === $failures) {
