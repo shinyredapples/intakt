@@ -9,11 +9,14 @@ use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
@@ -21,6 +24,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(Rework::class)]
 #[UsesClass(Fence::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptCut::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
 final class BuilderPromptTest extends TestCase
@@ -105,9 +110,55 @@ final class BuilderPromptTest extends TestCase
         FencedPlants::assertEveryPlantIsOnlyFenced($brief, $prompt);
     }
 
+    /**
+     * @return iterable<string, array{UntrustedSource}>
+     */
+    public static function cutInputs(): iterable
+    {
+        yield 'task' => [UntrustedSource::Task];
+        yield 'CI log' => [UntrustedSource::CiLog];
+        yield 'published pull request text' => [UntrustedSource::PullRequestText];
+    }
+
+    #[DataProvider('cutInputs')]
+    public function testAnInputOverTheCeilingIsCutAtACharacterBoundaryWithTheNoteOutsideItsFence(UntrustedSource $source): void
+    {
+        $text = 'a'.str_repeat('é', PromptCut::CEILING_BYTES / 2);
+
+        $prompt = $this->promptFor($this->briefWith($source, $text));
+
+        $fence = '/<<<UNTRUSTED '.$source->value.' (fence-[0-9a-f]{16})>>>\n(.*?)\n<<<END \1>>>\n\nIntakt cut this text: (\d+) of (\d+) bytes are shown/s';
+        if (1 !== preg_match($fence, $prompt, $cut)) {
+            self::fail('The prompt holds no cut fence of the '.$source->value.' followed by the cut note.');
+        }
+
+        self::assertSame('a'.str_repeat('é', PromptCut::CEILING_BYTES / 2 - 1), $cut[2]);
+        self::assertSame([(string) (PromptCut::CEILING_BYTES - 1), (string) (PromptCut::CEILING_BYTES + 1)], [$cut[3], $cut[4]]);
+    }
+
+    #[DataProvider('cutInputs')]
+    public function testAnInputAtTheCeilingIsFencedWholeWithNoCutNote(UntrustedSource $source): void
+    {
+        $text = str_repeat('é', PromptCut::CEILING_BYTES / 2);
+
+        $prompt = $this->promptFor($this->briefWith($source, $text));
+
+        self::assertStringContainsString(new Fence()->wrap($source, $text)->rendered(), $prompt);
+        self::assertStringNotContainsString('Intakt cut this text', $prompt);
+    }
+
     private function promptFor(BuildBrief $brief): string
     {
-        return new BuilderPrompt(new Fence())->textFor($brief);
+        return new BuilderPrompt(new Fence(), new PromptCut(new Fence()))->textFor($brief);
+    }
+
+    private function briefWith(UntrustedSource $source, string $text): BuildBrief
+    {
+        return match ($source) {
+            UntrustedSource::Task => new BuildBrief($text, [], new Rework([], $this->plant(30), $this->plant(31))),
+            UntrustedSource::CiLog => new BuildBrief($this->plant(1), [], new Rework([], $text, $this->plant(31))),
+            default => new BuildBrief($this->plant(1), [], new Rework([], $this->plant(30), $text)),
+        };
     }
 
     private function rework(): BuildBrief

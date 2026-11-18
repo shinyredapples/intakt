@@ -129,6 +129,6 @@
 - Closures in constant expressions for the built-in quorum policies, and `#[NoDiscard]` on `QuorumPolicy::isMet()`: `src/Core/Review/Contract/QuorumPolicy.php` (in progress, T8 (#13, part #222)).
 - `array_first()` and `array_last()` for the first and latest round of a finding: `src/Core/Review/Domain/TrackedFinding.php` (in progress, T10 (#15, part #410)).
 - `Uri\Rfc3986\Uri` for the pull request URL that the reads and the review post go to: `src/Plugin/GitHubForge/Infrastructure/PullRequestAddress.php` (in progress, T18 (#23, parts #540, #541)).
-- The pipe operator for cutting an oversized prompt text before it is fenced: `src/Core/Review/Infrastructure/PromptCut.php` (in progress, T28 (#35, part #711)).
+- The pipe operator for cutting an oversized prompt text before it is fenced: `src/Core/Review/Contract/PromptCut.php` (in progress, T28 (#35, part #711)).
 - `#[NoDiscard]` on the reset results the Symfony AI reset probe asserts (the state left behind, the mutable state without a reset, the calls of a round): `tests/Application/AiServiceState.php`, `tests/Application/SymfonyAiResetTest.php` (in progress, T29 (#29, part #771)).
 - Planned: the pipe operator (T5, T30), `Uri\Rfc3986\Uri` (T19).
