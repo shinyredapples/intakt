@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
-// Limit: the owner session of the dashboard design does not exist yet, so the Host check, the CSRF token and the refusal while a key is configured are all that guard this route.
+// The Host check, the CSRF token and the refusal while a key is configured guard this route, because the dashboard has no login and reaching its port decides who can act (design: Dashboard, Who can act).
 final readonly class KeepProviderKeyController
 {
     public const string TOKEN_ID = 'dashboard_keep_provider_key';
