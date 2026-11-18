@@ -8,6 +8,7 @@ use Closure;
 use FilesystemIterator;
 use Generator;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\ReviewTool;
 use InvalidArgumentException;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
@@ -17,7 +18,7 @@ use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
 
-#[AsTool(name: 'search_files', description: 'Finds the lines of the repository at the head under review that contain a text; answers path:line:text.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
+#[AsTool(name: ReviewTool::SearchFiles->value, description: 'Finds the lines of the repository at the head under review that contain a text; answers path:line:text.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
 final readonly class SearchFiles
 {
     // Because the answer is part of the prompt, and a file larger than this is generated or binary.
