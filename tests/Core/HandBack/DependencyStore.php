@@ -21,16 +21,27 @@ final readonly class DependencyStore
 {
     public const string INSTALL_SCRIPT = __DIR__.'/../../../docker/job/install-dependencies.sh';
 
-    public static function in(string $root, JobRunner $runner, Gate $gate, SharedLockStoreInterface $locks = new InMemoryStore()): DependencySnapshots
+    public function __construct(
+        private string $root,
+        private SharedLockStoreInterface $locks = new InMemoryStore(),
+    ) {
+    }
+
+    public static function in(string $root, JobRunner $runner, Gate $gate): DependencySnapshots
+    {
+        return new self($root)->snapshots($runner, $gate);
+    }
+
+    public function snapshots(JobRunner $runner, Gate $gate): DependencySnapshots
     {
         return new DependencySnapshots(
             $gate,
             new RepositoryGit(new HardenedGit()),
             new DependencyInstallJob($runner, $gate, new Filesystem(), self::INSTALL_SCRIPT),
-            new LockFactory($locks),
+            new LockFactory($this->locks),
             new MockClock(),
             new Filesystem(),
-            $root,
+            $this->root,
             10,
         );
     }

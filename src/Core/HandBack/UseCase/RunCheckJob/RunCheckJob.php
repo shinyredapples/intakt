@@ -94,12 +94,24 @@ final readonly class RunCheckJob implements CheckJobs
             return new CheckJobOutcome(CheckVerdict::LostContent, lostContent: $lost);
         }
 
-        // Resolved once, so the snapshot's key, its install and the check all use the same image even if its tag is rebuilt meanwhile.
+        return $this->checked($job, $repository, $accepted);
+    }
+
+    // The image is resolved once, so the snapshot's key, its install and the check all use the same image even if its tag is rebuilt meanwhile.
+    private function checked(CheckJob $job, string $repository, AcceptedHandBack $accepted): CheckJobOutcome
+    {
         $image = $this->images->idOf($job->image);
         $snapshot = $this->dependencies->of($repository, $accepted->head, $image);
 
         try {
-            return $this->outcomeOf($this->ranJob($this->specOf($job, $repository, $accepted, $image, $snapshot)));
+            return $this->outcomeOf($this->ranJob(new JobSpec(
+                new JobId('check-'.substr($accepted->head, 0, 40)),
+                $image,
+                $this->commandOf($job, $snapshot),
+                $this->inputsOf($job, $repository, $snapshot),
+                new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
+                $this->egress(),
+            )));
         } finally {
             $snapshot?->release();
         }
@@ -127,24 +139,25 @@ final readonly class RunCheckJob implements CheckJobs
         }
     }
 
-    private function specOf(CheckJob $job, string $repository, AcceptedHandBack $accepted, string $image, ?DependencySnapshot $snapshot): JobSpec
+    /**
+     * @return list<string>
+     */
+    private function commandOf(CheckJob $job, ?DependencySnapshot $snapshot): array
     {
         $script = $this->filesystem->readFile($this->checkScript);
-        $steps = $this->gate->checkSteps($job->configuredCommand);
+        $dependencies = $snapshot instanceof DependencySnapshot ? [self::DEPENDENCIES, $snapshot->directory] : [];
+
+        return ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...$dependencies, '--', ...$this->gate->checkSteps($job->configuredCommand)];
+    }
+
+    /**
+     * @return list<JobInput>
+     */
+    private function inputsOf(CheckJob $job, string $repository, ?DependencySnapshot $snapshot): array
+    {
         $inputs = [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
 
-        if ($snapshot instanceof DependencySnapshot) {
-            $inputs[] = new JobInput($snapshot->path, self::DEPENDENCIES);
-        }
-
-        return new JobSpec(
-            new JobId('check-'.substr($accepted->head, 0, 40)),
-            $image,
-            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...($snapshot instanceof DependencySnapshot ? [self::DEPENDENCIES, $snapshot->directory] : []), '--', ...$steps],
-            $inputs,
-            new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
-            $this->egress(),
-        );
+        return $snapshot instanceof DependencySnapshot ? [...$inputs, new JobInput($snapshot->path, self::DEPENDENCIES)] : $inputs;
     }
 
     private function egress(): JobEgress

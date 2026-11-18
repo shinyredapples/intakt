@@ -22,14 +22,15 @@ use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\SharedLockInterface;
 
 // Written by the runner alone and mounted read-only into checks, so a builder can never plant a package that a later check of another head would run.
-// Each key has one lock: shared while checks use its entry, exclusive while one check saves it or another evicts it, so no check meets a half-saved or removed folder.
 final readonly class DependencySnapshots
 {
     public const string LOCK_PREFIX = 'dependency-snapshot-';
 
     private const string STAGING = '.staging';
 
-    private const string NAME = '/\A(?<key>[0-9a-f]{64})(?<staging>\.staging)?\z/D';
+    private const string ENTRY = '/\A[0-9a-f]{64}\z/D';
+
+    private const string STAGING_NAME = '/\A[0-9a-f]{64}\.staging\z/D';
 
     public function __construct(
         private Gate $gate,
@@ -48,9 +49,8 @@ final readonly class DependencySnapshots
         }
     }
 
+    // The caller releases the snapshot once its job ended, because the entry is safe from eviction only until then.
     /**
-     * The caller releases the snapshot once its job ended, because the entry is safe from eviction only until then.
-     *
      * @throws DockerEngineFailed
      * @throws JobEventNotRecorded
      */
@@ -105,7 +105,7 @@ final readonly class DependencySnapshots
         return $lockFiles;
     }
 
-    // No expiry, because an install or a check may run longer than a default lock lives.
+    // Shared while checks use the entry and exclusive while one saves or evicts it, so no check meets a half-saved or removed folder; no expiry, because a job may outlive a default lock.
     private function lockOf(string $key): SharedLockInterface
     {
         return $this->locks->createLock(self::LOCK_PREFIX.$key, ttl: null);
@@ -199,22 +199,19 @@ final readonly class DependencySnapshots
     // The entry just saved is left out, so a save never evicts its own snapshot; a staging folder whose key nobody holds is a crash's leftover.
     private function evictBeyondTheCount(string $saved): void
     {
+        $names = scandir($this->root);
+        $names = array_diff(false === $names ? [] : $names, [$saved]);
+
+        foreach ($this->matching(self::STAGING_NAME, $names) as $staging) {
+            $this->removedUnlessHeld(basename($staging, self::STAGING), $staging);
+        }
+
         $used = [];
         // Cleared first, because another check touched its snapshot since this process last read the times.
         clearstatcache();
 
-        $names = scandir($this->root);
-
-        foreach (false === $names ? [] : $names as $name) {
-            if (1 !== preg_match(self::NAME, $name, $match) || $saved === $name) {
-                continue;
-            }
-
-            if ('' !== ($match['staging'] ?? '')) {
-                $this->removedUnlessHeld($match['key'], $name);
-            } else {
-                $used[$name] = (int) filemtime($this->root.'/'.$name);
-            }
+        foreach ($this->matching(self::ENTRY, $names) as $name) {
+            $used[$name] = (int) filemtime($this->root.'/'.$name);
         }
 
         arsort($used, SORT_NUMERIC);
@@ -222,6 +219,18 @@ final readonly class DependencySnapshots
         foreach (array_slice(array_keys($used), $this->kept - 1) as $name) {
             $this->removedUnlessHeld($name, $name);
         }
+    }
+
+    /**
+     * @param array<string> $names
+     *
+     * @return array<string>
+     */
+    private function matching(string $pattern, array $names): array
+    {
+        $matching = preg_grep($pattern, $names);
+
+        return false === $matching ? [] : $matching;
     }
 
     // Skipped while a check holds the key, so a folder a job is binding, copying or saving stays; a later save evicts it.

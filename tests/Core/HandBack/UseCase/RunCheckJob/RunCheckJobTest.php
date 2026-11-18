@@ -612,7 +612,7 @@ final class RunCheckJobTest extends TestCase
             new LostContentCheck($git),
             $runner,
             $gate,
-            DependencyStore::in($this->history->folder.'/dependencies', $runner, $gate, $locks ?? new InMemoryStore()),
+            new DependencyStore($this->history->folder.'/dependencies', $locks ?? new InMemoryStore())->snapshots($runner, $gate),
             $images,
             new Filesystem(),
             self::SCRIPT,
@@ -633,14 +633,15 @@ final class RunCheckJobTest extends TestCase
         return $this->installed;
     }
 
+    // Read from the container definition the engine gets, because jobs run as the runner's own user and only a read-only mount keeps them from writing.
     /**
-     * Read from the container definition the engine gets, because jobs run as the runner's own user and only a read-only mount keeps them from writing.
-     *
      * @return list<array{string, bool}>
      */
     private function mountsUnder(string $store, JobSpec $spec): array
     {
-        $mounts = new JobContainerDefinition(self::START_CHECK)->of($spec, $this->history->folder.'/output', EgressRoute::none())['HostConfig']['Mounts'] ?? null;
+        $host = new JobContainerDefinition(self::START_CHECK)->of($spec, $this->history->folder.'/output', EgressRoute::none())['HostConfig'] ?? null;
+        self::assertIsArray($host);
+        $mounts = $host['Mounts'] ?? null;
         self::assertIsArray($mounts);
         $under = [];
 
