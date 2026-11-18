@@ -36,11 +36,6 @@ final readonly class JudgedFindings
     {
         $marks = [];
         $sameCause = [];
-        $notes = [];
-        $severities = [];
-        foreach ($findings as $finding) {
-            $severities[$finding->id] = $finding->severity;
-        }
         $given = array_map(static fn (Finding $finding): string => $finding->id, $findings);
 
         foreach ($judgement->marks as $judged) {
@@ -48,18 +43,36 @@ final readonly class JudgedFindings
             if (null !== $judged->same_cause_as && in_array($judged->id, $given, true) && in_array($judged->same_cause_as, $given, true)) {
                 $sameCause[$judged->id] = $judged->same_cause_as;
             }
-
-            $reason = null === $judged->reason ? '' : trim($judged->reason);
-            $kept = Mark::Act !== $judged->mark && isset($severities[$judged->id]) && Severity::P3 !== $severities[$judged->id];
-            if ($kept && '' !== $reason) {
-                $notes[$judged->id] = $reason;
-            }
         }
 
         $blocking = static fn (Finding $finding): bool => Severity::P3 !== $finding->severity;
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $notes);
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, self::notesOf($judgement, $findings));
+    }
+
+    // Only a P1 or P2 the judge marked reject or defer, because the note says why a finding stayed that the judge would have removed.
+    /**
+     * @param list<Finding> $findings
+     *
+     * @return array<string, string>
+     */
+    private static function notesOf(Judgement $judgement, array $findings): array
+    {
+        $blocking = [];
+        foreach ($findings as $finding) {
+            $blocking[$finding->id] = Severity::P3 !== $finding->severity;
+        }
+
+        $notes = [];
+        foreach ($judgement->marks as $judged) {
+            $reason = trim($judged->reason ?? '');
+            if (Mark::Act !== $judged->mark && ($blocking[$judged->id] ?? false) && '' !== $reason) {
+                $notes[$judged->id] = $reason;
+            }
+        }
+
+        return $notes;
     }
 }

@@ -45,6 +45,6 @@ final readonly class RoundActListTool
     {
         $id = $round->id()->toRfc4122();
 
-        return $this->findings->actListOf($round, $this->ledger->actIdsOf($id), $this->ledger->sameCauseOf($id), $this->ledger->judgeNotesOf($id));
+        return $this->findings->withJudgeNotes($this->findings->actListOf($round, $this->ledger->actIdsOf($id), $this->ledger->sameCauseOf($id)), $this->ledger->judgeNotesOf($id));
     }
 }

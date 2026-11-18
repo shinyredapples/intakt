@@ -75,13 +75,24 @@ final readonly class StoredFindings
     /**
      * @param list<string>          $actIds
      * @param array<string, string> $sameCause
+     *
+     * @return list<Finding>
+     */
+    public function actListOf(ReviewRound $round, array $actIds, array $sameCause): array
+    {
+        return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause);
+    }
+
+    // Beside the act list, because the judge's note is the judge's alone and the entries must stay as the merge rule built them.
+    /**
+     * @param list<Finding>         $actList
      * @param array<string, string> $judgeNotes
      *
      * @return list<Finding>
      */
-    public function actListOf(ReviewRound $round, array $actIds, array $sameCause, array $judgeNotes = []): array
+    public function withJudgeNotes(array $actList, array $judgeNotes): array
     {
-        return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause, $judgeNotes);
+        return new OnePerPlace()->withNotes($actList, $judgeNotes);
     }
 
     /**

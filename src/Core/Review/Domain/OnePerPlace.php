@@ -17,11 +17,10 @@ final readonly class OnePerPlace
      * @param list<Finding>         $reported
      * @param list<string>          $actIds
      * @param array<string, string> $sameCause
-     * @param array<string, string> $judgeNotes
      *
      * @return list<Finding>
      */
-    public function actList(array $reported, array $actIds, array $sameCause = [], array $judgeNotes = []): array
+    public function actList(array $reported, array $actIds, array $sameCause = []): array
     {
         $act = array_values(array_filter($reported, static fn (Finding $finding): bool => in_array($finding->id, $actIds, true)));
         $groups = $this->groupedByPlace($act);
@@ -29,7 +28,7 @@ final readonly class OnePerPlace
             $groups = $this->joinedWhenNearby($groups, $act, $link);
         }
 
-        return array_map(fn (Finding $entry): Finding => $this->noted($entry, $judgeNotes), $this->entries($act, $groups));
+        return $this->entries($act, $groups);
     }
 
     // A group is named by the position of its first finding, so the entries keep the panel order. Places are keyed by file, then line, so no separator inside a path can make two places one.
@@ -132,17 +131,22 @@ final readonly class OnePerPlace
 
     // The first note in the entry's own id then merged ids order, so the result is the same on every run.
     /**
+     * @param list<Finding>         $entries
      * @param array<string, string> $judgeNotes
+     *
+     * @return list<Finding>
      */
-    private function noted(Finding $entry, array $judgeNotes): Finding
+    public function withNotes(array $entries, array $judgeNotes): array
     {
-        foreach ([$entry->id, ...$entry->merged] as $id) {
-            if (isset($judgeNotes[$id])) {
-                return $entry->withJudgeNote($judgeNotes[$id]);
+        return array_map(static function (Finding $entry) use ($judgeNotes): Finding {
+            foreach ([$entry->id, ...$entry->merged] as $id) {
+                if (isset($judgeNotes[$id])) {
+                    return $entry->withJudgeNote($judgeNotes[$id]);
+                }
             }
-        }
 
-        return $entry;
+            return $entry;
+        }, $entries);
     }
 
     private function merged(Finding $entry, Finding $finding): Finding
