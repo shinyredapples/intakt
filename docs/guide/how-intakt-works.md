@@ -14,6 +14,7 @@ Think of it as a small software team that works around the clock:
 | **The orchestrator** | Intakt itself | runs everything: picks the next task, starts the workers, keeps score, merges |
 | **Builder** | an AI agent | writes the code for one task |
 | **Reviewers** | a panel of AI agents you configure (by default two, from different companies when available) | check the builder's work, independently of each other, each with its own focus |
+| **Designer** (planned) | an AI agent, only in projects with screens | plans and scores what people see ([the Designer](the-designer.md)) |
 | **Checks** | your project's own tests and rules | catch mistakes no one has to argue about |
 | **Maintainer agent** | an AI agent working for the orchestrator | sorts out anything that gets stuck, so it rarely reaches you |
 

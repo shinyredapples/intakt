@@ -29,6 +29,7 @@ Architecture:
 12. [New and existing projects](05-architecture/12-new-and-existing-projects.md)
 13. [Dashboard](05-architecture/13-dashboard.md)
 14. [Threat model: prompt injection and third-party text](05-architecture/14-threat-model.md)
+15. [Design scoring](05-architecture/15-design-scoring.md): the Designer's objective checks, rubric and taste ladder
 
 Dashboard mocks (static pages in [`mocks/`](mocks/), with made-up projects):
 

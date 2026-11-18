@@ -20,6 +20,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **CI** | GitHub running the checks again on its own machines | [engine room](the-engine-room.md#ci-the-second-opinion) |
 | **Core panel** | the reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Cycle** | one round of build, check and review | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
+| **Designer** | the team member who plans and scores what people see, only in projects with screens (planned) | [the Designer](the-designer.md) |
 | **Draining** | stopping new work so running jobs can finish before an update | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
 | **Finding** | one problem a reviewer reports, with a severity | [journey](the-journey-of-a-task.md#5-reviewing) |
@@ -50,6 +51,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Pace** | the week's use compared with how much of the week has passed | [costs](accounts-and-costs.md) |
 | **Parked** | waiting for something outside (CI, you), with the bench given back | [engine room](the-engine-room.md#holds-hand-overs-and-caps) |
 | **Plugin** | a swappable connection to a forge, an AI company or a notifier | [writing a plugin](writing-a-plugin.md) |
+| **Preference ladder** | design versions put in order by comparing them two at a time without knowing which is which, checked against your own picks (planned) | [the Designer](the-designer.md#three-ways-to-score-the-work) |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label | [steering](steering-intakt.md) |
 | **Probe** | a small test a reviewer writes and runs against the change (planned, not built yet) | [containers](containers-and-services.md#can-reviewers-use-them) |
 | **Project memory** | the notebook of what was learned, kept per project | [project memory](project-memory.md) |
@@ -64,6 +66,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Review panel** | the reviewers for a change: the core panel plus specialists | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Review server** | the read-only server through which a reviewer reads the head under review | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Reviewer-for-loop mode** | a project setting: Intakt reviews an existing loop's changes in place of one of its reviewers, its verdicts count, and the only thing it writes to the forge is its verdict on each head (a status and a comment) | [costs](accounts-and-costs.md#reviewer-for-the-loop-intakts-review-takes-a-reviewers-place) |
+| **Score card** | the Designer's scores for one screen, each pointing at a spot in a screenshot; a low score is a note to fix, not a hard stop (planned) | [the Designer](the-designer.md#three-ways-to-score-the-work) |
 | **Shadow mode** | a former project setting, no longer available: a configuration that still sets it stops Intakt from starting | [costs](accounts-and-costs.md#the-former-shadow-mode) |
 | **Share** | a project's part of the week's AI allowance | [several projects](several-projects.md) |
 | **Sidecar** | an extra container a job needs, such as a database | [containers](containers-and-services.md) |

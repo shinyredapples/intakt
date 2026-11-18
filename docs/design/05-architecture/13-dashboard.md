@@ -106,3 +106,12 @@ The AI providers configured in `config/packages/ai.php` read the image's vault w
 ### History
 
 Every change is a ledger event: who (the owner, by the credential the session was opened with), what, the value before and after, and the expiry. A lapse is an event of its own, by the orchestrator. The dashboard's history lists them, newest first. An account's secret appears in them only as its fingerprint.
+
+## Design scores
+
+Planned, for a project the Designer works in ([Design scoring](15-design-scoring.md)); a project without a user interface shows nothing here.
+
+- **Scores per screen:** each screen's latest rubric scores per heuristic and width, with their history over time and the evidence (the screenshot region and what is wrong) behind each score.
+- **Regressions:** a screen whose score fell below its last score on main is listed with the head that lowered it and the finding it raised.
+- **Objective checks:** each check's last result per page and width, and a check whose tool the project has not enabled shown as not running, never as passed.
+- **Agreement:** the Designer's agreement with the owner on the sampled pairs of the taste ladder, as a trend, with the number of votes it rests on and how many design choices still go to the owner.

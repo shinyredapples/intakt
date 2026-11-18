@@ -67,6 +67,12 @@ The Security engineer (#864; team names in #862) runs two model sessions of its 
 - **Holds:** the credential of the one account it runs on only (an automation token, or a login file mounted read-only).
 - **Checks:** its output is a plan capped in size, which reaches the builder fenced as another model's advice, never as the task ([Budget and model planner](06-budget-and-model-planner.md)). It is advice only: it cannot pick a model, make a task eligible or approve anything, and the build it informs is checked, reviewed and merged like any other, so a steered plan can only produce a build that the same gates judge.
 
+### Designer
+Planned ([Design scoring](15-design-scoring.md)).
+- **Reads:** the task text with its fenced external blocks, the code at main and, on a head, the diff, the results of the objective checks and the screenshots the check job took of the head and of main. Screenshots render code under review, so their text is untrusted like the diff; all of it reaches the Designer fenced.
+- **Can:** read-only repository tools at main or at the head, and for the taste ladder write variants as data in its typed answer, which the check job renders; no writes to the checkout, no network beyond its vendor, no credentials of the project or the forge.
+- **Checks:** the objective checks are plain code in the check job, so a steered Designer cannot pass or fail them. Its design for *Ready* reaches the Developer fenced as another model's advice, never as the task. Its rubric scores are a typed verdict checked like any reviewer's: a score without its evidence is refused, a low score is only a finding for the judge, and no score approves. Its ladder only orders variants and decides which choices go to the owner; it never approves or merges, and the agreement shown is computed by plain code from the owner's own votes. Its triggers only add it and are protected like the specialists' triggers, and the paths are read from the head as well as the plan, so a task's own text cannot keep the Designer away from a change that touches the user interface.
+
 ### Triage and sizing
 - **Reads:** the task text with its fenced external blocks and the review in the external block of a task filed from a catch-up review, and items of the follow-up inbox.
 - **Can:** say whether the task is ready, propose a class, estimate a size, and merge, queue or expire follow-ups; no tools.

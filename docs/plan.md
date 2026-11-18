@@ -26,6 +26,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
 | M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
+| The Designer | see [The Designer](#the-designer): objective checks, the rubric and the taste ladder for projects with a user interface | T84 to T86 | after the switch |
 
 ## M1 Review core
 
@@ -664,6 +665,28 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - **Evidence:** `(owner provides)` the takeover and a first merged task after it.
 - **Waits for:** T72, T73. **Size:** S. **Labels:** `class:tooling`, `priority:high`.
 
+## The Designer
+
+The Designer's role and triggers are in [Reviews](design/05-architecture/07-reviews.md#the-designer), its three scoring layers in [Design scoring](design/05-architecture/15-design-scoring.md). Nothing here is needed for the switch.
+
+### T84 The Designer's objective checks
+- **Description:** A project declares that it has a user interface, its user-interface paths and labels, its design tokens, its three widths and its Lighthouse thresholds per page, and enables axe-core, Lighthouse and a headless browser in its check environment (opt-in; the simplest install needs none). A task joins the Designer only when its planned or changed paths or its labels match. Each objective check is a check of its own in the check job: no serious or critical axe-core violation and passing contrast; at each width no horizontal scroll, no overlapping elements, no text overflow and touch targets of at least 44 px; colors, spacing and type only from the tokens; the Lighthouse thresholds; screenshots compared with main, a changed screen the task does not name failing. A check whose tool is not enabled does not run and says so.
+- **Acceptance:** a project without a user interface, and a task that touches none of its paths or labels, run no check and make no model call; each check has a failing and a passing fixture page, including a touch target of exactly 44 px (passes) and 43 px (fails), a literal color that is no token (fails) and an unchanged screen (passes); a disabled tool shows as not running, never as passed.
+- **Evidence:** the checks' output on a fixture project with one page that breaks each rule and one that passes, from a running install.
+- **Waits for:** T51. **Size:** L. **Labels:** `class:feature`, `priority:low`, `plan:required`.
+
+### T85 The Designer's Ready additions and the rubric
+- **Description:** For a task the Designer joins, it adds to the task's plan the flows, every state (empty, loading, error, success), the copy, the three widths and the accessibility needs ([Definition of Ready](design/01-intent.md#definition-of-ready)), fenced to the Developer as another model's advice. On the head it scores each touched screen against the fixed heuristics (clarity, feedback, states, consistency, error recovery, copy) in a typed verdict; each score cites a screenshot region and what is wrong there, and a low score is a finding, never a gate. Scores are stored per screen, width, heuristic and head; a score below main's last one for that screen is a regression on the dashboard. The task records the score scale in [Design scoring](design/05-architecture/15-design-scoring.md).
+- **Acceptance:** with `MockPlatformFactory`, a score without evidence is a failed review; a low score yields a finding and no blocking check; a lower score than main's for the same screen shows as a regression; a task the Designer does not join gets no design part.
+- **Evidence:** a scripted Designer review of a fixture head, its stored scores and the regression line on the dashboard.
+- **Waits for:** T84, T7, T20. **Size:** M. **Labels:** `class:feature`, `priority:low`.
+
+### T86 The taste ladder
+- **Description:** For a visible design choice the Designer creates variants, compares them blind in pairs (neutral names, random order) and ranks them into a preference ladder. The owner votes on a sample of pairs, shown the same blind way; plain code measures the Designer's agreement with the owner's votes and shows it on the dashboard. While agreement is low, a choice with character goes to the owner as options; as it rises, fewer are asked. The task records how the share of questions follows agreement in [Design scoring](design/05-architecture/15-design-scoring.md).
+- **Acceptance:** neither the Designer's comparison nor the owner's vote shows which variant is current or which the Designer chose; agreement is computed only from owner votes; with low agreement a choice goes to the owner as options, with higher agreement fewer choices do.
+- **Evidence:** a scripted ladder over fixture variants, a sample of owner votes, and the agreement and questions it produces.
+- **Waits for:** T85. **Size:** M. **Labels:** `class:feature`, `priority:low`.
+
 ## Not in the switch
 
 - **Later:** pacing and stand-ins for a second reviewer vendor; cross-checks; the plan trial arm, holdout and quality report, with the strong-start arm compared against the plan arm and a strong default start tier per project when it wins; cost reports from CLI logs; webhooks (T32); branch cleanup beyond merged branches (T30); conflict resolution for generated files; deploy hooks after a merge; database sidecars for builds; the maintainer agent; a dashboard beyond the status JSON; the setup wizard; other forges, languages and vendors.
@@ -676,3 +699,4 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
 - M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76.
 - M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.
+- The Designer: T84 after T51, T85 after T84, T7 and T20, T86 after T85.
