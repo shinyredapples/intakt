@@ -11,8 +11,8 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class QuotesInChange
 {
-    // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet; fences count only at a line start, as in Markdown, so backticks inside a fenced line never close the block, and at any indentation and after any number of blockquote markers, because a fix under a list item or in a quote is indented or marked with it.
-    private const string FENCED_BLOCK = '/^[ \t]*(?:>[ \t]*)*((`|~)\2{2,})[^\n]*(?:\n.*?)??(?:\n[ \t]*(?:>[ \t]*)*\1\2*[ \t]*$|\z)/ms';
+    // Left out, because a fenced block is mostly a suggested fix, which the change cannot hold yet; fences count only at a line start, as in Markdown, so backticks inside a fenced line never close the block, and at any indentation and after any number of blockquote markers, because a fix under a list item or in a quote is indented or marked with it; a backtick fence's line holds no other backtick, as in Markdown, because a line that starts with an inline triple-backtick quote would otherwise hide every quote after it.
+    private const string FENCED_BLOCK = '/^[ \t]*(?:>[ \t]*)*((`|~)\2{2,})(?:(?<=~)[^\n]*|[^`\n]*)(?:\n.*?)??(?:\n[ \t]*(?:>[ \t]*)*\1\2*[ \t]*$|\z)/ms';
     private const array LINE_ENDS = ["\r\n", "\r"];
     // A quote may wrap onto the next line, as in Markdown, but never across a blank line, because a paragraph ends there.
     private const string CODE = '(?<code>(?:[^`\n]|\n(?![ \t]*\n))+?)';

@@ -2,8 +2,8 @@
 <turbo-stream action="update" target="board-headline"><template>{{ include('dashboard/_board_headline.html.twig', {headline: headline}, with_context = false) }}</template></turbo-stream>
 {#- The empty board's octopus, replaced from the head's partial: once a review has run it renders nothing, so the octopus leaves the head. -#}
 <turbo-stream action="replace" target="board-octopus"><template>{{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>
-{#- The columns a round moves between, replaced whole from the board's own partial: a round starts in In review and ends in Done. -#}
+{#- The columns a round moves between, replaced from the board's own partial: a round starts in In review and ends in Done. Each is pushed with at most the page limit of cards (pushed), so the update does not grow with the install's history. -#}
 {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}
 {% for column in [constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::InReview'), constant('Intakt\\Core\\Dashboard\\Domain\\BoardColumn::Done')] %}
-<turbo-stream action="replace" target="col-{{ column.value|lower|replace({' ': '-'}) }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit}, with_context = false) }}</template></turbo-stream>
+<turbo-stream action="replace" target="col-{{ column.value|lower|replace({' ': '-'}) }}"><template>{{ include('dashboard/_board_column.html.twig', {board: board, column: column, limit: limit, pushed: true}, with_context = false) }}</template></turbo-stream>
 {% endfor %}

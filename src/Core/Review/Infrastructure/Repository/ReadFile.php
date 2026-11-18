@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure\Repository;
 
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\ReviewTool;
 use RuntimeException;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
 
-#[AsTool(name: 'read_file', description: 'Reads one file of the repository at the head under review.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
+#[AsTool(name: ReviewTool::ReadFile->value, description: 'Reads one file of the repository at the head under review.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
 final readonly class ReadFile
 {
     // Because a tool answer is part of the prompt: a whole generated file would crowd out the review.

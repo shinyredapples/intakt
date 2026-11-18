@@ -77,6 +77,54 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::assertSame(['first', 'second'], $payloads);
     }
 
+    public function testAReadByTextReturnsTheEventsWhosePayloadNamesAnyOfTheTextsInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach ([[LedgerEventKind::ReviewStarted, '{"round":"r-2"}'], [LedgerEventKind::JudgeDone, '{"round":"r-1"}'], [LedgerEventKind::VerdictReceived, '{"round":"r-3"}'], [LedgerEventKind::UsageRecorded, '{"call":"c-1","round":"r-2"}']] as [$kind, $payload]) {
+            self::assertTrue($ledger->append(new LedgerEvent($kind, $payload))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(['r-2', 'r-1'])));
+
+        self::assertSame(['{"round":"r-2"}', '{"round":"r-1"}', '{"call":"c-1","round":"r-2"}'], $payloads);
+    }
+
+    public function testAReadByTextTakesItsWildcardAndEscapeCharactersLiterally(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+
+        foreach (['{"note":"a_b"}', '{"note":"axb"}', '{"note":"50%!"}', '{"note":"50 and more"}'] as $payload) {
+            self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, $payload))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning(['a_b', '50%!'])));
+
+        self::assertSame(['{"note":"a_b"}', '{"note":"50%!"}'], $payloads);
+    }
+
+    public function testAReadByMoreTextsThanOneQueryHoldsReturnsEachMatchingEventOnceInTheOrderTheyWereAppended(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        $calls = array_map(static fn (int $n): string => sprintf('00000000-0000-7000-8000-%012d', $n), range(1, 1100));
+
+        foreach (['{"call":"'.$calls[1099].'"}', '{"call":"none"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'] as $payload) {
+            self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $payload))->succeeded());
+        }
+
+        $payloads = array_map(static fn (RecordedEvent $event): string => $event->event->payload, iterator_to_array($ledger->readMentioning($calls)));
+
+        self::assertSame(['{"call":"'.$calls[1099].'"}', '{"call":"'.$calls[0].'","also":"'.$calls[1099].'"}', '{"call":"'.$calls[500].'"}'], $payloads);
+    }
+
+    public function testAReadByNoTextReadsNothing(): void
+    {
+        $ledger = $this->ledger('2026-10-27 12:00:00', 'UTC');
+        self::assertTrue($ledger->append(new LedgerEvent(LedgerEventKind::JudgeDone, '{"round":"r-1"}'))->succeeded());
+
+        self::assertSame([], iterator_to_array($ledger->readMentioning([])));
+    }
+
     public function testEventsAreReadInAppendOrderAfterTheClockStepsBack(): void
     {
         $clock = new MockClock('2026-10-27 12:00:00', 'UTC');

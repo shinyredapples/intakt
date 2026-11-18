@@ -360,6 +360,35 @@ final class LedgerRoundsTest extends TestCase
         self::assertSame('openai', $review?->rounds[0]->outcomes[0]->substitute);
     }
 
+    public function testAReviewerThatFailsOverPartwayThroughAReviewIsNamedByTheSubstitutesModel(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::ReviewerStarted, new ReviewerStarted('r1', 'x', 'correctness', Tier::Standard, 'standard-model')),
+            $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', 'x', 'correctness', Tier::Standard, Decision::Changes, 2, ProjectMode::Live)),
+            $this->row(LedgerEventKind::CatchUpOwed, new CatchUpOwed('r1', 'x', 'correctness', Tier::Standard, Provider::OpenAi, 'openai-model')),
+        );
+
+        $outcome = $review?->rounds[0]->outcomes[0];
+
+        self::assertSame([ReviewerProgress::Answered, 'openai', 'openai-model'], [$outcome?->progress, $outcome?->substitute, $outcome?->model]);
+    }
+
+    public function testACatchUpRecordedWithoutAModelKeepsTheModelOfTheStart(): void
+    {
+        $review = $this->reviewOf(
+            'r1',
+            $this->event(LedgerEventKind::ReviewStarted, self::START),
+            $this->row(LedgerEventKind::ReviewerStarted, new ReviewerStarted('r1', 'x', 'correctness', Tier::Standard, 'standard-model')),
+            $this->row(LedgerEventKind::CatchUpOwed, new CatchUpOwed('r1', 'x', 'correctness', Tier::Standard, Provider::OpenAi)),
+        );
+
+        $outcome = $review?->rounds[0]->outcomes[0];
+
+        self::assertSame(['openai', 'standard-model'], [$outcome?->substitute, $outcome?->model]);
+    }
+
     public function testAReviewerRowWithATierOutsideTheKnownOnesIsSkipped(): void
     {
         $review = $this->reviewOf(

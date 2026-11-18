@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure\Repository;
 
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\ReviewTool;
 use RuntimeException;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
 
-#[AsTool(name: 'list_directory', description: 'Lists the entries of one directory of the repository at the head under review; directories end with a slash.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
+#[AsTool(name: ReviewTool::ListDirectory->value, description: 'Lists the entries of one directory of the repository at the head under review; directories end with a slash.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
 final readonly class ListDirectory
 {
     // Because the answer is part of the prompt, and a vendored or generated directory can hold thousands of entries.

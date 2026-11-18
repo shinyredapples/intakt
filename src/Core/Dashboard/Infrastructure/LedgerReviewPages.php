@@ -30,10 +30,20 @@ final readonly class LedgerReviewPages
     ) {
     }
 
-    // Null for a round the ledger never started readably, so the page answers 404 instead of an empty review.
+    // Null for a round the ledger never started readably, so the page answers 404 instead of an empty review. Read from the starts, then the rows that name the review's rounds, then those that name their calls, because a settled call's row names only its call; never the whole ledger, because each judged state's live update reads it too.
     public function reviewOf(string $round): ?Review
     {
-        return $this->rounds($this->ledger->readInOrder())->reviewOf($round);
+        $rounds = $this->rounds($this->ledger->readOfKind(LedgerEventKind::ReviewStarted));
+        $members = $rounds->roundsOfTheReviewOf($round);
+
+        if ([] === $members) {
+            return null;
+        }
+
+        $added = $this->addUnseen($rounds, $this->ledger->readMentioning($members), []);
+        $this->addUnseen($rounds, $this->ledger->readMentioning($rounds->callsOf($members)), $added);
+
+        return $rounds->reviewOf($round);
     }
 
     // Null on a fresh install, because then no review has run.
@@ -51,9 +61,9 @@ final readonly class LedgerReviewPages
     /**
      * @return list<ReviewedRound>
      */
-    public function roundsInStartOrder(): array
+    public function listedRoundsInStartOrder(): array
     {
-        return $this->rounds($this->ledger->readInOrder())->inStartOrder();
+        return $this->rounds($this->ledger->readInOrder())->listedInStartOrder();
     }
 
     // Read from the starts alone, because a live update goes out for each streamed text and must not read the whole ledger; the latest start wins, as on the page, and null means the reviewer has not started in that round.
@@ -91,5 +101,25 @@ final readonly class LedgerReviewPages
         }
 
         return $rounds;
+    }
+
+    // A row both reads find is added once, because a call's tokens and a reviewer's moves count each time they are added; a start found again changes nothing, because the first one counts.
+    /**
+     * @param array<string, true> $seen
+     *
+     * @return array<string, true>
+     */
+    private function addUnseen(LedgerRounds $rounds, RecordedEvents $events, array $seen): array
+    {
+        foreach ($events as $recorded) {
+            $id = $recorded->id->toRfc4122();
+
+            if (!isset($seen[$id])) {
+                $rounds->add($recorded);
+                $seen[$id] = true;
+            }
+        }
+
+        return $seen;
     }
 }

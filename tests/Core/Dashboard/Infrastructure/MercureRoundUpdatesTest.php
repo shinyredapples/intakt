@@ -35,6 +35,7 @@ use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\ToolCallCount;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Core\Dashboard\UseCase\ReviewBoundLedger;
 use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
@@ -92,10 +93,57 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private Ledger $ledger;
 
+    private RoundCosts $costs;
+
     protected function setUp(): void
     {
         $this->log = new BufferingLogger();
         $this->ledger = new DashboardLedger();
+        $this->costs = self::createStub(RoundCosts::class);
+        $this->costs->method('costOf')->willReturn(Cost::none());
+    }
+
+    public function testAJudgedStateAsksTheCostOfTheRoundsOfItsOwnReviewOnly(): void
+    {
+        $other = '01a19a97-48cf-70f1-bdae-965425786c48';
+        $earlier = '01a19a97-48cf-70f1-bdae-965425786c49';
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/other', $other, 1);
+        $ledger->judgeRound($other);
+        $ledger->startRoundOf('feat/thing', $earlier, 1);
+        $ledger->judgeRound($earlier);
+        $ledger->startRoundOf('feat/thing', self::ROUND, 2);
+        $ledger->judgeRound(self::ROUND);
+        $this->ledger = $ledger;
+        $asked = [];
+        $costs = $this->createMock(RoundCosts::class);
+        $costs->expects($this->atLeastOnce())->method('costOf')->willReturnCallback(static function (string $round) use (&$asked): Cost {
+            $asked[$round] = true;
+
+            return Cost::none();
+        });
+        $this->costs = $costs;
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        self::assertEqualsCanonicalizing([$earlier, self::ROUND], array_map(strval(...), array_keys($asked)));
+    }
+
+    public function testAJudgedStateIsReadFromItsOwnReviewWithoutReadingTheWholeLedger(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/other', '01a19a97-48cf-70f1-bdae-965425786c48', 1);
+        $ledger->startRoundOf('feat/thing', self::ROUND, 1);
+        $ledger->useTokens(self::ROUND, 1000, 200);
+        $ledger->judgeFindings(self::ROUND, []);
+        $this->ledger = new ReviewBoundLedger($ledger);
+
+        $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
+
+        $judged = array_last($this->published);
+        self::assertNotNull($judged);
+        self::assertStringContainsString('<span id="review-summary-tokens">1,200 tokens', $judged->getData());
+        self::assertSame([], $this->log->cleanLogs());
     }
 
     public function testUpdatesOfARoundReachTheHubInTheOrderTheyHappened(): void
@@ -181,13 +229,13 @@ final class MercureRoundUpdatesTest extends TestCase
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $this->published[0]->getData());
     }
 
-    public function testAReviewerAskedAgainAppendsAMarkerForThatTryToItsLiveTextUnlessThePageHoldsItAlready(): void
+    public function testAReviewerAskedAgainReplacesItsLiveTextWithOneLineForThatTryUnlessThePageHoldsItAlready(): void
     {
         $this->updates()->reviewerAskedAgain(Uuid::fromString(self::ROUND), self::REVIEWER, 'try-2');
 
         $data = $this->published[0]->getData();
-        self::assertStringContainsString(sprintf('<turbo-stream action="append" targets="#reviewer-%1$s-text:not(:has(#reviewer-%1$s-try-try-2))">', self::REVIEWER), $data);
-        self::assertStringContainsString(sprintf('<p class="asked-again" id="reviewer-%s-try-try-2">Asked again:', self::REVIEWER), $data);
+        self::assertStringContainsString(sprintf('<turbo-stream action="update" targets="#reviewer-%1$s-text:not(:has(#reviewer-%1$s-try-try-2))">', self::REVIEWER), $data);
+        self::assertStringContainsString(sprintf('<p class="asked-again" id="reviewer-%s-try-try-2">First try gave no usable answer, so the reviewer was asked again.</p>', self::REVIEWER), $data);
         self::assertStringContainsString(sprintf('targets="#round-%s-live:not(:has(#reviewer-%s-text))"', self::ROUND, self::REVIEWER), $data);
     }
 
@@ -288,7 +336,7 @@ final class MercureRoundUpdatesTest extends TestCase
             ['replace '.$base.'-tools', 'replace '.$base.'-cost', 'replace '.$base.'-files', 'replace '.$base.'-findings'],
             array_map($this->actionAndTargetOf(...), $this->streamsOf($this->published[0])),
         );
-        self::assertStringContainsString('<dt>read_file</dt><dd>3</dd>', $this->published[0]->getData());
+        self::assertStringContainsString('<dt>File reads</dt><dd>3</dd>', $this->published[0]->getData());
         self::assertStringContainsString('0.5000 USD', $this->published[0]->getData());
     }
 
@@ -318,8 +366,8 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->updates(null, $this->summaries($summary))->summaryChanged(Uuid::fromString(self::ROUND));
 
         self::assertStringContainsString('&lt;b&gt;x&lt;/b&gt;.php', $this->published[0]->getData());
-        self::assertStringContainsString('&lt;i&gt;x&lt;/i&gt;', $this->published[0]->getData());
         self::assertStringNotContainsString('<b>', $this->published[0]->getData());
+        self::assertStringNotContainsString('<i>', $this->published[0]->getData());
     }
 
     public function testASummaryThatCannotBeComputedIsLoggedAndPublishesNothingButTheRoundChangeStillGoesOut(): void
@@ -493,7 +541,7 @@ final class MercureRoundUpdatesTest extends TestCase
     public function testAJudgedRoundWhoseLedgerCannotBeReadGoesOutWithoutItsTokensAndTheReviewsTotals(): void
     {
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willThrowException(new RuntimeException('the ledger is gone'));
+        $ledger->method('readOfKind')->willThrowException(new RuntimeException('the ledger is gone'));
         $this->ledger = $ledger;
 
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
@@ -509,7 +557,7 @@ final class MercureRoundUpdatesTest extends TestCase
     {
         $failure = new RuntimeException('the ledger is gone');
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willThrowException($failure);
+        $ledger->method('readOfKind')->willThrowException($failure);
         $this->ledger = $ledger;
 
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false, [self::REVIEWER => FinishedState::Verdict]));
@@ -527,7 +575,7 @@ final class MercureRoundUpdatesTest extends TestCase
     {
         $failure = new RuntimeException('the ledger is gone');
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willThrowException($failure);
+        $ledger->method('readOfKind')->willThrowException($failure);
         $this->ledger = $ledger;
 
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(2, 2, true));
@@ -562,7 +610,7 @@ final class MercureRoundUpdatesTest extends TestCase
     {
         $failure = new RuntimeException('the ledger is gone');
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willThrowException($failure);
+        $ledger->method('readOfKind')->willThrowException($failure);
         $this->ledger = $ledger;
 
         $this->updates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 2, false, [self::REVIEWER => FinishedState::Failed]));
@@ -702,10 +750,7 @@ final class MercureRoundUpdatesTest extends TestCase
 
     private function pages(): LedgerReviewPages
     {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-
-        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+        return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
     }
 
     // The first read pauses its fiber and answers a running round, because it stands for a read taken before the judge committed; every later one finds the round judged, since the judge commits before it publishes.

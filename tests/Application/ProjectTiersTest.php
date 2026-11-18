@@ -281,14 +281,14 @@ final class ProjectTiersTest extends KernelTestCase
 
     public function testTheCodexProbeOfTheContainerUsesTheOwnersCodexSection(): void
     {
-        file_put_contents($this->file, "codex: { model: gpt-5.3-codex, effort: high }\n");
+        file_put_contents($this->file, "codex: { model: gpt-6.2-sol, effort: high }\n");
         $this->bootedContainer();
         self::assertNotNull(self::$kernel);
         $tester = new CommandTester(new Application(self::$kernel)->find('intakt:codex:probe'));
 
         $tester->execute(['account' => 'wiring']);
 
-        self::assertStringContainsString('gpt-5.3-codex', $tester->getDisplay());
+        self::assertStringContainsString('gpt-6.2-sol', $tester->getDisplay());
     }
 
     public function testACeilingAboveAHundredPercentStopsTheBoot(): void
@@ -435,13 +435,13 @@ final class ProjectTiersTest extends KernelTestCase
     public function testWithItsSectionEveryListedCodexAccountGetsAPlatformOfItsOwn(): void
     {
         file_put_contents($this->file, <<<'YAML'
-            codex: { model: gpt-5.3-codex, effort: high }
+            codex: { model: gpt-6.2-sol, effort: high }
             accounts:
                 codex: [default, team]
             projects:
                 alpha-one:
                     tiers:
-                        strong: { provider: codex, model: gpt-5.3-codex }
+                        strong: { provider: codex, model: gpt-6.2-sol }
             YAML);
 
         $container = $this->bootedContainer();

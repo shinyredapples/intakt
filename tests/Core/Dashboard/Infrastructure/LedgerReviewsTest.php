@@ -29,13 +29,21 @@ use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
 use Intakt\Core\Review\Contract\ReviewStarted;
+use Intakt\Core\Review\Contract\RoundCosts;
+use Intakt\Core\Review\Contract\RoundEnding;
+use Intakt\Core\Review\Contract\RoundEndings;
+use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
+use Intakt\Tests\Support\FixedRoundEndings;
 use Intakt\Tests\Support\ListedReviews;
+use Intakt\Tests\Support\ReplayMarkBus;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use Intakt\Tests\Support\UnpricedRoundCosts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
 
 #[CoversClass(LedgerReviews::class)]
@@ -61,6 +69,13 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(LedgerEvent::class)]
 final class LedgerReviewsTest extends TestCase
 {
+    private DashboardLedger $ledger;
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+    }
+
     public function testEventsOfKindsTheDashboardDoesNotReadAreIgnored(): void
     {
         $reviews = $this->reviewsOf(
@@ -266,6 +281,41 @@ final class LedgerReviewsTest extends TestCase
         $reviews = $this->listOf($ledger);
 
         self::assertSame([['r2', 2, ReviewOutcome::Approved, 0], ['r1', 1, ReviewOutcome::ChangesRequested, 1]], array_map(static fn (ReviewSummary $review): array => [$review->round, $review->number, $review->outcome, $review->findingCount], $reviews));
+    }
+
+    public function testTheReviewListNeverAsksForARoundsCostOrReplayMark(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'r1', 1);
+        $this->ledger->startRoundOf('other-change', 'r2', 1);
+        $this->ledger->judgeRound('r1');
+        $costs = $this->createMock(RoundCosts::class);
+        $costs->expects($this->never())->method('costOf');
+        $queries = $this->createMock(MessageBusInterface::class);
+        $queries->expects($this->never())->method('dispatch');
+
+        $reviews = $this->listWith($costs, $queries, new FixedRoundEndings());
+
+        self::assertCount(2, $reviews);
+    }
+
+    public function testAnUnjudgedRoundThatEndedIsListedWithTheOutcomeItsReviewPageShows(): void
+    {
+        $this->ledger->startRoundOf('sample-change', 'r1', 1);
+        $endings = new FixedRoundEndings(new RoundEnding(RoundEnds::JudgingFailed, 'The judge could not decide.'));
+
+        $reviews = $this->listWith(new UnpricedRoundCosts(), new ReplayMarkBus(), $endings);
+
+        self::assertSame([ReviewState::InProgress, ReviewOutcome::Failed], [$reviews[0]->state, $reviews[0]->outcome]);
+    }
+
+    /**
+     * @return list<ReviewSummary>
+     */
+    private function listWith(RoundCosts $costs, MessageBusInterface $queries, RoundEndings $endings): array
+    {
+        $pages = new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
+
+        return new LedgerReviews($pages)->newestFirst();
     }
 
     /**
