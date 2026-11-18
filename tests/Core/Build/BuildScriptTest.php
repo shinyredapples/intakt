@@ -17,6 +17,8 @@ use Symfony\Component\Process\Process;
 final class BuildScriptTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../docker/job/build.sh';
+    // Seconds a killed watchdog's sleep may take to end, because the kill is delivered asynchronously and a loaded runner may finish its exit only after the script returned.
+    private const int WATCHDOG_DEADLINE = 5;
 
     private BuildHistory $history;
     private string $output = '';
@@ -196,10 +198,36 @@ final class BuildScriptTest extends TestCase
         $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
 
         self::assertSame(0, $run->getExitCode());
-        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
-        $sleeps = array_map(intval(...), false === $recorded ? [] : $recorded);
+        $sleeps = $this->recordedSleeps();
         self::assertNotSame([], $sleeps);
-        self::assertSame([], array_values(array_filter($sleeps, $this->isRunning(...))));
+        self::assertSame([], $this->stillRunningAfter($sleeps, self::WATCHDOG_DEADLINE));
+    }
+
+    public function testAWatchdogSleepStillEndingWhenTheBuildReturnsIsNotLeftBehindOnceItHasEnded(): void
+    {
+        $this->givenTheCli('until [ -s "$RECORD/sleeps" ]; do :; done; exit 0');
+        $this->givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild();
+
+        $run = $this->whenTheBuildRuns('task', 'claude-sonnet-5-5', 31);
+        $sleeps = $this->recordedSleeps();
+        $runningWhenTheBuildReturned = array_values(array_filter($sleeps, $this->isRunning(...)));
+        touch($this->history->folder.'/build-returned');
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertNotSame([], $runningWhenTheBuildReturned);
+        self::assertSame([], $this->stillRunningAfter($sleeps, self::WATCHDOG_DEADLINE));
+    }
+
+    public function testTheWaitForTheWatchdogStillReportsAProcessThatOutlivesItsDeadline(): void
+    {
+        $lingering = new Process([(string) new ExecutableFinder()->find('sleep'), '30']);
+        $lingering->start();
+        $process = (int) $lingering->getPid();
+
+        $stillRunning = $this->stillRunningAfter([$process], 1);
+        $lingering->stop(0);
+
+        self::assertSame([$process], $stillRunning);
     }
 
     public function testTheCliWorksInAFreshCloneOnTheTasksBranchWithOnlyTheBuildClonesBranches(): void
@@ -397,6 +425,49 @@ final class BuildScriptTest extends TestCase
         self::assertNotNull($sleep);
         file_put_contents($this->bin.'/sleep', "#!/bin/sh\necho \$\$ >> \"\$RECORD/sleeps\"\nexec ".escapeshellarg($sleep)." \"\$@\"\n");
         chmod($this->bin.'/sleep', 0o755);
+    }
+
+    // A stand-in in a session of its own, so the group kill misses it and it stays running until the build has returned, as a killed sleep still in its exit does.
+    // The stand-in reports itself only once it is in that session, because the group kill would otherwise reach it before setsid; it ends after ten seconds at the latest, so a failed test leaves nothing running.
+    private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(): void
+    {
+        $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
+        file_put_contents($this->bin.'/sleep', <<<SH
+            #!/bin/sh
+            setsid sh -c 'echo \$\$ > "\$RECORD/stand-in.\$2"; i=0; until [ -e "\$RECORD/build-returned" ] || [ "\$i" -ge 200 ]; do i=\$((i + 1)); "\$1" 0.05; done' stand-in {$sleep} \$\$ > /dev/null 2>&1 &
+            until [ -s "\$RECORD/stand-in.\$\$" ]; do :; done
+            cat "\$RECORD/stand-in.\$\$" >> "\$RECORD/sleeps"
+            echo \$\$ >> "\$RECORD/sleeps"
+            exec {$sleep} "\$@"
+            SH);
+        chmod($this->bin.'/sleep', 0o755);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function recordedSleeps(): array
+    {
+        $recorded = file($this->history->folder.'/sleeps', FILE_IGNORE_NEW_LINES);
+
+        return array_map(intval(...), false === $recorded ? [] : $recorded);
+    }
+
+    /**
+     * @param list<int> $processes
+     *
+     * @return list<int>
+     */
+    private function stillRunningAfter(array $processes, int $seconds): array
+    {
+        $deadline = hrtime(true) + $seconds * 1_000_000_000;
+        $running = array_values(array_filter($processes, $this->isRunning(...)));
+        while ([] !== $running && hrtime(true) < $deadline) {
+            usleep(20_000);
+            $running = array_values(array_filter($running, $this->isRunning(...)));
+        }
+
+        return $running;
     }
 
     private function isRunning(int $process): bool
