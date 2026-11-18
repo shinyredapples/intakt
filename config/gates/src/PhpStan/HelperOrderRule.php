@@ -70,7 +70,7 @@ final readonly class HelperOrderRule implements Rule
      * @param list<ClassMethod>          $methods
      * @param array<string, ClassMethod> $helpers
      *
-     * @return array<string, list<string>> each caller's helpers in the order it first calls them, only the helpers it calls first
+     * @return array<string, list<string>>
      */
     private function callsOf(array $methods, array $helpers, string $class): array
     {
@@ -94,6 +94,43 @@ final readonly class HelperOrderRule implements Rule
         return $calls;
     }
 
+    // because an anonymous class has its own $this, a call inside one is not the method's, while a call in a closure or a first-class callable is
+    /**
+     * @param array<string, ClassMethod> $helpers
+     *
+     * @return list<string>
+     */
+    private function calledHelpers(ClassMethod $method, array $helpers, string $class): array
+    {
+        $finder = new NodeFinder();
+        $statements = $method->stmts ?? [];
+        $isCall = fn (Node $found): bool => isset($helpers[$this->calledName($found, $class) ?? '']);
+        $nested = array_map(spl_object_id(...), $finder->find($finder->findInstanceOf($statements, ClassLike::class), $isCall));
+        $calls = array_filter($finder->find($statements, $isCall), static fn (Node $call): bool => !in_array(spl_object_id($call), $nested, true));
+        // a call ends after the calls in its arguments, so the end position gives the order PHP calls them in
+        usort($calls, static fn (Node $one, Node $other): int => $one->getEndFilePos() <=> $other->getEndFilePos());
+
+        return array_values(array_unique(array_map(fn (Node $call): string => $this->calledName($call, $class) ?? '', $calls)));
+    }
+
+    private function calledName(Node $node, string $class): ?string
+    {
+        if (!$node instanceof MethodCall && !$node instanceof NullsafeMethodCall && !$node instanceof StaticCall) {
+            return null;
+        }
+
+        $isOwn = $node instanceof StaticCall
+            ? $node->class instanceof Name && $this->namesTheClass($node->class, $class)
+            : $node->var instanceof Variable && 'this' === $node->var->name;
+
+        return $isOwn && $node->name instanceof Identifier ? $node->name->toLowerString() : null;
+    }
+
+    private function namesTheClass(Name $name, string $class): bool
+    {
+        return in_array($name->toLowerString(), self::SELF_NAMES, true) || strtolower($name->toString()) === strtolower($class);
+    }
+
     /**
      * @param array<string, mixed>        $roots
      * @param array<string, list<string>> $called
@@ -115,43 +152,6 @@ final readonly class HelperOrderRule implements Rule
         }
 
         return $reached;
-    }
-
-    // a closure or first-class callable in the method counts as the method calling, but an anonymous class has its own $this
-    /**
-     * @param array<string, ClassMethod> $helpers
-     *
-     * @return list<string>
-     */
-    private function calledHelpers(ClassMethod $method, array $helpers, string $class): array
-    {
-        $finder = new NodeFinder();
-        $statements = $method->stmts ?? [];
-        $isCall = fn (Node $found): bool => isset($helpers[$this->calledName($found, $class) ?? '']);
-        $nested = array_map(spl_object_id(...), $finder->find($finder->findInstanceOf($statements, ClassLike::class), $isCall));
-        $calls = array_filter($finder->find($statements, $isCall), static fn (Node $call): bool => !in_array(spl_object_id($call), $nested, true));
-        // a call ends after the calls in its arguments, so the end position gives the order PHP calls them in
-        usort($calls, static fn (Node $one, Node $other): int => $one->getEndFilePos() <=> $other->getEndFilePos());
-
-        return array_values(array_unique(array_map(fn (Node $call): string => $this->calledName($call, $class) ?? '', $calls)));
-    }
-
-    private function calledName(Node $node, string $class): ?string
-    {
-        $isOwn = match (true) {
-            $node instanceof MethodCall, $node instanceof NullsafeMethodCall => $node->var instanceof Variable && 'this' === $node->var->name,
-            $node instanceof StaticCall => $node->class instanceof Name && $this->namesTheClass($node->class, $class),
-            default => false,
-        };
-
-        return $isOwn && ($node instanceof MethodCall || $node instanceof NullsafeMethodCall || $node instanceof StaticCall) && $node->name instanceof Identifier
-            ? $node->name->toLowerString()
-            : null;
-    }
-
-    private function namesTheClass(Name $name, string $class): bool
-    {
-        return in_array($name->toLowerString(), self::SELF_NAMES, true) || strtolower($name->toString()) === strtolower($class);
     }
 
     /**
