@@ -64,9 +64,10 @@ final readonly class FencedPlants
     }
 
     // A part of a plant can leak on its own (a task's first line used as a title), so each line is checked as well as the whole.
+    // Any line ending splits, so a CRLF line is checked without the "\r" a copied title drops.
     private static function assertNoLineIsOutside(string $plant, string $outside): void
     {
-        foreach (explode("\n", $plant) as $line) {
+        foreach (preg_split('/\R/', $plant) ?: [] as $line) {
             if ('' !== trim($line)) {
                 Assert::assertStringNotContainsString($line, $outside, 'A line of a plant reaches the prompt outside a fence.');
             }
