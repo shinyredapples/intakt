@@ -5,7 +5,7 @@
 ## Surface
 
 - `Contract/JobRunner::run(JobSpec): JobResult`, implemented by `Infrastructure/ContainerJobRunner`.
-- `JobSpec`: a `JobId`, the image, the command, a list of `JobInput` (a host path mounted read-only at a container path), `JobLimits` (memory in bytes, CPUs, run time in seconds) and a `JobEgress`. It has no environment field, so nothing the orchestrator holds (forge token, signing key, API keys) can be passed to a job.
+- `JobSpec`: a `JobId`, the image, the command, a list of `JobInput` (a host path mounted read-only at a container path), `JobLimits` (memory in bytes, CPUs, run time in seconds), a `JobEgress` and an optional kept directory (an absolute host path, otherwise `JobRefused`; no input may be mounted at or inside `/work`, `/output` or `/kept`). It has no environment field, so nothing the orchestrator holds (forge token, signing key, API keys) can be passed to a job.
 - `JobEgress`: `JobEgress::none()` (no network at all, for probe jobs and a check job whose gate names no registry) or `JobEgress::to(list<string>)`, the exact host names the job may reach (each kept once). A check job passes its gate's registry hosts ([Check job](check-job.md)), a build job its vendor's API and the gate's registry hosts ([Build job](build-job.md)), and a review job its vendor's host alone ([Review job](review-job.md)).
 - `JobResult`: a `JobEnd` (the `JobCause` and the exit code) and the `JobOutput` (the files the job left in its output directory, by name, without the start check's report). What the start check found is in the ledger only (`job_start_check_failed`, see [Start check](#start-check)).
 - Refusals: `JobRefused` for a job id that is not 1 to 63 of `a-z`, `0-9`, `.`, `_`, `-` starting with a letter or digit, for a limit of zero or less, for an input whose host path is relative or whose container path is relative, `/`, or on or under `/work` or `/output` (after `..` is resolved), for an empty allowlist, for an allowlisted host that is not a lowercase host name of at most 253 characters with labels of 1 to 63 of `a-z`, `0-9`, `-` (not starting or ending with `-`) and a top-level domain of 2 to 63 letters (so no address, wildcard, leading or trailing dot, port, space or line break), for a job id that is already running, and for an image that declares volumes. `DockerEngineFailed` when the socket is missing, the engine does not answer, refuses a call (with the engine's message) or answers a body this client cannot read (a proxy log whose frames do not add up included). `JobOutputRefused` for an output entry that is a link, a folder or anything else but a plain file, or that cannot be read, for an output of more than 1000 entries, and for an output of more than 16 MiB in total (`JobOutputDirectories::MAX_FILES`, `MAX_BYTES`). `JobEventNotRecorded` when the ledger refuses the job's end.
@@ -16,13 +16,13 @@
 
 | Setting | Value | Why |
 |---|---|---|
-| `ReadonlyRootfs` | `true` | nothing outside the work area and the output directory can be written |
+| `ReadonlyRootfs` | `true` | nothing outside the work area, the output directory and a kept directory can be written |
 | `Tmpfs` | `/work` (`rw,nosuid,nodev`) | the work area, gone with the container |
 | `Entrypoint` | `/bin/sh -c <docker/job/start-check.sh> intakt-start-check`, the script's text read from the project folder for each job | the [start check](#start-check) runs before the job's command in any image with a POSIX shell; the image's own entrypoint is not used |
 | `Cmd` | the inputs' container paths, `--`, then the job's command | the start check checks each input, then runs the command with `exec` |
 | `Env` | `HOME=/work`, `TMPDIR=/work`, `INTAKT_JOB_ID=<id>`, `INTAKT_JOB_OUTPUT=/output` only, and with an allowlist `INTAKT_JOB_EGRESS=<hosts, space-separated>` and `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, `https_proxy` set to `http://egress-proxy:3128` | a wiped home and own caches per job, no credential |
 | `WorkingDir` | `/work` | |
-| `Mounts` | each input as a read-only bind, then the job's own output directory as the only writable bind at `/output` | |
+| `Mounts` | each input as a read-only bind, then the job's own output directory as a writable bind at `/output`, then the spec's kept directory, when it has one, as the only other writable bind at `/kept` | the kept directory is how a job hands back what is too large for the output directory (the [dependency install](check-job.md#dependency-snapshots)); the runner neither reads nor removes it |
 | `User` | the orchestrator's uid and gid | the job can write its output directory, which only that user can read, and never runs as root |
 | `Memory`, `MemorySwap` | the job's limit, both equal | a runaway job is killed at its own limit instead of swapping |
 | `NanoCpus` | CPUs times 10^9, rounded; `JobLimits` refuses a value that is not finite, rounds to less than 1 or does not fit a PHP integer | 0 would turn the engine's CPU limit off |
