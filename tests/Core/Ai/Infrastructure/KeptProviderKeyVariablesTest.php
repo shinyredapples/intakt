@@ -18,11 +18,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
 use RuntimeException;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\EnvVarLoaderInterface;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Exception\EnvNotFoundException;
+use Symfony\Component\HttpKernel\Log\Logger;
 use Symfony\Component\String\LazyString;
 
 #[CoversClass(KeptProviderKeyVariables::class)]
@@ -148,6 +150,22 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $variables = new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog(), $logger, [$failing])->loadEnvVars();
 
         self::assertSame(['HF_TOKEN' => 'hf_'.self::BODY], $variables);
+    }
+
+    public function testTheWarningForALoaderThatFailsNamesBothClassesOnALoggerWithoutAFormatter(): void
+    {
+        $failing = self::createStub(EnvVarLoaderInterface::class);
+        $failing->method('loadEnvVars')->willThrowException(new RuntimeException('secret-text-from-the-vault'));
+        $keys = self::createStub(KeptProviderKeys::class);
+        $keys->method('read')->willReturn(ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog()));
+        $written = fopen('php://memory', 'w+') ?: self::fail('No memory stream.');
+
+        // The logger config/packages/ai.php builds before the logger service exists, on a stream that can be read back.
+        new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog(), new Logger(LogLevel::WARNING, $written), [$failing])->loadEnvVars();
+
+        $line = (string) stream_get_contents($written, offset: 0);
+        self::assertStringContainsString('[warning] The env var loader '.$failing::class.' failed with '.RuntimeException::class.', so its variable counts as set.', $line);
+        self::assertStringNotContainsString('secret-text-from-the-vault', $line);
     }
 
     public function testAKeptKeyOfAProviderTheCatalogNoLongerListsLoadsNoVariable(): void

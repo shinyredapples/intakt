@@ -95,7 +95,7 @@ return static function (ContainerConfigurator $container): void {
     $keptKeyDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_PROVIDER_KEY_DIR') : null) ?? dirname(__DIR__, 2).'/var/data';
     $container->parameters()->set(AiServices::KEPT_KEY_DIRECTORY, $keptKeyDirectory);
 
-    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader; the logger service does not exist yet, so a failure is written to the service output like the logger would.
+    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader; the logger service does not exist yet, so a failure goes to the service output through a logger without the service's formatter: a plain line holding the message, whose placeholders name the loader and the failure by class.
     $keyProviders = new SymfonyAiProviderCatalog();
     $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, new Logger(LogLevel::WARNING, 'php://stderr'), [$vault])->loadEnvVars();
 

@@ -105,8 +105,8 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
             return null !== $value && '' !== (string) $value;
             // Boundary: logs the loader class and counts the variable as set, because the env processor would fail on it and any loader may fail in its own way.
         } catch (Throwable $failure) {
-            // Only the classes, because a vault failure can echo a secret.
-            $this->logger->warning('An env var loader failed, so its variable counts as set.', ['loader' => $loader::class, 'exception_class' => $failure::class]);
+            // Only the classes, because a vault failure can echo a secret; they are placeholders in the message too, because the build-time logger has no formatter and writes the message alone.
+            $this->logger->warning('The env var loader {loader} failed with {exception_class}, so its variable counts as set.', ['loader' => $loader::class, 'exception_class' => $failure::class]);
 
             return true;
         }
