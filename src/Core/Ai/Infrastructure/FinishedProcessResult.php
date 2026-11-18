@@ -57,18 +57,11 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
         return $this->withStructuredOutput($data);
     }
 
-    // Only a call of one of its tools on that server whose result the CLI reports without an error counts, because a failed or refused call, one left without a result or one to another server showed the reviewer nothing of the change.
+    // Only a call of one of its tools on that server whose result the CLI reports without an error counts, because a failed or refused call, one left without a result or one to another server showed the reviewer nothing of the change; and only when the CLI reports that server connected, so a call it could not have reached it with never counts.
     #[Override]
     public function readThrough(ReviewServerAccess $access): bool
     {
-        $toolNames = $access->mcpToolNames();
-        $calls = array_filter($this->contentBlocks('assistant', 'tool_use'), static fn (array $use): bool => in_array($use['name'] ?? null, $toolNames, true));
-        $ids = array_column($calls, 'id');
-
-        return array_any(
-            $this->contentBlocks('user', 'tool_result'),
-            static fn (array $result): bool => in_array($result['tool_use_id'] ?? null, $ids, true) && false === ($result['is_error'] ?? false),
-        );
+        return $this->connected($access) && $this->readThroughTools($access);
     }
 
     #[Override]
@@ -81,6 +74,27 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
     public function getObject(): object
     {
         return $this->inner->getObject();
+    }
+
+    // The CLI's init event lists each MCP server it started with its status, so only `connected` shows the round's server was reached.
+    private function connected(ReviewServerAccess $access): bool
+    {
+        $init = array_filter($this->events(), static fn (array $event): bool => 'system' === ($event[self::TYPE] ?? null) && 'init' === ($event['subtype'] ?? null));
+        $servers = array_merge(...array_map(static fn (array $event): array => is_array($event['mcp_servers'] ?? null) ? array_values($event['mcp_servers']) : [], array_values($init)));
+
+        return array_any($servers, static fn (mixed $server): bool => is_array($server) && $access->name === ($server['name'] ?? null) && 'connected' === ($server['status'] ?? null));
+    }
+
+    private function readThroughTools(ReviewServerAccess $access): bool
+    {
+        $toolNames = $access->mcpToolNames();
+        $calls = array_filter($this->contentBlocks('assistant', 'tool_use'), static fn (array $use): bool => in_array($use['name'] ?? null, $toolNames, true));
+        $ids = array_column($calls, 'id');
+
+        return array_any(
+            $this->contentBlocks('user', 'tool_result'),
+            static fn (array $result): bool => in_array($result['tool_use_id'] ?? null, $ids, true) && false === ($result['is_error'] ?? false),
+        );
     }
 
     // The bridge reads only the result's text (upstream/ai-claude-code-platform-structured-output), while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict. A null field holds no answer, so the result's text stays the one read.
