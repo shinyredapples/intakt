@@ -641,14 +641,23 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('including any marker with another boundary or none', $this->sent[0]);
     }
 
-    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPassesUnlessItNamesTheWrongGate(): void
+    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPasses(): void
     {
         $this->review('Add a cart.', [], self::APPROVE);
 
         $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
         self::assertIsString($system);
         self::assertStringContainsString('Do not re-flag what `bin/check` passes', $system);
-        self::assertStringContainsString('unless the gate itself is wrong; then name the gate in the requirement field', $system);
+    }
+
+    public function testTheSystemMessageTellsTheReviewerThatAGateThatMissesACaseIsAP3NamingTheGateNotASendBack(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
+        self::assertIsString($system);
+        self::assertStringContainsString('also when the gate is wrong or misses a case: that gap gets a gate issue, not a send-back, so report it at most as a P3 that names the gate in the requirement field', $system);
+        self::assertStringNotContainsString('unless the gate itself is wrong', $system);
     }
 
     public function testTheDiffReachesThePromptInsideItsOwnFenceAfterTheTask(): void
