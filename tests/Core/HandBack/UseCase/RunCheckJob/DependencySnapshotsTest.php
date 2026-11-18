@@ -93,7 +93,7 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
 
-        $snapshot = $this->store($this->runnerInstalling())->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = $this->store($this->runnerInstalling())->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertNotNull($snapshot);
         self::assertStringStartsWith($this->root.'/', $snapshot);
@@ -114,9 +114,9 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
         $store = $this->store($this->runnerInstalling());
-        $first = $store->of($this->history->work.'/.git',$head, 'job-image');
+        $first = $store->of($this->history->work.'/.git', $head, 'job-image');
 
-        $second = $store->of($this->history->work.'/.git',$this->history->commit('Change only the code'), 'job-image');
+        $second = $store->of($this->history->work.'/.git', $this->history->commit('Change only the code'), 'job-image');
 
         self::assertNotNull($first);
         self::assertSame($first, $second);
@@ -126,9 +126,9 @@ final class DependencySnapshotsTest extends TestCase
     public function testAChangedLockFileMissesTheSnapshotOfTheOldOne(): void
     {
         $store = $this->store($this->runnerInstalling());
-        $old = $store->of($this->history->work.'/.git',$this->givenTheHeadLocks('{"packages": ["acme/lib"]}'), 'job-image');
+        $old = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["acme/lib"]}'), 'job-image');
 
-        $new = $store->of($this->history->work.'/.git',$this->givenTheHeadLocks('{"packages": ["acme/lib", "acme/other"]}'), 'job-image');
+        $new = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["acme/lib", "acme/other"]}'), 'job-image');
 
         self::assertNotNull($new);
         self::assertNotSame($old, $new);
@@ -139,9 +139,9 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
         $store = $this->store($this->runnerInstalling());
-        $old = $store->of($this->history->work.'/.git',$head, 'php-8.4-image');
+        $old = $store->of($this->history->work.'/.git', $head, 'php-8.4-image');
 
-        $new = $store->of($this->history->work.'/.git',$head, 'php-8.5-image');
+        $new = $store->of($this->history->work.'/.git', $head, 'php-8.5-image');
 
         self::assertNotSame($old, $new);
         self::assertCount(2, $this->ran);
@@ -151,7 +151,7 @@ final class DependencySnapshotsTest extends TestCase
     {
         $this->history->commitFile('composer.json', "{}\n", 'Add the manifest alone');
 
-        $snapshot = $this->store($this->runnerInstalling())->of($this->history->work.'/.git',$this->history->commit('Build work'), 'job-image');
+        $snapshot = $this->store($this->runnerInstalling())->of($this->history->work.'/.git', $this->history->commit('Build work'), 'job-image');
 
         self::assertNull($snapshot);
         self::assertSame([], $this->ran);
@@ -163,7 +163,7 @@ final class DependencySnapshotsTest extends TestCase
         $gate = self::createStub(Gate::class);
         $gate->method('dependencyInstall')->willReturn(null);
 
-        $snapshot = $this->store($this->runnerInstalling(), $gate)->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = $this->store($this->runnerInstalling(), $gate)->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertNull($snapshot);
         self::assertSame([], $this->ran);
@@ -178,7 +178,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::Exited, 1), new JobOutput([]));
         });
 
-        $snapshot = $this->store($runner)->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = $this->store($runner)->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertNull($snapshot);
         self::assertSame([], $this->entries());
@@ -193,7 +193,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::TimedOut, 137), new JobOutput(['install-result' => "installed\n"]));
         });
 
-        self::assertNull($this->store($runner)->of($this->history->work.'/.git',$head, 'job-image'));
+        self::assertNull($this->store($runner)->of($this->history->work.'/.git', $head, 'job-image'));
         self::assertSame([], $this->entries());
     }
 
@@ -203,7 +203,7 @@ final class DependencySnapshotsTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willThrowException(JobOutputRefused::tooMany(1000));
 
-        self::assertNull($this->store($runner)->of($this->history->work.'/.git',$head, 'job-image'));
+        self::assertNull($this->store($runner)->of($this->history->work.'/.git', $head, 'job-image'));
         self::assertSame([], $this->entries());
     }
 
@@ -221,7 +221,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n"]));
         });
 
-        $snapshot = (string) $this->store($runner)->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = (string) $this->store($runner)->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertSame(0o755, fileperms($this->root) & 0o777);
         self::assertSame(0o755, fileperms($snapshot) & 0o777);
@@ -243,7 +243,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n"]));
         });
 
-        $snapshot = (string) $this->store($runner)->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = (string) $this->store($runner)->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertTrue(is_link($snapshot.'/vendor/acme/link'));
         clearstatcache();
@@ -253,14 +253,14 @@ final class DependencySnapshotsTest extends TestCase
     public function testTheStoreKeepsOnlyTheMostRecentlyUsedSnapshots(): void
     {
         $store = $this->store($this->runnerInstalling(), kept: 2);
-        $first = $store->of($this->history->work.'/.git',$this->givenTheHeadLocks('{"packages": ["first"]}'), 'job-image');
+        $first = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["first"]}'), 'job-image');
         $this->clock->sleep(60);
-        $second = $store->of($this->history->work.'/.git',$this->givenTheHeadLocks('{"packages": ["second"]}'), 'job-image');
+        $second = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["second"]}'), 'job-image');
         $this->clock->sleep(60);
-        $store->of($this->history->work.'/.git',$this->givenTheHeadLocks('{"packages": ["first"]}'), 'job-image');
+        $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["first"]}'), 'job-image');
         $this->clock->sleep(60);
 
-        $third = $store->of($this->history->work.'/.git',$this->givenTheHeadLocks('{"packages": ["third"]}'), 'job-image');
+        $third = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["third"]}'), 'job-image');
 
         self::assertEqualsCanonicalizing([basename((string) $first), basename((string) $third)], $this->entries());
         self::assertDirectoryDoesNotExist((string) $second);
@@ -272,7 +272,7 @@ final class DependencySnapshotsTest extends TestCase
         $store = $this->store($this->runnerInstalling());
         $this->givenAnotherCheckInstalls('{"packages": ["acme/lib"]}');
 
-        $snapshot = $store->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = $store->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertNull($snapshot);
         self::assertSame([], $this->ran);
@@ -287,7 +287,7 @@ final class DependencySnapshotsTest extends TestCase
             new Filesystem()->dumpFile($entry.'/vendor/acme/lib/Lib.php', "<?php\n");
         }));
 
-        $snapshot = $store->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = $store->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertSame($entry, $snapshot);
         self::assertSame([], $this->ran);
@@ -304,7 +304,7 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
 
-        $snapshot = $this->store($this->runnerInstalling(), kept: 1)->of($this->history->work.'/.git',$head, 'job-image');
+        $snapshot = $this->store($this->runnerInstalling(), kept: 1)->of($this->history->work.'/.git', $head, 'job-image');
 
         self::assertNotNull($snapshot);
         self::assertCount(1, $this->entries());

@@ -30,12 +30,6 @@ final readonly class JobInput
             return false;
         }
 
-        foreach ([JobSpec::WORK_AREA, JobSpec::OUTPUT_DIRECTORY, JobSpec::KEPT_DIRECTORY] as $writable) {
-            if (Path::isBasePath($canonical, $writable) || Path::isBasePath($writable, $canonical)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all([JobSpec::WORK_AREA, JobSpec::OUTPUT_DIRECTORY, JobSpec::KEPT_DIRECTORY], fn ($writable) => !Path::isBasePath($canonical, $writable) && !Path::isBasePath($writable, $canonical));
     }
 }
