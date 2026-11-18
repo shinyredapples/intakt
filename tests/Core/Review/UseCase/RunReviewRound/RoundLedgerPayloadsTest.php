@@ -37,6 +37,7 @@ use Intakt\Tests\Plugin\SymfonyAiVendor\InMemoryLedger;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(ReviewStarted::class)]
@@ -96,7 +97,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAStartedReviewerRowWrittenBeforeTheModelWasRecordedReadsWithNoModel(): void
     {
-        $started = $this->serializer()->deserialize(self::IDENTITY.'}', ReviewerStarted::class, 'json');
+        $started = $this->serializer()->deserialize(self::IDENTITY.'}', ReviewerStarted::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(ReviewerStarted::class, $started);
         self::assertSame(['security', null], [$started->role, $started->model]);
@@ -159,7 +160,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAnOwedCatchUpRowWrittenBeforeTheModelWasRecordedReadsWithNoModel(): void
     {
-        $owed = $this->serializer()->deserialize(self::IDENTITY.',"substitute":"openai"}', CatchUpOwed::class, 'json');
+        $owed = $this->serializer()->deserialize(self::IDENTITY.',"substitute":"openai"}', CatchUpOwed::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(CatchUpOwed::class, $owed);
         self::assertSame([Provider::OpenAi, null], [$owed->substitute, $owed->model]);
@@ -243,7 +244,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAJudgeRowWithADroppedFindingReadsBackWithItsReason(): void
     {
-        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[{"id":"F1","severity":"P1","text":"A bug.","file":"src/A.php","line":7,"reason":"none of its 1 quoted code fragments is in the change"}]}', JudgeDone::class, 'json');
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[{"id":"F1","severity":"P1","text":"A bug.","file":"src/A.php","line":7,"reason":"none of its 1 quoted code fragments is in the change"}]}', JudgeDone::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(JudgeDone::class, $done);
         self::assertEquals([new DroppedFinding('F1', Severity::P1, 'A bug.', 'src/A.php', 7, 'none of its 1 quoted code fragments is in the change')], $done->dropped);
@@ -251,7 +252,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAJudgeRowWrittenBeforeDropReasonsWereRecordedReadsWithNoDroppedFindings(): void
     {
-        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', JudgeDone::class, 'json');
+        $done = $this->serializer()->deserialize('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[]}', JudgeDone::class, JsonEncoder::FORMAT);
 
         self::assertInstanceOf(JudgeDone::class, $done);
         self::assertSame([], $done->dropped);
@@ -277,7 +278,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testAJudgeRowWrittenWithoutFileAndLineStillReadsWithBothNull(): void
     {
-        $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug."}', JudgeDoneFinding::class, 'json');
+        $finding = self::getContainer()->get('serializer.stored')->deserialize('{"id":"f1","severity":"P1","text":"A bug."}', JudgeDoneFinding::class, JsonEncoder::FORMAT);
 
         self::assertSame([null, null], [$finding->file, $finding->line]);
     }
@@ -306,7 +307,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private function written(object $payload): string
     {
-        return $this->serializer()->serialize($payload, 'json');
+        return $this->serializer()->serialize($payload, JsonEncoder::FORMAT);
     }
 
     private function serializer(): SerializerInterface
