@@ -1,0 +1,107 @@
+
+== light 1440 ==
+1. Open the task: /reviews/<round 2> loaded; Review sample-change - Intakt
+2. Read the current state: Now: round 2 in review
+  3. Follow a finding: Tab x11 reaches the first open finding of the Now block
+    focus: a.sb-finding "P1F1 The discount is applied twice when qty is ove", ring: 2px solid
+    Enter: address #round-0196f0a0-0000-7000-8000-000000000001-finding-F1, round 1 open: true, its card in view: li.finding-card at y=80 of 900
+    axe (round 1 opened by the finding): 0 serious or critical
+  4. Fold and expand a round: Escape inside the open round 1 folds it, open: false
+    focus: summary.ev-head "Round 1 Changes requested Judged 2 findings 12:31 ", ring: 2px solid
+    Enter on its heading: open: true
+    Space on its heading: open: false
+  6. Stop: Tab x10 reaches Stop (class btn danger)
+    focus: button.btn "Stop", ring: 2px solid
+    Enter: label "Click again to stop the round", still on /reviews/...
+    axe (Stop armed): 0 serious or critical
+      Escape: label "Stop"
+    focus: button.btn "Stop", ring: 2px solid
+    Space: label "Click again to stop the round"
+
+== light 390 ==
+1. Open the task: /reviews/<round 2> loaded; Review sample-change - Intakt
+2. Read the current state: Now: round 2 in review
+  3. Follow a finding: Tab x9 reaches the first open finding of the Now block
+    focus: a.sb-finding "P1F1 The discount is applied twice when qty is ove", ring: 2px solid
+    (Live log chosen first, to show the finding brings the timeline back)
+    Enter: address #round-0196f0a0-0000-7000-8000-000000000001-finding-F1, round 1 open: true, its card in view: li.finding-card at y=142 of 844, pane shown: timeline
+    axe (round 1 opened by the finding): 0 serious or critical
+  4. Fold and expand a round: Escape inside the open round 1 folds it, open: false
+    focus: summary.ev-head "Round 1 Changes requested Judged 2 findings 12:31 ", ring: 2px solid
+    Enter on its heading: open: true
+    Space on its heading: open: false
+  5. Switch to the live log: Tab x11 reaches the chosen tab
+    focus: button#timeline-tab[role=tab] "Timeline", ring: 2px solid
+    ArrowRight: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    ArrowLeft: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+    End: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    End: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    Home: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+    Home: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+    ArrowLeft: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    ArrowRight: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+      Tab: the chosen pane (timeline-pane role=tabpanel labelledby=timeline-tab)
+    focus: section#timeline-pane.tl-pane[role=tabpanel] "Timeline Round 1 Changes requested Judged 2 findin", ring: 2px solid
+    Shift+Tab, Left (Live log), Tab: the chosen pane (live-log-pane role=tabpanel labelledby=live-log-tab)
+    axe (Live log chosen): 0 serious or critical
+  6. Stop: Tab x8 reaches Stop (class btn danger)
+    focus: button.btn "Stop", ring: 2px solid
+    Enter: label "Click again to stop the round", still on /reviews/...
+    axe (Stop armed): 0 serious or critical
+      Escape: label "Stop"
+    focus: button.btn "Stop", ring: 2px solid
+    Space: label "Click again to stop the round"
+
+== dark 1920 ==
+1. Open the task: /reviews/<round 2> loaded; Review sample-change - Intakt
+2. Read the current state: Now: round 2 in review
+  3. Follow a finding: Tab x11 reaches the first open finding of the Now block
+    focus: a.sb-finding "P1F1 The discount is applied twice when qty is ove", ring: 2px solid
+    Enter: address #round-0196f0a0-0000-7000-8000-000000000001-finding-F1, round 1 open: true, its card in view: li.finding-card at y=80 of 900
+    axe (round 1 opened by the finding): 0 serious or critical
+  4. Fold and expand a round: Escape inside the open round 1 folds it, open: false
+    focus: summary.ev-head "Round 1 Changes requested Judged 2 findings 12:31 ", ring: 2px solid
+    Enter on its heading: open: true
+    Space on its heading: open: false
+  6. Stop: Tab x10 reaches Stop (class btn danger)
+    focus: button.btn "Stop", ring: 2px solid
+    Enter: label "Click again to stop the round", still on /reviews/...
+    axe (Stop armed): 0 serious or critical
+      Escape: label "Stop"
+    focus: button.btn "Stop", ring: 2px solid
+    Space: label "Click again to stop the round"
+
+== dark 390 ==
+1. Open the task: /reviews/<round 2> loaded; Review sample-change - Intakt
+2. Read the current state: Now: round 2 in review
+  3. Follow a finding: Tab x9 reaches the first open finding of the Now block
+    focus: a.sb-finding "P1F1 The discount is applied twice when qty is ove", ring: 2px solid
+    (Live log chosen first, to show the finding brings the timeline back)
+    Enter: address #round-0196f0a0-0000-7000-8000-000000000001-finding-F1, round 1 open: true, its card in view: li.finding-card at y=142 of 844, pane shown: timeline
+    axe (round 1 opened by the finding): 0 serious or critical
+  4. Fold and expand a round: Escape inside the open round 1 folds it, open: false
+    focus: summary.ev-head "Round 1 Changes requested Judged 2 findings 12:31 ", ring: 2px solid
+    Enter on its heading: open: true
+    Space on its heading: open: false
+  5. Switch to the live log: Tab x11 reaches the chosen tab
+    focus: button#timeline-tab[role=tab] "Timeline", ring: 2px solid
+    ArrowRight: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    ArrowLeft: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+    End: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    End: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    Home: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+    Home: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+    ArrowLeft: focus button#live-log-tab[role=tab] "Live log", ring 2px solid, aria-selected true, pane log
+    ArrowRight: focus button#timeline-tab[role=tab] "Timeline", ring 2px solid, aria-selected true, pane timeline
+      Tab: the chosen pane (timeline-pane role=tabpanel labelledby=timeline-tab)
+    focus: section#timeline-pane.tl-pane[role=tabpanel] "Timeline Round 1 Changes requested Judged 2 findin", ring: 2px solid
+    Shift+Tab, Left (Live log), Tab: the chosen pane (live-log-pane role=tabpanel labelledby=live-log-tab)
+    axe (Live log chosen): 0 serious or critical
+  6. Stop: Tab x8 reaches Stop (class btn danger)
+    focus: button.btn "Stop", ring: 2px solid
+    Enter: label "Click again to stop the round", still on /reviews/...
+    axe (Stop armed): 0 serious or critical
+      Escape: label "Stop"
+    focus: button.btn "Stop", ring: 2px solid
+    Space: label "Click again to stop the round"
+    Enter, Enter: confirmed; the page says: Asked 2 running reviewers to stop.
