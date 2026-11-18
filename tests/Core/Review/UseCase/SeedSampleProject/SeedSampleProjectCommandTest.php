@@ -113,8 +113,8 @@ final class SeedSampleProjectCommandTest extends TestCase
     {
         $this->seed(Provider::OpenAiCompatible);
 
-        self::assertArrayHasKey('openai/gpt-oss-120b:novita', $this->writtenPrices());
-        self::assertArrayHasKey('moonshotai/Kimi-K3:deepinfra', $this->writtenPrices());
+        self::assertArrayHasKey('deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra', $this->writtenPrices());
+        self::assertArrayHasKey('moonshotai/Kimi-K3.1-Pro:deepinfra', $this->writtenPrices());
     }
 
     public function testOneKeyPutsTheWholePanelOnThatProvider(): void
@@ -145,7 +145,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $display = $this->seed(Provider::OpenAiCompatible)->getDisplay();
 
         self::assertSame(['openai_compatible'], $this->panelProviders());
-        self::assertSame(['moonshotai/Kimi-K3:deepinfra', 'openai/gpt-oss-120b:novita'], $this->reviewerModels());
+        self::assertSame(['moonshotai/Kimi-K3.1-Pro:deepinfra', 'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra'], $this->reviewerModels());
         self::assertStringContainsString('its panel on openai_compatible', $display);
     }
 
@@ -154,7 +154,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $this->seed(Provider::Anthropic, Provider::OpenAiCompatible);
 
         self::assertSame(['anthropic', 'openai_compatible'], $this->panelProviders());
-        self::assertSame(['claude-opus-5-5', 'moonshotai/Kimi-K3:deepinfra'], $this->reviewerModels());
+        self::assertSame(['claude-opus-5-5', 'moonshotai/Kimi-K3.1-Pro:deepinfra'], $this->reviewerModels());
     }
 
     public function testAnOpenAiCompatibleEndpointOtherThanTheHuggingFaceRouterSeedsNothing(): void
