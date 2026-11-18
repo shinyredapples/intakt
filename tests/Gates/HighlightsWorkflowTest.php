@@ -21,7 +21,7 @@ final class HighlightsWorkflowTest extends TestCase
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/highlights.yml';
     private const string MAIN_ONLY = "github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'";
 
-    public function testTheWorkflowRunsOnInputPushesDailyAndOnDemand(): void
+    public function testTheWorkflowRunsOnInputsDailyAndByHand(): void
     {
         $workflow = $this->workflow();
 

@@ -4,7 +4,7 @@
 
 **Decision:** GitHub Pages at `https://shinyredapples.github.io/intakt/`, through GitHub's Pages deployment (no `gh-pages` branch): a stable address, no sign-in, at most a day behind main, unlike a release or CI artifact.
 
-- Runs on a push to main touching its `paths`, daily (covering the CI image) and by hand (`gh workflow run highlights.yml`), never for a pull request. Both jobs have the guard `if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'`.
+- Runs on a push to main touching its `paths`, daily (for the CI image) and by hand (`gh workflow run highlights.yml`), never for a pull request. Both jobs have the guard `if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'`.
 - `build` has the read-only token, checks out the full history (fragments are ordered by the commit that added each), runs `bin/highlights` in the CI image as uid 1000, writes the page source as `docs/highlights.md` with each `{{` and `{%` written as a Liquid string that prints it (`{{ "{{" }}`, `{{ "{%" }}`, with `sed`), renders with `actions/jekyll-build-pages` and uploads with `actions/upload-pages-artifact`.
 - `publish` runs no checkout and no repository code: its one step, `actions/deploy-pages`, deploys that artifact to the `github-pages` environment. Only it holds the `pages` write permission and the `id-token` permission.
 - A failed run leaves the previous page. Runs are serialized (`concurrency` group `highlights`).
