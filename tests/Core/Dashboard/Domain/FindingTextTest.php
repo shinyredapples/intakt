@@ -110,9 +110,14 @@ final class FindingTextTest extends TestCase
 
     public function testDunderNamesKeepTheirMarks(): void
     {
-        $written = 'Use __DIR__ here, not __FILE__ or __CLASS__, and __init__.py or __invoke__.';
-
-        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+        foreach ([
+            'Use __DIR__ here, not __FILE__ or __CLASS__, and __init__.py or __invoke__.',
+            'call __init_subclass__ here',
+            'the __webpack_require__ global',
+            'override __get_state__ too',
+        ] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
     }
 
     public function testSeparateMarksNeverPairAcrossEachOther(): void
