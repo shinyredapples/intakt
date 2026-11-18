@@ -203,7 +203,9 @@ final readonly class CheckedReports
             return null;
         }
 
-        return 1 === preg_match(self::ANY_DATE, $match['rest'], $match) && $this->dateOf($match['date']) instanceof DateTimeImmutable
+        preg_match_all(self::ANY_DATE, $match['rest'], $dates);
+
+        return array_any($dates['date'], fn (string $date): bool => $this->dateOf($date) instanceof DateTimeImmutable)
             ? null
             : 'but its "Pull requests and commits" line names no pull request (#n), URL or commit hash and no date of the check as YYYY-MM-DD';
     }

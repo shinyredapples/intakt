@@ -22,6 +22,7 @@ final readonly class Prose
             'codex',
             'codex-minimal',
             'deepseek-chatbot',
+            'text-embedding-adapter',
         ];
     }
 }

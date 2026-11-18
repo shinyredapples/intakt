@@ -71,6 +71,11 @@ final class CheckedReportsTest extends SandboxTestCase
         self::assertSame([self::NAMES_NOTHING], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** none found (checked 2026-02-30).\n- **Status:** `ready to file`\n"));
     }
 
+    public function testAReadyToFileReportWhosePullRequestsAndCommitsLineHasAValidDateAfterAnImpossibleOnePasses(): void
+    {
+        self::assertSame([], $this->findingsOf("- **Checked:** 2026-11-07 against main.\n- **Pull requests and commits:** 2026-02-30 was a typo. Searched on 2026-11-07 and found nothing.\n- **Status:** `ready to file`\n"));
+    }
+
     public function testAReadyToFileReportWhosePullRequestsAndCommitsLineNamesNothingElseThanAWordIsAFinding(): void
     {
         foreach (['none', '-', '``', 'No pull requests or commits found.', 'none foundry commits, see pull request 12.'] as $rest) {
