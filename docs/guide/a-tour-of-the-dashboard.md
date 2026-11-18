@@ -137,14 +137,14 @@ flowchart TD
 
 ## Steering budgets and pauses
 
-The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. There is no login, password or passkey: whoever can open the dashboard can press every button and change every setting. That is why it is kept to you:
-- The dashboard only answers on the computer it runs on, so whoever opens it is at that computer.
+The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. There is no login, password or passkey: whoever can open the dashboard can press every button and change every setting. So what matters is who can reach it:
+- The dashboard only answers on the computer it runs on, so whoever opens it is at that computer: you, or anyone else who uses it.
 - To use it from your phone (planned), you make it reachable on a network you trust, such as a VPN or your home network, and add the name your phone uses for it. Then anyone who can reach it on that network can act too, so a VPN is the safer choice; never put it on a shared network such as an office or a café. HTTPS is a good idea there as well, but nothing depends on it.
 - Another website open in your browser can't press a button or change a setting, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
 
 ### Every change ends by itself
 
-Raising or lowering a ceiling, pausing and changing a share each ask **until when**: a date and time, or "until the window resets" (for example the next weekly reset of an AI account). Clearing a back-off asks nothing: the wait it lifts already had an end, and that end is when the change runs out. When that moment comes, the change lapses and the normal setting is back, so a forgotten change can't keep spending. The board and the status show every change in effect and when it ends (a cleared back-off only says it lasts until the old wait would have ended); your accounts' limits and reset times show only in the admin area. The history lists every change: who made it, what it was before and after, and until when.
+Raising or lowering a ceiling, pausing and changing a share each ask **until when**: a date and time, or "until the window resets" (for example the next weekly reset of an AI account). Clearing a back-off asks nothing: the wait it lifts already had an end, and that end is when the change runs out. When that moment comes, the change lapses and the normal setting is back, so a forgotten change can't keep spending. The board and the status show every change in effect and when it ends (a cleared back-off only says it lasts until the old wait would have ended); your accounts' limits and reset times show only in the admin area. The history lists every change: whether it came from the dashboard or from Intakt itself (with no login, it can't say which person pressed the button), what it was before and after, and until when.
 
 | You can | For example |
 |---|---|
