@@ -99,9 +99,9 @@ flowchart TD
 
 | The change... | Who approves it |
 |---|---|
-| passes the mechanical checks, the Security engineer's security review and penetration test, and no reviewer calls it loosening (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week |
+| passes the mechanical checks, the Security engineer's security review and penetration test, and every reviewer with a blocking vote classes it as tightening or neutral on the current head (this includes new checks, edited tests of a check with the proof that it got no weaker, and the start-up scripts; a CI edit or a change to the agents' instructions that no check covers still comes to you) | Intakt approves it itself, and lists it on the dashboard for a week |
 | changes how Intakt approves (the list of protected files, the limits, the checks that apply them, the Security engineer's instructions, the known bad changes), or touches secrets and permissions (how secrets are kept or scanned, a workflow that reads a secret, more workflow permissions, new triggers, other machines) | always you |
-| fails a check, or the security review or penetration test finds a way around it | you |
+| fails a check, the security review or penetration test finds a way around it, or a reviewer with a blocking vote classes it as loosening or gives it no class on the current head | you |
 
 You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the review panel has approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
