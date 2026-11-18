@@ -335,6 +335,46 @@ final class DependencySnapshotsTest extends TestCase
         self::assertDirectoryDoesNotExist($held->path);
     }
 
+    public function testAHitEvictsTheSnapshotsThatChecksHeldOverTheCountOnceTheyAreReleased(): void
+    {
+        $store = $this->store($this->runnerInstalling(), kept: 2);
+        $held = [];
+        $head = '';
+
+        foreach (['first', 'second', 'third'] as $package) {
+            $head = $this->givenTheHeadLocks('{"packages": ["'.$package.'"]}');
+            $held[] = $store->of($this->repository(), $head, 'job-image');
+            $this->clock->sleep(60);
+        }
+
+        self::assertCount(3, $this->entries());
+
+        foreach ($held as $snapshot) {
+            self::assertInstanceOf(DependencySnapshot::class, $snapshot);
+            $snapshot->release();
+        }
+
+        $hit = $this->pathAt($store, $head);
+
+        self::assertCount(3, $this->ran);
+        self::assertEqualsCanonicalizing([$this->keyOf('{"packages": ["second"]}'), basename((string) $hit)], $this->entries());
+    }
+
+    public function testAHitNeverEvictsASnapshotAnotherCheckStillHolds(): void
+    {
+        $store = $this->store($this->runnerInstalling(), kept: 1);
+        $held = $store->of($this->repository(), $this->givenTheHeadLocks('{"packages": ["held"]}'), 'job-image');
+        self::assertInstanceOf(DependencySnapshot::class, $held);
+        $this->clock->sleep(60);
+        $head = $this->givenTheHeadLocks('{"packages": ["second"]}');
+        $this->pathAt($store, $head);
+
+        $this->pathAt($store, $head);
+
+        self::assertDirectoryExists($held->path);
+        $held->release();
+    }
+
     public function testASnapshotBeingEvictedIsNotHandedToACheck(): void
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');

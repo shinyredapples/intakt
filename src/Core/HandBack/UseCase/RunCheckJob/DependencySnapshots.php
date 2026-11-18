@@ -79,6 +79,9 @@ final readonly class DependencySnapshots
         $entry = $this->root.'/'.$source->key();
 
         if ($this->isEntry($entry)) {
+            // Also on a hit, because entries that checks held while a save evicted stay over the count and no save may follow.
+            $this->evictBeyondTheCount(basename($entry));
+
             return $this->used($entry, $install, $lock);
         }
 
@@ -196,7 +199,7 @@ final readonly class DependencySnapshots
         return $file->isDir() || 0 !== ($file->getPerms() & 0o100) ? 0o755 : 0o644;
     }
 
-    // The entry just saved is left out, so a save never evicts its own snapshot; a staging folder whose key nobody holds is a crash's leftover.
+    // The entry just saved or hit is left out, so a check never evicts its own snapshot; a staging folder whose key nobody holds is a crash's leftover.
     private function evictBeyondTheCount(string $saved): void
     {
         $names = scandir($this->root);
@@ -231,7 +234,7 @@ final readonly class DependencySnapshots
         return array_filter($names, static fn (string $name): bool => 1 === preg_match($pattern, $name));
     }
 
-    // Skipped while a check holds the key, so a folder a job is binding, copying or saving stays; a later save evicts it.
+    // Skipped while a check holds the key, so a folder a job is binding, copying or saving stays; the next hit or save evicts it.
     private function removedUnlessHeld(string $key, string $name): void
     {
         $lock = $this->lockOf($key);
