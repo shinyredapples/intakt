@@ -1,3 +1,4 @@
+# First-day install (no review, no task): bin/ui-check's check() on the board and /components only, because bin/ui-check needs a review round to open
 board light 1440: axe critical 0, serious 0, moderate 0, minor 0
 board light 1920: axe critical 0, serious 0, moderate 0, minor 0
 board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -5,17 +6,26 @@ board dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 board dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 board dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 components light 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:<port>/components
 components light 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:<port>/components
 components light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for http://localhost:<port>/components
 components dark 1440: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:<port>/components
 components dark 1920: axe critical 0, serious 0, moderate 0, minor 0
-  error: HTTP 500 for http://localhost:<port>/components
 components dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-  error: HTTP 500 for http://localhost:<port>/components
+UI check: 12 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
+
+# Idle install (one judged review): bin/ui-check, every page
+board light 1440: axe critical 0, serious 0, moderate 0, minor 0
+board light 1920: axe critical 0, serious 0, moderate 0, minor 0
+board light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+board dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+board dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+board dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+components light 1440: axe critical 0, serious 0, moderate 0, minor 0
+components light 1920: axe critical 0, serious 0, moderate 0, minor 0
+components light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
+components dark 1440: axe critical 0, serious 0, moderate 0, minor 0
+components dark 1920: axe critical 0, serious 0, moderate 0, minor 0
+components dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
 projects light 1440: axe critical 0, serious 0, moderate 0, minor 0
 projects light 1920: axe critical 0, serious 0, moderate 0, minor 0
 projects light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
@@ -46,5 +56,15 @@ review light 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor fi
 review dark 1440: axe critical 0, serious 0, moderate 0, minor 0
 review dark 1920: axe critical 0, serious 0, moderate 0, minor 0
 review dark 390: axe critical 0, serious 0, moderate 0, minor 0, phone floor findings 0
-UI check: 42 runs, 0 serious or critical axe violations, 0 phone floor findings, 6 page errors.
+UI check: 42 runs, 0 serious or critical axe violations, 0 phone floor findings, 0 page errors.
 Screenshots in var/ui-check/
+
+# One idle project (alpha) beside a busy one (beta): project filter and the asleep octopus
+light 1440 project=all: octopus hidden, axe serious+critical 0
+light 1440 project=alpha: octopus shown 144 px, axe serious+critical 0
+light 1440 project=beta: octopus hidden, axe serious+critical 0
+light 390 project=all (no filter on a phone): octopus hidden, axe serious+critical 0
+dark 1440 project=all: octopus hidden, axe serious+critical 0
+dark 1440 project=alpha: octopus shown 144 px, axe serious+critical 0
+dark 1440 project=beta: octopus hidden, axe serious+critical 0
+dark 390 project=all (no filter on a phone): octopus hidden, axe serious+critical 0
