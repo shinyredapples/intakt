@@ -12,6 +12,7 @@ use Intakt\Gates\GateResult;
 use Intakt\Gates\ProcessResult;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(FullReport::class)]
 #[CoversClass(CheckCommand::class)]
@@ -103,6 +104,66 @@ final class FullReportTest extends SandboxTestCase
         self::assertFileExists($sandbox->root.'/'.$name);
         self::assertFileDoesNotExist($sandbox->root.sprintf('/var/check/report-%016x.json', 6));
         self::assertFileExists($sandbox->root.sprintf('/var/check/report-%016x.json', 7));
+    }
+
+    public function testAHandMadeFileBesideTheReportsSurvivesPruning(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('var/check/report-manual.json', "{}\n");
+        touch($sandbox->root.'/var/check/report-manual.json', 1000);
+
+        foreach (range(1, FullReport::KEPT_REPORTS + 5) as $older) {
+            $sandbox->write(sprintf('var/check/report-%016x.json', $older), "{}\n");
+        }
+
+        FullReport::start()->writeTo($sandbox->root, ['result' => 'pass', 'failed' => []], []);
+
+        self::assertFileExists($sandbox->root.'/var/check/report-manual.json');
+    }
+
+    public function testPruningKeepsTheReportJustWrittenWhenOthersAreDatedInTheFuture(): void
+    {
+        $sandbox = $this->emptySandbox();
+
+        foreach (range(1, FullReport::KEPT_REPORTS + 5) as $newer) {
+            $sandbox->write(sprintf('var/check/report-%016x.json', $newer), "{}\n");
+            touch($sandbox->root.sprintf('/var/check/report-%016x.json', $newer), time() + 86400 + $newer);
+        }
+
+        $name = FullReport::start()->writeTo($sandbox->root, ['result' => 'pass', 'failed' => []], []);
+
+        self::assertNotNull($name);
+        self::assertFileExists($sandbox->root.'/'.$name);
+        $kept = glob($sandbox->root.'/var/check/report-*.json');
+        self::assertIsArray($kept);
+        self::assertCount(FullReport::KEPT_REPORTS, $kept);
+    }
+
+    public function testAGateThatKeptAFailureAndThenCrashedIsReportedWithItsCrash(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $report = FullReport::start();
+
+        FullReport::keep(GateResult::failedBecause('cs', 'saved before the crash'), $this->fileFor($report, 'cs'));
+        $name = $report->writeTo($sandbox->root, ['result' => 'fail', 'failed' => ['cs']], [GateReport::fromChild('cs', new ProcessResult(139, '', 'Segmentation fault'))]);
+
+        $findings = $this->reportedGate($sandbox, $name, 'cs')['findings'];
+        self::assertIsArray($findings);
+        self::assertCount(1, $findings);
+        self::assertIsString($findings[0]);
+        self::assertStringContainsString('gate process ended with exit code 139', $findings[0]);
+    }
+
+    public function testAGrandchildStartedThroughSymfonyProcessNoLongerSeesTheVariable(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $grandchild = 'echo json_encode([getenv("'.FullReport::VARIABLE.'"), $_SERVER["'.FullReport::VARIABLE.'"] ?? null, $_ENV["'.FullReport::VARIABLE.'"] ?? null]);';
+        $sandbox->write('child.php', "<?php\nrequire '".dirname(__DIR__, 2)."/vendor/autoload.php';\necho json_encode(isset(\$_ENV['".FullReport::VARIABLE."'], \$_SERVER['".FullReport::VARIABLE."']));\nIntakt\\Gates\\FullReport::fileAskedFor();\n\$grandchild = new Symfony\\Component\\Process\\Process([PHP_BINARY, '-d', 'variables_order=EGPCS', '-r', ".var_export($grandchild, true)."]);\n\$grandchild->mustRun();\necho \$grandchild->getOutput();\n");
+        $child = new Process([PHP_BINARY, '-d', 'variables_order=EGPCS', $sandbox->root.'/child.php'], $sandbox->root, [FullReport::VARIABLE => '/somewhere/cs.json']);
+
+        $child->mustRun();
+
+        self::assertSame('true[false,null,null]', $child->getOutput(), $child->getErrorOutput());
     }
 
     public function testAReportIsNotWrittenThroughALinkAtItsPath(): void

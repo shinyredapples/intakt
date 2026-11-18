@@ -45,6 +45,8 @@ final readonly class FullReport
     {
         $file = getenv(self::VARIABLE);
         putenv(self::VARIABLE);
+        // Because Symfony Process hands $_ENV and $_SERVER on to the processes it starts, not only the process environment.
+        unset($_ENV[self::VARIABLE], $_SERVER[self::VARIABLE]);
 
         return is_string($file) && '' !== $file ? $file : null;
     }
@@ -85,7 +87,7 @@ final readonly class FullReport
             return null;
         }
 
-        $this->pruneOlderReportsIn($directory);
+        $this->pruneOlderReportsIn($directory, $file);
 
         return $this->path;
     }
@@ -117,27 +119,30 @@ final readonly class FullReport
         return $directory;
     }
 
-    private function pruneOlderReportsIn(string $directory): void
+    // Because only files this check names may go: a hand-made file beside them stays, and the report just written stays whatever its modification time says.
+    private function pruneOlderReportsIn(string $directory, string $written): void
     {
         $found = glob($directory.'/report-*.json');
-        $reports = array_filter(false === $found ? [] : $found, static fn (string $file): bool => is_file($file) && !is_link($file));
+        $reports = array_filter(false === $found ? [] : $found, static fn (string $file): bool => $file !== $written
+            && 1 === preg_match('/\Areport-[0-9a-f]{16}\.json\z/', basename($file))
+            && is_file($file) && !is_link($file));
         $ages = array_map(static fn (string $file): int => (int) filemtime($file), $reports);
         arsort($ages);
 
         try {
-            new Filesystem()->remove(array_map(static fn (int $key): string => $reports[$key], array_slice(array_keys($ages), self::KEPT_REPORTS)));
+            new Filesystem()->remove(array_map(static fn (int $key): string => $reports[$key], array_slice(array_keys($ages), self::KEPT_REPORTS - 1)));
         } catch (IOException) {
             return;
         }
     }
 
-    // Because the gate line decides the verdict, a kept result counts only when it is that gate's and agrees with the line; otherwise the line itself is reported.
+    // Because the gate line decides the verdict, a kept result counts only when the child wrote that line itself and the result is that gate's and agrees with it; a crash, a timeout or a missing line is reported with the line that names it.
     /**
      * @return array<array-key, mixed>
      */
     private function resultOf(GateReport $report): array
     {
-        $kept = $this->keptResultOf($report->gate);
+        $kept = $report->writtenByChild ? $this->keptResultOf($report->gate) : null;
 
         if (null !== $kept && $kept['ok'] === $report->isPassing()) {
             return $kept;
