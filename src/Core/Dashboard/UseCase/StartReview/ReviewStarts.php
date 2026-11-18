@@ -13,7 +13,6 @@ use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\RequestedRound;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\StartReview;
-use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
@@ -66,10 +65,8 @@ final readonly class ReviewStarts
     {
         try {
             $handled = $this->commands->dispatch($command)->last(HandledStamp::class);
-        } catch (HandlerFailedException $failed) {
-            $reportable = array_first($failed->getWrappedExceptions(ReportableFailure::class, true));
-
-            return new StartAnswer([self::FLASH_ERROR, $reportable?->getMessage() ?? 'The review could not be started.']);
+        } catch (ReportableFailure $refusal) {
+            return new StartAnswer([self::FLASH_ERROR, $refusal->getMessage()]);
         }
 
         $round = $handled?->getResult();

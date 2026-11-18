@@ -6,6 +6,10 @@ namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Platform\Contract\Redaction;
+use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
+use Intakt\Core\Platform\Infrastructure\HeldCredentials;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
@@ -80,6 +84,9 @@ use Throwable;
 #[UsesClass(Finding::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(ReviewRound::class)]
+#[UsesClass(HeldCredentialRedactor::class)]
+#[UsesClass(HeldCredentials::class)]
+#[UsesClass(Redaction::class)]
 final class JudgeRoundTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -508,6 +515,24 @@ final class JudgeRoundTest extends KernelTestCase
         } catch (JudgeLimited $limited) {
             self::assertSame(30_000, $limited->getRetryDelay());
         }
+    }
+
+    public function testAHeldAppSecretWithATrailingNewlineIsRedactedWhereTheJudgesTextQuotesItWithoutIt(): void
+    {
+        $previous = $_SERVER['APP_SECRET'] ?? null;
+        $_SERVER['APP_SECRET'] = "probe-app-secret-value\n";
+
+        try {
+            $redacted = self::getContainer()->get(Redactor::class)->redact('the judge saw probe-app-secret-value in the diff');
+        } finally {
+            if (null === $previous) {
+                unset($_SERVER['APP_SECRET']);
+            } else {
+                $_SERVER['APP_SECRET'] = $previous;
+            }
+        }
+
+        self::assertSame('the judge saw [redacted] in the diff', $redacted);
     }
 
     private function completedRound(): ReviewRound
