@@ -37,7 +37,15 @@ final readonly class Finding
         // Ignored, so the schema never asks a reviewer for it and an answer naming it is refused; only plain code merges findings, and StoredFindingNormalizer keeps it in stored JSON.
         #[Ignore]
         public array $merged = [],
+        // Ignored for the same reason as merged: only the judge's reason for a rejected or deferred P1 or P2 fills it, never a reviewer.
+        #[Ignore]
+        public ?string $judge_note = null,
     ) {
+    }
+
+    public function withJudgeNote(string $note): self
+    {
+        return clone ($this, ['judge_note' => $note]);
     }
 
     public function withSeverity(Severity $severity): self
