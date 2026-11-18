@@ -14,8 +14,9 @@ final readonly class Board
 
     /**
      * @param list<Review> $reviews
+     * @param int          $tasks   the tasks the build has recorded a step of, which hold no card yet but end the first day (#2658, D5)
      */
-    public function __construct(array $reviews)
+    public function __construct(array $reviews, private int $tasks = 0)
     {
         usort($reviews, static fn (Review $one, Review $other): int => $other->latest()->startedAt <=> $one->latest()->startedAt);
         $this->cards = $reviews;
@@ -43,13 +44,13 @@ final readonly class Board
     // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
     public function headline(): Headline
     {
-        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards));
+        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards) + $this->tasks);
     }
 
-    // A card is a review, so a board without one is an install on which no review has run yet.
+    // The first day is an install with no tasks and no reviews (#1792, D5), so a task the build has worked on ends it before any review has run.
     public function isFirstDay(): bool
     {
-        return [] === $this->cards;
+        return [] === $this->cards && 0 === $this->tasks;
     }
 
     // One home for the choice, because the page and the pushed board both show it. Idle is read board-wide, since no column holds a project's ready tasks yet: nobody works and every card is Done (#2658).

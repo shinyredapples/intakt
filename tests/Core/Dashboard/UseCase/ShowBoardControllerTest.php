@@ -72,6 +72,16 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
     }
 
+    public function testAnInstallWithRecordedBuildWorkIsPastItsFirstDay(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('#board-octopus img[src*="octopus-waiting-"]'));
+        self::assertCount(0, $page->selectLink('Set up Intakt'));
+    }
+
     public function testAFreshInstallsBoardShowsTheWaitingOctopusAboveItsOneLineEmptyStateText(): void
     {
         $page = $this->browser->request('GET', '/');

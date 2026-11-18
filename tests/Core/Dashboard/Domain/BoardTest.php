@@ -165,6 +165,13 @@ final class BoardTest extends TestCase
         self::assertFalse(new Board([new Review([$this->round('r1', 'feat/a', 1)])])->isFirstDay());
     }
 
+    public function testABoardWithARecordedTaskButNoReviewIsNoLongerTheFirstDay(): void
+    {
+        $board = new Board([], 1);
+
+        self::assertSame([false, false], [$board->isFirstDay(), $board->headline()->isFirstDay()]);
+    }
+
     public function testAFirstDayBoardShowsTheWaitingOctopus(): void
     {
         self::assertSame(MascotPose::Waiting, new Board([])->mascot());

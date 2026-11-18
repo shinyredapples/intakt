@@ -89,7 +89,7 @@ final readonly class LedgerReviewPages
 
     public function boardOf(RecordedEvents $events): Board
     {
-        return new Board($this->rounds($events)->reviews());
+        return new Board($this->rounds($events)->reviews(), count(new LedgerBuildSteps()->in($events)));
     }
 
     private function rounds(RecordedEvents $events): LedgerRounds
