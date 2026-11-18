@@ -55,7 +55,6 @@ use Symfony\Component\HttpFoundation\Session\FlashBagAwareSessionInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
@@ -684,7 +683,7 @@ final class FirstRunControllerTest extends WebTestCase
         $commands = $this->commandBus();
         $token = $this->tokenFromThePage();
         $commands->expects(self::once())->method('dispatch')
-            ->willThrowException(new HandlerFailedException(new Envelope(new stdClass()), [RoundNotNext::for(1, 2)]));
+            ->willThrowException(RoundNotNext::for(1, 2));
 
         $this->browser()->request('POST', '/setup/first-review', ['_token' => $token]);
 

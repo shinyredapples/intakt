@@ -24,13 +24,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\MockObject\MockObject;
 use Psr\Log\LogLevel;
+use RuntimeException;
 use stdClass;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Messenger\Envelope;
-use Symfony\Component\Messenger\Exception\HandlerFailedException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\HandledStamp;
 
@@ -222,7 +222,7 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
         $refusal = RoundNotNext::for(2, 3);
         $commands = $this->commandBus();
-        $commands->expects(self::once())->method('dispatch')->willThrowException(new HandlerFailedException(new Envelope(new stdClass()), [$refusal]));
+        $commands->expects(self::once())->method('dispatch')->willThrowException($refusal);
 
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
 
@@ -232,10 +232,22 @@ final class StartReviewControllerTest extends DashboardPageTestCase
         self::assertStringNotContainsString('Stack trace', (string) $this->browser->getResponse()->getContent());
     }
 
+    public function testAFailureThatIsNotAReportableOneIsAServerErrorAndNotAnErrorLine(): void
+    {
+        $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
+        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(new RuntimeException('the review store is gone'));
+
+        $crawler = $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
+
+        self::assertResponseStatusCodeSame(500);
+        self::assertLoggedError(LogLevel::ERROR, sprintf('A dashboard page failed, reference %s.', $crawler->filter('main code')->text()));
+        self::assertLoggedError(LogLevel::CRITICAL, sprintf('Uncaught PHP Exception %s: "the review store is gone"', RuntimeException::class));
+    }
+
     public function testARefusedStartShowsNoToast(): void
     {
         $this->ledger->startRecordedRoundOf('feat/thing', 'round-1', 1);
-        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(new HandlerFailedException(new Envelope(new stdClass()), [RoundNotNext::for(2, 3)]));
+        $this->commandBus()->expects(self::once())->method('dispatch')->willThrowException(RoundNotNext::for(2, 3));
 
         $this->browser->request('POST', '/reviews/round-1/start', ['_token' => $this->token(), 'number' => '2']);
         $this->browser->followRedirect();

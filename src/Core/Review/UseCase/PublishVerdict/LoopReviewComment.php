@@ -17,6 +17,7 @@ final readonly class LoopReviewComment
     private const string HEADING = '**Review by Intakt** (head %s)';
     private const string FOLLOW_UPS = 'Follow-ups:';
     private const int SHORT_HEAD = 12;
+    private const string COMMENT_OPENER = '<!--';
 
     /**
      * @param list<Finding> $findings
@@ -55,7 +56,14 @@ final readonly class LoopReviewComment
     // On one line, because a line break in a model's text could open a fence or a finding line of its own; the line redacted whole and alone, because a header can start in the place and end in the text, and a redaction that runs to the end of its text must end with its line, not take the verdict block with it.
     private function lineOf(Finding $finding): string
     {
-        return new Redaction()->redact(sprintf('[%s] %s: %s', $finding->severity->value, $this->oneLine($this->placeOf($finding)), $this->oneLine($finding->text)));
+        return new Redaction()->redact(sprintf('[%s] %s: %s', $finding->severity->value, $this->oneLine($this->placeOf($finding)), $this->oneLine($finding->text)))
+            |> $this->withoutCommentOpener(...);
+    }
+
+    // Broken after the redaction, so nothing can open it again: GitHub hides everything after an opener, the verdict block too, and a quoted marker must not reach the App's comment.
+    private function withoutCommentOpener(string $line): string
+    {
+        return str_replace(self::COMMENT_OPENER, '&lt;!--', $line);
     }
 
     private function placeOf(Finding $finding): string
