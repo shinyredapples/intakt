@@ -58,7 +58,7 @@ final class StoredJsonTest extends KernelTestCase
     {
         $tracked = [new TrackedFinding('a', $this->finding(), [1, 3], FindingStatus::Open)];
 
-        self::assertSame($this->asJsonEncodeWroteIt($tracked), $this->serializer()->serialize($tracked, JsonEncoder::FORMAT));
+        self::assertSame(json_encode($tracked, JSON_THROW_ON_ERROR),$this->serializer()->serialize($tracked, JsonEncoder::FORMAT));
     }
 
     public function testAFindingWithoutEvidenceKeepsTheNullKeyThatJsonEncodeWrote(): void
@@ -67,7 +67,7 @@ final class StoredJsonTest extends KernelTestCase
 
         $json = $this->serializer()->serialize($finding, JsonEncoder::FORMAT);
 
-        self::assertSame($this->asJsonEncodeWroteIt($finding), $json);
+        self::assertSame(json_encode($finding, JSON_THROW_ON_ERROR), $json);
     }
 
     public function testAFindingRowWrittenByJsonEncodeStillReadsBack(): void
@@ -188,7 +188,7 @@ final class StoredJsonTest extends KernelTestCase
         $read = $this->serializer()->deserialize('['.self::TODAYS_FINDING.']', Finding::class.'[]', JsonEncoder::FORMAT);
 
         self::assertInstanceOf(Finding::class, $read[0]);
-        self::assertNull($read[0]->judge_note);
+        self::assertNull($read[0]->judgeNote());
     }
 
     public function testAFindingRowWithANullJudgeNoteReadsWithNone(): void
@@ -224,12 +224,6 @@ final class StoredJsonTest extends KernelTestCase
     private function finding(): Finding
     {
         return new Finding('a', Severity::P2, 'src/A.php', 7, null, 'Broken.', FixableBy::Builder, false, null, new Evidence('php -l', 'ok'), true);
-    }
-
-    // Without the null judge note, because json_encode wrote its rows before the note existed and a finding without one is still written without the key.
-    private function asJsonEncodeWroteIt(mixed $value): string
-    {
-        return str_replace(',"judge_note":null', '', json_encode($value, JSON_THROW_ON_ERROR));
     }
 
     private function serializer(): SerializerInterface

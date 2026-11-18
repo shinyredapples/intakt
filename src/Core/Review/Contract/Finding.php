@@ -38,9 +38,15 @@ final readonly class Finding
         #[Ignore]
         public array $merged = [],
         // Ignored, so the schema never asks a reviewer for it, because only the judge's reason for a rejected or deferred P1 or P2 belongs here; StoredFindingNormalizer keeps it in stored JSON.
+        // Private, so the MCP answers that json_encode findings keep their shape until the act list tool shows the note.
         #[Ignore]
-        public ?string $judge_note = null,
+        private ?string $judge_note = null,
     ) {
+    }
+
+    public function judgeNote(): ?string
+    {
+        return $this->judge_note;
     }
 
     public function withJudgeNote(string $note): self

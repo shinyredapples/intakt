@@ -16,7 +16,7 @@ use Symfony\Component\Serializer\Normalizer\NormalizerAwareInterface;
 use Symfony\Component\Serializer\Normalizer\NormalizerAwareTrait;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
-// Only on the stored serializer, because Finding::$merged and Finding::$judge_note are ignored for the model's schema and answer but must survive in stored JSON.
+// Only on the stored serializer, because Finding::$merged and Finding::judgeNote() are ignored for the model's schema and answer but must survive in stored JSON.
 #[AutoconfigureTag('serializer.normalizer', ['serializer' => 'stored'])]
 final class StoredFindingNormalizer implements NormalizerInterface, DenormalizerInterface, NormalizerAwareInterface, DenormalizerAwareInterface
 {
@@ -48,8 +48,9 @@ final class StoredFindingNormalizer implements NormalizerInterface, Denormalizer
         }
 
         // Left out when there is none, so a finding without a note is written as before the note existed.
-        if (null !== $data->judge_note && $this->writes(self::JUDGE_NOTE, $context)) {
-            $normalized[self::JUDGE_NOTE] = $data->judge_note;
+        $note = $data->judgeNote();
+        if (null !== $note && $this->writes(self::JUDGE_NOTE, $context)) {
+            $normalized[self::JUDGE_NOTE] = $note;
         }
 
         return $normalized;
