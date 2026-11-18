@@ -82,6 +82,7 @@ final readonly class BootResults
     {
         try {
             return $this->entities->find(BootRecord::class, ['project' => $key->project, 'main' => $key->main->hash, 'toolFingerprint' => $key->toolFingerprint]);
+            // Boundary: logs an unreadable stored result and boots main again, because a lost cache entry must not stop the review the boot only gates.
         } catch (Throwable $unread) {
             $this->logger->error("Main's stored boot result could not be read, so main boots again.", ['exception' => $unread]);
 
@@ -94,6 +95,7 @@ final readonly class BootResults
     {
         try {
             $result = $this->queries->dispatch($query)->last(HandledStamp::class)?->getResult();
+            // Boundary: turns any failure of the boot into a crashed outcome, because the boot runs foreign code whose failures cannot be named in advance.
         } catch (Throwable $failure) {
             return BootOutcome::crashed($failure::class.': '.$failure->getMessage());
         }
@@ -129,6 +131,7 @@ final readonly class BootResults
         } catch (UniqueConstraintViolationException) {
             // Ignored, because then another worker booted the same main meanwhile, and its row answers the next ask as well as this one would.
             return false;
+            // Boundary: logs a result that cannot be stored, because main then only boots again next time and the review must go on.
         } catch (Throwable $unstored) {
             $this->logger->error("Main's boot result could not be stored, so main boots again next time.", ['exception' => $unstored]);
 
@@ -147,6 +150,7 @@ final readonly class BootResults
                     $this->ledger->mainBootFailed($key, $outcome);
                 }
             });
+            // Boundary: logs an alert the ledger refused, because the row stays pending so a later ask records it, and the review must go on.
         } catch (Throwable $unrecorded) {
             // Reset as the ledger resets it after a failed flush, because a line the ledger flushed before the rollback stays managed though the database no longer holds it, and the next flush would close the manager.
             $this->registry->resetManager();
@@ -173,6 +177,7 @@ final readonly class BootResults
     {
         try {
             $this->ledger->bootResultComputed($key, $outcome);
+            // Boundary: logs a ledger line that cannot be written, because the computed result still gates the review.
         } catch (Throwable $unrecorded) {
             $this->logger->error("Main's computed boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
         }

@@ -54,6 +54,7 @@ final readonly class FailedHeads
     {
         try {
             $this->reportCauseOf($item, $failure);
+            // Boundary: logs a failed install-wide record and reopens the entity manager, so the head still backs off alone and the next heads run.
         } catch (Throwable $notReported) {
             $this->logger->error('The install-wide failure record failed; the head still backs off alone.', ['exception' => $notReported]);
             $this->reopenEntityManager();
@@ -109,6 +110,7 @@ final readonly class FailedHeads
                     $this->record($headFailure, $failures, $retryAt);
                 }
             });
+            // Boundary: reports a failed hand-over and rethrows, because the head must stay due so the tick fails and the next one tries again.
         } catch (Throwable $notRecorded) {
             // After the rollback, because the failure back-off must outlast it.
             if (self::HAND_OVER_AFTER === $failures) {
@@ -124,6 +126,7 @@ final readonly class FailedHeads
     {
         try {
             $this->installWide->handOverFailed($handOver);
+            // Boundary: logs a back-off that cannot start, because the hand-over's own failure is the one the caller rethrows.
         } catch (Throwable $notStarted) {
             $this->logger->error('The failed hand-over could not start the install-wide failure back-off.', ['exception' => $notStarted]);
         }

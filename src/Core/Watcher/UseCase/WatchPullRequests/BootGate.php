@@ -43,6 +43,7 @@ final readonly class BootGate implements HeadGate
     {
         try {
             return $this->judged($project, $green);
+            // Boundary: logs any failure of the gate and starts the review without it, because the boot only gates a review and must never stop it.
         } catch (Throwable $failure) {
             $this->logger->error('The boot gate failed, so the review starts without it.', ['exception' => $failure]);
 
@@ -75,6 +76,7 @@ final readonly class BootGate implements HeadGate
     {
         try {
             return $this->authors->isAuthorTrusted($green->change->id);
+            // Boundary: logs any failure of the trust check and counts the author as untrusted, because a check that cannot answer must never let a head run.
         } catch (Throwable $unanswered) {
             $this->logger->warning('The pull request author counts as untrusted, because the trust check failed.', ['change' => $green->change->id->value, 'exception' => $unanswered]);
 

@@ -27,6 +27,7 @@ final readonly class DiscardedRounds
 
         try {
             $this->commands->dispatch(new DiscardQueuedRound($queued));
+            // Boundary: logs a failed discard, because the failure that caused it is the one the caller rethrows.
         } catch (Throwable $discardFailure) {
             $this->logger->error('The kept snapshot of a round that was not recorded could not be discarded.', ['round' => $queued->roundId, 'exception' => $discardFailure]);
         }
