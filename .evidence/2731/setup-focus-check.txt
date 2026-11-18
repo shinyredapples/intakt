@@ -1,0 +1,4 @@
+pushed stream (morph): <turbo-stream action="replace" method="morph" target="board-setup"><template>...</template></turbo-stream>
+  the link is the same node: true, it holds the focus: true, document.activeElement: a#board-setup
+control (plain replace): <turbo-stream action="replace" target="board-setup"><template>...</template></turbo-stream>
+  the link is the same node: false, it holds the focus: true, document.activeElement: a#board-setup

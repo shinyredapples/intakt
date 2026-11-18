@@ -253,6 +253,28 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame($page->filter('#board-setup')->outerHtml(), trim($pushed->html()));
     }
 
+    public function testABoardPushedEmptyToAnEmptyBoardMorphsTheSetUpSlotInsteadOfReplacingItsLink(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $streams = new Crawler($this->lastShellUpdate());
+
+        self::assertCount(1, $streams->filter('turbo-stream[action="replace"][method="morph"][target="board-setup"] template a[href="/setup"]'));
+        self::assertCount(0, $streams->filter('turbo-stream[action="replace"][target="board-setup"]:not([method="morph"])'));
+    }
+
+    public function testABoardPushedEmptyToAnEmptyBoardLeavesTheSetUpLinkInPlaceSoItKeepsTheKeyboardFocus(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $link = $page->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0);
+        self::assertNotNull($link);
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $updated = $this->replaced($page, $this->lastShellUpdate());
+
+        self::assertSame($link, $updated->filter('.page-head .actions a#board-setup[href="/setup"]')->getNode(0));
+    }
+
     public function testThePushedBoardLeavesTheReviewListLinkInPlaceSoItKeepsTheKeyboardFocus(): void
     {
         $page = $this->browser->request('GET', '/');
@@ -378,6 +400,11 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
 
             foreach ($page->filter('[id="'.$stream->attr('target').'"]')->each(static fn (Crawler $old): ?DOMNode => $old->getNode(0)) as $target) {
                 self::assertNotNull($target);
+                // Turbo morphs a `method="morph"` stream into the shown element, so an element pushed with the markup it already has stays the same node.
+                if ('morph' === $stream->attr('method') && new Crawler($target)->outerHtml() === trim($stream->filter('template')->html())) {
+                    continue;
+                }
+
                 $parent = $target->parentNode;
                 $document = $target->ownerDocument;
                 self::assertNotNull($parent);
