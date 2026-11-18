@@ -248,7 +248,7 @@ final class CheckScriptTest extends TestCase
 
     public function testTheGitAttributesInTheImagesDefaultTemplateDoNotHideAConflictWithCurrentMain(): void
     {
-        // A git in front of the real one whose default template is a fixture, as an image's git copies its compiled-in template into every clone.
+        // A git in front of the real one whose default template is a fixture, because an image's git copies its compiled-in template into every clone.
         $git = (string) new ExecutableFinder()->find('git');
         $template = $this->history->folder.'/template';
         $shim = $this->history->folder.'/shim';
