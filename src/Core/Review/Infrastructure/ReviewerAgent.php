@@ -66,7 +66,7 @@ final readonly class ReviewerAgent implements Reviewer
 
         $verdict = $this->canStream($platform, $model) ? $this->answeredStreaming($agent, $conversation, $request->conversation) : $this->answeredUnstreamed($agent, $conversation, $request->conversation);
 
-        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since its verdict still blocks.
+        // A stop wins over an earlier malformed call, because only a stopped verdict lets the stop be recorded; a model naming the id itself gains nothing, since checkedAgainst() refuses it.
         if ($tools->seen() && !$verdict->isStopped()) {
             throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
@@ -87,6 +87,13 @@ final readonly class ReviewerAgent implements Reviewer
     // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
     private function checkedAgainst(ReviewBrief $brief, Verdict $verdict): Verdict
     {
+        // Refused like unreadable output, because a counted vote under a reserved id would send the head back with findings the ledger drops; key-safe, because only Intakt's own ids are named.
+        $claimed = $verdict->claimedFailureIds();
+
+        if ([] !== $claimed) {
+            throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict names finding ids reserved for failed reviews: %s.', implode(', ', $claimed)));
+        }
+
         $open = array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
         $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
         $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);

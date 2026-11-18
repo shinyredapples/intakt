@@ -526,6 +526,27 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict marks ids both resolved and repeat: F3.', $refused->keySafeInWords());
     }
 
+    public function testAChangesAnswerNamingAReservedFailureIdIsRefusedAsUnreadable(): void
+    {
+        $refused = $this->refused('Add a cart.', [], VerdictDocument::fromTheDesign()->with('verdict', 'changes')->with('resolved', [])->withFinding('id', Verdict::NO_TOOLS)->json());
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict names finding ids reserved for failed reviews: no-tools.', $refused->keySafeInWords());
+    }
+
+    public function testABlockedAnswerNamingAReservedFailureIdIsRefusedAsUnreadable(): void
+    {
+        $refused = $this->refused('Add a cart.', [], VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::REVIEWER_STOPPED)->json());
+
+        self::assertSame('the reviewer\'s answer could not be read as a verdict: the verdict names finding ids reserved for failed reviews: reviewer-stopped.', $refused->keySafeInWords());
+    }
+
+    public function testAChangesAnswerWithANewFindingIdIsAccepted(): void
+    {
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('verdict', 'changes')->with('resolved', [])->withFinding('id', 'cart-total')->json());
+
+        self::assertSame('cart-total', $verdict->findings[0]->id);
+    }
+
     public function testAMalformedToolCallIsAKeySafeReason(): void
     {
         $refused = $this->refused('Add a cart.', [new ToolCall('1', 'write_file', ['path' => 'a'])], self::APPROVE);

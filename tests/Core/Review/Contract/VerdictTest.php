@@ -99,6 +99,29 @@ final class VerdictTest extends TestCase
         yield 'invalid output' => [Verdict::INVALID_OUTPUT];
     }
 
+    #[DataProvider('failureIds')]
+    public function testAReviewersAnswerNamingAFailureIdClaimsThatId(string $failureId): void
+    {
+        $answer = VerdictDocument::fromTheDesign()
+            ->with('verdict', 'changes')
+            ->with('resolved', [])
+            ->withFinding('id', $failureId);
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, 'json');
+
+        self::assertSame([$failureId], $verdict->claimedFailureIds());
+    }
+
+    public function testAReviewersAnswerWithOrdinaryIdsClaimsNoFailureId(): void
+    {
+        self::assertSame([], new Verdict(Decision::Changes, [$this->finding()], [], [])->claimedFailureIds());
+    }
+
+    #[DataProvider('failureVerdicts')]
+    public function testAnIntaktFailureVerdictClaimsNoFailureId(Verdict $failure): void
+    {
+        self::assertSame([], $failure->claimedFailureIds());
+    }
+
     public function testAFailureVerdictWithItsFindingsReplacedStaysBlocked(): void
     {
         self::assertSame(Decision::Blocked, Verdict::noTools()->withFindings([$this->finding()])->asRecorded()->verdict);
