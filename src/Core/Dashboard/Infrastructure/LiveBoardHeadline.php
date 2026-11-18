@@ -41,7 +41,7 @@ final readonly class LiveBoardHeadline
         }
     }
 
-    // For a change no round makes, such as removing the demo project's rows, which can leave the board empty again and bring its octopus back.
+    // Without a round, because removing the demo project's rows follows no round and can leave the board empty again, which brings its octopus back (#2437).
     public function publishTheBoard(): void
     {
         try {

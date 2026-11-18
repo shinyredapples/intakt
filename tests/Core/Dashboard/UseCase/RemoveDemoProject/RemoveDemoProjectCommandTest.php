@@ -195,9 +195,10 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
 
     private function lastPushedBoard(): Crawler
     {
-        self::assertNotSame([], $this->live->events);
+        $last = array_last($this->live->events);
+        self::assertNotNull($last);
 
-        return new Crawler($this->live->events[array_key_last($this->live->events)]->turboStream);
+        return new Crawler($last->turboStream);
     }
 
     private function givenTheDemoProjectWithAReplayedReview(): void
