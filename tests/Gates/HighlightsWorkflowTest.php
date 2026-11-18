@@ -6,10 +6,12 @@ namespace Intakt\Tests\Gates;
 
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * @phpstan-type Step array{uses?: string, run?: string}
+ * @phpstan-type Step array{name?: string, uses?: string, run?: string}
  * @phpstan-type Job array{permissions?: array<string, string>, if?: string, environment?: array{name?: string}, steps?: list<Step>}
  * @phpstan-type WorkflowFile array{on: array<string, mixed>, permissions: array<string, string>, jobs: array<string, Job>}
  */
@@ -61,6 +63,47 @@ final class HighlightsWorkflowTest extends TestCase
 
         self::assertSame('github-pages', $publish['environment']['name'] ?? null);
         self::assertSame(['actions/deploy-pages'], array_map(static fn (array $step): string => explode('@', $step['uses'] ?? '')[0], $publish['steps'] ?? []));
+    }
+
+    public function testTheAssembledPageIsTheHighlightsBehindAFrontMatterThatTurnsOffLiquid(): void
+    {
+        $page = $this->assembledPage("# Highlights\n\nA code span `{{ x }}` and `{% if y %}`.\n");
+
+        self::assertSame("---\nrender_with_liquid: false\n---\n# Highlights\n\nA code span `{{ x }}` and `{% if y %}`.\n", $page);
+    }
+
+    public function testTheAssembledPageRunsBinHighlightsBeforeItWritesThePage(): void
+    {
+        self::assertStringStartsWith('bin/highlights && ', $this->pageCommand());
+    }
+
+    /**
+     * Runs the step's write command on a stand-in `docs/highlights.md`, with the container's `/page` mapped to a temp folder.
+     */
+    private function assembledPage(string $highlights): string
+    {
+        $workspace = sys_get_temp_dir().'/intakt-highlights-'.bin2hex(random_bytes(6));
+        mkdir($workspace.'/docs', 0o777, true);
+        mkdir($workspace.'/page');
+        file_put_contents($workspace.'/docs/highlights.md', $highlights);
+
+        try {
+            $write = substr($this->pageCommand(), \strlen('bin/highlights && '));
+            new Process(['sh', '-c', str_replace(' /page/', ' '.$workspace.'/page/', $write)], $workspace)->mustRun();
+
+            return (string) file_get_contents($workspace.'/page/index.md');
+        } finally {
+            new Filesystem()->remove($workspace);
+        }
+    }
+
+    private function pageCommand(): string
+    {
+        $steps = array_filter($this->workflow()['jobs']['build']['steps'] ?? [], static fn (array $step): bool => 'Assemble the page' === ($step['name'] ?? null));
+        self::assertCount(1, $steps);
+        self::assertSame(1, preg_match("/ sh -c '([^']*)'\\n\$/", array_first($steps)['run'] ?? '', $command));
+
+        return $command[1];
     }
 
     /**

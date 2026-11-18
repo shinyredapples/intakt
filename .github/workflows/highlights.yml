@@ -27,6 +27,7 @@ jobs:
       - name: Build or restore the CI image
         uses: $/.github/actions/ci-image
       - name: Assemble the page
+        # The front matter turns off Liquid, because Jekyll would otherwise mangle a {{ or {% that a fragment shows in code.
         run: |
           set -eu
           mkdir _highlights
@@ -35,7 +36,7 @@ jobs:
             --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
             --volume "$GITHUB_WORKSPACE/_highlights:/page" \
-            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/highlights && cp docs/highlights.md /page/index.md'
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh sh -c 'bin/highlights && { printf "%s\n" --- "render_with_liquid: false" ---; cat docs/highlights.md; } > /page/index.md'
       - uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
         with:
           source: ./_highlights
