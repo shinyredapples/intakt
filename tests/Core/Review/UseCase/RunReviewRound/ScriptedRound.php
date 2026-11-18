@@ -20,6 +20,7 @@ use Intakt\Core\Review\Contract\ChangeReviewRequest;
 use Intakt\Core\Review\Contract\FailureInWords;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\RequestedRound;
+use Intakt\Core\Review\Contract\ReviewServerAccesses;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Infrastructure\JudgeAgent;
 use Intakt\Core\Review\Infrastructure\JudgePrompt;
@@ -153,7 +154,7 @@ final class ScriptedRound
         $tiers = new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger());
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), self::PARALLEL_CALLS);
         $usage = new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create());
-        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $limit, $this->fixture->clock);
+        $vendor = new SymfonyAiVendor($tiers, $resolver, $this->reviewer(), new JudgeAgent(new JudgePrompt(new Fence())), $usage, $limit, $this->fixture->clock, $this->container->get(ReviewServerAccesses::class));
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
     }
