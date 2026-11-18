@@ -51,7 +51,7 @@ final readonly class RecordedPullRequests implements OpenChanges, HeadChecks, Au
     {
         $runs = array_filter($this->read()['workflow_runs'], static fn (array $run): bool => $run['head_sha'] === $head->hash);
 
-        return new CiState($head, array_values(array_map(fn (array $run): CiRun => new CiRun(new CiRunOrigin($run['name'], $run['event'], null), $this->stateOf($run), $this->momentOf($run['created_at'])), $runs)));
+        return new CiState($head, array_values(array_map(fn (array $run): CiRun => new CiRun(new CiRunOrigin($run['name'], $run['event'], null, $run['name']), $this->stateOf($run), $this->momentOf($run['created_at'])), $runs)));
     }
 
     // Untrusted unless the recording says so, because the real check answers false when it cannot answer, and a recording without the key must boot nothing.

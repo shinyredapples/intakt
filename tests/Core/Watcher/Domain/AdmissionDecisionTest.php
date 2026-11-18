@@ -57,7 +57,7 @@ final class AdmissionDecisionTest extends TestCase
 
     public function testACancelledRunIsIgnoredWhenANewerRunOfTheSameOriginReplacedIt(): void
     {
-        $runs = [$this->ciRun(CiRunState::Cancelled, 0), $this->ciRun(CiRunState::Succeeded, 5), $this->ciRun(CiRunState::Succeeded, 0, new CiRunOrigin('lint', 'pull_request', new ChangeId('7')))];
+        $runs = [$this->ciRun(CiRunState::Cancelled, 0), $this->ciRun(CiRunState::Succeeded, 5), $this->ciRun(CiRunState::Succeeded, 0, new CiRunOrigin('lint', 'pull_request', new ChangeId('7'), 'workflow:lint'))];
 
         self::assertSame(HeadAdmission::Green, $this->admissionOfRuns(...$runs));
     }
@@ -69,21 +69,21 @@ final class AdmissionDecisionTest extends TestCase
 
     public function testACancelledRunOfAnotherNameIsNotReplaced(): void
     {
-        $lint = new CiRunOrigin('lint', 'pull_request', new ChangeId('7'));
+        $lint = new CiRunOrigin('lint', 'pull_request', new ChangeId('7'), 'workflow:lint');
 
         self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, 0), $this->ciRun(CiRunState::Succeeded, 5, $lint)));
     }
 
     public function testACancelledRunIsNotReplacedByANewerRunOfAnotherEvent(): void
     {
-        $push = new CiRunOrigin('ci', 'push', new ChangeId('7'));
+        $push = new CiRunOrigin('ci', 'push', new ChangeId('7'), 'workflow:ci');
 
         self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, 0), $this->ciRun(CiRunState::Succeeded, 5, $push)));
     }
 
     public function testACancelledRunIsNotReplacedByANewerRunForAnotherPullRequest(): void
     {
-        $other = new CiRunOrigin('ci', 'pull_request', new ChangeId('8'));
+        $other = new CiRunOrigin('ci', 'pull_request', new ChangeId('8'), 'workflow:ci');
 
         self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::Cancelled, 0), $this->ciRun(CiRunState::Succeeded, 5, $other)));
     }
@@ -115,9 +115,16 @@ final class AdmissionDecisionTest extends TestCase
 
     public function testANotStartedRunIsNotReplacedByANewerGreenRunOfAnotherName(): void
     {
-        $lint = new CiRunOrigin('lint', 'pull_request', new ChangeId('7'));
+        $lint = new CiRunOrigin('lint', 'pull_request', new ChangeId('7'), 'workflow:lint');
 
         self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::NotStarted, 0), $this->ciRun(CiRunState::Succeeded, 5, $lint)));
+    }
+
+    public function testANotStartedRunIsNotReplacedByANewerGreenRunOfAnotherWorkflowWithTheSameName(): void
+    {
+        $otherWorkflow = new CiRunOrigin('ci', 'pull_request', new ChangeId('7'), 'workflow:other');
+
+        self::assertSame(HeadAdmission::Pending, $this->admissionOfRuns($this->ciRun(CiRunState::NotStarted, 0), $this->ciRun(CiRunState::Succeeded, 5, $otherWorkflow)));
     }
 
     public function testAStartedRunIsNotReplacedByANewerGreenRunOfTheSameOrigin(): void
@@ -169,7 +176,7 @@ final class AdmissionDecisionTest extends TestCase
     {
         $startedAt = new DateTimeImmutable('2026-11-02T10:00:00+00:00')->add(new DateInterval('PT'.$minutesAfterTen.'M'));
 
-        return new CiRun($origin ?? new CiRunOrigin('ci', 'pull_request', new ChangeId('7')), $state, $startedAt);
+        return new CiRun($origin ?? new CiRunOrigin('ci', 'pull_request', new ChangeId('7'), 'workflow:ci'), $state, $startedAt);
     }
 
     private function decided(string $id, HeadAdmission $admission): HeadDecision

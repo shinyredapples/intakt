@@ -4,6 +4,8 @@
   {
    "name": "ci",
    "event": "pull_request",
+   "workflow_id": 10,
+   "check_suite_id": 201,
    "head_sha": "1111111111111111111111111111111111111111",
    "status": "completed",
    "conclusion": "success",
@@ -17,6 +19,8 @@
   {
    "name": "ci",
    "event": "pull_request",
+   "workflow_id": 10,
+   "check_suite_id": 200,
    "head_sha": "1111111111111111111111111111111111111111",
    "status": "queued",
    "conclusion": null,

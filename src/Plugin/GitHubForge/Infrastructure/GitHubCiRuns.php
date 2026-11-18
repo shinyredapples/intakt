@@ -16,6 +16,10 @@ final readonly class GitHubCiRuns
 {
     private const string CHECK_SUITE_EVENT = 'check_suite';
 
+    // Each key ends in a number, so a workflow's key and a suite's key can never be equal.
+    private const string WORKFLOW_KEY = 'workflow:';
+    private const string SUITE_KEY = 'suite:';
+
     public function __construct(private GitHubMoments $moments)
     {
     }
@@ -27,18 +31,61 @@ final readonly class GitHubCiRuns
      */
     public function ofWorkflowRuns(RepositoryAddress $repository, CommitId $head, array $answer): array
     {
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [$this->text($entry, 'name'), $this->text($entry, 'event')]);
+        // Two workflows can share a display name and an event, so only the workflow's id tells their runs apart.
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [$this->text($entry, 'name'), $this->text($entry, 'event'), $this->workflowOf($entry)]);
+    }
+
+    /**
+     * @param array<mixed> $answer       the check suites of the head
+     * @param array<mixed> $workflowRuns the workflow runs of the same head, which name the suite each of them runs in
+     *
+     * @return list<CiRun>
+     */
+    public function ofCheckSuites(RepositoryAddress $repository, CommitId $head, array $answer, array $workflowRuns): array
+    {
+        $workflowOfSuite = $this->workflowsBySuite($head, $workflowRuns);
+
+        // A suite of a workflow run shares that workflow's key, so the newer run's suite replaces a suite that never started with it; any other suite keeps its own id and is never replaced, because one app can make suites for unrelated checks.
+        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), function (array $suite) use ($workflowOfSuite): array {
+            $id = $this->positiveNumber($suite, 'id');
+
+            return [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $workflowOfSuite[$id] ?? self::SUITE_KEY.$id];
+        });
     }
 
     /**
      * @param array<mixed> $answer
      *
-     * @return list<CiRun>
+     * @return array<int, string>
      */
-    public function ofCheckSuites(RepositoryAddress $repository, CommitId $head, array $answer): array
+    private function workflowsBySuite(CommitId $head, array $answer): array
     {
-        // A queued suite without check runs is kept as not started, because its first job may still start and the other runs alone would make the head green too early.
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), fn (array $suite): array => [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT]);
+        $workflows = [];
+        foreach ($this->ofHead($head, $this->entries($answer, 'workflow_runs')) as $run) {
+            if (array_key_exists('check_suite_id', $run)) {
+                $workflows[$this->positiveNumber($run, 'check_suite_id')] = $this->workflowOf($run);
+            }
+        }
+
+        return $workflows;
+    }
+
+    /**
+     * @param array<mixed> $run
+     */
+    private function workflowOf(array $run): string
+    {
+        return self::WORKFLOW_KEY.$this->positiveNumber($run, 'workflow_id');
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function positiveNumber(array $data, string $key): int
+    {
+        $value = $data[$key] ?? null;
+
+        return is_int($value) && $value > 0 ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without a positive "%s".', $key));
     }
 
     /**
@@ -74,16 +121,16 @@ final readonly class GitHubCiRuns
 
     /**
      * @param list<array<mixed>>                            $entries
-     * @param callable(array<mixed>): array{string, string} $originOf
+     * @param callable(array<mixed>): array{string, string, string} $originOf
      *
      * @return list<CiRun>
      */
     private function runsOf(RepositoryAddress $repository, array $entries, callable $originOf): array
     {
         return array_map(function (array $entry) use ($repository, $originOf): CiRun {
-            [$name, $event] = $originOf($entry);
+            [$name, $event, $definition] = $originOf($entry);
 
-            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry)), $this->stateOf($entry), $this->moments->parse($this->text($entry, 'created_at')));
+            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry), $definition), $this->stateOf($entry), $this->moments->parse($this->text($entry, 'created_at')));
         }, $entries);
     }
 

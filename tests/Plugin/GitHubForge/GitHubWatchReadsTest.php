@@ -286,6 +286,59 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertTrue($runs[0]->isNewerRunOf($runs[1]));
     }
 
+    public function testAQueuedWorkflowRunIsNotReplacedByANewerRunOfAnotherWorkflowWithTheSameName(): void
+    {
+        $this->runs = 'runs_queued_other_workflow.json';
+        $runs = $this->state()->runs;
+
+        self::assertFalse($runs[0]->isNewerRunOf($runs[1]));
+    }
+
+    public function testAQueuedSuiteOfAWorkflowRunIsReplacedByTheSuiteOfTheNewerRunOfThatWorkflow(): void
+    {
+        $this->runs = 'runs_queued_replaced.json';
+        $this->suites = 'suites_queued_replaced.json';
+        $runs = $this->state()->runs;
+
+        self::assertTrue($runs[2]->isNewerRunOf($runs[3]));
+    }
+
+    public function testAQueuedSuiteWithoutAWorkflowRunIsNotReplacedByANewerSuiteOfTheSameApp(): void
+    {
+        $this->runs = 'runs_none.json';
+        $this->suites = 'suites_two_of_one_app.json';
+        $runs = $this->state()->runs;
+
+        self::assertFalse($runs[0]->isNewerRunOf($runs[1]));
+    }
+
+    public function testAWorkflowRunWithoutAWorkflowIdRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_without_workflow_id.json';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->state();
+    }
+
+    public function testAWorkflowRunWithACheckSuiteIdThatIsNotANumberRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_text_check_suite_id.json';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->state();
+    }
+
+    public function testACheckSuiteWithoutAnIdRaisesAReadFailure(): void
+    {
+        $this->suites = 'suites_without_id.json';
+
+        $this->expectException(ForgeReadFailed::class);
+
+        $this->state();
+    }
+
     public function testAFailedWorkflowRunIsFailed(): void
     {
         $this->runs = 'runs_failed.json';

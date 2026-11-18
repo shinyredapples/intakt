@@ -65,11 +65,13 @@ final class RecordedChecks implements HeadChecks
     private function originOf(array $entry): CiRunOrigin
     {
         $change = array_first($entry['pull_requests']);
+        $name = $entry['name'] ?? $entry['app']['slug'] ?? 'check';
 
         return new CiRunOrigin(
-            $entry['name'] ?? $entry['app']['slug'] ?? 'check',
+            $name,
             $entry['event'] ?? 'check_suite',
             null === $change ? null : new ChangeId((string) $change['number']),
+            $name,
         );
     }
 
