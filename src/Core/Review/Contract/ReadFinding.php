@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Contract;
 
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
+
+#[Exclude]
 final readonly class ReadFinding
 {
     // In characters, so a finding written as one long line still reads as a title wherever it is shown.

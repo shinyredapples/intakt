@@ -13,8 +13,17 @@ final readonly class FindingSpans
      * @return list<array{text: string, code: bool}>
      */
     #[AsTwigFunction('finding_spans')]
-    public function of(string $text, bool $cut = false): array
+    public function of(string $text): array
     {
-        return new FindingText($text, $cut)->spans();
+        return new FindingText($text)->spans();
+    }
+
+    /**
+     * @return list<array{text: string, code: bool}>
+     */
+    #[AsTwigFunction('cut_title_spans')]
+    public function ofACutTitle(string $title): array
+    {
+        return new FindingText($title)->spansOfACutTitle();
     }
 }

@@ -31,13 +31,16 @@ final readonly class FindingText
     // A single mark is also a wildcard, so it counts as cut emphasis only around one word right before the ellipsis: *test files… and *.php… keep their star.
     private const string PLAIN_CUT = '/'.self::OPENS.'([*_])((?=[^\s*_.\/])(?:(?!\1)\S)+?)(?<=[^*_\/])(?=…$)/u';
 
+    // Each pattern with the group that holds its text, in the order they apply: double marks before single ones, whole pairs before cut ones.
+    private const array EMPHASIS = [self::STRONG => '$2', self::PLAIN => '$2'];
+
+    private const array EMPHASIS_OF_A_CUT_TITLE = [self::STRONG => '$2', self::STRONG_CUT => '$3', self::PLAIN => '$2', self::PLAIN_CUT => '$2'];
+
     // Plain spans never hold a backtick, so a backtick stands in for each code span while the marks around it are paired.
     private const string CODE = '`';
 
     public function __construct(
         private string $text,
-        // Only the caller knows that it cut the text: an ellipsis the reviewer wrote looks the same and must close no mark.
-        private bool $cut = false,
     ) {
     }
 
@@ -46,7 +49,17 @@ final readonly class FindingText
      */
     public function spans(): array
     {
-        return $this->joined($this->withoutEmphasis($this->codeAndPlainSpans()));
+        return $this->joined($this->withoutEmphasis($this->codeAndPlainSpans(), self::EMPHASIS));
+    }
+
+    /**
+     * Only the caller knows that it cut the text: an ellipsis the reviewer wrote looks the same and must close no mark.
+     *
+     * @return list<array{text: string, code: bool}>
+     */
+    public function spansOfACutTitle(): array
+    {
+        return $this->joined($this->withoutEmphasis($this->codeAndPlainSpans(), self::EMPHASIS_OF_A_CUT_TITLE));
     }
 
     /**
@@ -91,17 +104,15 @@ final readonly class FindingText
 
     /**
      * @param list<array{text: string, code: bool}> $spans
+     * @param array<string, string>                 $emphasis
      *
      * @return list<array{text: string, code: bool}>
      */
-    private function withoutEmphasis(array $spans): array
+    private function withoutEmphasis(array $spans, array $emphasis): array
     {
         $codes = array_values(array_filter($spans, static fn (array $span): bool => $span['code']));
         $marked = implode('', array_map(static fn (array $span): string => $span['code'] ? self::CODE : $span['text'], $spans));
-        $strong = preg_replace(self::STRONG, '$2', $marked) ?? $marked;
-        $strong = $this->cut ? preg_replace(self::STRONG_CUT, '$3', $strong) ?? $strong : $strong;
-        $plain = preg_replace(self::PLAIN, '$2', $strong) ?? $strong;
-        $plain = $this->cut ? preg_replace(self::PLAIN_CUT, '$2', $plain) ?? $plain : $plain;
+        $plain = preg_replace(array_keys($emphasis), array_values($emphasis), $marked) ?? $marked;
 
         $result = [];
         foreach (explode(self::CODE, $plain) as $index => $text) {

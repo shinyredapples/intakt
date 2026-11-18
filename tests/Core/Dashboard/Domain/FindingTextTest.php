@@ -210,7 +210,7 @@ final class FindingTextTest extends TestCase
             'Fix **now** and **the rest…' => 'Fix now and the rest…',
             'Update ***word…' => 'Update word…',
         ] as $written => $shown) {
-            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written, true)->spans(), $written);
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
         }
     }
 
@@ -221,21 +221,21 @@ final class FindingTextTest extends TestCase
             'Update __the word_…' => 'Update the word…',
             'Update **word*…' => 'Update word…',
         ] as $written => $shown) {
-            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written, true)->spans(), $written);
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
         }
     }
 
     public function testATitleCutRightAfterItsClosingMarkLosesBothMarks(): void
     {
         foreach (['Update **the word**…' => 'Update the word…', 'Update *word*…' => 'Update word…', 'Update __the word__…' => 'Update the word…'] as $written => $shown) {
-            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written, true)->spans(), $written);
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
         }
     }
 
     public function testAWildcardInATitleCutShortKeepsItsStar(): void
     {
         foreach (['Copy *test files…', 'globs *.php…', 'skip src/*…', 'a lone * …', 'Copy *.php and *.twig files…', 'Match **/kwargs…'] as $written) {
-            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written, true)->spans(), $written);
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
         }
     }
 
