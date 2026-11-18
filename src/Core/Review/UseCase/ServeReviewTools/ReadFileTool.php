@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ServeReviewTools;
 
 use Intakt\Core\Mcp\Contract\ToolAccess;
+use Intakt\Core\Review\Contract\ReviewTool;
 use Mcp\Capability\Attribute\McpTool;
 use Mcp\Capability\Attribute\Schema;
 use Mcp\Schema\ToolAnnotations;
@@ -19,7 +20,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 final readonly class ReadFileTool
 {
     // A constant, because the review server records each call under the tool's name and the summary counts by it.
-    public const string NAME = 'read_file';
+    public const string NAME = ReviewTool::ReadFile->value;
 
     public function __construct(private ReviewedRepository $repository)
     {

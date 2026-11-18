@@ -187,7 +187,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $this->conversation = new UuidV7();
         $unstreamed = $this->review('Add a cart.', $reads, self::APPROVE);
 
-        self::assertSame(['tool '.$reviewer.' read_file', 'answer '.$reviewer.' approve'], $published);
+        self::assertSame(['tool '.$reviewer.' read src/Cart.php', 'answer '.$reviewer.' approve'], $published);
         self::assertEquals($unstreamed, $streamed, json_encode($streamed->findings, JSON_THROW_ON_ERROR));
         self::assertSame(Decision::Approve, $streamed->verdict);
         self::assertSame([], $this->ledger->kinds());
@@ -256,7 +256,7 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testTheStreamedNarrationBeforeAToolCallIsPublishedBeforeTheCallInTheOrderItArrived(): void
@@ -266,7 +266,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        self::assertSame([$this->seen('text', 'I read the cart first.'), $this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+        self::assertSame([$this->seen('text', 'I read the cart first.'), $this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testAReviewersStructuredAnswerIsPublishedAsTheTypedAnswerAndItsJsonIsNeverStreamedAsText(): void
@@ -277,7 +277,7 @@ final class ReviewerVerdictTest extends WebTestCase
         $verdict = $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], $this->streamed(...str_split($answer, 40)));
 
         self::assertEquals([ReadAnswer::of($verdict)], $this->updates->answers);
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'changes [P1 src/Cart.php:12 The discount ends one day early.]')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'changes [P1 src/Cart.php:12 The discount ends one day early.]')], $this->updates->seen);
         self::assertStringNotContainsString('"verdict"', implode("\n", $this->updates->seen));
     }
 
@@ -288,7 +288,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $this->review('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], self::APPROVE);
 
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'approve')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'approve')], $this->updates->seen);
     }
 
     public function testAnUnreadableStreamedAnswerPublishesOnlyTheMarkerAndStillFailsTheReviewWithItsReason(): void
@@ -304,7 +304,7 @@ final class ReviewerVerdictTest extends WebTestCase
     {
         $this->refused('Add a cart.', [new ToolCall('1', 'read_file', ['path' => 'src/Cart.php'])], 'Looks good to me.');
 
-        self::assertSame([$this->seen('tool', 'read_file'), $this->seen('answer', 'unreadable')], $this->updates->seen);
+        self::assertSame([$this->seen('tool', 'read src/Cart.php'), $this->seen('answer', 'unreadable')], $this->updates->seen);
     }
 
     public function testAStreamCutOffMidAnswerPublishesNeitherItsTextNorAnAnswer(): void

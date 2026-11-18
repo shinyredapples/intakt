@@ -201,6 +201,18 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         self::assertSame(['openai'], $this->payloadValues(LedgerEventKind::CatchUpOwed, 'substitute'));
     }
 
+    public function testALimitHalfwayThroughAReviewRecordsTheSubstitutesModelWithTheOwedCatchUp(): void
+    {
+        $this->fixture->start(1);
+        $message = $this->fixture->bus->messages[0];
+        $vendor = $this->vendor($this->limitedOnTheSecondRound(), $this->answering());
+
+        $this->deliverUntilItStays($message, $vendor);
+
+        self::assertSame([RoundFixture::MODEL, RoundFixture::MODEL], $this->payloadValues(LedgerEventKind::ReviewerStarted, 'model'));
+        self::assertSame([RoundFixture::SUBSTITUTE_MODEL], $this->payloadValues(LedgerEventKind::CatchUpOwed, 'model'));
+    }
+
     public function testAKeyRejectedAsTheCallIsSentWithNoOtherAccountOrSubstituteEndsTheReviewerFailed(): void
     {
         $round = $this->fixture->start(1);
@@ -232,8 +244,8 @@ final class CrossProviderSubstituteTest extends KernelTestCase
     // Null maps the tier without substitutes, so the same stack shows what part 1's single provider does when nothing may take over.
     private function vendor(PlatformInterface $own, PlatformInterface $substitute, ?Provider $substituteProvider = Provider::OpenAi): Vendor
     {
-        $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => 'other']] : [];
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'substitutes' => $substitutes]]]], []);
+        $substitutes = $substituteProvider instanceof Provider ? [['provider' => $substituteProvider->value, 'model' => RoundFixture::SUBSTITUTE_MODEL]] : [];
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => RoundFixture::MODEL, 'substitutes' => $substitutes]]]], []);
         $accounts = static fn (Provider $provider, PlatformInterface $platform, AccountCooldownWindows $cooldowns): PlatformInterface => new AccountFailoverPlatform($provider, [Account::DEFAULT => $platform], $cooldowns, new NativeClock(), new NullLogger());
         $platforms = new ServiceLocator([
             Provider::Anthropic->value => fn (): PlatformInterface => $accounts(Provider::Anthropic, $this->recording(Provider::Anthropic, $own), $this->cooldowns),
@@ -275,7 +287,7 @@ final class CrossProviderSubstituteTest extends KernelTestCase
                 promptTokens: 100,
                 completionTokens: 20,
                 totalTokens: 120,
-                model: 'other',
+                model: RoundFixture::SUBSTITUTE_MODEL,
             ));
 
             return $answer;

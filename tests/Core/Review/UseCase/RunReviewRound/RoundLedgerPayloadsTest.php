@@ -150,6 +150,57 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
         self::assertSame(self::IDENTITY.',"substitute":"openai"}', $this->written($owed));
     }
 
+    public function testAnOwedCatchUpWithAModelIsWrittenWithTheModelAfterItsSubstitute(): void
+    {
+        $owed = new CatchUpOwed(self::ROUND, self::REVIEWER, 'security', Tier::Strong, Provider::OpenAi, 'other-model');
+
+        self::assertSame(self::IDENTITY.',"substitute":"openai","model":"other-model"}', $this->written($owed));
+    }
+
+    public function testAnOwedCatchUpRowWrittenBeforeTheModelWasRecordedReadsWithNoModel(): void
+    {
+        $owed = $this->serializer()->deserialize(self::IDENTITY.',"substitute":"openai"}', CatchUpOwed::class, 'json');
+
+        self::assertInstanceOf(CatchUpOwed::class, $owed);
+        self::assertSame([Provider::OpenAi, null], [$owed->substitute, $owed->model]);
+    }
+
+    public function testAnOwedCatchUpRecordsTheModelOfTheTiersSubstituteOnThatProvider(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('substitutes')->willReturn([new ResolvedModel(Provider::ClaudeCode, 'code-model'), new ResolvedModel(Provider::OpenAi, 'openai-model'), new ResolvedModel(Provider::OpenAi, 'later-model')]);
+        $ledger = new InMemoryLedger();
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+
+        self::assertSame(['openai', 'openai-model'], [$ledger->payloads()[0]['substitute'], $ledger->payloads()[0]['model']]);
+    }
+
+    public function testAnOwedCatchUpWhoseSubstituteIsNoLongerConfiguredRecordsNoModel(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('substitutes')->willReturn([new ResolvedModel(Provider::ClaudeCode, 'code-model')]);
+        $ledger = new InMemoryLedger();
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+
+        self::assertArrayNotHasKey('model', $ledger->payloads()[0]);
+    }
+
+    public function testAnOwedCatchUpWhoseTierDoesNotResolveIsStillRecordedWithoutAModel(): void
+    {
+        $reviewer = new RoundFixture(self::getContainer())->start(1)->reviewers()[0];
+        $tiers = self::createStub(TierResolver::class);
+        $tiers->method('substitutes')->willThrowException(new ProjectNotConfigured('alpha'));
+        $ledger = new InMemoryLedger();
+
+        new RoundLedger($ledger, new ConfiguredProjectModes([]), $this->serializer(), $tiers)->catchUpOwed($reviewer, Provider::OpenAi);
+
+        self::assertSame(['round', 'reviewer', 'role', 'tier', 'substitute'], array_keys($ledger->payloads()[0]));
+    }
+
     public function testAFailedReviewerIsWrittenWithItsFailure(): void
     {
         $failed = new ReviewerFailed(self::ROUND, self::REVIEWER, 'security', Tier::Strong, 'RuntimeException');

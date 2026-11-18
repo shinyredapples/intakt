@@ -66,12 +66,12 @@ final readonly class LedgerReviewPages
         return $this->rounds($this->ledger->readInOrder())->listedInStartOrder();
     }
 
-    // Read from the starts alone, because a live update goes out for each streamed text and must not read the whole ledger; the latest start wins, as on the page, and null means the reviewer has not started in that round.
+    // Read from the rows that name the round alone, because a live update goes out for each streamed text and must not read every start the ledger holds; the latest start wins, as on the page, and null means the reviewer has not started in that round.
     public function startedReviewerOf(string $round, string $reviewer): ?ReviewerOutcome
     {
         $started = null;
 
-        foreach ($this->ledger->readOfKind(LedgerEventKind::ReviewerStarted) as $recorded) {
+        foreach ($this->ledger->readMentioning([$round]) as $recorded) {
             $row = $this->payloads->reviewerRowOf($recorded);
 
             if ($row instanceof ReviewerStarted && $row->round === $round && $row->reviewer === $reviewer) {

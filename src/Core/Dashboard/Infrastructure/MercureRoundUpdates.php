@@ -43,9 +43,9 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     }
 
     #[Override]
-    public function toolCalled(Uuid $round, string $reviewer, string $tool): void
+    public function toolCalled(Uuid $round, string $reviewer, string $call): void
     {
-        $this->publish($round, RoundStream::ToolCalled, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->startedReviewerOf($round, $reviewer), 'tool' => $tool]);
+        $this->publish($round, RoundStream::ToolCalled, ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'outcome' => $this->startedReviewerOf($round, $reviewer), 'call' => $call]);
     }
 
     #[Override]

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\UseCase\RecordDemo;
 
 use Composer\InstalledVersions;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Attribute\MapInput;
 use Symfony\Component\Console\Command\Command;
@@ -16,7 +17,7 @@ use Symfony\Component\Filesystem\Filesystem;
 final readonly class RecordDemoCommand
 {
     public function __construct(
-        private ReviewRowsOfChange $rows,
+        private ReplayedReviewRows $rows,
         private CapturedUpdates $captured,
         private RecordingFormat $format,
         private Filesystem $filesystem,

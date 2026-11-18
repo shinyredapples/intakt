@@ -6,10 +6,10 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\RemoveDemoProject;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
-use Intakt\Core\Dashboard\UseCase\RecordDemo\ReviewRowsOfChange;
 use Intakt\Core\Dashboard\UseCase\RemoveDemoProject\RemoveDemoProjectCommand;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Ledger\Contract\Ledger;
@@ -38,7 +38,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[Group('persistence')]
 #[CoversClass(RemoveDemoProjectCommand::class)]
-#[CoversClass(ReviewRowsOfChange::class)]
+#[CoversClass(ReplayedReviewRows::class)]
 #[UsesClass(ReplayMarks::class)]
 #[UsesClass(RoundPayloads::class)]
 #[UsesClass(RemoveReplayedEvents::class)]
@@ -192,9 +192,9 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
     {
         $container = self::getContainer();
         $marks = $container->get(ReplayMarks::class);
-        $rows = $container->get(ReviewRowsOfChange::class);
+        $rows = $container->get(ReplayedReviewRows::class);
         self::assertInstanceOf(ReplayMarks::class, $marks);
-        self::assertInstanceOf(ReviewRowsOfChange::class, $rows);
+        self::assertInstanceOf(ReplayedReviewRows::class, $rows);
         $application = new Application();
         $application->addCommand(new RemoveDemoProjectCommand($this->commands(), $marks, $rows, new LockFactory($this->locks), $composeService));
         $tester = new CommandTester($application->find('intakt:demo:remove'));

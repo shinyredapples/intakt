@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\UseCase;
 
+use DOMNode;
 use Intakt\Core\Budget\Contract\Cost;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Character;
@@ -20,12 +21,14 @@ use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\MercureLiveUpdates;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
+use Intakt\Core\Review\Contract\ChangesWithoutFindings;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FinishedState;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
+use Intakt\Core\Review\Contract\ReviewTool;
 use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\SessionSummaries;
@@ -87,7 +90,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 {
     use DownloadedScriptStandIns;
 
-    private const string ASKED_AGAIN = 'Asked again: any text above is from a try that gave no usable answer.';
+    private const string ASKED_AGAIN = 'First try gave no usable answer, so the reviewer was asked again.';
 
     private ?string $secretBefore = null;
 
@@ -147,7 +150,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $streams = [
-            $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']),
+            $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'call' => 'read src/A.php']),
             $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']),
             $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false)]),
         ];
@@ -326,7 +329,17 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
             [['F1', 'P2', 'Text of F1.', 'Fix now'], ['F2', 'P2', 'Text of F2.', 'Dropped: deferred to a follow-up issue']],
             $updated->filter('#round-'.$id.'-judged li.finding-card')->each(static fn (Crawler $card): array => [$card->filter('.fc-id')->text(), $card->filter('.sev')->text(), $card->filter('.fc-text')->text(), $card->filter('.fc-call')->text()]),
         );
-        self::assertStringStartsWith('The judge has judged this round. Its call and the findings to fix are in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
+        self::assertSame('outcome not recorded, 1 finding to fix. See each finding in the round below.', $updated->filter('#round-'.$id.'-now-judge')->text());
+    }
+
+    public function testTheNowBoxOpensWithTheJudgesCallInsteadOfPointingToTheRoundBelow(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act', 'F2' => 'defer', 'F3' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(ReviewOutcome::ChangesRequested->value.', 2 findings to fix.', $updated->filter('#round-'.$id.'-now-judge p')->first()->text());
     }
 
     public function testAPageOpenedBeforeTheRoundStartsStatesTheJudgesCallInTheNowBoxOnceTheRoundIsJudged(): void
@@ -424,9 +437,29 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
 
         $updated = $this->replaced($page, $this->publishedStreams());
         self::assertSame(
-            'The judge has judged this round. Its call and the findings to fix are in the round below. '.ReviewOutcome::Approved->value.', 0 findings to fix',
+            ReviewOutcome::Approved->value.', 0 findings to fix. See the round below.',
             $updated->filter('#round-'.$id.'-now-judge')->text(),
         );
+    }
+
+    public function testTheNowBoxLinksToTheRoundWithoutPromisingFindingsWhenNoneIsLeftToFix(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'defer']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('See the round below.', $updated->filter('#round-'.$id.'-now-judge a')->text());
+    }
+
+    public function testTheNowBoxLinksToEachFindingInTheRoundWhenSomeAreLeftToFix(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundOfQuorumStarted();
+
+        $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame('See each finding in the round below.', $updated->filter('#round-'.$id.'-now-judge a')->text());
     }
 
     // A round started without a recorded quorum has no outcome, and a policy must never be guessed.
@@ -437,7 +470,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenTheRoundIsJudgedWith($round, ['F1' => 'act']);
 
         $updated = $this->replaced($page, $this->publishedStreams());
-        self::assertSame('outcome not recorded, 1 finding to fix', $updated->filter('#round-'.$id.'-now-judge .now-call')->text());
+        self::assertSame('outcome not recorded, 1 finding to fix.', $updated->filter('#round-'.$id.'-now-judge .now-call')->text());
     }
 
     public function testAPageOpenedBeforeTheRoundIsJudgedShowsTheActListTheVerdictAndTheRoundStateOnceTheRoundIsJudged(): void
@@ -750,6 +783,20 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['Failed', 'the model did not answer in time'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
     }
 
+    public function testAReviewerThatGaveNoApprovalWithoutNamingAFindingAfterThePageLoadedIsLabelledFailedAndNeverBlocked(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewerOn($id, 'correctness', 'Kimi K3');
+        $this->ledger->failReviewer($id, 'correctness', ChangesWithoutFindings::class);
+
+        $this->publishedUpdates()->roundChanged($round, new RoundProgress(1, 2, false, [$id.'-correctness' => FinishedState::Failed]));
+
+        $replaced = $this->replaced($page, $this->publishedStreams());
+        $state = $replaced->filter('#round-'.$id.'-reviewer-'.$id.'-correctness-state');
+        self::assertSame(['Failed', 'gave no approval without naming a finding'], [$state->filter('.chip.broken')->text(), $state->filter('.muted')->text()]);
+        self::assertStringNotContainsString('Blocked', $replaced->filter('#round-'.$id)->text());
+    }
+
     public function testAFailedReviewerTheTableAlreadyListsShowsItsCauseOnceItFails(): void
     {
         [$round, $id] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
@@ -795,7 +842,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/reviews/round-1');
 
         $updated = $this->replaced($page, $this->stream('round_changed', ['round' => 'round-1', 'progress' => new RoundProgress(1, 2, false, ['round-1-correctness' => FinishedState::Verdict])])
-            .$this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
+            .$this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'call' => 'read src/A.php']));
 
         self::assertSame([['role not read', 'model not read', 'answered', 'shown after a reload']], $this->rowsOf($updated));
         self::assertSame(['A reviewer (role not read): answered'], $updated->filter('.state-block .sb-list li')->each(static fn (Crawler $li): string => $li->text()));
@@ -876,7 +923,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'call' => 'read src/A.php']));
 
         $row = $updated->filter('#round-round-1-now-reviewers li');
         self::assertSame('A reviewer (role not read): running', $row->text());
@@ -928,7 +975,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file']));
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'call' => 'read src/A.php']));
 
         $row = $updated->filter('#round-round-1-live .live .character-row');
         self::assertSame('A reviewer (role not read) live', $row->text());
@@ -1009,26 +1056,84 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         $this->givenARunningRound();
         $page = $this->browser->request('GET', '/reviews/round-1');
 
-        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'tool' => 'read_file'])
+        $updated = $this->replaced($page, $this->stream('tool_called', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'call' => 'read src/A.php'])
             .$this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Looking']));
 
-        self::assertSame(['read_file'], $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-activity li')->each(static fn (Crawler $call): string => $call->text()));
+        self::assertSame(['read src/A.php'], $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-activity li')->each(static fn (Crawler $call): string => $call->text()));
         self::assertSame('Looking', $updated->filter('.task-grid > .log-pane #reviewer-round-1-correctness-text')->text());
     }
 
-    public function testAReviewerAskedAgainShowsWhereTheRetryStartsBetweenTheFirstTrysTextAndTheRetrysText(): void
+    public function testAReviewerAskedAgainHasTheRetrysTextInPlaceOfTheFirstTrysUnderOneLineSayingSo(): void
     {
         $this->givenARunningRound();
         $page = $this->browser->request('GET', '/reviews/round-1');
         $askedAgain = $this->stream('reviewer_asked_again', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'try' => 'try-2']);
 
-        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => '{"verdict":"appro'])
+        $updated = $this->replaced($page, $this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Reading the cart.'])
             .$askedAgain.$askedAgain
-            .$this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => '{"verdict":"changes"}']));
+            .$this->stream('text_streamed', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'text' => 'Reading the discount.']));
 
         $text = $updated->filter('#reviewer-round-1-correctness-text');
         self::assertCount(1, $text->filter('.asked-again'));
-        self::assertSame('{"verdict":"appro'.self::ASKED_AGAIN.'{"verdict":"changes"}', $text->text(normalizeWhitespace: false));
+        self::assertSame(self::ASKED_AGAIN.'Reading the discount.', $text->text(normalizeWhitespace: false));
+    }
+
+    public function testAPageOpenedBeforeTheRoundStartsShowsNoTextOfAFailedTryAndNoRetryInternalsOnceTheReviewerIsAskedAgain(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewer($id, 'security');
+
+        $this->publishedUpdates()->textStreamed($round, $id.'-security', 'Reading the cart.');
+        $this->publishedUpdates()->reviewerAskedAgain($round, $id.'-security', 'try-2');
+        // Sent twice, because a streamed retry refused before its first delta reports its start again, unstreamed.
+        $this->publishedUpdates()->reviewerAskedAgain($round, $id.'-security', 'try-2');
+        $this->publishedUpdates()->textStreamed($round, $id.'-security', 'Reading the discount.');
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $text = $updated->filter('#reviewer-'.$id.'-security-text');
+        self::assertSame(self::ASKED_AGAIN.'Reading the discount.', $text->text(normalizeWhitespace: false));
+        self::assertStringNotContainsString('Asked again:', $updated->filter('#round-'.$id.'-live')->text());
+        self::assertStringNotContainsString('any text above', $updated->filter('#round-'.$id.'-live')->text());
+    }
+
+    public function testAPageOpenedBeforeTheRoundStartsShowsEachToolCallInPlainWordsAndNeverTheToolsName(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeAnyReviewerStarted();
+        $this->ledger->startReviewer($id, 'security');
+
+        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::ReadFile->callInWords(['path' => 'src/discount.js']));
+        $this->publishedUpdates()->toolCalled($round, $id.'-security', ReviewTool::SearchFiles->callInWords(['text' => 'discount', 'path' => 'src']));
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame(['read src/discount.js', 'searched for "discount" in src'], $updated->filter('#reviewer-'.$id.'-security-activity li')->each(static fn (Crawler $call): string => $call->text()));
+        self::assertStringNotContainsString('_file', $updated->filter('#round-'.$id.'-live')->text());
+    }
+
+    public function testAPageOpenedBeforeTheRoundStartsCountsTheToolCallsByKindInPlainWords(): void
+    {
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 2), new ToolCallCount('search_files', 1)], Cost::inUsd(0.1), ['src/discount.js'], [], [], [], false));
+
+        $this->publishedUpdates()->summaryChanged($round);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        self::assertSame([['File reads', '2'], ['Searches', '1'], ['Total', '3']], $this->pairsOf($updated->filter('#round-'.$id.'-summary-tools .ls-tools')));
+    }
+
+    // One text node in one nowrap button, so neither the markup nor the button's own style can put "F" and "1" on two lines.
+    public function testAPageOpenedBeforeTheRoundStartsKeepsEachFindingIdOfTheLiveSummaryOnOneLineBesideALongText(): void
+    {
+        $long = new Finding('F1', Severity::P2, 'src/discount.js', 3, null, str_repeat('The discount is applied twice when the cart holds a voucher. ', 6), FixableBy::Builder, false, null, null);
+        [$round, $id, $page] = $this->givenAPageLoadedBeforeTheRoundStartsWithTheSummary(new SessionSummary([], Cost::inUsd(0.1), [], [], [$long], [], false));
+
+        $this->publishedUpdates()->summaryChanged($round);
+
+        $updated = $this->replaced($page, $this->publishedStreams());
+        $button = $updated->filter('#round-'.$id.'-summary-findings .ls-findings li > .mono > button.linkbtn');
+        self::assertCount(1, $button);
+        self::assertSame('F1', $button->html());
+        $sheet = (string) file_get_contents(dirname(__DIR__, 4).'/assets/styles/components.css');
+        self::assertMatchesRegularExpression('/\.ls-findings \.linkbtn \{[^}]*white-space: nowrap;/', $sheet);
+        self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none;[^}]*white-space: nowrap;/', $sheet);
     }
 
     public function testAReadAnswerReachesTheReviewPageAsItsTypedAnswerAfterTheRetryMarkerAndNeverAsJson(): void
@@ -1102,7 +1207,7 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $this->published);
         self::assertSame(['review/rounds/'.$round], $this->published[0]->getTopics());
         $updated = $this->replaced($page, $this->published[0]->getData());
-        self::assertSame([['read_file', '1'], ['Total', '1']], $this->pairsOf($updated->filter('#round-'.$round.'-summary-tools .ls-tools')));
+        self::assertSame([['File reads', '1'], ['Total', '1']], $this->pairsOf($updated->filter('#round-'.$round.'-summary-tools .ls-tools')));
         self::assertSame(['RoundFixture.php'], $updated->filter('#round-'.$round.'-summary-files .mono')->each(static fn (Crawler $file): string => $file->text()));
     }
 
@@ -1178,6 +1283,23 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
     private function givenAPageLoadedBeforeAnyReviewerStarted(): array
     {
         $round = $this->givenTheHubRecordsWhatIsPublishedForARoundWithoutSummary();
+        $id = $round->toRfc4122();
+        $this->ledger->startRoundOf('feat/thing', $id, 1);
+
+        return [$round, $id, $this->browser->request('GET', '/reviews/'.$id)];
+    }
+
+    /**
+     * @return array{Uuid, string, Crawler}
+     */
+    private function givenAPageLoadedBeforeTheRoundStartsWithTheSummary(SessionSummary $summary): array
+    {
+        $this->browser->disableReboot();
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn($summary);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
+        $this->givenTheHubRecordsWhatIsPublished();
+        $round = Uuid::v7();
         $id = $round->toRfc4122();
         $this->ledger->startRoundOf('feat/thing', $id, 1);
 
@@ -1310,6 +1432,15 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertNotNull($node);
         if ('remove' === $stream->attr('action')) {
             $node->parentNode?->removeChild($node);
+
+            return;
+        }
+
+        if ('update' === $stream->attr('action')) {
+            while ($node->firstChild instanceof DOMNode) {
+                $node->removeChild($node->firstChild);
+            }
+            $this->appended($target, $stream->filter('template')->html());
 
             return;
         }

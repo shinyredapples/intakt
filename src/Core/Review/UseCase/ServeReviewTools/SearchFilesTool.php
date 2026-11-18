@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ServeReviewTools;
 
 use Intakt\Core\Mcp\Contract\ToolAccess;
+use Intakt\Core\Review\Contract\ReviewTool;
 use Mcp\Capability\Attribute\McpTool;
 use Mcp\Capability\Attribute\Schema;
 use Mcp\Schema\ToolAnnotations;
@@ -19,7 +20,7 @@ use Symfony\AI\AiBundle\Security\Attribute\IsGrantedTool;
 #[IsGrantedTool(ToolAccess::Read->value)]
 final readonly class SearchFilesTool
 {
-    public const string NAME = 'search_files';
+    public const string NAME = ReviewTool::SearchFiles->value;
 
     // Because a large tree has thousands of files, and a notification for each would flood the client.
     private const int FILES_PER_NOTIFICATION = 10;

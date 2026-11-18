@@ -18,15 +18,9 @@ enum ReviewOutcome: string
 
     public static function of(ReviewedRound $round): ?self
     {
-        if ($round->ending instanceof RoundEnding) {
-            return RoundEnds::JudgingFailed === $round->ending->end ? self::Failed : self::Blocked;
-        }
-
-        if ($round->isJudged() && $round->reviewers > 0 && $round->failedReviewers() === $round->reviewers) {
-            return self::Failed;
-        }
-
-        return self::ofQuorum($round);
+        return ($round->ending instanceof RoundEnding ? self::ofEnding($round->ending) : null)
+            ?? self::ofReviewers($round)
+            ?? self::ofQuorum($round);
     }
 
     public static function ofQuorum(ReviewedRound $round): ?self
@@ -38,7 +32,7 @@ enum ReviewOutcome: string
     public static function ofReviewer(ReviewerOutcome $reviewer): ?self
     {
         return match ($reviewer->progress) {
-            ReviewerProgress::Answered => null === $reviewer->decision ? null : self::ofDecision(Decision::from($reviewer->decision)),
+            ReviewerProgress::Answered => $reviewer->decision instanceof Decision ? self::ofDecision($reviewer->decision) : null,
             ReviewerProgress::Failed => self::Failed,
             ReviewerProgress::Blocked => self::Blocked,
             ReviewerProgress::Running, ReviewerProgress::Stopped => null,
@@ -63,6 +57,21 @@ enum ReviewOutcome: string
             self::ChangesRequested => 'rounds',
             self::Blocked => 'stop',
             self::Failed => 'broken',
+        };
+    }
+
+    private static function ofReviewers(ReviewedRound $round): ?self
+    {
+        return $round->isJudged() && $round->reviewers > 0 && $round->failedReviewers() === $round->reviewers ? self::Failed : null;
+    }
+
+    // A judged ending carries no outcome of its own, so the round falls back to its reviewers and quorum.
+    private static function ofEnding(RoundEnding $ending): ?self
+    {
+        return match ($ending->end) {
+            RoundEnds::JudgingFailed => self::Failed,
+            RoundEnds::NoOutcomeInTime => self::Blocked,
+            RoundEnds::Judged => null,
         };
     }
 }
