@@ -62,7 +62,7 @@
     { n: 205, p: "acme-shop", t: "Refund emails include the order number", s: "S", col: "Checking", age: "1 h 50 min", cost: "0.66", reason: ["broken", "Waiting for CI: image build failing"], broken: true },
     { n: 598, p: "intakt", t: "Hold pushes while main is red", s: "M", col: "In review", age: "11 min", slot: "Code reviewers", model: "Model L", cost: "5.62", round: 2 },
     { n: 71, p: "field-notes", t: "Filter trails by difficulty", s: "S", col: "In review", age: "1 d", cost: "1.24", round: 1, reason: ["pause", "Project paused"] },
-    { n: 589, p: "intakt", t: "Rotate the forge token without a restart", s: "M", col: "Waiting on you", age: "1 h 05 min", cost: "4.30", round: 2, needs: "Approve this version: it touches secret handling" },
+    { n: 589, p: "intakt", t: "Rotate the forge token without a restart", s: "M", col: "Waiting on you", age: "1 h 05 min", cost: "4.30", round: 2, needs: "Approve this version: secrets limit, ForgeTokenStore.php changed" },
     { n: 199, p: "acme-shop", t: "Gift cards: pick the stored currency", s: "M", col: "Waiting on you", age: "52 min", cost: "0.38", needs: "The Tech lead has a question" },
     { n: 594, p: "intakt", t: "Cache forge responses for 30 seconds", s: "S", col: "Waiting on you", age: "34 min", cost: "2.11", round: 1, needs: "Push on hold: it changes the CI workflow" },
     { n: 601, p: "intakt", t: "Expiry column in the history ledger", s: "S", col: "Merging", age: "1 min", cost: "1.85", round: 1 },
