@@ -14,8 +14,9 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class CountedVote
 {
+    // The reported findings are under the ledger's ids, because the act ids name those.
     /**
-     * @param list<Finding> $reported the round's reported findings, under the ledger's ids
+     * @param list<Finding> $reported
      * @param list<string>  $actIds
      */
     public function __construct(
