@@ -64,6 +64,7 @@ When a builder needs a decision the task doesn't cover, it doesn't guess: it pos
 - **On a task in flight:** comment on the issue with the new instruction. The task restarts with it (a limited number of times, so it can't loop).
 - **Sending work back:** on the pull request, request changes in a review (or comment `changes <sha>`); your notes go to the builder as findings, ahead of the reviewers'.
 - **From the dashboard:** open the task's card to **stop** the job running now, **continue** it, or **send it back with a note**.
+- **New work from the dashboard** *(planned)*: describe it in plain words in the **New task** box and pick the project; you approve the draft before it becomes an issue ([starting a task from the dashboard](a-tour-of-the-dashboard.md#starting-a-task-from-the-dashboard)).
 
 ## Approving
 

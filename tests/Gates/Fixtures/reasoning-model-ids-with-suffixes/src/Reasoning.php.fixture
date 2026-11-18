@@ -19,6 +19,15 @@ final readonly class Reasoning
             'o3-pro-2025-06-10',
             'o3-deep-research',
             'O1-MINI',
+            'openai/o3',
+            'openai:o1',
+            'azure.o4',
+            '--model=o3',
+            '{"model":"o3"}',
+            'openai/o3:online',
+            '--model=o3 --format=json',
+            'Use openai/o3 for this request.',
+            'Use openai:o1 for this request.',
         ];
     }
 
