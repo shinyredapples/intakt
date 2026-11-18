@@ -174,7 +174,7 @@ final class JudgeRoundTest extends KernelTestCase
             }
         }
 
-        self::assertStringNotContainsString($held, $this->judgeDonePayloads()[0]['judge_notes']['F1']);
+        self::assertSame(['F1' => 'The configured value is [redacted].'], $this->judgeDonePayloads()[0]['judge_notes']);
     }
 
     public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
