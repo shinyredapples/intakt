@@ -119,7 +119,8 @@ final readonly class FullReport
 
     private function pruneOlderReportsIn(string $directory): void
     {
-        $reports = array_filter(glob($directory.'/report-*.json') ?: [], static fn (string $file): bool => is_file($file) && !is_link($file));
+        $found = glob($directory.'/report-*.json');
+        $reports = array_filter(false === $found ? [] : $found, static fn (string $file): bool => is_file($file) && !is_link($file));
         $ages = array_map(static fn (string $file): int => (int) filemtime($file), $reports);
         arsort($ages);
 

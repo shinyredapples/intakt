@@ -33,8 +33,9 @@ final class FullReportTest extends SandboxTestCase
         self::assertSame(1, $run->exitCode(), $run->output());
         $summary = $this->summaryOf($run);
         self::assertSame(['result' => 'fail', 'failed' => ['dashes']], array_slice($summary, 0, 2));
-        self::assertMatchesRegularExpression(self::REPORT_NAME, (string) $summary['report']);
-        self::assertFileExists($sandbox->root.'/'.$summary['report']);
+        $name = $this->reportNamedBy($run);
+        self::assertMatchesRegularExpression(self::REPORT_NAME, $name);
+        self::assertFileExists($sandbox->root.'/'.$name);
     }
 
     public function testTheFullReportHoldsEveryFindingTheGateLineOmits(): void
@@ -96,7 +97,9 @@ final class FullReportTest extends SandboxTestCase
 
         $name = FullReport::start()->writeTo($sandbox->root, ['result' => 'pass', 'failed' => []], []);
 
-        self::assertCount(FullReport::KEPT_REPORTS, glob($sandbox->root.'/var/check/report-*.json') ?: []);
+        $kept = glob($sandbox->root.'/var/check/report-*.json');
+        self::assertIsArray($kept);
+        self::assertCount(FullReport::KEPT_REPORTS, $kept);
         self::assertFileExists($sandbox->root.'/'.$name);
         self::assertFileDoesNotExist($sandbox->root.sprintf('/var/check/report-%016x.json', 6));
         self::assertFileExists($sandbox->root.sprintf('/var/check/report-%016x.json', 7));
