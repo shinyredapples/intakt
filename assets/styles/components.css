@@ -612,6 +612,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .fc-place, .fc-call, .fc-merged { color: var(--muted); font-size: var(--t13); }
 .fc-call { font-weight: 600; }
 @media (max-width: 760px) {
+  .sb-finding { min-height: 44px; }
   .finding-card { flex-wrap: wrap; }
   .fc-body { flex-basis: 100%; }
 }

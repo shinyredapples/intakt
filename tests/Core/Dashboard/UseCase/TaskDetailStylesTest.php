@@ -52,6 +52,14 @@ final class TaskDetailStylesTest extends TestCase
         self::assertMatchesRegularExpression('/^\s*width:\s*100%;\s*$/', $rules['.task-actions .btn'] ?? '');
     }
 
+    // A one-line open finding measured 41.75 px at 390 wide in the UI check, under the 44 px floor of a touch target.
+    public function testOnAPhoneAnOpenFindingLinkOfTheNowBlockIsAtLeast44PxTall(): void
+    {
+        $rules = $this->rulesOf($this->mediaBlocks('max-width: 760px'));
+
+        self::assertMatchesRegularExpression('/^\s*min-height:\s*44px;\s*$/', $rules['.sb-finding'] ?? '');
+    }
+
     public function testTheStylesheetHidesTheStartOfARoundWhileARoundIsInReview(): void
     {
         $css = (string) file_get_contents(__DIR__.'/../../../../assets/styles/components.css');
