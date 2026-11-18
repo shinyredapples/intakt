@@ -77,9 +77,6 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertStringStartsWith('bin/highlights && ', $this->pageCommand());
     }
 
-    /**
-     * Runs the step's write command on a stand-in `docs/highlights.md`, with the container's `/page` mapped to a temp folder.
-     */
     private function assembledPage(string $highlights): string
     {
         $workspace = sys_get_temp_dir().'/intakt-highlights-'.bin2hex(random_bytes(6));
@@ -101,7 +98,9 @@ final class HighlightsWorkflowTest extends TestCase
     {
         $steps = array_filter($this->workflow()['jobs']['build']['steps'] ?? [], static fn (array $step): bool => 'Assemble the page' === ($step['name'] ?? null));
         self::assertCount(1, $steps);
-        self::assertSame(1, preg_match("/ sh -c '([^']*)'\\n\$/", array_first($steps)['run'] ?? '', $command));
+        if (1 !== preg_match("/ sh -c '([^']*)'\\n\$/", array_first($steps)['run'] ?? '', $command)) {
+            self::fail('The step "Assemble the page" ends with no single-quoted sh -c command.');
+        }
 
         return $command[1];
     }
