@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Job\Infrastructure;
 
 use SplFileInfo;
-use Symfony\Component\Filesystem\Exception\IOException;
-use Symfony\Component\Filesystem\Filesystem;
 
 // Reads what docker/job/start-check.sh left in the output directory; the job ran after it and could rewrite it, so anything malformed is a failure, never a pass.
 final readonly class StartCheckReport
@@ -19,10 +17,6 @@ final readonly class StartCheckReport
     private const int MAX_BYTES = 64 * 1024;
     private const int MAX_REASON_BYTES = 255;
     private const string END = 'end';
-
-    public function __construct(private Filesystem $filesystem = new Filesystem())
-    {
-    }
 
     /**
      * @return list<StartCheckFailure>
@@ -50,16 +44,18 @@ final readonly class StartCheckReport
             : array_slice($this->failuresListedIn($contents), 0, self::MAX_FAILURES);
     }
 
-    // The Filesystem throws instead of warning, so an unreadable report never reaches the runner's error handler; a length check after the read, because a report that grew after the size check must not pass; one byte over the limit keeps a report that grew after the size check from passing.
+    // The job may grow the report after the size check, so at most one byte over the limit is read, and that byte refuses it; a warning is silenced because the runner's error handler would turn it into an exception that aborts the job before its end is recorded.
     private function contentsOf(SplFileInfo $report): ?string
     {
+        set_error_handler(static fn (): bool => true);
+
         try {
-            $contents = $this->filesystem->readFile($report->getPathname());
-        } catch (IOException) {
-            return null;
+            $contents = file_get_contents($report->getPathname(), false, null, 0, self::MAX_BYTES + 1);
+        } finally {
+            restore_error_handler();
         }
 
-        return strlen($contents) > self::MAX_BYTES ? null : $contents;
+        return false === $contents || strlen($contents) > self::MAX_BYTES ? null : $contents;
     }
 
     /**

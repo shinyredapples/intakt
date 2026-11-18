@@ -116,7 +116,7 @@ intakt-start-check: reduced mode: output input egress
 After the job's container is removed, `Infrastructure/StartCheckReport::failuresIn()` reads the report from the output directory and the run records one `job_start_check_failed` event (`job`, `check`, `reason`) per failure before `job_ended`, at most 20 per job (`StartCheckReport::MAX_FAILURES`). The job runs after the check and can rewrite the report, so a report that is not a whole, well-formed one counts as a failure and never as a pass. A job can still replace the report with a well-formed one ending in `end`, which makes a failed check read as a pass: only a damaged or missing report counts as a failure.
 
 - no report at all is an `output` failure (`no report in the output directory: it could not be written, or the check did not run`), which is how a broken output mount shows;
-- a link (never followed), a folder or anything else but a plain file, a report over 64 KiB, one that cannot be read, or one without its last `end` line is a single `report` failure;
+- a link (never followed), a folder or anything else but a plain file, a report over 64 KiB (one that grew past it after its size was read included: at most one byte over the limit is read, so a growing report is never held whole), one that cannot be read, or one without its last `end` line is a single `report` failure;
 - a line that is not `output`, `work`, `input`, `egress` or `report`, a colon and a space and a reason of printable ASCII is a `report` failure naming the line; a reason is cut to 255 bytes.
 
 The report is not part of the job's `JobOutput`. A missing `docker/job/start-check.sh` fails the run with Symfony Filesystem's `IOException` before the job's container is created.

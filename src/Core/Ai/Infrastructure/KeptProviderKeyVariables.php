@@ -28,7 +28,8 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
     public function __construct(
         private KeptProviderKeys $keys,
         private ProviderCatalog $providers,
-        private ?LoggerInterface $logger = null,
+        // Required, because a loader failure is recorded only here: the variable then counts as set like any value.
+        private LoggerInterface $logger,
         // The env processor pairs each variable on its own, so a base URL from the vault would go with the kept key unless every other source is asked here too.
         #[AutowireIterator('container.env_var_loader')]
         private iterable $otherLoaders = [],
@@ -44,7 +45,7 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
         try {
             $key = $this->keys->read();
         } catch (KeptProviderKeyUnreadable) {
-            $this->logger?->warning('The kept provider key could not be read, so it is not used.');
+            $this->logger->warning('The kept provider key could not be read, so it is not used.');
 
             return [];
         }
@@ -105,7 +106,7 @@ final readonly class KeptProviderKeyVariables implements EnvVarLoaderInterface
             // Boundary: logs the loader class and counts the variable as set, because the env processor would fail on it and any loader may fail in its own way.
         } catch (Throwable $failure) {
             // Only the classes, because a vault failure can echo a secret.
-            $this->logger?->warning('An env var loader failed, so its variable counts as set.', ['loader' => $loader::class, 'exception_class' => $failure::class]);
+            $this->logger->warning('An env var loader failed, so its variable counts as set.', ['loader' => $loader::class, 'exception_class' => $failure::class]);
 
             return true;
         }

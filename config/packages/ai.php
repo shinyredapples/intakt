@@ -49,6 +49,7 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Psr\Log\LogLevel;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\EnvVarProcessor;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -56,6 +57,7 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ReferenceConfigura
 use Symfony\Component\DependencyInjection\Parameter;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\ServiceLocator;
+use Symfony\Component\HttpKernel\Log\Logger;
 use Symfony\Component\Yaml\Yaml;
 
 // Same sources as Symfony's env processor: the environment, then the secrets vault, then the kept key. Presence is decided at build time because an unset env reference fails when the service is built.
@@ -93,9 +95,9 @@ return static function (ContainerConfigurator $container): void {
     $keptKeyDirectory = ('test' === $container->env() ? $environmentValue('INTAKT_PROVIDER_KEY_DIR') : null) ?? dirname(__DIR__, 2).'/var/data';
     $container->parameters()->set(AiServices::KEPT_KEY_DIRECTORY, $keptKeyDirectory);
 
-    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader.
+    // Last, after `.env.local` and the vault, because the env loader that serves it at run time (KeptProviderKeyVariables) is asked only for a name they lack, after the vault's loader; the logger service does not exist yet, so a failure is written to the service output like the logger would.
     $keyProviders = new SymfonyAiProviderCatalog();
-    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, otherLoaders: [$vault])->loadEnvVars();
+    $keptValues = new KeptProviderKeyVariables(new KeptProviderKeyFile($keptKeyDirectory, $keyProviders), $keyProviders, new Logger(LogLevel::WARNING, 'php://stderr'), [$vault])->loadEnvVars();
 
     // Revealed because an empty secret is as unusable as a missing one; a secret that cannot be decrypted would fail when the service is built.
     $isSet = static function (string $name) use ($environmentValue, $vaultValue, $keptValues): bool {

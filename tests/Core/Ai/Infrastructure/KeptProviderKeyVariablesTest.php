@@ -155,7 +155,7 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $keys = self::createStub(KeptProviderKeys::class);
         $keys->method('read')->willReturn(ProviderKey::recognise('hf_'.self::BODY, new SymfonyAiProviderCatalog()));
 
-        self::assertSame([], new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog([new AnthropicDescriptor()]))->loadEnvVars());
+        self::assertSame([], new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog([new AnthropicDescriptor()]), self::createStub(LoggerInterface::class))->loadEnvVars());
     }
 
     public function testWithoutAKeptKeyNoVariableLoads(): void
@@ -163,7 +163,7 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $keys = self::createStub(KeptProviderKeys::class);
         $keys->method('read')->willReturn(null);
 
-        self::assertSame([], new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog())->loadEnvVars());
+        self::assertSame([], new KeptProviderKeyVariables($keys, new SymfonyAiProviderCatalog(), self::createStub(LoggerInterface::class))->loadEnvVars());
     }
 
     public function testAnUnreadableKeptFileLoadsNoVariableAndLogsOnlyAFixedMessage(): void
@@ -195,7 +195,7 @@ final class KeptProviderKeyVariablesTest extends TestCase
         $keys = self::createStub(KeptProviderKeys::class);
         $keys->method('read')->willReturn(ProviderKey::recognise($key, $providers));
 
-        return new KeptProviderKeyVariables($keys, $providers, otherLoaders: $otherLoaders);
+        return new KeptProviderKeyVariables($keys, $providers, self::createStub(LoggerInterface::class), $otherLoaders);
     }
 
     // Returns nothing because the processor reads a plain string variable itself and calls this only for a prefix it chains.

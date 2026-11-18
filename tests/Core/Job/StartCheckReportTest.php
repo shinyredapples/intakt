@@ -8,10 +8,10 @@ use ErrorException;
 use Intakt\Core\Job\Infrastructure\StartCheck;
 use Intakt\Core\Job\Infrastructure\StartCheckFailure;
 use Intakt\Core\Job\Infrastructure\StartCheckReport;
-use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(StartCheckReport::class)]
@@ -137,15 +137,32 @@ final class StartCheckReportTest extends TestCase
         self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], $failures);
     }
 
-    public function testAFailureOtherThanAnIoErrorWhileReadingTheReportPassesThrough(): void
+    public function testAnUnexpectedExceptionWhileReadingTheReportPassesThrough(): void
     {
-        file_put_contents($this->output.'/'.StartCheckReport::FILE, "end\n");
-        $filesystem = self::createStub(Filesystem::class);
-        $filesystem->method('readFile')->willThrowException(new LogicException('not an I/O error'));
+        GrowingReportStream::register(new RuntimeException('not a read failure'));
 
-        $this->expectException(LogicException::class);
+        try {
+            $this->expectExceptionObject(new RuntimeException('not a read failure'));
 
-        new StartCheckReport($filesystem)->failuresIn($this->output);
+            new StartCheckReport()->failuresIn(GrowingReportStream::PROTOCOL.'://output');
+        } finally {
+            GrowingReportStream::unregister();
+        }
+    }
+
+    public function testAReportThatGrewAfterTheSizeCheckIsRefusedWithoutBeingReadWhole(): void
+    {
+        GrowingReportStream::register();
+
+        try {
+            $failures = new StartCheckReport()->failuresIn(GrowingReportStream::PROTOCOL.'://output');
+        } finally {
+            GrowingReportStream::unregister();
+        }
+
+        self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], $failures);
+        // PHP pulls a user stream in chunks of 8192 bytes, so the read may take up to one chunk past the limit plus one byte.
+        self::assertLessThanOrEqual(64 * 1024 + 1 + 8192, GrowingReportStream::$bytesRead);
     }
 
     /**
