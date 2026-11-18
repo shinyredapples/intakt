@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\UseCase\RemoveDemoProject;
 
+use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\UseCase\CreateDemoProject\CreateDemoProjectCommand;
-use Intakt\Core\Dashboard\UseCase\RecordDemo\ReviewRowsOfChange;
 use Intakt\Core\Dashboard\UseCase\ReplayDemo\ReplaysRecording;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RemoveReplayedEvents;
@@ -27,7 +27,7 @@ final readonly class RemoveDemoProjectCommand
     public function __construct(
         private MessageBusInterface $commands,
         private ReplayMarks $marks,
-        private ReviewRowsOfChange $rows,
+        private ReplayedReviewRows $rows,
         private LockFactory $locks,
         #[Autowire(env: 'INTAKT_COMPOSE_SERVICE')]
         private string $composeService,
