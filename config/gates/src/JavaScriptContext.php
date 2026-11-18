@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Gates;
 
-// Because JavaScript reads a slash as division or as the start of a regular expression by the code before it, these rules carry that reading.
-final readonly class JavaScriptSlashes
+// Because JavaScript reads a slash as division or as the start of a regular expression by the code before it, the scanner carries that code's context.
+final readonly class JavaScriptContext
 {
     private const string WORD_CHARACTERS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$';
     // Because after these words an expression starts, so a slash there opens a regular expression, while after any other word it divides.
@@ -14,9 +14,55 @@ final readonly class JavaScriptSlashes
     private const array KEYWORDS_BEFORE_A_BLOCK = ['do', 'else'];
     // Because the parentheses after these words hold a condition, a slash after them starts the statement's body.
     private const array KEYWORDS_BEFORE_A_CONDITION = ['if', 'while', 'for', 'with'];
+    private const string VALUE = '""';
+
+    /**
+     * @param list<JavaScriptSlash> $closings what a slash after the closing bracket of each open bracket means, innermost last
+     */
+    public function __construct(
+        private JavaScriptSlash $slash = JavaScriptSlash::Regex,
+        private array $closings = [],
+        private string $before = '',
+    ) {
+    }
+
+    public function slashStartsARegex(): bool
+    {
+        return JavaScriptSlash::Regex === $this->slash;
+    }
+
+    public function isOutermost(): bool
+    {
+        return [] === $this->closings;
+    }
+
+    public function afterCode(string $code): self
+    {
+        return '' === $code ? $this : new self($this->slashAfter($code), $this->closings, $code);
+    }
+
+    public function afterValue(): self
+    {
+        return new self(JavaScriptSlash::Division, $this->closings, self::VALUE);
+    }
+
+    public function afterDivision(): self
+    {
+        return new self(JavaScriptSlash::Regex, $this->closings, '/');
+    }
+
+    public function afterOpening(string $opening): self
+    {
+        return new self(JavaScriptSlash::Regex, [...$this->closings, $this->slashAfterClosing($opening)], $opening);
+    }
+
+    public function afterClosing(string $closing): self
+    {
+        return new self(array_last($this->closings) ?? JavaScriptSlash::Division, array_slice($this->closings, 0, -1), $closing);
+    }
 
     // Because a postfix increment or decrement ends an operand, a slash after it divides.
-    public function after(string $code): JavaScriptSlash
+    private function slashAfter(string $code): JavaScriptSlash
     {
         $word = $this->wordAtEnd($code);
 
@@ -27,21 +73,21 @@ final readonly class JavaScriptSlashes
         return $this->isKeyword($code, $word, self::KEYWORDS_BEFORE_AN_EXPRESSION) ? JavaScriptSlash::Regex : JavaScriptSlash::Division;
     }
 
-    public function afterClosing(string $opening, string $before): JavaScriptSlash
+    private function slashAfterClosing(string $opening): JavaScriptSlash
     {
-        $word = $this->wordAtEnd($before);
+        $word = $this->wordAtEnd($this->before);
 
         return match ($opening) {
-            '(' => $this->isKeyword($before, $word, self::KEYWORDS_BEFORE_A_CONDITION) ? JavaScriptSlash::Regex : JavaScriptSlash::Division,
-            '{' => $this->opensBlock($before, $word) ? JavaScriptSlash::Regex : JavaScriptSlash::Division,
+            '(' => $this->isKeyword($this->before, $word, self::KEYWORDS_BEFORE_A_CONDITION) ? JavaScriptSlash::Regex : JavaScriptSlash::Division,
+            '{' => $this->opensBlock($word) ? JavaScriptSlash::Regex : JavaScriptSlash::Division,
             default => JavaScriptSlash::Division,
         };
     }
 
     // Because a brace where an expression is expected opens an object literal, which a slash then divides, while any other brace opens a block.
-    private function opensBlock(string $before, string $word): bool
+    private function opensBlock(string $word): bool
     {
-        if ('' === $before || str_ends_with($before, '=>') || str_contains(';{})', $before[-1])) {
+        if ('' === $this->before || str_ends_with($this->before, '=>') || str_contains(';{})', $this->before[-1])) {
             return true;
         }
 

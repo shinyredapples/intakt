@@ -15,10 +15,6 @@ final readonly class JavaScriptComments implements CommentLanguage
     // Because JavaScript shares PHP's comment syntax except the hash, a marker behind nested comment syntax counts as it does in PHP.
     private const string LINE_SYNTAX = '~\G(?://++|/\*++|\*++(?!/))\s*+~';
 
-    public function __construct(private JavaScriptSlashes $slashes = new JavaScriptSlashes())
-    {
-    }
-
     public function lineSyntax(): string
     {
         return self::LINE_SYNTAX;
@@ -35,57 +31,44 @@ final readonly class JavaScriptComments implements CommentLanguage
     private function code(string $source, int $offset, ?string $closer): Generator
     {
         $length = strlen($source);
-        $slash = JavaScriptSlash::Regex;
-        // Because what a slash after a closing bracket means depends on its opening one, each open bracket keeps that meaning here.
-        $closings = [];
-        $before = '';
+        $context = new JavaScriptContext();
 
         while (true) {
             $stop = $offset + strcspn($source, self::CODE_STOPS, $offset);
-            $code = rtrim(substr($source, $offset, $stop - $offset));
-            [$slash, $before] = '' === $code ? [$slash, $before] : [$this->slashes->after($code), $code];
+            $context = $context->afterCode(rtrim(substr($source, $offset, $stop - $offset)));
 
             if ($stop >= $length) {
                 return $length;
             }
 
-            if ([] === $closings && $source[$stop] === $closer) {
+            if ($context->isOutermost() && $source[$stop] === $closer) {
                 return $stop + 1;
             }
 
-            [$offset, $slash, $closings] = yield from $this->afterStop($source, $stop, $slash, $closings, $before);
-            $before = $this->beforeNextStop($source, $stop, $before);
+            [$offset, $context] = yield from $this->afterStop($source, $stop, $context);
         }
     }
 
     /**
-     * @param list<JavaScriptSlash> $closings
-     *
-     * @return Generator<int, array{int, string}, mixed, array{int, JavaScriptSlash, list<JavaScriptSlash>}>
+     * @return Generator<int, array{int, string}, mixed, array{int, JavaScriptContext}>
      */
-    private function afterStop(string $source, int $stop, JavaScriptSlash $slash, array $closings, string $before): Generator
+    private function afterStop(string $source, int $stop, JavaScriptContext $context): Generator
     {
         $char = $source[$stop];
 
         return match ($char) {
-            "'", '"' => [$this->afterQuoted($source, $stop + 1, $char), JavaScriptSlash::Division, $closings],
-            '`' => [yield from $this->template($source, $stop + 1), JavaScriptSlash::Division, $closings],
-            '/' => [...yield from $this->slash($source, $stop, $slash), $closings],
-            '(', '[', '{' => [$stop + 1, JavaScriptSlash::Regex, [...$closings, $this->slashes->afterClosing($char, $before)]],
-            default => [$stop + 1, array_last($closings) ?? JavaScriptSlash::Division, array_slice($closings, 0, -1)],
+            "'", '"' => [$this->afterQuoted($source, $stop + 1, $char), $context->afterValue()],
+            '`' => [yield from $this->template($source, $stop + 1), $context->afterValue()],
+            '/' => yield from $this->slash($source, $stop, $context),
+            '(', '[', '{' => [$stop + 1, $context->afterOpening($char)],
+            default => [$stop + 1, $context->afterClosing($char)],
         };
     }
 
-    // Because a comment is not code, the code before it stays what the next stop follows.
-    private function beforeNextStop(string $source, int $stop, string $before): string
-    {
-        return '/' === $source[$stop] && in_array($source[$stop + 1] ?? '', ['/', '*'], true) ? $before : $source[$stop];
-    }
-
     /**
-     * @return Generator<int, array{int, string}, mixed, array{int, JavaScriptSlash}>
+     * @return Generator<int, array{int, string}, mixed, array{int, JavaScriptContext}>
      */
-    private function slash(string $source, int $offset, JavaScriptSlash $slash): Generator
+    private function slash(string $source, int $offset, JavaScriptContext $context): Generator
     {
         $end = match ($source[$offset + 1] ?? '') {
             '/' => $this->afterLineComment($source, $offset),
@@ -96,10 +79,10 @@ final readonly class JavaScriptComments implements CommentLanguage
         if (null !== $end) {
             yield [$offset, substr($source, $offset, $end - $offset)];
 
-            return [$end, $slash];
+            return [$end, $context];
         }
 
-        return JavaScriptSlash::Regex === $slash ? [$this->afterRegex($source, $offset + 1), JavaScriptSlash::Division] : [$offset + 1, JavaScriptSlash::Regex];
+        return $context->slashStartsARegex() ? [$this->afterRegex($source, $offset + 1), $context->afterValue()] : [$offset + 1, $context->afterDivision()];
     }
 
     private function afterLineComment(string $source, int $offset): int
@@ -122,8 +105,7 @@ final readonly class JavaScriptComments implements CommentLanguage
         return false === $end ? strlen($source) : $end + 2;
     }
 
-    // Because an unescaped line end cannot stand in a quoted string, a string left open ends there instead of hiding the rest of the file,
-    // while a backslash before a carriage return and line feed escapes both, so the string goes on.
+    // Because only an escaped line end (a backslash before CR LF escapes both) may stand in a quoted string, a string left open ends at a line end instead of hiding the rest of the file.
     private function afterQuoted(string $source, int $offset, string $quote): int
     {
         $length = strlen($source);
