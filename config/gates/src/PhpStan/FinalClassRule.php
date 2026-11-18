@@ -7,7 +7,6 @@ namespace Intakt\Gates\PhpStan;
 use PhpParser\Node;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
-use PHPStan\Node\AnonymousClassNode;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
@@ -33,8 +32,8 @@ final readonly class FinalClassRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        // PHPStan names an anonymous class and hands it over as an AnonymousClassNode, so a null name alone misses it
-        if (null === $node->name || $node instanceof AnonymousClassNode || $node->isFinal() || $node->isAbstract() || !$this->isRepositoryCode($scope->getFile())) {
+        // PHPStan names an anonymous class, so only isAnonymous(), which it overrides for that node, tells one apart from a named class
+        if (null === $node->name || $node->isAnonymous() || $node->isFinal() || $node->isAbstract() || !$this->isRepositoryCode($scope->getFile())) {
             return [];
         }
 
