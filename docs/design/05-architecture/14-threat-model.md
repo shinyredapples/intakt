@@ -11,6 +11,7 @@ Untrusted means "may have been written or influenced by someone who is not a per
 - **CI log excerpts and probe output**, since they print what model-written code and dependencies print.
 - **Project memory**, since its entries summarize pull requests and findings that models wrote. This includes a hand-off note and the kept conversation a build continues from after a vendor limit ([Budget and model planner](06-budget-and-model-planner.md#a-limit-never-loses-work)): the kept conversation is model text and is fenced, while the note holds only the orchestrator's own facts (commits, task, open findings) and is fenced as memory.
 - **Other reviews and findings**, since a steered reviewer's text reaches the judge, the builder and the maintainer agent.
+- **The owner's text in the dashboard's New task box** ([Dashboard](13-dashboard.md#starting-a-task)). It comes from the owner, but it is often pasted from elsewhere (a mail, a chat, a page), so it reaches the drafting model fenced like an issue's external block, never as instructions.
 
 Every model output is untrusted too: it is validated against its schema before use, and anything invalid is an explicit failure, never a silent default.
 
@@ -73,6 +74,11 @@ The Security engineer (#864; team names in #862) covers the security of the prod
 - **Reads:** the task text with its fenced external blocks and the review in the external block of a task filed from a catch-up review, and items of the follow-up inbox.
 - **Can:** say whether the task is ready, propose a class, estimate a size, and merge, queue or expire follow-ups; no tools.
 - **Checks:** it cannot make a task eligible (eligibility is the write-access check and a steering label from a person). A proposed class fills the row only when no label sets one. The size sets a start model and an allowance, both bounded by the owner's routing, the sensitive-path rule (sensitive paths start on the strong tier whatever the size) and the budget caps. A parked task costs one comment.
+
+### Task drafting (Tech lead)
+- **Reads:** the owner's text from the New task box, fenced as untrusted ([Dashboard](13-dashboard.md#starting-a-task)), and the chosen project's repository and plan, read-only, with the titles of its open tasks, which the orchestrator takes from its forge listing; all of it is untrusted.
+- **Can:** read-only repository tools (read, search) within a turn cap; no writes, no forge access, no network beyond its vendor, no credentials of the project or the forge.
+- **Checks:** its output is a draft task, validated against its schema; an invalid draft is an explicit failure shown in the draft view, never a filed issue. Nothing it writes is filed or queued: the owner sees the whole draft, can edit it, and only an approval in the dashboard (a request that passes its `Host` and CSRF checks, [Who can act](13-dashboard.md#who-can-act)) files it, and the filing is plain code that writes exactly the approved text with the labels a ready task carries, under Intakt's own forge identity. The owner's text and the drafts are shown on the dashboard to whoever can open it, never in a JSON API response. The filed issue then enters intake like any task ([Choosing work](03-choosing-work.md#tasks-drafted-from-the-dashboard)) and is checked, reviewed and approved as usual, so a steered draft can only propose a task that the owner reads before filing and the same gates judge after.
 
 ### Escalation
 - **Reads and can:** a stronger model rebuilding a recurring finding is a builder; an escalation review is a reviewer on a stronger tier; a job's upgrade request is model output.
