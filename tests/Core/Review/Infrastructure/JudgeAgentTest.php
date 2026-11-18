@@ -46,6 +46,28 @@ final class JudgeAgentTest extends KernelTestCase
         self::assertEquals([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer), new JudgedFinding('F3', Mark::Reject)], $judgement->marks);
     }
 
+    public function testAP3WordingFindingInAFileTheChangeTouchesIsMarkedAct(): void
+    {
+        $judgement = $this->judge(['F1' => Severity::P3], '{"marks":[{"id":"F1","mark":"act"}]}', file: 'docs/guide/the-journey-of-a-task.md');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+    }
+
+    public function testAP3FindingThatNeedsANewFileIsMarkedDefer(): void
+    {
+        $judgement = $this->judge(['F1' => Severity::P3], '{"marks":[{"id":"F1","mark":"defer"}]}', file: 'src/New/Thing.php');
+
+        self::assertEquals([new JudgedFinding('F1', Mark::Defer)], $judgement->marks);
+    }
+
+    public function testThePromptTellsTheJudgeToActOnALocalP3EditAndToDeferOnlyWhatNeedsMore(): void
+    {
+        $this->judge(['F1' => Severity::P3], '{"marks":[{"id":"F1","mark":"act"}]}');
+
+        self::assertStringContainsString('local edit in a file the change already touches', $this->sent[0]);
+        self::assertStringContainsString('needs its own design or tests, or files outside the change', $this->sent[0]);
+    }
+
     public function testAMarkOutsideActDeferAndRejectMakesEveryBlockingFindingAct(): void
     {
         $judgement = $this->judge(['F1' => Severity::P1, 'F2' => Severity::P3], '{"marks":[{"id":"F1","mark":"ignore"},{"id":"F2","mark":"reject"}]}');
@@ -146,7 +168,7 @@ final class JudgeAgentTest extends KernelTestCase
     /**
      * @param array<string, Severity> $findings
      */
-    private function judge(array $findings, string $answer, string $task = 'Add a cart.'): Judgement
+    private function judge(array $findings, string $answer, string $task = 'Add a cart.', string $file = 'src/A.php'): Judgement
     {
         $platform = MockPlatformFactory::createPlatform(function (mixed $model, mixed $input) use ($answer): string {
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
@@ -155,7 +177,7 @@ final class JudgeAgentTest extends KernelTestCase
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
         $given = [];
         foreach ($findings as $id => $severity) {
-            $given[] = new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
+            $given[] = new Finding($id, $severity, $file, 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
         }
 
         return new JudgeAgent(new JudgePrompt(new Fence()))->judge(new JudgeRequest($task, $given, new UuidV7()), $platform, 'judge-model');
