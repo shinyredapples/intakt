@@ -31,6 +31,7 @@ final class TwigCommentsTest extends TestCase
         yield 'a comment trimming whitespace' => ["{#- XXX breaks on empty orders -#}\n", [1 => 'XXX']];
         yield 'a comment trimming line whitespace' => ["{#~ TODO show the total ~#}\n", [1 => 'TODO']];
         yield 'a documentation comment' => ["{## TODO describe the order ##}\n", [1 => 'TODO']];
+        yield 'a documentation comment closed by a single hash' => ["{## TODO explain the total #}\n", [1 => 'TODO']];
         yield 'a documentation comment trimming whitespace' => ["{##- TODO describe the order -##}\n", [1 => 'TODO']];
         yield 'the second line of a multi-line comment' => ["{#\n  TODO show the total\n#}\n", [2 => 'TODO']];
         yield 'a starred line of a multi-line comment' => ["{#\n * The order\n * FIXME the total\n #}\n", [3 => 'FIXME']];
