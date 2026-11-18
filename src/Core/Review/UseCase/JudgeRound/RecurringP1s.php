@@ -37,8 +37,8 @@ final readonly class RecurringP1s
 
         $current = $this->findings->actListOf($round, $this->idsOf($judged->actList), $judged->sameCause);
 
-        foreach (new RecurringP1()->in($this->actListOf($earlier), $current) as [$finding, $before]) {
-            $this->ledger->recurringP1Found($this->found($round, $earlier, $finding, $before));
+        foreach (new RecurringP1()->in($this->actListOf($earlier), $current) as $pair) {
+            $this->ledger->recurringP1Found($this->found($round, $earlier, $pair));
         }
     }
 
@@ -64,8 +64,13 @@ final readonly class RecurringP1s
     }
 
     // Keyed at this round's head, because that is the code an escalation of the finding would judge.
-    private function found(ReviewRound $round, ReviewRound $earlier, Finding $finding, Finding $before): RecurringP1Found
+    /**
+     * @param array{Finding, Finding} $pair
+     */
+    private function found(ReviewRound $round, ReviewRound $earlier, array $pair): RecurringP1Found
     {
+        [$finding, $before] = $pair;
+
         return new RecurringP1Found(
             $round->id()->toRfc4122(),
             $round->number(),

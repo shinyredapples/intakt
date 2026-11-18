@@ -8,15 +8,16 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Severity;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// A P1 recurs when the change's round on the earlier head flagged a P1 in the same place; a rule, not a service.
+// Plain code decides that a P1 recurs, because no reviewer's text may start an escalation; a rule, not a service.
 #[Exclude]
 final readonly class RecurringP1
 {
+    // Act entries of both rounds, because only what the builder was told to fix can come back; each pair is this round's P1 and the earlier one in its place.
     /**
-     * @param list<Finding> $earlier the act entries of the change's judged round on the earlier head
-     * @param list<Finding> $current the act entries of this round
+     * @param list<Finding> $earlier
+     * @param list<Finding> $current
      *
-     * @return list<array{Finding, Finding}> each recurring P1 of this round with the earlier P1 in its place
+     * @return list<array{Finding, Finding}>
      */
     public function in(array $earlier, array $current): array
     {

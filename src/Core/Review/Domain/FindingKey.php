@@ -26,9 +26,9 @@ final readonly class FindingKey
         return array_values(array_unique([...(null === $finding->file ? [] : [$finding->file]), ...$inText]));
     }
 
-    // Null without a file, because a key on the text alone would stand for any code; the parts are JSON encoded, so no path or text can shift into its neighbor.
+    // Null without a file, because a key on the text alone would stand for any code; the parts are JSON encoded, so no path or text can shift into its neighbor. The hashes are each named file's SHA-256 by path.
     /**
-     * @param array<string, string> $fileHashes the SHA-256 of each named file's content, by path
+     * @param array<string, string> $fileHashes
      */
     public function of(Finding $finding, array $fileHashes): ?string
     {
@@ -46,6 +46,8 @@ final readonly class FindingKey
     // Case and spacing ignored, because a reviewer rewording the same finding on the next head changes only those.
     private function normalized(string $text): string
     {
-        return implode(' ', preg_split('/\s+/', mb_strtolower(trim($text)), flags: PREG_SPLIT_NO_EMPTY) ?: []);
+        $words = preg_split('/\s+/', mb_strtolower($text), flags: PREG_SPLIT_NO_EMPTY);
+
+        return false === $words ? $text : implode(' ', $words);
     }
 }

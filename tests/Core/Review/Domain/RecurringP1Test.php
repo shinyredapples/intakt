@@ -18,75 +18,75 @@ final class RecurringP1Test extends TestCase
 {
     public function testAP1FlaggedAtTheSameFileAndSymbolOnTheNextHeadIsRecurring(): void
     {
-        $earlier = $this->finding('F1', Severity::P1, 'src/Thing.php', 'Thing::save');
-        $current = $this->finding('F4', Severity::P1, 'src/Thing.php', 'Thing::save');
+        $earlier = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::save');
+        $current = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::save')->withId('F4');
 
         self::assertSame([[$current, $earlier]], new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testAP1AtAnotherLineOfTheSameFileAndSymbolIsStillRecurring(): void
     {
-        $earlier = $this->finding('F1', Severity::P1, 'src/Thing.php', 'Thing::save', 12);
-        $current = $this->finding('F2', Severity::P1, 'src/Thing.php', 'Thing::save', 40);
+        $earlier = new Finding('F1', Severity::P1, 'src/Thing.php', 12, 'Thing::save', 'Not restart safe.', FixableBy::Builder, false, null, null);
+        $current = new Finding('F2', Severity::P1, 'src/Thing.php', 40, 'Thing::save', 'Not restart safe.', FixableBy::Builder, false, null, null);
 
         self::assertCount(1, new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testAP1InTheSameFileWhereEitherNamesNoSymbolIsRecurring(): void
     {
-        $earlier = $this->finding('F1', Severity::P1, 'src/Thing.php', null);
-        $current = $this->finding('F2', Severity::P1, 'src/Thing.php', 'Thing::save');
+        $earlier = $this->finding(Severity::P1, 'src/Thing.php', null);
+        $current = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::save');
 
         self::assertCount(1, new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testAP1AtAnotherSymbolOfTheSameFileIsNotRecurring(): void
     {
-        $earlier = $this->finding('F1', Severity::P1, 'src/Thing.php', 'Thing::save');
-        $current = $this->finding('F2', Severity::P1, 'src/Thing.php', 'Thing::load');
+        $earlier = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::save');
+        $current = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::load');
 
         self::assertSame([], new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testAP1InAnotherFileIsNotRecurring(): void
     {
-        $earlier = $this->finding('F1', Severity::P1, 'src/Thing.php', null);
-        $current = $this->finding('F2', Severity::P1, 'src/Other.php', null);
+        $earlier = $this->finding(Severity::P1, 'src/Thing.php', null);
+        $current = $this->finding(Severity::P1, 'src/Other.php', null);
 
         self::assertSame([], new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testAP2FlaggedInTheSamePlaceTwiceIsNotARecurringP1(): void
     {
-        $earlier = $this->finding('F1', Severity::P2, 'src/Thing.php', null);
-        $current = $this->finding('F2', Severity::P2, 'src/Thing.php', null);
+        $earlier = $this->finding(Severity::P2, 'src/Thing.php', null);
+        $current = $this->finding(Severity::P2, 'src/Thing.php', null);
 
         self::assertSame([], new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testAP1WhereTheEarlierHeadHadOnlyAP2IsNotRecurring(): void
     {
-        $earlier = $this->finding('F1', Severity::P2, 'src/Thing.php', null);
-        $current = $this->finding('F2', Severity::P1, 'src/Thing.php', null);
+        $earlier = $this->finding(Severity::P2, 'src/Thing.php', null);
+        $current = $this->finding(Severity::P1, 'src/Thing.php', null);
 
         self::assertSame([], new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testTwoP1sWithoutAFileAreNeverInTheSamePlace(): void
     {
-        $earlier = $this->finding('F1', Severity::P1, null, null);
-        $current = $this->finding('F2', Severity::P1, null, null);
+        $earlier = $this->finding(Severity::P1, null, null);
+        $current = $this->finding(Severity::P1, null, null);
 
         self::assertSame([], new RecurringP1()->in([$earlier], [$current]));
     }
 
     public function testAP1WithNoEarlierHeadIsNeverRecurring(): void
     {
-        self::assertSame([], new RecurringP1()->in([], [$this->finding('F1', Severity::P1, 'src/Thing.php', null)]));
+        self::assertSame([], new RecurringP1()->in([], [$this->finding(Severity::P1, 'src/Thing.php', null)]));
     }
 
-    private function finding(string $id, Severity $severity, ?string $file, ?string $symbol, int $line = 3): Finding
+    private function finding(Severity $severity, ?string $file, ?string $symbol): Finding
     {
-        return new Finding($id, $severity, $file, null === $file ? null : $line, $symbol, 'The save is not restart safe.', FixableBy::Builder, false, null, null);
+        return new Finding('F1', $severity, $file, null === $file ? null : 3, $symbol, 'The save is not restart safe.', FixableBy::Builder, false, null, null);
     }
 }
