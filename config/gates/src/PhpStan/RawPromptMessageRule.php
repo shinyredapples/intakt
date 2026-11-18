@@ -103,7 +103,7 @@ final readonly class RawPromptMessageRule implements Rule
             return [RuleErrorBuilder::message('new '.substr($message, (int) strrpos($message, '\\') + 1).self::MESSAGE_ADVICE)->identifier('intakt.rawPromptMessage')->build()];
         }
 
-        if (in_array(strtolower(self::CONVERSATION), $classes, true) && !$this->isInside(self::ROLE_SOURCE, $scope) && !($this->isInside(self::RETRIES, $scope) && $this->copiesARolePrompt($construction, $scope))) {
+        if (in_array(strtolower(self::CONVERSATION), $classes, true) && !$this->isInside(self::ROLE_SOURCE, $scope) && (!$this->isInside(self::RETRIES, $scope) || !$this->copiesARolePrompt($construction, $scope))) {
             return [RuleErrorBuilder::message(self::CONVERSATION_ADVICE)->identifier('intakt.reviewerConversation')->build()];
         }
 
