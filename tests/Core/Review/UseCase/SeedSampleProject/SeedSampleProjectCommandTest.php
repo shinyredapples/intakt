@@ -195,7 +195,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $this->seed(Provider::Anthropic);
 
         self::assertSame('2030-01-02', $this->written()['budget']['price_date']);
-        self::assertStringContainsString('list prices read on 2030-01-02', new Filesystem()->readFile($this->configuration()));
+        self::assertStringContainsString('The price table is dated 2030-01-02', new Filesystem()->readFile($this->configuration()));
     }
 
     public function testWithOnlyTheRouterTheSecondMakerIsTheOneTheDataFileNames(): void

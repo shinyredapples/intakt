@@ -5,7 +5,7 @@
 # Without /v1, because the generic bridge appends /v1/chat/completions itself.
 router_url: https://router.huggingface.co
 
-# The day the prices below were read, written into the seeded file as budget.price_date.
+# The date of the price table below, written into the seeded file as budget.price_date.
 price_date: '2026-11-18'
 
 # The router models name their router provider, because the router's default provider may refuse tools together with structured output.
