@@ -32,6 +32,7 @@ final readonly class JudgePrompt
 
     public function __construct(
         private Fence $fence,
+        // Defaulted because the assembly has no state or settings to wire, so every place that builds the prompt gets the same one.
         private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }

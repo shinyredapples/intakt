@@ -12,8 +12,10 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -113,6 +115,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReadFile::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(UnstreamedModelCatalog::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ReviewerVerdictTest extends WebTestCase
 {
     use AiAssertionsTrait;

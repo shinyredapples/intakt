@@ -13,6 +13,8 @@ use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -53,6 +55,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
 #[UsesClass(RelevantMemory::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ReviewerMemoryTest extends TestCase
 {
     private const string PROJECT = 'alpha';

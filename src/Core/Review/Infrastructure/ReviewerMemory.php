@@ -27,6 +27,7 @@ final readonly class ReviewerMemory
         private ProjectMemory $memory,
         private Fence $fence,
         private DiffPaths $paths,
+        // Defaulted because the assembly has no state or settings to wire, so every place that builds the prompt gets the same one.
         private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }

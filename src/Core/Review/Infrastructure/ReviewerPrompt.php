@@ -59,6 +59,7 @@ final readonly class ReviewerPrompt
         private VerdictParser $parser,
         // Optional because memory only helps a review: the container wires it in, and a prompt without it reviews from the task and diff alone.
         private ?ReviewerMemory $memory = null,
+        // Defaulted because the assembly has no state or settings to wire, so every place that builds the prompt gets the same one.
         private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }
@@ -66,7 +67,7 @@ final readonly class ReviewerPrompt
     public function messagesFor(ReviewerConversation $conversation, ReviewBrief $brief): MessageBag
     {
         $messages = [
-            $this->assembly->systemWithRole(self::INSTRUCTIONS, $conversation->rolePrompt),
+            $this->assembly->systemWithRole(self::INSTRUCTIONS, $conversation),
             $this->assembly->user('The task of the change:', $this->cut->fenced(UntrustedSource::Task, $brief->change->task)),
             $this->assembly->user('The diff of the change:', $this->cut->fenced(UntrustedSource::Diff, $brief->change->diff)),
         ];

@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
 use Intakt\Core\Review\Infrastructure\PromptCut;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
 use Symfony\AI\Agent\Toolbox\ToolResult;
@@ -18,6 +20,8 @@ use Symfony\AI\Platform\Result\ToolCall;
 #[CoversClass(FencedToolbox::class)]
 #[CoversClass(PromptCut::class)]
 #[CoversClass(Fence::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class FencedToolboxTest extends TestCase
 {
     public function testAnAnswerTheReviewServerFencedJustUnderTheCeilingIsNotCut(): void

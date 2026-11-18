@@ -19,13 +19,13 @@ final readonly class PromptAssembly
         return Message::forSystem($instructions);
     }
 
-    // The role prompt is the owner's panel configuration, read from protected skill files, so it counts as trusted although it is read at runtime.
+    // The role prompt is the owner's panel configuration, read from protected skill files; it is taken only from the conversation that carries the panel's role, never as a plain string, so no other runtime text can reach the system message.
     /**
      * @param literal-string $instructions
      */
-    public function systemWithRole(string $instructions, string $rolePrompt): SystemMessage
+    public function systemWithRole(string $instructions, ReviewerConversation $conversation): SystemMessage
     {
-        return Message::forSystem($instructions."\n\n".$rolePrompt);
+        return Message::forSystem($instructions."\n\n".$conversation->rolePrompt);
     }
 
     /**
