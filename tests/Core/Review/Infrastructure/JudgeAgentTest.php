@@ -39,8 +39,6 @@ final class JudgeAgentTest extends KernelTestCase
      */
     private array $sent = [];
 
-    private string $file = 'src/A.php';
-
     public function testAValidAnswerMarksEachFindingWithTheMarkTheJudgeGave(): void
     {
         $judgement = $this->judge(['F1' => Severity::P1, 'F2' => Severity::P2, 'F3' => Severity::P3], '{"marks":[{"id":"F1","mark":"act"},{"id":"F2","mark":"defer"},{"id":"F3","mark":"reject"}]}');
@@ -48,20 +46,26 @@ final class JudgeAgentTest extends KernelTestCase
         self::assertEquals([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer), new JudgedFinding('F3', Mark::Reject)], $judgement->marks);
     }
 
-    public function testAP3WordingFindingInAFileTheChangeTouchesIsMarkedAct(): void
+    public function testTheFilesTheChangeTouchesReachTheModelFencedBesideTheFindings(): void
     {
-        $this->file = 'docs/guide/the-journey-of-a-task.md';
-        $judgement = $this->judge(['F1' => Severity::P3], '{"marks":[{"id":"F1","mark":"act"}]}');
+        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/the-journey-of-a-task.md')], new UuidV7(), ['docs/guide/the-journey-of-a-task.md', 'src/A.php']), '{"marks":[{"id":"F1","mark":"act"}]}');
 
-        self::assertEquals([new JudgedFinding('F1', Mark::Act)], $judgement->marks);
+        self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\ndocs\\\\\/guide\\\\\/the-journey-of-a-task\.md\\\\nsrc\\\\\/A\.php\\\\n<<<END \1>>>/', $this->sent[0]);
     }
 
-    public function testAP3FindingThatNeedsANewFileIsMarkedDefer(): void
+    public function testAnEmptyChangedFilesListIsSentAsADashInsideItsFence(): void
     {
-        $this->file = 'src/New/Thing.php';
-        $judgement = $this->judge(['F1' => Severity::P3], '{"marks":[{"id":"F1","mark":"defer"}]}');
+        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7()), '{"marks":[{"id":"F1","mark":"act"}]}');
 
-        self::assertEquals([new JudgedFinding('F1', Mark::Defer)], $judgement->marks);
+        self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\n-\\\\n<<<END \1>>>/', $this->sent[0]);
+    }
+
+    public function testThePromptTellsTheJudgeThatTheFileListDecidesWhatIsLocal(): void
+    {
+        $this->judge(['F1' => Severity::P3], '{"marks":[{"id":"F1","mark":"defer"}]}');
+
+        self::assertStringContainsString('The files the change touches', $this->sent[0]);
+        self::assertStringContainsString('a file the change already touches', $this->sent[0]);
     }
 
     public function testThePromptTellsTheJudgeToActOnALocalP3EditAndToDeferOnlyWhatNeedsMore(): void
@@ -174,16 +178,27 @@ final class JudgeAgentTest extends KernelTestCase
      */
     private function judge(array $findings, string $answer, string $task = 'Add a cart.'): Judgement
     {
+        $given = [];
+        foreach ($findings as $id => $severity) {
+            $given[] = $this->finding($id, 'src/A.php', $severity);
+        }
+
+        return $this->ask(new JudgeRequest($task, $given, new UuidV7()), $answer);
+    }
+
+    private function ask(JudgeRequest $request, string $answer): Judgement
+    {
         $platform = MockPlatformFactory::createPlatform(function (mixed $model, mixed $input) use ($answer): string {
             $this->sent[] = json_encode($input, JSON_THROW_ON_ERROR);
 
             return $answer;
         }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $given = [];
-        foreach ($findings as $id => $severity) {
-            $given[] = new Finding($id, $severity, $this->file, 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
-        }
 
-        return new JudgeAgent(new JudgePrompt(new Fence()))->judge(new JudgeRequest($task, $given, new UuidV7()), $platform, 'judge-model');
+        return new JudgeAgent(new JudgePrompt(new Fence()))->judge($request, $platform, 'judge-model');
+    }
+
+    private function finding(string $id, string $file, Severity $severity = Severity::P3): Finding
+    {
+        return new Finding($id, $severity, $file, 3, null, 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 }
