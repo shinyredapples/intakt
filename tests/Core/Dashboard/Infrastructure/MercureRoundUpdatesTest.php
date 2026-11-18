@@ -593,7 +593,7 @@ final class MercureRoundUpdatesTest extends TestCase
     {
         $failure = new RuntimeException('the ledger is gone');
         $ledger = self::createStub(Ledger::class);
-        $ledger->method('readOfKind')->willThrowException($failure);
+        $ledger->method('readMentioning')->willThrowException($failure);
         $this->ledger = $ledger;
 
         $this->updates()->toolCalled(Uuid::fromString(self::ROUND), self::REVIEWER, 'read_file');
