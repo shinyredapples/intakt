@@ -15,6 +15,7 @@ use Intakt\Core\Review\Infrastructure\StoredJsonEncoder;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageStarted;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 
 #[CoversClass(StoredSerializerFactory::class)]
@@ -33,7 +34,7 @@ final class StoredSerializerFactoryTest extends KernelTestCase
         $stored = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $stored);
 
-        self::assertSame($stored->serialize($payload, 'json'), StoredSerializerFactory::create()->serialize($payload, 'json'));
+        self::assertSame($stored->serialize($payload, JsonEncoder::FORMAT), StoredSerializerFactory::create()->serialize($payload, JsonEncoder::FORMAT));
     }
 
     // A judge_done row, because reading it back needs the list of finding objects the container's serializer denormalizes.
@@ -43,7 +44,7 @@ final class StoredSerializerFactoryTest extends KernelTestCase
         $stored = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $stored);
 
-        self::assertEquals($stored->deserialize($json, JudgeDone::class, 'json'), StoredSerializerFactory::create()->deserialize($json, JudgeDone::class, 'json'));
+        self::assertEquals($stored->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT), StoredSerializerFactory::create()->deserialize($json, JudgeDone::class, JsonEncoder::FORMAT));
     }
 
     // A finding with merged ids, because only the stored finding normalizer keeps them.
@@ -53,6 +54,6 @@ final class StoredSerializerFactoryTest extends KernelTestCase
         $stored = self::getContainer()->get('serializer.stored');
         self::assertInstanceOf(SerializerInterface::class, $stored);
 
-        self::assertSame($stored->serialize($finding, 'json'), StoredSerializerFactory::create()->serialize($finding, 'json'));
+        self::assertSame($stored->serialize($finding, JsonEncoder::FORMAT), StoredSerializerFactory::create()->serialize($finding, JsonEncoder::FORMAT));
     }
 }

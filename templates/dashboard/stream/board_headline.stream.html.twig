@@ -1,6 +1,6 @@
 {#- An update of the line's content, from the same partial as the board's head, so the pushed line never differs from a page loaded after it. -#}
 <turbo-stream action="update" target="board-headline"><template>{{ include('dashboard/_board_headline.html.twig', {headline: headline}, with_context = false) }}</template></turbo-stream>
-{#- The empty board's octopus, replaced from the head's partial: once a review has run it renders nothing, so the octopus leaves the head. -#}
+{#- The empty board's octopus, replaced from the head's partial: once a review has run it renders an empty hidden target, so the octopus leaves the head and comes back when the board is empty again. -#}
 <turbo-stream action="replace" target="board-octopus"><template>{{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>
 {#- The columns a round moves between, replaced from the board's own partial: a round starts in In review and ends in Done. Each is pushed with at most the page limit of cards (pushed), so the update does not grow with the install's history. -#}
 {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}

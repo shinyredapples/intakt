@@ -119,7 +119,7 @@ final class RunBuildJobTest extends TestCase
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task'), $this->promptSeen);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task')->rendered(), $this->promptSeen);
         self::assertFileDoesNotExist($this->ran->inputs[1]->hostPath);
     }
 

@@ -95,8 +95,8 @@ final class RunBuildJobCommandTest extends TestCase
     {
         $this->executed(new JobOutput([]), ['--decision' => ['PLANT-first', 'PLANT-second']]);
 
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task'), $this->promptSeen);
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Decisions, "D1: PLANT-first\nD2: PLANT-second"), $this->promptSeen);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, 'PLANT-task')->rendered(), $this->promptSeen);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Decisions, "D1: PLANT-first\nD2: PLANT-second")->rendered(), $this->promptSeen);
     }
 
     public function testTheTierOptionPicksTheModel(): void

@@ -32,6 +32,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectModes;
 use Symfony\Component\DependencyInjection\Attribute\Target;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 
 // Called inside the caller's transaction, so a refused event rolls the move it reports back with it.
@@ -171,7 +172,7 @@ final readonly class RoundLedger
 
     private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
     {
-        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, 'json')));
+        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
 
         if (!$result->succeeded()) {
             throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);

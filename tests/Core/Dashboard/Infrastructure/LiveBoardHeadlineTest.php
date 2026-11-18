@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Dashboard\Contract\DashboardTopics;
 use Intakt\Core\Dashboard\Contract\LiveEvent;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\Headline;
@@ -43,6 +44,17 @@ use Twig\Environment;
 #[UsesClass(LiveEvent::class)]
 final class LiveBoardHeadlineTest extends KernelTestCase
 {
+    public function testTheBoardPublishedWithoutARoundIsAnEmptyBoardWithItsWaitingOctopusOnTheShellTopic(): void
+    {
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn(new DashboardLedger(), $live)->publishTheBoard();
+
+        self::assertCount(1, $live->events);
+        self::assertSame(DashboardTopics::SHELL, $live->events[0]->topic);
+        self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.head-character'));
+    }
+
     public function testAPushedDoneColumnCarriesAtMostThePageLimitOfCards(): void
     {
         $done = $this->pushedDoneColumnOf(Board::PAGE_LIMIT + 3);

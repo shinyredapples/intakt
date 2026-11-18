@@ -8,8 +8,11 @@ use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\UntrustedSource;
+use Symfony\AI\Platform\Message\UserMessage;
 
 final readonly class ReviewerMemory
 {
@@ -18,32 +21,37 @@ final readonly class ReviewerMemory
 
     private const string SHORTENED = ' [note shortened]';
 
+    private const string LEAD = 'Project memory, notes earlier reviews left about the files under review:';
+
     public function __construct(
         private ProjectMemory $memory,
         private Fence $fence,
         private DiffPaths $paths,
+        // Defaulted because the assembly has no state or settings to wire, so every place that builds the prompt gets the same one.
+        private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }
 
-    public function briefingOn(ReviewBrief $brief): ?string
+    public function briefingOn(ReviewBrief $brief): ?UserMessage
     {
-        $room = self::MAX_BYTES - strlen($this->wrapped(''));
+        $room = self::MAX_BYTES - $this->bytesOf($this->fenced(''));
         $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, $this->paths->in($brief->change->diff), $room))->entries;
+        $notes = $this->notesWithin($entries);
 
-        return $this->briefingWithin($entries);
+        return $notes instanceof FencedText ? $this->assembly->user(self::LEAD, $notes) : null;
     }
 
     // The separators still add bytes the memory does not count, so the least relevant entries are dropped until the whole briefing fits; a lone top entry is shortened instead, because the most relevant note is worth more than none.
     /**
      * @param list<MemoryEntry> $entries
      */
-    private function briefingWithin(array $entries): ?string
+    private function notesWithin(array $entries): ?FencedText
     {
         while ([] !== $entries) {
-            $briefing = $this->briefingOf($entries);
+            $notes = $this->notesOf($entries);
 
-            if (strlen($briefing) <= self::MAX_BYTES) {
-                return $briefing;
+            if ($this->bytesOf($notes) <= self::MAX_BYTES) {
+                return $notes;
             }
 
             if (1 === count($entries)) {
@@ -56,24 +64,30 @@ final readonly class ReviewerMemory
         return null;
     }
 
-    private function shortened(MemoryEntry $entry): string
+    private function shortened(MemoryEntry $entry): FencedText
     {
-        $room = self::MAX_BYTES - strlen($this->wrapped('')) - strlen(self::SHORTENED);
+        $room = self::MAX_BYTES - $this->bytesOf($this->fenced('')) - strlen(self::SHORTENED);
 
         // mb_strcut cuts at a character boundary, so the text stays valid UTF-8.
-        return $this->wrapped(mb_strcut($entry->text, 0, $room, 'UTF-8').self::SHORTENED);
+        return $this->fenced(mb_strcut($entry->text, 0, $room, 'UTF-8').self::SHORTENED);
     }
 
     /**
      * @param non-empty-list<MemoryEntry> $entries
      */
-    private function briefingOf(array $entries): string
+    private function notesOf(array $entries): FencedText
     {
-        return $this->wrapped(implode("\n\n", array_map(static fn (MemoryEntry $entry): string => $entry->text, $entries)));
+        return $this->fenced(implode("\n\n", array_map(static fn (MemoryEntry $entry): string => $entry->text, $entries)));
     }
 
-    private function wrapped(string $notes): string
+    private function fenced(string $notes): FencedText
     {
-        return "Project memory, notes earlier reviews left about the files under review:\n\n".$this->fence->wrap(UntrustedSource::ProjectMemory, $notes);
+        return $this->fence->wrap(UntrustedSource::ProjectMemory, $notes);
+    }
+
+    // Measured as the whole message, introduction included, because the cap holds for what the model receives.
+    private function bytesOf(FencedText $notes): int
+    {
+        return strlen($this->assembly->userText(self::LEAD, $notes));
     }
 }

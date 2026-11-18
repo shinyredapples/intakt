@@ -79,6 +79,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
@@ -184,7 +185,7 @@ final readonly class RoundFixture
         $stored = $this->entities->find(ChangeFindings::class, ['project' => 'alpha', 'change' => $change]);
         assert($stored instanceof ChangeFindings);
 
-        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json'));
+        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', JsonEncoder::FORMAT));
     }
 
     /**
