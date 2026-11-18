@@ -32,7 +32,7 @@ final readonly class BuilderPrompt
     {
         return implode("\n\n", [
             self::INSTRUCTIONS,
-            "The task:\n\n".$this->fence->wrap(UntrustedSource::Task, $brief->task),
+            "The task:\n\n".$this->fence->wrap(UntrustedSource::Task, $brief->task)->rendered(),
             ...$this->decisionsOf($brief),
             ...$this->closingOf($brief->rework),
         ]);
@@ -53,7 +53,7 @@ final readonly class BuilderPrompt
             $brief->decisions,
         );
 
-        return ["The maintainer's decisions on this task; apply each one:\n\n".$this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered))];
+        return ["The maintainer's decisions on this task; apply each one:\n\n".$this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered))->rendered()];
     }
 
     /**
@@ -69,7 +69,7 @@ final readonly class BuilderPrompt
             self::REWORK,
             ...$this->actListOf($rework),
             ...$this->ciLogOf($rework),
-            "The published pull request text to edit:\n\n".$this->fence->wrap(UntrustedSource::PullRequestText, $rework->publishedText),
+            "The published pull request text to edit:\n\n".$this->fence->wrap(UntrustedSource::PullRequestText, $rework->publishedText)->rendered(),
         ];
     }
 
@@ -84,7 +84,7 @@ final readonly class BuilderPrompt
 
         $entries = array_map($this->actEntryOf(...), $rework->actList);
 
-        return ["The findings to act on:\n\n".$this->fence->wrap(UntrustedSource::ActList, implode("\n\n", $entries))];
+        return ["The findings to act on:\n\n".$this->fence->wrap(UntrustedSource::ActList, implode("\n\n", $entries))->rendered()];
     }
 
     private function actEntryOf(Finding $finding): string
@@ -105,6 +105,6 @@ final readonly class BuilderPrompt
             return [];
         }
 
-        return ["The excerpt of the failed CI log:\n\n".$this->fence->wrap(UntrustedSource::CiLog, $rework->ciExcerpt)];
+        return ["The excerpt of the failed CI log:\n\n".$this->fence->wrap(UntrustedSource::CiLog, $rework->ciExcerpt)->rendered()];
     }
 }

@@ -41,6 +41,16 @@ final readonly class LiveBoardHeadline
         }
     }
 
+    // Without a round, because removing the demo project's rows follows no round and can leave the board empty again, which brings its octopus back (#2437).
+    public function publishTheBoard(): void
+    {
+        try {
+            $this->publishedInTurn();
+        } catch (Throwable $failure) {
+            $this->logger->warning('The board headline was not published.', ['exception' => $failure]);
+        }
+    }
+
     private function publishedInTurn(): void
     {
         $lock = $this->locks->createLock(self::LOCK);

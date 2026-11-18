@@ -68,6 +68,14 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/flex:\s*1 1 0;/', $rules['.page-head > .head-character + div'] ?? '');
     }
 
+    public function testABoardWithACardKeepsTheWrapRuleOnTheTitleColumnBehindTheHiddenOctopusTarget(): void
+    {
+        $rules = $this->rulesOf($this->sheet());
+        $selector = '.page-head > #board-octopus[hidden] + div';
+
+        self::assertMatchesRegularExpression('/min-width:\s*0;\s*overflow-wrap:\s*anywhere;/', $rules[$selector] ?? '');
+    }
+
     public function testAt1700WideAndUpThePagePaddingGrowsTo48(): void
     {
         $rules = $this->rulesOf($this->mediaBlock('min-width: 1700px'));
