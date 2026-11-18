@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\PhpStan\FinalClassRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Process\Process;
 
@@ -20,6 +21,23 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
     protected function ruleFor(string $root): FinalClassRule
     {
         return new FinalClassRule($root);
+    }
+
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
+    {
+        return self::casesOfOnePhpstanRun([
+            'AFinalDoctrineEntityPassesStaticAnalysis' => ['final-entity'],
+            'ANonFinalReadonlyServiceFailsStaticAnalysis' => ['non-final-service', 'src/Mailer.php:7 intakt.finalClass Class Mailer is not final: declare it final'],
+        ], 'src/');
+    }
+
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
+    {
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
     }
 
     public function testANonFinalReadonlyServiceFailsStaticAnalysis(): void
