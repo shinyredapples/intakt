@@ -27,7 +27,7 @@ final class HeadThatFailsUnexpectedly
     /**
      * @return array<int|string, int>|false
      */
-    public function url_stat(string $path, int $flags): array|false
+    public function url_stat(string $path): array|false
     {
         throw new InvalidArgumentException(sprintf('The filesystem cannot answer for "%s".', $path));
     }
