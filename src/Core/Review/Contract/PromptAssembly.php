@@ -53,7 +53,7 @@ final readonly class PromptAssembly
         return $lead."\n\n".$body->rendered();
     }
 
-    // A whole prompt text, for an agent that takes its prompt as one string rather than as messages.
+    // A string, not messages, because the builder agent takes its prompt as one text; its parts still admit only literals and fences: docs/design/05-architecture/14-threat-model.md#builder
     public function document(PromptPart ...$parts): string
     {
         return implode("\n\n", array_map(static fn (PromptPart $part): string => $part->rendered(), $parts));
