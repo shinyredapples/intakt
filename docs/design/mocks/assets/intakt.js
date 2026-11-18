@@ -62,7 +62,7 @@
     { n: 205, p: "acme-shop", t: "Refund emails include the order number", s: "S", col: "Checking", age: "1 h 50 min", cost: "0.66", reason: ["broken", "Waiting for CI: image build failing"], broken: true },
     { n: 598, p: "intakt", t: "Hold pushes while main is red", s: "M", col: "In review", age: "11 min", slot: "Code reviewers", model: "Model L", cost: "5.62", round: 2 },
     { n: 71, p: "field-notes", t: "Filter trails by difficulty", s: "S", col: "In review", age: "1 d", cost: "1.24", round: 1, reason: ["pause", "Project paused"] },
-    { n: 589, p: "intakt", t: "Rotate the forge token without a restart", s: "M", col: "Waiting on you", age: "1 h 05 min", cost: "4.30", round: 2, needs: "Approve this version: it touches secret handling" },
+    { n: 589, p: "intakt", t: "Rotate the forge token without a restart", s: "M", col: "Waiting on you", age: "1 h 05 min", cost: "4.30", round: 2, needs: "Approve this version: secrets limit, ForgeTokenStore.php changed" },
     { n: 199, p: "acme-shop", t: "Gift cards: pick the stored currency", s: "M", col: "Waiting on you", age: "52 min", cost: "0.38", needs: "The Tech lead has a question" },
     { n: 594, p: "intakt", t: "Cache forge responses for 30 seconds", s: "S", col: "Waiting on you", age: "34 min", cost: "2.11", round: 1, needs: "Push on hold: it changes the CI workflow" },
     { n: 601, p: "intakt", t: "Expiry column in the history ledger", s: "S", col: "Merging", age: "1 min", cost: "1.85", round: 1 },
@@ -461,7 +461,7 @@
 
   /* Glossary: one standard explanation per term, used the same way everywhere (DESIGN.md, Glossary). */
   const GLOSSARY = {
-    version: "The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval.",
+    version: "The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval, unless it leaves what you approved exactly as it was (planned, for a limit like secrets: the same files, unchanged). A revised held CI push always needs its own approval.",
     hold: "Intakt stopped this push before checks ran, because it changes something only you can allow, such as CI files or protected files.",
     share: "This project's part of the week's AI budget. Intakt paces work so spend follows it.",
     round: "One build, its checks and its review. Sending work back starts the next round.",
