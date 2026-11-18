@@ -20,7 +20,7 @@ final readonly class JudgeRequest
         // Carried to the call's usage row, because a round's token count reads its calls by the round id.
         public Uuid $round,
         // Because only a file the change already touches makes a P3 edit local, and the judge cannot see the diff.
-        public array $changedFiles = [],
+        public array $changedFiles,
     ) {
     }
 }

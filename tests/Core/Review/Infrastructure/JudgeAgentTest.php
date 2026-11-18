@@ -50,12 +50,12 @@ final class JudgeAgentTest extends KernelTestCase
     {
         $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'docs/guide/the-journey-of-a-task.md')], new UuidV7(), ['docs/guide/the-journey-of-a-task.md', 'src/A.php']), '{"marks":[{"id":"F1","mark":"act"}]}');
 
-        self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\ndocs\\\\\/guide\\\\\/the-journey-of-a-task\.md\\\\nsrc\\\\\/A\.php\\\\n<<<END \1>>>/', $this->sent[0]);
+        self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\n\\\\"docs\\\\\/guide\\\\\/the-journey-of-a-task\.md\\\\"\\\\n\\\\"src\\\\\/A\.php\\\\"\\\\n<<<END \1>>>/', $this->sent[0]);
     }
 
     public function testAnEmptyChangedFilesListIsSentAsADashInsideItsFence(): void
     {
-        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7()), '{"marks":[{"id":"F1","mark":"act"}]}');
+        $this->ask(new JudgeRequest('Add a cart.', [$this->finding('F1', 'src/A.php')], new UuidV7(), []), '{"marks":[{"id":"F1","mark":"act"}]}');
 
         self::assertMatchesRegularExpression('/<<<UNTRUSTED changed files (fence-[0-9a-f]{16})>>>\\\\n-\\\\n<<<END \1>>>/', $this->sent[0]);
     }
@@ -183,7 +183,7 @@ final class JudgeAgentTest extends KernelTestCase
             $given[] = $this->finding($id, 'src/A.php', $severity);
         }
 
-        return $this->ask(new JudgeRequest($task, $given, new UuidV7()), $answer);
+        return $this->ask(new JudgeRequest($task, $given, new UuidV7(), []), $answer);
     }
 
     private function ask(JudgeRequest $request, string $answer): Judgement

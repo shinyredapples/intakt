@@ -39,7 +39,7 @@ final readonly class JudgePrompt
         return new MessageBag(
             Message::forSystem(self::INSTRUCTIONS),
             Message::ofUser("The task of the change:\n\n".$this->fence->wrap(UntrustedSource::Task, $request->task)),
-            Message::ofUser("The files the change touches:\n\n".$this->fence->wrap(UntrustedSource::ChangedFiles, [] === $request->changedFiles ? '-' : implode("\n", $request->changedFiles))),
+            Message::ofUser("The files the change touches:\n\n".$this->fence->wrap(UntrustedSource::ChangedFiles, [] === $request->changedFiles ? '-' : implode("\n", array_map(static fn (string $path): string => json_encode($path, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR), $request->changedFiles)))),
             Message::ofUser("The findings to judge:\n\n".$this->fence->wrap(UntrustedSource::FindingsToJudge, $this->listOf($request->findings))),
         );
     }

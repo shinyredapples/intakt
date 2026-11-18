@@ -229,6 +229,18 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['F1', 'Text of A.'], ['F2', 'Text of B.'], ['F3', 'Text of C.']], $this->idsAndTexts($asked));
     }
 
+    public function testTheJudgeIsGivenTheFilesOfTheRoundsDiff(): void
+    {
+        $round = $this->completedRound();
+        $vendor = new ScriptedJudgement(new Judgement([]));
+
+        $this->fixture->judge($vendor)($this->judgingOf($round));
+
+        $asked = $vendor->asked;
+        self::assertInstanceOf(JudgeRequest::class, $asked);
+        self::assertNotSame([], $asked->changedFiles);
+    }
+
     public function testTwoReviewersReportingDifferentFindingsUnderOneIdBothReachTheJudge(): void
     {
         $round = $this->fixture->start(2);
