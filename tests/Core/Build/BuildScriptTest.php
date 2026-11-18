@@ -218,6 +218,23 @@ final class BuildScriptTest extends TestCase
         self::assertSame([], $this->stillRunningAfter($sleeps, self::WATCHDOG_DEADLINE));
     }
 
+    public function testTheStandInEndsOnceItsTestRunnerIsGoneWhileTheRecordFolderStillExists(): void
+    {
+        $runner = new Process([(string) new ExecutableFinder()->find('sleep'), '30']);
+        $runner->start();
+        $this->givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild((int) $runner->getPid());
+        new Process([$this->bin.'/sleep', '0'], env: ['RECORD' => $this->history->folder])->mustRun();
+        $standIn = $this->recordedSleeps()[0];
+        $runningWhileTheRunnerLived = $this->isRunning($standIn);
+
+        $runner->stop(0);
+
+        self::assertTrue($runningWhileTheRunnerLived);
+        self::assertSame([], $this->stillRunningAfter([$standIn], self::WATCHDOG_DEADLINE));
+        self::assertDirectoryExists($this->history->folder);
+        self::assertFileDoesNotExist($this->history->folder.'/build-returned');
+    }
+
     public function testTheWaitForTheWatchdogStillReportsAProcessThatOutlivesItsDeadline(): void
     {
         $lingering = new Process([(string) new ExecutableFinder()->find('sleep'), '30']);
@@ -436,13 +453,14 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/sleep', 0o755);
     }
 
-    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and ends once tearDown removes the folder, so a failed test leaves nothing.
-    private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(): void
+    // A stand-in that reports itself only once in a session of its own, so the group kill misses it and it runs until the build returned, as a killed sleep still in its exit does; it has no time limit a slow build could outlast, and also ends once tearDown removes the folder or the test runner's process is gone, because a failed test must leave nothing and a killed runner never reaches tearDown.
+    private function givenSleepRecordsAProcessThatEndsOnlyAfterTheBuild(?int $runner = null): void
     {
+        $runner ??= (int) getmypid();
         $sleep = escapeshellarg((string) new ExecutableFinder()->find('sleep'));
         file_put_contents($this->bin.'/sleep', <<<SH
             #!/bin/sh
-            setsid sh -c 'echo \$\$ > "\$RECORD/stand-in.\$2"; until [ -e "\$RECORD/build-returned" ] || [ ! -d "\$RECORD" ]; do "\$1" 0.05; done' stand-in {$sleep} \$\$ > /dev/null 2>&1 &
+            setsid sh -c 'echo \$\$ > "\$RECORD/stand-in.\$2"; until [ -e "\$RECORD/build-returned" ] || [ ! -d "\$RECORD" ] || [ ! -d "/proc/\$3" ]; do "\$1" 0.05; done' stand-in {$sleep} \$\$ {$runner} > /dev/null 2>&1 &
             until [ -s "\$RECORD/stand-in.\$\$" ]; do :; done
             cat "\$RECORD/stand-in.\$\$" >> "\$RECORD/sleeps"
             echo \$\$ >> "\$RECORD/sleeps"
