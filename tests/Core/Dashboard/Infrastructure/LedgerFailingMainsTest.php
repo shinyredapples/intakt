@@ -83,6 +83,44 @@ final class LedgerFailingMainsTest extends TestCase
         self::assertSame(['B fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
     }
 
+    public function testAFailedMainReadFromTheStoreAfterABootedOneShowsTheItemAgainWithItsReason(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
+        $this->ledger->bootMain('alpha', 'b');
+
+        $this->ledger->readMainFromStore('alpha', 'a', 'failed', 'A fails.');
+
+        self::assertSame([['a', 'A fails.']], array_map(static fn (FailingMain $main): array => [$main->main, $main->reason], $this->failing()));
+    }
+
+    public function testABootedMainReadFromTheStoreClearsTheItemThoughItsPairWasSeen(): void
+    {
+        $this->ledger->bootMain('alpha', 'b');
+        $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
+
+        $this->ledger->readMainFromStore('alpha', 'b', 'booted');
+
+        self::assertSame([], $this->failing());
+    }
+
+    public function testAComputedFailedLineThatWasNotReadFromTheStoreRaisesNoItem(): void
+    {
+        $this->ledger->bootMain('alpha', 'b');
+
+        $this->ledger->computeFailedMain('alpha', 'a', 'A fails.');
+
+        self::assertSame([], $this->failing());
+    }
+
+    public function testACrashReadFromTheStoreNeitherRaisesNorClearsTheItem(): void
+    {
+        $this->ledger->failMainBoot('alpha', 'A fails.', 'a');
+
+        $this->ledger->readMainFromStore('alpha', 'b', 'crashed', 'composer could not run');
+
+        self::assertSame(['A fails.'], array_map(static fn (FailingMain $main): string => $main->reason, $this->failing()));
+    }
+
     public function testALedgerWithoutAMainFailureListsNothing(): void
     {
         $this->ledger->bootMain('alpha');

@@ -40,8 +40,11 @@ final readonly class LedgerFailingMains
         $payload = LedgerPayload::of($recorded);
         $pair = $this->pairOf($payload);
         $reason = $payload['reason'] ?? null;
-        $failed = LedgerEventKind::MainBootFailed === $recorded->event->kind && is_string($reason);
-        $booted = LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null);
+        $result = LedgerEventKind::BootResultComputed === $recorded->event->kind;
+        // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when the state changed.
+        $fromStore = $result && 'store' === ($payload['read_from'] ?? null);
+        $failed = is_string($reason) && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $fromStore && 'failed' === ($payload['state'] ?? null));
+        $booted = $result && 'booted' === ($payload['state'] ?? null);
 
         if (null === $pair || !$failed && !$booted) {
             return [$failing, $seen];
@@ -51,8 +54,8 @@ final readonly class LedgerFailingMains
 
         if ($failed) {
             $failing[$project] = new FailingMain($project, $main, $tools, $reason);
-        } elseif (!isset($seen[$project][$main][$tools])) {
-            // Only a main commit or tool fingerprint the project has not booted or failed before clears it: main moves forward, so a booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
+        } elseif ($fromStore || !isset($seen[$project][$main][$tools])) {
+            // Otherwise only a main commit or tool fingerprint the project has not booted or failed before clears it: a computed booted line of a pair already seen is a worker that lost the store, could not read the cache or finished late, not a recovery.
             unset($failing[$project]);
         }
 

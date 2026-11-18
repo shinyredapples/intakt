@@ -52,13 +52,17 @@ final readonly class BootResults
         }
 
         if ($stored instanceof BootRecord && $stored->answersAt($now)) {
+            $outcome = $stored->outcome();
+
             if ($stored->alertPending()) {
-                $this->alert($key, $stored->outcome());
+                $this->alert($key, $outcome);
                 // Forgotten, because the claim changed the row behind the entity manager, which would keep answering with the pending alert.
                 $this->entities->detach($stored);
             }
 
-            return $stored->outcome();
+            $this->recordChangeBackTo($key, $outcome);
+
+            return $outcome;
         }
 
         $outcome = $this->safe($this->boot(new BootHarness(new BootAt($source, $key->main))));
@@ -175,6 +179,22 @@ final readonly class BootResults
             $this->ledger->bootResultComputed($key, $outcome);
         } catch (Throwable $unrecorded) {
             $this->logger->error("Main's computed boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
+        }
+    }
+
+    // Recorded only when main's state changed, because the board reads it from the ledger, which a stored result never reaches when main or the tools go back to a pair already booted; a repeated hit of the same state, or a crash, changes nothing the board shows.
+    private function recordChangeBackTo(BootKey $key, BootOutcome $outcome): void
+    {
+        if (BootState::Crashed === $outcome->state) {
+            return;
+        }
+
+        try {
+            if ($this->ledger->lastBootStateOf($key->project) !== $outcome->state) {
+                $this->ledger->bootResultReadFromStore($key, $outcome);
+            }
+        } catch (Throwable $unrecorded) {
+            $this->logger->error("Main's stored boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
         }
     }
 }

@@ -18,6 +18,8 @@ use Intakt\Core\Ledger\Contract\AppendResult;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Ledger\Contract\RecordedEvents;
 use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Platform\Infrastructure\HeldCredentialRedactor;
 use Intakt\Core\Review\Contract\BootAt;
@@ -431,6 +433,7 @@ final class BootResultsTest extends KernelTestCase
     {
         $refusals = 1;
         $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturnCallback(fn (LedgerEventKind $kind): RecordedEvents => $this->ledger->readOfKind($kind));
         $ledger->method('append')->willReturnCallback(function (LedgerEvent $event) use (&$refusals): AppendResult {
             return LedgerEventKind::MainBootFailed === $event->kind && $refusals-- > 0 ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event);
         });
@@ -468,6 +471,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertInstanceOf(Ledger::class, $stored);
         $failures = 1;
         $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturnCallback($stored->readOfKind(...));
         $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
             $appended = $stored->append($event);
 
@@ -504,6 +508,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertInstanceOf(Ledger::class, $stored);
         $failures = 1;
         $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturnCallback($stored->readOfKind(...));
         $ledger->method('append')->willReturnCallback(static function (LedgerEvent $event) use ($stored, &$failures): AppendResult {
             $appended = $stored->append($event);
 
@@ -539,6 +544,7 @@ final class BootResultsTest extends KernelTestCase
         self::assertTrue($this->entities->isOpen());
         self::assertLoggedError('error', "Main's computed boot result could not be recorded in the ledger.");
         self::assertLoggedErrors(2, "Main's boot failure could not be recorded in the ledger as an alert.");
+        self::assertLoggedError('error', "Main's stored boot result could not be recorded in the ledger.");
     }
 
     public function testAFailedMainStoredBeforeTheAlertExistedGetsItsAlertOnceAfterTheMigration(): void
@@ -587,6 +593,132 @@ final class BootResultsTest extends KernelTestCase
 
         self::assertSame(BootState::Failed, $winner->ofMain($this->key('a', 'tools-1'), $this->source())->state);
         self::assertSame(['alpha'], array_map(static fn (FailingMain $main): string => $main->project, new LedgerFailingMains()->in($this->ledger->readInOrder())));
+    }
+
+    public function testGoingBackToAFailedMainWhoseResultIsStoredShowsTheBannerAgainWithOneAlert(): void
+    {
+        $bus = new BootingBus(BootOutcome::failed('A fails.'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $bus->outcome = BootOutcome::booted();
+        $results->ofMain($this->key('b', 'tools-1'), $this->source());
+        self::assertSame([], $this->bannerReasons());
+
+        $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertSame(['A fails.'], $this->bannerReasons());
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testGoingBackToABootedMainWhoseResultIsStoredClearsTheBannerWithOneAlert(): void
+    {
+        $bus = new BootingBus(BootOutcome::booted());
+        $results = $this->results($bus);
+        $results->ofMain($this->key('b', 'tools-1'), $this->source());
+        $bus->outcome = BootOutcome::failed('A fails.');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        self::assertSame(['A fails.'], $this->bannerReasons());
+
+        $outcome = $results->ofMain($this->key('b', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Booted, $outcome->state);
+        self::assertSame([], $this->bannerReasons());
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::MainBootFailed)));
+    }
+
+    public function testGoingBackToAToolFingerprintWhoseFailureIsStoredShowsTheBannerAgain(): void
+    {
+        $bus = new BootingBus(BootOutcome::failed('A fails.'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $bus->outcome = BootOutcome::booted();
+        $results->ofMain($this->key('a', 'tools-2'), $this->source());
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(['A fails.'], $this->bannerReasons());
+    }
+
+    public function testRepeatedCacheHitsOfTheSameStateAppendOnlyTheLineOfTheChange(): void
+    {
+        $bus = new BootingBus(BootOutcome::failed('A fails.'));
+        $results = $this->results($bus);
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $bus->outcome = BootOutcome::booted();
+        $results->ofMain($this->key('b', 'tools-1'), $this->source());
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $lines = array_map(static fn (RecordedEvent $recorded): mixed => json_decode($recorded->event->payload, true), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed)));
+        self::assertCount(3, $lines);
+        self::assertSame(
+            ['project' => 'alpha', 'main' => str_repeat('a', 40), 'tool_fingerprint' => 'tools-1', 'state' => 'failed', 'reason' => 'A fails.', 'read_from' => 'store'],
+            $lines[2],
+        );
+    }
+
+    public function testACacheHitOfTheStateTheLedgerAlreadyShowsAppendsNoLine(): void
+    {
+        $results = $this->results(new BootingBus(BootOutcome::booted()));
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(1, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed)));
+    }
+
+    public function testACacheHitOfAnotherProjectsStateStillAppendsTheLineOfThisProject(): void
+    {
+        $results = $this->results(new BootingBus(BootOutcome::failed('A fails.')));
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $this->ledger->bootMain('alpha', str_repeat('b', 40));
+        $this->ledger->computeFailedMain('alphabet', str_repeat('c', 40), 'Alphabet fails.');
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(['A fails.'], $this->bannerReasons());
+    }
+
+    public function testAStoredCrashInsideItsBackOffAppendsNoLineAfterABootedMain(): void
+    {
+        $bus = new BootingBus(BootOutcome::booted());
+        $results = $this->results($bus);
+        $results->ofMain($this->key('b', 'tools-1'), $this->source());
+        $bus->outcome = BootOutcome::crashed('composer could not run');
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertCount(2, iterator_to_array($this->ledger->readOfKind(LedgerEventKind::BootResultComputed)));
+    }
+
+    public function testAStoredResultTheLedgerRefusesToRecordIsStillAnsweredAndIsLogged(): void
+    {
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readOfKind')->willReturnCallback(fn (LedgerEventKind $kind): RecordedEvents => $this->ledger->readOfKind($kind));
+        $ledger->method('append')->willReturnCallback(fn (LedgerEvent $event): AppendResult => str_contains($event->payload, '"read_from"') ? AppendResult::failed('The ledger is down.') : $this->ledger->append($event));
+        $bus = new BootingBus(BootOutcome::failed('A fails.'));
+        $results = new BootResults($bus, $this->entities, $this->clock, new WatcherLedger($ledger), $this->redactor(), $this->logger(), $this->registry());
+        $results->ofMain($this->key('a', 'tools-1'), $this->source());
+        $bus->outcome = BootOutcome::booted();
+        $results->ofMain($this->key('b', 'tools-1'), $this->source());
+
+        $outcome = $results->ofMain($this->key('a', 'tools-1'), $this->source());
+
+        self::assertSame(BootState::Failed, $outcome->state);
+        self::assertCount(2, $bus->booted);
+        self::assertLoggedError('error', "Main's stored boot result could not be recorded in the ledger.");
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function bannerReasons(): array
+    {
+        return array_map(static fn (FailingMain $main): string => $main->reason, new LedgerFailingMains()->in($this->ledger->readInOrder()));
     }
 
     // A forked process on a connection of its own, because only a process that dies runs no further line of the worker and loses its open transaction as a killed worker does.
