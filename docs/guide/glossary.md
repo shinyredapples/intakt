@@ -17,7 +17,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Bundle** | the sealed package of commits a builder hands back | [journey](the-journey-of-a-task.md#2-building) |
 | **Catch-up review** | a reviewer's review done later, after a substitute took its place | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Checks / gates** | the project's automatic tests and rules (`bin/check`) | [journey](the-journey-of-a-task.md#3-checking) |
-| **CI** | GitHub running the checks again on its own machines | [engine room](the-engine-room.md#ci-the-second-opinion) |
+| **CI** | the project's full check run again on the pushed version, on a machine the builder does not control: today GitHub's machines; planned: a fresh container Intakt starts by default, or GitHub's machines where the project sets it | [engine room](the-engine-room.md#ci-the-second-opinion) |
 | **Core panel** | the reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Cycle** | one round of build, check and review | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
 | **Draining** | stopping new work so running jobs can finish before an update; planned: an update drains only the builder slots it is moving to the new version (first one slot, then the remaining builder slots together, so several can show draining while reviews go on), and all of them only when it changes stored data the old version could not read | [engine room](the-engine-room.md#draining-and-updates) |
@@ -60,7 +60,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Review bench** | eight small changes with known mistakes (three have none) that measure how many the reviewers catch and how often they flag one by error; it calls your paid models | [review bench](review-bench.md) |
 | **Review cap** | how much finished work may wait for review before builders pause | [engine room](the-engine-room.md#queues-who-is-next) |
 | **Review credential** | a secret made for one review round; it lets a reviewer read that round and nothing else, and stops working once the round is judged | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
-| **Review lane** | the bench where finished work is reviewed and merged | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
+| **Review lane** | the bench where finished work is reviewed, then handed to the landing step | [engine room](the-engine-room.md#lanes-and-slots-the-workbenches) |
 | **Review panel** | the reviewers for a change: the core panel plus specialists | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Review server** | the read-only server through which a reviewer reads the head under review | [safety](why-the-ai-cant-wreck-your-project.md#the-review-server) |
 | **Reviewer-for-loop mode** | a project setting: Intakt reviews an existing loop's changes in place of one of its reviewers, its verdicts count, and the only thing it writes to the forge is its verdict on each head (a status and a comment) | [costs](accounts-and-costs.md#reviewer-for-the-loop-intakts-review-takes-a-reviewers-place) |
