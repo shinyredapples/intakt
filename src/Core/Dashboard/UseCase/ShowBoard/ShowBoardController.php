@@ -7,14 +7,14 @@ namespace Intakt\Core\Dashboard\UseCase\ShowBoard;
 use Intakt\Core\Dashboard\Contract\DashboardRoutes;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\FailingHead;
-use Intakt\Core\Dashboard\Domain\FailingMain;
 use Intakt\Core\Dashboard\Infrastructure\LedgerFailingHeads;
-use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
 use Intakt\Core\Dashboard\Infrastructure\LivePageRendering;
 use Intakt\Core\Dashboard\Infrastructure\SampleChangeSource;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Platform\Contract\Redactor;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,7 +30,7 @@ final readonly class ShowBoardController
         private Ledger $ledger,
         private LedgerReviewPages $reviewPages,
         private LedgerFailingHeads $failingHeads,
-        private LedgerFailingMains $failingMains,
+        private FailingMains $failingMains,
         private Redactor $redactor,
         private LivePageRendering $pages,
         private SampleChangeSource $sample,

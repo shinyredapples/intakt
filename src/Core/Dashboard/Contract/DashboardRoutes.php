@@ -24,4 +24,5 @@ final readonly class DashboardRoutes
     public const string SHOW_TASK = self::PREFIX.'show_task';
     public const string SHOW_DEMO = self::PREFIX.'show_demo';
     public const string PLAY_DEMO = self::PREFIX.'play_demo';
+    public const string SHOW_STATUS = self::PREFIX.'show_status';
 }

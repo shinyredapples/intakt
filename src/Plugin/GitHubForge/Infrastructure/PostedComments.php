@@ -52,10 +52,10 @@ final readonly class PostedComments
         throw new ForgeWriteFailed('The pull request holds more comments than this forge reads before a post.');
     }
 
-    // Posted through this App, which GitHub alone sets, because anyone who learns the round's id can write its marker into a comment of their own.
+    // Posted through this App, which GitHub alone sets, because anyone who learns the round's id can write its marker into a comment of their own; the marker only at the end, where the post puts it, so a finding that quotes another round's marker never counts.
     private function isOwnCommentWith(mixed $comment, string $marker): bool
     {
-        if (!is_array($comment) || !is_string($comment['body'] ?? null) || !str_contains($comment['body'], $marker)) {
+        if (!is_array($comment) || !is_string($comment['body'] ?? null) || !str_ends_with(rtrim($comment['body']), $marker)) {
             return false;
         }
 

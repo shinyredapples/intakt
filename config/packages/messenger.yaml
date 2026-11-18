@@ -3,7 +3,9 @@ framework:
         default_bus: command.bus
         failure_transport: failed
         buses:
-            command.bus: ~
+            # A caller gets the failing handler's own exception, so a refusal such as RoundNotNext is caught by its type; a worker still gets the HandlerFailedException.
+            command.bus:
+                unwrap_exceptions: true
             query.bus: ~
         transports:
             # One worker per reviewer message runs the reviewers of a round in parallel. The table comes from the migrations, never from a first send, because a first send inside a rolled-back transaction would take the table with it.
