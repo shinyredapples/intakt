@@ -14,7 +14,7 @@ You can give Intakt any mix of these, per AI company, and it treats them as one 
 
 This part is planned, not built yet ([details](../design/05-architecture/06-budget-and-model-planner.md#order-of-use)). An API key is used only after your subscriptions: when none of them has room left. You don't have to set a cap. You can set a weekly one for one account or for the whole install; without one, the money on the account is the limit. If the AI company says the balance is gone or a payment failed, Intakt stops using that account, shows why on the board, and tells you once, because only you can top it up.
 
-If a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and (planned) applies your spending cap if you set one. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each account.
+Planned as well: if a subscription can bill **overage** (extra usage past its allowance), Intakt asks at setup, treats the account like an API key past the limit, and applies your spending cap if you set one. Some companies' terms restrict automated use of consumer plans; Intakt says which plans its terms allow, next to each account.
 
 You can add more than one account of the same kind from the same company, for example two subscriptions. Intakt watches each one separately, and all of them work at the same time (see [every account works at once](#every-account-works-at-once), planned).
 
@@ -53,7 +53,7 @@ This part is planned, not built yet ([details](../design/05-architecture/06-budg
 - **At a limit, nothing is lost.** If a job reaches an account's limit, it stops at a safe point. Its work is saved on its branch, its conversation is kept, and a short note says what is done and what is left. Another account picks it up right away from that note; it doesn't wait for the first account to refill. A build can move to another company's account, and the change of model is written on the task.
 - **Reviews stay with their company.** A review that is cut off before the reviewer starts answering starts again on another account of the same company. If none has room, the stand-in rules above apply. A half-written answer cannot be picked up again, so a review whose answer breaks off while it is being written is asked once more, from the start, without streaming the answer. If that answer breaks off too, the review ends blocked, with the reason on the review and a note of what the answer held before it broke off, to help find out why. When a limit or a temporary error is what broke the answer off, the review ends blocked at once, without the second try. Both tries count toward the costs.
 
-You add, order and remove accounts in the dashboard's [admin area](a-tour-of-the-dashboard.md#steering-budgets-and-pauses). Billing stays with the AI company: Intakt keeps only whether an account bills past its plan, its own cap below the company's limit if you set one, and a link to the company's billing page. The board shows what paid accounts spent this day and this week, next to how much of your subscriptions is used.
+You add, order and remove accounts in the dashboard's [admin area](a-tour-of-the-dashboard.md#steering-budgets-and-pauses). Billing stays with the AI company: Intakt keeps only whether an account bills past its plan, its own cap below the company's limit if you set one, and a link to the company's billing page. Planned: the board shows what paid accounts spent this day and this week, next to how much of your subscriptions is used.
 
 ## The former shadow mode
 
@@ -84,7 +84,7 @@ To grow, add an account; Intakt picks it up on its own at the next start, and yo
 | You want | Do this |
 |---|---|
 | more throughput | add an account, or a bigger plan; allow more build slots |
-| a hard ceiling | limit build slots; planned: an optional weekly spending cap on API keys (without one, the balance is the limit) |
+| a hard ceiling | keep only as much money on an API key as Intakt may spend, since the balance is the limit; planned: an optional weekly spending cap. Fewer build slots slow spending down but do not cap it |
 | focus on one project | raise its share, or set the others to 0 |
 | cheaper runs | map the tiers to cheaper models, or label routine tasks `model:light` |
 | more or less for a while | raise or lower a ceiling, or pause, in the [admin area](a-tour-of-the-dashboard.md#steering-budgets-and-pauses); each change ends by itself |

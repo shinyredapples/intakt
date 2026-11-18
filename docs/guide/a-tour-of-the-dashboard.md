@@ -151,7 +151,7 @@ Intakt normally leaves room in each AI account for your own use and spreads the 
 2. Raise its **weekly ceiling** (up to all of the allowance).
 3. Choose **until the window resets**, so it ends with the week.
 
-Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. On an account that can bill past its plan, the ceiling stops at the plan's limit; anything past it counts against your spending cap, if you set one (the cap is planned).
+Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. Planned: on an account that can bill past its plan, the ceiling stops at the plan's limit, and anything past it counts against your spending cap, if you set one.
 
 ### Pausing
 
