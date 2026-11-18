@@ -19,10 +19,11 @@ final readonly class PromptCut
 
     public function fenced(UntrustedSource $source, string $text): FencedText
     {
-        $head = $this->head($text);
-        $fenced = $this->fence->wrap($source, $head);
+        $fenced = $text
+            |> $this->head(...)
+            |> (fn (string $head): FencedText => $this->fence->wrap($source, $head));
 
-        return $this->cuts($text) ? $fenced->cut(strlen($head), strlen($text)) : $fenced;
+        return $this->cuts($text) ? $fenced->cut(strlen($this->head($text)), strlen($text)) : $fenced;
     }
 
     public function cuts(string $text): bool
