@@ -51,7 +51,7 @@ Models and budget:
 - [Provider failure cases](provider-failure-cases.md): the scripted runs of plan T25 and how each round ends
 
 Builds:
-- [The build lane's review cap](lanes.md): `ReviewCap` admits a build while fewer heads than the cap wait for a reviewer or are in review; heads waiting for CI, a runner or landing do not count
+- [The build lane's review cap and in-flight limit](lanes.md): `ReviewCap` admits a build while fewer heads than the cap wait for a reviewer or are in review; heads waiting for CI, a runner or landing do not count; `HeadsInFlightLimit` admits a build while fewer heads than the limit (twice the cap by default) are in flight, counting every pushed, unmerged head
 - [Builder prompt](builder-prompt.md): the build job's prompt, every untrusted input fenced, and the gate test that proves it
 - [Build task](build-task.md): `intakt:build:task` reads the task, updates the mirror, makes the build clone, runs the build job, checks its hand-back, runs the pre-push check and pushes the branch signed, recording each step in the ledger
 - [Build job](build-job.md): the Claude Code CLI on the tier's model in a job container, and the bundle and pull request text it returns

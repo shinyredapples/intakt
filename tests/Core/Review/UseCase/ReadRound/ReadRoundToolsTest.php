@@ -169,6 +169,20 @@ final class ReadRoundToolsTest extends KernelTestCase
         self::assertSame(['F1', 'F2'], array_map(static fn (Finding $finding): string => $finding->id, $act->act));
     }
 
+    public function testAnActListEntryWithoutAJudgeNoteKeepsItsShapeInTheToolAnswer(): void
+    {
+        $answer = new RoundActList('round', true, [$this->findingAt('A')], ReplayMark::Live);
+
+        self::assertArrayNotHasKey('judge_note', $this->firstActEntryAsJson($answer));
+    }
+
+    public function testAnActListEntryWithAJudgeNoteDoesNotShowItInTheToolAnswerYet(): void
+    {
+        $answer = new RoundActList('round', true, [$this->findingAt('A')->withJudgeNote('Rejected.')], ReplayMark::Live);
+
+        self::assertArrayNotHasKey('judge_note', $this->firstActEntryAsJson($answer));
+    }
+
     public function testTwoFindingsAtOnePlaceGiveOneActEntryThatNamesTheSecondAsMerged(): void
     {
         $round = $this->fixture->start(2);
@@ -350,6 +364,18 @@ final class ReadRoundToolsTest extends KernelTestCase
     private function findingAt(string $id): Finding
     {
         return new Finding($id, Severity::P1, 'src/A.php', 7, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    // Through json_encode, because that is how the MCP SDK writes a tool's answer.
+    /**
+     * @return array<string, mixed>
+     */
+    private function firstActEntryAsJson(RoundActList $answer): array
+    {
+        /** @var array{act: list<array<string, mixed>>} $data */
+        $data = json_decode(json_encode($answer, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+
+        return $data['act'][0];
     }
 
     // At one place, so a finding that is dropped would otherwise be merged with the other.

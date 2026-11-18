@@ -39,6 +39,8 @@ Planned: within one priority and milestone, a task that more other tasks wait on
 
 **The review cap** (planned: the rule is written, but the build lane does not use it yet) stops the builders from running too far ahead: when a few pieces of finished work are already waiting for a reviewer, the builders pause. Work that waits too long goes stale (main moves on and it needs updating), so building more of it would only create waste. An `urgent` task may still start, one at a time. Only work that is waiting for a reviewer, or being read by one, counts. Work that is waiting for its checks (CI), for a machine to run them, or to be merged doesn't count towards the cap, and neither does work waiting for *you* or on hold, because no reviewer can move it: otherwise the builders would pause while the reviewers have nothing to read.
 
+**The in-flight limit** (planned: the rule is written, but the build lane does not use it yet) is a second, higher bound beside the review cap. It counts every piece of finished work that is pushed but not merged yet, whatever it waits for: a reviewer, a review in progress, its checks, a machine to run them, or the merge. When that count reaches the limit, the builders pause too, even if the review cap is not full. Two exceptions are planned: one urgent build may start when the review cap is full (but not when this limit is full), and a rework of work already pushed is never held by this limit, because it replaces work that is already counted. By default the limit is twice the review cap. The two limits do different jobs: the review cap keeps builders from outrunning the reviewers, and the in-flight limit keeps the pile of unmerged work small, because every piece of it may clash with the others when they are merged, and each one needs its checks run.
+
 ## Ticks, events and deadlines: what makes things move
 
 Some loops run on a **tick**: a clock that wakes every lane every few minutes ("anything to do?"). Intakt mostly doesn't need one. It reacts to **events** the moment they happen:
@@ -104,12 +106,17 @@ A cycle that changes nothing (the builder couldn't fix the problem because it ne
 
 AI subscriptions come with allowances that refill over time, usually a **five-hour window** and a **weekly window**. Intakt reads how much of each is used, as the AI company measures it, and compares that with how much of the week has passed. Today Intakt can keep the latest reading of each window per account and decide from it whether one more job may start on that account: not at a window's ceiling (90% unless you set another), with the five-hour ceiling lowered while the week is used faster than its pace, and a second job at once only on a reading of the last few minutes with room to spare. The same decision also knows an account's **cooldown** (after the AI company said its limit is reached, that account waits until the reset the company named; other accounts carry on) and holds that stop every account: a budget back-off and a pause still let approved work merge, while a failure back-off and a drain stop merges too. Intakt starts a failure back-off by itself, for 15 minutes, only when something no single pull request causes goes wrong: GitHub refuses Intakt's credentials, the disk is full, the lock store fails while a pull request is being locked or unlocked, two different pull requests fail with the same error within an hour, or a hand-over cannot be recorded; one pull request that keeps failing only waits itself. When an account sends no reading for three hours, Intakt warns you once in its log. `intakt:budget:replay` shows these decisions over a made-up day without changing anything ([user guide](../user/README.md#cooldowns-pauses-and-outage-notices)). Reading the windows from the AI companies, asking that decision before each job, the controls that set a pause or a back-off, and the slots and models of the pace below are planned.
 
-Two rules in one sentence each: an extra builder starts whenever its own AI company's allowance would otherwise expire, whatever the reviewers' company has left; and a window is recognized by how long it lasts and when it resets, never by the name the company gives it.
+Three rules in one sentence each (the first two planned): an extra builder starts only while your accounts together would still have more than one build's worth of the week left over when they refill, and no other AI company that reviews the work is about to use up its own week; while there is such room left over, a task's first attempt gets a stronger model, unless its label asks for a tier, except for a few tasks picked at random that start on a cheaper model instead to show what the stronger one gains, and when the room is short the extra builder gives way first; and a window is recognized by how long it lasts and when it resets, never by the name the company gives it.
 
 ```mermaid
 flowchart LR
   read[Measured use<br/>vs. time passed] --> pace{Pace}
-  pace -- "behind: room to spare" --> up[More slots,<br/>stronger models]
+  pace -- "behind: room would go unused" --> left{"More than one build's worth<br/>left over at the refill?"}
+  left -- no --> same
+  left -- yes --> strong["Stronger first attempts<br/>(planned)"]
+  strong --> extra{"Room for an extra slot too,<br/>and the reviewers' companies<br/>keep enough of their week?"}
+  extra -- yes --> up["One more slot<br/>(planned)"]
+  extra -- no --> same[The usual slots]
   pace -- "on track" --> keep[As planned]
   pace -- "ahead: spending fast" --> down[One slot,<br/>a cheaper model]
   read --> ceiling{Window nearly full?}
@@ -157,4 +164,5 @@ While a slot drains, the dashboard says "draining" on that slot; it usually take
 | **Hand-over** | the task goes to the maintainer agent, which decides what happens next |
 | **Owner cap** | at most a few things wait for you at once, so you're never flooded; more work of that kind waits its turn |
 | **Review cap** (planned) | at most a few pieces of finished work wait for a reviewer (or are being reviewed) before the builders pause; work waiting for its checks or to be merged doesn't count |
+| **In-flight limit** (planned) | at most a few more pieces of finished but unmerged work exist, whatever they wait for, before the builders pause; twice the review cap by default |
 | **Parked** | a job that is waiting for something outside (CI, you) and has given its bench back |

@@ -31,6 +31,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Hands-off** | a label meaning you work on this item yourself and Intakt stays off it until you remove it (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
 | **Head** | the latest commit of a pull request | |
 | **Hold** | a pause that lifts by itself when its reason is gone | [how it works](how-intakt-works.md#when-something-gets-stuck) |
+| **In-flight limit** | how much finished but not yet merged work may exist, whatever it waits for, before builders pause; twice the review cap by default | [engine room](the-engine-room.md#queues-who-is-next) |
 | **Issue / task** | one piece of work; on GitHub it is an issue | [writing a good task](writing-a-good-task.md) |
 | **Job** | one build, one check or one review, in its own container | [containers](containers-and-services.md) |
 | **Journey check** | a run that starts a fresh copy of Intakt and walks one path a person takes, to prove the whole product still works | [checking the whole product](checking-the-whole-product.md) |
