@@ -29,7 +29,7 @@ Rules:
 - **Two values in one family** (for example `priority:high` and `priority:low`): the one applied last wins, and Intakt removes the other with a comment. `hands-off` and `take-over` are exempt: they are not one family, Intakt never removes either, and `hands-off` always wins when both are present, whichever was applied last.
 - **Existing projects keep their labels.** A project file can map its own labels onto the families (`P1` to `priority:urgent`, `bug` to `class:core`), and a work-source plugin maps families to native fields where the forge has them (a Jira priority, a GitHub issue type or project field), so a team keeps working the way it does.
 - **Setup creates the labels** with colors and descriptions that say what each one does, and never deletes or renames labels it did not create.
-- **The dashboard shows and sets them.** A change made there is written to the forge as the owner, so both stay in sync. A control for `hands-off` and `take-over` is planned; until it exists the labels are the control.
+- **The dashboard shows and sets them.** A change made there is written to the forge under Intakt's own forge identity (Intakt holds no token of the owner's account), so both stay in sync, and the ledger records the dashboard as its source, not a verified person, because the dashboard has no login ([Dashboard](13-dashboard.md#who-can-act)). A control for `hands-off` and `take-over` is planned. Intakt never writes these two labels (below), so that control will not write them either: it takes effect from the dashboard request recorded in Intakt's own state, counted like a person's label, and the card shows it. Until it exists the labels set by a person are the control.
 
 ## Who drives an item
 
