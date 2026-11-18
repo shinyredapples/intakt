@@ -74,7 +74,7 @@ final readonly class CountedVote
         return [] !== $matches && array_all($matches, fn (Finding $reported): bool => Severity::P3 === $reported->severity && in_array($reported->id, $this->setAsideIds, true));
     }
 
-    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by every field its reviewer wrote, because the ledger gives it an id of its own and keeps them (the stored verdict already holds the severity the goalpost rule left it), so another reviewer's finding of the same words but another severity or requirement never counts for this one, and every match stays in view so no act mark is missed.
+    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by every field the ledger keeps except its id, because the ledger gives it an id of its own (the stored verdict already holds the severity the goalpost rule left it), so another reviewer's finding differing in any kept field never counts for this one. The ledger does not record which reviewer reported which id, so two reports alike in every kept field both match, and every match stays in view so no act mark is missed.
     /**
      * @return list<Finding>
      */
@@ -90,6 +90,9 @@ final readonly class CountedVote
             && $finding->symbol === $reported->symbol
             && $finding->text === $reported->text
             && $finding->requirement === $reported->requirement
-            && $finding->fixable_by === $reported->fixable_by));
+            && $finding->fixable_by === $reported->fixable_by
+            && $finding->regression === $reported->regression
+            && $finding->evidence?->probe === $reported->evidence?->probe
+            && $finding->evidence?->output === $reported->evidence?->output));
     }
 }

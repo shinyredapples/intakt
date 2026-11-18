@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
+use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FollowUp;
@@ -16,6 +17,7 @@ use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
+use Intakt\Core\Review\Domain\FindingLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -28,6 +30,8 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(Judgement::class)]
 #[UsesClass(FollowUp::class)]
 #[UsesClass(DroppedFinding::class)]
+#[UsesClass(Evidence::class)]
+#[UsesClass(FindingLedger::class)]
 final class CountedVoteTest extends TestCase
 {
     public function testAChangesVerdictWhoseP3FindingsTheJudgeDeferredOrRejectedCountsAsApproval(): void
@@ -208,6 +212,28 @@ final class CountedVoteTest extends TestCase
         self::assertSame(Decision::Changes, $vote->of($this->changes($acted)));
     }
 
+    public function testADeferredP3CountsAsApprovalThoughAnotherReviewersP3DifferingOnlyInEvidenceIsOnTheActList(): void
+    {
+        $deferred = new Finding('a', Severity::P3, 'src/A.php', 5, null, 'Handle an empty result.', FixableBy::Builder, false, null, null);
+        $acted = new Finding('b', Severity::P3, 'src/A.php', 5, null, 'Handle an empty result.', FixableBy::Builder, false, null, new Evidence('EmptyResultTest.php', 'Expected [] but got null'));
+
+        [$first, $second, $vote] = $this->countedFromLedger($deferred, $acted);
+
+        self::assertSame(Decision::Approve, $vote->of($first));
+        self::assertSame(Decision::Changes, $vote->of($second));
+    }
+
+    public function testADeferredP3CountsAsApprovalThoughAnotherReviewersP3DifferingOnlyInRegressionIsOnTheActList(): void
+    {
+        $deferred = new Finding('a', Severity::P3, 'src/A.php', 5, null, 'Handle an empty result.', FixableBy::Builder, false, null, null);
+        $acted = new Finding('b', Severity::P3, 'src/A.php', 5, null, 'Handle an empty result.', FixableBy::Builder, false, null, null, true);
+
+        [$first, $second, $vote] = $this->countedFromLedger($deferred, $acted);
+
+        self::assertSame(Decision::Approve, $vote->of($first));
+        self::assertSame(Decision::Changes, $vote->of($second));
+    }
+
     public function testABlockedVerdictWithOnlyP3FindingsStaysBlocked(): void
     {
         $blocked = new Verdict(Decision::Blocked, [$this->finding('A', Severity::P3, 'One.')], [], []);
@@ -251,6 +277,23 @@ final class CountedVoteTest extends TestCase
         $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding($id, $mark), array_keys($marks), $marks));
 
         return JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
+    }
+
+    // Through a real ledger, so the reported findings carry every field the ledger keeps and the ids it gives.
+    /**
+     * @return array{Verdict, Verdict, CountedVote}
+     */
+    private function countedFromLedger(Finding $deferred, Finding $acted): array
+    {
+        $first = $this->changes($deferred);
+        $second = $this->changes($acted);
+        $ledger = new FindingLedger();
+        $ledger->recordVerdict(1, $first);
+        $ledger->recordVerdict(1, $second);
+        $reported = $ledger->openReportedIn(1);
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('F1', Mark::Defer), new JudgedFinding('F2', Mark::Act)]), $reported);
+
+        return [$first, $second, new CountedVote($reported, [], $judged)];
     }
 
     private function changes(Finding ...$findings): Verdict

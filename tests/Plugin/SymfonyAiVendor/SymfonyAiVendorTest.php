@@ -353,7 +353,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         };
         $updates = new RecordedRoundUpdates();
         $reviewerId = new UuidV7();
-        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
+        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
 
         $verdict = $this->vendorWithOutputLimit($answer, new InMemoryLedger(), $updates)->review('alpha', Tier::Strong, $request)->verdict;
 
@@ -803,7 +803,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
     {
         $ledger = new InMemoryLedger();
         $reviewerId = new UuidV7();
-        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
+        $request = new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7(), $reviewerId));
 
         $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()), $ledger)->review('alpha', Tier::Strong, $request);
 
@@ -1259,7 +1259,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private function request(?Uuid $round = null): ReviewRequest
     {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
     }
 
     private function requestInRound(int $round): ReviewRequest
