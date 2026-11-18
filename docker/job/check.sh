@@ -18,8 +18,7 @@ log="$output/check.log"
 main=''
 merged=''
 
-# The script's own git commands read no configuration or attributes of the image or the job's environment, as CI's test merge reads none of ours:
-# a merge option, strategy or signing setting there would change what the check runs on. A subshell, so the steps keep the job's environment.
+# Git reads no configuration of the image or job here, as in CI's test merge, so a merge option or signing setting cannot change the merge (subshell: steps keep the environment).
 own_git() (
     # The C locale, because in a UTF-8 one sed's pattern stops at a byte that is no text and leaves it on the name.
     for name in $(env | LC_ALL=C sed -n 's/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do
