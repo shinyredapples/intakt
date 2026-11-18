@@ -753,4 +753,12 @@ The Security engineer covers the security of the product being built, across inf
 - **Evidence:** the dashboard's measures on a running install, and a scripted experiment kept and one reverted.
 - **Waits for:** T60, T69. **Size:** L. **Labels:** `class:core`, `priority:normal`, `plan:required`.
 
+## Test engineer (#1297)
+
+### T92 The Test engineer: a scheduled audit of the test suite
+- **Description:** An opt-in role that owns the suite as a whole: a time budget for the `tests` gate (its elapsed time in CI) and per file (every file's time in `tests/durations.json`, not only the ten of the `slowest` list), redundant tests, the split between unit, integration, gate and journey tests, flaky tests (#860), the journeys (#859) and the CI workflows' speed. A scheduled audit reads a deterministic report (the gate's elapsed time and every file's time, test count and lines per folder, `bin/check` sandbox runs per gate test, tests in `serial`), a model pass reads the folders it flags with read-only tools and fenced inputs (the report and every tool result redacted and secret-scanned first; a hit or a failed scan withholds that result whole), and each finding of any kind becomes a `ready` task with the audit's text in an external block, built only once a person with write access labels it ([Threat model](design/05-architecture/14-threat-model.md#the-test-engineers-session-planned)); the role never edits a test. Design: [the Test engineer](design/05-architecture/07-reviews.md#the-test-engineer-planned), [Quality gates](architecture/quality-gates.md#the-test-time-budget-planned).
+- **Acceptance:** a task that removes or merges a test names, for each removed case, the test that still proves it; coverage of `src/` does not drop; a time claim is measured in CI before and after; the role changes no gate's strictness, check or approval rule, and a CI workflow change stays a protected change; a new project starts without the role; a read or search result holding a planted credential value reaches the model redacted, and one with a secret-scan hit or a failed scan is withheld whole.
+- **Evidence:** the report on a running install and one audit that files a task.
+- **Waits for:** T8. **Size:** M. **Labels:** `class:core`, `priority:normal`, `plan:required`.
+
 Parallel paths: T84, T85 and T86 in parallel after T51; T87 after T85; T88 after T8 and T66, alongside the checks, its reviews covering a layer until that layer's checks land; T89 after T60 and T69.
