@@ -127,6 +127,17 @@ final class FindingTextTest extends TestCase
         }
     }
 
+    public function testGlobsPairingAcrossEachOtherKeepTheirStars(): void
+    {
+        foreach ([
+            'matches *.php or src/*',
+            'skip *.php and vendor/* here',
+            'globs **/a and b/** stay',
+        ] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
     public function testEmphasisRunningOverALineBreakLosesItsMarks(): void
     {
         self::assertSame([['text' => "multi\nline", 'code' => false]], new FindingText("**multi\nline**")->spans());

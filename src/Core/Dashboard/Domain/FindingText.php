@@ -78,8 +78,8 @@ final readonly class FindingText
         $codes = array_values(array_filter($spans, static fn (array $span): bool => $span['code']));
         $marked = implode('', array_map(static fn (array $span): string => $span['code'] ? self::CODE : $span['text'], $spans));
         // A lone __word__ is a dunder name (__DIR__, __invoke__), so it keeps its marks; the text between a pair never holds the mark's own character, so two separate marks (*x*/*y*, two globs) never pair across each other.
-        $strong = preg_replace('/'.self::OPENS.'(?!__[A-Za-z0-9]+__)(\*\*|__)(?=\S)((?:(?!\1(?![*_])).){1,300}?)(?<=\S)\1'.self::CLOSES.'/us', '$2', $marked) ?? $marked;
-        $plain = preg_replace('/'.self::OPENS.'([*_])(?=[^\s*_])((?:(?!\1).){1,300}?)(?<=[^\s*_])\1'.self::CLOSES.'/us', '$2', $strong) ?? $strong;
+        $strong = preg_replace('/'.self::OPENS.'(?!__[A-Za-z0-9]+__)(\*\*|__)(?=[^\s./])((?:(?!\1(?![*_])).){1,300}?)(?<=[^\s/])\1'.self::CLOSES.'/us', '$2', $marked) ?? $marked;
+        $plain = preg_replace('/'.self::OPENS.'([*_])(?=[^\s*_./])((?:(?!\1).){1,300}?)(?<=[^\s*_/])\1'.self::CLOSES.'/us', '$2', $strong) ?? $strong;
 
         $result = [];
         foreach (explode(self::CODE, $plain) as $index => $text) {
