@@ -10,6 +10,7 @@ use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Contract\VerdictOrigin;
 use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Verdict::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
+#[UsesClass(VerdictOrigin::class)]
 final class VerdictTest extends TestCase
 {
     public function testAnIncompleteStreamVerdictBlocksAndNamesTheReason(): void

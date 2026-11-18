@@ -32,7 +32,7 @@ final readonly class Verdict
         public array $follow_ups,
         // Ignored by the serializer and the schema, so neither a model's answer nor its finding ids can claim Intakt's origin; only the failure constructors below set it.
         #[Ignore]
-        private bool $raisedByIntakt = false,
+        private VerdictOrigin $origin = VerdictOrigin::Reviewer,
     ) {
     }
 
@@ -54,7 +54,7 @@ final readonly class Verdict
     // A reviewer's own blocked that names findings asks for changes, because every view and the quorum read the stored decision; Intakt's failure verdicts stay blocked.
     public function asRecorded(): self
     {
-        if (Decision::Blocked !== $this->verdict || [] === $this->findings || $this->raisedByIntakt) {
+        if (Decision::Blocked !== $this->verdict || [] === $this->findings || VerdictOrigin::Intakt === $this->origin) {
             return $this;
         }
 
@@ -77,7 +77,7 @@ final readonly class Verdict
 
     private static function raisedByIntakt(Finding $finding): self
     {
-        return new self(Decision::Blocked, [$finding], [], [], raisedByIntakt: true);
+        return new self(Decision::Blocked, [$finding], [], [], VerdictOrigin::Intakt);
     }
 
     public static function incompleteStream(string $reason, Evidence $evidence): self
