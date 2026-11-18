@@ -19,6 +19,9 @@ final class CheckScriptTest extends TestCase
     private string $output = '';
     private string $work = '';
 
+    /** @var array<string, string> */
+    private array $gitConfiguration = [];
+
     protected function setUp(): void
     {
         $this->history = new BuildHistory();
@@ -111,7 +114,7 @@ final class CheckScriptTest extends TestCase
         self::assertSame("passed\n", $this->outputFile('check-result'));
     }
 
-    public function testABranchBehindAMainThatMovedRunsItsStepsOnTheHeadMergedWithCurrentMain(): void
+    public function testABranchBehindAMainThatMovedRunsItsStepsOnTheHeadMergedIntoCurrentMainWithMainAsTheFirstParent(): void
     {
         $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
         $main = $this->mainMovesWith('added-on-main.txt', "main moved\n");
@@ -121,12 +124,57 @@ final class CheckScriptTest extends TestCase
             'task',
             'test -f made.txt',
             'test -f added-on-main.txt',
-            'test "$(git rev-parse HEAD^1)" = '.$head,
-            'test "$(git rev-parse HEAD^2)" = '.$main,
+            'test "$(git rev-parse HEAD^1)" = '.$main,
+            'test "$(git rev-parse HEAD^2)" = '.$head,
         );
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
         self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
+    public function testAUnionMergedFileHoldsWhatCisMergeOfTheBranchIntoMainHolds(): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile('.gitattributes', "list.txt merge=union\n", 'Merge the list by union');
+        $this->history->commitFile('list.txt', "base\n", 'Start the list');
+        $this->history->push('main');
+        $this->history->checkout('task');
+        $this->history->merge('main');
+        $head = $this->history->commitFile('list.txt', "the branch's line\n", 'Write the branch line');
+        $bundle = $this->history->bundle('main..task');
+        $this->mainMovesWith('list.txt', "main's line\n");
+        $this->history->checkout('main');
+        $this->history->merge($head);
+        $merged = (string) file_get_contents($this->history->work.'/list.txt');
+
+        $run = $this->whenTheCheckRuns($bundle, 'task', 'cat list.txt');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertStringEndsWith("\$ cat list.txt\n".$merged, $this->outputFile('check.log'));
+    }
+
+    public function testTheMergeWithCurrentMainHasAConventionalSubjectSoTheCommitSubjectGatePassesIt(): void
+    {
+        $this->history->commit('Build work');
+        $this->mainMovesWith('added-on-main.txt', "main moved\n");
+
+        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'test "$(git log -1 --format=%s)" = "chore(check): merge the branch into current main"');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+    }
+
+    public function testAMergeGitRefusesWithoutAConflictLeavesNotMergedAndRunsNoStep(): void
+    {
+        $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
+        $this->mainMovesWith('added-on-main.txt', "main moved\n");
+        $this->gitConfiguration = ['merge.verifySignatures' => 'true'];
+
+        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'touch ran');
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame("not-merged\n", $this->outputFile('check-result'));
+        self::assertStringContainsString('does not have a GPG signature', $this->outputFile('check.log'));
+        self::assertFileDoesNotExist($this->work.'/clone/ran');
     }
 
     public function testTheMergeWithCurrentMainTakesTheChecksOwnIdentityAndNoneFromTheJob(): void
@@ -196,6 +244,12 @@ final class CheckScriptTest extends TestCase
             if (is_string($name) && str_starts_with($name, 'GIT_')) {
                 $environment[$name] = false;
             }
+        }
+
+        $environment['GIT_CONFIG_COUNT'] = (string) count($this->gitConfiguration);
+        foreach (array_keys($this->gitConfiguration) as $index => $key) {
+            $environment['GIT_CONFIG_KEY_'.$index] = $key;
+            $environment['GIT_CONFIG_VALUE_'.$index] = $this->gitConfiguration[$key];
         }
 
         return $environment;

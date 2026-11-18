@@ -183,6 +183,15 @@ final class RunCheckJobTest extends TestCase
         self::assertEquals(new CheckJobOutcome(CheckVerdict::ConflictsWithMain), $outcome);
     }
 
+    public function testABranchGitRefusedToMergeWithoutAConflictFailsTheCheckAsNotMerged(): void
+    {
+        $this->history->commit('Build work');
+
+        $outcome = $this->whenTheJobLeaves(['check-result' => "not-merged\n"]);
+
+        self::assertEquals(new CheckJobOutcome(CheckVerdict::NotMerged), $outcome);
+    }
+
     public function testTheResultIsReadFromTheOutputDirectoryAndNotFromTheContainersExitCode(): void
     {
         $this->history->commit('Build work');

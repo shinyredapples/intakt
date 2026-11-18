@@ -1,8 +1,7 @@
 #!/bin/sh
 # The check job's command, so the builder's own run of the checks is never what lets a change through.
 # Usage: check.sh <mirror> <bundle> <branch> -- <step> [step ...]
-# Clones the mirror into TMPDIR, applies the bundle's branch, merges current main (the mirror's HEAD) into it when the branch lacks it, then runs each step with sh -c in the clone until one fails.
-# Writes check.log and check-result (passed, failed <exit code>, not-applied or conflicts-with-main) into INTAKT_JOB_OUTPUT, the job's only way to hand its result back.
+# The result goes to files in INTAKT_JOB_OUTPUT, the job's only way to hand its result back.
 set -u
 
 mirror="$1"
@@ -26,14 +25,17 @@ apply() {
         && git -C "$clone" checkout --quiet --force "$branch"
 }
 
-# The check runs on what CI runs on, the branch merged with current main, because a change can fail only together with main's newer commits.
+# The check runs on what CI runs on, the branch merged into current main, because a change can fail only together with main's newer commits.
 merge_main() {
     if [ -z "$main" ] || git merge-base --is-ancestor "$main" HEAD; then
         return 0
     fi
-    printf '$ git merge %s\n' "$main"
-    # The check's own identity on the command line, because the job's clone and HOME carry none.
-    git -c user.name=intakt-check -c user.email=check@intakt.invalid merge --no-ff --no-edit "$main"
+    head=$(git rev-parse --verify HEAD) || return 1
+    printf '$ git merge %s into %s\n' "$head" "$main"
+    # Main as the first parent, as CI merges, because a merge driver such as union orders the two sides by it.
+    git reset --quiet --hard "$main" || return 1
+    # The check's own identity, because the job's clone and HOME carry none, and a conventional subject, because the commit-subject gate reads this commit too.
+    git -c user.name=intakt-check -c user.email=check@intakt.invalid merge --no-ff --no-edit -m 'chore(check): merge the branch into current main' "$head"
 }
 
 result() {
@@ -48,7 +50,12 @@ fi
 cd "$clone" || exit 1
 
 if ! merge_main >> "$log" 2>&1; then
-    result 'conflicts-with-main'
+    # Only unmerged paths are a conflict; any other refusal of the merge is not the branch's to resolve.
+    if [ -n "$(git ls-files --unmerged 2>> "$log")" ]; then
+        result 'conflicts-with-main'
+    else
+        result 'not-merged'
+    fi
     exit 1
 fi
 
