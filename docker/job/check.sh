@@ -2,7 +2,7 @@
 # The check job's command, so the builder's own run of the checks is never what lets a change through.
 # Usage: check.sh <mirror> <bundle> <branch> [<dependencies> <directory>] -- <step> [step ...]
 # Clones the mirror into TMPDIR, applies the bundle's branch, copies <directory> of the dependency snapshot into the clone when one is given
-# and the head leaves that path free, then runs each step with sh -c in the clone until one fails.
+# and the head leaves that path free (nothing at it, and no file or link at a parent of it), then runs each step with sh -c in the clone until one fails.
 # Writes check.log and check-result (passed, failed <exit code> or not-applied) into INTAKT_JOB_OUTPUT, the job's only way to hand its result back.
 set -u
 
@@ -39,11 +39,33 @@ copy_dependencies() {
         return 0
     fi
     test -d "$dependencies/$directory" || return 1
-    if [ -e "$clone/$directory" ] || [ -L "$clone/$directory" ]; then
+    if [ -e "$clone/$directory" ] || [ -L "$clone/$directory" ] || parent_blocked; then
         return 0
     fi
     mkdir -p "$(dirname "$clone/$directory")" \
         && cp -R "$dependencies/$directory" "$clone/$directory"
+}
+
+# A file the head tracks at a parent would fail the mkdir, and a link there would lead the copy to wherever the head points it.
+# The link test comes first, because a link to a directory also passes -d.
+parent_blocked() {
+    parent="$clone"
+    below="$directory"
+    while [ "$below" != "${below#*/}" ]; do
+        name="${below%%/*}"
+        below="${below#*/}"
+        if [ -z "$name" ]; then
+            continue
+        fi
+        parent="$parent/$name"
+        if [ -L "$parent" ]; then
+            return 0
+        fi
+        if [ -e "$parent" ] && [ ! -d "$parent" ]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 result() {

@@ -151,6 +151,58 @@ final class CheckScriptTest extends TestCase
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
     }
 
+    public function testAFileTheHeadTracksAtAParentOfTheSnapshotFolderLeavesTheStepsToRunWithoutACopy(): void
+    {
+        $this->history->commitFile('tools', "tracked file\n", 'Track a file at the dependency parent');
+        $snapshot = $this->history->folder.'/snapshot';
+        new Filesystem()->dumpFile($snapshot.'/tools/vendor/package', "cached\n");
+
+        $run = $this->whenTheCheckRunsWith(
+            [$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot, 'tools/vendor'],
+            'test "$(cat tools)" = "tracked file"',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertFileExists($this->work.'/clone/tools');
+        self::assertDirectoryDoesNotExist($this->work.'/clone/tools');
+    }
+
+    public function testALinkTheHeadTracksAtAParentOfTheSnapshotFolderIsNeverCopiedThrough(): void
+    {
+        $this->history->commitFile('src/keep.txt', "kept\n", 'Add a folder');
+        $this->history->commitLink('tools', 'src', 'Link the dependency parent to the folder');
+        $snapshot = $this->history->folder.'/snapshot';
+        new Filesystem()->dumpFile($snapshot.'/tools/vendor/package', "cached\n");
+
+        $run = $this->whenTheCheckRunsWith(
+            [$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot, 'tools/vendor'],
+            'test -L tools',
+            'test ! -e src/vendor',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertDirectoryDoesNotExist($this->work.'/clone/src/vendor');
+        self::assertSame(['keep.txt'], array_values(array_diff((array) scandir($this->work.'/clone/src'), ['.', '..'])));
+    }
+
+    public function testALinkTheHeadTracksAtAParentThatPointsNowhereLeavesTheStepsToRunWithoutACopy(): void
+    {
+        $this->history->commitLink('tools', 'missing', 'Link the dependency parent to nothing');
+        $snapshot = $this->history->folder.'/snapshot';
+        new Filesystem()->dumpFile($snapshot.'/tools/vendor/package', "cached\n");
+
+        $run = $this->whenTheCheckRunsWith(
+            [$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot, 'tools/vendor'],
+            'test -L tools',
+            'test ! -e missing',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
     public function testAMissingDependencySnapshotLeavesNotAppliedAndRunsNoStep(): void
     {
         $this->history->commit('Build work');
