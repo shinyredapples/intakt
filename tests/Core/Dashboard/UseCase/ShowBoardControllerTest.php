@@ -327,8 +327,33 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $empty = [BoardColumn::Backlog, BoardColumn::Ready, BoardColumn::Planned, BoardColumn::Building, BoardColumn::Checking, BoardColumn::Merging, BoardColumn::Done];
         self::assertSame(
             array_map(static fn (BoardColumn $column): string => $column->emptyLine(), $empty),
-            $page->filter('.board > section.col:not(.col-needs) .col-empty')->each(static fn (Crawler $line): string => $line->text()),
+            $page->filter('.board > section.col:not(.col-needs) .col-empty:not([hidden])')->each(static fn (Crawler $line): string => $line->text()),
         );
+    }
+
+    public function testAColumnWhoseCardsAllBelongToAnotherProjectCarriesItsHiddenEmptyLineForTheProjectFilter(): void
+    {
+        $this->ledger->startRound('done', 'beta');
+        $this->ledger->judgeRound('done');
+        $this->ledger->startRoundOf('42', 'running', 1);
+        $this->ledger->startReviewer('running', 'correctness');
+
+        $column = $this->browser->request('GET', '/')->filter('#col-in-review');
+
+        self::assertCount(0, $column->filter('article[data-project="beta"]'));
+        self::assertSame(BoardColumn::InReview->emptyLine(), $column->filter('.col-empty[hidden]')->text());
+    }
+
+    public function testTheBoardWiresTheEmptyLinesToTheirScriptWhichTheInstallServes(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+        $script = $this->browser->request('GET', '/')->filter('script[type="module"]')->first()->text();
+
+        $this->browser->request('GET', $packages->getUrl('column-empty.js'));
+
+        self::assertStringContainsString('showEmptyLines(document);', $script);
+        self::assertStringContainsString('export function showEmptyLines(page)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testWaitingOnYouKeepsItsFirstDayExplanationAfterAReview(): void

@@ -709,7 +709,12 @@ final class DashboardComponentsTest extends KernelTestCase
 
     public function testAnEmptyColumnSaysNothingHere(): void
     {
-        self::assertSame('Nothing here', $this->render('column_empty', [])->filter('.col-empty')->text());
+        self::assertSame('Nothing here', $this->render('column_empty', [])->filter('.col-empty:not([hidden])')->text());
+    }
+
+    public function testAColumnEmptyLineAskedToHideRendersHidden(): void
+    {
+        self::assertCount(1, $this->render('column_empty', ['hidden' => true])->filter('.col-empty[hidden]'));
     }
 
     /**
