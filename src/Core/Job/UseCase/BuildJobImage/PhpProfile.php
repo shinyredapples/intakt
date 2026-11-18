@@ -61,7 +61,7 @@ final readonly class PhpProfile
         }
     }
 
-    // The minor's moving tag when the rule admits every patch from some point to the minor's end; otherwise the highest admitted patch up to the newest one known to be released, because it carries the most fixes and its image exists; when the rule admits only newer patches, the lowest of them, the one most likely released.
+    // The minor's moving tag when the rule's last range runs to the minor's end and the rule admits the newest patch known to be released, the one that tag holds at least (a rule with a gap there would get an image it refuses); otherwise the highest admitted patch up to the newest one known to be released, because it carries the most fixes and its image exists; when the rule admits only newer patches, the lowest of them, the one most likely released.
     public function imageVersionIn(string $minor, ?int $newestReleasedPatch): ?string
     {
         $intervals = Intervals::get(MultiConstraint::create([new VersionParser()->parseConstraints($minor.'.*'), $this->constraint]))['numeric'];
@@ -70,7 +70,9 @@ final readonly class PhpProfile
             return null;
         }
 
-        if (!str_starts_with(array_last($intervals)->getEnd()->getVersion(), $minor.'.')) {
+        $runsToTheMinorsEnd = !str_starts_with(array_last($intervals)->getEnd()->getVersion(), $minor.'.');
+
+        if ($runsToTheMinorsEnd && (null === $newestReleasedPatch || $this->allows($minor.'.'.$newestReleasedPatch))) {
             return $minor;
         }
 

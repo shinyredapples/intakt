@@ -57,6 +57,36 @@ final class PhpProfileTest extends TestCase
         self::assertSame('8.4', $php->imageVersionIn('8.4', 20));
     }
 
+    public function testARuleWithAGapAroundTheNewestReleasedPatchGetsTheHighestPatchBelowTheGap(): void
+    {
+        $farGap = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.20 || >=8.4.10000 <8.5"}}');
+        $nearGap = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.20 || >=8.4.30 <8.5"}}');
+
+        self::assertSame('8.4.19', $farGap->imageVersionIn('8.4', 25));
+        self::assertSame('8.4.19', $nearGap->imageVersionIn('8.4', 25));
+    }
+
+    public function testARuleThatExcludesOnlyTheNewestReleasedPatchGetsThePatchBelowIt(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.0 <8.5 !=8.4.25"}}');
+
+        self::assertSame('8.4.24', $php->imageVersionIn('8.4', 25));
+    }
+
+    public function testARuleThatRunsToTheMinorsEndFromAboveTheNewestReleasedPatchGetsItsLowestPatch(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.30 <8.5"}}');
+
+        self::assertSame('8.4.30', $php->imageVersionIn('8.4', 25));
+    }
+
+    public function testAMinorWithoutKnownReleasesGetsItsMovingTagWhenTheRuleRunsToTheMinorsEnd(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.20 || >=8.4.30 <8.5"}}');
+
+        self::assertSame('8.4', $php->imageVersionIn('8.4', null));
+    }
+
     public function testARuleCappedInsideAMinorGetsTheHighestPatchBelowTheCap(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.20"}}');
