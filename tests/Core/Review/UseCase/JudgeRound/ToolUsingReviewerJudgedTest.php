@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
-use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
@@ -12,6 +11,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\Judgement;
 use Intakt\Core\Review\Contract\JudgeRequest;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictReceived;
 use Intakt\Core\Review\Infrastructure\FencedToolbox;
