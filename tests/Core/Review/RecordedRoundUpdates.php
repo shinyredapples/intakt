@@ -42,9 +42,9 @@ final class RecordedRoundUpdates implements RoundUpdates
     public ?Closure $whilePublishingNextRoundChange = null;
 
     #[Override]
-    public function toolCalled(Uuid $round, string $reviewer, string $tool): void
+    public function toolCalled(Uuid $round, string $reviewer, string $call): void
     {
-        $this->seen[] = sprintf('tool %s %s', $reviewer, $tool);
+        $this->seen[] = sprintf('tool %s %s', $reviewer, $call);
     }
 
     #[Override]
