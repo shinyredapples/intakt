@@ -200,43 +200,118 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
     }
 
-    public function testAnOpeningMarkOfATitleCutShortLosesItsMark(): void
+    public function testAStarBeforeADotAndAStarAfterItAreBothKept(): void
+    {
+        foreach (['Copy *.* here.', 'match *.* and *.php'] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
+    public function testEmphasisNestedOneLevelDeepLosesAllItsMarks(): void
     {
         foreach ([
-            'Update **the word…' => 'Update the word…',
-            'Update __the word…' => 'Update the word…',
-            'Update *word…' => 'Update word…',
-            'Update _word…' => 'Update word…',
-            'Fix **now** and **the rest…' => 'Fix now and the rest…',
-            'Update ***word…' => 'Update word…',
+            'say *_both_* now' => 'say both now',
+            'say _*both*_ now' => 'say both now',
+            'say *outer _inner_ words* now' => 'say outer inner words now',
+            'say **outer *inner* words** now' => 'say outer inner words now',
+            'say __outer *inner* words__ now' => 'say outer inner words now',
         ] as $written => $shown) {
-            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spans(), $written);
         }
     }
 
-    public function testATitleCutBetweenTheTwoClosingMarksLosesTheOneThatIsLeft(): void
+    public function testStarsOnEitherSideOfACodeSpanHoldingABlankLineNeverPair(): void
     {
-        foreach ([
-            'Update **the word*…' => 'Update the word…',
-            'Update __the word_…' => 'Update the word…',
-            'Update **word*…' => 'Update word…',
-        ] as $written => $shown) {
-            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
+        self::assertSame(
+            [['text' => 'Copy *test.php. Example: ', 'code' => false], ['text' => "a\n\nb", 'code' => true], ['text' => '. Keep build*.', 'code' => false]],
+            new FindingText("Copy *test.php. Example: `a\n\nb`. Keep build*.")->spans(),
+        );
+    }
+
+    public function testEmphasisAroundACodeSpanWithoutABlankLineStillLosesItsMarks(): void
+    {
+        self::assertSame(
+            [['text' => 'say ', 'code' => false], ['text' => "a\nb", 'code' => true], ['text' => ' here now', 'code' => false]],
+            new FindingText("say *`a\nb` here* now")->spans(),
+        );
+    }
+
+    public function testAMarkTouchingACodeSpanFromOutsideLosesItsMarks(): void
+    {
+        self::assertSame([['text' => 'foo', 'code' => true], ['text' => 'bar now', 'code' => false]], new FindingText('`foo`*bar* now')->spans());
+        self::assertSame([['text' => 'see x', 'code' => false], ['text' => 'y', 'code' => true]], new FindingText('see **x**`y`')->spans());
+    }
+
+    public function testATextWhoseVisibleCharactersFitTheLimitIsNotCutForItsMarks(): void
+    {
+        $written = 'Update **'.str_repeat('x', 152).'**.';
+
+        self::assertSame([['text' => 'Update '.str_repeat('x', 152).'.', 'code' => false]], new FindingText($written)->spansCutTo(160));
+    }
+
+    public function testATextOneCharacterOverTheLimitIsCutToTheLimitAndEndsWithAnEllipsis(): void
+    {
+        self::assertSame([['text' => str_repeat('a', 159).'…', 'code' => false]], new FindingText(str_repeat('a', 161))->spansCutTo(160));
+        self::assertSame([['text' => str_repeat('a', 160), 'code' => false]], new FindingText(str_repeat('a', 160))->spansCutTo(160));
+    }
+
+    public function testACutAtAnyOffsetAroundAClosingMarkShowsNoMark(): void
+    {
+        foreach (['**', '__', '*'] as $mark) {
+            foreach (range(144, 152) as $length) {
+                $shown = 'Update the '.str_repeat('x', $length).' before shipping.';
+
+                $cut = new FindingText('Update '.$mark.'the '.str_repeat('x', $length).$mark.' before shipping.')->spansCutTo(160);
+
+                self::assertSame([['text' => rtrim(mb_substr($shown, 0, 159)).'…', 'code' => false]], $cut, $mark.' around '.$length);
+            }
         }
     }
 
-    public function testATitleCutRightAfterItsClosingMarkLosesBothMarks(): void
+    public function testACutInsideMultiwordEmphasisShowsNoMark(): void
     {
-        foreach (['Update **the word**…' => 'Update the word…', 'Update *word*…' => 'Update word…', 'Update __the word__…' => 'Update the word…'] as $written => $shown) {
-            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
+        foreach (['*', '_', '**'] as $mark) {
+            $shown = 'Update '.str_repeat('word ', 40).'end now.';
+
+            $cut = new FindingText('Update '.$mark.str_repeat('word ', 40).'end'.$mark.' now.')->spansCutTo(160);
+
+            self::assertSame([['text' => rtrim(mb_substr($shown, 0, 159)).'…', 'code' => false]], $cut, $mark);
         }
     }
 
-    public function testAWildcardInATitleCutShortKeepsItsStar(): void
+    public function testACutJustAfterAnOpeningDoubleMarkShowsNoMark(): void
     {
-        foreach (['Copy *test files…', 'globs *.php…', 'skip src/*…', 'a lone * …', 'Copy *.php and *.twig files…', 'Match **/kwargs…'] as $written) {
-            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spansOfACutTitle(), $written);
-        }
+        $cut = new FindingText(str_repeat('a', 158).' **bold words** and more')->spansCutTo(160);
+
+        self::assertSame([['text' => str_repeat('a', 158).'…', 'code' => false]], $cut);
+    }
+
+    public function testACutGlobKeepsItsStar(): void
+    {
+        $written = str_repeat('a ', 75).'skip *Test.php files';
+
+        self::assertSame([['text' => str_repeat('a ', 75).'skip *Tes…', 'code' => false]], new FindingText($written)->spansCutTo(160));
+    }
+
+    public function testAGlobBeforeTheCutKeepsItsStar(): void
+    {
+        $written = 'Copy *Test.php '.str_repeat('files ', 30);
+
+        self::assertSame([['text' => rtrim(mb_substr($written, 0, 159)).'…', 'code' => false]], new FindingText($written)->spansCutTo(160));
+    }
+
+    public function testACutInsideACodeSpanKeepsTheCodeUpToTheCut(): void
+    {
+        $cut = new FindingText(str_repeat('a', 150).' `'.str_repeat('b', 20).'` done')->spansCutTo(160);
+
+        self::assertSame([['text' => str_repeat('a', 150).' ', 'code' => false], ['text' => str_repeat('b', 8), 'code' => true], ['text' => '…', 'code' => false]], $cut);
+    }
+
+    public function testACutOfMultibyteCharactersCountsCharacters(): void
+    {
+        $cut = new FindingText('**'.str_repeat('é', 400).'**')->spansCutTo(160);
+
+        self::assertSame([['text' => str_repeat('é', 159).'…', 'code' => false]], $cut);
     }
 
     public function testAnEllipsisTheReviewerWroteClosesNoMark(): void
@@ -263,7 +338,8 @@ final class FindingTextTest extends TestCase
         $start = hrtime(true);
         new FindingText(str_repeat(' *a', 20000).' end')->spans();
 
-        self::assertLessThan(500, (hrtime(true) - $start) / 1e6);
+        // The scan takes a few ms, and the bound only catches the old quadratic seconds-long case without failing on a loaded runner.
+        self::assertLessThan(3000, (hrtime(true) - $start) / 1e6);
     }
 
     public function testAnEmptyTextHasNoSpans(): void
