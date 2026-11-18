@@ -71,7 +71,7 @@ final class BoardStylesTest extends TestCase
     public function testABoardWithACardKeepsTheWrapRuleOnTheTitleColumnBehindTheHiddenOctopusTarget(): void
     {
         $rules = $this->rulesOf($this->sheet());
-        $selector = '.page-head > div:first-child, .page-head > #board-octopus[hidden] + div';
+        $selector = '.page-head > #board-octopus[hidden] + div';
 
         self::assertMatchesRegularExpression('/min-width:\s*0;\s*overflow-wrap:\s*anywhere;/', $rules[$selector] ?? '');
     }
