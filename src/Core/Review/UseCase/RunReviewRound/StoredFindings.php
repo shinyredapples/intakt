@@ -9,6 +9,7 @@ use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ChangeFindings;
 use Intakt\Core\Review\Domain\ChangeRound;
@@ -83,16 +84,15 @@ final readonly class StoredFindings
         return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause);
     }
 
-    // Beside the act list, because the judge's note is the judge's alone and the entries must stay as the merge rule built them.
+    // The act list as the judge left it, from one judge_done row, so every reader of a round's act list builds it the same way; none before the judge answered.
     /**
-     * @param list<Finding>         $actList
-     * @param array<string, string> $judgeNotes
-     *
      * @return list<Finding>
      */
-    public function withJudgeNotes(array $actList, array $judgeNotes): array
+    public function judgedActListOf(ReviewRound $round, ?JudgeDone $judged): array
     {
-        return new OnePerPlace()->withNotes($actList, $judgeNotes);
+        $place = new OnePerPlace();
+
+        return $place->withNotes($place->actList($this->reportedIn($round), $judged->act ?? [], $judged->sameCause ?? []), $judged->judgeNotes ?? []);
     }
 
     /**

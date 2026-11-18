@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Review\Contract\Decision;
@@ -35,6 +36,7 @@ use Intakt\Core\Review\UseCase\JudgeRound\JudgeRound;
 use Intakt\Core\Review\UseCase\JudgeRound\JudgeRoundHandler;
 use Intakt\Core\Review\UseCase\JudgeRound\PublishJudgedRound;
 use Intakt\Core\Review\UseCase\JudgeRound\QueueJudgingOfCompletedRound;
+use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
 use Intakt\Core\Review\UseCase\RunReviewRound\LiveRoundProgress;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
@@ -57,6 +59,7 @@ use Throwable;
 #[CoversClass(JudgeRoundHandler::class)]
 #[CoversClass(PublishJudgedRound::class)]
 #[UsesClass(LiveRoundProgress::class)]
+#[UsesClass(RoundLedgerReading::class)]
 #[CoversClass(JudgeRound::class)]
 #[CoversClass(JudgedRounds::class)]
 #[CoversClass(JudgeLimited::class)]
@@ -134,6 +137,24 @@ final class JudgeRoundTest extends KernelTestCase
         $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
 
         self::assertSame(['F1' => 'Not a defect.', 'F2' => 'Later.'], $this->judgeDonePayloads()[0]['judge_notes']);
+    }
+
+    public function testAJudgeThatDefersAP2LeavesItOnTheActListWithItsNote(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F2', Mark::Defer, null, 'Needs its own design.')])))($this->judgingOf($round));
+
+        self::assertSame(['F1' => null, 'F2' => 'Needs its own design.'], $this->notesOnTheActListOf($round));
+    }
+
+    public function testAJudgesNoteIsStoredWithACredentialInItRedacted(): void
+    {
+        $round = $this->completedRound();
+
+        $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'Authorization: Bearer abc123xyz')])))($this->judgingOf($round));
+
+        self::assertSame(['F1' => 'Authorization: [redacted]'], $this->judgeDonePayloads()[0]['judge_notes']);
     }
 
     public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
@@ -564,6 +585,18 @@ final class JudgeRoundTest extends KernelTestCase
             ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3],
             ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB],
         ];
+    }
+
+    /**
+     * @return array<string, string|null>
+     */
+    private function notesOnTheActListOf(ReviewRound $round): array
+    {
+        $id = $round->id()->toRfc4122();
+        $judged = new RoundLedgerReading($this->fixture->ledger(), $this->fixture->ledgerPayloads(), new ConfiguredPrices([]))->judgeDoneOf($id);
+        $entries = $this->fixture->findingStore()->judgedActListOf($this->fixture->round($id), $judged);
+
+        return array_column(array_map(static fn (Finding $entry): array => [$entry->id, $entry->judge_note], $entries), 1, 0);
     }
 
     private function judgingOf(ReviewRound $round): JudgeRound

@@ -54,14 +54,6 @@ final readonly class RoundLedgerReading implements RoundCosts
     }
 
     /**
-     * @return array<string, string>
-     */
-    public function judgeNotesOf(string $roundId): array
-    {
-        return $this->judgeDoneOf($roundId)->judgeNotes ?? [];
-    }
-
-    /**
      * @return list<DroppedFinding>
      */
     public function droppedOf(string $roundId): array
@@ -139,7 +131,7 @@ final readonly class RoundLedgerReading implements RoundCosts
         return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
     }
 
-    private function judgeDoneOf(string $roundId): ?JudgeDone
+    public function judgeDoneOf(string $roundId): ?JudgeDone
     {
         foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
             $judged = $this->payloads->of($recorded, JudgeDone::class);

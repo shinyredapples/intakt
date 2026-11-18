@@ -129,7 +129,7 @@ final readonly class OnePerPlace
         return array_values($entries);
     }
 
-    // The first note in the entry's own id then merged ids order, so the result is the same on every run.
+    // Every note of the entry's own and merged ids, in that order, each named by its id when there are several, because each merged finding stays on the list and its note must not be lost.
     /**
      * @param list<Finding>         $entries
      * @param array<string, string> $judgeNotes
@@ -139,13 +139,18 @@ final readonly class OnePerPlace
     public function withNotes(array $entries, array $judgeNotes): array
     {
         return array_map(static function (Finding $entry) use ($judgeNotes): Finding {
+            $notes = [];
             foreach ([$entry->id, ...$entry->merged] as $id) {
                 if (isset($judgeNotes[$id])) {
-                    return $entry->withJudgeNote($judgeNotes[$id]);
+                    $notes[$id] = $judgeNotes[$id];
                 }
             }
 
-            return $entry;
+            return match (count($notes)) {
+                0 => $entry,
+                1 => $entry->withJudgeNote((string) array_first($notes)),
+                default => $entry->withJudgeNote(implode('; ', array_map(static fn (string $id, string $note): string => $id.': '.$note, array_keys($notes), $notes))),
+            };
         }, $entries);
     }
 
