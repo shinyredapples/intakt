@@ -24,9 +24,9 @@ final readonly class BoardHeadlineRoundUpdates implements RoundUpdates
     }
 
     #[Override]
-    public function toolCalled(Uuid $round, string $reviewer, string $tool): void
+    public function toolCalled(Uuid $round, string $reviewer, string $call): void
     {
-        $this->round->toolCalled($round, $reviewer, $tool);
+        $this->round->toolCalled($round, $reviewer, $call);
     }
 
     #[Override]

@@ -7,7 +7,7 @@
             {% else %}
             <dl class="ls-dl ls-tools">
                 {% for kind in summary.toolCalls %}
-                <dt>{{ kind.tool }}</dt><dd>{{ kind.count }}</dd>
+                <dt>{{ kind.kindInWords }}</dt><dd>{{ kind.count }}</dd>
                 {% endfor %}
                 <dt>Total</dt><dd>{{ summary.totalToolCalls }}</dd>
             </dl>

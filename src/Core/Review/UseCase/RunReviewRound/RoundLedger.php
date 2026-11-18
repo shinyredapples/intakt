@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\RunReviewRound;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
@@ -78,10 +79,14 @@ final readonly class RoundLedger
         ));
     }
 
-    // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up.
+    // Written with the verdict in one transaction, so a substitute's verdict never counts without its owed catch-up; the substitute's model goes with it, because the dashboard then names the reviewer by the model that answered.
     public function catchUpOwed(RoundReviewer $reviewer, Provider $substitute): void
     {
-        $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(...$this->identify($reviewer), substitute: $substitute));
+        $this->append(LedgerEventKind::CatchUpOwed, new CatchUpOwed(
+            ...$this->identify($reviewer),
+            substitute: $substitute,
+            model: $this->substituteModelOf($reviewer, $substitute),
+        ));
     }
 
     public function reviewerFailed(RoundReviewer $reviewer, string $failure): void
@@ -142,6 +147,18 @@ final readonly class RoundLedger
         } catch (TierResolutionFailure) {
             return null;
         }
+    }
+
+    // The first substitute on that provider, because the vendor tries the tier's substitutes in order and an outage takes a whole provider out.
+    private function substituteModelOf(RoundReviewer $reviewer, Provider $substitute): ?string
+    {
+        try {
+            $substitutes = $this->tiers->substitutes($reviewer->round()->project(), $reviewer->tier());
+        } catch (TierResolutionFailure) {
+            return null;
+        }
+
+        return array_find($substitutes, static fn (ResolvedModel $model): bool => $substitute === $model->provider)?->model;
     }
 
     /**

@@ -46,7 +46,7 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
 
         $crawler = $this->browser->request('GET', '/reviews/round-2');
 
-        self::assertSame([['list_directory', '1'], ['read_file', '4'], ['Total', '5']], $this->pairsOf($crawler->filter('.log-summary .ls-tools')));
+        self::assertSame([['Directory listings', '1'], ['File reads', '4'], ['Total', '5']], $this->pairsOf($crawler->filter('.log-summary .ls-tools')));
     }
 
     public function testTheSummaryShowsTheCostOfTheRoundAndOfTheReviewSoFar(): void

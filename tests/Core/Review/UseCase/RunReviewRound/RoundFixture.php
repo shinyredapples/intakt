@@ -90,6 +90,7 @@ final readonly class RoundFixture
     public const string DIFF = "diff --git a/src/Thing.php b/src/Thing.php\n@@ -1,9 +1,9 @@\n-old\n+new\n";
     public const string CHANGE = 'feat/thing';
     public const string MODEL = 'standard-model';
+    public const string SUBSTITUTE_MODEL = 'substitute-model';
 
     public EntityManagerInterface $entities;
     public RecordingBus $bus;
@@ -367,7 +368,7 @@ final readonly class RoundFixture
 
     private function roundLedger(Ledger $ledger): RoundLedger
     {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL]]]], []));
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []));
     }
 
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
