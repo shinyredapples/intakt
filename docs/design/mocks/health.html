@@ -22,7 +22,7 @@
 </div>
 <nav class="subtabs" aria-label="Project views"><a href="projects.html">Projects</a><a href="health.html" aria-current="page">Health <span class="count" style="margin-left:6px">2 broken</span></a></nav>
 
-<p class="health-sum"><span class="dot broken"></span> 2 broken, both with the Maintainer. 1 waits on you. 3 working. 4 of 5 background jobs on.</p>
+<p class="health-sum"><span class="dot broken"></span> 2 broken, both with the Maintainer. 1 waits on you. 7 working. 1 off. 5 of 6 background jobs on.</p>
 
 <div class="list health">
   <article class="hrow broken">
@@ -76,7 +76,7 @@
       <dl class="kv">
         <dt>Purpose</dt><dd>Asks each vendor how much of every account's allowance is used, so builds start only when there is room.</dd>
         <dt>Runs</dt><dd>Every 10 minutes. Owned by the Maintainer. No tokens: plain code.</dd>
-        <dt>Last run</dt><dd>11:20, failed: the vendor's usage page answers 429 for the Work subscription. 3 failed runs in a row, since 11:00.</dd>
+        <dt>Last run</dt><dd>11:20, failed: the vendor's usage page answers 429 for the Work subscription. 3 failed runs in a row, since 11:00. 0 tokens.</dd>
         <dt>Next run</dt><dd>11:30</dd>
         <dt>Who has it</dt><dd>The Maintainer. Until a probe works again, the planner uses the last reading, from 10:50.</dd>
       </dl>
@@ -103,7 +103,7 @@
       <dl class="kv">
         <dt>Purpose</dt><dd>Looks at each watched project's open pull requests and starts a review for a new version once its checks are green.</dd>
         <dt>Runs</dt><dd>Every minute. Owned by the Maintainer. No tokens: plain code.</dd>
-        <dt>Last run</dt><dd>11:29, done: 2 projects, 7 pull requests, 1 review started.</dd>
+        <dt>Last run</dt><dd>11:29, done: 2 projects, 7 pull requests, 1 review started. 0 tokens.</dd>
         <dt>Next run</dt><dd>11:30</dd>
       </dl>
     </div>
@@ -116,20 +116,33 @@
       <dl class="kv">
         <dt>Purpose</dt><dd>Wakes up tasks whose wait has reached its deadline.</dd>
         <dt>Runs</dt><dd>Every minute. Owned by the Maintainer. No tokens: plain code.</dd>
-        <dt>Last run</dt><dd>11:29, done: nothing due.</dd>
+        <dt>Last run</dt><dd>11:29, done: nothing due. 0 tokens.</dd>
         <dt>Next run</dt><dd>11:30</dd>
       </dl>
     </div>
     <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Deadlines on"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Deadlines: running now">Run now</button></div>
   </article>
   <article class="hrow">
+    <span class="dot ok" aria-hidden="true"></span>
+    <div class="body">
+      <h3>Heartbeat</h3>
+      <dl class="kv">
+        <dt>Purpose</dt><dd>Sends a beat to the check outside your install, which alerts you when the beats stop. A beat goes out only when the consumers, the Scheduler and the Maintainer all finished work in the interval.</dd>
+        <dt>Runs</dt><dd>Every 5 minutes. Owned by the Maintainer. No tokens: plain code. Switching it off stops the beats, so the outside check will alert you that Intakt went quiet.</dd>
+        <dt>Last run</dt><dd>11:25, done: beat sent. 0 tokens.</dd>
+        <dt>Next run</dt><dd>11:30</dd>
+      </dl>
+    </div>
+    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Heartbeat on"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Heartbeat: sending a beat now">Run now</button></div>
+  </article>
+  <article class="hrow">
     <span class="dot idle" aria-hidden="true"></span>
     <div class="body">
       <h3>Weekly cleanup <span class="muted">off</span></h3>
       <dl class="kv">
-        <dt>Purpose</dt><dd>Deletes the branches of merged and closed pull requests.</dd>
+        <dt>Purpose</dt><dd>Deletes the branches Intakt made once they are no longer needed: merged pull requests, closed ones after 30 days, and branches with no pull request after 60 days unless claimed. A week before, it lists what it will delete.</dd>
         <dt>Runs</dt><dd>Weekly, Sundays at 04:00. Owned by the Maintainer. No tokens: plain code.</dd>
-        <dt>Last run</dt><dd>2 Nov 04:00, done: 14 branches deleted.</dd>
+        <dt>Last run</dt><dd>2 Nov 04:00, done: 14 branches deleted. 0 tokens.</dd>
         <dt>Next run</dt><dd>None while it is off. Switched off by you on 4 Nov 18:22.</dd>
       </dl>
     </div>
@@ -141,5 +154,6 @@
 </div>
 </div>
 <script src="assets/intakt.js"></script>
+<script>document.querySelectorAll(".switch input").forEach((c)=>c.addEventListener("change",()=>{c.closest("label").lastChild.textContent=c.checked?"On":"Off";}));</script>
 </body>
 </html>

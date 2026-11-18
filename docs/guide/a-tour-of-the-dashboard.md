@@ -133,6 +133,7 @@ flowchart TD
 - **Accounts:** the AI accounts and the reviewers and builders on them are shown once, each with what it is doing now.
 - **Trends:** tasks created versus finished per day (is the queue growing?), merges per day, review findings per merge, and how long tasks take from ready to merged, split into waiting, building, review and waiting on you. Planned: for the last 7 days, how many follow-up tasks were filed per merged change, how many polish rounds started and merged, and the follow-up chain rate, the share of the follow-ups filed that came from changes that were themselves follow-ups. The status JSON carries the same seven-day figures.
 - **Rework** (planned): per project, how many tokens one merged change costs and how much of them went into fixing changes the reviewers sent back, so you can see whether the checks before review pay off.
+- **Background jobs** (planned, a section of the Health page): one row for each job Intakt runs on a schedule, such as the watcher tick or the monthly backlog sweep. Each row says what the job is for, when it last ran and how many tokens that cost, when it runs next, and has an on/off switch and a **Run now** button. Look here for what the jobs spend (it also counts in the budgets), and use Run now when you don't want to wait for the next run; a sweep costs about a million tokens, so it asks no one but you.
 - **Approved by Intakt:** the protected changes Intakt approved by itself in the last week, one line each with the reviewers' reasons.
 
 ## Steering budgets and pauses
