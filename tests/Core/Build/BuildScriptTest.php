@@ -246,7 +246,7 @@ final class BuildScriptTest extends TestCase
         $standIn = $this->recordedSleeps()[0];
         $runningWhileTheRunnerLived = $this->isRunning($standIn);
 
-        proc_terminate($runner, 9);
+        proc_terminate($runner, SIGKILL);
         $runnerEnded = [] === $this->stillRunningAfter([$pid], self::WATCHDOG_DEADLINE);
         $runnerUnreaped = is_dir('/proc/'.$pid);
         $standInStillRunning = $this->stillRunningAfter([$standIn], self::WATCHDOG_DEADLINE);
