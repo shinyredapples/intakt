@@ -20,7 +20,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **CI** | GitHub running the checks again on its own machines | [engine room](the-engine-room.md#ci-the-second-opinion) |
 | **Core panel** | the reviewers every change gets | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
 | **Cycle** | one round of build, check and review | [engine room](the-engine-room.md#cycles-and-generations-second-chances) |
-| **Draining** | stopping new work so running jobs can finish before an update | [engine room](the-engine-room.md#draining-and-updates) |
+| **Draining** | stopping new work so running jobs can finish before an update, only for an update that says it needs it | [engine room](the-engine-room.md#draining-and-updates) |
 | **Evidence** | what a finished change must show, numbered E1, E2, ... | [writing a good task](writing-a-good-task.md) |
 | **Finding** | one problem a reviewer reports, with a severity | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Fixture** | a small sample project a test of Intakt's own checks runs a rule on | [testing a new check](testing-a-new-check.md) |

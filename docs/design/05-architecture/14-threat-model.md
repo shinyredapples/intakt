@@ -138,6 +138,12 @@ No deterministic check stands between that code and the shared instance: the han
 - **Build jobs** get the credentials only on the owner's opt-in.
 - **Credential values** a job held are redacted and scanned before anything it returned is pushed or posted, as for every credential ([Builder](#builder)).
 
+## Jobs on an older image during an update
+
+An update lets running jobs finish on the image they started with ([Overview](01-overview.md#updates)), so a fix in the new release does not reach a job that is already running. Such a job keeps every limit it started with (no forge credentials, no signing key, egress limited to its vendor and registries), and its result gets no trust from its version: the new orchestrator puts it through the same hand-back scan, check job, reviews and merge rules as any other.
+
+A flaw that a running job could still use is the case those limits do not cover, for example in a vendor CLI, a package of the job image or the job's own entry script. So a security release lists, in its release notes, the jobs that must stop: by the versions and the job kinds the flaw affects. When the release is installed, the orchestrator stops every running job on that list by removing its container, discards the output of a listed job that exited during the restart unread, records each in the ledger with the release's reason, and does the work again on the new version. The card of each such job says so. A release that changes how jobs are isolated drains instead, so no job runs across it. The list is read from the release being installed, never from text a job, a model or the forge produced.
+
 ## CI log excerpts
 
 The builder holds no forge credentials, so it gets red CI as an excerpt the orchestrator reads from the forge. A builder controls the workflow on its branch, and could make a CI job print whatever the job can reach, encoded past redaction, and read it back. So:

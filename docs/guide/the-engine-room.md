@@ -111,19 +111,19 @@ flowchart LR
 
 ## Draining and updates
 
-**Draining** is how Intakt updates itself without breaking work in progress:
+Intakt updates itself without stopping the work in progress:
 
 ```mermaid
 flowchart LR
-  a[New version ready] --> b[Drain:<br/>start no new jobs]
-  b --> c[Running jobs finish<br/>work waiting on CI or you is parked]
-  c --> d[Swap in the new version]
-  d --> e{Starts and works?}
-  e -- yes --> f[Resume]
-  e -- no --> g[Roll back to the old version,<br/>resume, alert]
+  a[New version ready] --> b[Intakt restarts once<br/>on the new version]
+  b --> e{Starts and works?}
+  e -- yes --> f[New jobs use the new version,<br/>running jobs finish on the old one]
+  e -- no --> g[Roll back to the old version, alert,<br/>redo the jobs the new one started]
 ```
 
-While a drain is on, the dashboard says "draining" and nothing new starts; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold the drain up.
+Each job runs in its own container, so a job that is already running keeps the version it started with until it ends, while new jobs use the new version. Intakt itself is away only for its restart, and the running jobs carry on meanwhile; anything that happens in that time (a job finishing, a comment on the forge) is picked up when it is back. The dashboard marks the jobs still running on an older version until none are left. A job from two versions back is too old for the newest Intakt to read, so its work is simply done again. A security fix may name jobs that must stop at once; those are stopped and their work is done again on the new version.
+
+**Draining** is the exception: nothing new starts, and the running jobs finish before the new version goes in. A new version drains only when its release notes say it must (for example when it changes how jobs are kept apart), and the dashboard says why. While a drain is on, the dashboard says "draining". Work that is only waiting (for CI, for you, on hold) doesn't hold the drain up.
 
 ## Holds, hand-overs and caps
 

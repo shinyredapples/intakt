@@ -22,7 +22,7 @@ flowchart TD
 | What you see | What it means | What to do |
 |---|---|---|
 | A card in **Waiting on you** | only a person can move it on | do what the card says |
-| **Draining** | Intakt is updating itself; running jobs finish first | nothing: it resumes in minutes |
+| **Draining** | Intakt is installing one of the rare updates that need running jobs to finish first; the dashboard says why | nothing: it resumes when they have finished |
 | **Paused** | someone paused the project or the install | resume it from the dashboard |
 | **budget** badge | the AI allowance is near its limit, or this week is spending fast | wait for the refill, or add an account ([costs](accounts-and-costs.md)) |
 | **Only one builder** is running | the week's pace says slow down | normal; it speeds up when there is room |

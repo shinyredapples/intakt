@@ -66,4 +66,4 @@ Intakt works out how many builders and reviewers fit each time it starts work, s
 
 ## Updating
 
-New versions install themselves safely: Intakt stops starting new jobs, lets the running ones finish, swaps in the new version, checks it starts and works, and resumes. If anything fails, it rolls back and tells you ([draining](the-engine-room.md#draining-and-updates)).
+New versions install themselves safely, without stopping the work in progress: Intakt restarts once on the new version and checks it starts and works; running jobs finish on the version they started with, and new jobs use the new one. If anything fails, it rolls back and tells you ([updates](the-engine-room.md#draining-and-updates)).
