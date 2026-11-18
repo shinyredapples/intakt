@@ -25,7 +25,7 @@ final class WaitingItemTest extends TestCase
 {
     public function testAnOutageNoticeBecomesAnItemWhoseRecommendedChoiceComesFirst(): void
     {
-        $item = WaitingItem::ofOutage(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+        $item = WaitingItem::ofOutage($this->outage(), null);
 
         self::assertStringContainsString('claude_code.main', $item->lead);
         self::assertStringContainsString('08:00 UTC', $item->why);
@@ -34,31 +34,27 @@ final class WaitingItemTest extends TestCase
 
     public function testTheRecommendedChoiceForAnOutageRunsNoPaidCall(): void
     {
-        $item = WaitingItem::ofOutage(new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+        $item = WaitingItem::ofOutage($this->outage(), null);
 
         self::assertNull($item->choices[0]->command);
         self::assertSame('php bin/console intakt:vendor:probe', $item->choices[1]->command);
         self::assertStringContainsString('paid call', $item->choices[1]->outcome);
     }
 
-    #[DataProvider('statusPages')]
-    public function testAnOutageItemLinksToTheStatusPageOfItsProvider(Provider $provider, ?string $expected): void
+    public function testAnOutageItemLinksToTheStatusPageItIsGiven(): void
     {
-        $item = WaitingItem::ofOutage(new OutageNotice(new Account($provider, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+        $item = WaitingItem::ofOutage($this->outage(), 'https://status.example');
 
-        self::assertSame($expected, $item->link);
+        self::assertSame('https://status.example', $item->link);
+        self::assertSame('Open the provider\'s status page', $item->linkLabel);
     }
 
-    /**
-     * @return iterable<string, array{Provider, ?string}>
-     */
-    public static function statusPages(): iterable
+    public function testAnOutageItemWithoutAStatusPageLinksToTheBoard(): void
     {
-        yield 'Anthropic' => [Provider::Anthropic, 'https://status.anthropic.com'];
-        yield 'Claude Code' => [Provider::ClaudeCode, 'https://status.anthropic.com'];
-        yield 'OpenAI' => [Provider::OpenAi, 'https://status.openai.com'];
-        yield 'Codex' => [Provider::Codex, 'https://status.openai.com'];
-        yield 'an OpenAI-compatible server, which has none' => [Provider::OpenAiCompatible, null];
+        $item = WaitingItem::ofOutage($this->outage(), null);
+
+        self::assertNull($item->link);
+        self::assertSame('See the queue on the board', $item->linkLabel);
     }
 
     public function testAnItemWithNoChoiceIsRefused(): void
@@ -115,6 +111,11 @@ final class WaitingItemTest extends TestCase
     private function itemOf(array $choices): WaitingItem
     {
         return new WaitingItem('Lead', 'Consequence', 'Why', new DateTimeImmutable('2026-11-02T11:00:00+00:00'), $choices, 'Open the status page', 'https://status.example');
+    }
+
+    private function outage(): OutageNotice
+    {
+        return new OutageNotice(new Account(Provider::ClaudeCode, 'main'), new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00'));
     }
 
     private function choice(bool $recommended): WaitingChoice

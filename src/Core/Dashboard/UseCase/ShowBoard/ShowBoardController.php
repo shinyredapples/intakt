@@ -64,8 +64,7 @@ final readonly class ShowBoardController
         return $answer;
     }
 
-    // A phone's home is Waiting on you (DESIGN.md), so a phone that opens the address lands there; the dashboard's own Board entries send the board flag and still reach the board.
-    // The user agent's "Mobi" (MDN's advice), because Safari and Firefox send no Sec-CH-UA-Mobile and Chromium sends it only on a secure origin.
+    // A phone's home is Waiting on you (DESIGN.md), unless the Board entry's flag asks for the board; "Mobi" (MDN's advice) because Safari and Firefox send no Sec-CH-UA-Mobile.
     private function isPhoneLanding(Request $request): bool
     {
         if ($request->query->has(self::BOARD_FLAG)) {

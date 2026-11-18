@@ -15,6 +15,7 @@ use Intakt\Core\Dashboard\Infrastructure\FilterProjects;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviews;
 use Intakt\Core\Dashboard\UseCase\ListWaiting\ListWaitingController;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -101,22 +102,26 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertSame(['waiting'], $page->filter('.rail a.nav[aria-current]')->each(static fn (Crawler $entry): ?string => $entry->attr('data-k')));
     }
 
-    public function testTheOutageCardLinksToTheStatusPageOfItsProvider(): void
+    #[DataProvider('statusPages')]
+    public function testTheOutageCardLinksToTheStatusPageOfItsProvider(Provider $provider, string $expected): void
     {
-        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
+        $this->noticesAre(new OutageNotice(new Account($provider, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
 
         $page = $this->browser->request('GET', '/waiting');
 
-        self::assertSame(['https://status.anthropic.com'], $page->filter('.wait-item a[href]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
+        self::assertSame([$expected], $page->filter('.wait-item a[href]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
     }
 
-    public function testAnOutageOfAnOpenAiCompatibleServerLinksToTheBoardWithItsFlag(): void
+    /**
+     * @return iterable<string, array{Provider, string}>
+     */
+    public static function statusPages(): iterable
     {
-        $this->noticesAre(new OutageNotice(new Account(Provider::OpenAiCompatible, 'main'), new DateTimeImmutable('2026-11-01T08:00:00+00:00'), new DateTimeImmutable('2026-11-01T11:00:00+00:00')));
-
-        $page = $this->browser->request('GET', '/waiting');
-
-        self::assertSame(['/?board=1'], $page->filter('.wait-item a[href]')->each(static fn (Crawler $link): ?string => $link->attr('href')));
+        yield 'Anthropic' => [Provider::Anthropic, 'https://status.anthropic.com'];
+        yield 'Claude Code' => [Provider::ClaudeCode, 'https://status.anthropic.com'];
+        yield 'OpenAI' => [Provider::OpenAi, 'https://status.openai.com'];
+        yield 'Codex' => [Provider::Codex, 'https://status.openai.com'];
+        yield 'an OpenAI-compatible server, which has no status page, so the board with its flag' => [Provider::OpenAiCompatible, '/?board=1'];
     }
 
     private function noticesAre(OutageNotice ...$notices): void

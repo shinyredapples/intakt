@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
-use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Budget\Contract\OutageNotice;
 
 // At most four choices, because more would make the owner compare instead of act, and the recommended one first because it is the one to take.
@@ -34,8 +33,8 @@ final readonly class WaitingItem
         }
     }
 
-    // Only a running outage becomes an item (OwnerNotices), so the present tense holds. Leaving it is recommended because no command brings a reading back, and the probe is offered with its cost because it only tells whether the provider answers.
-    public static function ofOutage(OutageNotice $notice): self
+    // Only a running outage becomes an item (OwnerNotices), so the present tense holds. Leaving it is recommended because no command brings a reading back, and the probe is offered with its cost because it only tells whether the provider answers. Without a status page (an OpenAI-compatible server) the page links to the board.
+    public static function ofOutage(OutageNotice $notice, ?string $statusPage): self
     {
         $account = $notice->account->key();
         $since = $notice->lastReadingAt->format('Y-m-d H:i');
@@ -57,19 +56,9 @@ final readonly class WaitingItem
                     recommended: false,
                 ),
             ],
-            null === self::statusPageOf($notice->account->provider) ? 'See the queue on the board' : 'Open the provider\'s status page',
-            self::statusPageOf($notice->account->provider),
+            null === $statusPage ? 'See the queue on the board' : 'Open the provider\'s status page',
+            $statusPage,
         );
-    }
-
-    // Null for an OpenAI-compatible server, because its address is the owner's own choice and has no public status page; the page then links to the board.
-    private static function statusPageOf(Provider $provider): ?string
-    {
-        return match ($provider) {
-            Provider::Anthropic, Provider::ClaudeCode => 'https://status.anthropic.com',
-            Provider::OpenAi, Provider::Codex => 'https://status.openai.com',
-            Provider::OpenAiCompatible => null,
-        };
     }
 
     // Whole units, rounded down, because an item must never read as older than it is.
