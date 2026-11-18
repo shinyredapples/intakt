@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
 use Intakt\Core\Review\Contract\Finding;
-use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgedFindings;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Domain\RecurringP1;
