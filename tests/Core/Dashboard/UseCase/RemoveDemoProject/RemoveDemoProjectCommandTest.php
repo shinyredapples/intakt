@@ -6,6 +6,8 @@ namespace Intakt\Tests\Core\Dashboard\UseCase\RemoveDemoProject;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
+use Intakt\Core\Dashboard\Infrastructure\LiveBoardHeadline;
 use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\ReplayMarks;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
@@ -23,18 +25,22 @@ use Intakt\Core\Review\Contract\ReplayMarkOfProject;
 use Intakt\Core\Review\Contract\SampleChange;
 use Intakt\Core\Review\Contract\UnflagReplayProject;
 use Intakt\Tests\Application\EmptyDatabase;
+use Intakt\Tests\Core\Dashboard\Infrastructure\PublishedLiveEvents;
 use Intakt\Tests\Core\Ledger\AppendOnlyTriggers;
 use Intakt\Tests\Support\KernelTestCase;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\Group;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\NullLogger;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Uuid;
+use Twig\Environment;
 
 #[Group('persistence')]
 #[CoversClass(RemoveDemoProjectCommand::class)]
@@ -46,9 +52,13 @@ use Symfony\Component\Uid\Uuid;
 #[UsesClass(FlagProjectAsReplay::class)]
 #[UsesClass(ReplayMarkOfProject::class)]
 #[UsesClass(ReplayMark::class)]
+#[UsesClass(LiveBoardHeadline::class)]
+#[UsesClass(LedgerReviewPages::class)]
 final class RemoveDemoProjectCommandTest extends KernelTestCase
 {
     private InMemoryStore $locks;
+
+    private PublishedLiveEvents $live;
 
     protected function setUp(): void
     {
@@ -59,6 +69,7 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
         AppendOnlyTriggers::in($entities->getConnection());
         $this->locks = new InMemoryStore();
+        $this->live = new PublishedLiveEvents();
     }
 
     public function testTheCommandDeletesTheDemoProjectsLedgerRowsAndItsReplayMark(): void
@@ -164,6 +175,32 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertTrue(new LockFactory($this->locks)->createLock(ReplaysRecording::LOCK)->acquire());
     }
 
+    public function testRemovingTheOnlyReplayedReviewPushesTheEmptyBoardWithItsWaitingOctopus(): void
+    {
+        $this->givenTheDemoProjectWithAReplayedReview();
+
+        $this->removal('intakt');
+
+        self::assertCount(2, $this->lastPushedBoard()->filter('#board-octopus.head-character:not([hidden]) img[src*="octopus-waiting-"]'));
+    }
+
+    public function testARemovalRefusedOutsideTheComposeDemoPushesNothing(): void
+    {
+        $this->givenTheDemoProjectWithAReplayedReview();
+
+        $this->removal('');
+
+        self::assertSame([], $this->live->events);
+    }
+
+    private function lastPushedBoard(): Crawler
+    {
+        $last = array_last($this->live->events);
+        self::assertNotNull($last);
+
+        return new Crawler($last->turboStream);
+    }
+
     private function givenTheDemoProjectWithAReplayedReview(): void
     {
         $this->commands()->dispatch(new FlagProjectAsReplay(CreateDemoProjectCommand::NAME));
@@ -196,11 +233,21 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
         self::assertInstanceOf(ReplayMarks::class, $marks);
         self::assertInstanceOf(ReplayedReviewRows::class, $rows);
         $application = new Application();
-        $application->addCommand(new RemoveDemoProjectCommand($this->commands(), $marks, $rows, new LockFactory($this->locks), $composeService));
+        $application->addCommand(new RemoveDemoProjectCommand($this->commands(), $marks, $rows, new LockFactory($this->locks), $this->headline(), $composeService));
         $tester = new CommandTester($application->find('intakt:demo:remove'));
         $tester->execute([]);
 
         return $tester;
+    }
+
+    private function headline(): LiveBoardHeadline
+    {
+        $pages = self::getContainer()->get(LedgerReviewPages::class);
+        $twig = self::getContainer()->get(Environment::class);
+        self::assertInstanceOf(LedgerReviewPages::class, $pages);
+        self::assertInstanceOf(Environment::class, $twig);
+
+        return new LiveBoardHeadline($pages, $twig, $this->live, new LockFactory(new InMemoryStore()), new NullLogger());
     }
 
     /**
