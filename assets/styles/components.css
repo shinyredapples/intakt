@@ -476,7 +476,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .page-head { display: flex; align-items: flex-end; gap: var(--s16); flex-wrap: wrap; margin-bottom: var(--s24); }
 .page-head .task-sentence { margin: var(--s4) 0 var(--s8); font-size: var(--t15); overflow-wrap: anywhere; }
 .page-head .lead { margin-top: calc(var(--s4) + 2px); color: var(--muted); font-size: var(--t15); }
-/* On the first day the whole headline is one link, a control on its own rather than a link in a sentence, so on a phone it takes the 44 px floor (#1792). */
+/* On the first day the whole headline is one link, a control on its own rather than a link in a sentence, so on a phone it takes the 44 px floor. */
 @media (max-width: 760px) {
   .page-head .lead .lead-link { display: inline-block; min-height: 44px; }
 }
