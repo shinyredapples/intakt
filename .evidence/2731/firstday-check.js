@@ -1,7 +1,8 @@
 'use strict';
 // Evidence for #2731: the first-day board of a running instance with an empty ledger, light and dark, at 1440 and 390,
 // with bin/ui-check's own axe report and phone floors (bin/ui-check itself needs a review round, which the first day has none of),
-// and the mock's ?demo=firstday example at the same sizes beside it.
+// The mock's captures beside them, mock-firstday-<theme>-<width>.png, are copies of docs/design/mocks/tools/screenshots.js's
+// screens/index-<theme>-<width>-firstday.png.
 // Usage: bin/instance -- sh -c "bin/console doctrine:migrations:migrate -n -q && bin/console asset-map:compile -q && NODE_PATH=$TMPDIR/node/node_modules node .evidence/2731/firstday-check.js"
 const path = require('path');
 const root = path.resolve(__dirname, '..', '..');
@@ -37,13 +38,6 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 390, height: 844 }];
       await page.screenshot({ path: path.join(OUT, `board-firstday-${theme}-${size.width}.png`), fullPage: true });
       runs.push({ page: 'board (first day)', theme, width: size.width, errors, violations, floors });
       await context.close();
-
-      const mock = await browser.newContext({ viewport: size, colorScheme: theme });
-      const mockPage = await mock.newPage();
-      await mockPage.goto('file://' + path.join(root, 'docs/design/mocks/index.html') + '?demo=firstday&theme=' + theme, { waitUntil: 'load' });
-      await mockPage.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
-      await mockPage.screenshot({ path: path.join(OUT, `mock-firstday-${theme}-${size.width}.png`), fullPage: true });
-      await mock.close();
     }
   } finally {
     await browser.close();

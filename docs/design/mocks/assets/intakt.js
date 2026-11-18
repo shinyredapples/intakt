@@ -526,7 +526,11 @@
       document.querySelectorAll(".rail .count.needs").forEach((c) => c.remove());
       document.querySelectorAll(".banner").forEach((b) => b.remove());
       lead.innerHTML = '<a href="setup.html">Nothing is running yet. Start the first review.</a>';
-      main.querySelector(".page-head .actions").innerHTML = '<a class="btn primary" href="setup.html">Set up Intakt</a>';
+      // The first day has one action, so phones keep it instead of hiding the board's actions.
+      const actions = main.querySelector(".page-head .actions");
+      actions.classList.remove("hide-phone");
+      actions.innerHTML = '<a class="btn primary" href="setup.html">Set up Intakt</a>';
+      document.getElementById("wsum").classList.add("w-sum-wrap");
       const files = { light: "assets/octopus-waiting-light-144.webp", dark: "assets/octopus-waiting-dark-144.webp" };
       const octopus = (theme) => `<img class="octopus-${theme}" src="${files[theme]}" alt="" width="144" height="144">`;
       document.getElementById("working").insertAdjacentHTML("beforebegin", `<section class="firstday" aria-labelledby="firstday-h">${octopus("light")}${octopus("dark")}<div><h2 id="firstday-h">Give Intakt its first task</h2>
