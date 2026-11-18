@@ -15,8 +15,8 @@ final class CodexSettingsTest extends TestCase
 {
     public function testTheConfiguredModelAndEffortBecomeTheCliOptions(): void
     {
-        $settings = CodexSettings::fromConfiguration(['model' => 'gpt-5.3-codex', 'effort' => 'xhigh']);
+        $settings = CodexSettings::fromConfiguration(['model' => 'gpt-6.2-sol', 'effort' => 'xhigh']);
 
-        self::assertSame(['model' => 'gpt-5.3-codex', 'config' => ['model_reasoning_effort="xhigh"']], $settings->options());
+        self::assertSame(['model' => 'gpt-6.2-sol', 'config' => ['model_reasoning_effort="xhigh"']], $settings->options());
     }
 }
