@@ -76,7 +76,7 @@ final readonly class PhpProfile
             ? array_last($intervals)
             : array_find($intervals, static fn (Interval $interval): bool => self::contains($interval, $parser->normalize($minor.'.'.$newestReleasedPatch)));
 
-        if ($tagRange instanceof Interval && self::endsTogether($tagRange, Intervals::get($everyPatch)['numeric'][0])) {
+        if ($tagRange instanceof Interval && $this->endsTogether($tagRange, Intervals::get($everyPatch)['numeric'][0])) {
             return $minor;
         }
 
@@ -96,7 +96,7 @@ final readonly class PhpProfile
         return $interval->getStart()->matches($exactly) && $interval->getEnd()->matches($exactly);
     }
 
-    private static function endsTogether(Interval $interval, Interval $other): bool
+    private function endsTogether(Interval $interval, Interval $other): bool
     {
         return $interval->getEnd()->getOperator() === $other->getEnd()->getOperator()
             && $interval->getEnd()->getVersion() === $other->getEnd()->getVersion();
