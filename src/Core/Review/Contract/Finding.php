@@ -61,6 +61,12 @@ final readonly class Finding
         return clone ($this, ['judge_note' => $note]);
     }
 
+    // The judge is a model, so an answer to an outside agent carries its note only inside a fence: docs/design/05-architecture/14-threat-model.md#judge
+    public function withJudgeNoteFenced(): self
+    {
+        return null === $this->judge_note ? $this : $this->withJudgeNote(new FencedText(UntrustedSource::JudgeNote, $this->judge_note)->rendered());
+    }
+
     public function withId(string $id): self
     {
         return clone ($this, ['id' => $id]);

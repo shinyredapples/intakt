@@ -13,13 +13,19 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class RoundActList
 {
     /**
+     * @var list<Finding>
+     */
+    public array $act;
+
+    /**
      * @param list<Finding> $act
      */
     public function __construct(
         public string $roundId,
         public bool $judged,
-        public array $act,
+        array $act,
         public ReplayMark $mark,
     ) {
+        $this->act = array_map(static fn (Finding $finding): Finding => $finding->withJudgeNoteFenced(), $act);
     }
 }

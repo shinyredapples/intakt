@@ -15,6 +15,7 @@ enum UntrustedSource: string
     case ProjectMemory = 'project memory';
     case Decisions = 'decisions';
     case ActList = 'act list';
+    case JudgeNote = 'judge note';
     case CiLog = 'ci log';
     case PullRequestText = 'pull request text';
 }
