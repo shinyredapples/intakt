@@ -1,9 +1,10 @@
 // Scratch: keyboard-only walk-through of the review page (D5 of #1795), with axe in each opened state.
-// Usage: node walk.cjs <node_modules> <chrome> <address> <round>
+// Every control is reached and used with the keyboard only (Tab, Shift+Tab, Enter, Space, arrows, Home, End, Escape); a page load is the only other action.
+// Usage: node walk.cjs <playwright node_modules> <axe node_modules> <chrome> <address> <round>
 'use strict';
-const [modules, chrome, address, round] = process.argv.slice(2);
+const [modules, axeModules, chrome, address, round] = process.argv.slice(2);
 const { chromium } = require(modules + '/playwright');
-const axePath = require.resolve(modules + '/axe-core/axe.min.js');
+const axePath = require.resolve(axeModules + '/axe-core/axe.min.js');
 
 const focused = (page) => page.evaluate(() => {
   const el = document.activeElement;
@@ -47,9 +48,12 @@ async function walk(browser, theme, width) {
   let n = await tabTo(page, () => document.activeElement.matches('a.sb-finding'));
   await step(page, `3. Follow a finding: Tab x${n} reaches the first open finding of the Now block`);
   if (width === 390) {
-    await page.click('#live-log-tab');
-    await page.focus('a.sb-finding');
-    console.log('    (Live log chosen first, to show the finding brings the timeline back)');
+    n = await tabTo(page, () => document.activeElement.id === 'timeline-tab');
+    await page.keyboard.press('ArrowRight');
+    console.log(`    (Tab x${n} to the tabs, Right: Live log chosen first, to show the finding brings the timeline back; pane ${await page.getAttribute('.task-grid', 'data-pane')})`);
+    let back = 0;
+    while (!(await page.evaluate(() => document.activeElement.matches('a.sb-finding'))) && back++ < 20) await page.keyboard.press('Shift+Tab');
+    await step(page, `    Shift+Tab x${back} back to the finding`);
   }
   await page.keyboard.press('Enter');
   await page.waitForTimeout(400);
@@ -58,10 +62,12 @@ async function walk(browser, theme, width) {
     + (width === 390 ? ', pane shown: ' + await page.getAttribute('.task-grid', 'data-pane') : ''));
   await axe(page, 'round 1 opened by the finding');
 
-  await page.focus('details.ev > summary');
+  let up = 0;
+  while (!(await page.evaluate(() => document.activeElement.matches('details.ev > summary'))) && up++ < 20) await page.keyboard.press('Shift+Tab');
+  await step(page, `4. Fold and expand a round: Shift+Tab x${up} from the followed finding reaches the round heading`);
   await page.keyboard.press('Tab');
   await page.keyboard.press('Escape');
-  await step(page, '4. Fold and expand a round: Escape inside the open round 1 folds it, open: ' + await page.evaluate(() => document.querySelector('details.ev').open));
+  await step(page, '    Escape inside the open round 1 folds it, open: ' + await page.evaluate(() => document.querySelector('details.ev').open));
   await page.keyboard.press('Enter');
   console.log('    Enter on its heading: open: ' + await page.evaluate(() => document.querySelector('details.ev').open));
   await page.keyboard.press(' ');
@@ -77,6 +83,10 @@ async function walk(browser, theme, width) {
       const f = await focused(page);
       console.log(`    ${key}: focus ${f.what}, ring ${f.ring}, aria-selected ${await page.evaluate(() => document.activeElement.getAttribute('aria-selected'))}, pane ${await page.getAttribute('.task-grid', 'data-pane')}`);
     }
+    await page.keyboard.press('Enter');
+    console.log(`    Enter on the focused tab: aria-selected ${await page.evaluate(() => document.activeElement.getAttribute('aria-selected'))}, pane ${await page.getAttribute('.task-grid', 'data-pane')}`);
+    await page.keyboard.press(' ');
+    console.log(`    Space on the focused tab: aria-selected ${await page.evaluate(() => document.activeElement.getAttribute('aria-selected'))}, pane ${await page.getAttribute('.task-grid', 'data-pane')}`);
     await page.keyboard.press('Tab');
     const panel = await page.evaluate(() => { const p = document.activeElement; return `${p.id} role=${p.getAttribute('role')} labelledby=${p.getAttribute('aria-labelledby')}`; });
     await step(page, `    Tab: the chosen pane (${panel})`);
@@ -84,7 +94,11 @@ async function walk(browser, theme, width) {
     await page.keyboard.press('ArrowLeft');
     await page.keyboard.press('Tab');
     const timelinePanel = await page.evaluate(() => { const p = document.activeElement; return `${p.id} role=${p.getAttribute('role')} labelledby=${p.getAttribute('aria-labelledby')}`; });
-    console.log(`    Shift+Tab, Left (Live log), Tab: the chosen pane (${timelinePanel})`);
+    await step(page, `    Shift+Tab, Left (Live log), Tab: the chosen pane (${timelinePanel})`);
+    await page.keyboard.press('Tab');
+    await step(page, '    Tab again: the Live log pane holds no control, so focus leaves it (still inside the pane: ' + await page.evaluate(() => !!document.activeElement.closest('#live-log-pane')) + ')');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('ArrowRight');
     await axe(page, 'Live log chosen');
