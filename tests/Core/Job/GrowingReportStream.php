@@ -6,7 +6,7 @@ namespace Intakt\Tests\Core\Job;
 
 use RuntimeException;
 
-// Serves a report whose size says 4 bytes but whose content runs to 2 MiB, as a report the job grew after the size check, and counts what the reader takes from it.
+// A stream wrapper, because a real file cannot be made to grow between the reader's size check and its read; the size says 4 bytes while the content runs to 2 MiB.
 final class GrowingReportStream
 {
     public const string PROTOCOL = 'intakt-growing-report';
