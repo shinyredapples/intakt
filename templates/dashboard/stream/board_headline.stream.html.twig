@@ -1,8 +1,8 @@
-{#- An update of the line's content, from the same partial as the board's head, so the pushed line never differs from a page loaded after it. -#}
-<turbo-stream action="update" target="board-headline"><template>{{ include('dashboard/_board_headline.html.twig', {headline: headline}, with_context = false) }}</template></turbo-stream>
+{#- An update of the line's content, from the same partial as the board's head, so the pushed line never differs from a page loaded after it. Morphed, so a push that carries the line the page already shows keeps the first-day link node and the keyboard focus it holds. -#}
+<turbo-stream action="update" method="morph" target="board-headline"><template>{{ include('dashboard/_board_headline.html.twig', {headline: headline}, with_context = false) }}</template></turbo-stream>
 {#- Only the head's Set up Intakt slot, from its partial: it comes and goes with the first-day panel that tells the user to choose it, and the review list link beside it keeps its focus. Morphed, not swapped: a board pushed empty to an empty board (the demo removal publishes even when it removed nothing) carries the link the page already shows, and a swapped link would lose the keyboard focus it holds. -#}
 <turbo-stream action="replace" method="morph" target="board-setup"><template>{{ include('dashboard/_board_setup.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>
-{#- The empty board's octopus, replaced from the head's partial: once a review has run it renders an empty hidden target, so the octopus leaves the head and comes back when the board is empty again. -#}
+{#- The empty board's first-day panel with its octopus, replaced from the panel's own partial: once a review has run it renders an empty hidden target, so the octopus leaves the page and comes back when the board is empty again. -#}
 <turbo-stream action="replace" target="board-octopus"><template>{{ include('dashboard/_board_octopus.html.twig', {board: board}, with_context = false) }}</template></turbo-stream>
 {#- The columns a round moves between, replaced from the board's own partial: a round starts in In review and ends in Done. Each is pushed with at most the page limit of cards (pushed), so the update does not grow with the install's history. -#}
 {% set limit = constant('Intakt\\Core\\Dashboard\\Domain\\Board::PAGE_LIMIT') %}

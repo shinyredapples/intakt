@@ -263,6 +263,16 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(0, $streams->filter('turbo-stream[action="replace"][target="board-setup"]:not([method="morph"])'));
     }
 
+    public function testABoardPushedEmptyToAnEmptyBoardMorphsTheHeadlineSoItsFirstDayLinkKeepsTheKeyboardFocus(): void
+    {
+        $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
+
+        $streams = new Crawler($this->lastShellUpdate());
+
+        self::assertCount(1, $streams->filter('turbo-stream[action="update"][method="morph"][target="board-headline"] template a[href="/setup"]'));
+        self::assertCount(0, $streams->filter('turbo-stream[action="update"][target="board-headline"]:not([method="morph"])'));
+    }
+
     public function testABoardPushedEmptyToAnEmptyBoardLeavesTheSetUpLinkInPlaceSoItKeepsTheKeyboardFocus(): void
     {
         $page = $this->browser->request('GET', '/');
