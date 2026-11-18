@@ -176,14 +176,72 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
     }
 
-    public function testAnOpeningMarkOfATitleCutShortLosesItsMark(): void
+    public function testStarsInParagraphsSeparatedByAnyLineEndingNeverPair(): void
     {
-        self::assertSame([['text' => 'Update the word…', 'code' => false]], new FindingText('Update **the word…')->spans());
+        foreach (["Copy *test.php.\r\n\r\nKeep build*.", "Copy *test.php.\r\rKeep build*.", "Copy *test.php.\n \t\nKeep build*."] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), json_encode($written, JSON_THROW_ON_ERROR));
+        }
     }
 
-    public function testAnEllipsisClosesNoMarkBeforeASpaceOrSlash(): void
+    public function testDoubleMarksAroundSeveralWordsStartingWithADotLoseTheirMarks(): void
     {
-        foreach (['skip src/*…', 'a lone * …'] as $written) {
+        foreach ([
+            'Check **.env stays private** before publishing.' => 'Check .env stays private before publishing.',
+            'Keep __.gitignore and friends__ as is' => 'Keep .gitignore and friends as is',
+        ] as $written => $shown) {
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
+    public function testASingleMarkBeforeADotNeverPairsAroundSeveralWords(): void
+    {
+        $written = 'Check *.env files and backups*.';
+
+        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+    }
+
+    public function testAnOpeningMarkOfATitleCutShortLosesItsMark(): void
+    {
+        foreach ([
+            'Update **the word…' => 'Update the word…',
+            'Update __the word…' => 'Update the word…',
+            'Update *word…' => 'Update word…',
+            'Update _word…' => 'Update word…',
+            'Fix **now** and **the rest…' => 'Fix now and the rest…',
+            'Update ***word…' => 'Update word…',
+        ] as $written => $shown) {
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written, true)->spans(), $written);
+        }
+    }
+
+    public function testATitleCutBetweenTheTwoClosingMarksLosesTheOneThatIsLeft(): void
+    {
+        foreach ([
+            'Update **the word*…' => 'Update the word…',
+            'Update __the word_…' => 'Update the word…',
+            'Update **word*…' => 'Update word…',
+        ] as $written => $shown) {
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written, true)->spans(), $written);
+        }
+    }
+
+    public function testATitleCutRightAfterItsClosingMarkLosesBothMarks(): void
+    {
+        foreach (['Update **the word**…' => 'Update the word…', 'Update *word*…' => 'Update word…', 'Update __the word__…' => 'Update the word…'] as $written => $shown) {
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written, true)->spans(), $written);
+        }
+    }
+
+    public function testAWildcardInATitleCutShortKeepsItsStar(): void
+    {
+        foreach (['Copy *test files…', 'globs *.php…', 'skip src/*…', 'a lone * …', 'Copy *.php and *.twig files…', 'Match **/kwargs…'] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written, true)->spans(), $written);
+        }
+    }
+
+    public function testAnEllipsisTheReviewerWroteClosesNoMark(): void
+    {
+        foreach (['Copy *.php…', 'Copy *test.php…', 'Match **kwargs…', 'Use _private and more…', 'Copy *.php and *.twig…', 'Copy *test files…', 'Update **the word*…', 'Update __the word…'] as $written) {
             self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
         }
     }

@@ -12,20 +12,32 @@ final readonly class FindingText
 
     private const string CLOSES = '(?=$|[\s)\]}"\'\p{Pe}\p{Pf}]|[.,;:!?…]+(?:$|[\s)\]}"\'\p{Pe}\p{Pf}]))';
 
-    // A title cut short ends in an ellipsis, which can remove the closing mark, so an opening mark with no closer pairs with that ellipsis.
-    private const string CUT = '(?=…$)';
+    // A pair never spans a blank line, whichever line ending the reviewer wrote, so stars in two paragraphs (a glob in each) never pair.
+    private const string PARAGRAPH = '\R[^\S\r\n]*\R';
 
-    // A pair never spans a blank line, so stars in two paragraphs (a glob in each) never pair.
-    private const string PARAGRAPH = '\n[^\S\n]*\n';
-
-    // A mark followed by a dot pairs only around one word (**.env**), so a glob like *.php never pairs with a star later in the sentence.
+    // A single mark followed by a dot pairs only around one word (*.env*), so a glob like *.php never pairs with a star later in the sentence.
     private const string DOT_WORD = '\.(?:(?!\1)\S)*?';
+
+    private const string DUNDER = '(?!__[A-Za-z0-9_]+__)';
+
+    // A lone __word__ is a dunder name (__DIR__, __init_subclass__), so it keeps its marks; the text between a pair never holds the mark's own character, so two separate marks (*x*/*y*, two globs) never pair across each other.
+    private const string STRONG = '/'.self::OPENS.self::DUNDER.'(\*\*|__)((?=[^\s\/])(?:(?!\1(?![*_])|'.self::PARAGRAPH.').)+?)(?<=[^\s\/])\1'.self::CLOSES.'/us';
+
+    private const string PLAIN = '/'.self::OPENS.'([*_])((?=[^\s*_.\/])(?:(?!\1|'.self::PARAGRAPH.').)+?|'.self::DOT_WORD.')(?<=[^\s*_\/])\1'.self::CLOSES.'/us';
+
+    // The cut can fall between the two characters of a closing double mark, so the one left before the ellipsis goes with the opening mark.
+    private const string STRONG_CUT = '/'.self::OPENS.self::DUNDER.'(([*_])\2)((?=[^\s\/])(?:(?!\1(?![*_])).)+?)(?<=[^\s\/])\2?(?=…$)/us';
+
+    // A single mark is also a wildcard, so it counts as cut emphasis only around one word right before the ellipsis: *test files… and *.php… keep their star.
+    private const string PLAIN_CUT = '/'.self::OPENS.'([*_])((?=[^\s*_.\/])(?:(?!\1)\S)+?)(?<=[^*_\/])(?=…$)/u';
 
     // Plain spans never hold a backtick, so a backtick stands in for each code span while the marks around it are paired.
     private const string CODE = '`';
 
     public function __construct(
         private string $text,
+        // Only the caller knows that it cut the text: an ellipsis the reviewer wrote looks the same and must close no mark.
+        private bool $cut = false,
     ) {
     }
 
@@ -86,9 +98,10 @@ final readonly class FindingText
     {
         $codes = array_values(array_filter($spans, static fn (array $span): bool => $span['code']));
         $marked = implode('', array_map(static fn (array $span): string => $span['code'] ? self::CODE : $span['text'], $spans));
-        // A lone __word__ is a dunder name (__DIR__, __init_subclass__), so it keeps its marks; the text between a pair never holds the mark's own character, so two separate marks (*x*/*y*, two globs) never pair across each other.
-        $strong = preg_replace('/'.self::OPENS.'(?!__[A-Za-z0-9_]+__)(\*\*|__)((?=[^\s.\/])(?:(?!\1(?![*_])|'.self::PARAGRAPH.').)+?|'.self::DOT_WORD.')(?<=[^\s\/])(?:\1'.self::CLOSES.'|'.self::CUT.')/us', '$2', $marked) ?? $marked;
-        $plain = preg_replace('/'.self::OPENS.'([*_])((?=[^\s*_.\/])(?:(?!\1|'.self::PARAGRAPH.').)+?|'.self::DOT_WORD.')(?<=[^\s*_\/])(?:\1'.self::CLOSES.'|'.self::CUT.')/us', '$2', $strong) ?? $strong;
+        $strong = preg_replace(self::STRONG, '$2', $marked) ?? $marked;
+        $strong = $this->cut ? preg_replace(self::STRONG_CUT, '$3', $strong) ?? $strong : $strong;
+        $plain = preg_replace(self::PLAIN, '$2', $strong) ?? $strong;
+        $plain = $this->cut ? preg_replace(self::PLAIN_CUT, '$2', $plain) ?? $plain : $plain;
 
         $result = [];
         foreach (explode(self::CODE, $plain) as $index => $text) {

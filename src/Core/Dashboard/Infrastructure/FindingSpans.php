@@ -13,8 +13,8 @@ final readonly class FindingSpans
      * @return list<array{text: string, code: bool}>
      */
     #[AsTwigFunction('finding_spans')]
-    public function of(string $text): array
+    public function of(string $text, bool $cut = false): array
     {
-        return new FindingText($text)->spans();
+        return new FindingText($text, $cut)->spans();
     }
 }

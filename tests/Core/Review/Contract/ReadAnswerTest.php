@@ -23,7 +23,7 @@ final class ReadAnswerTest extends TestCase
 {
     public function testAReadAnswerKeepsTheVerdictAndEachFindingsSeverityPlaceAndTitleInOrder(): void
     {
-        $expected = [new ReadFinding(Severity::P1, 'src/Cart.php', 12, 'The discount ends early.'), new ReadFinding(Severity::P3, null, null, 'Name the constant.')];
+        $expected = [new ReadFinding(Severity::P1, 'src/Cart.php', 12, 'The discount ends early.', false), new ReadFinding(Severity::P3, null, null, 'Name the constant.', false)];
 
         $answer = ReadAnswer::of(new Verdict(Decision::Changes, array_map($this->findingReadAs(...), $expected), [], []));
 
@@ -68,6 +68,19 @@ final class ReadAnswerTest extends TestCase
         $read = ReadFinding::of($this->findingWritten(str_repeat('a', 158).' '.str_repeat('b', 50)));
 
         self::assertSame(str_repeat('a', 158).'…', $read->title);
+    }
+
+    public function testATitleLongerThanTheCapSaysItWasCut(): void
+    {
+        self::assertTrue(ReadFinding::of($this->findingWritten(str_repeat('a', 161)))->titleCut);
+    }
+
+    public function testATitleOfTheCapEndingInAnEllipsisTheReviewerWroteSaysItWasNotCut(): void
+    {
+        $read = ReadFinding::of($this->findingWritten(str_repeat('a', 159).'…'));
+
+        self::assertSame(str_repeat('a', 159).'…', $read->title);
+        self::assertFalse($read->titleCut);
     }
 
     public function testAnApprovalIsReadWithoutFindings(): void

@@ -10,6 +10,7 @@ use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
 use Intakt\Core\Dashboard\Infrastructure\LedgerRounds;
 use Intakt\Core\Dashboard\UseCase\ShowReview\ShowReviewController;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\DomCrawler\Crawler;
 
@@ -52,6 +53,20 @@ final class JudgedRoundFindingsPageTest extends DashboardPageTestCase
 
         self::assertSame('F1 the amount is greater than 100, not why', $crawler->filter('#round-round-1 .finding-card .fc-title')->text());
         self::assertSame('P1F1 the amount is greater than 100, not why', $crawler->filter('.state-block a.sb-finding')->text());
+    }
+
+    #[TestWith(['Copy *.php…'])]
+    #[TestWith(['Match **kwargs…'])]
+    #[TestWith(['Use _private and more…'])]
+    #[TestWith(['Copy *.php and *.twig…'])]
+    public function testACardEndingInAnEllipsisTheReviewerWroteKeepsItsWildcards(string $written): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeToFixAtLine7OfA('round-1', $written);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame($written, $crawler->filter('#round-round-1 .finding-card .fc-text')->text());
     }
 
     public function testAnUnmatchedBacktickLeavesNoLiteralBacktickInACard(): void

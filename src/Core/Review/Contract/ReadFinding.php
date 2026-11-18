@@ -14,24 +14,23 @@ final readonly class ReadFinding
         public ?string $file,
         public ?int $line,
         public string $title,
+        // A title can end in an ellipsis the reviewer wrote, so whoever shows it learns here whether it was cut.
+        public bool $titleCut,
     ) {
     }
 
     public static function of(Finding $finding): self
     {
-        return new self($finding->severity, $finding->file, $finding->line, self::titleOf($finding->text));
+        // The first line of its text, because a finding has no title of its own and the rest of its text is the explanation.
+        $title = trim(explode("\n", trim($finding->text), 2)[0]);
+        $cut = mb_strlen($title) > self::TITLE_LENGTH;
+
+        return new self($finding->severity, $finding->file, $finding->line, $cut ? self::shortened($title) : $title, $cut);
     }
 
-    // The first line of its text, because a finding has no title of its own and the rest of its text is the explanation.
-    private static function titleOf(string $text): string
+    // Cut by characters, so a multibyte character is never split, and marked so a reader sees the title goes on.
+    private static function shortened(string $title): string
     {
-        $title = trim(explode("\n", trim($text), 2)[0]);
-
-        if (mb_strlen($title) <= self::TITLE_LENGTH) {
-            return $title;
-        }
-
-        // Cut by characters, so a multibyte character is never split, and marked so a reader sees the title goes on.
         return rtrim(mb_substr($title, 0, self::TITLE_LENGTH - 1)).'…';
     }
 }

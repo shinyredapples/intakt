@@ -1202,6 +1202,37 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertStringNotContainsString('*', $line);
     }
 
+    public function testAReadFindingWhoseTitleIsCutAtAnyOffsetAroundItsClosingMarkReachesTheLiveLogWithoutAMark(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        // A whole __word__ is a dunder name and keeps its marks, so the double underscore starts where the cut reaches its closing mark.
+        foreach (['**' => [148, 149, 150, 151, 152], '__' => [149, 150, 151], '*' => [149, 150, 151, 152], '_' => [150, 151]] as $mark => $lengths) {
+            foreach ($lengths as $length) {
+                $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, 'Update '.$mark.str_repeat('x', $length).$mark.' before shipping.', FixableBy::Builder, false, null, null)], [], []));
+
+                $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+                self::assertSame('P2 '.str_replace($mark[0], '', $answer->findings[0]->title), $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->last()->text(), $mark.' around '.$length);
+            }
+        }
+    }
+
+    public function testAReadFindingEndingInAnEllipsisTheReviewerWroteReachesTheLiveLogWithItsWildcards(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+
+        foreach (['Copy *.php…', 'Match **kwargs…', 'Use _private and more…', 'Copy *.php and *.twig…'] as $written) {
+            $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, $written, FixableBy::Builder, false, null, null)], [], []));
+
+            $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+            self::assertSame('P2 '.$written, $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->last()->text());
+        }
+    }
+
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
         $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
