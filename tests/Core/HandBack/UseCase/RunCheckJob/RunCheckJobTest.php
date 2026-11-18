@@ -25,6 +25,7 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyInstallJob;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySnapshot;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySource;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
@@ -33,6 +34,7 @@ use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobImages;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
@@ -40,6 +42,8 @@ use Intakt\Core\Job\Contract\JobOutputRefused;
 use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
+use Intakt\Core\Job\Infrastructure\EgressRoute;
+use Intakt\Core\Job\Infrastructure\JobContainerDefinition;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
 use Intakt\Plugin\Gate\Contract\DependencyInstall;
 use Intakt\Plugin\Gate\Contract\Gate;
@@ -50,6 +54,9 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\SharedLockStoreInterface;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(RunCheckJob::class)]
 #[CoversClass(LostContentCheck::class)]
@@ -84,12 +91,19 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
 #[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencySnapshot::class)]
+#[UsesClass(JobContainerDefinition::class)]
+#[UsesClass(EgressRoute::class)]
 #[UsesClass(DependencyInstallJob::class)]
 #[UsesClass(DependencySource::class)]
 #[UsesClass(DependencyInstall::class)]
 final class RunCheckJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
+
+    private const string START_CHECK = __DIR__.'/../../../../../docker/job/start-check.sh';
+
+    private const string IMAGE_ID = 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
     private BuildHistory $history;
 
@@ -131,7 +145,57 @@ final class RunCheckJobTest extends TestCase
             $spec->inputs,
         );
         self::assertSame(['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', '/input/mirror', '/input/handback.bundle', 'task', '--'], array_slice($spec->command, 0, 8));
-        self::assertSame('job-image', $spec->image);
+    }
+
+    public function testTheSnapshotsKeyItsInstallAndTheCheckAllUseTheImagesIdAndNotItsTag(): void
+    {
+        $this->history->commitFile('composer.json', "{}\n", 'Add the manifest');
+        $this->history->commitFile('composer.lock', "{\"packages\": []}\n", 'Lock the dependencies');
+
+        $this->whenTheJobLeaves(['check-result' => "passed\n"]);
+
+        $key = new DependencySource(new PhpGate()->dependencyInstall(), self::IMAGE_ID, ['composer.json' => "{}\n", 'composer.lock' => "{\"packages\": []}\n"])->key();
+        self::assertSame(self::IMAGE_ID, $this->ranSpec()->image);
+        self::assertSame(self::IMAGE_ID, $this->installedSpec()->image);
+        self::assertSame($this->history->folder.'/dependencies/'.$key, array_last($this->ranSpec()->inputs)?->hostPath);
+    }
+
+    public function testTheCheckHoldsItsSnapshotWhileItsJobRunsAndLetsItGoAfterwards(): void
+    {
+        $this->history->commitFile('composer.json', "{}\n", 'Add the manifest');
+        $this->history->commitFile('composer.lock', "{\"packages\": []}\n", 'Lock the dependencies');
+        $locks = new InMemoryStore();
+        $key = new DependencySource(new PhpGate()->dependencyInstall(), self::IMAGE_ID, ['composer.json' => "{}\n", 'composer.lock' => "{\"packages\": []}\n"])->key();
+        $evictor = new LockFactory($locks)->createLock(DependencySnapshots::LOCK_PREFIX.$key, ttl: null);
+        $evictableWhileRunning = null;
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($evictor, &$evictableWhileRunning): JobResult {
+            if (null !== $spec->keptDirectory) {
+                return $this->installedInto($spec);
+            }
+
+            $evictableWhileRunning = $evictor->acquire();
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['check-result' => "passed\n"]));
+        });
+
+        (void) $this->checkJob($runner, locks: $locks)->run($this->job($this->history->bundle('main..task'), null, []));
+
+        self::assertFalse($evictableWhileRunning);
+        self::assertTrue($evictor->acquire());
+    }
+
+    public function testNeitherTheInstallNorTheCheckJobGetsAWritableMountOfAStoreEntry(): void
+    {
+        $this->history->commitFile('composer.json', "{}\n", 'Add the manifest');
+        $this->history->commitFile('composer.lock', "{\"packages\": []}\n", 'Lock the dependencies');
+
+        $this->whenTheJobLeaves(['check-result' => "passed\n"]);
+
+        $store = $this->history->folder.'/dependencies';
+        $entry = (string) array_last($this->ranSpec()->inputs)?->hostPath;
+        self::assertSame([[$entry, true]], $this->mountsUnder($store, $this->ranSpec()));
+        self::assertSame([[$entry.'.staging/lock', true], [$entry.'.staging/kept', false]], $this->mountsUnder($store, $this->installedSpec()));
     }
 
     public function testTheJobRunsTheGatesStepsAndReachesOnlyItsRegistries(): void
@@ -181,8 +245,8 @@ final class RunCheckJobTest extends TestCase
         self::assertStringStartsWith($this->history->folder.'/dependencies/', $snapshot->hostPath);
         self::assertFileExists($snapshot->hostPath.'/vendor/acme/lib/Lib.php');
         self::assertNull($spec->keptDirectory);
-        self::assertSame(['task', '/input/dependencies', '--'], array_slice($spec->command, 6, 3));
-        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice($spec->command, 9));
+        self::assertSame(['task', '/input/dependencies', 'vendor', '--'], array_slice($spec->command, 6, 4));
+        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice($spec->command, 10));
     }
 
     public function testAHeadWithoutALockFileRunsTheCheckJobWithoutASnapshot(): void
@@ -536,17 +600,20 @@ final class RunCheckJobTest extends TestCase
         return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, $named);
     }
 
-    private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob
+    private function checkJob(JobRunner $runner, ?Gate $gate = null, ?SharedLockStoreInterface $locks = null): RunCheckJob
     {
         $git = new RepositoryGit(new HardenedGit());
         $gate ??= new PhpGate();
+        $images = self::createStub(JobImages::class);
+        $images->method('idOf')->willReturnMap([['job-image', self::IMAGE_ID]]);
 
         return new RunCheckJob(
             new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
             new LostContentCheck($git),
             $runner,
             $gate,
-            DependencyStore::in($this->history->folder.'/dependencies', $runner, $gate),
+            DependencyStore::in($this->history->folder.'/dependencies', $runner, $gate, $locks ?? new InMemoryStore()),
+            $images,
             new Filesystem(),
             self::SCRIPT,
         );
@@ -557,6 +624,37 @@ final class RunCheckJobTest extends TestCase
         self::assertInstanceOf(JobSpec::class, $this->ran);
 
         return $this->ran;
+    }
+
+    private function installedSpec(): JobSpec
+    {
+        self::assertInstanceOf(JobSpec::class, $this->installed);
+
+        return $this->installed;
+    }
+
+    /**
+     * Read from the container definition the engine gets, because jobs run as the runner's own user and only a read-only mount keeps them from writing.
+     *
+     * @return list<array{string, bool}>
+     */
+    private function mountsUnder(string $store, JobSpec $spec): array
+    {
+        $mounts = new JobContainerDefinition(self::START_CHECK)->of($spec, $this->history->folder.'/output', EgressRoute::none())['HostConfig']['Mounts'] ?? null;
+        self::assertIsArray($mounts);
+        $under = [];
+
+        foreach ($mounts as $mount) {
+            self::assertIsArray($mount);
+            $source = $mount['Source'] ?? null;
+            self::assertIsString($source);
+
+            if (str_starts_with($source, $store.'/')) {
+                $under[] = [$source, true === ($mount['ReadOnly'] ?? null)];
+            }
+        }
+
+        return $under;
     }
 
     /**

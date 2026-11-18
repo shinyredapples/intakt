@@ -35,6 +35,7 @@ use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobImages;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
@@ -217,12 +218,15 @@ final class RunCheckJobCommandTest extends TestCase
     private function executed(JobRunner $runner, array $options): CommandTester
     {
         $git = new RepositoryGit(new HardenedGit());
+        $images = self::createStub(JobImages::class);
+        $images->method('idOf')->willReturnArgument(0);
         $checks = new RunCheckJob(
             new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
             new LostContentCheck($git),
             $runner,
             new PhpGate(),
             DependencyStore::in($this->history->folder.'/dependencies', $runner, new PhpGate()),
+            $images,
             new Filesystem(),
             self::SCRIPT,
         );

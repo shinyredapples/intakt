@@ -19,13 +19,17 @@ use Symfony\Component\Clock\ClockInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\SharedLockInterface;
 
 // Written by the runner alone and mounted read-only into checks, so a builder can never plant a package that a later check of another head would run.
+// Each key has one lock: shared while checks use its entry, exclusive while one check saves it or another evicts it, so no check meets a half-saved or removed folder.
 final readonly class DependencySnapshots
 {
     public const string LOCK_PREFIX = 'dependency-snapshot-';
 
-    private const string ENTRY = '/\A[0-9a-f]{64}\z/D';
+    private const string STAGING = '.staging';
+
+    private const string NAME = '/\A(?<key>[0-9a-f]{64})(?<staging>\.staging)?\z/D';
 
     public function __construct(
         private Gate $gate,
@@ -45,10 +49,12 @@ final readonly class DependencySnapshots
     }
 
     /**
+     * The caller releases the snapshot once its job ended, because the entry is safe from eviction only until then.
+     *
      * @throws DockerEngineFailed
      * @throws JobEventNotRecorded
      */
-    public function of(string $repository, string $head, string $image): ?string
+    public function of(string $repository, string $head, string $image): ?DependencySnapshot
     {
         $install = $this->gate->dependencyInstall();
 
@@ -63,9 +69,22 @@ final readonly class DependencySnapshots
         }
 
         $source = new DependencySource($install, $image, $lockFiles);
+        $lock = $this->lockOf($source->key());
+
+        // Without waiting, so a check whose snapshot another check is saving or evicting installs itself as before.
+        if (!$lock->acquireRead()) {
+            return null;
+        }
+
         $entry = $this->root.'/'.$source->key();
 
-        return is_dir($entry) ? $this->used($entry) : $this->saved($source, $entry);
+        if ($this->isEntry($entry)) {
+            return $this->used($entry, $install, $lock);
+        }
+
+        $lock->release();
+
+        return $this->saved($source, $entry, $lock);
     }
 
     /**
@@ -86,51 +105,76 @@ final readonly class DependencySnapshots
         return $lockFiles;
     }
 
-    // Touched with the clock's time, because the least recently used snapshot is the one evicted.
-    private function used(string $entry): string
+    // No expiry, because an install or a check may run longer than a default lock lives.
+    private function lockOf(string $key): SharedLockInterface
+    {
+        return $this->locks->createLock(self::LOCK_PREFIX.$key, ttl: null);
+    }
+
+    private function isEntry(string $path): bool
+    {
+        return !is_link($path) && is_dir($path);
+    }
+
+    // Touched with the clock's time while the shared lock is held, so the entry exists and the least recently used one is evicted first.
+    private function used(string $entry, DependencyInstall $install, SharedLockInterface $lock): DependencySnapshot
     {
         touch($entry, $this->clock->now()->getTimestamp());
 
-        return $entry;
+        return new DependencySnapshot($entry, $install->directory, $lock);
     }
 
-    // Without waiting, so a check whose lock files another check is installing installs them itself as before.
-    private function saved(DependencySource $source, string $entry): ?string
+    // Looked at again under the exclusive lock, because another check may have saved the entry since the shared lock was let go.
+    private function saved(DependencySource $source, string $entry, SharedLockInterface $lock): ?DependencySnapshot
     {
-        // No expiry, because an install may run longer than a default lock lives.
-        $lock = $this->locks->createLock(self::LOCK_PREFIX.basename($entry), ttl: null);
-
         if (!$lock->acquire()) {
             return null;
         }
 
+        $saved = false;
+
         try {
-            return is_dir($entry) ? $this->used($entry) : $this->installedAs($source, $entry);
+            $saved = $this->isEntry($entry) || $this->installedAs($source, $entry);
         } finally {
-            $lock->release();
+            if (!$saved) {
+                $lock->release();
+            }
         }
-    }
 
-    private function installedAs(DependencySource $source, string $entry): ?string
-    {
-        $this->filesystem->mkdir($this->root, 0o755);
-        $this->filesystem->chmod($this->root, 0o755);
-        $staging = $entry.'.staging';
-        $this->filesystem->remove($staging);
-
-        if (!$this->install->installed($source, $staging)) {
-            $this->filesystem->remove($staging);
-
+        // Shared again before the eviction, so other checks may use the entry while this one runs.
+        if (!$saved || !$lock->acquireRead()) {
             return null;
         }
 
-        $this->sealed($staging.'/kept');
-        $this->filesystem->rename($staging.'/kept', $entry);
-        $this->filesystem->remove($staging);
-        $this->used($entry);
-        $this->evictBeyondTheCount();
+        $this->evictBeyondTheCount(basename($entry));
 
-        return $entry;
+        return $this->used($entry, $source->install, $lock);
+    }
+
+    /**
+     * @throws DockerEngineFailed
+     * @throws JobEventNotRecorded
+     */
+    private function installedAs(DependencySource $source, string $entry): bool
+    {
+        $this->filesystem->mkdir($this->root, 0o755);
+        $this->filesystem->chmod($this->root, 0o755);
+        $staging = $entry.self::STAGING;
+        // Whatever stands at either path is a leftover, because only the holder of the key's exclusive lock writes them.
+        $this->filesystem->remove([$staging, $entry]);
+
+        try {
+            if (!$this->install->installed($source, $staging)) {
+                return false;
+            }
+
+            $this->sealed($staging.'/kept');
+            $this->filesystem->rename($staging.'/kept', $entry);
+        } finally {
+            $this->filesystem->remove($staging);
+        }
+
+        return true;
     }
 
     // Links are skipped, because chmod follows them and the job chose where they point.
@@ -152,7 +196,8 @@ final readonly class DependencySnapshots
         return $file->isDir() || 0 !== ($file->getPerms() & 0o100) ? 0o755 : 0o644;
     }
 
-    private function evictBeyondTheCount(): void
+    // The entry just saved is left out, so a save never evicts its own snapshot; a staging folder whose key nobody holds is a crash's leftover.
+    private function evictBeyondTheCount(string $saved): void
     {
         $used = [];
         // Cleared first, because another check touched its snapshot since this process last read the times.
@@ -161,15 +206,37 @@ final readonly class DependencySnapshots
         $names = scandir($this->root);
 
         foreach (false === $names ? [] : $names as $name) {
-            if (1 === preg_match(self::ENTRY, $name)) {
+            if (1 !== preg_match(self::NAME, $name, $match) || $saved === $name) {
+                continue;
+            }
+
+            if ('' !== ($match['staging'] ?? '')) {
+                $this->removedUnlessHeld($match['key'], $name);
+            } else {
                 $used[$name] = (int) filemtime($this->root.'/'.$name);
             }
         }
 
         arsort($used, SORT_NUMERIC);
 
-        foreach (array_slice(array_keys($used), $this->kept) as $name) {
+        foreach (array_slice(array_keys($used), $this->kept - 1) as $name) {
+            $this->removedUnlessHeld($name, $name);
+        }
+    }
+
+    // Skipped while a check holds the key, so a folder a job is binding, copying or saving stays; a later save evicts it.
+    private function removedUnlessHeld(string $key, string $name): void
+    {
+        $lock = $this->lockOf($key);
+
+        if (!$lock->acquire()) {
+            return;
+        }
+
+        try {
             $this->filesystem->remove($this->root.'/'.$name);
+        } finally {
+            $lock->release();
         }
     }
 }

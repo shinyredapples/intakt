@@ -6,16 +6,16 @@ namespace Intakt\Tests\Core\HandBack\UseCase\RunCheckJob;
 
 use Closure;
 use Symfony\Component\Lock\Key;
-use Symfony\Component\Lock\PersistingStoreInterface;
+use Symfony\Component\Lock\SharedLockStoreInterface;
 
-// Runs another check's save at the moment the lock is taken, so the order where it finished first is forced instead of hoped for.
-final readonly class SavingWhileLocking implements PersistingStoreInterface
+// Runs another check's save at the moment the exclusive lock is taken, so the order where it finished first is forced instead of hoped for.
+final readonly class SavingWhileLocking implements SharedLockStoreInterface
 {
     /**
      * @param Closure(): void $otherCheckSaves
      */
     public function __construct(
-        private PersistingStoreInterface $store,
+        private SharedLockStoreInterface $store,
         private Closure $otherCheckSaves,
     ) {
     }
@@ -24,6 +24,11 @@ final readonly class SavingWhileLocking implements PersistingStoreInterface
     {
         ($this->otherCheckSaves)();
         $this->store->save($key);
+    }
+
+    public function saveRead(Key $key): void
+    {
+        $this->store->saveRead($key);
     }
 
     public function delete(Key $key): void

@@ -40,6 +40,15 @@ final class InstallDependenciesScriptTest extends TestCase
         self::assertSame("installed\n", file_get_contents($this->folder.'/output/install-result'));
     }
 
+    public function testANestedFolderIsKeptUnderItsOwnPath(): void
+    {
+        $run = $this->whenTheInstallRuns('mkdir -p tools/vendor && echo installed > tools/vendor/package', 'tools/vendor');
+
+        self::assertSame(0, $run->getExitCode(), $run->getErrorOutput());
+        self::assertSame("installed\n", file_get_contents($this->folder.'/kept/tools/vendor/package'));
+        self::assertDirectoryDoesNotExist($this->folder.'/kept/vendor');
+    }
+
     public function testAFailedInstallKeepsNothingAndLeavesNoResult(): void
     {
         $run = $this->whenTheInstallRuns('mkdir -p vendor/acme && echo network timeout && exit 1');
@@ -58,10 +67,10 @@ final class InstallDependenciesScriptTest extends TestCase
         self::assertFileDoesNotExist($this->folder.'/output/install-result');
     }
 
-    private function whenTheInstallRuns(string $command): Process
+    private function whenTheInstallRuns(string $command, string $directory = 'vendor'): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-install-dependencies', $this->folder.'/lock', $this->folder.'/kept', 'vendor', '--', $command],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-install-dependencies', $this->folder.'/lock', $this->folder.'/kept', $directory, '--', $command],
             null,
             ['HOME' => $this->folder.'/work', 'TMPDIR' => $this->folder.'/work', 'INTAKT_JOB_OUTPUT' => $this->folder.'/output'],
         );

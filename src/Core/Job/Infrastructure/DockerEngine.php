@@ -17,7 +17,8 @@ final readonly class DockerEngine
     // Pinned, so a newer engine still answers in the shape read here (1.44 is Docker Engine 25).
     private const string API = 'http://docker/v1.44/';
     private const string CONTAINER_ID = '/^[A-Za-z0-9]{1,128}$/D';
-    private const string NETWORK_NAME = '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D';
+    private const string IMAGE_ID = '/\Asha256:[0-9a-f]{64}\z/D';
+    private const string NETWORK_NAME ='/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D';
     // Generous, because a step such as compiling an extension may print nothing for minutes; a whole build gets an hour before it counts as stuck.
     private const float BUILD_IDLE_SECONDS = 600.0;
     private const float BUILD_SECONDS = 3600.0;
@@ -84,6 +85,18 @@ final readonly class DockerEngine
         $answer = json_decode($body, true);
 
         return is_array($answer) && is_int($answer['StatusCode'] ?? null) && null === ($answer['Error'] ?? null);
+    }
+
+    // Only a sha256 digest counts, because the ID is used where a mutable tag would let a rebuilt image pass for the old one.
+    public function imageId(string $image): string
+    {
+        $id = $this->send('GET', sprintf('images/%s/json', rawurlencode($image)))->accepting(200)['Id'] ?? null;
+
+        if (!is_string($id) || 1 !== preg_match(self::IMAGE_ID, $id)) {
+            throw DockerEngineFailed::unexpected('images/json');
+        }
+
+        return $id;
     }
 
     /**

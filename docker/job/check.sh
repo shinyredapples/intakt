@@ -1,8 +1,8 @@
 #!/bin/sh
 # The check job's command, so the builder's own run of the checks is never what lets a change through.
-# Usage: check.sh <mirror> <bundle> <branch> [dependencies] -- <step> [step ...]
-# Clones the mirror into TMPDIR, applies the bundle's branch, copies the dependency snapshot into the clone when one is given,
-# then runs each step with sh -c in the clone until one fails.
+# Usage: check.sh <mirror> <bundle> <branch> [<dependencies> <directory>] -- <step> [step ...]
+# Clones the mirror into TMPDIR, applies the bundle's branch, copies <directory> of the dependency snapshot into the clone when one is given
+# and the head leaves that path free, then runs each step with sh -c in the clone until one fails.
 # Writes check.log and check-result (passed, failed <exit code> or not-applied) into INTAKT_JOB_OUTPUT, the job's only way to hand its result back.
 set -u
 
@@ -11,9 +11,11 @@ bundle="$2"
 branch="$3"
 shift 3
 dependencies=''
-if [ $# -gt 0 ] && [ "$1" != '--' ]; then
+directory=''
+if [ $# -gt 1 ] && [ "$1" != '--' ]; then
     dependencies="$1"
-    shift
+    directory="$2"
+    shift 2
 fi
 if [ "${1-}" = '--' ]; then
     shift
@@ -31,11 +33,17 @@ apply() {
 }
 
 # A copy, so the check writes its own autoload files into the clone and the read-only snapshot stays as the runner saved it.
+# Only into a path the head leaves free, so the snapshot never replaces a file of the change under check; such a head installs as before.
 copy_dependencies() {
     if [ -z "$dependencies" ]; then
         return 0
     fi
-    cp -R "$dependencies/." "$clone/"
+    test -d "$dependencies/$directory" || return 1
+    if [ -e "$clone/$directory" ] || [ -L "$clone/$directory" ]; then
+        return 0
+    fi
+    mkdir -p "$(dirname "$clone/$directory")" \
+        && cp -R "$dependencies/$directory" "$clone/$directory"
 }
 
 result() {

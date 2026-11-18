@@ -78,6 +78,7 @@ use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEnd;
 use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobImages;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
@@ -895,7 +896,9 @@ final class BuildTaskTest extends TestCase
         $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
         $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
         $dependencies = DependencyStore::in($this->mirrors.'-dependencies', $this->checkRunner, new PhpGate());
-        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), $dependencies, new Filesystem(), self::CHECK_SCRIPT);
+        $images = self::createStub(JobImages::class);
+        $images->method('idOf')->willReturnArgument(0);
+        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), $dependencies, $images, new Filesystem(), self::CHECK_SCRIPT);
 
         return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $ledger);
     }

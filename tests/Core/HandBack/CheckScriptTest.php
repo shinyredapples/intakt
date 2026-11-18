@@ -96,18 +96,66 @@ final class CheckScriptTest extends TestCase
         $snapshot = $this->history->folder.'/snapshot';
         new Filesystem()->dumpFile($snapshot.'/vendor/acme/lib/Lib.php', "<?php\n");
 
-        $run = $this->whenTheCheckRunsWith([$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot], 'test -f vendor/acme/lib/Lib.php', 'touch vendor/acme/written-by-the-check');
+        $run = $this->whenTheCheckRunsWith([$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot, 'vendor'], 'test -f vendor/acme/lib/Lib.php', 'touch vendor/acme/written-by-the-check');
 
         self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
         self::assertSame("passed\n", $this->outputFile('check-result'));
         self::assertFileDoesNotExist($snapshot.'/vendor/acme/written-by-the-check');
     }
 
+    public function testASnapshotNeverReplacesAFileTheHeadTracksInItsFolder(): void
+    {
+        $this->history->commitFile('vendor/example/resource.txt', "tracked change\n", 'Change a tracked dependency file');
+        $snapshot = $this->history->folder.'/snapshot';
+        new Filesystem()->dumpFile($snapshot.'/vendor/example/resource.txt', "registry version\n");
+        new Filesystem()->dumpFile($snapshot.'/vendor/acme/lib/Lib.php', "<?php\n");
+
+        $run = $this->whenTheCheckRunsWith(
+            [$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot, 'vendor'],
+            'test "$(cat vendor/example/resource.txt)" = "tracked change"',
+            'test ! -e vendor/acme',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
+    public function testASnapshotOutsideItsFolderIsNotCopied(): void
+    {
+        $this->history->commitFile('README.md', "from the head\n", 'Add a readme');
+        $snapshot = $this->history->folder.'/snapshot';
+        new Filesystem()->dumpFile($snapshot.'/vendor/acme/lib/Lib.php', "<?php\n");
+        new Filesystem()->dumpFile($snapshot.'/README.md', "from the snapshot\n");
+
+        $run = $this->whenTheCheckRunsWith(
+            [$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot, 'vendor'],
+            'test "$(cat README.md)" = "from the head"',
+            'test -f vendor/acme/lib/Lib.php',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+    }
+
+    public function testANestedSnapshotFolderIsCopiedToTheSamePathInTheClone(): void
+    {
+        $this->history->commitFile('tools/composer.json', "{}\n", 'Add a tools project');
+        $snapshot = $this->history->folder.'/snapshot';
+        new Filesystem()->dumpFile($snapshot.'/tools/vendor/acme/Tool.php', "<?php\n");
+
+        $run = $this->whenTheCheckRunsWith(
+            [$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot, 'tools/vendor'],
+            'test -f tools/vendor/acme/Tool.php',
+            'test -f tools/composer.json',
+        );
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+    }
+
     public function testAMissingDependencySnapshotLeavesNotAppliedAndRunsNoStep(): void
     {
         $this->history->commit('Build work');
 
-        $run = $this->whenTheCheckRunsWith([$this->history->mirror, $this->history->bundle('main..task'), 'task', $this->history->folder.'/missing'], 'touch ran');
+        $run = $this->whenTheCheckRunsWith([$this->history->mirror, $this->history->bundle('main..task'), 'task', $this->history->folder.'/missing', 'vendor'], 'touch ran');
 
         self::assertSame(1, $run->getExitCode());
         self::assertSame("not-applied\n", $this->outputFile('check-result'));

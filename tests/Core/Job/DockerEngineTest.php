@@ -124,6 +124,25 @@ final class DockerEngineTest extends TestCase
         $this->engineAnswering('{"Id":"sha256:abc"}')->imageVolumes('sample:latest');
     }
 
+    public function testAnImagesIdIsItsContentDigest(): void
+    {
+        $id = 'sha256:'.str_repeat('ab', 32);
+
+        self::assertSame($id, $this->engineAnswering('{"Id":"'.$id.'","Config":{}}')->imageId('sample:latest'));
+    }
+
+    public function testAnImageIdThatIsNotASha256DigestIsRefused(): void
+    {
+        foreach (['{"Id":"sha256:abc"}', '{"Id":"sample:latest"}', '{"Config":{}}', '{"Id":42}'] as $body) {
+            try {
+                $this->engineAnswering($body)->imageId('sample:latest');
+                self::fail('Accepted '.$body);
+            } catch (DockerEngineFailed $failed) {
+                self::assertEquals(DockerEngineFailed::unexpected('images/json'), $failed, $body);
+            }
+        }
+    }
+
     public function testTheImageNameIsEncodedIntoTheApiPath(): void
     {
         $url = '';

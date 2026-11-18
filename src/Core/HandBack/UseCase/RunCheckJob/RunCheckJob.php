@@ -18,6 +18,7 @@ use Intakt\Core\Job\Contract\JobCause;
 use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobEventNotRecorded;
 use Intakt\Core\Job\Contract\JobId;
+use Intakt\Core\Job\Contract\JobImages;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
@@ -61,6 +62,7 @@ final readonly class RunCheckJob implements CheckJobs
         private JobRunner $jobs,
         private Gate $gate,
         private DependencySnapshots $dependencies,
+        private JobImages $images,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/check.sh')]
         private string $checkScript,
@@ -92,7 +94,15 @@ final readonly class RunCheckJob implements CheckJobs
             return new CheckJobOutcome(CheckVerdict::LostContent, lostContent: $lost);
         }
 
-        return $this->outcomeOf($this->ranJob($job, $repository, $accepted));
+        // Resolved once, so the snapshot's key, its install and the check all use the same image even if its tag is rebuilt meanwhile.
+        $image = $this->images->idOf($job->image);
+        $snapshot = $this->dependencies->of($repository, $accepted->head, $image);
+
+        try {
+            return $this->outcomeOf($this->ranJob($this->specOf($job, $repository, $accepted, $image, $snapshot)));
+        } finally {
+            $snapshot?->release();
+        }
     }
 
     private function absolute(string $path): string
@@ -107,31 +117,30 @@ final readonly class RunCheckJob implements CheckJobs
         return $absolute;
     }
 
-    private function ranJob(CheckJob $job, string $repository, AcceptedHandBack $accepted): ?JobResult
+    private function ranJob(JobSpec $spec): ?JobResult
     {
         try {
-            return $this->jobs->run($this->specOf($job, $repository, $accepted));
+            return $this->jobs->run($spec);
         } catch (JobOutputRefused) {
             // No result, because the job wrote what the runner refuses to read, which says nothing for the change.
             return null;
         }
     }
 
-    private function specOf(CheckJob $job, string $repository, AcceptedHandBack $accepted): JobSpec
+    private function specOf(CheckJob $job, string $repository, AcceptedHandBack $accepted, string $image, ?DependencySnapshot $snapshot): JobSpec
     {
         $script = $this->filesystem->readFile($this->checkScript);
         $steps = $this->gate->checkSteps($job->configuredCommand);
         $inputs = [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
-        $snapshot = $this->dependencies->of($repository, $accepted->head, $job->image);
 
-        if (null !== $snapshot) {
-            $inputs[] = new JobInput($snapshot, self::DEPENDENCIES);
+        if ($snapshot instanceof DependencySnapshot) {
+            $inputs[] = new JobInput($snapshot->path, self::DEPENDENCIES);
         }
 
         return new JobSpec(
             new JobId('check-'.substr($accepted->head, 0, 40)),
-            $job->image,
-            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...(null === $snapshot ? [] : [self::DEPENDENCIES]), '--', ...$steps],
+            $image,
+            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...($snapshot instanceof DependencySnapshot ? [self::DEPENDENCIES, $snapshot->directory] : []), '--', ...$steps],
             $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             $this->egress(),

@@ -9,6 +9,7 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyInstallJob;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySnapshot;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySnapshots;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySource;
 use Intakt\Core\Job\Contract\JobCause;
@@ -30,14 +31,16 @@ use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\SharedLockInterface;
+use Symfony\Component\Lock\SharedLockStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(DependencySnapshots::class)]
+#[CoversClass(DependencySnapshot::class)]
 #[CoversClass(DependencyInstallJob::class)]
 #[CoversClass(DependencySource::class)]
 #[UsesClass(DependencyInstall::class)]
@@ -65,7 +68,7 @@ final class DependencySnapshotsTest extends TestCase
 
     private MockClock $clock;
 
-    private PersistingStoreInterface $locks;
+    private SharedLockStoreInterface $locks;
 
     // Held for the whole test, because a lock nobody references is released at once.
     private ?SharedLockInterface $otherCheck = null;
@@ -93,11 +96,12 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
 
-        $snapshot = $this->store($this->runnerInstalling())->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = $this->store($this->runnerInstalling())->of($this->repository(), $head, 'job-image');
 
-        self::assertNotNull($snapshot);
-        self::assertStringStartsWith($this->root.'/', $snapshot);
-        self::assertFileExists($snapshot.'/vendor/acme/lib/Lib.php');
+        self::assertInstanceOf(DependencySnapshot::class, $snapshot);
+        self::assertStringStartsWith($this->root.'/', $snapshot->path);
+        self::assertSame('vendor', $snapshot->directory);
+        self::assertFileExists($snapshot->path.'/vendor/acme/lib/Lib.php');
         self::assertCount(1, $this->ran);
         self::assertSame(['composer.json', 'composer.lock'], $this->lockInputsSeen);
         $install = $this->ran[0];
@@ -107,16 +111,16 @@ final class DependencySnapshotsTest extends TestCase
         self::assertSame((string) file_get_contents(self::SCRIPT), $install->command[2]);
         self::assertSame('job-image', $install->image);
         self::assertSame(['repo.packagist.org', 'api.github.com', 'codeload.github.com'], $install->egress->hosts);
-        self::assertDirectoryDoesNotExist($snapshot.'.staging');
+        self::assertDirectoryDoesNotExist($snapshot->path.'.staging');
     }
 
     public function testAHitReusesTheSnapshotAndRunsNoInstall(): void
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
         $store = $this->store($this->runnerInstalling());
-        $first = $store->of($this->history->work.'/.git', $head, 'job-image');
+        $first = $this->pathAt($store, $head);
 
-        $second = $store->of($this->history->work.'/.git', $this->history->commit('Change only the code'), 'job-image');
+        $second = $this->pathAt($store, $this->history->commit('Change only the code'));
 
         self::assertNotNull($first);
         self::assertSame($first, $second);
@@ -126,9 +130,9 @@ final class DependencySnapshotsTest extends TestCase
     public function testAChangedLockFileMissesTheSnapshotOfTheOldOne(): void
     {
         $store = $this->store($this->runnerInstalling());
-        $old = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["acme/lib"]}'), 'job-image');
+        $old = $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["acme/lib"]}'));
 
-        $new = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["acme/lib", "acme/other"]}'), 'job-image');
+        $new = $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["acme/lib", "acme/other"]}'));
 
         self::assertNotNull($new);
         self::assertNotSame($old, $new);
@@ -139,9 +143,9 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
         $store = $this->store($this->runnerInstalling());
-        $old = $store->of($this->history->work.'/.git', $head, 'php-8.4-image');
+        $old = $this->pathAt($store, $head, 'sha256:'.str_repeat('1', 64));
 
-        $new = $store->of($this->history->work.'/.git', $head, 'php-8.5-image');
+        $new = $this->pathAt($store, $head, 'sha256:'.str_repeat('2', 64));
 
         self::assertNotSame($old, $new);
         self::assertCount(2, $this->ran);
@@ -151,7 +155,7 @@ final class DependencySnapshotsTest extends TestCase
     {
         $this->history->commitFile('composer.json', "{}\n", 'Add the manifest alone');
 
-        $snapshot = $this->store($this->runnerInstalling())->of($this->history->work.'/.git', $this->history->commit('Build work'), 'job-image');
+        $snapshot = $this->pathAt($this->store($this->runnerInstalling()), $this->history->commit('Build work'));
 
         self::assertNull($snapshot);
         self::assertSame([], $this->ran);
@@ -163,7 +167,7 @@ final class DependencySnapshotsTest extends TestCase
         $gate = self::createStub(Gate::class);
         $gate->method('dependencyInstall')->willReturn(null);
 
-        $snapshot = $this->store($this->runnerInstalling(), $gate)->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = $this->pathAt($this->store($this->runnerInstalling(), $gate), $head);
 
         self::assertNull($snapshot);
         self::assertSame([], $this->ran);
@@ -178,7 +182,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::Exited, 1), new JobOutput([]));
         });
 
-        $snapshot = $this->store($runner)->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = $this->pathAt($this->store($runner), $head);
 
         self::assertNull($snapshot);
         self::assertSame([], $this->entries());
@@ -193,7 +197,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::TimedOut, 137), new JobOutput(['install-result' => "installed\n"]));
         });
 
-        self::assertNull($this->store($runner)->of($this->history->work.'/.git', $head, 'job-image'));
+        self::assertNull($this->pathAt($this->store($runner), $head));
         self::assertSame([], $this->entries());
     }
 
@@ -203,8 +207,41 @@ final class DependencySnapshotsTest extends TestCase
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willThrowException(JobOutputRefused::tooMany(1000));
 
-        self::assertNull($this->store($runner)->of($this->history->work.'/.git', $head, 'job-image'));
+        self::assertNull($this->pathAt($this->store($runner), $head));
         self::assertSame([], $this->entries());
+    }
+
+    public function testAnInstallThatThrowsAfterWritingLeavesNoStagingFolderAndNoLock(): void
+    {
+        $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
+        $runner = $this->runnerDoing(static function (string $kept): JobResult {
+            new Filesystem()->dumpFile($kept.'/vendor/acme/lib/Lib.php', "<?php\n");
+
+            throw new RuntimeException('The engine went away.');
+        });
+        $store = $this->store($runner);
+
+        try {
+            $this->pathAt($store, $head);
+            self::fail('The engine failure was swallowed.');
+        } catch (RuntimeException $failure) {
+            self::assertSame('The engine went away.', $failure->getMessage());
+        }
+
+        self::assertSame([], $this->entries());
+        self::assertNotNull($this->pathAt($this->store($this->runnerInstalling()), $head));
+    }
+
+    public function testAStrayFileAtTheEntryIsReplacedByTheSnapshotInsteadOfBreakingEveryLaterCheck(): void
+    {
+        $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
+        new Filesystem()->mkdir($this->root);
+        touch($this->root.'/'.$this->keyOf('{"packages": ["acme/lib"]}'), 1);
+
+        $snapshot = $this->pathAt($this->store($this->runnerInstalling()), $head);
+
+        self::assertNotNull($snapshot);
+        self::assertFileExists($snapshot.'/vendor/acme/lib/Lib.php');
     }
 
     public function testASavedSnapshotIsWritableByTheRunnerAlone(): void
@@ -221,7 +258,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n"]));
         });
 
-        $snapshot = (string) $this->store($runner)->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = (string) $this->pathAt($this->store($runner), $head);
 
         self::assertSame(0o755, fileperms($this->root) & 0o777);
         self::assertSame(0o755, fileperms($snapshot) & 0o777);
@@ -243,7 +280,7 @@ final class DependencySnapshotsTest extends TestCase
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n"]));
         });
 
-        $snapshot = (string) $this->store($runner)->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = (string) $this->pathAt($this->store($runner), $head);
 
         self::assertTrue(is_link($snapshot.'/vendor/acme/link'));
         clearstatcache();
@@ -253,26 +290,92 @@ final class DependencySnapshotsTest extends TestCase
     public function testTheStoreKeepsOnlyTheMostRecentlyUsedSnapshots(): void
     {
         $store = $this->store($this->runnerInstalling(), kept: 2);
-        $first = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["first"]}'), 'job-image');
+        $first = $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["first"]}'));
         $this->clock->sleep(60);
-        $second = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["second"]}'), 'job-image');
+        $second = $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["second"]}'));
         $this->clock->sleep(60);
-        $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["first"]}'), 'job-image');
+        $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["first"]}'));
         $this->clock->sleep(60);
 
-        $third = $store->of($this->history->work.'/.git', $this->givenTheHeadLocks('{"packages": ["third"]}'), 'job-image');
+        $third = $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["third"]}'));
 
         self::assertEqualsCanonicalizing([basename((string) $first), basename((string) $third)], $this->entries());
         self::assertDirectoryDoesNotExist((string) $second);
+    }
+
+    public function testASaveNeverEvictsTheSnapshotItJustSavedWhenAllWereUsedInTheSameSecond(): void
+    {
+        $store = $this->store($this->runnerInstalling(), kept: 1);
+        $locks = ['{"packages":[]}', '{"packages": []}'];
+        usort($locks, fn (string $a, string $b): int => strcmp($this->keyOf($a), $this->keyOf($b)));
+
+        foreach ($locks as $lock) {
+            $snapshot = $this->pathAt($store, $this->givenTheHeadLocks($lock));
+
+            self::assertNotNull($snapshot);
+            self::assertDirectoryExists($snapshot);
+        }
+
+        self::assertSame([$this->keyOf($locks[1])], $this->entries());
+    }
+
+    public function testASnapshotACheckStillHoldsIsNotEvictedUntilItIsReleased(): void
+    {
+        $store = $this->store($this->runnerInstalling(), kept: 1);
+        $held = $store->of($this->repository(), $this->givenTheHeadLocks('{"packages": ["held"]}'), 'job-image');
+        self::assertInstanceOf(DependencySnapshot::class, $held);
+        $this->clock->sleep(60);
+
+        $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["second"]}'));
+
+        self::assertDirectoryExists($held->path);
+        $held->release();
+        $this->clock->sleep(60);
+        $this->pathAt($store, $this->givenTheHeadLocks('{"packages": ["third"]}'));
+        self::assertDirectoryDoesNotExist($held->path);
+    }
+
+    public function testASnapshotBeingEvictedIsNotHandedToACheck(): void
+    {
+        $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
+        $store = $this->store($this->runnerInstalling());
+        $this->pathAt($store, $head);
+        $this->givenAnotherCheckHoldsTheKeyExclusively('{"packages": ["acme/lib"]}');
+
+        $snapshot = $this->pathAt($store, $head);
+
+        self::assertNull($snapshot);
+        self::assertCount(1, $this->ran);
+    }
+
+    public function testAStagingFolderACrashLeftIsSweptByTheNextSave(): void
+    {
+        $left = $this->root.'/'.$this->keyOf('{"packages": ["crashed"]}').'.staging';
+        new Filesystem()->dumpFile($left.'/kept/vendor/Half.php', "<?php\n");
+
+        $this->pathAt($this->store($this->runnerInstalling()), $this->givenTheHeadLocks('{"packages": ["acme/lib"]}'));
+
+        self::assertDirectoryDoesNotExist($left);
+    }
+
+    public function testAStagingFolderOfAnInstallStillRunningIsKept(): void
+    {
+        $running = $this->root.'/'.$this->keyOf('{"packages": ["running"]}').'.staging';
+        new Filesystem()->dumpFile($running.'/kept/vendor/Half.php', "<?php\n");
+        $this->givenAnotherCheckHoldsTheKeyExclusively('{"packages": ["running"]}');
+
+        $this->pathAt($this->store($this->runnerInstalling()), $this->givenTheHeadLocks('{"packages": ["acme/lib"]}'));
+
+        self::assertDirectoryExists($running);
     }
 
     public function testAnInstallOfTheSameLockFilesAlreadyRunningLeavesTheCheckToInstallAsBefore(): void
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
         $store = $this->store($this->runnerInstalling());
-        $this->givenAnotherCheckInstalls('{"packages": ["acme/lib"]}');
+        $this->givenAnotherCheckHoldsTheKeyExclusively('{"packages": ["acme/lib"]}');
 
-        $snapshot = $store->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = $this->pathAt($store, $head);
 
         self::assertNull($snapshot);
         self::assertSame([], $this->ran);
@@ -287,7 +390,7 @@ final class DependencySnapshotsTest extends TestCase
         });
         $store = $this->store($this->runnerInstalling());
 
-        $snapshot = $store->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = $this->pathAt($store, $head);
 
         self::assertSame($entry, $snapshot);
         self::assertSame([], $this->ran);
@@ -304,10 +407,24 @@ final class DependencySnapshotsTest extends TestCase
     {
         $head = $this->givenTheHeadLocks('{"packages": ["acme/lib"]}');
 
-        $snapshot = $this->store($this->runnerInstalling(), kept: 1)->of($this->history->work.'/.git', $head, 'job-image');
+        $snapshot = $this->pathAt($this->store($this->runnerInstalling(), kept: 1), $head);
 
         self::assertNotNull($snapshot);
         self::assertCount(1, $this->entries());
+    }
+
+    private function repository(): string
+    {
+        return $this->history->work.'/.git';
+    }
+
+    // Released at once, as a check job that ended would, so the entry is free for eviction again.
+    private function pathAt(DependencySnapshots $store, string $head, string $image = 'job-image'): ?string
+    {
+        $snapshot = $store->of($this->repository(), $head, $image);
+        $snapshot?->release();
+
+        return $snapshot?->path;
     }
 
     private function givenTheHeadLocks(string $lock): string
@@ -317,7 +434,7 @@ final class DependencySnapshotsTest extends TestCase
         return $this->history->commitFile('composer.lock', $lock."\n", 'Lock the dependencies');
     }
 
-    private function givenAnotherCheckInstalls(string $lock): void
+    private function givenAnotherCheckHoldsTheKeyExclusively(string $lock): void
     {
         $this->otherCheck = new LockFactory($this->locks)->createLock(DependencySnapshots::LOCK_PREFIX.$this->keyOf($lock), ttl: null);
         self::assertTrue($this->otherCheck->acquire());
