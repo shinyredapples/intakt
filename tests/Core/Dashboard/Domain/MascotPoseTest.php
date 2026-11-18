@@ -60,6 +60,6 @@ final class MascotPoseTest extends TestCase
 
     public function testThePosesAreWaitingConductingBowingAndAsleep(): void
     {
-        self::assertSame(['waiting', 'conducting', 'bowing', 'asleep'],array_column(MascotPose::cases(), 'value'));
+        self::assertSame(['waiting', 'conducting', 'bowing', 'asleep'], array_column(MascotPose::cases(), 'value'));
     }
 }
