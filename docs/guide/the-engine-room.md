@@ -124,8 +124,10 @@ flowchart LR
   d --> e{First build fine,<br/>or quiet for a while?}
   e -- yes --> f[The other slots follow,<br/>each when its job is done]
   e -- no --> h[Roll back,<br/>alert you]
-  f --> i[A job that runs too long<br/>is saved and picked up<br/>on the new version]
-  i --> j[Intakt's control process<br/>switches in seconds,<br/>running reviews keep going]
+  f --> k{A job still running<br/>at its slot's deadline?}
+  k -- yes --> i[That job is saved<br/>and picked up<br/>on the new version]
+  k -- no --> j[Intakt's control process<br/>switches in seconds,<br/>running reviews keep going]
+  i --> j
 ```
 
 - **Beside the old one:** the new version is checked while the old one keeps building and reviewing. Intakt compares the two checks test by test: if a test fails the same way on the old version too (the same test, stopping at the same line with the same failure message), that is a problem of your project, not of the update, so you hear about it and the update goes on. A test that fails only on the new version, or fails there at a different line or with a different message, stops the update.

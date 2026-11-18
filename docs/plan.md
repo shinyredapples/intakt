@@ -700,7 +700,7 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37; T91 after T38.
 - The first weeks of the weekly report (after T43) run while M7 is built.
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
-- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76; T90 after T20; T89 after T40, T44, T46, T48, T56 and T90; T92 after T51, T60 and T69.
+- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76; T90 after T20; T89 after T40, T44, T46, T48, T56 and T90; T92 after T51, T56, T60 and T69.
 - M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.
 
 ## Product security (#864)
