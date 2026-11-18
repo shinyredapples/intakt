@@ -45,8 +45,8 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame([
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
-            '{"result":"fail","failed":["secrets"],"report":"var/check/report.json"}',
-        ], $run->lines());
+            '{"result":"fail","failed":["secrets"],"report":"var/check/report-*.json"}',
+        ], $run->linesNamingAnyReport());
         self::assertSame(1, $run->exitCode());
     }
 
@@ -57,8 +57,8 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame([
             '{"gate":"cs","ok":true,"findings":[],"omitted":0}',
             '{"gate":"secrets","ok":false,"findings":["src/Report.php:3 broken"],"omitted":0}',
-            '{"result":"fail","failed":["secrets"],"report":"var/check/report.json"}',
-        ], $run->lines());
+            '{"result":"fail","failed":["secrets"],"report":"var/check/report-*.json"}',
+        ], $run->linesNamingAnyReport());
         self::assertSame(1, $run->exitCode());
     }
 
@@ -124,8 +124,8 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
             '{"gate":"tests","ok":true,"findings":[],"omitted":0}',
-            '{"result":"pass","failed":[],"report":"var/check/report.json"}',
-        ], $run->lines());
+            '{"result":"pass","failed":[],"report":"var/check/report-*.json"}',
+        ], $run->linesNamingAnyReport());
     }
 
     public function testTheContainerGateAlsoWaitsForTheStaticGates(): void
@@ -144,8 +144,8 @@ final class GateChildrenTest extends SandboxTestCase
             '{"gate":"phpstan","ok":true,"findings":[],"omitted":0}',
             '{"gate":"comments","ok":true,"findings":[],"omitted":0}',
             '{"gate":"audit","ok":true,"findings":[],"omitted":0}',
-            '{"result":"pass","failed":[],"report":"var/check/report.json"}',
-        ], $run->lines());
+            '{"result":"pass","failed":[],"report":"var/check/report-*.json"}',
+        ], $run->linesNamingAnyReport());
     }
 
     public function testAnOverrideThatNamesNoNumberOfGatesStopsBeforeAnyGateStarts(): void

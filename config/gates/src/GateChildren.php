@@ -63,9 +63,11 @@ final readonly class GateChildren
     {
         $running = [];
         $results = [];
-        // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment.
-        $forwarding = StopSignalForwarding::through(static function () use (&$running): void {
+        $fullReport = $this->fullReport;
+        // Because one Ctrl-C or kill meant for bin/check must reach every child running at that moment, and a stopped run keeps none of their results.
+        $forwarding = StopSignalForwarding::through(static function () use (&$running, $fullReport): void {
             self::stopAll($running);
+            $fullReport->discard();
         });
 
         while ([] !== $waiting || [] !== $running) {

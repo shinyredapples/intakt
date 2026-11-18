@@ -126,7 +126,8 @@ final readonly class CheckCommand
         }
 
         $summary = ['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed];
-        $this->print($fullReport->writeTo($root, $summary, $reports) ? $summary + ['report' => FullReport::PATH] : $summary);
+        $written = $fullReport->writeTo($root, $summary, $reports);
+        $this->print(null === $written ? $summary : $summary + ['report' => $written]);
 
         return [] === $failed ? 0 : 1;
     }
