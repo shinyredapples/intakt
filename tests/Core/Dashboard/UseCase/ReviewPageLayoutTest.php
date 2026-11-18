@@ -39,6 +39,54 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
         self::assertNotContains(null, $controlled);
     }
 
+    public function testEachPaneTheTabsControlIsATabPanelLabelledByItsTab(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        foreach ($crawler->filter('.ttabs button[role="tab"]')->each(static fn (Crawler $tab): Crawler => $tab) as $tab) {
+            $pane = $crawler->filter('#'.$tab->attr('aria-controls'));
+            self::assertSame('tabpanel', $pane->attr('role'));
+            self::assertSame($tab->attr('id'), $pane->attr('aria-labelledby'));
+        }
+        self::assertSame(['timeline-tab', 'live-log-tab'], $crawler->filter('.ttabs button[role="tab"]')->each(static fn (Crawler $tab): ?string => $tab->attr('id')));
+    }
+
+    public function testTheLiveLogIsATabStopBeforeAnyReviewerHasStarted(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $log = $crawler->filter('#live-log-pane');
+        self::assertSame('tabpanel', $log->attr('role'));
+        self::assertSame('0', $log->attr('tabindex'));
+        self::assertCount(0, $crawler->filter('#live-log-pane :is(a[href], button, summary, [tabindex])'));
+    }
+
+    public function testEachTabPanelNamesTheHeadingThatLabelsItWhileBothPanesAreShown(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $headings = $crawler->filter('.task-grid > [role="tabpanel"]')->each(static fn (Crawler $pane): ?string => $pane->attr('data-heading'));
+        self::assertSame(['timeline-title', 'live-log-title'], $headings);
+        foreach ($headings as $heading) {
+            self::assertCount(1, $crawler->filter('h2#'.$heading));
+        }
+    }
+
+    public function testOnlyTheChosenTabStartsInTheTabOrder(): void
+    {
+        $this->givenARunningRound();
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        self::assertSame(['0', '-1'], $crawler->filter('.ttabs button[role="tab"]')->each(static fn (Crawler $tab): ?string => $tab->attr('tabindex')));
+    }
+
     public function testAReviewWithoutALiveLogOffersNoSwitch(): void
     {
         $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
@@ -48,6 +96,19 @@ final class ReviewPageLayoutTest extends DashboardPageTestCase
 
         self::assertSelectorNotExists('.ttabs');
         self::assertSelectorExists('.task-grid[data-pane="timeline"] > .tl-pane');
+    }
+
+    public function testWithoutTheSwitchTheTimelineIsNoTabPanelAndKeepsItsHeadingAsLabel(): void
+    {
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeRound('round-1');
+
+        $crawler = $this->browser->request('GET', '/reviews/round-1');
+
+        $pane = $crawler->filter('#timeline-pane');
+        self::assertNull($pane->attr('role'));
+        self::assertSame('timeline-title', $pane->attr('aria-labelledby'));
+        self::assertCount(1, $crawler->filter('#timeline-title'));
     }
 
     // The page must be roomy, because DESIGN.md's Breakpoints grow only roomy pages past the default width from 1500 px.
