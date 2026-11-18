@@ -30,7 +30,7 @@ final readonly class RejectingJudge implements Vendor
     #[Override]
     public function judge(string $project, JudgeRequest $request): Judgement
     {
-        return new Judgement(array_map(static fn ($finding): JudgedFinding => new JudgedFinding($finding->id, Mark::Reject), $request->findings));
+        return new Judgement(array_map(static fn ($finding): JudgedFinding => new JudgedFinding($finding->id, Mark::Reject, null, 'Not a defect.'), $request->findings));
     }
 
     #[Override]

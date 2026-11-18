@@ -92,6 +92,41 @@ final class JudgedFindingsTest extends TestCase
         self::assertSame([], $judged->followUps);
     }
 
+    public function testAP1RejectedWithAReasonKeepsTheJudgesNote(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Reject, null, '  Not a bug here.  ')]), [$this->finding('a', Severity::P1)]);
+
+        self::assertSame(['a' => 'Not a bug here.'], $judged->judgeNotes);
+        self::assertCount(1, $judged->actList);
+    }
+
+    public function testAP2DeferredWithAReasonKeepsTheJudgesNote(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Defer, null, 'Needs its own design.')]), [$this->finding('a', Severity::P2)]);
+
+        self::assertSame(['a' => 'Needs its own design.'], $judged->judgeNotes);
+    }
+
+    public function testAP1WithoutAJudgeAnswerHasNoNote(): void
+    {
+        self::assertSame([], JudgedFindings::of($this->marks([]), [$this->finding('a', Severity::P1)])->judgeNotes);
+    }
+
+    public function testAP1ActedOrRejectedWithABlankReasonHasNoNote(): void
+    {
+        $judgement = new Judgement([new JudgedFinding('a', Mark::Act, null, 'Real.'), new JudgedFinding('b', Mark::Reject, null, '  ')]);
+
+        self::assertSame([], JudgedFindings::of($judgement, [$this->finding('a', Severity::P1), $this->finding('b', Severity::P1)])->judgeNotes);
+    }
+
+    public function testAP3RejectedWithAReasonCarriesNoNote(): void
+    {
+        $judged = JudgedFindings::of(new Judgement([new JudgedFinding('a', Mark::Reject, null, 'Taste.')]), [$this->finding('a', Severity::P3)]);
+
+        self::assertSame([], $judged->judgeNotes);
+        self::assertSame([], $judged->actList);
+    }
+
     public function testJudgedFindingsKeepTheDroppedFindingsTheyAreGiven(): void
     {
         $dropped = [DroppedFinding::of($this->finding('gone', Severity::P2), 'Names no file.')];

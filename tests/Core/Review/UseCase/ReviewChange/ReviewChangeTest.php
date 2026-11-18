@@ -191,6 +191,24 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
     }
 
+    public function testAP1TheJudgeRejectsKeepsTheJudgesNoteOnItsActListEntry(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('A', Severity::P1), $this->finding('B', Severity::P3)], [], []);
+
+        $review = $this->reviewWith(new RejectingJudge(new VerdictPerRole(['Look at part 1.' => $verdict])));
+
+        self::assertSame(['Not a defect.'], array_map(static fn (Finding $finding): ?string => $finding->judge_note, $review->actList));
+    }
+
+    public function testAP1WithoutAJudgeAnswerHasNoNoteOnItsActListEntry(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], []);
+
+        $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => $verdict]));
+
+        self::assertSame([null], array_map(static fn (Finding $finding): ?string => $finding->judge_note, $review->actList));
+    }
+
     public function testTwoReviewersReportingOnePlaceGiveOneActEntryThatNamesBothFindings(): void
     {
         $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 7)));

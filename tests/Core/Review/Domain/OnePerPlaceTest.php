@@ -25,6 +25,13 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame(['F2'], $act[0]->merged);
     }
 
+    public function testAnEntryCarriesTheNoteOfAFindingMergedIntoIt(): void
+    {
+        $entries = new OnePerPlace()->actList([$this->finding('F1', 'a.php', 3), $this->finding('F2', 'a.php', 3), $this->finding('F3', 'b.php', 1)], ['F1', 'F2', 'F3'], [], ['F2' => 'Kept anyway.']);
+
+        self::assertSame(['Kept anyway.', null], array_map(static fn (Finding $entry): ?string => $entry->judge_note, $entries));
+    }
+
     public function testTheMergedEntryKeepsTheHighestPriority(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7)->withSeverity(Severity::P1)], ['F1', 'F2']);

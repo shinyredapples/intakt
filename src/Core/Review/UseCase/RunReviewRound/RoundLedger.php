@@ -118,6 +118,7 @@ final readonly class RoundLedger
             $this->recordedFindings($judged, $act),
             $judged->dropped,
             $judged->sameCause,
+            $judged->judgeNotes,
         ));
     }
 

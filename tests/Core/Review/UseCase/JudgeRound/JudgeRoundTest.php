@@ -126,6 +126,16 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame([['round' => $round->id()->toRfc4122(), 'act' => ['F1', 'F2'], 'follow_ups' => []]], $this->judgeCalls());
     }
 
+    public function testAJudgeThatRejectsAP1WithAReasonRecordsItsNoteInJudgeDone(): void
+    {
+        $round = $this->completedRound();
+        $judgement = new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'Not a defect.'), new JudgedFinding('F2', Mark::Defer, null, 'Later.'), new JudgedFinding('F3', Mark::Reject, null, 'Taste.')]);
+
+        $this->fixture->judge(new ScriptedJudgement($judgement))($this->judgingOf($round));
+
+        self::assertSame(['F1' => 'Not a defect.', 'F2' => 'Later.'], $this->judgeDonePayloads()[0]['judge_notes']);
+    }
+
     public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
     {
         $round = $this->completedRound();
@@ -566,7 +576,7 @@ final class JudgeRoundTest extends KernelTestCase
      */
     private function judgeCalls(): array
     {
-        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true]), $this->judgeDonePayloads());
+        return array_map(static fn (array $payload): array => array_diff_key($payload, ['findings' => true, 'dropped' => true, 'same_cause' => true, 'judge_notes' => true]), $this->judgeDonePayloads());
     }
 
     /**

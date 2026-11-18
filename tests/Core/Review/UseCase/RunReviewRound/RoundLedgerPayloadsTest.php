@@ -225,7 +225,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
     {
         $done = new JudgeDone(self::ROUND, ['f1'], ['f2'], [new JudgeDoneFinding('f1', Severity::P1, 'A bug.'), new JudgeDoneFinding('f2', Severity::P3, 'A nit.')]);
 
-        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null}],"dropped":[],"same_cause":[]}', $this->written($done));
+        self::assertSame('{"round":"'.self::ROUND.'","act":["f1"],"follow_ups":["f2"],"findings":[{"id":"f1","severity":"P1","text":"A bug.","merged":[],"file":null,"line":null},{"id":"f2","severity":"P3","text":"A nit.","merged":[],"file":null,"line":null}],"dropped":[],"same_cause":[],"judge_notes":[]}', $this->written($done));
     }
 
     public function testADoneJudgeListsEachDroppedFindingWithItsIdPlaceAndReason(): void
@@ -285,7 +285,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     public function testADoneJudgeWithoutFollowUpsStillWritesTheKey(): void
     {
-        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
+        self::assertSame('{"round":"'.self::ROUND.'","act":[],"follow_ups":[],"findings":[],"dropped":[],"same_cause":[],"judge_notes":[]}', $this->written(new JudgeDone(self::ROUND, [], [], [])));
     }
 
     public function testTheLedgerSpreadsTheReviewerIdentityBeforeTheEventsOwnKeys(): void

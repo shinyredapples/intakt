@@ -54,11 +54,12 @@ final class StoredJsonTest extends KernelTestCase
         self::assertEquals($tracked, $read);
     }
 
+    // The judge's note is left out of stored JSON on purpose: it is read from the judge_done row, so json_encode's extra key is removed here.
     public function testATrackedFindingIsWrittenWithTheFieldsJsonEncodeWrote(): void
     {
         $tracked = [new TrackedFinding('a', $this->finding(), [1, 3], FindingStatus::Open)];
 
-        self::assertSame(json_encode($tracked, JSON_THROW_ON_ERROR), $this->serializer()->serialize($tracked, JsonEncoder::FORMAT));
+        self::assertSame(str_replace(',"judge_note":null', '', json_encode($tracked, JSON_THROW_ON_ERROR)), $this->serializer()->serialize($tracked, JsonEncoder::FORMAT));
     }
 
     public function testAFindingWithoutEvidenceKeepsTheNullKeyThatJsonEncodeWrote(): void
@@ -67,7 +68,7 @@ final class StoredJsonTest extends KernelTestCase
 
         $json = $this->serializer()->serialize($finding, JsonEncoder::FORMAT);
 
-        self::assertSame(json_encode($finding, JSON_THROW_ON_ERROR), $json);
+        self::assertSame(str_replace(',"judge_note":null', '', json_encode($finding, JSON_THROW_ON_ERROR)), $json);
     }
 
     public function testAFindingRowWrittenByJsonEncodeStillReadsBack(): void

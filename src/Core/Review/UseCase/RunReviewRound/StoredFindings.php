@@ -75,12 +75,13 @@ final readonly class StoredFindings
     /**
      * @param list<string>          $actIds
      * @param array<string, string> $sameCause
+     * @param array<string, string> $judgeNotes
      *
      * @return list<Finding>
      */
-    public function actListOf(ReviewRound $round, array $actIds, array $sameCause): array
+    public function actListOf(ReviewRound $round, array $actIds, array $sameCause, array $judgeNotes = []): array
     {
-        return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause);
+        return new OnePerPlace()->actList($this->reportedIn($round), $actIds, $sameCause, $judgeNotes);
     }
 
     /**
