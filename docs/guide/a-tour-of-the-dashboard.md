@@ -114,7 +114,7 @@ flowchart TD
 - **Only you can act:** an approval, a question only you can answer, an expired login, a halt only you may clear. You get one notification and a card, at the same moment.
 - **Once each:** a notification is sent once per item and change, not again every few minutes. The card stays until the reason is gone, then clears without you dismissing it.
 - **Nothing is lost:** every notice is recorded with whether it was delivered. If your phone can't be reached, the card says so and the fallback notifier is tried.
-- **Not yet yours:** a change still in review or being fixed doesn't ask you anything. You are asked once it has passed review and CI.
+- **Not yet yours:** a change still in review or being fixed doesn't ask you anything. You are asked once it has passed review and CI. (Planned:) The exception is a decision only you can make, such as a new package from an outside company: it is asked as soon as it shows up.
 
 ## Around the board
 
