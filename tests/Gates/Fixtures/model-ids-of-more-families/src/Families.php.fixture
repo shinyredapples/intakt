@@ -1,0 +1,23 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Families
+{
+    /**
+     * @return list<string>
+     */
+    public function ids(): array
+    {
+        return [
+            'text-embedding-3-small',
+            'codex-mini-latest',
+            'deepseek-chat',
+            'deepseek-reasoner',
+            'deepseek-coder',
+            'text-embedding-ada-002',
+        ];
+    }
+}

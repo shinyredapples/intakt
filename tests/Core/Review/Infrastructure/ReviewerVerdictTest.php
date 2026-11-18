@@ -12,8 +12,10 @@ use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ConversationAlreadyStarted;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReadFinding;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -113,6 +115,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReadFile::class)]
 #[UsesClass(StrictVerdictSubscriber::class)]
 #[UsesClass(UnstreamedModelCatalog::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ReviewerVerdictTest extends WebTestCase
 {
     use AiAssertionsTrait;
@@ -637,14 +641,23 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertStringContainsString('including any marker with another boundary or none', $this->sent[0]);
     }
 
-    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPassesUnlessItNamesTheWrongGate(): void
+    public function testTheSystemMessageTellsTheReviewerNotToReFlagWhatBinCheckPasses(): void
     {
         $this->review('Add a cart.', [], self::APPROVE);
 
         $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
         self::assertIsString($system);
         self::assertStringContainsString('Do not re-flag what `bin/check` passes', $system);
-        self::assertStringContainsString('unless the gate itself is wrong; then name the gate in the requirement field', $system);
+    }
+
+    public function testTheSystemMessageTellsTheReviewerThatAGateThatMissesACaseIsAP3NamingTheGateNotASendBack(): void
+    {
+        $this->review('Add a cart.', [], self::APPROVE);
+
+        $system = $this->conversations->load($this->conversation)->getSystemMessage()?->getContent();
+        self::assertIsString($system);
+        self::assertStringContainsString('also when the gate is wrong or misses a case: that gap gets a gate issue, not a send-back, so report it at most as a P3 that names the gate in the requirement field', $system);
+        self::assertStringNotContainsString('unless the gate itself is wrong', $system);
     }
 
     public function testTheDiffReachesThePromptInsideItsOwnFenceAfterTheTask(): void
@@ -669,7 +682,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         $messages = $this->conversations->load($this->conversation)->getMessages();
         self::assertInstanceOf(UserMessage::class, $messages[2]);
-        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff), $messages[2]->asText());
+        self::assertSame("The diff of the change:\n\n".new Fence()->wrap(UntrustedSource::Diff, $diff)->rendered(), $messages[2]->asText());
     }
 
     public function testAnEndMarkerInsideTheDiffCannotCloseItsFence(): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Override;
 use Symfony\AI\Agent\Toolbox\ToolboxInterface;
@@ -23,6 +24,7 @@ final class FencedToolbox implements ToolboxInterface
         private readonly ToolboxInterface $inner,
         private readonly PromptCut $cut,
         private readonly Fence $fence,
+        private readonly PromptAssembly $assembly,
     ) {
     }
 
@@ -41,7 +43,7 @@ final class FencedToolbox implements ToolboxInterface
         $answer = $this->fence->contentOf(UntrustedSource::ToolResult, $converted) ?? $converted;
         $this->cutAnAnswer = $this->cut->cuts($answer) || $this->cutAnAnswer;
 
-        return new ToolResult($toolCall, $this->cut->fenced(UntrustedSource::ToolResult, $answer), $result->getSources());
+        return new ToolResult($toolCall, $this->assembly->toolAnswer($this->cut->fenced(UntrustedSource::ToolResult, $answer)), $result->getSources());
     }
 
     public function cutAnAnswer(): bool
