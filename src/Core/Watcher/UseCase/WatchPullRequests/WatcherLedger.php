@@ -9,6 +9,8 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\BootOutcome;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
@@ -19,8 +21,12 @@ use Intakt\Plugin\Forge\Contract\OpenChange;
 
 final readonly class WatcherLedger
 {
-    public function __construct(private Ledger $ledger)
-    {
+    private const string STORE = 'store';
+
+    public function __construct(
+        private Ledger $ledger,
+        private FailingMains $failingMains = new FailingMains(),
+    ) {
     }
 
     // Skipped for a green head because the round it starts is recorded instead.
@@ -64,7 +70,21 @@ final readonly class WatcherLedger
 
     public function bootResultComputed(BootKey $key, BootOutcome $outcome): void
     {
-        $this->append(LedgerEventKind::BootResultComputed, ['project' => $key->project, 'main' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'state' => $outcome->state->value, 'reason' => $outcome->reason]);
+        $this->append(LedgerEventKind::BootResultComputed, $this->bootResultOf($key, $outcome));
+    }
+
+    // Marked, because the board trusts a result read from the store even for a pair it has seen, while a computed line of a seen pair may be a worker that finished late.
+    public function bootResultReadFromStore(BootKey $key, BootOutcome $outcome): void
+    {
+        $this->append(LedgerEventKind::BootResultComputed, $this->bootResultOf($key, $outcome) + ['read_from' => self::STORE]);
+    }
+
+    // Read with the board's own rule over the project's lines, because a stored result must be compared with what the board shows, not with the last line, which the board may have passed over.
+    public function failingMainOf(string $project): ?FailingMain
+    {
+        $lines = $this->ledger->readMentioning(['"project":'.json_encode($project, JSON_THROW_ON_ERROR)]);
+
+        return array_find($this->failingMains->in($lines), static fn (FailingMain $failing): bool => $project === $failing->project);
     }
 
     // The infrastructure alert of a main that does not boot, so the gate is off for every head of the project until main boots again.
@@ -76,6 +96,14 @@ final readonly class WatcherLedger
     public function headBootSkipped(string $project, HeadDecision $green): void
     {
         $this->append(LedgerEventKind::HeadBootSkipped, $this->headOf($project, $green) + ['cause' => BootGate::UNTRUSTED_AUTHOR]);
+    }
+
+    /**
+     * @return array{project: string, main: string, tool_fingerprint: string, state: string, reason: string}
+     */
+    private function bootResultOf(BootKey $key, BootOutcome $outcome): array
+    {
+        return ['project' => $key->project, 'main' => $key->main->hash, 'tool_fingerprint' => $key->toolFingerprint, 'state' => $outcome->state->value, 'reason' => $outcome->reason];
     }
 
     /**

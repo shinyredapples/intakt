@@ -52,6 +52,7 @@ final readonly class HeadLocks
             }
 
             $work($heads);
+            // Boundary: tries to give every held lock back and rethrows, because a lock left held would keep its head from later ticks until it expires.
         } catch (Throwable $failure) {
             $this->giveBackAfter($failure, $held);
 
@@ -101,6 +102,7 @@ final readonly class HeadLocks
     {
         try {
             $this->installWide->lockStoreFailed($storeFailure);
+            // Boundary: logs a back-off that cannot start, because the failure that ended the tick is the one the caller rethrows.
         } catch (Throwable $notReported) {
             $this->logger->error('The lock store failure could not start the install-wide failure back-off.', ['exception' => $notReported, 'lock_store_failure' => $storeFailure]);
         }

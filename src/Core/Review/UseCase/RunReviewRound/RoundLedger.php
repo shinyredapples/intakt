@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
+use Intakt\Core\Platform\Contract\Redactor;
 use Intakt\Core\Review\Contract\CatchUpOwed;
 use Intakt\Core\Review\Contract\ChangeSource;
 use Intakt\Core\Review\Contract\Finding;
@@ -44,6 +45,7 @@ final readonly class RoundLedger
         #[Target('stored')]
         private SerializerInterface $serializer,
         private TierResolver $tiers,
+        private Redactor $redactor,
     ) {
     }
 
@@ -137,7 +139,19 @@ final readonly class RoundLedger
 
         $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
 
-        return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line), $shown);
+        return array_map(fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line, $this->storedNote($judged->notes[$finding->id] ?? null)), $shown);
+    }
+
+    // Redacted and then trimmed, because the note is model text that may quote a held credential, and a credential held with edge whitespace leaves that whitespace behind.
+    private function storedNote(?string $note): ?string
+    {
+        if (null === $note) {
+            return null;
+        }
+
+        $stored = trim($this->redactor->redact($note));
+
+        return '' === $stored ? null : $stored;
     }
 
     // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
