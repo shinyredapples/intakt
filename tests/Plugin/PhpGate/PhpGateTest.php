@@ -36,7 +36,7 @@ final class PhpGateTest extends TestCase
 
     public function testTheComposerLockInputsAreTheManifestTheLockFileAndThePhpVersionOfTheJobImage(): void
     {
-        $step = self::composerStep(null);
+        $step = $this->composerStep(null);
 
         self::assertSame(['composer.json', 'composer.lock'], $step->lockFiles);
         self::assertSame("php -r 'echo PHP_VERSION;'", $step->platformProbe);
@@ -46,18 +46,18 @@ final class PhpGateTest extends TestCase
     {
         self::assertSame(
             'composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader',
-            self::composerStep(null)->install,
+            $this->composerStep(null)->install,
         );
     }
 
     public function testTheAutoloadAndRuntimeFilesAreGeneratedApartFromTheInstallFromTheChecksOwnTree(): void
     {
-        self::assertSame('composer dump-autoload --no-interaction', self::composerStep(null)->generate);
+        self::assertSame('composer dump-autoload --no-interaction', $this->composerStep(null)->generate);
     }
 
     public function testAnEmptyConfiguredCommandStillNamesTheComposerLockInputs(): void
     {
-        self::assertSame(['composer.json', 'composer.lock'], self::composerStep(' ')->lockFiles);
+        self::assertSame(['composer.json', 'composer.lock'], $this->composerStep(' ')->lockFiles);
     }
 
     public function testAProjectWithItsOwnCheckCommandReportsNoLockInputsSoItInstallsEveryTime(): void
@@ -65,7 +65,7 @@ final class PhpGateTest extends TestCase
         self::assertNull(new PhpGate()->dependencyStep('make check'));
     }
 
-    private static function composerStep(?string $configuredCommand): DependencyStep
+    private function composerStep(?string $configuredCommand): DependencyStep
     {
         $step = new PhpGate()->dependencyStep($configuredCommand);
         self::assertNotNull($step);
