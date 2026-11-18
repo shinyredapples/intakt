@@ -30,12 +30,11 @@ final readonly class Verdict
         public array $findings,
         public array $resolved,
         public array $follow_ups,
+        // Ignored by the serializer and the schema, so neither a model's answer nor its finding ids can claim Intakt's origin; only the failure constructors below set it.
+        #[Ignore]
+        private bool $raisedByIntakt = false,
     ) {
-        $this->raisedByIntakt = false;
     }
-
-    // Private and set only by the failure constructors below, so neither a model's answer nor its finding ids can claim Intakt's origin.
-    private bool $raisedByIntakt;
 
     /**
      * @param list<Finding> $findings
@@ -78,7 +77,7 @@ final readonly class Verdict
 
     private static function raisedByIntakt(Finding $finding): self
     {
-        return clone (new self(Decision::Blocked, [$finding], [], []), ['raisedByIntakt' => true]);
+        return new self(Decision::Blocked, [$finding], [], [], raisedByIntakt: true);
     }
 
     public static function incompleteStream(string $reason, Evidence $evidence): self
