@@ -33,8 +33,8 @@ use Intakt\Core\Review\Contract\ReviewStarted;
 use Intakt\Core\Review\Contract\SameCause;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\VerdictReceived;
-use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use Intakt\Core\Review\Domain\OnePerPlace;
+use Intakt\Core\Review\Infrastructure\StoredFindingIdsNormalizer;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\ReviewerForLoop\Contract\ProjectMode;
 use Intakt\Core\ReviewerForLoop\Infrastructure\ConfiguredProjectModes;
@@ -73,7 +73,7 @@ final class RoundLedgerPayloadsTest extends KernelTestCase
 
     private const string LINKED_ROW = '{"round":"'.self::ROUND.'","act":["F1","F3"],"follow_ups":[],"findings":[{"id":"F1","severity":"P1","text":"A bug.","merged":["F3"],"file":null,"line":null,"judge_note":null}],"dropped":[],"same_cause":{"F3":"F1"}}';
 
-    private const string IDENTITY ='{"round":"'.self::ROUND.'","reviewer":"'.self::REVIEWER.'","role":"security","tier":"strong"';
+    private const string IDENTITY = '{"round":"'.self::ROUND.'","reviewer":"'.self::REVIEWER.'","role":"security","tier":"strong"';
 
     public function testAStartWithASourceIsWrittenInTodaysFormat(): void
     {
