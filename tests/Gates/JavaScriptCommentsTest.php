@@ -6,6 +6,7 @@ namespace Intakt\Tests\Gates;
 
 use Intakt\Gates\JavaScriptComments;
 use Intakt\Gates\JavaScriptSlash;
+use Intakt\Gates\JavaScriptSlashes;
 use Intakt\Gates\LeftUndoneComments;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(JavaScriptComments::class)]
 #[CoversClass(LeftUndoneComments::class)]
 #[CoversClass(JavaScriptSlash::class)]
+#[CoversClass(JavaScriptSlashes::class)]
 final class JavaScriptCommentsTest extends TestCase
 {
     /**
