@@ -2,7 +2,7 @@
 
 ## The team
 
-Intakt's model roles carry traditional team titles. There are seven of them, plus the person who owns the project. The id is the lowercase name the role goes by wherever it must be greppable.
+Intakt's model roles carry traditional team titles. There are seven of them, plus the Test engineer, an opt-in eighth that a new project starts without, and the person who owns the project. The id is the lowercase name the role goes by wherever it must be greppable.
 
 | Role | Id | Formerly | What it does |
 |---|---|---|---|
@@ -13,7 +13,8 @@ Intakt's model roles carry traditional team titles. There are seven of them, plu
 | **Code reviewers** | `code_reviewer` | the review panel, with the judge as their verdict step | Review correctness, readability, tests, docs and the framework's use. Specialists are settings of the panel, not roles of their own. |
 | **Security engineer** | `security_engineer` | the gatekeeper's security reviewer and attacker (now the penetration tester) | Security across infrastructure, backend and frontend. Its two verdicts, the security review and the penetration test, feed the approval of protected changes. Checks first, the role for what checks cannot judge: reviews per layer, triggered by paths, and a monthly audit ([Reviews](07-reviews.md#the-security-engineer)). |
 | **AI engineer** | `ai_engineer` | (new) | Models, prompts, skills, context and tokens; owns model routing, as measured experiments ([planned](06-budget-and-model-planner.md#the-ai-engineer-planned)). |
-| **Maintainer** | `maintainer` | the maintainer agent | Hand-overs, conflicts, re-queues, and the weekly flow and quality review with its backlog sweep ([The Maintainer](09-maintainer-agent.md)). |
+| **Test engineer** (opt-in) | `test_engineer` | (new) | Owns the test suite as a whole: its time, redundant tests, the balance of tests and the CI workflows' speed, through a scheduled audit that files ready tasks and never edits a test ([planned](07-reviews.md#the-test-engineer-planned)). A new project starts without it. |
+| **Maintainer** | `maintainer` | the maintainer agent | Hand-overs, conflicts, re-queues, and the weekly flow review with its backlog sweep; the health of the test suite is the Test engineer's ([The Maintainer](09-maintainer-agent.md)). |
 
 Machinery keeps technical names: the orchestrator, the scheduler, the watchdog, the checks (`bin/check` in Intakt itself, the check job for a project) and the dashboard. The approval of protected changes is plain code, not a role: the floors, the mechanical checks and the Security engineer's two verdicts ([Merge](08-merge.md#approving-protected-changes)).
 
