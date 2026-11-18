@@ -120,7 +120,7 @@ On top, the **Security engineer** runs two separate sessions that never see what
 
 ## Layer 6: only you can approve what needs a person
 
-- **Your approval comes from your own GitHub account** and names the exact version you approved. A later push needs a new approval. If reviewers send the change back after you approved, the fix is a new version: you are asked again only once it has passed review and CI, never while it is still being fixed.
+- **Your approval comes from your own GitHub account** and names the exact version you approved. A later push needs a new approval. If reviewers send the change back after you approved, the fix is a new version: you are asked again only once it has passed review and CI, never while it is still being fixed. (Planned:) A decision only you can make, such as a new package from an outside company, is the exception: it is asked as soon as it shows up, and your answer holds for later versions that leave that part unchanged, while the merge still waits for passing checks and reviews.
 - **No agent can fake it:** agents have no GitHub access, and Intakt's own account never writes an approval. Labels can't stand in for an approval either.
 - **Only people with write access steer:** a label or comment from anyone else is ignored.
 
