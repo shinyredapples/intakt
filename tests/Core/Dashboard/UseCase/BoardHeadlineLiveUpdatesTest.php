@@ -122,6 +122,18 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame('Nothing is running. Nothing needs you.', $updated->filter('#board-headline')->text());
     }
 
+    public function testAJudgedRoundPushedToTheBoardPutsTheAsleepOctopusInTheHead(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $started = $this->pushedHeadlineAfterAReviewerStarted();
+        $this->ledger->judgeRound(self::ROUND);
+
+        $this->roundUpdates()->roundChanged(Uuid::fromString(self::ROUND), new RoundProgress(1, 1, true));
+
+        $updated = $this->replaced($page, $started.$this->lastShellUpdate());
+        self::assertCount(2, $updated->filter('.page-head > #board-octopus img[src*="octopus-asleep-"]'));
+    }
+
     public function testAStartedRoundsPushPutsItsCardInTheInReviewColumn(): void
     {
         $this->browser->request('GET', '/');

@@ -35,6 +35,25 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(TokenFigures::class)]
 final class BoardTest extends TestCase
 {
+    public function testABoardWhoseOnlyCardsAreDoneIsIdle(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertTrue($board->isIdle());
+    }
+
+    public function testABoardWithACardInReviewIsNotIdle(): void
+    {
+        $board = new Board([new Review([$this->round('r1', 'feat/a', 1)]), new Review([$this->round('r2', 'feat/b', 1)->judgedWith([], $this->morning())])]);
+
+        self::assertFalse($board->isIdle());
+    }
+
+    public function testABoardOnItsFirstDayIsNotIdle(): void
+    {
+        self::assertFalse(new Board([])->isIdle());
+    }
+
     public function testTheBoardHasTheNineColumnsOfTheDesignInTheirOrder(): void
     {
         $names = array_map(static fn (BoardColumn $column): string => $column->value, BoardColumn::cases());

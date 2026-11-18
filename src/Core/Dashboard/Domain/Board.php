@@ -52,6 +52,12 @@ final readonly class Board
         return [] === $this->cards;
     }
 
+    // Reviewers run only for a card in review, so with every card in Done nothing is ready or in flight.
+    public function isIdle(): bool
+    {
+        return !$this->isFirstDay() && $this->everyColumnButDoneIsEmpty();
+    }
+
     // Done opens while every other column is empty, so a finished review is seen on arrival instead of behind its strip.
     public function startsCollapsed(BoardColumn $column): bool
     {

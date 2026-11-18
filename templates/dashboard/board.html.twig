@@ -32,7 +32,7 @@
 {% endfor %}
 {# A disclosure with no lane would open to nothing, so it is a plain line until a lane runs. #}
 {% if working.lanes is empty %}
-<p class="working working-none" id="working">{{ board.firstDay ? 'Nobody is working yet: reviewers appear here while they review a change' : 'Nobody is working' }}</p>
+<p class="working working-none" id="working">{{ board.firstDay ? 'Nobody is working yet: reviewers appear here while they review a change' : 'Nobody is working now: reviewers appear here while they review a change' }}</p>
 {% else %}
 <details class="working" id="working">
     <summary><span class="w-title">Who is working</span><span class="w-dots" aria-hidden="true">{% for lane in working.lanes %}<span class="dot ok"></span>{% endfor %}</span><span class="w-sum">{{ working.working }} working</span>{{ include('dashboard/components/icon.html.twig', {name: 'chevron', small: true, extra: 'chev'}, with_context = false) }}</summary>
