@@ -74,12 +74,13 @@ final readonly class FindingText
             $cut[] = ['text' => $text, 'code' => $span['code']];
         }
 
-        while ([] !== $cut && '' === rtrim(array_last($cut)['text'])) {
-            array_pop($cut);
+        $last = array_pop($cut);
+        while (null !== $last && '' === rtrim($last['text'])) {
+            $last = array_pop($cut);
         }
 
-        if ([] !== $cut) {
-            $cut[array_key_last($cut)]['text'] = rtrim(array_last($cut)['text']);
+        if (null !== $last) {
+            $cut[] = ['text' => rtrim($last['text']), 'code' => $last['code']];
         }
 
         return $this->joined([...$cut, ['text' => self::ELLIPSIS, 'code' => false]]);

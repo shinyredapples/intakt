@@ -338,7 +338,7 @@ final class FindingTextTest extends TestCase
         $start = hrtime(true);
         new FindingText(str_repeat(' *a', 20000).' end')->spans();
 
-        // The scan takes a few ms, and the bound only catches the old quadratic seconds-long case without failing on a loaded runner.
+        // 3000 ms because the scan takes a few ms, and the bound only catches the old quadratic seconds-long case without failing on a loaded runner.
         self::assertLessThan(3000, (hrtime(true) - $start) / 1e6);
     }
 
