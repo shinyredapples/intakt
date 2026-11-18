@@ -26,6 +26,8 @@ final class RecordedChecks implements HeadChecks
     /** @var list<string> */
     public array $asked = [];
     public ?DateTimeImmutable $pausedUntil = null;
+    // Null pauses every head; a hash pauses that head only, so one tick can hold a paused head beside a readable one.
+    public ?string $pausedHead = null;
 
     /**
      * @param array<string, string> $recordings
@@ -37,7 +39,7 @@ final class RecordedChecks implements HeadChecks
     public function ciStateOf(string $project, CommitId $head): CiState
     {
         // Before the head is counted as asked, because the real forge refuses a read during its pause without any request.
-        if ($this->pausedUntil instanceof DateTimeImmutable) {
+        if ($this->pausedUntil instanceof DateTimeImmutable && in_array($this->pausedHead, [null, $head->hash], true)) {
             throw new ForgeRateLimited($this->pausedUntil);
         }
 
