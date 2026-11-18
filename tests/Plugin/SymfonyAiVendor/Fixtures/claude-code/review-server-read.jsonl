@@ -1,4 +1,4 @@
-{"type":"system","subtype":"init","model":"sonnet","tools":["mcp__intakt-review__read_file","mcp__intakt-review__list_directory","mcp__intakt-review__search_files"]}
+{"type":"system","subtype":"init","model":"sonnet","tools":["mcp__intakt-review__read_file","mcp__intakt-review__list_directory","mcp__intakt-review__search_files"],"mcp_servers":[{"name":"intakt-review","status":"connected","source":"dynamic"}],"apiKeySource":"none","claude_code_version":"2.1.326"}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"mcp__intakt-review__read_file","input":{"path":"src/a.php"}}]},"parent_tool_use_id":null}
 {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":[{"type":"text","text":"<<<untrusted>>> <?php echo 1; <<<end>>>"}]}]},"parent_tool_use_id":null}
 {"type":"result","subtype":"success","is_error":false,"result":"{\"findings\":[],\"verdict\":\"approve\",\"resolved\":[],\"follow_ups\":[]}","usage":{"input_tokens":90,"output_tokens":20,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}
