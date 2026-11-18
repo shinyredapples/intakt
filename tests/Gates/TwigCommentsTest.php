@@ -35,6 +35,8 @@ final class TwigCommentsTest extends TestCase
         yield 'the second line of a multi-line comment' => ["{#\n  TODO show the total\n#}\n", [2 => 'TODO']];
         yield 'a starred line of a multi-line comment' => ["{#\n * The order\n * FIXME the total\n #}\n", [3 => 'FIXME']];
         yield 'an inline comment in an output tag' => ["{{ order.total # TODO round it\n}}\n", [1 => 'TODO']];
+        yield 'an inline comment behind a star and a space' => ["{{ total # * TODO round it\n}}\n", [1 => 'TODO']];
+        yield 'a one-line comment behind a star and a space' => ["{# * TODO show the total #}\n", [1 => 'TODO']];
         yield 'an inline comment in a block tag' => ["{% set total = 3 # FIXME read the total %}\n", [1 => 'FIXME']];
         yield 'a comment after a string holding a comment end' => ["{{ '#}' }}{# TODO show the total #}\n", [1 => 'TODO']];
         yield 'a comment after nested brackets' => ["{{ {a: {b: 1}}|length }}{# TODO show the total #}\n", [1 => 'TODO']];
