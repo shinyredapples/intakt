@@ -106,8 +106,8 @@ final class FindingTextTest extends TestCase
         foreach ([
             'The **read**-only mode still writes to disk.' => 'The read-only mode still writes to disk.',
             'This is *not*-as-claimed safe.' => 'This is not-as-claimed safe.',
-            'The check is **wrong**—it never runs.' => 'The check is wrong—it never runs.',
-            'The range is **open**–ended, _never_-closed.' => 'The range is open–ended, never-closed.',
+            "The check is **wrong**\u{2014}it never runs." => "The check is wrong\u{2014}it never runs.",
+            "The range is **open**\u{2013}ended, _never_-closed." => "The range is open\u{2013}ended, never-closed.",
         ] as $written => $shown) {
             self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spans(), $written);
         }
