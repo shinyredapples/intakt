@@ -21,12 +21,16 @@ final readonly class BuildContext
     // As a tar streamed from a temporary file, because the engine takes the build context as one in the request body and a large repository need not fit in memory.
     public function sentWith(JobImagePlan $plan, string $directory, Closure $send): ImageBuild
     {
+        // In a folder only this user may enter, made before the archive, because the archive holds a private checkout for the whole engine build and the umask may leave it readable to all.
+        $folder = sys_get_temp_dir().'/intakt-image-'.bin2hex(random_bytes(8));
         // A name that does not exist yet, because PharData refuses an empty file as a broken archive.
-        $file = sys_get_temp_dir().'/intakt-image-'.bin2hex(random_bytes(8)).'.tar';
+        $file = $folder.'/context.tar';
         $filesystem = new Filesystem();
         $stream = null;
 
         try {
+            $filesystem->mkdir($folder, 0o700);
+            $filesystem->chmod($folder, 0o700);
             $this->write($plan, $directory, $file);
             $stream = fopen($file, 'r');
 
@@ -40,7 +44,7 @@ final readonly class BuildContext
                 fclose($stream);
             }
 
-            $filesystem->remove($file);
+            $filesystem->remove($folder);
         }
     }
 

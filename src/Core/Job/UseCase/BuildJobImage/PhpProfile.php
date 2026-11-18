@@ -7,6 +7,7 @@ namespace Intakt\Core\Job\UseCase\BuildJobImage;
 use Composer\Semver\Constraint\Constraint;
 use Composer\Semver\Constraint\ConstraintInterface;
 use Composer\Semver\Constraint\MultiConstraint;
+use Composer\Semver\Interval;
 use Composer\Semver\Intervals;
 use Composer\Semver\VersionParser;
 use JsonException;
@@ -20,8 +21,6 @@ final readonly class PhpProfile
     private const string FILE = 'composer.json';
     private const string PLATFORM_VERSION = '/^\d+\.\d+(?:\.\d+)?$/D';
     private const string EXTENSION = '/^[a-z0-9][a-z0-9_-]*$/D';
-    // Above any patch PHP will release, so a rule that allows it allows whatever patch a moving minor tag holds.
-    private const int NEWEST_PATCH = 9999;
 
     /**
      * @param list<string> $extensions
@@ -62,41 +61,43 @@ final readonly class PhpProfile
         }
     }
 
-    // The minor's moving tag only when its newest patches meet the rule, otherwise the highest patch the rule admits in it, because that one carries the most security fixes and still meets an exact or capped rule.
-    public function imageVersionIn(string $minor): ?string
+    /**
+     * The minor's moving tag when the rule admits every patch from some point to the minor's end; otherwise the highest admitted patch up to the newest one known to be released, because it carries the most fixes and its image exists; when the rule admits only newer patches, the lowest of them, the one most likely released.
+     */
+    public function imageVersionIn(string $minor, ?int $newestReleasedPatch): ?string
     {
-        $parser = new VersionParser();
-        $intervals = Intervals::get(MultiConstraint::create([$parser->parseConstraints($minor.'.*'), $this->constraint]))['numeric'];
+        $intervals = Intervals::get(MultiConstraint::create([new VersionParser()->parseConstraints($minor.'.*'), $this->constraint]))['numeric'];
 
         if ([] === $intervals) {
             return null;
         }
 
-        if ($this->allows($minor.'.'.self::NEWEST_PATCH)) {
+        if (!str_starts_with($intervals[array_key_last($intervals)]->getEnd()->getVersion(), $minor.'.')) {
             return $minor;
         }
 
-        foreach (array_reverse($intervals) as $interval) {
-            $highest = $this->highestPatchUpTo($interval->getEnd()->getVersion());
-
-            if (null !== $highest) {
-                return $highest;
+        for ($patch = $newestReleasedPatch ?? -1; $patch >= 0; --$patch) {
+            if ($this->allows($minor.'.'.$patch)) {
+                return $minor.'.'.$patch;
             }
         }
 
-        return null;
+        return $this->lowestPatchAbove($intervals, $minor, $newestReleasedPatch ?? -1);
     }
 
-    // The patch before the end too, because an end the rule excludes ("<8.4.5", which Composer reads as "<8.4.5.0-dev") admits only the patch below it.
-    private function highestPatchUpTo(string $end): ?string
+    /**
+     * @param non-empty-list<Interval> $intervals
+     */
+    // The patch after a range's start too, because a start the rule excludes (">8.4.5") admits only the patch above it.
+    private function lowestPatchAbove(array $intervals, string $minor, int $released): ?string
     {
-        [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $end)[0]), 0, 3));
+        foreach ($intervals as $interval) {
+            $start = max($released + 1, (int) (explode('.', $interval->getStart()->getVersion())[2] ?? 0));
 
-        foreach ([$patch, $patch - 1] as $candidate) {
-            $version = sprintf('%d.%d.%d', $major, $minor, $candidate);
-
-            if ($this->allows($version)) {
-                return $version;
+            foreach ([$start, $start + 1] as $patch) {
+                if ($this->allows($minor.'.'.$patch)) {
+                    return $minor.'.'.$patch;
+                }
             }
         }
 

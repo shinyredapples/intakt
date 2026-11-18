@@ -95,6 +95,7 @@ final class BuildJobImageCommandTest extends TestCase
     private string $url = '';
     private ?BuildJobImage $racing = null;
     private ?string $sentFrom = null;
+    private ?int $sentFolderMode = null;
     private int $status = 200;
 
     /** @var list<MockResponse> */
@@ -223,6 +224,21 @@ final class BuildJobImageCommandTest extends TestCase
         self::assertSame(['Dockerfile'], $this->filesInTheSentContext());
     }
 
+    public function testTheContextFileLiesInAFolderOnlyItsOwnerCanEnterUnderAWideUmask(): void
+    {
+        $umask = umask(0o022);
+
+        try {
+            $tester = $this->whenTheCommandRuns(self::BUILT);
+        } finally {
+            umask($umask);
+        }
+
+        self::assertSame(Command::SUCCESS, $tester->getStatusCode(), $tester->getDisplay());
+        self::assertSame(0o700, $this->sentFolderMode);
+        self::assertDirectoryDoesNotExist(dirname((string) $this->sentFrom));
+    }
+
     public function testTheContextFileIsGoneAlsoWhenTheEngineFails(): void
     {
         $this->status = 400;
@@ -283,6 +299,7 @@ final class BuildJobImageCommandTest extends TestCase
             $this->context = sys_get_temp_dir().'/intakt-context-'.bin2hex(random_bytes(4)).'.tar';
             $body = is_resource($options['body']) ? $options['body'] : self::fail('The build context is no stream.');
             $this->sentFrom = stream_get_meta_data($body)['uri'] ?? null;
+            $this->sentFolderMode = null === $this->sentFrom ? null : fileperms(dirname($this->sentFrom)) & 0o777;
             new Filesystem()->dumpFile($this->context, (string) stream_get_contents($body));
             $response = new MockResponse($stream, ['http_code' => $this->status]);
             $this->requests[] = $response;

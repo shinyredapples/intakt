@@ -45,58 +45,94 @@ final class PhpProfileTest extends TestCase
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.3 <8.5"}}');
 
-        self::assertSame('8.4', $php->imageVersionIn('8.4'));
-        self::assertNull($php->imageVersionIn('8.5'));
-        self::assertNull($php->imageVersionIn('8.3'));
+        self::assertSame('8.4', $php->imageVersionIn('8.4', 20));
+        self::assertNull($php->imageVersionIn('8.5', 12));
+        self::assertNull($php->imageVersionIn('8.3', 25));
+    }
+
+    public function testARuleThatExcludesOnePatchFarAboveTheReleasesStillGetsTheMovingTagOfItsOwnMinor(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": "^8.4 !=8.4.9999"}}');
+
+        self::assertSame('8.4', $php->imageVersionIn('8.4', 20));
     }
 
     public function testARuleCappedInsideAMinorGetsTheHighestPatchBelowTheCap(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.20"}}');
 
-        self::assertSame('8.4.19', $php->imageVersionIn('8.4'));
+        self::assertSame('8.4.19', $php->imageVersionIn('8.4', 20));
+    }
+
+    public function testACapAboveTheNewestReleasedPatchGetsThatReleasedPatch(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.100"}}');
+
+        self::assertSame('8.4.20', $php->imageVersionIn('8.4', 20));
+    }
+
+    public function testARuleWhosePatchesAreAllNewerThanTheReleasesKnownGetsTheLowestOfThem(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.24 <8.4.30"}}');
+
+        self::assertSame('8.4.25', $php->imageVersionIn('8.4', 20));
+    }
+
+    public function testAMinorWithoutKnownReleasesGetsTheLowestPatchTheRuleAdmits(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.1.4 <8.1.30"}}');
+
+        self::assertSame('8.1.4', $php->imageVersionIn('8.1', null));
     }
 
     public function testARuleThatIncludesItsUpperBoundGetsThatPatch(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <=8.4.6"}}');
 
-        self::assertSame('8.4.6', $php->imageVersionIn('8.4'));
+        self::assertSame('8.4.6', $php->imageVersionIn('8.4', 20));
     }
 
     public function testAnExactRuleGetsExactlyThatPatch(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": "8.4.3"}}');
 
-        self::assertSame('8.4.3', $php->imageVersionIn('8.4'));
+        self::assertSame('8.4.3', $php->imageVersionIn('8.4', 20));
     }
 
     public function testAnUpperBoundWithAFourthPartGetsThePatchItAdmits(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <=8.4.5.3"}}');
 
-        self::assertSame('8.4.5', $php->imageVersionIn('8.4'));
+        self::assertSame('8.4.5', $php->imageVersionIn('8.4', 20));
     }
 
     public function testARuleThatAdmitsNoPatchOfAMinorHasNoVersionThere(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">8.4.1 <8.4.2"}}');
 
-        self::assertNull($php->imageVersionIn('8.4'));
+        self::assertNull($php->imageVersionIn('8.4', 20));
     }
 
     public function testTheHighestPatchOfAllRangesIsUsed(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.3 || 8.4.7"}}');
 
-        self::assertSame('8.4.7', $php->imageVersionIn('8.4'));
+        self::assertSame('8.4.7', $php->imageVersionIn('8.4', 20));
     }
 
     public function testAnEarlierRangeIsUsedWhenTheLastAdmitsNoPatch(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": "8.4.2 || >8.4.5 <8.4.6"}}');
 
-        self::assertSame('8.4.2', $php->imageVersionIn('8.4'));
+        self::assertSame('8.4.2', $php->imageVersionIn('8.4', 20));
+    }
+
+    public function testACapInTheNextMinorNeverLeavesTheMinorAsked(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.5.3"}}');
+
+        self::assertSame('8.4', $php->imageVersionIn('8.4', 20));
+        self::assertSame('8.5.2', $php->imageVersionIn('8.5', 12));
     }
 
     public function testAComposerJsonWithoutAPhpRecordIsRefused(): void
