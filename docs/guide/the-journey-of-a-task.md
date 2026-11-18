@@ -26,7 +26,7 @@ flowchart TD
   r -- yes --> s{Small enough to build<br/>and review in one go?}
   s -- too big --> split[Split into smaller tasks]
   s -- yes --> q[Joins the queue]
-  q --> order[Ordered: urgent first,<br/>then milestone, then age]
+  q --> order[Ordered: urgent first,<br/>then priority, then milestone<br/>planned: milestone by milestone,<br/>priority within a milestone]
 ```
 
 One exception: a task whose pull request is already open (it needs a fix or an update) goes before every task not started yet, unless that task is `urgent`, so open work lands first. Each time a task joins the queue, Intakt looks its pull request up on the site where the code is hosted (GitHub or Gitea), so a task that comes back after a decision is still treated as a fix to its open pull request, never started over.
@@ -36,7 +36,8 @@ One exception: a task whose pull request is already open (it needs a fix or an u
 - **Evidence the builder can't produce** *(planned)*: if the task asks for evidence only you could produce (a real AI call, a run on your own install) without marking it `(owner provides)`, it comes back to you with one comment naming those items, before any build. Marked items are yours to check before the merge, and reviewers never send the work back for them.
 - **Two new tasks touching the same files** are usually built one after the other, so they don't trip over each other; everything else can run in parallel.
 - **A task with an open pull request never waits** because another task is changing the same files.
-- **A task held back for files only lets a task of the same priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway.
+- *(Planned:)* **A task held back for files only lets a task of the same milestone, priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway, so a later milestone never jumps ahead this way. Today no task is held back for its files; the whole rule arrives with the build lane.
+- **A blocked or waiting task** is passed over, and the next task in line is built instead, even one of a later milestone.
 - **Pace:** how many builders run at once depends on how much of the week's AI allowance is left (see [Spending wisely](how-intakt-works.md#spending-wisely)).
 
 ## 2. Building
@@ -96,7 +97,7 @@ flowchart TD
   judge -- nothing to fix now --> pass[The panel approves]
 ```
 
-- **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: becomes a follow-up task, never blocks). From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
+- **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: never blocks; a small fix in a file the change already touches is marked "fix now", anything bigger becomes a follow-up task). From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
 - **A finding keeps its name:** each finding gets a short id (F1, F2, ...). On the next round, every reviewer is shown the findings still open, says which ones are fixed, and a problem that is still there keeps its id, so one problem can be followed from round to round.
 - **All reviewers at once:** the core panel's reviewers read the same version at the same time, and none waits for another to approve first, so the builder gets every finding in one go instead of one extra round per reviewer.
 - **Evidence beats opinion:** a reviewer will be able to write a small test, run it against the change, and attach the result to its finding (planned: today reviewers read the change and run nothing).
@@ -130,7 +131,8 @@ flowchart TD
 
 ## 7. Afterwards
 
-- **Follow-ups:** any P3 notes from the reviewers become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks.
+- **Polish round (planned):** when every reviewer approves but small "fix now" notes remain, the builder gets one short extra pass to fix just those before the merge, and one reviewer checks only that pass. If it fails, the approved change merges without it and the notes become one follow-up task. A project setting turns it off.
+- **Follow-ups:** P3 notes that need their own design, tests or files outside the change become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks.
 - **Project memory:** what was learned (a fixed finding, a recurring failure and its cause) goes into the project memory, so the next builder and reviewers are briefed.
 - **Unblocking:** tasks that said `Waits for` this one become eligible.
 - **Tidying up:** the task's branch is cleaned up.

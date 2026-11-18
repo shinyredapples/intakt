@@ -219,6 +219,7 @@ final readonly class SymfonyAiVendor implements Vendor
             $this->usage->settle($reservation, ...$platform->rounds());
 
             throw $unreadable;
+            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
         } catch (Throwable $failure) {
             // Left unsettled, never settled as well, so the call's usage is counted once, also for a cut stream.
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
@@ -274,6 +275,7 @@ final readonly class SymfonyAiVendor implements Vendor
             $this->usage->leaveUnsettled($reservation, $incomplete, ...$platform->rounds());
 
             return Judgement::everyBlockingFindingActs($request->findings);
+            // Boundary: leaves the call unsettled and rethrows it typed, because any provider failure must reach the callers as a vendor failure.
         } catch (Throwable $failure) {
             $this->usage->leaveUnsettled($reservation, $failure, ...$platform->rounds());
 

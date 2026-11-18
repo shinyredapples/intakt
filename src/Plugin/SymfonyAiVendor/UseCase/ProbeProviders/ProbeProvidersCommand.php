@@ -91,6 +91,7 @@ final readonly class ProbeProvidersCommand
             $result = $this->tiers->invoke($this->resolver->resolve($project, $tier), new TierRequest(new MessageBag(Message::ofUser(self::PROMPT))));
             $result->asText();
             $io->writeln(sprintf('%s: %s', $provider, $this->usageLine($result)));
+            // Boundary: reports the failure class and fails this provider only, because the probe must go on to the next provider.
         } catch (Throwable $failure) {
             // The class only, because a provider's message can echo the request URL or headers that carry its key.
             $io->writeln(sprintf('<error>%s: the call failed with %s</error>', $provider, $failure::class));
