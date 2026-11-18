@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Job\Contract;
 
+use Intakt\Core\Job\Contract\JobEgress;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobInput;
 use Intakt\Core\Job\Contract\JobLimits;
 use Intakt\Core\Job\Contract\JobOutput;
 use Intakt\Core\Job\Contract\JobRefused;
+use Intakt\Core\Job\Contract\JobSpec;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(JobId::class)]
@@ -18,6 +21,8 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(JobLimits::class)]
 #[CoversClass(JobOutput::class)]
 #[CoversClass(JobRefused::class)]
+#[CoversClass(JobSpec::class)]
+#[UsesClass(JobEgress::class)]
 final class JobSpecTest extends TestCase
 {
     public function testAnIdOfSixtyThreePlainCharactersIsAccepted(): void
@@ -70,6 +75,22 @@ final class JobSpecTest extends TestCase
         yield 'inside the work area' => ['/srv/mirror', '/work/repository'];
         yield 'the output directory' => ['/srv/mirror', '/output'];
         yield 'inside the output directory through dots' => ['/srv/mirror', '/input/../output/bundle'];
+        yield 'the kept directory' => ['/srv/mirror', '/kept'];
+        yield 'inside the kept directory' => ['/srv/mirror', '/kept/vendor'];
+    }
+
+    public function testAKeptDirectoryOnAnAbsoluteHostPathIsAccepted(): void
+    {
+        $spec = new JobSpec(new JobId('dependencies-1'), 'sample:latest', ['true'], [], new JobLimits(1, 1.0, 1), JobEgress::none(), '/srv/dependencies/staging');
+
+        self::assertSame('/srv/dependencies/staging', $spec->keptDirectory);
+    }
+
+    public function testAKeptDirectoryOnARelativeHostPathIsRefused(): void
+    {
+        $this->expectExceptionObject(JobRefused::forKeptDirectory('dependencies/staging'));
+
+        new JobSpec(new JobId('dependencies-1'), 'sample:latest', ['true'], [], new JobLimits(1, 1.0, 1), JobEgress::none(), 'dependencies/staging');
     }
 
     #[DataProvider('refusedInputs')]

@@ -10,7 +10,7 @@ use Intakt\Core\Job\Contract\JobSpec;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Filesystem\Filesystem;
 
-// Writable only in the tmpfs work area and the job's own output directory, so nothing else a job writes survives it.
+// Writable only in the tmpfs work area, the job's own output directory and the kept directory its caller gave it, so nothing else a job writes survives it.
 final readonly class JobContainerDefinition
 {
     public function __construct(
@@ -58,7 +58,7 @@ final readonly class JobContainerDefinition
         return [
             'ReadonlyRootfs' => true,
             'Tmpfs' => [JobSpec::WORK_AREA => 'rw,nosuid,nodev'],
-            'Mounts' => [...array_map($this->inputMountOf(...), $spec->inputs), $this->outputMountOf($outputDirectory)],
+            'Mounts' => [...array_map($this->inputMountOf(...), $spec->inputs), $this->outputMountOf($outputDirectory), ...$this->keptMountOf($spec)],
             // Swap equal to memory, so a runaway job is killed at its limit instead of swapping.
             'Memory' => $spec->limits->memoryBytes,
             'MemorySwap' => $spec->limits->memoryBytes,
@@ -84,5 +84,17 @@ final readonly class JobContainerDefinition
     private function outputMountOf(string $outputDirectory): array
     {
         return ['Type' => 'bind', 'Source' => $outputDirectory, 'Target' => JobSpec::OUTPUT_DIRECTORY, 'ReadOnly' => false];
+    }
+
+    /**
+     * @return list<array{Type: string, Source: string, Target: string, ReadOnly: bool}>
+     */
+    private function keptMountOf(JobSpec $spec): array
+    {
+        if (null === $spec->keptDirectory) {
+            return [];
+        }
+
+        return [['Type' => 'bind', 'Source' => $spec->keptDirectory, 'Target' => JobSpec::KEPT_DIRECTORY, 'ReadOnly' => false]];
     }
 }

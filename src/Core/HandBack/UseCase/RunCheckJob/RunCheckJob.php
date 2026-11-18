@@ -39,6 +39,8 @@ final readonly class RunCheckJob implements CheckJobs
 
     public const string BUNDLE = '/input/handback.bundle';
 
+    public const string DEPENDENCIES = '/input/dependencies';
+
     public const string RESULT = 'check-result';
 
     public const string LOG = 'check.log';
@@ -58,6 +60,7 @@ final readonly class RunCheckJob implements CheckJobs
         private LostContentCheck $lostContent,
         private JobRunner $jobs,
         private Gate $gate,
+        private DependencySnapshots $dependencies,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/check.sh')]
         private string $checkScript,
@@ -118,12 +121,18 @@ final readonly class RunCheckJob implements CheckJobs
     {
         $script = $this->filesystem->readFile($this->checkScript);
         $steps = $this->gate->checkSteps($job->configuredCommand);
+        $inputs = [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)];
+        $snapshot = $this->dependencies->of($repository, $accepted->head, $job->image);
+
+        if (null !== $snapshot) {
+            $inputs[] = new JobInput($snapshot, self::DEPENDENCIES);
+        }
 
         return new JobSpec(
             new JobId('check-'.substr($accepted->head, 0, 40)),
             $job->image,
-            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, '--', ...$steps],
-            [new JobInput($repository, self::MIRROR), new JobInput($this->absolute($job->handBack->bundle), self::BUNDLE)],
+            ['/bin/sh', '-c', $script, 'intakt-check', self::MIRROR, self::BUNDLE, $job->handBack->branch, ...(null === $snapshot ? [] : [self::DEPENDENCIES]), '--', ...$steps],
+            $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             $this->egress(),
         );

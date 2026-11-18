@@ -11,4 +11,12 @@ final readonly class PhpGateSteps
     public const string INSTALL = 'composer install --no-interaction --no-progress';
 
     public const string CHECK = 'bin/check --fast';
+
+    // The PHP version is not among them, because it comes with the job image, which is part of a snapshot's key.
+    public const array LOCK_FILES = ['composer.json', 'composer.lock'];
+
+    // No scripts and no plugins, so no package's own code runs, and no autoloader, so the check makes it and the runtime files from its own tree.
+    public const string CLEAN_INSTALL = 'composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader';
+
+    public const string VENDOR = 'vendor';
 }

@@ -17,4 +17,7 @@ interface Gate
      * @return list<string>
      */
     public function registryHosts(): array;
+
+    // Null for a language whose dependencies cannot be installed from lock files alone, so its checks install every time.
+    public function dependencyInstall(): ?DependencyInstall;
 }

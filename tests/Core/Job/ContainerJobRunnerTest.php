@@ -133,6 +133,18 @@ final class ContainerJobRunnerTest extends TestCase
         ], $mounts);
     }
 
+    public function testAKeptDirectoryIsMountedWritableAtKeptBesideTheOutputDirectory(): void
+    {
+        $spec = new JobSpec(new JobId('dependencies-1'), 'sample:latest', ['true'], [], new JobLimits(self::MEMORY, 1.0, 60), JobEgress::none(), '/srv/dependencies/staging');
+
+        $this->whenJobRuns($spec);
+
+        self::assertSame([
+            ['Type' => 'bind', 'Source' => $this->root.'/dependencies-1', 'Target' => '/output', 'ReadOnly' => false],
+            ['Type' => 'bind', 'Source' => '/srv/dependencies/staging', 'Target' => '/kept', 'ReadOnly' => false],
+        ], $this->mountsOf('dependencies-1'));
+    }
+
     public function testAJobGetsAWipedHomeAndNoEnvironmentFromTheOrchestrator(): void
     {
         putenv('GITHUB_APP_PRIVATE_KEY=held-by-the-orchestrator');

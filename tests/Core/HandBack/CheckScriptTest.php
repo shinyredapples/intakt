@@ -90,10 +90,42 @@ final class CheckScriptTest extends TestCase
         self::assertSame("not-applied\n", $this->outputFile('check-result'));
     }
 
+    public function testADependencySnapshotIsCopiedIntoTheCloneBeforeTheFirstStep(): void
+    {
+        $this->history->commit('Build work');
+        $snapshot = $this->history->folder.'/snapshot';
+        new Filesystem()->dumpFile($snapshot.'/vendor/acme/lib/Lib.php', "<?php\n");
+
+        $run = $this->whenTheCheckRunsWith([$this->history->mirror, $this->history->bundle('main..task'), 'task', $snapshot], 'test -f vendor/acme/lib/Lib.php', 'touch vendor/acme/written-by-the-check');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+        self::assertFileDoesNotExist($snapshot.'/vendor/acme/written-by-the-check');
+    }
+
+    public function testAMissingDependencySnapshotLeavesNotAppliedAndRunsNoStep(): void
+    {
+        $this->history->commit('Build work');
+
+        $run = $this->whenTheCheckRunsWith([$this->history->mirror, $this->history->bundle('main..task'), 'task', $this->history->folder.'/missing'], 'touch ran');
+
+        self::assertSame(1, $run->getExitCode());
+        self::assertSame("not-applied\n", $this->outputFile('check-result'));
+        self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
     private function whenTheCheckRuns(string $bundle, string $branch, string ...$steps): Process
     {
+        return $this->whenTheCheckRunsWith([$this->history->mirror, $bundle, $branch], ...$steps);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function whenTheCheckRunsWith(array $arguments, string ...$steps): Process
+    {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', $this->history->mirror, $bundle, $branch, '--', ...array_values($steps)],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-check', ...$arguments, '--', ...array_values($steps)],
             null,
             $this->environment(),
         );

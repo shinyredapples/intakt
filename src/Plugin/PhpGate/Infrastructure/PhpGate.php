@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Plugin\PhpGate\Infrastructure;
 
+use Intakt\Plugin\Gate\Contract\DependencyInstall;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Contract\PhpGateSteps;
 
@@ -24,5 +25,10 @@ final readonly class PhpGate implements Gate
     public function registryHosts(): array
     {
         return self::REGISTRIES;
+    }
+
+    public function dependencyInstall(): DependencyInstall
+    {
+        return new DependencyInstall(PhpGateSteps::LOCK_FILES, PhpGateSteps::CLEAN_INSTALL, PhpGateSteps::VENDOR);
     }
 }

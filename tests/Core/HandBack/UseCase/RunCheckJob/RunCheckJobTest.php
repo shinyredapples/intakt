@@ -24,6 +24,9 @@ use Intakt\Core\HandBack\UseCase\CheckHandBack\IncomingObjects;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\RepositoryGit;
 use Intakt\Core\HandBack\UseCase\CheckHandBack\StrippedCommits;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\ChangedFile;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencyInstallJob;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySnapshots;
+use Intakt\Core\HandBack\UseCase\RunCheckJob\DependencySource;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\LostContentCheck;
 use Intakt\Core\HandBack\UseCase\RunCheckJob\RunCheckJob;
 use Intakt\Core\Job\Contract\JobCause;
@@ -38,13 +41,17 @@ use Intakt\Core\Job\Contract\JobResult;
 use Intakt\Core\Job\Contract\JobRunner;
 use Intakt\Core\Job\Contract\JobSpec;
 use Intakt\Plugin\Forge\Contract\JobCredentials;
+use Intakt\Plugin\Gate\Contract\DependencyInstall;
 use Intakt\Plugin\Gate\Contract\Gate;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use Intakt\Tests\Core\HandBack\BuildHistory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Clock\MockClock;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[CoversClass(RunCheckJob::class)]
 #[CoversClass(LostContentCheck::class)]
@@ -78,13 +85,21 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(JobResult::class)]
 #[UsesClass(JobEnd::class)]
 #[UsesClass(JobOutput::class)]
+#[UsesClass(DependencySnapshots::class)]
+#[UsesClass(DependencyInstallJob::class)]
+#[UsesClass(DependencySource::class)]
+#[UsesClass(DependencyInstall::class)]
 final class RunCheckJobTest extends TestCase
 {
     private const string SCRIPT = __DIR__.'/../../../../../docker/job/check.sh';
 
+    private const string INSTALL_SCRIPT = __DIR__.'/../../../../../docker/job/install-dependencies.sh';
+
     private BuildHistory $history;
 
     private ?JobSpec $ran = null;
+
+    private ?JobSpec $installed = null;
 
     protected function setUp(): void
     {
@@ -154,6 +169,34 @@ final class RunCheckJobTest extends TestCase
             ->run(new CheckJob(new HandBack($this->history->mirror, 'task', $this->history->bundle('main..task'), false, new JobCredentials()), 'job-image', null, []));
 
         self::assertTrue($this->ranSpec()->egress->isNone());
+    }
+
+    public function testTheCheckJobGetsTheDependencySnapshotAsAReadOnlyInputAndCopiesItIntoItsClone(): void
+    {
+        $this->history->commitFile('composer.json', "{}\n", 'Add the manifest');
+        $this->history->commitFile('composer.lock', "{\"packages\": []}\n", 'Lock the dependencies');
+
+        $this->whenTheJobLeaves(['check-result' => "passed\n"]);
+
+        $spec = $this->ranSpec();
+        $snapshot = array_last($spec->inputs);
+        self::assertInstanceOf(JobInput::class, $snapshot);
+        self::assertSame('/input/dependencies', $snapshot->containerPath);
+        self::assertStringStartsWith($this->history->folder.'/dependencies/', $snapshot->hostPath);
+        self::assertFileExists($snapshot->hostPath.'/vendor/acme/lib/Lib.php');
+        self::assertNull($spec->keptDirectory);
+        self::assertSame(['task', '/input/dependencies', '--'], array_slice($spec->command, 6, 3));
+        self::assertSame(['composer install --no-interaction --no-progress', 'bin/check --fast'], array_slice($spec->command, 9));
+    }
+
+    public function testAHeadWithoutALockFileRunsTheCheckJobWithoutASnapshot(): void
+    {
+        $this->history->commit('Build work');
+
+        $this->whenTheJobLeaves(['check-result' => "passed\n"]);
+
+        self::assertCount(2, $this->ranSpec()->inputs);
+        self::assertNull($this->installed);
     }
 
     public function testAFailedStepFailsTheCheckWithItsExitCodeAndLog(): void
@@ -469,12 +512,24 @@ final class RunCheckJobTest extends TestCase
     {
         $runner = self::createStub(JobRunner::class);
         $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($result): JobResult {
+            if (null !== $spec->keptDirectory) {
+                return $this->installedInto($spec);
+            }
+
             $this->ran = $spec;
 
             return $result;
         });
 
         return $runner;
+    }
+
+    private function installedInto(JobSpec $install): JobResult
+    {
+        $this->installed = $install;
+        new Filesystem()->dumpFile($install->keptDirectory.'/vendor/acme/lib/Lib.php', "<?php\n");
+
+        return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput(['install-result' => "installed\n"]));
     }
 
     /**
@@ -488,12 +543,23 @@ final class RunCheckJobTest extends TestCase
     private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob
     {
         $git = new RepositoryGit(new HardenedGit());
+        $gate ??= new PhpGate();
 
         return new RunCheckJob(
             new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan('gitleaks')),
             new LostContentCheck($git),
             $runner,
-            $gate ?? new PhpGate(),
+            $gate,
+            new DependencySnapshots(
+                $gate,
+                $git,
+                new DependencyInstallJob($runner, $gate, new Filesystem(), self::INSTALL_SCRIPT),
+                new LockFactory(new InMemoryStore()),
+                new MockClock(),
+                new Filesystem(),
+                $this->history->folder.'/dependencies',
+                10,
+            ),
             new Filesystem(),
             self::SCRIPT,
         );
