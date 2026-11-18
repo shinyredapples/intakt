@@ -22,7 +22,7 @@ final readonly class FindingKey
 
     private const string CODE_SPAN = '~`([^`]+)`~';
 
-    // What a citation adds behind a path: a line or a line range, and the full stop of its sentence.
+    // Dropped from a code span, because a citation puts a line or a line range and the full stop of its sentence behind the path, and the file is named without them.
     private const string LINE_AND_FULL_STOP = '~(?::\d+(?:-\d+)?)?\.?$~';
 
     // Kept as written by the key, because spacing inside one is part of a value.

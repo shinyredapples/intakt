@@ -222,7 +222,7 @@ final class RecurringP1sTest extends KernelTestCase
 
         $this->fixture->judgeLoggingStatements(new VerdictPerRole([]), $log)(new JudgeRound($roundId));
 
-        $sent = array_map(static fn (array $entry): string => (string) ($entry[2]['sql'] ?? $entry[1]), $log->cleanLogs());
+        $sent = $this->sentIn($log);
         $lock = array_find_key($sent, static fn (string $sql): bool => str_starts_with($sql, 'UPDATE change_findings'));
         self::assertIsInt($lock);
         $begun = array_find_key(array_reverse($sent, true), static fn (string $sql, int $at): bool => 'Beginning transaction' === $sql && $at < $lock);
@@ -267,6 +267,25 @@ final class RecurringP1sTest extends KernelTestCase
     private function judge(string $roundId): void
     {
         $this->fixture->judge(new VerdictPerRole([]))(new JudgeRound($roundId));
+    }
+
+    // Each statement as its SQL and every other step as its message, because the test looks for what ran between a transaction's start and its lock.
+    /**
+     * @return list<string>
+     */
+    private function sentIn(BufferingLogger $log): array
+    {
+        $sent = [];
+
+        foreach ($log->cleanLogs() as $entry) {
+            self::assertIsArray($entry);
+            self::assertIsArray($entry[2]);
+            $step = $entry[2]['sql'] ?? $entry[1];
+            self::assertIsString($step);
+            $sent[] = $step;
+        }
+
+        return $sent;
     }
 
     private function moveCheckoutOf(string $roundId, string $root): void

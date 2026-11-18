@@ -19,7 +19,7 @@ final readonly class FlaggedRound
     public function __construct(
         public ReviewRound $round,
         public array $act,
-        // By finding id, as taken when the round was judged.
+        // By finding id and from the round's own judging, because its checkout may be gone when a recurrence of the finding is recorded.
         public array $p1Keys,
     ) {
     }

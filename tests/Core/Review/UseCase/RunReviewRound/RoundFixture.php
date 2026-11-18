@@ -6,7 +6,7 @@ namespace Intakt\Tests\Core\Review\UseCase\RunReviewRound;
 
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\DriverManager;
-use Doctrine\DBAL\Logging\Middleware as LoggingMiddleware;
+use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityManagerInterface;
@@ -243,7 +243,7 @@ final readonly class RoundFixture
     // A judging on its own connection that logs every statement it sends, so a test sees what it read before it took a lock; its ledger is in memory because the Doctrine ledger writes through the first connection.
     public function judgeLoggingStatements(Vendor $vendor, LoggerInterface $statements): JudgeRoundHandler
     {
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new LoggingMiddleware($statements)]));
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams(), new Configuration()->setMiddlewares([new Middleware($statements)]));
 
         return $this->judgeOn(new EntityManager($connection, $this->entities->getConfiguration()), new InMemoryLedger(), $vendor);
     }
