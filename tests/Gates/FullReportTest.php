@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\CheckCommand;
 use Intakt\Gates\FullReport;
 use Intakt\Gates\GateChildren;
+use Intakt\Gates\GateLineSource;
 use Intakt\Gates\GateReport;
 use Intakt\Gates\GateResult;
 use Intakt\Gates\ProcessResult;
@@ -18,10 +19,13 @@ use Symfony\Component\Process\Process;
 #[CoversClass(CheckCommand::class)]
 #[CoversClass(GateChildren::class)]
 #[UsesClass(GateReport::class)]
+#[UsesClass(GateLineSource::class)]
 #[UsesClass(GateResult::class)]
 final class FullReportTest extends SandboxTestCase
 {
     private const int DASHED_LINES = 12;
+
+    private const int YEAR_2100 = 4102444800;
 
     private const string REPORT_NAME = '~^var/check/report-[0-9a-f]{16}\.json$~';
 
@@ -127,7 +131,7 @@ final class FullReportTest extends SandboxTestCase
 
         foreach (range(1, FullReport::KEPT_REPORTS + 5) as $newer) {
             $sandbox->write(sprintf('var/check/report-%016x.json', $newer), "{}\n");
-            touch($sandbox->root.sprintf('/var/check/report-%016x.json', $newer), time() + 86400 + $newer);
+            touch($sandbox->root.sprintf('/var/check/report-%016x.json', $newer), self::YEAR_2100 + $newer);
         }
 
         $name = FullReport::start()->writeTo($sandbox->root, ['result' => 'pass', 'failed' => []], []);

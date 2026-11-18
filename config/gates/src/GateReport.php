@@ -13,7 +13,7 @@ final readonly class GateReport
     private function __construct(
         public string $gate,
         public string $line,
-        public bool $writtenByChild,
+        public GateLineSource $source,
     ) {
     }
 
@@ -24,12 +24,12 @@ final readonly class GateReport
         $passing = null === $line ? null : self::verdictOf($gate, $line);
 
         if (null !== $passing && $child->exitCode === ($passing ? 0 : 1)) {
-            return new self($gate, $line, true);
+            return new self($gate, $line, GateLineSource::Child);
         }
 
         $reason = 'gate process ended with exit code '.$child->exitCode.' and no valid result line: ';
 
-        return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson(), false);
+        return new self($gate, GateResult::failedBecause($gate, $reason.self::endOf($child, $reason))->toJson(), GateLineSource::Runner);
     }
 
     // Because a finding is cut at its end, and the end of what a child wrote names why it stopped (a timeout, a signal, a fatal error).
