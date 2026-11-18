@@ -11,8 +11,9 @@ final readonly class HeaderSpans
     // Quote, bracket and separator vary because headers appear in logs, JSON, shell and dumps; spaces are possessive so none is redacted for a value.
     private const string HEADER_HEAD = '(?<![\w-])(?:'.self::HEADER_NAMES.')[\\\\"\'\]]*\s*+(?:=>|:|=)\s*+';
 
+    // Next to the lists, the end of each list whose following text is kept comes back by its start, because the value pass must skip only that list's own part.
     /**
-     * @return array{RedactedSpans, array<int, int>} the lists, and the end of each list whose following text is kept, by its start
+     * @return array{RedactedSpans, array<int, int>}
      */
     public function lists(string $text): array
     {

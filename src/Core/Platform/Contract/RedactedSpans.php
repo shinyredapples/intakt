@@ -6,8 +6,9 @@ namespace Intakt\Core\Platform\Contract;
 
 use Closure;
 use Generator;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// The parts of one text to redact, each by its start and end in the original text.
+#[Exclude]
 final class RedactedSpans
 {
     // A short held credential may match at every byte of a long text, so a part is one integer (start high, end inverted low, which also sorts it by start and then longest first) instead of a small array, which would cost about ten times the memory.
@@ -18,7 +19,8 @@ final class RedactedSpans
     /** @var list<int> */
     private array $keys = [];
 
-    /** @var array<int, string> only the replacements other than the marker, by key */
+    // Only replacements other than the marker are kept, by key, because almost every part takes the marker.
+    /** @var array<int, string> */
     private array $replacements = [];
 
     public function add(int $start, int $end, string $replacement = Redaction::MARKER): void
