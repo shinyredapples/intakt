@@ -2,13 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Review\Infrastructure;
+namespace Intakt\Core\Review\Contract;
 
-use Intakt\Core\Review\Contract\Fence;
-use Intakt\Core\Review\Contract\FencedText;
-use Intakt\Core\Review\Contract\UntrustedSource;
-
-// A constant, not an option: no caller needs another ceiling, and a fixed one keeps the cached prompt prefix and the tests stable.
+// A constant, not an option: no caller needs another ceiling, and a fixed one keeps the cached prompt prefix and the tests stable. In the contract, because the builder prompt cuts its inputs with the same rule.
 final readonly class PromptCut
 {
     public const int CEILING_BYTES = 100_000;

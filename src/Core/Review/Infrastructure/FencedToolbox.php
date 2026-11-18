@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\UntrustedSource;
