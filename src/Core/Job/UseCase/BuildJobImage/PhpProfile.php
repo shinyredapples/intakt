@@ -62,7 +62,7 @@ final readonly class PhpProfile
         }
     }
 
-    // The minor's moving tag only when its newest patches meet the rule, otherwise the lowest patch the rule admits in it, so an exact or capped rule gets an image whose PHP meets it.
+    // The minor's moving tag only when its newest patches meet the rule, otherwise the highest patch the rule admits in it, because that one carries the most security fixes and still meets an exact or capped rule.
     public function imageVersionIn(string $minor): ?string
     {
         $parser = new VersionParser();
@@ -76,23 +76,23 @@ final readonly class PhpProfile
             return $minor;
         }
 
-        foreach ($intervals as $interval) {
-            $lowest = $this->lowestPatchFrom($interval->getStart()->getVersion());
+        foreach (array_reverse($intervals) as $interval) {
+            $highest = $this->highestPatchUpTo($interval->getEnd()->getVersion());
 
-            if (null !== $lowest) {
-                return $lowest;
+            if (null !== $highest) {
+                return $highest;
             }
         }
 
         return null;
     }
 
-    // The patch after the start too, because a start the rule excludes (">8.4.1") or a fourth part ("8.4.1.5") admits only the next patch.
-    private function lowestPatchFrom(string $start): ?string
+    // The patch before the end too, because an end the rule excludes ("<8.4.5", which Composer reads as "<8.4.5.0-dev") admits only the patch below it.
+    private function highestPatchUpTo(string $end): ?string
     {
-        [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $start)[0]), 0, 3));
+        [$major, $minor, $patch] = array_map(intval(...), array_slice(explode('.', explode('-', $end)[0]), 0, 3));
 
-        foreach ([$patch, $patch + 1] as $candidate) {
+        foreach ([$patch, $patch - 1] as $candidate) {
             $version = sprintf('%d.%d.%d', $major, $minor, $candidate);
 
             if ($this->allows($version)) {
