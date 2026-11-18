@@ -30,13 +30,13 @@ final readonly class Redaction
     {
         $spans = new HeldCredentialSpans()->in($text, array_values($heldCredentials));
         // A failed match would leave the rest unredacted, so nothing of the text goes out.
-        if (null === $spans) {
+        if (!$spans instanceof RedactedSpans) {
             return self::MARKER;
         }
 
         foreach (array_unique([$text, $spans->maskedKeepingLineBreaksIn($text)]) as $view) {
             $found = $this->structuredSpans($view);
-            if (null === $found) {
+            if (!$found instanceof RedactedSpans) {
                 return self::MARKER;
             }
             $spans->addAll($found);
@@ -51,7 +51,7 @@ final readonly class Redaction
         $headers = new HeaderSpans();
         [$spans, $keptTails] = $headers->lists($text);
         $values = $headers->values($spans->maskedIn($text), $keptTails);
-        if (null === $values) {
+        if (!$values instanceof RedactedSpans) {
             return null;
         }
 

@@ -52,7 +52,6 @@ final readonly class HeaderSpans
 
     /**
      * @param array<int, int> $keptTails
-     *
      */
     public function values(string $text, array $keptTails): ?RedactedSpans
     {
