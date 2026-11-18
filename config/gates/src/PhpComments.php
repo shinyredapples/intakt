@@ -8,6 +8,13 @@ use PhpToken;
 
 final readonly class PhpComments implements CommentLanguage
 {
+    private const string LINE_SYNTAX = '~\G(?://++|#++|/\*++|\*++(?!/))\s*+~';
+
+    public function lineSyntax(): string
+    {
+        return self::LINE_SYNTAX;
+    }
+
     public function commentsIn(string $source): array
     {
         $comments = [];

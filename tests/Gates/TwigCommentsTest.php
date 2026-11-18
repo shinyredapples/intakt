@@ -75,6 +75,17 @@ final class TwigCommentsTest extends TestCase
         yield 'a marker after the comment start' => ["{# see the TODO list #}\n"];
         yield 'a reasoned exception' => ["{# TODO(#123): show the total once the forge sends it #}\n"];
         yield 'an empty comment' => ["{##}\n"];
+        yield 'a marker behind PHP line comment syntax' => ["{# // TODO is the PHP syntax in this example #}\n"];
+        yield 'a marker behind PHP block comment syntax' => ["{# /* FIXME */ is the PHP syntax #}\n"];
+        yield 'a marker behind a hash in a comment' => ["{# # TODO is shell syntax #}\n"];
+        yield 'a marker behind PHP syntax in an inline comment' => ["{{ order.total # // TODO is PHP syntax\n}}\n"];
+    }
+
+    public function testOnlyTheTwigCommentWhoseTextStartsWithAMarkerIsReported(): void
+    {
+        $template = "{# // TODO is the PHP syntax in this example #}\n{# FIXME this template #}\n";
+
+        self::assertSame([2 => 'FIXME'], $this->markersOn($template));
     }
 
     #[DataProvider('templatesWithoutAMarkerComment')]

@@ -7,7 +7,6 @@ namespace Intakt\Gates;
 final readonly class LeftUndoneComments
 {
     private const string WHITESPACE = " \t\n\r\v\f";
-    private const string COMMENT_SYNTAX = '~\G(?://++|#++|/\*++|\*++(?!/))\s*+~';
     private const string MARKER = '/^(TODO|FIXME|XXX)\b/i';
     public const string ISSUE_REFERENCE = '\(#[1-9][0-9]*\):';
     private const string REASONED_EXCEPTION = '/^(?:TODO|FIXME|XXX)'.self::ISSUE_REFERENCE.'.*[[:alpha:]]/i';
@@ -23,7 +22,7 @@ final readonly class LeftUndoneComments
         $markers = [];
 
         foreach ($this->commentLines($source, $language) as [$number, $text]) {
-            $marker = isset($added[$number]) ? $this->unreasonedMarkerIn($text) : null;
+            $marker = isset($added[$number]) ? $this->unreasonedMarkerIn($text, $language) : null;
 
             if (null !== $marker) {
                 $markers[$number] ??= $marker;
@@ -57,9 +56,9 @@ final readonly class LeftUndoneComments
         return $lines;
     }
 
-    private function unreasonedMarkerIn(string $commentLine): ?string
+    private function unreasonedMarkerIn(string $commentLine, CommentLanguage $language): ?string
     {
-        $text = $this->withoutCommentSyntax($commentLine);
+        $text = $this->withoutCommentSyntax($commentLine, $language);
 
         $marker = $this->matchIn(self::MARKER, $text);
 
@@ -71,11 +70,11 @@ final readonly class LeftUndoneComments
     }
 
     // Because a repeated group exhausts the pattern engine's stack on thousands of nested markers, one marker is stripped per match.
-    private function withoutCommentSyntax(string $commentLine): string
+    private function withoutCommentSyntax(string $commentLine, CommentLanguage $language): string
     {
         $offset = strspn($commentLine, self::WHITESPACE);
 
-        while (null !== $syntax = $this->matchIn(self::COMMENT_SYNTAX, $commentLine, $offset)) {
+        while (null !== $syntax = $this->matchIn($language->lineSyntax(), $commentLine, $offset)) {
             $offset += strlen($syntax[0] ?? '');
         }
 
