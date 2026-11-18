@@ -34,13 +34,13 @@ final readonly class GitHubCiRuns
 
         return [
             // Two workflows can share a display name and an event, so only the workflow's id tells their runs apart.
-            ...$this->runsOf($repository, $workflowRuns, fn (array $run): array => [$this->text($run, 'name'), $this->text($run, 'event'), $this->workflowOf($run)], static fn (): bool => false),
+            ...$this->runsOf($repository, $workflowRuns, fn (array $run): array => [$this->text($run, 'name'), $this->text($run, 'event'), $this->workflowOf($run), $this->stateOf($run)]),
             // A suite of a workflow run takes that run's workflow and trigger event as its key, so only the suite of a newer run of the same workflow and event replaces a suite that never started; any other suite keeps its own id and is never replaced, because one app can make suites for unrelated checks.
             ...$this->runsOf($repository, $this->ofHead($head, $this->entries($answers->checkSuites, 'check_suites')), function (array $suite) use ($workflowOfSuite): array {
                 $id = $this->positiveNumber($suite, 'id');
 
-                return [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $workflowOfSuite[$id] ?? self::SUITE_KEY.$id];
-            }, $this->hasCheckRuns(...)),
+                return [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $workflowOfSuite[$id] ?? self::SUITE_KEY.$id, $this->suiteStateOf($suite)];
+            }),
         ];
     }
 
@@ -73,10 +73,12 @@ final readonly class GitHubCiRuns
     /**
      * @param array<mixed> $suite
      */
-    private function hasCheckRuns(array $suite): bool
+    private function suiteStateOf(array $suite): CiRunState
     {
-        // Only a count of zero shows that no job was made: a queued suite with a check run, or without a count, may still finish red.
-        return 0 !== ($suite['latest_check_runs_count'] ?? null);
+        $state = $this->stateOf($suite);
+
+        // Only a count of zero counts as never started, because a queued suite with a check run, or without a count, may still finish red.
+        return CiRunState::NotStarted === $state && 0 !== ($suite['latest_check_runs_count'] ?? null) ? CiRunState::Unfinished : $state;
     }
 
     /**
@@ -121,18 +123,17 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param list<array<mixed>>                                    $entries
-     * @param callable(array<mixed>): array{string, string, string} $originOf
-     * @param callable(array<mixed>): bool                          $hasStarted
+     * @param list<array<mixed>>                                                $entries
+     * @param callable(array<mixed>): array{string, string, string, CiRunState} $runOf
      *
      * @return list<CiRun>
      */
-    private function runsOf(RepositoryAddress $repository, array $entries, callable $originOf, callable $hasStarted): array
+    private function runsOf(RepositoryAddress $repository, array $entries, callable $runOf): array
     {
-        return array_map(function (array $entry) use ($repository, $originOf, $hasStarted): CiRun {
-            [$name, $event, $definition] = $originOf($entry);
+        return array_map(function (array $entry) use ($repository, $runOf): CiRun {
+            [$name, $event, $definition, $state] = $runOf($entry);
 
-            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry), $definition), $this->stateOf($entry, $hasStarted), $this->moments->parse($this->text($entry, 'created_at')));
+            return new CiRun(new CiRunOrigin($name, $event, $this->changeOf($repository, $entry), $definition), $state, $this->moments->parse($this->text($entry, 'created_at')));
         }, $entries);
     }
 
@@ -153,13 +154,12 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param array<mixed>                 $entry
-     * @param callable(array<mixed>): bool $hasStarted
+     * @param array<mixed> $entry
      */
-    private function stateOf(array $entry, callable $hasStarted): CiRunState
+    private function stateOf(array $entry): CiRunState
     {
         return match ($this->text($entry, 'status')) {
-            'queued' => $hasStarted($entry) ? CiRunState::Unfinished : CiRunState::NotStarted,
+            'queued' => CiRunState::NotStarted,
             'completed' => $this->conclusionOf($entry),
             default => CiRunState::Unfinished,
         };
