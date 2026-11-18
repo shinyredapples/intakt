@@ -7,7 +7,7 @@ The dashboard and the logs use a handful of words for the loop's machinery: lane
 Think of a workshop with workbenches. Each bench does one job at a time.
 
 - A **build slot** is a bench where a builder works on one task. A project can have one or more.
-- The **review lane** is where finished work is reviewed and merged. It has as many **review workers** as your settings allow, so reviews keep up with the builders: each worker reviews a different piece of work, and two workers never review the same one.
+- The **review lane** is where finished work is reviewed, then handed to the landing step. It has as many **review workers** as your settings allow, so reviews keep up with the builders: each worker reviews a different piece of work, and two workers never review the same one.
 - The **landing step** merges approved work into main, one piece at a time for the whole install, whichever worker approved it.
 
 The benches work **independently**: while one task is being reviewed, the next one is already being built. They hand work to each other, like an assembly line.
@@ -54,7 +54,7 @@ Everything that waits has a **deadline** that wakes it, for example "check again
 
 ## CI: the second opinion
 
-**CI** (continuous integration) is GitHub running the project's checks on its own machines after every push. Before pushing, Intakt runs only the quick checks that do not run the change's code; the full check, tests included, runs on the pushed version, and that run is the builder's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task.
+**CI** (continuous integration) is the project's full check, tests included, run on the pushed version after every push, on a machine the builder does not control: by default a fresh container that Intakt starts itself, or the forge's CI (GitHub's machines) where the project sets it, or both. That run is the builder's check. It is a second, independent opinion, and the reviewers only start once it is green. While it runs, the build slot is already free for the next task. For Intakt's own repository it is GitHub's CI, and the checks before the push are only the quick ones that do not run the change's code. Another project runs before the push whatever pre-push command it configures, and its whole check when it configures none.
 
 Intakt's own checks run on GitHub's machines by default. Whoever maintains a copy of the Intakt repository can move them to a machine of their own by setting the repository variable `CI_RUNS_ON`, but only to a machine that is wiped back to a clean state before every job and cannot reach their home or office network: a change under review runs its own code there, and a machine that keeps anything between jobs would let it leave something behind for the next one. The machine also needs Docker and a few system settings; the [setup page](../user/self-hosted-ci.md) lists them. A paid runner service that hands out a fresh machine for every job works too; the same page says which two settings it needs. One job always stays on GitHub's machines: the one that files the urgent task when the nightly journeys fail, because it needs GitHub's own command-line tool.
 
