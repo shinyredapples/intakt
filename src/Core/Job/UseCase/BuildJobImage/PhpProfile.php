@@ -61,9 +61,7 @@ final readonly class PhpProfile
         }
     }
 
-    /**
-     * The minor's moving tag when the rule admits every patch from some point to the minor's end; otherwise the highest admitted patch up to the newest one known to be released, because it carries the most fixes and its image exists; when the rule admits only newer patches, the lowest of them, the one most likely released.
-     */
+    // The minor's moving tag when the rule admits every patch from some point to the minor's end; otherwise the highest admitted patch up to the newest one known to be released, because it carries the most fixes and its image exists; when the rule admits only newer patches, the lowest of them, the one most likely released.
     public function imageVersionIn(string $minor, ?int $newestReleasedPatch): ?string
     {
         $intervals = Intervals::get(MultiConstraint::create([new VersionParser()->parseConstraints($minor.'.*'), $this->constraint]))['numeric'];
@@ -86,7 +84,7 @@ final readonly class PhpProfile
     }
 
     /**
-     * @param non-empty-list<Interval> $intervals
+     * @param array<Interval> $intervals
      */
     // The patch after a range's start too, because a start the rule excludes (">8.4.5") admits only the patch above it.
     private function lowestPatchAbove(array $intervals, string $minor, int $released): ?string
