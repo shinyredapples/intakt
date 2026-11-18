@@ -50,7 +50,7 @@ final readonly class RunBuildJob
 
     private const float CPUS = 2.0;
 
-    // PHPStan's memory limit in `bin/check`, which gives each gate this much of its cgroup's memory when it sizes its own gates at once.
+    // PHPStan's memory limit, because `bin/check` gives each gate this much of its cgroup's memory when it sizes its own gates at once.
     private const int GATE_MEMORY_BYTES = 2 * 1024 ** 3;
 
     // Fixed, because sizing the limits for each task is plan task T60 (#1710); the CLI ends its session after this many turns.

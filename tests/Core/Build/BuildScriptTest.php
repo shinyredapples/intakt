@@ -23,6 +23,7 @@ final class BuildScriptTest extends TestCase
     private string $work = '';
     private string $bin = '';
     private string $prompt = '';
+    private string $gates = '4';
 
     protected function setUp(): void
     {
@@ -84,7 +85,9 @@ final class BuildScriptTest extends TestCase
     {
         $this->givenTheCli('printf "%s\n" "${INTAKT_GATE_SLOTS-unset}" > "$RECORD/gates"');
 
-        $this->whenTheBuildRuns('task', 'claude-opus-5-5', gates: '');
+        $this->gates = '';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
 
         self::assertSame("unset\n", (string) file_get_contents($this->history->folder.'/gates'));
     }
@@ -393,10 +396,10 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/git', 0o755);
     }
 
-    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600, string $gates = '4'): Process
+    private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $gates],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, $this->gates],
             null,
             $this->environment(),
             timeout: 20,
