@@ -38,6 +38,7 @@ use Intakt\Core\Git\Contract\BuildCheckoutFailed;
 use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\Git\Domain\CommitObject;
@@ -148,6 +149,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(LostContentCheck::class)]
 #[UsesClass(ChangedFile::class)]
 #[UsesClass(CheckJob::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(CheckJobOutcome::class)]
 #[UsesClass(CheckVerdict::class)]
 #[UsesClass(CheckHandBack::class)]

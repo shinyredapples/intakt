@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -54,6 +55,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(MemoryDocuments::class)]
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(RelevantMemory::class)]
 #[UsesClass(FencedText::class)]
 #[UsesClass(PromptAssembly::class)]
@@ -92,7 +94,7 @@ final class ReviewerMemoryTest extends TestCase
 
     public function testANoteFromOneProjectDoesNotReachAReviewOfAnotherProject(): void
     {
-        $this->index->index(new MemoryEntry('beta', 'Resolved finding: beta private billing secret leaked in composer.json scripts.', ['composer.json']));
+        $this->index->index(new MemoryEntry('beta', 'Resolved finding: beta private billing secret leaked in composer.json scripts.', new Paths('composer.json')));
 
         $briefing = $this->memory->briefingOn(new ReviewBrief(new ChangeUnderReview(self::PROJECT, 'Task.', "diff --git a/composer.json b/composer.json\n"), []));
 
@@ -101,7 +103,7 @@ final class ReviewerMemoryTest extends TestCase
 
     public function testANoteOfTheProjectUnderReviewStillReachesItWhenAnotherProjectHasNotesOnTheSameFile(): void
     {
-        $this->index->index(new MemoryEntry('beta', 'Beta cart note.', ['src/Cart.php']));
+        $this->index->index(new MemoryEntry('beta', 'Beta cart note.', new Paths('src/Cart.php')));
         $this->remember('Alpha cart note.', 'src/Cart.php');
 
         $briefing = $this->briefing(self::DIFF);
@@ -168,7 +170,7 @@ final class ReviewerMemoryTest extends TestCase
     {
         $memory = self::createStub(ProjectMemory::class);
         $memory->method('relevantTo')->willReturnCallback(static fn (MemoryQuery $query): RelevantMemory => RelevantMemory::within(
-            [new MemoryEntry(self::PROJECT, str_repeat('x', $query->maxBytes), ['src/Cart.php'])],
+            [new MemoryEntry(self::PROJECT, str_repeat('x', $query->maxBytes), new Paths('src/Cart.php'))],
             $query->maxBytes,
         ));
 
@@ -254,7 +256,7 @@ final class ReviewerMemoryTest extends TestCase
 
     private function remember(string $text, string $file): void
     {
-        $this->index->index(new MemoryEntry(self::PROJECT, $text, [$file]));
+        $this->index->index(new MemoryEntry(self::PROJECT, $text, new Paths($file)));
     }
 
     private function brief(string $diff): ReviewBrief

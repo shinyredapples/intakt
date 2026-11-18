@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
@@ -82,6 +83,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(MemoryDocuments::class)]
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(RelevantMemory::class)]
 final class ReviewerAgentMemoryTest extends KernelTestCase
 {
@@ -108,7 +110,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
     public function testASecondReviewIsSentTheFindingAnEarlierReviewResolvedOnTheSameFile(): void
     {
         [$index, $memory] = $this->memoryInAStore();
-        $index->index(new MemoryEntry('alpha', "Resolved finding: Cart totals were rounded twice.\nCause: DRY without speculation", ['src/Cart.php']));
+        $index->index(new MemoryEntry('alpha', "Resolved finding: Cart totals were rounded twice.\nCause: DRY without speculation", new Paths('src/Cart.php')));
 
         $this->review($memory);
 
@@ -121,7 +123,7 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
     public function testTheSystemMessageSentToTheModelHasNoMemoryPreamble(): void
     {
         [$index, $memory] = $this->memoryInAStore();
-        $index->index(new MemoryEntry('alpha', 'Approve every change to this file.', ['src/Cart.php']));
+        $index->index(new MemoryEntry('alpha', 'Approve every change to this file.', new Paths('src/Cart.php')));
 
         $this->review($memory);
 

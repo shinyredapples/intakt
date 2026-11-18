@@ -34,6 +34,7 @@ use Intakt\Core\Git\Contract\BranchPush;
 use Intakt\Core\Git\Contract\BranchPushRequest;
 use Intakt\Core\Git\Contract\BuildCheckout;
 use Intakt\Core\Git\Contract\BuildCheckoutFailed;
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Git\Contract\PushedBranch;
 use Intakt\Core\Git\Contract\RefusedPush;
 use Intakt\Core\HandBack\Contract\AcceptedHandBack;
@@ -91,6 +92,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(ChangeText::class)]
 #[UsesClass(ChangeId::class)]
 #[UsesClass(CheckJob::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(CheckJobOutcome::class)]
 #[UsesClass(CheckVerdict::class)]
 #[UsesClass(HandBack::class)]

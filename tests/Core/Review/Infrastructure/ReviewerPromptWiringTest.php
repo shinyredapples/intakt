@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\Memory\Contract\MemoryEntry;
 use Intakt\Core\Memory\Contract\MemoryQuery;
 use Intakt\Core\Memory\Contract\ProjectMemory;
@@ -36,6 +37,7 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(ReviewerConversation::class)]
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
+#[UsesClass(Paths::class)]
 #[UsesClass(RelevantMemory::class)]
 #[UsesClass(FencedText::class)]
 #[UsesClass(PromptAssembly::class)]
@@ -44,7 +46,7 @@ final class ReviewerPromptWiringTest extends KernelTestCase
     public function testTheContainerWiresTheReviewerPromptWithProjectMemory(): void
     {
         $memory = self::createStub(ProjectMemory::class);
-        $memory->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('alpha', 'Cart totals were rounded twice.', ['src/Cart.php'])], 1_000));
+        $memory->method('relevantTo')->willReturn(RelevantMemory::within([new MemoryEntry('alpha', 'Cart totals were rounded twice.', new Paths('src/Cart.php'))], 1_000));
         self::getContainer()->set(ProjectMemory::class, $memory);
         $prompt = self::getContainer()->get(ReviewerPrompt::class);
         $diff = "diff --git a/src/Cart.php b/src/Cart.php\n--- a/src/Cart.php\n+++ b/src/Cart.php\n";

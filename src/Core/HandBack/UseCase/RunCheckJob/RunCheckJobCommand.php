@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\UseCase\RunCheckJob;
 
+use Intakt\Core\Git\Contract\Paths;
 use Intakt\Core\HandBack\Contract\CheckJob;
 use Intakt\Core\HandBack\Contract\CheckJobOutcome;
 use Intakt\Core\HandBack\Contract\HandBack;
@@ -54,7 +55,7 @@ final readonly class RunCheckJobCommand
             new HandBack($input->repository, $input->branch, $input->bundle, $input->mergeMain, new JobCredentials()),
             $input->image,
             $input->checkCommand,
-            $input->rewritten,
+            new Paths(...array_values($input->rewritten)),
         );
     }
 
