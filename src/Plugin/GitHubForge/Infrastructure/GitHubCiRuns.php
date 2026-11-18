@@ -25,43 +25,34 @@ final readonly class GitHubCiRuns
     }
 
     /**
-     * @param array<mixed> $answer
-     *
      * @return list<CiRun>
      */
-    public function ofWorkflowRuns(RepositoryAddress $repository, CommitId $head, array $answer): array
+    public function of(RepositoryAddress $repository, CommitId $head, HeadCiAnswers $answers): array
     {
-        // Two workflows can share a display name and an event, so only the workflow's id tells their runs apart.
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'workflow_runs')), fn (array $entry): array => [$this->text($entry, 'name'), $this->text($entry, 'event'), $this->workflowOf($entry)]);
+        $workflowRuns = $this->ofHead($head, $this->entries($answers->workflowRuns, 'workflow_runs'));
+        $workflowOfSuite = $this->workflowsBySuite($workflowRuns);
+
+        return [
+            // Two workflows can share a display name and an event, so only the workflow's id tells their runs apart.
+            ...$this->runsOf($repository, $workflowRuns, fn (array $run): array => [$this->text($run, 'name'), $this->text($run, 'event'), $this->workflowOf($run)]),
+            // A suite of a workflow run shares that workflow's key, so the newer run's suite replaces a suite that never started with it; any other suite keeps its own id and is never replaced, because one app can make suites for unrelated checks.
+            ...$this->runsOf($repository, $this->ofHead($head, $this->entries($answers->checkSuites, 'check_suites')), function (array $suite) use ($workflowOfSuite): array {
+                $id = $this->positiveNumber($suite, 'id');
+
+                return [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $workflowOfSuite[$id] ?? self::SUITE_KEY.$id];
+            }),
+        ];
     }
 
     /**
-     * @param array<mixed> $answer       the check suites of the head
-     * @param array<mixed> $workflowRuns the workflow runs of the same head, which name the suite each of them runs in
-     *
-     * @return list<CiRun>
-     */
-    public function ofCheckSuites(RepositoryAddress $repository, CommitId $head, array $answer, array $workflowRuns): array
-    {
-        $workflowOfSuite = $this->workflowsBySuite($head, $workflowRuns);
-
-        // A suite of a workflow run shares that workflow's key, so the newer run's suite replaces a suite that never started with it; any other suite keeps its own id and is never replaced, because one app can make suites for unrelated checks.
-        return $this->runsOf($repository, $this->ofHead($head, $this->entries($answer, 'check_suites')), function (array $suite) use ($workflowOfSuite): array {
-            $id = $this->positiveNumber($suite, 'id');
-
-            return [$this->text($suite, 'app', 'name'), self::CHECK_SUITE_EVENT, $workflowOfSuite[$id] ?? self::SUITE_KEY.$id];
-        });
-    }
-
-    /**
-     * @param array<mixed> $answer
+     * @param list<array<mixed>> $workflowRuns
      *
      * @return array<int, string>
      */
-    private function workflowsBySuite(CommitId $head, array $answer): array
+    private function workflowsBySuite(array $workflowRuns): array
     {
         $workflows = [];
-        foreach ($this->ofHead($head, $this->entries($answer, 'workflow_runs')) as $run) {
+        foreach ($workflowRuns as $run) {
             if (array_key_exists('check_suite_id', $run)) {
                 $workflows[$this->positiveNumber($run, 'check_suite_id')] = $this->workflowOf($run);
             }

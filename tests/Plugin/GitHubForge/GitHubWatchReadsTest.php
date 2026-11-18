@@ -27,6 +27,7 @@ use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCalls;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubCiRuns;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubMoments;
 use Intakt\Plugin\GitHubForge\Infrastructure\GitHubWatchReads;
+use Intakt\Plugin\GitHubForge\Infrastructure\HeadCiAnswers;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReadBack;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationReader;
 use Intakt\Plugin\GitHubForge\Infrastructure\InstallationTokenMinter;
@@ -48,6 +49,7 @@ use Symfony\Contracts\HttpClient\ResponseInterface;
 
 #[CoversClass(GitHubWatchReads::class)]
 #[CoversClass(GitHubCiRuns::class)]
+#[CoversClass(HeadCiAnswers::class)]
 #[CoversClass(RepositoryAddress::class)]
 #[CoversClass(GitHubMoments::class)]
 #[CoversClass(WatchedRepositories::class)]
