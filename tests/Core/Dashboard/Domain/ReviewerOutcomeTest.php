@@ -30,7 +30,12 @@ final class ReviewerOutcomeTest extends TestCase
     #[DataProvider('decisions')]
     public function testAReviewerThatAnsweredGivesItsDecisionInTheOutcomeWords(Decision $decision, ReviewOutcome $outcome): void
     {
-        self::assertSame($outcome, $this->reviewer()->answered($decision->value, 2, ProjectMode::Live)->outcome());
+        self::assertSame($outcome, $this->reviewer()->answered($decision, 2, ProjectMode::Live)->outcome());
+    }
+
+    public function testAnAnsweredReviewerKeepsItsDecisionAsADecision(): void
+    {
+        self::assertSame(Decision::Changes, $this->reviewer()->answered(Decision::Changes, 2, ProjectMode::Live)->decision);
     }
 
     public function testAReviewerStartedWithAnEmptyModelNamesItsTierLikeOneWithNone(): void
@@ -62,7 +67,7 @@ final class ReviewerOutcomeTest extends TestCase
 
     public function testAReviewerStartedAgainAfterAnAnswerGivesNoOutcome(): void
     {
-        $restarted = $this->reviewer()->answered('approve', 0, ProjectMode::Live)->restarted(new DateTimeImmutable('2026-10-28T11:05:00+00:00'), null);
+        $restarted = $this->reviewer()->answered(Decision::Approve, 0, ProjectMode::Live)->restarted(new DateTimeImmutable('2026-10-28T11:05:00+00:00'), null);
 
         self::assertNull($restarted->outcome());
     }

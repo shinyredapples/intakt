@@ -9,6 +9,7 @@ use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\BoardColumn;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
+use Intakt\Core\Dashboard\Domain\ReviewerOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Dashboard\Infrastructure\LedgerReviewPages;
@@ -40,6 +41,7 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(BoardColumn::class)]
 #[UsesClass(Review::class)]
 #[UsesClass(ReviewedRound::class)]
+#[UsesClass(ReviewerOutcome::class)]
 #[UsesClass(RoundPlace::class)]
 #[UsesClass(RoundStart::class)]
 #[UsesClass(RoundPayloads::class)]
@@ -229,6 +231,59 @@ final class LedgerReviewPagesTest extends TestCase
         $ledger->startRoundOf('feat/a', 'r2', 2);
 
         self::assertTrue($this->pagesOn($ledger, [], ['r1' => ReplayMark::Replay, 'r2' => ReplayMark::Replay])->reviewOf('r1')?->everyRoundIsAReplay());
+    }
+
+    public function testAStartedReviewerIsReadFromTheRowsThatNameItsRoundAlone(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startReviewer('other', 'correctness');
+        $ledger->startReviewerOn('r1', 'correctness', 'claude-test');
+
+        $started = $this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'r1-correctness');
+
+        self::assertSame(['correctness', 'claude-test'], [$started?->role, $started?->model]);
+    }
+
+    public function testAReviewerStartedInAnotherRoundIsNotStartedInThisOne(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startReviewer('other', 'correctness');
+
+        self::assertNull($this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'other-correctness'));
+    }
+
+    public function testAStartInARoundWhoseIdContainsThisRoundsIdIsNotAStartInThisRound(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startReviewer('r10', 'correctness');
+
+        self::assertNull($this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'r10-correctness'));
+    }
+
+    public function testTheLatestStartOfAReviewerInARoundWins(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startReviewerOn('r1', 'correctness', 'first-model');
+        $ledger->startReviewerOn('r1', 'correctness', 'second-model');
+
+        self::assertSame('second-model', $this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'r1-correctness')?->model);
+    }
+
+    public function testARowThatNamesTheReviewerButIsNoStartIsNotAStartedReviewer(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startRoundOf('feat/a', 'r1', 1);
+        $ledger->answer('r1', 'correctness', 0);
+
+        self::assertNull($this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'r1-correctness'));
+    }
+
+    public function testAnotherReviewerStartedInTheRoundIsNotThisReviewer(): void
+    {
+        $ledger = new DashboardLedger();
+        $ledger->startReviewer('r1', 'security');
+
+        self::assertNull($this->pagesOn(new ReviewBoundLedger($ledger))->startedReviewerOf('r1', 'r1-correctness'));
     }
 
     /**
