@@ -11,8 +11,10 @@ use Intakt\Core\Dashboard\Domain\ReviewOutcome;
 use Intakt\Core\Dashboard\Domain\RoundPlace;
 use Intakt\Core\Dashboard\Domain\RoundStart;
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\RoundEnding;
 use Intakt\Core\Review\Contract\RoundEnds;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -44,6 +46,23 @@ final class ReviewedRoundTest extends TestCase
         $round = $this->judged()->decidedAs(Decision::Approve);
 
         self::assertSame(ReviewOutcome::of($round), $round->reviewOutcome());
+    }
+
+    public function testANewlyBuiltRoundHasNoReplayMarkUntilItIsMarked(): void
+    {
+        $round = $this->round();
+
+        self::assertFalse($round->isReplay());
+        $this->expectException(LogicException::class);
+        $round->replayMark();
+    }
+
+    public function testARoundMarkedAsAReplayReadsAsAReplay(): void
+    {
+        $marked = $this->round()->markedAs(ReplayMark::Replay);
+
+        self::assertTrue($marked->isReplay());
+        self::assertSame(ReplayMark::Replay, $marked->replayMark());
     }
 
     private function round(): ReviewedRound
