@@ -277,7 +277,6 @@ final class ReviewChangeCommandTest extends TestCase
     // The reviewer's probe: a checkout switched away and back while the reviewers read must not change what they read.
     public function testABranchSwitchedAndRestoredDuringTheRoundDoesNotChangeWhatTheReviewersRead(): void
     {
-
         $tester = $this->whenTheCommandRuns($this->reviewingTheSnapshot(function (string $snapshot): void {
             $this->repository->checkout('main');
             self::assertFileDoesNotExist($this->repository->path.'/src/Feature.php');

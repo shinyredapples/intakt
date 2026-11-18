@@ -65,7 +65,6 @@ final class MercureHubTest extends TestCase
 
     private const int SECONDS_TO_WAIT = 10;
 
-    // One hub for the class, because starting it costs more than a test; a round of its own per test keeps the tests apart on its history.
     private Process $hub;
 
     private string $storage;
@@ -118,6 +117,7 @@ final class MercureHubTest extends TestCase
         if (isset($this->storage)) {
             new Filesystem()->remove($this->storage);
         }
+    }
 
     private function connectClients(): void
     {

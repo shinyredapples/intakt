@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Gates\PhpStan;
 
 use PhpParser\Node;
+use PhpParser\Node\Identifier;
 use PhpParser\Node\Stmt\Class_;
 use PHPStan\Analyser\Scope;
 use PHPStan\Rules\IdentifierRuleError;
@@ -26,7 +27,7 @@ final readonly class FinalClassRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!$node->name instanceof Node\Identifier || $node->isFinal() || $node->isAbstract()) {
+        if (!$node->name instanceof Identifier || $node->isFinal() || $node->isAbstract()) {
             return [];
         }
 
