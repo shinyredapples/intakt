@@ -72,6 +72,13 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
     }
 
+    public function testAFreshInstallsHeadlineIsOneLinkThatTheStylesheetCanSizeAsAControl(): void
+    {
+        $link = $this->browser->request('GET', '/')->filter('.page-head .lead > a.lead-link');
+
+        self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
+    }
+
     public function testAFreshInstallsBoardShowsTheWaitingOctopusBesideItsOneSetUpLink(): void
     {
         $head = $this->browser->request('GET', '/')->filter('.page-head');
