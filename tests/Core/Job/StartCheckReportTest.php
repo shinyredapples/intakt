@@ -17,6 +17,8 @@ use Symfony\Component\Filesystem\Filesystem;
 #[CoversClass(StartCheckReport::class)]
 #[UsesClass(StartCheckFailure::class)]
 #[UsesClass(StartCheck::class)]
+#[UsesClass(GrowingReportStream::class)]
+#[UsesClass(InterruptedReportStream::class)]
 final class StartCheckReportTest extends TestCase
 {
     private string $output = '';
@@ -134,6 +136,23 @@ final class StartCheckReportTest extends TestCase
             restore_error_handler();
         }
 
+        self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], $failures);
+    }
+
+    public function testAReadThatFailsAfterAWellFormedStartIsAFailedReportEvenWhenWarningsAreThrown(): void
+    {
+        InterruptedReportStream::register();
+        // The runner's error handler, which must never see the read's warning.
+        set_error_handler(static fn (int $level, string $message): never => throw new ErrorException($message, 0, $level));
+
+        try {
+            $failures = new StartCheckReport()->failuresIn(InterruptedReportStream::PROTOCOL.'://output');
+        } finally {
+            restore_error_handler();
+            InterruptedReportStream::unregister();
+        }
+
+        self::assertSame(1, InterruptedReportStream::$warnings);
         self::assertEquals([new StartCheckFailure(StartCheck::Report, 'the report cannot be read')], $failures);
     }
 

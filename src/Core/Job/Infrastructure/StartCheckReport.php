@@ -44,10 +44,15 @@ final readonly class StartCheckReport
             : array_slice($this->failuresListedIn($contents), 0, self::MAX_FAILURES);
     }
 
-    // The job may grow the report after the size check, so at most one byte over the limit is read, and that byte refuses it; a warning is silenced because the runner's error handler would turn it into an exception that aborts the job before its end is recorded.
+    // The job may grow the report after the size check, so at most one byte over the limit is read, and that byte refuses it; a warning is recorded and refuses the report too, because PHP returns the bytes it read before a failure, and it is kept from the runner's error handler, which would turn it into an exception that aborts the job before its end is recorded.
     private function contentsOf(SplFileInfo $report): ?string
     {
-        set_error_handler(static fn (): bool => true);
+        $warned = false;
+        set_error_handler(static function () use (&$warned): bool {
+            $warned = true;
+
+            return true;
+        });
 
         try {
             $contents = file_get_contents($report->getPathname(), false, null, 0, self::MAX_BYTES + 1);
@@ -55,7 +60,7 @@ final readonly class StartCheckReport
             restore_error_handler();
         }
 
-        return false === $contents || strlen($contents) > self::MAX_BYTES ? null : $contents;
+        return $warned || false === $contents || strlen($contents) > self::MAX_BYTES ? null : $contents;
     }
 
     /**
