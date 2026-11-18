@@ -24,7 +24,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M5 Demo | image in worker mode with no state leaks, `docker compose up`, sample repository, the five-minute path, hardening | T22 to T29 | 2026-11-21 |
 | After the hackathon | branch cleanup, labels, server metrics, a development setup with file watching, every account working at once with a hand-off at a limit, and last the optional GitHub webhooks; the demo runs on a local repository without them | T19, T30, T34, T35, T81, T32 (optional) | after the deadline |
 | M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
-| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82, T84 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M1 Review core
@@ -343,7 +343,7 @@ Conventions, in addition to the ones above:
 | Milestone | Outcome | Tasks | Target |
 |---|---|---|---|
 | M6 Reviewer for the loop | Intakt's review takes the place of the existing loop's Claude reviewer on the owner's two projects and counts, and a weekly report compares its published verdicts with the loop's GPT reviews | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
-| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
+| M7 Builder half | Intakt sizes, builds, checks, pushes, reviews through CI, asks the owner and merges, from its own job containers, on one project in a test repository | T39, T47 to T69, T75 to T80, T82, T84 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | Intakt's verdicts count, then it builds a labeled share, then takes over once every parity item has an Intakt test | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
 
 ## M6 Reviewer for the loop
@@ -392,7 +392,7 @@ T44 to T46 run in M6 alongside T37, T38, T40 and T43 (owner decision 2026-11-09,
 
 ## M7 Builder half
 
-M7 holds T39, T47 to T69, T75 to T80 and T82. T75 to T80 moved here from after the hackathon (issue #852), because approving protected changes on the spot belongs to the switch. T39 moved here from M6 with D5 of #1434, while T43 stays in M6. T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); their sections stay here.
+M7 holds T39, T47 to T69, T75 to T80, T82 and T84. T75 to T80 moved here from after the hackathon (issue #852), because approving protected changes on the spot belongs to the switch. T39 moved here from M6 with D5 of #1434, while T43 stays in M6. T44 to T46 run in M6 (owner decision 2026-11-09, to start the builder chain early); their sections stay here.
 
 ### T39 A Codex subscription reviewer
 - **Description:** A reviewer role runs through the Codex platform bridge on a subscription login: the login file is kept per account in the orchestrator, refreshed there, and given to the call read-only; the model and effort are pinned in config. The vendor's structured errors (usage limit, model not available for the plan, login lost) become an account cooldown or an account error with one owner notice, never a failed review or `changes`; the measured use it reports is recorded per account. The package is a new dependency the owner approves.
@@ -590,6 +590,12 @@ M7 holds T39, T47 to T69, T75 to T80 and T82. T75 to T80 moved here from after t
 - **Evidence:** the forced-order tests' run; the default limit computed from a measured peak of the sample repository's check; a command over its group's limit killed while the agent keeps running, on a host with cgroup v2 delegation `(owner provides)`.
 - **Waits for:** T44, T45, T49, T51, T67, T68, T76 (the `language` plugin kind and the status it builds on). **Size:** M. **Labels:** `class:core`, `priority:normal`.
 
+### T84 Flaky tests: rerun once, never a send-back, one urgent task each
+- **Description:** The flaky-test rule of the design ([Reviews](design/05-architecture/07-reviews.md)). The orchestrator records each test's result per head in the ledger from the check job's per-test report (the JUnit reports of the `tests` gate). On a failure the check job reruns only the failed tests, once, on the same tree; the tests that pass are marked flaky, and the run counts as green when all of them pass and every other gate passed. A test that failed on one head and passed on another head with an identical tree is flaky too, and a head is never sent back for a test that is flaky on its tree. Plain code keeps one `priority:urgent` task per flaky test (its name, its latest failure output inside a redacted and scanned `<!-- external -->` block, how often it flaked), updated and reopened rather than duplicated, asking for a fix proved by a forced-order test, never by repetition. The status (T68) lists the flaky tests until their task is closed.
+- **Acceptance:** a failed test that passes its rerun is marked flaky, the run counts as green and nothing is sent back; a test that fails its rerun sends the head back as before; the rerun runs only the failed tests and only once; a test that failed on one head and passed on an identical tree is flaky; a failing other gate keeps the run red; a second flake of the same test updates its task's count and output, reopens it when closed, and files no second task; a failure output holding a credential-shaped string files nothing with it; forced order: a crash between the flake's ledger record and the task write files the task once.
+- **Evidence:** a check job on the sample repository with a test that fails once and then passes, its ledger record and the urgent task it files, against recorded forge responses.
+- **Waits for:** T47, T51, T68. **Size:** M. **Labels:** `class:core`, `priority:normal`.
+
 T75 to T80 build [Approving protected changes](design/05-architecture/08-merge.md#approving-protected-changes). Until T80's switch turns a project on, every protected change still goes to the owner.
 
 ### T75 The two hard floors and the approval decision
@@ -674,5 +680,5 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - From 2026-11-23: T37, T40 and T44 in parallel; T38 after T37.
 - The first weeks of the weekly report (after T43) run while M7 is built.
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
-- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76.
+- M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76; T84 after T47, T51 and T68.
 - M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.
