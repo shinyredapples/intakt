@@ -138,7 +138,7 @@ flowchart TD
 ## Steering budgets and pauses
 
 The dashboard has an **admin area** where you change how much Intakt may spend and when it works, without editing any file. There is no login, password or passkey: whoever can open the dashboard can press every button and change every setting. So what matters is who can reach it:
-- The dashboard only answers on the computer it runs on, so whoever opens it is at that computer: you, or anyone else who uses it.
+- As set up by default, the dashboard's port is published on the computer's loopback address only (`127.0.0.1`), so whoever opens it is at that computer: you, or anyone else who uses it. If you publish the port on another address, anyone who can reach that address can act, whatever name they type.
 - To use it from your phone (planned), you make it reachable on a network you trust, such as a VPN or your home network, and add the name your phone uses for it. Then anyone who can reach it on that network can act too, so a VPN is the safer choice; never put it on a shared network such as an office or a café. HTTPS is a good idea there as well, but nothing depends on it.
 - Another website open in your browser can't press a button or change a setting, and neither can an AI agent, a job, a label or a comment: they can see what is in effect, never change it.
 

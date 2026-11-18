@@ -19,7 +19,7 @@ flowchart TD
   defaults --> go[It starts on tasks labeled intakt]
 ```
 
-There is no login, password or setup code: the dashboard only answers on the computer Intakt runs on, so whoever can open it there can use it ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). The wizard goes straight to:
+There is no login, password or setup code: by default the dashboard's port is published on the computer's loopback address only, so only someone at the computer Intakt runs on can open it, and whoever can open it can use it; publish it on another address and anyone who reaches that address can use it too ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). The wizard goes straight to:
 
 1. **Your repository:** paste its address; Intakt detects GitHub or Gitea.
 2. **Its own identity:** Intakt creates a GitHub App that acts as itself, never as you, so its comments and your approvals can always be told apart. It is installed only on the repositories you choose, with the narrowest permissions. You confirm once; you never hand Intakt a personal token. Before its first call to GitHub, Intakt reads the App's installation back and refuses to go on if its permissions or repositories differ from what you configured, naming the difference.
