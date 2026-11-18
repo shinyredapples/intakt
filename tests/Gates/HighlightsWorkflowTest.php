@@ -88,7 +88,7 @@ final class HighlightsWorkflowTest extends TestCase
         file_put_contents($workspace.'/docs/highlights.md', $highlights);
 
         try {
-            $write = substr($this->pageCommand(), \strlen('bin/highlights && '));
+            $write = substr($this->pageCommand(), strlen('bin/highlights && '));
             new Process(['sh', '-c', str_replace(' /page/', ' '.$workspace.'/page/', $write)], $workspace)->mustRun();
 
             return (string) file_get_contents($workspace.'/page/index.md');
