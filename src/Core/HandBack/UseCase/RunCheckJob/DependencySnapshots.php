@@ -228,9 +228,7 @@ final readonly class DependencySnapshots
      */
     private function matching(string $pattern, array $names): array
     {
-        $matching = preg_grep($pattern, $names);
-
-        return false === $matching ? [] : $matching;
+        return array_filter($names, static fn (string $name): bool => 1 === preg_match($pattern, $name));
     }
 
     // Skipped while a check holds the key, so a folder a job is binding, copying or saving stays; a later save evicts it.
