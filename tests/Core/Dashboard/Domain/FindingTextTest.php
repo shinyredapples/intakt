@@ -108,9 +108,23 @@ final class FindingTextTest extends TestCase
         self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
     }
 
-    public function testADunderNameLosesItsMarksAsMarkdownRendersIt(): void
+    public function testDunderNamesKeepTheirMarks(): void
     {
-        self::assertSame([['text' => 'init.py', 'code' => false]], new FindingText('__init__.py')->spans());
+        $written = 'Use __DIR__ here, not __FILE__ or __CLASS__, and __init__.py or __invoke__.';
+
+        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+    }
+
+    public function testSeparateMarksNeverPairAcrossEachOther(): void
+    {
+        foreach ([
+            'matches (*.php|*.twig) only',
+            'files "*.php" and "*.twig" are skipped',
+            'then *x*/*y* here',
+            'x_y_ z, _private_var and _other',
+        ] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
     }
 
     public function testEmphasisRunningOverALineBreakLosesItsMarks(): void
