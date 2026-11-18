@@ -5,22 +5,24 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\ServeReviewTools;
 
 use Closure;
-use DomainException;
 use Intakt\Core\Review\Contract\Checkout;
+use Intakt\Core\Review\Contract\CheckoutNotADirectory;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\PathNotInCheckout;
+use Intakt\Core\Review\Contract\PathOutsideCheckout;
 use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\RoundUpdates;
 use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
+use Intakt\Core\Review\Infrastructure\Repository\EntryNotReadable;
 use Intakt\Core\Review\Infrastructure\Repository\ListDirectory;
 use Intakt\Core\Review\Infrastructure\Repository\ReadFile;
 use Intakt\Core\Review\Infrastructure\Repository\SearchFiles;
+use Intakt\Core\Review\Infrastructure\Repository\SearchTextEmpty;
 use Intakt\Core\Review\Infrastructure\RoundToolCalls;
 use Intakt\Core\Review\UseCase\ReadRound\ReadableRounds;
-use InvalidArgumentException;
 use Mcp\Exception\ToolCallException;
-use RuntimeException;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\Security\Core\User\UserInterface;
 
@@ -108,7 +110,7 @@ final readonly class ReviewedRepository
 
         try {
             return new Checkout($round->checkoutRoot());
-        } catch (InvalidArgumentException $unavailable) {
+        } catch (CheckoutNotADirectory $unavailable) {
             throw new ToolCallException('The head of this round is not available.', $unavailable->getCode(), previous: $unavailable);
         }
     }
@@ -141,7 +143,7 @@ final readonly class ReviewedRepository
     {
         try {
             return $step();
-        } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
+        } catch (PathNotInCheckout|PathOutsideCheckout|EntryNotReadable|SearchTextEmpty $refused) {
             $this->recordedCall($round, $tool);
 
             throw new ToolCallException($this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage())), $refused->getCode(), previous: $refused);

@@ -63,13 +63,13 @@ final readonly class CapturingLiveUpdates implements LiveUpdates
         }
     }
 
-    // Swallowed after a log, because a capture is best effort like the update itself and must never fail the work that published.
     private function capturedOrLogged(LiveEvent $event, callable $step): bool
     {
         try {
             $step();
 
             return true;
+            // Boundary: logs every failure and goes on, because a capture is best effort like the update itself and must never fail the work that published.
         } catch (Throwable $failure) {
             $this->logger->warning('A live dashboard update was not captured.', ['topic' => $event->topic, 'exception' => $failure]);
 
@@ -81,6 +81,7 @@ final readonly class CapturingLiveUpdates implements LiveUpdates
     {
         try {
             $lock->release();
+            // Boundary: logs a lock that was not released, because the lock store expires it and the published update must stand.
         } catch (Throwable $failure) {
             $this->logger->warning('The live capture lock was not released.', ['topic' => $event->topic, 'exception' => $failure]);
         }

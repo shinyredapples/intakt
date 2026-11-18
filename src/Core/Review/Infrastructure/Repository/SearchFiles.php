@@ -9,7 +9,6 @@ use FilesystemIterator;
 use Generator;
 use Intakt\Core\Review\Contract\Checkout;
 use Intakt\Core\Review\Contract\ReviewTool;
-use InvalidArgumentException;
 use RecursiveCallbackFilterIterator;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -17,6 +16,7 @@ use SplFileInfo;
 use Symfony\AI\Agent\Toolbox\Attribute\AsTool;
 use Symfony\AI\Platform\Contract\JsonSchema\Attribute\Schema;
 use Symfony\AI\Platform\Tool\ToolEffectHints;
+use UnexpectedValueException;
 
 #[AsTool(name: ReviewTool::SearchFiles->value, description: 'Finds the lines of the repository at the head under review that contain a text; answers path:line:text.', effectHints: new ToolEffectHints(readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false))]
 final readonly class SearchFiles
@@ -41,7 +41,7 @@ final readonly class SearchFiles
         #[Schema(description: 'File or directory to search, relative to the repository root; "." is the root.')] string $path = '.',
     ): string {
         if ('' === $text) {
-            throw new InvalidArgumentException('The text to find is empty.');
+            throw SearchTextEmpty::make();
         }
 
         $matches = [];
@@ -86,7 +86,7 @@ final readonly class SearchFiles
 
         // Because a link in the code under review can point out of the checkout, symlinks are not followed.
         $entries = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(
-            new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS),
+            $this->directory($real),
             static fn (SplFileInfo $entry): bool => '.git' !== $entry->getFilename() && !$entry->isLink(),
         ), RecursiveIteratorIterator::LEAVES_ONLY, RecursiveIteratorIterator::CATCH_GET_CHILD);
 
@@ -95,6 +95,16 @@ final readonly class SearchFiles
             if ($entry->isFile()) {
                 yield $entry;
             }
+        }
+    }
+
+    // Only the directory the search names can fail to open here, because CATCH_GET_CHILD skips an unreadable one below it.
+    private function directory(string $real): RecursiveDirectoryIterator
+    {
+        try {
+            return new RecursiveDirectoryIterator($real, FilesystemIterator::SKIP_DOTS);
+        } catch (UnexpectedValueException $unopened) {
+            throw EntryNotReadable::because($this->checkout->relative($real), 'cannot be searched', $unopened);
         }
     }
 

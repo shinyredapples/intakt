@@ -32,6 +32,7 @@ final readonly class LivePageRendering
 
         try {
             return $this->twig->render($template, [...$context, 'live' => true, 'listener_grants' => self::listenerGrants()]);
+            // Boundary: logs every failure of the live render and falls back to the plain page, because the hub's authorization is not the page's own.
         } catch (Throwable $failure) {
             // Rendered again without the subscription, because a hub that cannot authorize a listener must leave the plain page standing; flashes put back, because the failed attempt read them.
             $flashBag->setAll($flashes);

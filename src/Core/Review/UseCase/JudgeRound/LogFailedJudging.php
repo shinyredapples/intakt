@@ -26,9 +26,9 @@ final readonly class LogFailedJudging
             return;
         }
 
-        // A log that cannot be written is swallowed, because the worker does not catch what a failure listener throws: it would stop before parking the message, and the message would come back again and again.
         try {
             $this->logger->error('The judging of a round failed for good; the round stays unjudged and its message is in the failure transport.', ['round' => $message->roundId, 'exception' => $event->getThrowable()]);
+            // Boundary: swallows a log that cannot be written, because the worker does not catch what a failure listener throws: it would stop before parking the message, and the message would come back again and again.
         } catch (Throwable) {
             return;
         }

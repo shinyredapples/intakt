@@ -126,13 +126,13 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         }
     }
 
-    // Logged and swallowed, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
     private function doneOrLogged(Uuid $round, Closure $step, string $failureMessage = 'A live session summary was not published.'): bool
     {
         try {
             $step();
 
             return true;
+            // Boundary: logs every failure and goes on, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
         } catch (Throwable $failure) {
             $this->logger->warning($failureMessage, ['round' => $round->toRfc4122(), 'exception' => $failure]);
 
@@ -223,8 +223,8 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     {
         try {
             $review = $this->pages->reviewOf($round->toRfc4122());
+            // Boundary: logs every failure and answers null, because the judged state must still go out when its findings cannot be read.
         } catch (Throwable $failure) {
-            // Logged and swallowed, because the judged state must still go out when its findings cannot be read.
             $this->logger->warning('The judged round was not read for its live update.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
 
             return null;
@@ -241,8 +241,8 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     {
         try {
             return $this->roundOf($round->toRfc4122())->outcomes ?? [];
+            // Boundary: logs every failure and answers no rows, because the progress must still go out when its reviewers cannot be named.
         } catch (Throwable $failure) {
-            // Logged and swallowed, because the progress must still go out when its reviewers cannot be named.
             $this->logger->warning('The round was not read for its live reviewer rows.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
 
             return [];
@@ -264,6 +264,7 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     {
         try {
             return $this->pages->startedReviewerOf($round->toRfc4122(), $reviewer);
+            // Boundary: logs every failure and answers null, because a live update must go out even when the ledger cannot be read.
         } catch (Throwable $failure) {
             $this->logger->warning('The reviewer was not read for its live update.', ['round' => $round->toRfc4122(), 'reviewer' => $reviewer, 'exception' => $failure]);
 
@@ -278,8 +279,8 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     {
         try {
             $turboStream = $this->twig->render($stream->template(), $context);
+            // Boundary: logs every render failure and sends nothing, because a live update is best effort and must never change a verdict or a round.
         } catch (Throwable $failure) {
-            // Swallowed after a log, because a live update is best effort and must never change a verdict or a round.
             $this->logger->warning('A live round update was not rendered.', ['round' => $round->toRfc4122(), 'stream' => $stream->value, 'exception' => $failure]);
 
             return;

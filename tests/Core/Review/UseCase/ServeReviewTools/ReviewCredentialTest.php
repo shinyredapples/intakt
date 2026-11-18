@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ServeReviewTools;
 
 use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredential;
-use LogicException;
+use Intakt\Core\Review\UseCase\ServeReviewTools\ReviewCredentialNeedsSecret;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Exception\BadCredentialsException;
 use Symfony\Component\Security\Core\User\UserInterface;
 
 #[CoversClass(ReviewCredential::class)]
+#[UsesClass(ReviewCredentialNeedsSecret::class)]
 final class ReviewCredentialTest extends TestCase
 {
     private const string ROUND = '0196f5a2-6c3e-7a10-9b2d-3f4e5a6b7c8d';
@@ -49,7 +51,7 @@ final class ReviewCredentialTest extends TestCase
 
     public function testNoCredentialIsIssuedWhileTheSecretIsEmpty(): void
     {
-        $this->expectException(LogicException::class);
+        $this->expectException(ReviewCredentialNeedsSecret::class);
 
         new ReviewCredential('')->issueFor(self::ROUND);
     }
