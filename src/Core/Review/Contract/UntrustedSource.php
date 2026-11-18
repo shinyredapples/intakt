@@ -11,6 +11,7 @@ enum UntrustedSource: string
     case ToolResult = 'tool result';
     case EarlierFindings = 'earlier findings';
     case FindingsToJudge = 'findings to judge';
+    case ChangedFiles = 'changed files';
     case ProjectMemory = 'project memory';
     case Decisions = 'decisions';
     case ActList = 'act list';

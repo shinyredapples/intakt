@@ -128,7 +128,7 @@ final class ClaudeCodeJudgeTest extends KernelTestCase
 
     private function request(): JudgeRequest
     {
-        return new JudgeRequest('Add the judge.', [$this->finding('F1', Severity::P2), $this->finding('F2', Severity::P3)], new UuidV7());
+        return new JudgeRequest('Add the judge.', [$this->finding('F1', Severity::P2), $this->finding('F2', Severity::P3)], new UuidV7(), []);
     }
 
     private function finding(string $id, Severity $severity): Finding
