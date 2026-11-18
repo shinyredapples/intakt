@@ -128,6 +128,26 @@ final class FindingTextTest extends TestCase
         }
     }
 
+    public function testAClosingMarkBeforePunctuationWithoutASpaceAfterItIsLeftAsWritten(): void
+    {
+        foreach (['The result is **wrong**,it drops errors.', 'matches *.php,*.twig only', 'Copy *Test.php,*Case.php here'] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
+    public function testAClosingMarkBeforePunctuationAndASpaceLosesItsMarks(): void
+    {
+        self::assertSame(
+            [['text' => 'The result is wrong, it drops errors.', 'code' => false]],
+            new FindingText('The result is **wrong**, it drops errors.')->spans(),
+        );
+    }
+
+    public function testEmphasisClosedRightBeforeAnEllipsisLosesItsMarks(): void
+    {
+        self::assertSame([['text' => 'Retry…', 'code' => false]], new FindingText('*Retry*…')->spans());
+    }
+
     public function testEmphasisEndingInASlashKeepsItsMarksUnlessThePathIsCode(): void
     {
         $written = 'The matcher must **ignore paths under /tmp/**.';
