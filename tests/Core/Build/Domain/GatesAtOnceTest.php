@@ -38,6 +38,11 @@ final class GatesAtOnceTest extends TestCase
         self::assertSame(2, new GatesAtOnce(2, 3)->count);
     }
 
+    public function testElevenProcessorsAndThreeBuildSlotsRoundDownToThreeGates(): void
+    {
+        self::assertSame(3, new GatesAtOnce(11, 3)->count);
+    }
+
     public function testSixteenProcessorsAndTwoBuildSlotsRunEightGatesAtOnce(): void
     {
         self::assertSame(8, new GatesAtOnce(16, 2)->count);
