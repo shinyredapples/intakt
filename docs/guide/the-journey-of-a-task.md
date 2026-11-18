@@ -99,7 +99,7 @@ flowchart TD
   judge -- nothing to fix now --> pass[The panel approves]
 ```
 
-- **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: becomes a follow-up task, never blocks). From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
+- **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: never blocks; a small fix in a file the change already touches is marked "fix now", anything bigger becomes a follow-up task). From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
 - **A finding keeps its name:** each finding gets a short id (F1, F2, ...). On the next round, every reviewer is shown the findings still open, says which ones are fixed, and a problem that is still there keeps its id, so one problem can be followed from round to round.
 - **All reviewers at once:** the core panel's reviewers read the same version at the same time, and none waits for another to approve first, so the builder gets every finding in one go instead of one extra round per reviewer.
 - **Evidence beats opinion:** a reviewer will be able to write a small test, run it against the change, and attach the result to its finding (planned: today reviewers read the change and run nothing).
@@ -133,7 +133,8 @@ flowchart TD
 
 ## 7. Afterwards
 
-- **Follow-ups:** any P3 notes from the reviewers become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original or no later stage is open; it says which stage it came from, so you can move it back.
+- **Polish round (planned):** when every reviewer approves but small "fix now" notes remain, the builder gets one short extra pass to fix just those before the merge, and one reviewer checks only that pass. If it fails, the approved change merges without it and the notes become one follow-up task. A project setting turns it off.
+- **Follow-ups:** P3 notes that need their own design, tests or files outside the change become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original or no later stage is open; it says which stage it came from, so you can move it back.
 - **Project memory:** what was learned (a fixed finding, a recurring failure and its cause) goes into the project memory, so the next builder and reviewers are briefed.
 - **Unblocking:** tasks that said `Waits for` this one become eligible.
 - **Tidying up:** the task's branch is cleaned up.

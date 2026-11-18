@@ -52,7 +52,7 @@ final class JourneyVendorTest extends TestCase
     {
         $findings = [$this->finding('A', Severity::P1), $this->finding('B', Severity::P3)];
 
-        $judgement = new JourneyVendor()->judge('sample', new JudgeRequest('Add a cart.', $findings, new UuidV7()));
+        $judgement = new JourneyVendor()->judge('sample', new JudgeRequest('Add a cart.', $findings, new UuidV7(), []));
 
         self::assertEquals([new JudgedFinding('A', Mark::Act)], $judgement->marks);
     }
