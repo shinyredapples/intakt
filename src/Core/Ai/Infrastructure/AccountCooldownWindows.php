@@ -9,6 +9,9 @@ use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\AiServices;
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Budget\Contract\MeasuredUse;
+use Intakt\Core\Budget\Contract\Usage;
+use Intakt\Core\Budget\Contract\UsageWindow;
 use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
@@ -23,6 +26,7 @@ use Symfony\Component\RateLimiter\RateLimit;
 use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\RateLimiter\Storage\CacheStorage;
 use Symfony\Component\Serializer\SerializerInterface;
+use Throwable;
 
 // A RateLimiter window of one call per account, anchored at the vendor's reset, in a cache every worker shares, so all reviewers on an account wait together.
 #[AsAlias(AccountCooldowns::class)]
@@ -36,10 +40,13 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
     // At most a day, so a huge reset never puts an account out of reach and the window stays inside its one-month period.
     private const int LONGEST_SECONDS = 86400;
 
+    private const float SPENT_PERCENT = 100.0;
+
     /**
      * @param array<string, list<string>> $accounts
      */
     public function __construct(
+        private MeasuredUse $measured,
         #[Autowire(service: AiServices::ACCOUNT_COOLDOWNS)]
         private CacheItemPoolInterface $pool,
         private LockFactory $locks,
@@ -55,25 +62,18 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
 
     public function coolDown(Account $account, ?int $resetInSeconds): void
     {
-        $seconds = min(self::LONGEST_SECONDS, $resetInSeconds ?? self::SECONDS_WITHOUT_RESET);
-        if ($seconds <= 0) {
-            return;
-        }
+        $this->coolDownFor($account, $resetInSeconds ?? self::SECONDS_WITHOUT_RESET);
+    }
 
-        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
-
-        // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
-        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
-            return;
-        }
-
-        $this->record($account, $until);
+    public function coolDownUntilPlanResets(Account $account): void
+    {
+        $this->coolDownFor($account, $this->secondsUntilSpentWindowResets($account) ?? self::SECONDS_WITHOUT_RESET);
     }
 
     // The marker ends with the window that runs, the rejection's minute or a limit set before it, so the account is retried when its cooldown ends like any other.
     public function coolDownRejected(Account $account): void
     {
-        $this->coolDown($account, null);
+        $this->coolDownFor($account, self::SECONDS_WITHOUT_RESET);
 
         $marker = $this->pool->getItem($this->rejectionKey($account))->set(true)->expiresAt($this->window($account)->getRetryAfter());
         $this->pool->save($marker);
@@ -110,6 +110,42 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $waits = array_map(fn (string $name): int => $this->secondsUntilFree(new Account($provider, $name)), $this->accounts[$provider->value] ?? []);
 
         return [] === $waits ? 0 : min($waits);
+    }
+
+    // Asked only for a spent plan's limit, which comes without a reset (issue #1749), so the account's measured readings say when it is usable again: the latest reset of a spent window still ahead.
+    private function secondsUntilSpentWindowResets(Account $account): ?int
+    {
+        try {
+            $usages = array_map(fn (UsageWindow $window): ?Usage => $this->measured->of($account, $window)?->usage, UsageWindow::cases());
+            // Boundary: logs the failed read and keeps the default minute, because the provider's own limit must still reach the caller and the account must still pause.
+        } catch (Throwable $unreadable) {
+            $this->logger->warning('The measured readings of account {account} could not be read.', ['account' => $account->key(), 'exception' => $unreadable]);
+
+            return null;
+        }
+
+        $now = $this->clock->now()->getTimestamp();
+        $waits = array_map(static fn (?Usage $usage): int => $usage instanceof Usage && $usage->usedPercent >= self::SPENT_PERCENT && $usage->resetsAt instanceof DateTimeImmutable ? $usage->resetsAt->getTimestamp() - $now : 0, $usages);
+        $longest = max(0, ...$waits);
+
+        return 0 < $longest ? $longest : null;
+    }
+
+    private function coolDownFor(Account $account, int $resetInSeconds): void
+    {
+        $seconds = min(self::LONGEST_SECONDS, $resetInSeconds);
+        if ($seconds <= 0) {
+            return;
+        }
+
+        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+
+        // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
+        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
+            return;
+        }
+
+        $this->record($account, $until);
     }
 
     // At least a second while the window runs, so a cooling account is never reported free and retried at once.

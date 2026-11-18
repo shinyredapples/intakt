@@ -10,6 +10,9 @@ interface AccountCooldowns
 {
     public function coolDown(Account $account, ?int $resetInSeconds): void;
 
+    // Apart from coolDown(), because only a subscription plan's limit without a reset waits for the plan's measured reset (issue #1749); an outage keeps its short pause.
+    public function coolDownUntilPlanResets(Account $account): void;
+
     // A rejected key is remembered with its cooldown, because a wait for an account that rejected its key brings nothing back; it is reported to the owner once, because only the owner can fix it.
     public function coolDownRejected(Account $account): void;
 

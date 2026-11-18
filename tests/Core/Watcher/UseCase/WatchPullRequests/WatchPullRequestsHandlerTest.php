@@ -92,6 +92,7 @@ use Symfony\Component\Lock\Exception\LockReleasingException;
 use Symfony\Component\Lock\Exception\LockStorageException;
 use Symfony\Component\Lock\Key;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 
 #[Group('persistence')]
 #[CoversClass(WatchPullRequestsHandler::class)]
@@ -1485,7 +1486,7 @@ final class WatchPullRequestsHandlerTest extends KernelTestCase
         // Main's boot lines go to a ledger of their own, because each test reads only the lines of the heads it settles.
         $authors = self::createStub(AuthorTrust::class);
         $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
-        $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine), $ledger, $logger);
+        $gate = new BootGate($this->queries, $authors, new BootResults($this->queries, $this->entities, $this->clock, new WatcherLedger(new InMemoryLedger()), $redactor, $logger, $doctrine, new LockFactory(new InMemoryStore())), $ledger, $logger);
         $settle = new SettleHeads(new SettleHead($gate, new StaleVerdicts($this->queries, $this->commands, $rounds, $ledger), new HeadsWithoutRound($ledger, $pending), $starts), $starts, $backOff);
         $projects = new WatchedProjects(['alpha' => ['repository' => 'repo', 'base' => 'main', 'task' => 'Review it.']]);
 

@@ -18,6 +18,8 @@ final readonly class JudgeDoneFinding
         // Null by default, because a judge_done row written before the place was recorded holds neither.
         public ?string $file = null,
         public ?int $line = null,
+        // Null by default, because a judge_done row written before the judge's note was recorded holds none, and so does every finding the judge did not defer or reject as a P1 or P2.
+        public ?string $judgeNote = null,
     ) {
     }
 }
