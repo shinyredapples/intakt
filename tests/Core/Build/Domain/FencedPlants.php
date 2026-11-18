@@ -25,6 +25,7 @@ final readonly class FencedPlants
             Assert::assertStringStartsWith(self::PREFIX, $plant, 'Every text of the input must be a plant, so the gate can find it.');
             Assert::assertStringContainsString($plant, $prompt, 'A plant is missing from the prompt.');
             Assert::assertStringNotContainsString($plant, $outside, 'A plant reaches the prompt outside a fence.');
+            self::assertNoLineIsOutside($plant, $outside);
         }
     }
 
@@ -60,6 +61,16 @@ final readonly class FencedPlants
         $properties = new ReflectionObject($value)->getProperties();
 
         return array_merge([], ...array_map(static fn ($property): array => self::plantsIn($property->getValue($value)), $properties));
+    }
+
+    // A part of a plant can leak on its own (a task's first line used as a title), so each line, without the "\r" a copied title drops, is checked too.
+    private static function assertNoLineIsOutside(string $plant, string $outside): void
+    {
+        foreach (explode("\n", str_replace(["\r\n", "\r"], "\n", $plant)) as $line) {
+            if ('' !== trim($line)) {
+                Assert::assertStringNotContainsString($line, $outside, 'A line of a plant reaches the prompt outside a fence.');
+            }
+        }
     }
 
     private static function outsideFences(string $prompt): string

@@ -2,9 +2,9 @@
 
 `bin/highlights` assembles the highlights page from `docs/highlights.d/` and it is never committed (the `highlights` row of [Quality gates](quality-gates.md)). `.github/workflows/highlights.yml` publishes it from main. `bin/pages` assembles the same page with a relative link to the journey page beside it at `journey/` ([The Pages site](journey-page.md#the-pages-site)); the workflow does not call it yet.
 
-**Decision:** GitHub Pages at `https://shinyredapples.github.io/intakt/`, through GitHub's Pages deployment (no `gh-pages` branch): a stable address, no sign-in, always the latest main, unlike a release or CI artifact. Readers find it at that address.
+**Decision:** GitHub Pages at `https://shinyredapples.github.io/intakt/`, through GitHub's Pages deployment (no `gh-pages` branch): a stable address, no sign-in, rebuilt from main on a push touching its inputs and once a day, unlike a release or CI artifact.
 
-- Runs on every push to main and by hand (`gh workflow run highlights.yml`), never for a pull request. Both jobs have the guard `if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'`.
+- Runs on a push to main touching its `paths`, daily and by hand (`gh workflow run highlights.yml`), never for a pull request. Both jobs have the guard `if: github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'`.
 - `build` has the read-only token, checks out the full history (fragments are ordered by the commit that added each), runs `bin/highlights` in the CI image as uid 1000, writes the page source as `docs/highlights.md` with each `{{` and `{%` written as a Liquid string that prints it (`{{ "{{" }}`, `{{ "{%" }}`, with `sed`), renders with `actions/jekyll-build-pages` and uploads with `actions/upload-pages-artifact`.
 - `publish` runs no checkout and no repository code: its one step, `actions/deploy-pages`, deploys that artifact to the `github-pages` environment. Only it holds the `pages` write permission and the `id-token` permission.
 - A failed run leaves the previous page. Runs are serialized (`concurrency` group `highlights`).
