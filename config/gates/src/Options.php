@@ -58,6 +58,14 @@ final readonly class Options
         return self::withMode($modes, $values);
     }
 
+    /**
+     * @return list<string>
+     */
+    private function names(?string $list): array
+    {
+        return null === $list ? [] : explode(',', $list);
+    }
+
     private static function modeNamedBy(string $argument): ?Mode
     {
         return match ($argument) {
@@ -65,26 +73,6 @@ final readonly class Options
             '--journeys' => Mode::Journeys,
             default => null,
         };
-    }
-
-    /**
-     * @param list<Mode>                                                                               $modes
-     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
-     */
-    private static function withMode(array $modes, array $values): self
-    {
-        if (!in_array(Mode::Journeys, $modes, true)) {
-            return new self(array_last($modes) ?? Mode::Full, $values);
-        }
-
-        $options = new self(Mode::Journeys, $values);
-        $others = array_filter($modes, static fn (Mode $mode): bool => Mode::Journeys !== $mode);
-
-        if ([] !== $others || [] !== $options->only || [] !== $options->skip || null !== $values['base'] || null !== $values['test-merge']) {
-            throw new InvalidArgumentException('--journeys runs alone, without --fast, --only, --skip, --base or --test-merge');
-        }
-
-        return $options;
     }
 
     /**
@@ -106,10 +94,22 @@ final readonly class Options
     }
 
     /**
-     * @return list<string>
+     * @param list<Mode>                                                                               $modes
+     * @param array{base: ?string, only: ?string, skip: ?string, root: ?string, 'test-merge': ?string} $values
      */
-    private function names(?string $list): array
+    private static function withMode(array $modes, array $values): self
     {
-        return null === $list ? [] : explode(',', $list);
+        if (!in_array(Mode::Journeys, $modes, true)) {
+            return new self(array_last($modes) ?? Mode::Full, $values);
+        }
+
+        $options = new self(Mode::Journeys, $values);
+        $others = array_filter($modes, static fn (Mode $mode): bool => Mode::Journeys !== $mode);
+
+        if ([] !== $others || [] !== $options->only || [] !== $options->skip || null !== $values['base'] || null !== $values['test-merge']) {
+            throw new InvalidArgumentException('--journeys runs alone, without --fast, --only, --skip, --base or --test-merge');
+        }
+
+        return $options;
     }
 }

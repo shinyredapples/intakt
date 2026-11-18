@@ -116,6 +116,11 @@ final class ProviderKeyTest extends TestCase
         self::assertStringNotContainsString('tracedvalue', (string) $caught?->getTraceAsString());
     }
 
+    private function body(string $tail = '1234'): string
+    {
+        return str_repeat('0', 24).$tail;
+    }
+
     private function catalog(ProviderDescriptor ...$descriptors): ProviderCatalog
     {
         $catalog = self::createStub(ProviderCatalog::class);
@@ -136,10 +141,5 @@ final class ProviderKeyTest extends TestCase
         $descriptor->method('keyPattern')->willReturn($pattern);
 
         return $descriptor;
-    }
-
-    private function body(string $tail = '1234'): string
-    {
-        return str_repeat('0', 24).$tail;
     }
 }

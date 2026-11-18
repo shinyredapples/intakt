@@ -94,28 +94,6 @@ final class DashboardMocksTest extends TestCase
         return $links;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function assetLinksIn(string $file): array
-    {
-        preg_match_all('/(?:href|src)="((?:\.\.\/)*assets\/[^"]+)"/', (string) file_get_contents($file), $matches);
-
-        return $matches[1];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function filesMatching(string $pattern): array
-    {
-        $files = glob($pattern);
-        self::assertNotFalse($files);
-        self::assertNotSame([], $files);
-
-        return $files;
-    }
-
     private function freePort(): int
     {
         $socket = stream_socket_server('tcp://127.0.0.1:0');
@@ -146,5 +124,27 @@ final class DashboardMocksTest extends TestCase
         } catch (TransportExceptionInterface) {
             return 'no response';
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function filesMatching(string $pattern): array
+    {
+        $files = glob($pattern);
+        self::assertNotFalse($files);
+        self::assertNotSame([], $files);
+
+        return $files;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function assetLinksIn(string $file): array
+    {
+        preg_match_all('/(?:href|src)="((?:\.\.\/)*assets\/[^"]+)"/', (string) file_get_contents($file), $matches);
+
+        return $matches[1];
     }
 }

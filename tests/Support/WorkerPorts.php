@@ -51,19 +51,6 @@ final class WorkerPorts
         throw new LogicException(sprintf('No free port is left in %d-%d, the range of this test worker.', $this->first, $this->last));
     }
 
-    private function isFree(int $port): bool
-    {
-        $socket = @stream_socket_server('tcp://127.0.0.1:'.$port);
-
-        if (false === $socket) {
-            return false;
-        }
-
-        fclose($socket);
-
-        return true;
-    }
-
     // Because outside the tests gate there is no other worker, so a port the system picks is as good as any.
     private function portTheSystemPicks(): int
     {
@@ -77,5 +64,18 @@ final class WorkerPorts
         fclose($socket);
 
         return $port;
+    }
+
+    private function isFree(int $port): bool
+    {
+        $socket = @stream_socket_server('tcp://127.0.0.1:'.$port);
+
+        if (false === $socket) {
+            return false;
+        }
+
+        fclose($socket);
+
+        return true;
     }
 }

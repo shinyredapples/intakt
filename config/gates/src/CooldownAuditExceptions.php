@@ -26,6 +26,24 @@ final readonly class CooldownAuditExceptions
     }
 
     /**
+     * @return array<mixed>
+     */
+    private function ignoreMap(string $path): array
+    {
+        try {
+            $node = is_file($path) ? json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR) : null;
+        } catch (JsonException) {
+            return [];
+        }
+
+        foreach (['config', 'policy', 'cooldown', 'ignore'] as $key) {
+            $node = is_array($node) ? $node[$key] ?? null : null;
+        }
+
+        return is_array($node) ? $node : [];
+    }
+
+    /**
      * @return list<string>
      */
     private function listed(mixed $value): array
@@ -63,23 +81,5 @@ final readonly class CooldownAuditExceptions
         $constraint = $rule['constraint'] ?? null;
 
         return [is_scalar($constraint) && '' !== (string) $constraint ? $package.' '.$constraint : $package.self::EVERY_VERSION];
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function ignoreMap(string $path): array
-    {
-        try {
-            $node = is_file($path) ? json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR) : null;
-        } catch (JsonException) {
-            return [];
-        }
-
-        foreach (['config', 'policy', 'cooldown', 'ignore'] as $key) {
-            $node = is_array($node) ? $node[$key] ?? null : null;
-        }
-
-        return is_array($node) ? $node : [];
     }
 }

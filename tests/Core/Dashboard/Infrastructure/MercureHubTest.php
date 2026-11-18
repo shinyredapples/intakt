@@ -195,11 +195,23 @@ final class MercureHubTest extends TestCase
         );
     }
 
-    private function publishThree(): void
+    private static function waitForTheHub(int $port): void
     {
-        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(1, 2, false));
-        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, false));
-        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline) {
+            $connection = @fsockopen('127.0.0.1', $port, $code, $message, 0.2);
+
+            if (false !== $connection) {
+                fclose($connection);
+
+                return;
+            }
+
+            usleep(100_000);
+        }
+
+        self::fail('The hub did not start: '.self::$hub->getErrorOutput());
     }
 
     private function subscribe(string $lastEventId): ResponseInterface
@@ -220,6 +232,13 @@ final class MercureHubTest extends TestCase
                 return;
             }
         }
+    }
+
+    private function publishThree(): void
+    {
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(1, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, false));
+        $this->updates->roundChanged(Uuid::fromString($this->round), new RoundProgress(2, 2, true));
     }
 
     /**
@@ -253,6 +272,21 @@ final class MercureHubTest extends TestCase
     }
 
     /**
+     * @param list<array{id: string, data: string}> $events
+     *
+     * @return list<string>
+     */
+    private function roundStatesIn(array $events): array
+    {
+        return array_map(static fn (array $event): string => 1 === preg_match('/<p id="[^"]+">([^<]+)<\/p>/', $event['data'], $found) ? $found[1] : $event['data'], $events);
+    }
+
+    private function token(Grant $grant): string
+    {
+        return new LcobucciFactory(self::SECRET)->create([$grant], ['iss' => self::$issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => self::$url]);
+    }
+
+    /**
      * @return array{id: string, data: string}|null
      */
     private function parsed(string $block): ?array
@@ -271,39 +305,5 @@ final class MercureHubTest extends TestCase
         }
 
         return null === $id ? null : ['id' => $id, 'data' => implode("\n", $data)];
-    }
-
-    /**
-     * @param list<array{id: string, data: string}> $events
-     *
-     * @return list<string>
-     */
-    private function roundStatesIn(array $events): array
-    {
-        return array_map(static fn (array $event): string => 1 === preg_match('/<p id="[^"]+">([^<]+)<\/p>/', $event['data'], $found) ? $found[1] : $event['data'], $events);
-    }
-
-    private function token(Grant $grant): string
-    {
-        return new LcobucciFactory(self::SECRET)->create([$grant], ['iss' => self::$issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => self::$url]);
-    }
-
-    private static function waitForTheHub(int $port): void
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
-
-        while (hrtime(true) < $deadline) {
-            $connection = @fsockopen('127.0.0.1', $port, $code, $message, 0.2);
-
-            if (false !== $connection) {
-                fclose($connection);
-
-                return;
-            }
-
-            usleep(100_000);
-        }
-
-        self::fail('The hub did not start: '.self::$hub->getErrorOutput());
     }
 }

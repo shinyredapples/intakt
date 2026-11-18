@@ -655,30 +655,43 @@ final class AccountFailoverPlatformTest extends TestCase
         $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
-    private function readStream(DeferredResult $result): void
+    private function answering(string|Closure $answer): PlatformInterface
     {
-        $failure = null;
-
-        try {
-            foreach ($result->asStream() as $delta) {
-                self::assertInstanceOf(TextDelta::class, $delta);
-            }
-        } catch (Throwable $caught) {
-            $failure = $caught;
-        }
-
-        self::assertNotNull($failure, 'The stream was expected to fail when read.');
+        return MockPlatformFactory::createPlatform($answer);
     }
 
-    /**
-     * @param Closure(): Generator<TextDelta> $deltas
-     */
-    private function streamed(Closure $deltas, AccountCooldowns $cooldowns, SendFailures $failures): DeferredResult
+    private function accounts(PlatformInterface $default, PlatformInterface $team, ?BufferingLogger $logger = null): AccountFailoverPlatform
     {
-        $platform = $this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult($deltas()));
-        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NativeClock(), new NullLogger(), $failures);
+        return new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $default, 'team' => $team], $this->cooldowns, new NativeClock(), $logger ?? new NullLogger());
+    }
 
-        return $account->invoke('big', 'Review.');
+    private function account(string $name): Account
+    {
+        return new Account(Provider::Anthropic, $name);
+    }
+
+    private function read(DeferredResult $result): void
+    {
+        try {
+            $result->getResult();
+            self::fail('The answer was expected to fail when read.');
+        } catch (Throwable) {
+        }
+    }
+
+    // Not MockPlatformFactory, because a provider's bridge reads the usage from the raw answer with its converter's extractor instead of carrying it on the converted result.
+    private function extracting(TokenUsage $usage, Closure $convert): PlatformInterface
+    {
+        $extractor = self::createStub(TokenUsageExtractorInterface::class);
+        $extractor->method('extract')->willReturn($usage);
+        $converter = self::createStub(ResultConverterInterface::class);
+        $converter->method('supports')->willReturn(true);
+        $converter->method('convert')->willReturnCallback($convert);
+        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
+        $platform = self::createStub(PlatformInterface::class);
+        $platform->method('invoke')->willReturnCallback(static fn (): DeferredResult => new DeferredResult($converter, new InMemoryRawResult()));
+
+        return $platform;
     }
 
     // The cooldowns read the same mocked clock as the calls, so the order of a send and a report is the one the test forces.
@@ -701,42 +714,29 @@ final class AccountFailoverPlatformTest extends TestCase
         }
     }
 
-    private function read(DeferredResult $result): void
+    /**
+     * @param Closure(): Generator<TextDelta> $deltas
+     */
+    private function streamed(Closure $deltas, AccountCooldowns $cooldowns, SendFailures $failures): DeferredResult
     {
+        $platform = $this->extracting(new TokenUsage(), static fn (): StreamResult => new StreamResult($deltas()));
+        $account = new AccountPlatform($this->account(Account::DEFAULT), $platform, $cooldowns, new NativeClock(), new NullLogger(), $failures);
+
+        return $account->invoke('big', 'Review.');
+    }
+
+    private function readStream(DeferredResult $result): void
+    {
+        $failure = null;
+
         try {
-            $result->getResult();
-            self::fail('The answer was expected to fail when read.');
-        } catch (Throwable) {
+            foreach ($result->asStream() as $delta) {
+                self::assertInstanceOf(TextDelta::class, $delta);
+            }
+        } catch (Throwable $caught) {
+            $failure = $caught;
         }
-    }
 
-    private function answering(string|Closure $answer): PlatformInterface
-    {
-        return MockPlatformFactory::createPlatform($answer);
-    }
-
-    // Not MockPlatformFactory, because a provider's bridge reads the usage from the raw answer with its converter's extractor instead of carrying it on the converted result.
-    private function extracting(TokenUsage $usage, Closure $convert): PlatformInterface
-    {
-        $extractor = self::createStub(TokenUsageExtractorInterface::class);
-        $extractor->method('extract')->willReturn($usage);
-        $converter = self::createStub(ResultConverterInterface::class);
-        $converter->method('supports')->willReturn(true);
-        $converter->method('convert')->willReturnCallback($convert);
-        $converter->method('getTokenUsageExtractor')->willReturn($extractor);
-        $platform = self::createStub(PlatformInterface::class);
-        $platform->method('invoke')->willReturnCallback(static fn (): DeferredResult => new DeferredResult($converter, new InMemoryRawResult()));
-
-        return $platform;
-    }
-
-    private function accounts(PlatformInterface $default, PlatformInterface $team, ?BufferingLogger $logger = null): AccountFailoverPlatform
-    {
-        return new AccountFailoverPlatform(Provider::Anthropic, [Account::DEFAULT => $default, 'team' => $team], $this->cooldowns, new NativeClock(), $logger ?? new NullLogger());
-    }
-
-    private function account(string $name): Account
-    {
-        return new Account(Provider::Anthropic, $name);
+        self::assertNotNull($failure, 'The stream was expected to fail when read.');
     }
 }

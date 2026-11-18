@@ -73,6 +73,19 @@ final readonly class GitHubCiRuns
     }
 
     /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $data;
+        foreach ($keys as $key) {
+            $value = is_array($value) ? ($value[$key] ?? null) : null;
+        }
+
+        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
+    }
+
+    /**
      * @param list<array<mixed>>                            $entries
      * @param callable(array<mixed>): array{string, string} $originOf
      *
@@ -117,18 +130,5 @@ final readonly class GitHubCiRuns
             'cancelled' => CiRunState::Cancelled,
             default => CiRunState::Failed,
         };
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 }

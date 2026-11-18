@@ -229,19 +229,19 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT], Provider::OpenAi->value => [Account::DEFAULT], Provider::ClaudeCode->value => [Account::DEFAULT]]);
     }
 
-    // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.
-    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor, int $moves = 1): void
+    private function answering(string $decision = 'changes'): PlatformInterface
     {
-        for ($move = 0; $move < $moves; ++$move) {
-            try {
-                $this->fixture->deliver($message, $vendor);
+        return MockPlatformFactory::createPlatform(static function () use ($decision): TextResult {
+            $answer = new TextResult(VerdictDocument::fromTheDesign()->with('verdict', $decision)->with('resolved', [])->with('findings', 'approve' === $decision ? [] : VerdictDocument::fromTheDesign()->decoded()['findings'])->json());
+            $answer->getMetadata()->add('token_usage', new TokenUsage(
+                promptTokens: 100,
+                completionTokens: 20,
+                totalTokens: 120,
+                model: RoundFixture::SUBSTITUTE_MODEL,
+            ));
 
-                return;
-            } catch (ReviewerMovesToAnotherAccount) {
-            }
-        }
-
-        $this->fixture->deliver($message, $vendor);
+            return $answer;
+        }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
     }
 
     // Null maps the tier without substitutes, so the same stack shows what part 1's single provider does when nothing may take over.
@@ -263,40 +263,19 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
     }
 
-    private function recording(Provider $provider, PlatformInterface $platform): PlatformInterface
+    // Delivered again as Messenger does after each recoverable move, so the reviewer stays only when a verdict or a block ends it.
+    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor, int $moves = 1): void
     {
-        return new RecordingCalls($platform, function () use ($provider): void {
-            $this->sent[] = $provider->value;
-        });
-    }
+        for ($move = 0; $move < $moves; ++$move) {
+            try {
+                $this->fixture->deliver($message, $vendor);
 
-    // The first round asks for a file and the second is refused for a limit as it is sent, so the limit comes halfway through the review.
-    private function limitedOnTheSecondRound(): PlatformInterface
-    {
-        $round = 0;
-
-        return MockPlatformFactory::createPlatform(static function () use (&$round): ToolCallResult {
-            if (0 === $round++) {
-                return new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+                return;
+            } catch (ReviewerMovesToAnotherAccount) {
             }
+        }
 
-            throw new RateLimitExceededException(300);
-        }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-    }
-
-    private function answering(string $decision = 'changes'): PlatformInterface
-    {
-        return MockPlatformFactory::createPlatform(static function () use ($decision): TextResult {
-            $answer = new TextResult(VerdictDocument::fromTheDesign()->with('verdict', $decision)->with('resolved', [])->with('findings', 'approve' === $decision ? [] : VerdictDocument::fromTheDesign()->decoded()['findings'])->json());
-            $answer->getMetadata()->add('token_usage', new TokenUsage(
-                promptTokens: 100,
-                completionTokens: 20,
-                totalTokens: 120,
-                model: RoundFixture::SUBSTITUTE_MODEL,
-            ));
-
-            return $answer;
-        }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $this->fixture->deliver($message, $vendor);
     }
 
     /**
@@ -315,5 +294,26 @@ final class CrossProviderSubstituteTest extends KernelTestCase
         }
 
         return $values;
+    }
+
+    // The first round asks for a file and the second is refused for a limit as it is sent, so the limit comes halfway through the review.
+    private function limitedOnTheSecondRound(): PlatformInterface
+    {
+        $round = 0;
+
+        return MockPlatformFactory::createPlatform(static function () use (&$round): ToolCallResult {
+            if (0 === $round++) {
+                return new ToolCallResult([new ToolCall('1', 'read_file', ['path' => 'missing.txt'])]);
+            }
+
+            throw new RateLimitExceededException(300);
+        }, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+    }
+
+    private function recording(Provider $provider, PlatformInterface $platform): PlatformInterface
+    {
+        return new RecordingCalls($platform, function () use ($provider): void {
+            $this->sent[] = $provider->value;
+        });
     }
 }

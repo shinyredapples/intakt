@@ -159,17 +159,6 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $this->commitFrom($this->read(['show-ref', '--verify', '--hash', 'refs/heads/'.$this->repository->baseBranch]));
     }
 
-    private function addWorktree(CommitId $head, string $prefix): string
-    {
-        $directory = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(8));
-        $this->read([...self::SNAPSHOT_AS_COMMITTED, 'worktree', 'add', '--detach', '--quiet', $directory, $head->hash]);
-
-        // Resolved because a worker started elsewhere reads the stored path from its own working directory.
-        $snapshot = realpath($directory);
-
-        return false === $snapshot ? throw new ForgeReadFailed('git worktree add left no directory at '.$directory.'.') : $snapshot;
-    }
-
     private function headOf(ChangeId $id): CommitId
     {
         // An exact ref only, so tags and revision expressions such as "feature~1" are not branches.
@@ -192,6 +181,12 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $this->commitFrom($this->read(['show-ref', '--verify', '--hash', $reference]));
     }
 
+    private function exists(CommitId $commit): bool
+    {
+        // Checked first, because a head rewritten and collected away leaves no object behind, and that is a rewrite rather than a failed read.
+        return $this->git(['cat-file', '-e', $commit->hash.'^{commit}'])->isSuccessful();
+    }
+
     private function mergeBase(CommitId $head): CommitId
     {
         return $this->commitFrom($this->read(['merge-base', 'refs/heads/'.$this->repository->baseBranch, $head->hash]));
@@ -204,45 +199,29 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return new Diff($this->binaryFiles->named($patch, $this->blob(...)), $this->changedFiles($commits));
     }
 
-    private function blob(string $id): string
+    private function addWorktree(CommitId $head, string $prefix): string
     {
-        return $this->read(['cat-file', 'blob', $id]);
+        $directory = sys_get_temp_dir().'/'.$prefix.bin2hex(random_bytes(8));
+        $this->read([...self::SNAPSHOT_AS_COMMITTED, 'worktree', 'add', '--detach', '--quiet', $directory, $head->hash]);
+
+        // Resolved because a worker started elsewhere reads the stored path from its own working directory.
+        $snapshot = realpath($directory);
+
+        return false === $snapshot ? throw new ForgeReadFailed('git worktree add left no directory at '.$directory.'.') : $snapshot;
     }
 
-    private function changedFiles(CommitRange $commits): ChangedFiles
+    /**
+     * @param list<string> $arguments
+     */
+    private function read(array $arguments): string
     {
-        $files = $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...self::DIFF_OPTIONS, ...$this->range($commits)]));
+        $process = $this->git($arguments);
 
-        // Because -z gives each path's raw bytes while every path reaches prompts and payloads that must be UTF-8; an escaped path could be the valid name of another file, so it is refused.
-        foreach ($files as $file) {
-            if (!mb_check_encoding($file->path, 'UTF-8')) {
-                throw new ForgeReadFailed(sprintf('git listed a changed path that is not valid UTF-8: %s.', $this->binaryFiles->escaped($file->path)));
-            }
+        if (!$process->isSuccessful()) {
+            throw new ForgeReadFailed(sprintf('git %s failed: %s', $this->commandOf($arguments), trim($process->getErrorOutput())));
         }
 
-        return $files;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function range(CommitRange $commits): array
-    {
-        return [$commits->base->hash, $commits->head->hash];
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function pathsBetween(CommitRange $commits): array
-    {
-        return array_map(static fn (ChangedFile $file): string => $file->path, [...$this->changedFiles($commits)]);
-    }
-
-    private function exists(CommitId $commit): bool
-    {
-        // Checked first, because a head rewritten and collected away leaves no object behind, and that is a rewrite rather than a failed read.
-        return $this->git(['cat-file', '-e', $commit->hash.'^{commit}'])->isSuccessful();
+        return $process->getOutput();
     }
 
     private function isAncestor(string $ancestor, string $descendant): bool
@@ -270,6 +249,14 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         return $merged->isSuccessful() && trim($merged->getOutput()) === trim($this->read(['rev-parse', $head->hash.'^{tree}']));
     }
 
+    /**
+     * @return list<string>
+     */
+    private function pathsBetween(CommitRange $commits): array
+    {
+        return array_map(static fn (ChangedFile $file): string => $file->path, [...$this->changedFiles($commits)]);
+    }
+
     private function blobAt(CommitId $head, string $path): string
     {
         // ls-tree lists nothing for a missing path but fails when the head cannot be read, which keeps the two apart.
@@ -284,6 +271,11 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         throw FileNotFoundAtHead::at($path, $head);
     }
 
+    private function blob(string $id): string
+    {
+        return $this->read(['cat-file', 'blob', $id]);
+    }
+
     private function commitFrom(string $output): CommitId
     {
         try {
@@ -291,20 +283,6 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         } catch (InvalidArgumentException $invalid) {
             throw new ForgeReadFailed('git printed something other than a commit hash.', $invalid->getCode(), previous: $invalid);
         }
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function read(array $arguments): string
-    {
-        $process = $this->git($arguments);
-
-        if (!$process->isSuccessful()) {
-            throw new ForgeReadFailed(sprintf('git %s failed: %s', $this->commandOf($arguments), trim($process->getErrorOutput())));
-        }
-
-        return $process->getOutput();
     }
 
     /**
@@ -328,6 +306,28 @@ final readonly class LocalGitForge implements Forge, AuthorTrust
         }
 
         return $process;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function range(CommitRange $commits): array
+    {
+        return [$commits->base->hash, $commits->head->hash];
+    }
+
+    private function changedFiles(CommitRange $commits): ChangedFiles
+    {
+        $files = $this->nameStatus->parse($this->read(['diff', '--name-status', '-z', ...self::DIFF_OPTIONS, ...$this->range($commits)]));
+
+        // Because -z gives each path's raw bytes while every path reaches prompts and payloads that must be UTF-8; an escaped path could be the valid name of another file, so it is refused.
+        foreach ($files as $file) {
+            if (!mb_check_encoding($file->path, 'UTF-8')) {
+                throw new ForgeReadFailed(sprintf('git listed a changed path that is not valid UTF-8: %s.', $this->binaryFiles->escaped($file->path)));
+            }
+        }
+
+        return $files;
     }
 
     /**

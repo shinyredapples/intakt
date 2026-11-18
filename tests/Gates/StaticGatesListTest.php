@@ -58,6 +58,13 @@ final class StaticGatesListTest extends TestCase
         self::assertStringContainsString('unknown argument --static-gates', $run->output);
     }
 
+    private function check(string ...$arguments): ProcessResult
+    {
+        $home = dirname(__DIR__, 2);
+
+        return new ProcessRunner()->run(['php', $home.'/bin/check', ...array_values($arguments)], $home);
+    }
+
     /**
      * @return array<mixed>
      */
@@ -78,12 +85,5 @@ final class StaticGatesListTest extends TestCase
         self::assertIsArray($names);
 
         return array_values(array_filter($names, is_string(...)));
-    }
-
-    private function check(string ...$arguments): ProcessResult
-    {
-        $home = dirname(__DIR__, 2);
-
-        return new ProcessRunner()->run(['php', $home.'/bin/check', ...array_values($arguments)], $home);
     }
 }

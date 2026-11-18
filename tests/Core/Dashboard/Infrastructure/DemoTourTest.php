@@ -187,6 +187,16 @@ final class DemoTourTest extends TestCase
         $this->ledger = new DashboardLedger();
     }
 
+    private function startRound(string $round, int $number): void
+    {
+        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => self::DEMO, 'reviewers' => 2, 'change' => 'sample-change', 'number' => $number]);
+    }
+
+    private function tour(string $composeService = 'intakt'): DemoTour
+    {
+        return TourCaptionsOn::tour($this->ledger, new ReplayMarks(new ReplayMarkBus($this->replays)), $composeService);
+    }
+
     private function caption(): TourCaption
     {
         $caption = $this->tour()->caption();
@@ -195,14 +205,12 @@ final class DemoTourTest extends TestCase
         return $caption;
     }
 
-    private function tour(string $composeService = 'intakt'): DemoTour
+    /**
+     * @param list<string> $act
+     */
+    private function judge(string $round, array $act): void
     {
-        return TourCaptionsOn::tour($this->ledger, new ReplayMarks(new ReplayMarkBus($this->replays)), $composeService);
-    }
-
-    private function startRound(string $round, int $number): void
-    {
-        $this->add(LedgerEventKind::ReviewStarted, ['round' => $round, 'project' => self::DEMO, 'reviewers' => 2, 'change' => 'sample-change', 'number' => $number]);
+        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => $act, 'follow_ups' => [], 'findings' => array_map(static fn (string $id): array => ['id' => $id, 'severity' => 'P2', 'text' => 'Text of '.$id.'.'], $act)]);
     }
 
     private function startReviewer(string $round, string $role): void
@@ -213,14 +221,6 @@ final class DemoTourTest extends TestCase
     private function answer(string $round, string $role, int $findings): void
     {
         $this->add(LedgerEventKind::VerdictReceived, ['round' => $round, 'reviewer' => $round.'-'.$role, 'role' => $role, 'tier' => 'standard', 'decision' => 0 === $findings ? 'approve' : 'changes', 'findings' => $findings]);
-    }
-
-    /**
-     * @param list<string> $act
-     */
-    private function judge(string $round, array $act): void
-    {
-        $this->add(LedgerEventKind::JudgeDone, ['round' => $round, 'act' => $act, 'follow_ups' => [], 'findings' => array_map(static fn (string $id): array => ['id' => $id, 'severity' => 'P2', 'text' => 'Text of '.$id.'.'], $act)]);
     }
 
     /**

@@ -33,6 +33,28 @@ final readonly class BareZizmorIgnores
     /**
      * @return list<string>
      */
+    private function yamlFiles(string $root): array
+    {
+        if (!is_dir($root.'/'.self::SCANNED)) {
+            return [];
+        }
+
+        $paths = [];
+
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/'.self::SCANNED, FilesystemIterator::SKIP_DOTS)) as $file) {
+            if ($file instanceof SplFileInfo && $file->isFile() && in_array(strtolower($file->getExtension()), ['yml', 'yaml'], true)) {
+                $paths[] = substr($file->getPathname(), strlen($root) + 1);
+            }
+        }
+
+        sort($paths);
+
+        return $paths;
+    }
+
+    /**
+     * @return list<string>
+     */
     private function inFile(string $root, string $path): array
     {
         $contents = is_readable($root.'/'.$path) ? file_get_contents($root.'/'.$path) : false;
@@ -75,27 +97,5 @@ final readonly class BareZizmorIgnores
     private function hasReason(string $afterDirective): bool
     {
         return 1 === preg_match('/\p{L}/u', $afterDirective);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function yamlFiles(string $root): array
-    {
-        if (!is_dir($root.'/'.self::SCANNED)) {
-            return [];
-        }
-
-        $paths = [];
-
-        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root.'/'.self::SCANNED, FilesystemIterator::SKIP_DOTS)) as $file) {
-            if ($file instanceof SplFileInfo && $file->isFile() && in_array(strtolower($file->getExtension()), ['yml', 'yaml'], true)) {
-                $paths[] = substr($file->getPathname(), strlen($root) + 1);
-            }
-        }
-
-        sort($paths);
-
-        return $paths;
     }
 }

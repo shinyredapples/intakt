@@ -94,6 +94,20 @@ final class AccountPlatformCooldownTest extends TestCase
         self::assertContains('The measured readings of account {account} could not be read.', array_column($logger->cleanLogs(), 1));
     }
 
+    private function spentReadings(): ReadingsInMemory
+    {
+        $clock = new NativeClock();
+        $readings = new ReadingsInMemory($clock);
+        $readings->record(new WindowReading($this->account(), UsageWindow::FiveHour, new Usage(100.0, $clock->now()->modify(sprintf('+%d seconds', self::RESET_IN_SECONDS)))));
+
+        return $readings;
+    }
+
+    private function cooldowns(MeasuredUse $readings, ?BufferingLogger $logger = null): AccountCooldownWindows
+    {
+        return new AccountCooldownWindows($readings, new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), $logger ?? new NullLogger(), StoredSerializerFactory::create(), [Provider::Codex->value => [Account::DEFAULT]]);
+    }
+
     private function failedCall(AccountCooldownWindows $cooldowns, Throwable $thrown, ?Account $account = null): Throwable
     {
         $platform = self::createStub(PlatformInterface::class);
@@ -107,20 +121,6 @@ final class AccountPlatformCooldownTest extends TestCase
         }
 
         self::fail('The call was expected to fail.');
-    }
-
-    private function spentReadings(): ReadingsInMemory
-    {
-        $clock = new NativeClock();
-        $readings = new ReadingsInMemory($clock);
-        $readings->record(new WindowReading($this->account(), UsageWindow::FiveHour, new Usage(100.0, $clock->now()->modify(sprintf('+%d seconds', self::RESET_IN_SECONDS)))));
-
-        return $readings;
-    }
-
-    private function cooldowns(MeasuredUse $readings, ?BufferingLogger $logger = null): AccountCooldownWindows
-    {
-        return new AccountCooldownWindows($readings, new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), new InMemoryLedger(), $logger ?? new NullLogger(), StoredSerializerFactory::create(), [Provider::Codex->value => [Account::DEFAULT]]);
     }
 
     private function account(): Account

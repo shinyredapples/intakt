@@ -35,15 +35,21 @@ final class ComposerAuditGate implements Gate
     }
 
     /**
-     * @param list<string> $exceptions
+     * @return list<string>
      */
-    private function passedNaming(array $exceptions): GateResult
+    private function auditConfiguration(Workspace $workspace): array
     {
-        if ([] === $exceptions) {
-            return GateResult::passed($this->name());
+        $path = $workspace->root.'/composer.json';
+        $manifest = is_file($path) ? JsonNode::parse((string) file_get_contents($path)) : null;
+
+        if (!$manifest instanceof JsonNode) {
+            return [];
         }
 
-        return GateResult::passedBecause($this->name(), 'cooldown exceptions in force: '.implode(', ', $exceptions));
+        return array_map(
+            static fn (string $setting): string => 'composer.json config.audit.'.$setting.' hides findings from the audit',
+            array_keys($manifest->get('config')->get('audit')->entries()),
+        );
     }
 
     private function audit(Workspace $workspace): ?ProcessResult
@@ -65,21 +71,15 @@ final class ComposerAuditGate implements Gate
     }
 
     /**
-     * @return list<string>
+     * @param list<string> $exceptions
      */
-    private function auditConfiguration(Workspace $workspace): array
+    private function passedNaming(array $exceptions): GateResult
     {
-        $path = $workspace->root.'/composer.json';
-        $manifest = is_file($path) ? JsonNode::parse((string) file_get_contents($path)) : null;
-
-        if (!$manifest instanceof JsonNode) {
-            return [];
+        if ([] === $exceptions) {
+            return GateResult::passed($this->name());
         }
 
-        return array_map(
-            static fn (string $setting): string => 'composer.json config.audit.'.$setting.' hides findings from the audit',
-            array_keys($manifest->get('config')->get('audit')->entries()),
-        );
+        return GateResult::passedBecause($this->name(), 'cooldown exceptions in force: '.implode(', ', $exceptions));
     }
 
     /**

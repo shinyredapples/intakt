@@ -110,14 +110,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
-    private function recordedEvents(): string
-    {
-        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
-        $tester->execute([]);
-
-        return $tester->getDisplay();
-    }
-
     private function handler(RecordingCommandBus $commands): WatchPullRequestsHandler
     {
         $clock = new MockClock('2026-11-02T10:00:00+00:00');
@@ -150,6 +142,14 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         return new WatchPullRequestsHandler($projects, new ChangedHeads($find, $pending, $ledger, $this->entities->getConnection()), new LookAtHeads(new HeadLocks($pending, $locks, $installWide, $logger), $decisions, $settle));
     }
 
+    private function recordedEvents(): string
+    {
+        $tester = new CommandTester(new Application(self::bootKernel())->find('intakt:ledger:events'));
+        $tester->execute([]);
+
+        return $tester->getDisplay();
+    }
+
     private function reads(MockClock $clock): GitHubWatchReads
     {
         $http = new MockHttpClient(fn (string $method, string $url): ResponseInterface => $this->answer($url), 'https://api.github.com');
@@ -163,6 +163,11 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets']]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
+    private function panel(): Panel
+    {
+        return new Panel([new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10)], QuorumPolicy::All);
+    }
+
     private function answer(string $url): MockResponse
     {
         return match (true) {
@@ -171,11 +176,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
             str_contains($url, '/actions/runs') => new MockResponse($this->fixture('runs_in_progress.json')),
             default => new MockResponse($this->fixture('suites_none.json')),
         };
-    }
-
-    private function panel(): Panel
-    {
-        return new Panel([new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10)], QuorumPolicy::All);
     }
 
     private function fixture(string $name): string

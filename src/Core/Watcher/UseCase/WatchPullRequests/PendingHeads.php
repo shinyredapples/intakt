@@ -171,6 +171,14 @@ final readonly class PendingHeads
         $this->dropLoaded($this->keyOf($project, $settled));
     }
 
+    private function stored(string $project, OpenChange $open): ?PendingHead
+    {
+        $key = $this->keyOf($project, $open);
+        $this->dropLoaded($key);
+
+        return $this->entities->find(PendingHead::class, $key);
+    }
+
     // Read again by its key rather than refreshed, because a worker keeps its entity manager, another worker may have moved or settled the row, and a refresh of a deleted row keeps its old values.
     private function readAgain(PendingHead $loaded): ?PendingHead
     {
@@ -179,12 +187,12 @@ final readonly class PendingHeads
         return $this->entities->find(PendingHead::class, ['project' => $loaded->project(), 'change' => $loaded->change()]);
     }
 
-    private function stored(string $project, OpenChange $open): ?PendingHead
+    /**
+     * @return array{project: string, change: string}
+     */
+    private function keyOf(string $project, OpenChange $open): array
     {
-        $key = $this->keyOf($project, $open);
-        $this->dropLoaded($key);
-
-        return $this->entities->find(PendingHead::class, $key);
+        return ['project' => $project, 'change' => $open->id->value];
     }
 
     // Dropped so the next read goes to the database, because a worker keeps its entity manager while other workers change and remove rows.
@@ -198,13 +206,5 @@ final readonly class PendingHeads
         if (null !== $loaded) {
             $this->entities->detach($loaded);
         }
-    }
-
-    /**
-     * @return array{project: string, change: string}
-     */
-    private function keyOf(string $project, OpenChange $open): array
-    {
-        return ['project' => $project, 'change' => $open->id->value];
     }
 }

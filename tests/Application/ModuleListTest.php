@@ -27,18 +27,6 @@ final class ModuleListTest extends TestCase
     /**
      * @return list<string>
      */
-    private function moduleList(): array
-    {
-        /** @var list<string> $modules */
-        $modules = require self::ROOT.'/config/modules.php';
-        sort($modules);
-
-        return $modules;
-    }
-
-    /**
-     * @return list<string>
-     */
     private function moduleDirectories(): array
     {
         $directories = [];
@@ -54,5 +42,17 @@ final class ModuleListTest extends TestCase
         sort($directories);
 
         return $directories;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function moduleList(): array
+    {
+        /** @var list<string> $modules */
+        $modules = require self::ROOT.'/config/modules.php';
+        sort($modules);
+
+        return $modules;
     }
 }

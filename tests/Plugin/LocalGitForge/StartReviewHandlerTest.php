@@ -161,9 +161,9 @@ final class StartReviewHandlerTest extends TestCase
         $this->repository->remove();
     }
 
-    private function removeSnapshot(string $snapshot): void
+    private function handler(ChangeReviews $reviews): StartReviewHandler
     {
-        new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
+        return new StartReviewHandler($this->review($reviews));
     }
 
     private function startOf(?int $number): StartReview
@@ -171,9 +171,9 @@ final class StartReviewHandlerTest extends TestCase
         return new StartReview('alpha', 'Add the thing.', new RequestedRound('sample', $number, new ChangeSource($this->repository->path, 'main')));
     }
 
-    private function handler(ChangeReviews $reviews): StartReviewHandler
+    private function removeSnapshot(string $snapshot): void
     {
-        return new StartReviewHandler($this->review($reviews));
+        new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
     }
 
     private function review(ChangeReviews $reviews): LocalChangeReview

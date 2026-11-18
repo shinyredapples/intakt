@@ -62,6 +62,14 @@ final readonly class CheckVerdictIdentityCommand
         $this->printStanding($io, $reviewed->standingAt($current, $forge->headMoveSince($reviewed->commits->head, $change)));
     }
 
+    private function termsOf(Change $change, CheckVerdictIdentityInput $input): ReviewTerms
+    {
+        $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
+        $description = new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), $paths, []);
+
+        return ReviewTerms::of($input->task, $input->checkCommand, $this->panels->panelForChange($input->project, $description));
+    }
+
     // Reportable here only, because here a person typed the identity, while an unreadable one from storage is a programming error.
     private function readReviewed(string $recorded): VerdictIdentity
     {
@@ -70,14 +78,6 @@ final readonly class CheckVerdictIdentityCommand
         } catch (InvalidArgumentException $invalid) {
             throw new RecordedIdentityUnreadable('--reviewed is not a recorded verdict identity: '.$invalid->getMessage(), $invalid->getCode(), $invalid);
         }
-    }
-
-    private function termsOf(Change $change, CheckVerdictIdentityInput $input): ReviewTerms
-    {
-        $paths = array_map(static fn (ChangedFile $file): string => $file->path, [...$change->diff->files]);
-        $description = new ChangeDescription($change->diff->addedLines() + $change->diff->removedLines(), $paths, []);
-
-        return ReviewTerms::of($input->task, $input->checkCommand, $this->panels->panelForChange($input->project, $description));
     }
 
     private function printStanding(SymfonyStyle $io, VerdictStanding $standing): void

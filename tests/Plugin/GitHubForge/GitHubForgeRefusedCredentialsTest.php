@@ -144,22 +144,6 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
-    private function failureOf(Closure $call): Throwable
-    {
-        try {
-            $call();
-        } catch (ForgeReadFailed|ForgeWriteFailed $failure) {
-            return $failure;
-        }
-
-        throw new LogicException('The call was expected to fail.');
-    }
-
-    private function change(): Change
-    {
-        return new Change(new ChangeId(self::PULL), new CommitRange(new CommitId(self::MERGE_BASE), new CommitId(self::HEAD)), new Diff('', new ChangedFiles()));
-    }
-
     /**
      * @param Closure(string): MockResponse $answer
      */
@@ -182,6 +166,17 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())), new GitHubAppSetting('12345', new NullLogger()));
     }
 
+    private function failureOf(Closure $call): Throwable
+    {
+        try {
+            $call();
+        } catch (ForgeReadFailed|ForgeWriteFailed $failure) {
+            return $failure;
+        }
+
+        throw new LogicException('The call was expected to fail.');
+    }
+
     private static function plain(string $url): MockResponse
     {
         return match (true) {
@@ -189,6 +184,11 @@ final class GitHubForgeRefusedCredentialsTest extends TestCase
             str_contains($url, '/pulls/7') => new MockResponse(self::fixture('pull_request.json')),
             default => new MockResponse(self::fixture('compare_merge_base.json')),
         };
+    }
+
+    private function change(): Change
+    {
+        return new Change(new ChangeId(self::PULL), new CommitRange(new CommitId(self::MERGE_BASE), new CommitId(self::HEAD)), new Diff('', new ChangedFiles()));
     }
 
     private static function fixture(string $name): string

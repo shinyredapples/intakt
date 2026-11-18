@@ -36,11 +36,6 @@ final class WorkingTreeSecretsGate extends GitleaksGate
         return [...$this->ignoreFileFindings($workspace), ...$this->inlineAllowDirectivesIn($workspace), ...$this->trackedFilesGitleaksSkips($workspace)];
     }
 
-    private function scanTree(Workspace $workspace, string $source): GateResult
-    {
-        return $this->scan($workspace, new ScanTarget($source, ['--no-git']), $workspace->config('gitleaks.toml'));
-    }
-
     private function copyRepositoryFilesTo(Workspace $workspace, string $directory): void
     {
         foreach ($workspace->repositoryFiles() as $path) {
@@ -55,18 +50,9 @@ final class WorkingTreeSecretsGate extends GitleaksGate
         $this->ensureFolder($directory);
     }
 
-    private function ensureFolder(string $folder): void
+    private function scanTree(Workspace $workspace, string $source): GateResult
     {
-        if (!is_dir($folder) && !mkdir($folder, 0o777, true) && !is_dir($folder)) {
-            throw new ScopeFailure('cannot create the folder '.$folder.' for the scan');
-        }
-    }
-
-    private function copyFile(string $source, string $target): void
-    {
-        if (!copy($source, $target)) {
-            throw new ScopeFailure('cannot copy '.$source.' for the scan');
-        }
+        return $this->scan($workspace, new ScanTarget($source, ['--no-git']), $workspace->config('gitleaks.toml'));
     }
 
     private function remove(string $directory): void
@@ -105,11 +91,6 @@ final class WorkingTreeSecretsGate extends GitleaksGate
         );
     }
 
-    private function carriesInlineAllow(string $file): bool
-    {
-        return is_file($file) && !is_link($file) && str_contains((string) file_get_contents($file), self::INLINE_ALLOW);
-    }
-
     /**
      * @return list<string>
      */
@@ -129,5 +110,24 @@ final class WorkingTreeSecretsGate extends GitleaksGate
             static fn (string $path): string => $path.' is tracked in a folder the scanner skips, remove it from the repository',
             $this->lines($tracked->output),
         );
+    }
+
+    private function ensureFolder(string $folder): void
+    {
+        if (!is_dir($folder) && !mkdir($folder, 0o777, true) && !is_dir($folder)) {
+            throw new ScopeFailure('cannot create the folder '.$folder.' for the scan');
+        }
+    }
+
+    private function copyFile(string $source, string $target): void
+    {
+        if (!copy($source, $target)) {
+            throw new ScopeFailure('cannot copy '.$source.' for the scan');
+        }
+    }
+
+    private function carriesInlineAllow(string $file): bool
+    {
+        return is_file($file) && !is_link($file) && str_contains((string) file_get_contents($file), self::INLINE_ALLOW);
     }
 }

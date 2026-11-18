@@ -242,6 +242,11 @@ final class FakeDockerEngine
         return $this->networks->answer($method, $this->pathOf($url), $options) ?? $this->answerOnContainers($method, $url, $options);
     }
 
+    private function nextId(): string
+    {
+        return sprintf('c0ffee%06d', ++$this->next);
+    }
+
     private function pathOf(string $url): string
     {
         return (string) preg_replace('#^/v1\.44/#', '', (string) parse_url($url, PHP_URL_PATH));
@@ -296,6 +301,36 @@ final class FakeDockerEngine
     }
 
     /**
+     * @return list<array{Id: string, Names: list<string>, Labels: array<string, string>}>
+     */
+    private function listing(): array
+    {
+        $listing = [];
+
+        foreach ($this->containers as $id => $container) {
+            $listing[] = ['Id' => $id, 'Names' => ['/'.$container->name], 'Labels' => ['intakt.job' => $container->job]];
+        }
+
+        return $listing;
+    }
+
+    /**
+     * @param array<mixed> $body
+     */
+    private function json(array $body, int $status = 200): MockResponse
+    {
+        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type' => 'application/json']]);
+    }
+
+    // A JSON object keyed by path, or null, because that is the shape the engine's image inspection answers with.
+    private function image(string $name): MockResponse
+    {
+        $paths = $this->volumes[$name] ?? [];
+
+        return $this->json(['Config' => ['Volumes' => [] === $paths ? null : (object) array_fill_keys($paths, (object) [])]]);
+    }
+
+    /**
      * @param array<string, mixed> $options
      */
     private function onContainer(string $idOrName, string $call, array $options): MockResponse
@@ -316,6 +351,19 @@ final class FakeDockerEngine
         };
     }
 
+    private function remove(string $idOrName): MockResponse
+    {
+        $id = $this->idOf($idOrName);
+
+        if (!isset($this->containers[$id])) {
+            return $this->json(['message' => 'No such container: '.$idOrName], 404);
+        }
+
+        unset($this->containers[$id]);
+
+        return new MockResponse('', ['http_code' => 204]);
+    }
+
     private function idOf(string $idOrName): string
     {
         foreach ($this->containers as $id => $container) {
@@ -325,19 +373,6 @@ final class FakeDockerEngine
         }
 
         return $idOrName;
-    }
-
-    // Framed as the engine frames the log of a container without a terminal (stream 1, three zero bytes, the length, the chunk), so the client's frame reading is exercised.
-    private function logs(FakeContainer $container): MockResponse
-    {
-        $lines = preg_split('/(?<=\n)/', $this->proxyLogs[$container->job] ?? '', flags: PREG_SPLIT_NO_EMPTY);
-        $framed = implode('', array_map(static fn (string $line): string => pack('CxxxN', 1, strlen($line)).$line, false === $lines ? [] : $lines));
-
-        if (in_array($container->job, $this->brokenLogs, true)) {
-            $framed = pack('CxxxN', 1, 100).'short';
-        }
-
-        return new MockResponse($framed, ['http_code' => 200, 'response_headers' => ['content-type' => 'application/vnd.docker.multiplexed-stream']]);
     }
 
     private function start(FakeContainer $container): MockResponse
@@ -412,6 +447,19 @@ final class FakeDockerEngine
         return new MockResponse('', ['http_code' => 204]);
     }
 
+    // Framed as the engine frames the log of a container without a terminal (stream 1, three zero bytes, the length, the chunk), so the client's frame reading is exercised.
+    private function logs(FakeContainer $container): MockResponse
+    {
+        $lines = preg_split('/(?<=\n)/', $this->proxyLogs[$container->job] ?? '', flags: PREG_SPLIT_NO_EMPTY);
+        $framed = implode('', array_map(static fn (string $line): string => pack('CxxxN', 1, strlen($line)).$line, false === $lines ? [] : $lines));
+
+        if (in_array($container->job, $this->brokenLogs, true)) {
+            $framed = pack('CxxxN', 1, 100).'short';
+        }
+
+        return new MockResponse($framed, ['http_code' => 200, 'response_headers' => ['content-type' => 'application/vnd.docker.multiplexed-stream']]);
+    }
+
     private function state(FakeContainer $container): MockResponse
     {
         if ($this->garbledState) {
@@ -440,53 +488,5 @@ final class FakeDockerEngine
         }
 
         return $this->json(['State' => ['Running' => $container->running, 'OOMKilled' => false, 'ExitCode' => $container->exitCode, 'Health' => ['Status' => $status]]]);
-    }
-
-    // A JSON object keyed by path, or null, because that is the shape the engine's image inspection answers with.
-    private function image(string $name): MockResponse
-    {
-        $paths = $this->volumes[$name] ?? [];
-
-        return $this->json(['Config' => ['Volumes' => [] === $paths ? null : (object) array_fill_keys($paths, (object) [])]]);
-    }
-
-    private function remove(string $idOrName): MockResponse
-    {
-        $id = $this->idOf($idOrName);
-
-        if (!isset($this->containers[$id])) {
-            return $this->json(['message' => 'No such container: '.$idOrName], 404);
-        }
-
-        unset($this->containers[$id]);
-
-        return new MockResponse('', ['http_code' => 204]);
-    }
-
-    /**
-     * @return list<array{Id: string, Names: list<string>, Labels: array<string, string>}>
-     */
-    private function listing(): array
-    {
-        $listing = [];
-
-        foreach ($this->containers as $id => $container) {
-            $listing[] = ['Id' => $id, 'Names' => ['/'.$container->name], 'Labels' => ['intakt.job' => $container->job]];
-        }
-
-        return $listing;
-    }
-
-    private function nextId(): string
-    {
-        return sprintf('c0ffee%06d', ++$this->next);
-    }
-
-    /**
-     * @param array<mixed> $body
-     */
-    private function json(array $body, int $status = 200): MockResponse
-    {
-        return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type' => 'application/json']]);
     }
 }

@@ -259,11 +259,6 @@ final class RunBuildJobTest extends TestCase
         new Filesystem()->remove($this->folder);
     }
 
-    private function job(Tier $tier = Tier::Standard): BuildJob
-    {
-        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
-    }
-
     private function runBuilds(JobOutput $output, ?ResolvedModel $model = null, JobEnd $end = new JobEnd(JobCause::Exited, 0)): RunBuildJob
     {
         $runner = self::createStub(JobRunner::class);
@@ -275,6 +270,11 @@ final class RunBuildJobTest extends TestCase
         });
 
         return $this->useCase($runner, $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'));
+    }
+
+    private function job(Tier $tier = Tier::Standard): BuildJob
+    {
+        return new BuildJob('demo', $this->folder.'/clone', 'task', new BuildBrief('PLANT-task', [], null), $tier, 'intakt-job-demo:1');
     }
 
     private function useCase(JobRunner $runner, ResolvedModel $model): RunBuildJob

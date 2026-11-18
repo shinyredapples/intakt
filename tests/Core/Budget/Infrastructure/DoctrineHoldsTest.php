@@ -122,9 +122,9 @@ final class DoctrineHoldsTest extends KernelTestCase
         $this->holds = new DoctrineHolds($entities, $this->clock);
     }
 
-    private function cool(Account $account, string $resetIn): void
+    private function claude(string $name): Account
     {
-        self::assertSame(ReadingOutcome::Recorded, $this->holds->coolDown($account, $this->later($resetIn)));
+        return new Account(Provider::ClaudeCode, $name);
     }
 
     private function later(string $modifier): DateTimeImmutable
@@ -132,8 +132,8 @@ final class DoctrineHoldsTest extends KernelTestCase
         return $this->clock->now()->modify($modifier);
     }
 
-    private function claude(string $name): Account
+    private function cool(Account $account, string $resetIn): void
     {
-        return new Account(Provider::ClaudeCode, $name);
+        self::assertSame(ReadingOutcome::Recorded, $this->holds->coolDown($account, $this->later($resetIn)));
     }
 }

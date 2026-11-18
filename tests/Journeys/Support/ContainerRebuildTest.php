@@ -78,6 +78,25 @@ final class ContainerRebuildTest extends TestCase
         new Filesystem()->remove($this->directory);
     }
 
+    /**
+     * @return array<string,string|false>
+     */
+    private function withoutKeys(): array
+    {
+        $variables = [SampleProject::HUGGING_FACE_TOKEN, ...array_merge(...array_map(static fn (Provider $provider): array => $provider->variables(), Provider::cases()))];
+
+        return array_fill_keys($variables, false);
+    }
+
+    /**
+     * @param list<string>               $arguments
+     * @param array<string,string|false> $environment
+     */
+    private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS): string
+    {
+        return $this->outputOf([PHP_BINARY, ...$this->consoleCommand($arguments)], $environment, $seconds);
+    }
+
     // Stamped inside each console process with its own start, because the framework's cache:clear takes a container compiled in the second it starts for one it built itself, as when the instance compiled one just before the rebuild.
     private function rebuildStampingTheCacheWithEachConsolesStart(): ContainerRebuild
     {
@@ -93,9 +112,17 @@ final class ContainerRebuildTest extends TestCase
         );
     }
 
-    private function rebuild(): ContainerRebuild
+    /**
+     * @return array<string,string>
+     */
+    private function withKey(): array
     {
-        return new ContainerRebuild(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()), $this->console(...));
+        return ['ANTHROPIC_API_KEY' => self::PLACEHOLDER_KEY];
+    }
+
+    private function configuration(): string
+    {
+        return $this->directory.'/intakt.yaml';
     }
 
     /**
@@ -112,13 +139,14 @@ final class ContainerRebuildTest extends TestCase
         return $files;
     }
 
-    /**
-     * @param list<string>               $arguments
-     * @param array<string,string|false> $environment
-     */
-    private function console(array $arguments, array $environment, int $seconds = self::CONSOLE_SECONDS): string
+    private function rebuild(): ContainerRebuild
     {
-        return $this->outputOf([PHP_BINARY, ...$this->consoleCommand($arguments)], $environment, $seconds);
+        return new ContainerRebuild(ContainerRebuild::loaderOf(new Kernel('test', false), $this->cacheDirectory()), $this->console(...));
+    }
+
+    private function cacheDirectory(): string
+    {
+        return $this->directory.'/cache/test';
     }
 
     /**
@@ -162,33 +190,5 @@ final class ContainerRebuildTest extends TestCase
             'DATABASE_URL' => 'sqlite:///'.$this->directory.'/data.db',
             'INTAKT_CONFIG' => $this->configuration(),
         ];
-    }
-
-    /**
-     * @return array<string,string|false>
-     */
-    private function withoutKeys(): array
-    {
-        $variables = [SampleProject::HUGGING_FACE_TOKEN, ...array_merge(...array_map(static fn (Provider $provider): array => $provider->variables(), Provider::cases()))];
-
-        return array_fill_keys($variables, false);
-    }
-
-    /**
-     * @return array<string,string>
-     */
-    private function withKey(): array
-    {
-        return ['ANTHROPIC_API_KEY' => self::PLACEHOLDER_KEY];
-    }
-
-    private function cacheDirectory(): string
-    {
-        return $this->directory.'/cache/test';
-    }
-
-    private function configuration(): string
-    {
-        return $this->directory.'/intakt.yaml';
     }
 }

@@ -66,6 +66,16 @@ final readonly class WorkflowReader
         return null;
     }
 
+    /**
+     * @param list<string> $lines
+     *
+     * @return array{WorkflowMapping|WorkflowSequence, int}
+     */
+    private function collection(array $lines, WorkflowLine $first): array
+    {
+        return $this->isItem($first->content) ? $this->sequence($lines, $first) : $this->mapping($lines, $first);
+    }
+
     private function line(string $text, int $number): WorkflowLine
     {
         $raw = rtrim($text, " \t");
@@ -77,14 +87,31 @@ final readonly class WorkflowReader
         return new WorkflowLine($number, strlen($raw) - strlen($content), $content);
     }
 
+    private function isItem(string $content): bool
+    {
+        return '-' === $content || str_starts_with($content, '- ') || str_starts_with($content, "-\t");
+    }
+
     /**
      * @param list<string> $lines
      *
-     * @return array{WorkflowMapping|WorkflowSequence, int}
+     * @return array{WorkflowSequence, int}
      */
-    private function collection(array $lines, WorkflowLine $first): array
+    private function sequence(array $lines, WorkflowLine $first): array
     {
-        return $this->isItem($first->content) ? $this->sequence($lines, $first) : $this->mapping($lines, $first);
+        $items = [];
+        $line = $first;
+        $next = $first->number;
+        while ($line instanceof WorkflowLine && $line->indent === $first->indent && $this->isItem($line->content)) {
+            [$items[], $next] = $this->item($lines, $line);
+            $line = $this->peek($lines, $next);
+        }
+
+        if ($line instanceof WorkflowLine && $line->indent > $first->indent) {
+            throw new WorkflowFormNotRead($line->number, 'a line that belongs to no item above it');
+        }
+
+        return [new WorkflowSequence($first->number, $items), $next];
     }
 
     /**
@@ -117,61 +144,6 @@ final readonly class WorkflowReader
     /**
      * @param list<string> $lines
      *
-     * @return array{WorkflowEntry, int}
-     */
-    private function entry(array $lines, WorkflowLine $line): array
-    {
-        [$key, $rest] = $this->inline->keyAndRest($line->content) ?? throw new WorkflowFormNotRead($line->number, 'a line the scan cannot read as a key and its value');
-        [$value, $next] = $this->isEmpty($rest) ? $this->entryChild($lines, $line) : $this->value($lines, $rest, $line);
-
-        return [new WorkflowEntry($key, $line->number, $value), $next];
-    }
-
-    /**
-     * @param list<string> $lines
-     *
-     * @return array{WorkflowScalar|WorkflowMapping|WorkflowSequence, int}
-     */
-    private function entryChild(array $lines, WorkflowLine $line): array
-    {
-        $next = $this->peek($lines, $line->number);
-        if ($next instanceof WorkflowLine && $next->indent > $line->indent) {
-            return $this->collection($lines, $next);
-        }
-
-        // YAML lets a list under a key start at the key's own indentation, so such items must stay under the key.
-        if ($next instanceof WorkflowLine && $next->indent === $line->indent && $this->isItem($next->content)) {
-            return $this->sequence($lines, $next);
-        }
-
-        return [new WorkflowScalar($line->number, ''), $line->number];
-    }
-
-    /**
-     * @param list<string> $lines
-     *
-     * @return array{WorkflowSequence, int}
-     */
-    private function sequence(array $lines, WorkflowLine $first): array
-    {
-        $items = [];
-        $line = $first;
-        $next = $first->number;
-        while ($line instanceof WorkflowLine && $line->indent === $first->indent && $this->isItem($line->content)) {
-            [$items[], $next] = $this->item($lines, $line);
-            $line = $this->peek($lines, $next);
-        }
-
-        if ($line instanceof WorkflowLine && $line->indent > $first->indent) {
-            throw new WorkflowFormNotRead($line->number, 'a line that belongs to no item above it');
-        }
-
-        return [new WorkflowSequence($first->number, $items), $next];
-    }
-
-    /**
-     * @param list<string> $lines
-     *
      * @return array{WorkflowScalar|WorkflowMapping|WorkflowSequence, int}
      */
     private function item(array $lines, WorkflowLine $line): array
@@ -187,6 +159,24 @@ final readonly class WorkflowReader
         }
 
         return $this->isEmpty($content) ? $this->itemChild($lines, $line) : $this->value($lines, $content, $line);
+    }
+
+    /**
+     * @param list<string> $lines
+     *
+     * @return array{WorkflowEntry, int}
+     */
+    private function entry(array $lines, WorkflowLine $line): array
+    {
+        [$key, $rest] = $this->inline->keyAndRest($line->content) ?? throw new WorkflowFormNotRead($line->number, 'a line the scan cannot read as a key and its value');
+        [$value, $next] = $this->isEmpty($rest) ? $this->entryChild($lines, $line) : $this->value($lines, $rest, $line);
+
+        return [new WorkflowEntry($key, $line->number, $value), $next];
+    }
+
+    private function isEmpty(string $rest): bool
+    {
+        return '' === $rest || str_starts_with($rest, '#');
     }
 
     /**
@@ -224,6 +214,26 @@ final readonly class WorkflowReader
     /**
      * @param list<string> $lines
      *
+     * @return array{WorkflowScalar|WorkflowMapping|WorkflowSequence, int}
+     */
+    private function entryChild(array $lines, WorkflowLine $line): array
+    {
+        $next = $this->peek($lines, $line->number);
+        if ($next instanceof WorkflowLine && $next->indent > $line->indent) {
+            return $this->collection($lines, $next);
+        }
+
+        // YAML lets a list under a key start at the key's own indentation, so such items must stay under the key.
+        if ($next instanceof WorkflowLine && $next->indent === $line->indent && $this->isItem($next->content)) {
+            return $this->sequence($lines, $next);
+        }
+
+        return [new WorkflowScalar($line->number, ''), $line->number];
+    }
+
+    /**
+     * @param list<string> $lines
+     *
      * @return array{WorkflowScalar, int}
      */
     private function blockValue(array $lines, string $header, WorkflowLine $line): array
@@ -233,15 +243,5 @@ final readonly class WorkflowReader
         }
 
         return $this->blocks->read($lines, $line->number, $line);
-    }
-
-    private function isEmpty(string $rest): bool
-    {
-        return '' === $rest || str_starts_with($rest, '#');
-    }
-
-    private function isItem(string $content): bool
-    {
-        return '-' === $content || str_starts_with($content, '- ') || str_starts_with($content, "-\t");
     }
 }

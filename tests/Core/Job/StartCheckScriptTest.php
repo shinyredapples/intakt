@@ -155,16 +155,16 @@ final class StartCheckScriptTest extends TestCase
         );
     }
 
-    /**
-     * @param list<string>                $arguments
-     * @param array<string, string|false> $environment
-     */
-    private function startCheckWith(array $arguments, array $environment): Process
+    private function report(): string
     {
-        $run = new Process(['/bin/sh', '-c', $this->script(), 'intakt-start-check', ...$arguments], null, $environment);
-        $run->run();
+        return (string) file_get_contents($this->output.'/.intakt-start-check');
+    }
 
-        return $run;
+    // A stand-in on the PATH, because no test may reach a host, and it records how the script called it.
+    private function curlExitsWith(int $code): void
+    {
+        file_put_contents($this->tools.'/curl', sprintf("#!/bin/sh\necho \"\$*\" >> %s/curl.log\nexit %d\n", $this->root, $code));
+        chmod($this->tools.'/curl', 0o700);
     }
 
     /**
@@ -183,20 +183,20 @@ final class StartCheckScriptTest extends TestCase
         ];
     }
 
-    // A stand-in on the PATH, because no test may reach a host, and it records how the script called it.
-    private function curlExitsWith(int $code): void
+    /**
+     * @param list<string>                $arguments
+     * @param array<string, string|false> $environment
+     */
+    private function startCheckWith(array $arguments, array $environment): Process
     {
-        file_put_contents($this->tools.'/curl', sprintf("#!/bin/sh\necho \"\$*\" >> %s/curl.log\nexit %d\n", $this->root, $code));
-        chmod($this->tools.'/curl', 0o700);
+        $run = new Process(['/bin/sh', '-c', $this->script(), 'intakt-start-check', ...$arguments], null, $environment);
+        $run->run();
+
+        return $run;
     }
 
     private function script(): string
     {
         return (string) file_get_contents(self::SCRIPT);
-    }
-
-    private function report(): string
-    {
-        return (string) file_get_contents($this->output.'/.intakt-start-check');
     }
 }

@@ -79,20 +79,6 @@ final readonly class GateResult
         return json_encode($report, self::JSON_FLAGS);
     }
 
-    /**
-     * @return list<array{file: string, seconds: float}>
-     */
-    private function slowestList(): array
-    {
-        $list = [];
-
-        foreach ($this->extras['slowest'] ?? [] as $file => $seconds) {
-            $list[] = ['file' => $file, 'seconds' => round($seconds, 3)];
-        }
-
-        return $list;
-    }
-
     private function shorten(string $finding): string
     {
         $oneLine = trim((string) preg_replace('/\s+/', ' ', $finding));
@@ -105,5 +91,19 @@ final readonly class GateResult
         }
 
         return mb_strimwidth($oneLine, 0, self::MAXIMUM_FINDING_LENGTH, '...');
+    }
+
+    /**
+     * @return list<array{file: string, seconds: float}>
+     */
+    private function slowestList(): array
+    {
+        $list = [];
+
+        foreach ($this->extras['slowest'] ?? [] as $file => $seconds) {
+            $list[] = ['file' => $file, 'seconds' => round($seconds, 3)];
+        }
+
+        return $list;
     }
 }

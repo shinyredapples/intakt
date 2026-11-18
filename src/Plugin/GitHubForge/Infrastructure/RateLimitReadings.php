@@ -85,6 +85,14 @@ final readonly class RateLimitReadings
         return $resetsAt > $this->clock->now() ? new RateLimitReading($value['remaining'], $value['limit'], $resetsAt) : null;
     }
 
+    private function storedPause(string $installationId, string $pool): ?DateTimeImmutable
+    {
+        $current = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId, $pool)));
+        $earlier = $this->pauseStoredByAnEarlierVersion($installationId, $pool);
+
+        return $current instanceof DateTimeImmutable && $earlier instanceof DateTimeImmutable ? max($current, $earlier) : $current ?? $earlier;
+    }
+
     /**
      * @param array<string, list<string>> $headers
      */
@@ -96,6 +104,18 @@ final readonly class RateLimitReadings
 
         // Only whole, because the reserve is a share of the limit and a reading without one could not hold it.
         return in_array(null, [$remaining, $limit, $reset], true) ? null : new RateLimitReading($remaining, $limit, $this->at($reset));
+    }
+
+    private function remember(string $installationId, RateLimitReading $reading): void
+    {
+        $resetsAt = $reading->resetsAt;
+        if ($resetsAt <= $this->clock->now()) {
+            return;
+        }
+
+        $value = ['remaining' => $reading->remaining, 'limit' => $reading->limit, 'reset' => $resetsAt->getTimestamp()];
+        $item = $this->pool->getItem($this->key('reading', $installationId, self::CORE))->set($value)->expiresAt($resetsAt);
+        $this->pool->save($item);
     }
 
     /**
@@ -122,6 +142,60 @@ final readonly class RateLimitReadings
         return $this->ahead(null === $reset ? null : $this->at($reset));
     }
 
+    private function pause(string $installationId, string $pool, DateTimeImmutable $until): DateTimeImmutable
+    {
+        // Under the lock every process takes, because two answers in flight could otherwise replace a longer pause with a shorter one.
+        $lock = $this->locks->createLock($this->key('pause', $installationId, $pool));
+        $lock->acquire(true);
+
+        try {
+            $longest = max($until, $this->storedPause($installationId, $pool) ?? $until);
+            $this->pool->save($this->pool->getItem($this->key('limited', $installationId, $pool))->set($longest->getTimestamp())->expiresAt($longest));
+
+            return $longest;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    // Hashed, because the id comes from the owner's settings, the pool from GitHub's answer, and a cache key allows only a narrow set of characters.
+    private function key(string $kind, string $installationId, string $pool): string
+    {
+        return 'github-rate-limit-'.$kind.'-'.hash('sha256', strlen($pool).':'.$pool.$installationId);
+    }
+
+    private function at(int $epoch): DateTimeImmutable
+    {
+        return $this->clock->now()->setTimestamp($epoch);
+    }
+
+    private function pausedUntil(CacheItemInterface $item): ?DateTimeImmutable
+    {
+        $value = $item->get();
+
+        return $item->isHit() && is_int($value) ? $this->at($value) : null;
+    }
+
+    // Honored until it expires, because an install upgraded during a pause stored it under the key the earlier version used (the installation id alone, for REST calls only), and dropping it would resume calls before GitHub's reset.
+    private function pauseStoredByAnEarlierVersion(string $installationId, string $pool): ?DateTimeImmutable
+    {
+        if (self::CORE !== $pool) {
+            return null;
+        }
+
+        return $this->pausedUntil($this->pool->getItem('github-rate-limit-limited-'.hash('sha256', $installationId)));
+    }
+
+    /**
+     * @param array<string, list<string>> $headers
+     */
+    private function number(array $headers, string $name): ?int
+    {
+        $value = $headers[$name][0] ?? null;
+
+        return is_string($value) && ctype_digit($value) && strlen($value) < 12 ? (int) $value : null;
+    }
+
     // Both forms, because HTTP allows Retry-After as seconds or as a date (RFC 9110, section 10.2.3).
     private function retryAfter(string $value): ?DateTimeImmutable
     {
@@ -140,79 +214,5 @@ final readonly class RateLimitReadings
         $now = $this->clock->now();
 
         return $moment instanceof DateTimeImmutable && $moment > $now ? $moment : $now->modify(sprintf('+%d seconds', self::SECONDS_WITHOUT_RESET));
-    }
-
-    private function remember(string $installationId, RateLimitReading $reading): void
-    {
-        $resetsAt = $reading->resetsAt;
-        if ($resetsAt <= $this->clock->now()) {
-            return;
-        }
-
-        $value = ['remaining' => $reading->remaining, 'limit' => $reading->limit, 'reset' => $resetsAt->getTimestamp()];
-        $item = $this->pool->getItem($this->key('reading', $installationId, self::CORE))->set($value)->expiresAt($resetsAt);
-        $this->pool->save($item);
-    }
-
-    private function pause(string $installationId, string $pool, DateTimeImmutable $until): DateTimeImmutable
-    {
-        // Under the lock every process takes, because two answers in flight could otherwise replace a longer pause with a shorter one.
-        $lock = $this->locks->createLock($this->key('pause', $installationId, $pool));
-        $lock->acquire(true);
-
-        try {
-            $longest = max($until, $this->storedPause($installationId, $pool) ?? $until);
-            $this->pool->save($this->pool->getItem($this->key('limited', $installationId, $pool))->set($longest->getTimestamp())->expiresAt($longest));
-
-            return $longest;
-        } finally {
-            $lock->release();
-        }
-    }
-
-    private function storedPause(string $installationId, string $pool): ?DateTimeImmutable
-    {
-        $current = $this->pausedUntil($this->pool->getItem($this->key('limited', $installationId, $pool)));
-        $earlier = $this->pauseStoredByAnEarlierVersion($installationId, $pool);
-
-        return $current instanceof DateTimeImmutable && $earlier instanceof DateTimeImmutable ? max($current, $earlier) : $current ?? $earlier;
-    }
-
-    // Honored until it expires, because an install upgraded during a pause stored it under the key the earlier version used (the installation id alone, for REST calls only), and dropping it would resume calls before GitHub's reset.
-    private function pauseStoredByAnEarlierVersion(string $installationId, string $pool): ?DateTimeImmutable
-    {
-        if (self::CORE !== $pool) {
-            return null;
-        }
-
-        return $this->pausedUntil($this->pool->getItem('github-rate-limit-limited-'.hash('sha256', $installationId)));
-    }
-
-    private function pausedUntil(CacheItemInterface $item): ?DateTimeImmutable
-    {
-        $value = $item->get();
-
-        return $item->isHit() && is_int($value) ? $this->at($value) : null;
-    }
-
-    private function at(int $epoch): DateTimeImmutable
-    {
-        return $this->clock->now()->setTimestamp($epoch);
-    }
-
-    /**
-     * @param array<string, list<string>> $headers
-     */
-    private function number(array $headers, string $name): ?int
-    {
-        $value = $headers[$name][0] ?? null;
-
-        return is_string($value) && ctype_digit($value) && strlen($value) < 12 ? (int) $value : null;
-    }
-
-    // Hashed, because the id comes from the owner's settings, the pool from GitHub's answer, and a cache key allows only a narrow set of characters.
-    private function key(string $kind, string $installationId, string $pool): string
-    {
-        return 'github-rate-limit-'.$kind.'-'.hash('sha256', strlen($pool).':'.$pool.$installationId);
     }
 }

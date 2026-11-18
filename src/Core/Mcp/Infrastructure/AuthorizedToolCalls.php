@@ -45,25 +45,6 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
         return $this->inner->handle($reference, $arguments);
     }
 
-    private function name(ElementReference $reference): string
-    {
-        $handler = $reference->handler;
-
-        return match (true) {
-            is_array($handler) => (is_object($handler[0]) ? $handler[0]::class : $handler[0]).'::'.$handler[1],
-            is_string($handler) => $handler,
-            default => 'closure',
-        };
-    }
-
-    /**
-     * @param list<IsGrantedTool> $checks
-     */
-    private function accesses(array $checks): string
-    {
-        return implode(',', array_map(static fn (IsGrantedTool $check): string => is_string($check->attribute) ? $check->attribute : 'expression', $checks));
-    }
-
     /**
      * @return list<IsGrantedTool>
      */
@@ -83,20 +64,15 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
         return array_map(static fn (ReflectionAttribute $attribute): IsGrantedTool => $attribute->newInstance(), $attributes);
     }
 
-    /**
-     * @param Closure|array{0: object|string, 1: string}|string $handler
-     */
-    private function method(Closure|array|string $handler): ?ReflectionMethod
+    private function name(ElementReference $reference): string
     {
-        if (is_array($handler)) {
-            return new ReflectionMethod($handler[0], $handler[1]);
-        }
+        $handler = $reference->handler;
 
-        if (is_string($handler) && class_exists($handler)) {
-            return new ReflectionMethod($handler, '__invoke');
-        }
-
-        return null;
+        return match (true) {
+            is_array($handler) => (is_object($handler[0]) ? $handler[0]::class : $handler[0]).'::'.$handler[1],
+            is_string($handler) => $handler,
+            default => 'closure',
+        };
     }
 
     // A ToolCallException reaches the client as an MCP error result, because the SDK never sends its trace.
@@ -114,5 +90,29 @@ final readonly class AuthorizedToolCalls implements ReferenceHandlerInterface
 
             throw new ToolCallException(sprintf('This tool needs %s, which is not granted.', is_string($check->attribute) ? $check->attribute : 'its expression'));
         }
+    }
+
+    /**
+     * @param list<IsGrantedTool> $checks
+     */
+    private function accesses(array $checks): string
+    {
+        return implode(',', array_map(static fn (IsGrantedTool $check): string => is_string($check->attribute) ? $check->attribute : 'expression', $checks));
+    }
+
+    /**
+     * @param Closure|array{0: object|string, 1: string}|string $handler
+     */
+    private function method(Closure|array|string $handler): ?ReflectionMethod
+    {
+        if (is_array($handler)) {
+            return new ReflectionMethod($handler[0], $handler[1]);
+        }
+
+        if (is_string($handler) && class_exists($handler)) {
+            return new ReflectionMethod($handler, '__invoke');
+        }
+
+        return null;
     }
 }

@@ -76,6 +76,32 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
         return $this->inner->getObject();
     }
 
+    // A CLI that wrote its final result and then failed reported why, so that stays a failure.
+    private function cutOffUnlessFinished(Throwable $failure, string $how): Throwable
+    {
+        return $this->endedWithResult() ? $failure : $this->cutOff($how, $failure);
+    }
+
+    private function cutOff(string $how, ?Throwable $failure): IncompleteStreamException
+    {
+        return new IncompleteStreamException('The Claude Code stream ended before its final result: '.$how.'.', 0, $failure);
+    }
+
+    // The bridge reads only the result's text (upstream/ai-claude-code-platform-structured-output), while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict. A null field holds no answer, so the result's text stays the one read.
+    /**
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, mixed>
+     */
+    private function withStructuredOutput(array $data): array
+    {
+        if (null === ($data[self::STRUCTURED_OUTPUT] ?? null)) {
+            return $data;
+        }
+
+        return [...$data, self::RESULT => json_encode($data[self::STRUCTURED_OUTPUT], JSON_THROW_ON_ERROR)];
+    }
+
     // The CLI's init event lists each MCP server it started with its status, so only `connected` shows the round's server was reached.
     private function connected(ReviewServerAccess $access): bool
     {
@@ -97,30 +123,24 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
         );
     }
 
-    // The bridge reads only the result's text (upstream/ai-claude-code-platform-structured-output), while a CLI given a schema puts the answer held to it in the structured output; encoded whole, so the caller's own parser still refuses one that is not a verdict. A null field holds no answer, so the result's text stays the one read.
-    /**
-     * @param array<string, mixed> $data
-     *
-     * @return array<string, mixed>
-     */
-    private function withStructuredOutput(array $data): array
-    {
-        if (null === ($data[self::STRUCTURED_OUTPUT] ?? null)) {
-            return $data;
-        }
-
-        return [...$data, self::RESULT => json_encode($data[self::STRUCTURED_OUTPUT], JSON_THROW_ON_ERROR)];
-    }
-
-    // A CLI that wrote its final result and then failed reported why, so that stays a failure.
-    private function cutOffUnlessFinished(Throwable $failure, string $how): Throwable
-    {
-        return $this->endedWithResult() ? $failure : $this->cutOff($how, $failure);
-    }
-
     private function endedWithResult(): bool
     {
         return array_any($this->events(), static fn (array $event): bool => 'result' === ($event[self::TYPE] ?? null));
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function events(): array
+    {
+        $process = $this->inner->getObject();
+        if (!$process instanceof Process) {
+            return [];
+        }
+
+        $events = array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput()));
+
+        return array_values(array_filter($events, is_array(...)));
     }
 
     /**
@@ -144,25 +164,5 @@ final readonly class FinishedProcessResult implements RawResultInterface, Review
         $content = is_array($message) ? $message['content'] ?? null : null;
 
         return is_array($content) ? array_values($content) : [];
-    }
-
-    /**
-     * @return list<array<mixed>>
-     */
-    private function events(): array
-    {
-        $process = $this->inner->getObject();
-        if (!$process instanceof Process) {
-            return [];
-        }
-
-        $events = array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput()));
-
-        return array_values(array_filter($events, is_array(...)));
-    }
-
-    private function cutOff(string $how, ?Throwable $failure): IncompleteStreamException
-    {
-        return new IncompleteStreamException('The Claude Code stream ended before its final result: '.$how.'.', 0, $failure);
     }
 }

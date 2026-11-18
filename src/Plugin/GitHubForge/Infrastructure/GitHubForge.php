@@ -135,45 +135,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         $this->app->whenConfigured(fn () => $this->publishAsTheApp($change, $verdict));
     }
 
-    private function publishAsTheApp(ChangeId $change, PublishedVerdict $verdict): void
-    {
-        $address = PullRequestAddress::of($change);
-        $comments = $verdict->comments();
-        if (array_any($comments, $this->secrets->findsSecretIn(...))) {
-            throw ReviewTextHoldsSecret::afterRedaction();
-        }
-
-        // Held from the read of the comments to the last post, because the read decides whether the comment is posted.
-        $this->verdictLocks->whileHeld($verdict->token, fn () => $this->postVerdict($address, $verdict, $comments));
-    }
-
-    /**
-     * @param list<string> $comments
-     */
-    private function postVerdict(PullRequestAddress $address, PublishedVerdict $verdict, array $comments): void
-    {
-        // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
-        $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
-        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
-            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
-        }
-
-        $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [
-            'state' => $verdict->status->value,
-            'context' => self::STATUS_CONTEXT,
-            'description' => $verdict->description,
-        ]);
-    }
-
-    private function isStale(Change $change): bool
-    {
-        try {
-            return $this->hasHeadMoved($change);
-        } catch (ForgeReadFailed|ChangeNotFound $failure) {
-            throw new ForgeWriteFailed('The head could not be read before the post: '.$failure->getMessage(), 0, $failure);
-        }
-    }
-
     /**
      * @return array<mixed>
      */
@@ -182,92 +143,6 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         $body = $this->get($address->pullRequestPath(), self::JSON);
 
         return null === $body ? throw ChangeNotFound::named($id) : $this->decode($body);
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function branchComparison(PullRequestAddress $address, string $baseReference, CommitId $head): array
-    {
-        return $this->compare($address, $this->encodeReference($baseReference), $head->hash) ?? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.');
-    }
-
-    private function patch(PullRequestAddress $address, CommitRange $commits): string
-    {
-        // Read between the two commits, not from the pull request, so a head that moves meanwhile cannot mix two states.
-        $patch = $this->get($address->repositoryPath().'/compare/'.$commits->base->hash.'...'.$commits->head->hash, self::DIFF);
-
-        return $patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.');
-    }
-
-    /**
-     * @param array<mixed> $comparison
-     */
-    private function changedFiles(array $comparison): ChangedFiles
-    {
-        // The files of the comparison that named the merge base, so they belong to the same head as the patch.
-        $entries = $this->completeFilesOf($comparison) ?? throw new ForgeReadFailed('GitHub listed the changed files incompletely (300 files or more, or no file list).');
-
-        return new ChangedFiles(...$this->filesIn($entries));
-    }
-
-    /**
-     * @param array<mixed> $comparison
-     *
-     * @return ?array<mixed>
-     */
-    private function completeFilesOf(array $comparison): ?array
-    {
-        $entries = $comparison['files'] ?? null;
-        if (null !== $entries && !is_array($entries)) {
-            throw new ForgeReadFailed('GitHub answered a comparison without a list of files.');
-        }
-
-        // GitHub lists at most 300 files of a comparison, so a list that long may be cut off.
-        return null === $entries || count($entries) >= self::COMPARED_FILES_CAP ? null : $entries;
-    }
-
-    /**
-     * @param array<mixed> $entries
-     *
-     * @return list<ChangedFile>
-     */
-    private function filesIn(array $entries): array
-    {
-        return array_merge([], ...array_map($this->filesOf(...), array_values($entries)));
-    }
-
-    /**
-     * @return list<ChangedFile>
-     */
-    private function filesOf(mixed $entry): array
-    {
-        $entry = is_array($entry) ? $entry : throw new ForgeReadFailed('GitHub listed a changed file that is not an object.');
-        $path = $this->textAt($entry, 'filename');
-
-        // A rename is a deletion and an addition, as the local forge reports it, so a reviewer sees both paths.
-        return match ($this->textAt($entry, 'status')) {
-            'added', 'copied' => [new ChangedFile($path, FileStatus::Added)],
-            'removed' => [new ChangedFile($path, FileStatus::Deleted)],
-            'modified', 'changed' => [new ChangedFile($path, FileStatus::Modified)],
-            'renamed' => [new ChangedFile($this->textAt($entry, 'previous_filename'), FileStatus::Deleted), new ChangedFile($path, FileStatus::Added)],
-            default => throw new ForgeReadFailed('GitHub listed a changed file with a status this forge does not know.'),
-        };
-    }
-
-    /**
-     * @return ?array<mixed>
-     */
-    private function compare(PullRequestAddress $address, string $base, string $head): ?array
-    {
-        $body = $this->get($address->repositoryPath().'/compare/'.$base.'...'.$head, self::JSON);
-
-        return null === $body ? null : $this->decode($body);
-    }
-
-    private function encodeReference(string $reference): string
-    {
-        return implode('/', array_map(rawurlencode(...), explode('/', $reference)));
     }
 
     /**
@@ -298,15 +173,64 @@ final readonly class GitHubForge implements Forge, ForgeWrites
     /**
      * @return array<mixed>
      */
-    private function decode(string $body): array
+    private function branchComparison(PullRequestAddress $address, string $baseReference, CommitId $head): array
     {
-        try {
-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
+        return $this->compare($address, $this->encodeReference($baseReference), $head->hash) ?? throw new ForgeReadFailed('GitHub has no comparison of the base branch with the head.');
+    }
+
+    private function patch(PullRequestAddress $address, CommitRange $commits): string
+    {
+        // Read between the two commits, not from the pull request, so a head that moves meanwhile cannot mix two states.
+        $patch = $this->get($address->repositoryPath().'/compare/'.$commits->base->hash.'...'.$commits->head->hash, self::DIFF);
+
+        return $patch ?? throw new ForgeReadFailed('GitHub has no diff between the base and the head.');
+    }
+
+    /**
+     * @param array<mixed> $comparison
+     */
+    private function changedFiles(array $comparison): ChangedFiles
+    {
+        // The files of the comparison that named the merge base, so they belong to the same head as the patch.
+        $entries = $this->completeFilesOf($comparison) ?? throw new ForgeReadFailed('GitHub listed the changed files incompletely (300 files or more, or no file list).');
+
+        return new ChangedFiles(...$this->filesIn($entries));
+    }
+
+    /**
+     * @return ?array<mixed>
+     */
+    private function compare(PullRequestAddress $address, string $base, string $head): ?array
+    {
+        $body = $this->get($address->repositoryPath().'/compare/'.$base.'...'.$head, self::JSON);
+
+        return null === $body ? null : $this->decode($body);
+    }
+
+    /**
+     * @param array<mixed> $comparison
+     *
+     * @return ?array<mixed>
+     */
+    private function completeFilesOf(array $comparison): ?array
+    {
+        $entries = $comparison['files'] ?? null;
+        if (null !== $entries && !is_array($entries)) {
+            throw new ForgeReadFailed('GitHub answered a comparison without a list of files.');
         }
 
-        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
+        // GitHub lists at most 300 files of a comparison, so a list that long may be cut off.
+        return null === $entries || count($entries) >= self::COMPARED_FILES_CAP ? null : $entries;
+    }
+
+    /**
+     * @param array<mixed> $entries
+     *
+     * @return list<ChangedFile>
+     */
+    private function filesIn(array $entries): array
+    {
+        return array_merge([], ...array_map($this->filesOf(...), array_values($entries)));
     }
 
     /**
@@ -335,6 +259,15 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         throw new ForgeReadFailed(sprintf('GitHub answered %d to a read.', $status), previous: self::UNAUTHORIZED === $status ? new ForgeCredentialsRefused() : null);
     }
 
+    private function isStale(Change $change): bool
+    {
+        try {
+            return $this->hasHeadMoved($change);
+        } catch (ForgeReadFailed|ChangeNotFound $failure) {
+            throw new ForgeWriteFailed('The head could not be read before the post: '.$failure->getMessage(), 0, $failure);
+        }
+    }
+
     /**
      * @param array<string, string> $payload
      */
@@ -356,16 +289,70 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
     }
 
+    private function publishAsTheApp(ChangeId $change, PublishedVerdict $verdict): void
+    {
+        $address = PullRequestAddress::of($change);
+        $comments = $verdict->comments();
+        if (array_any($comments, $this->secrets->findsSecretIn(...))) {
+            throw ReviewTextHoldsSecret::afterRedaction();
+        }
+
+        // Held from the read of the comments to the last post, because the read decides whether the comment is posted.
+        $this->verdictLocks->whileHeld($verdict->token, fn () => $this->postVerdict($address, $verdict, $comments));
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function decode(string $body): array
+    {
+        try {
+            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
+    }
+
+    private function encodeReference(string $reference): string
+    {
+        return implode('/', array_map(rawurlencode(...), explode('/', $reference)));
+    }
+
+    /**
+     * @return list<ChangedFile>
+     */
+    private function filesOf(mixed $entry): array
+    {
+        $entry = is_array($entry) ? $entry : throw new ForgeReadFailed('GitHub listed a changed file that is not an object.');
+        $path = $this->textAt($entry, 'filename');
+
+        // A rename is a deletion and an addition, as the local forge reports it, so a reviewer sees both paths.
+        return match ($this->textAt($entry, 'status')) {
+            'added', 'copied' => [new ChangedFile($path, FileStatus::Added)],
+            'removed' => [new ChangedFile($path, FileStatus::Deleted)],
+            'modified', 'changed' => [new ChangedFile($path, FileStatus::Modified)],
+            'renamed' => [new ChangedFile($this->textAt($entry, 'previous_filename'), FileStatus::Deleted), new ChangedFile($path, FileStatus::Added)],
+            default => throw new ForgeReadFailed('GitHub listed a changed file with a status this forge does not know.'),
+        };
+    }
+
+    private function bearer(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted $notMinted) {
+            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+            throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+        }
+    }
+
     // Not chained to the client's exception, because its trace holds the request options with the bearer token.
     private function unreachable(string $failure): ForgeReadFailed
     {
         return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
-    // Not chained either, because the trace of a failed post holds the bearer token too.
-    private function unreachableForWrite(string $failure): ForgeWriteFailed
-    {
-        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
     }
 
     private function writeBearer(): string
@@ -379,14 +366,27 @@ final readonly class GitHubForge implements Forge, ForgeWrites
         }
     }
 
-    private function bearer(): string
+    // Not chained either, because the trace of a failed post holds the bearer token too.
+    private function unreachableForWrite(string $failure): ForgeWriteFailed
     {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted $notMinted) {
-            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
-        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+        return new ForgeWriteFailed(sprintf('GitHub could not be reached for a write (%s).', $failure));
+    }
+
+    /**
+     * @param list<string> $comments
+     */
+    private function postVerdict(PullRequestAddress $address, PublishedVerdict $verdict, array $comments): void
+    {
+        // The comment before the status, so a head never shows Intakt's status without the comment that explains it; a retry finds the comment by its marker and posts it once.
+        $marker = sprintf(self::VERDICT_MARKER, $verdict->token->value);
+        foreach ($this->comments->notYetPosted($address, $marker, $comments) as $comment) {
+            $this->post($address->issuePath().'/comments', ['body' => $comment."\n\n".$marker]);
         }
+
+        $this->post($address->repositoryPath().'/statuses/'.$verdict->head->hash, [
+            'state' => $verdict->status->value,
+            'context' => self::STATUS_CONTEXT,
+            'description' => $verdict->description,
+        ]);
     }
 }

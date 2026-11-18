@@ -39,6 +39,23 @@ final readonly class ReproductionRunner
         return $this->outcome($directory, $this->phpunit($directory), static fn (Process $process): bool => $process->isSuccessful());
     }
 
+    private function script(string $script): Process
+    {
+        return new Process([
+            PHP_BINARY,
+            '-d',
+            'auto_prepend_file='.$this->projectDir.'/vendor/autoload.php',
+            $script,
+        ], dirname($script), timeout: $this->timeoutSeconds);
+    }
+
+    private function scriptPassed(Process $process): bool
+    {
+        $lines = explode("\n", trim($process->getOutput()));
+
+        return $process->isSuccessful() && self::SCRIPT_PASSES === trim(array_last($lines));
+    }
+
     /**
      * @param Closure(Process): bool $passed
      */
@@ -57,16 +74,6 @@ final readonly class ReproductionRunner
         );
     }
 
-    private function script(string $script): Process
-    {
-        return new Process([
-            PHP_BINARY,
-            '-d',
-            'auto_prepend_file='.$this->projectDir.'/vendor/autoload.php',
-            $script,
-        ], dirname($script), timeout: $this->timeoutSeconds);
-    }
-
     // Empty, skipped and assertion-free runs fail, because only a test that ran and asserted can show a fix.
     private function phpunit(string $directory): Process
     {
@@ -83,12 +90,5 @@ final readonly class ReproductionRunner
             '--fail-on-risky',
             $directory,
         ], $this->projectDir, timeout: $this->timeoutSeconds);
-    }
-
-    private function scriptPassed(Process $process): bool
-    {
-        $lines = explode("\n", trim($process->getOutput()));
-
-        return $process->isSuccessful() && self::SCRIPT_PASSES === trim(array_last($lines));
     }
 }

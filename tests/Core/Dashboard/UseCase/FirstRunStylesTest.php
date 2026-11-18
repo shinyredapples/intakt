@@ -77,9 +77,43 @@ final class FirstRunStylesTest extends TestCase
         self::assertMatchesRegularExpression('/min-width:\s*0;/', $this->rule('.setup .page-head > div', $this->desktopRules()));
     }
 
+    private function phoneBlock(): string
+    {
+        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
+
+        return implode("\n", $blocks[1]);
+    }
+
+    private function rule(string $selector, string $css): string
+    {
+        preg_match_all('/([^{}]+)\{([^{}]*)\}/', $css, $rules, PREG_SET_ORDER);
+        $found = array_filter($rules, static fn (array $rule): bool => trim($rule[1]) === $selector);
+
+        return [] === $found ? self::fail($selector) : implode(' ', array_column($found, 2));
+    }
+
     private function zIndex(string $selector): int
     {
         return 1 === preg_match('/z-index:\s*(\d+);/', $this->rule($selector, $this->phoneBlock()), $found) ? (int) $found[1] : self::fail($selector);
+    }
+
+    private function file(string $path): string
+    {
+        $text = file_get_contents(__DIR__.'/../../../../'.$path);
+        self::assertIsString($text);
+
+        return $text;
+    }
+
+    private function pixels(string $pattern, string $text): int
+    {
+        return 1 === preg_match($pattern, $text, $found) ? (int) $found[1] : self::fail($pattern);
+    }
+
+    // The rules that hold at every width: a media block's rules would otherwise be read as the page's own.
+    private function desktopRules(): string
+    {
+        return (string) preg_replace('/@media[^{]+\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/', '', $this->sheet());
     }
 
     private function pageLiftsTheContentCap(): bool
@@ -100,49 +134,15 @@ final class FirstRunStylesTest extends TestCase
         return [$steps[0], $steps[1] ?? $steps[0], $steps[2] ?? $steps[0]];
     }
 
-    private function spacing(string $value): int
-    {
-        preg_match_all('/var\(--s(\d+)\)/', $value, $steps);
-
-        return (int) array_sum($steps[1]);
-    }
-
-    private function pixels(string $pattern, string $text): int
-    {
-        return 1 === preg_match($pattern, $text, $found) ? (int) $found[1] : self::fail($pattern);
-    }
-
     private function sheet(): string
     {
         return (string) preg_replace('~/\*.*?\*/~s', '', $this->file('assets/styles/components.css'));
     }
 
-    private function file(string $path): string
+    private function spacing(string $value): int
     {
-        $text = file_get_contents(__DIR__.'/../../../../'.$path);
-        self::assertIsString($text);
+        preg_match_all('/var\(--s(\d+)\)/', $value, $steps);
 
-        return $text;
-    }
-
-    // The rules that hold at every width: a media block's rules would otherwise be read as the page's own.
-    private function desktopRules(): string
-    {
-        return (string) preg_replace('/@media[^{]+\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/', '', $this->sheet());
-    }
-
-    private function phoneBlock(): string
-    {
-        preg_match_all('/@media \(max-width: 760px\) \{(.*?)\n\}/s', $this->sheet(), $blocks);
-
-        return implode("\n", $blocks[1]);
-    }
-
-    private function rule(string $selector, string $css): string
-    {
-        preg_match_all('/([^{}]+)\{([^{}]*)\}/', $css, $rules, PREG_SET_ORDER);
-        $found = array_filter($rules, static fn (array $rule): bool => trim($rule[1]) === $selector);
-
-        return [] === $found ? self::fail($selector) : implode(' ', array_column($found, 2));
+        return (int) array_sum($steps[1]);
     }
 }

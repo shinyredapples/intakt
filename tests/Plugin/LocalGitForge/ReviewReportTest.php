@@ -222,6 +222,11 @@ final class ReviewReportTest extends TestCase
         self::assertNotSame([], $this->schemaErrors(json_encode($document, JSON_THROW_ON_ERROR)));
     }
 
+    private function report(): ReviewReport
+    {
+        return new ReviewReport(StoredSerializerFactory::create());
+    }
+
     private function review(Decision $decision, ?RoundTokens $tokens = null, ?Cost $cost = null): ChangeReview
     {
         $finding = new Finding('F1', Severity::P1, 'src/Feature.php', 3, null, 'Missing check.', FixableBy::Builder, false, null, null);
@@ -232,11 +237,6 @@ final class ReviewReportTest extends TestCase
         $tokens ??= RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20));
 
         return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], $tokens, $cost ?? Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
-    }
-
-    private function report(): ReviewReport
-    {
-        return new ReviewReport(StoredSerializerFactory::create());
     }
 
     /**

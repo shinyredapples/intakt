@@ -79,6 +79,14 @@ final class ScriptedBenchRunTest extends KernelTestCase
     }
 
     /**
+     * @return list<Finding>
+     */
+    private function findingsOn(Expectations $expectations): array
+    {
+        return $this->scripted(array_map(static fn (PlantedDefect $defect): array => [$defect->file, $defect->from], $expectations->defects));
+    }
+
+    /**
      * @param callable(Expectations): RunOutcome $review
      */
     private function reviewBench(callable $review): BenchFigures
@@ -91,26 +99,6 @@ final class ScriptedBenchRunTest extends KernelTestCase
         }
 
         return BenchFigures::from($verdicts);
-    }
-
-    private function filesOf(string $tree): ChangeFiles
-    {
-        $lineCounts = [];
-        foreach ([self::SAMPLE.'/base', $tree] as $directory) {
-            foreach (new Finder()->files()->in($directory) as $file) {
-                $lineCounts[$file->getRelativePathname()] = substr_count(rtrim($file->getContents(), "\n"), "\n") + 1;
-            }
-        }
-
-        return new ChangeFiles($lineCounts);
-    }
-
-    /**
-     * @return list<Finding>
-     */
-    private function findingsOn(Expectations $expectations): array
-    {
-        return $this->scripted(array_map(static fn (PlantedDefect $defect): array => [$defect->file, $defect->from], $expectations->defects));
     }
 
     /**
@@ -128,5 +116,17 @@ final class ScriptedBenchRunTest extends KernelTestCase
         $json = json_encode(['verdict' => [] === $findings ? 'approve' : 'changes', 'findings' => $findings, 'resolved' => [], 'follow_ups' => []], JSON_THROW_ON_ERROR);
 
         return new VerdictParser()->parse(ScriptedReviewer::in(self::getContainer())->answering($json))->findings;
+    }
+
+    private function filesOf(string $tree): ChangeFiles
+    {
+        $lineCounts = [];
+        foreach ([self::SAMPLE.'/base', $tree] as $directory) {
+            foreach (new Finder()->files()->in($directory) as $file) {
+                $lineCounts[$file->getRelativePathname()] = substr_count(rtrim($file->getContents(), "\n"), "\n") + 1;
+            }
+        }
+
+        return new ChangeFiles($lineCounts);
     }
 }

@@ -64,6 +64,16 @@ final readonly class EgressProxy
         $this->engine->removeNetwork($this->networkOf($spec->id));
     }
 
+    private function networkOf(JobId $job): string
+    {
+        return 'intakt-job-'.$job->value;
+    }
+
+    private function proxyOf(JobId $job): string
+    {
+        return 'intakt-egress-'.$job->value;
+    }
+
     // The engine reports a proxy started before Squid listens, and a proxy that stops on a bad config leaves the job without a way out and without a cause, so the job waits for its health check.
     private function awaitHealthy(string $proxy): void
     {
@@ -86,15 +96,5 @@ final readonly class EgressProxy
         if (null !== $reason) {
             throw DockerEngineFailed::proxyNotReady($proxy, $reason);
         }
-    }
-
-    private function networkOf(JobId $job): string
-    {
-        return 'intakt-job-'.$job->value;
-    }
-
-    private function proxyOf(JobId $job): string
-    {
-        return 'intakt-egress-'.$job->value;
     }
 }

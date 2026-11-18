@@ -327,6 +327,11 @@ final class IntakeRulesTest extends TestCase
         self::assertSame([1, 50, 51, 52], $this->numbers(new IntakeRules('intakt')->itemsNeedingHistory($items)));
     }
 
+    private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
+    {
+        return $this->vouched($this->unread($listed)[0], $listed, $history);
+    }
+
     /**
      * @param list<QueuedIssue> $rows
      *
@@ -335,6 +340,26 @@ final class IntakeRulesTest extends TestCase
     private function readyOf(array $rows): array
     {
         return $this->numbers($this->plan($rows)->ready);
+    }
+
+    // Keyed by label, earliest application first, because a label applied again takes its later place.
+
+    /**
+     * @param array<string, string> $applications
+     */
+    private function history(string $lastEditor, array $applications): IssueHistory
+    {
+        return new IssueHistory($lastEditor, array_map(static fn (string $label, string $account): LabelApplication => new LabelApplication($label, $account), array_keys($applications), array_values($applications)));
+    }
+
+    /**
+     * @return list<QueuedIssue>
+     */
+    private function unread(ListedIssue ...$listed): array
+    {
+        $references = new IssueReferences();
+
+        return array_values(array_map(static fn (ListedIssue $item): QueuedIssue => new QueuedIssue(new ItemReading($item, $references->waitsFor($item->body), $references->unreadableWaits($item->body), $references->closedBy($item->body))), $listed));
     }
 
     /**
@@ -356,16 +381,6 @@ final class IntakeRulesTest extends TestCase
         return array_map(static fn (QueuedIssue $row): int => $row->number(), $rows);
     }
 
-    /**
-     * @return list<QueuedIssue>
-     */
-    private function unread(ListedIssue ...$listed): array
-    {
-        $references = new IssueReferences();
-
-        return array_values(array_map(static fn (ListedIssue $item): QueuedIssue => new QueuedIssue(new ItemReading($item, $references->waitsFor($item->body), $references->unreadableWaits($item->body), $references->closedBy($item->body))), $listed));
-    }
-
     // Vouches only the items the rule asks for, as the caller will, because a row vouched regardless hides a pull request the rule forgot to ask for.
     /**
      * @return list<QueuedIssue>
@@ -378,24 +393,9 @@ final class IntakeRulesTest extends TestCase
         return array_map(fn (QueuedIssue $item, ListedIssue $source): QueuedIssue => in_array($item->number(), $asked, true) ? $this->vouched($item, $source) : $item, $items, $listed);
     }
 
-    private function row(ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
-    {
-        return $this->vouched($this->unread($listed)[0], $listed, $history);
-    }
-
     // Without a history the author last edited the item and applied every label, because most cases are about something else.
     private function vouched(QueuedIssue $row, ListedIssue $listed, ?IssueHistory $history = null): QueuedIssue
     {
         return $row->vouchedBy(Vouching::of($listed->author, $history ?? $this->history($listed->author, array_fill_keys($listed->labels, $listed->author)), static fn (string $account): bool => in_array($account, self::WRITERS, true)));
-    }
-
-    // Keyed by label, earliest application first, because a label applied again takes its later place.
-
-    /**
-     * @param array<string, string> $applications
-     */
-    private function history(string $lastEditor, array $applications): IssueHistory
-    {
-        return new IssueHistory($lastEditor, array_map(static fn (string $label, string $account): LabelApplication => new LabelApplication($label, $account), array_keys($applications), array_values($applications)));
     }
 }

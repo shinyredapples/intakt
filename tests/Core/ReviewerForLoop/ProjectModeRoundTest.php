@@ -139,38 +139,9 @@ final class ProjectModeRoundTest extends KernelTestCase
         new Filesystem()->remove($this->file);
     }
 
-    // Read through the container's handler, so the project's mode comes from its config as the merge will read it.
-    private function countedFor(ChangeReview $review): RoundVerdicts
+    private static function compiledContainers(): CompiledContainers
     {
-        $handler = self::getContainer()->get(VerdictsOfRoundHandler::class);
-
-        return $handler(new VerdictsOfRound($review->roundId, SampleIdentity::of(RoundFixture::TASK, $this->panel()), new HeadMove(HeadMoveKind::Unmoved, [])));
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function recordedVerdictModes(): array
-    {
-        $verdicts = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder(), false), static fn (RecordedEvent $recorded): bool => LedgerEventKind::VerdictReceived === $recorded->event->kind);
-
-        return array_values(array_map(static fn (RecordedEvent $recorded): mixed => self::payloadOf($recorded)['mode'] ?? null, $verdicts));
-    }
-
-    /**
-     * @return array<array-key, mixed>
-     */
-    private static function payloadOf(RecordedEvent $recorded): array
-    {
-        $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
-        assert(is_array($payload));
-
-        return $payload;
-    }
-
-    private function modes(): ProjectModes
-    {
-        return self::getContainer()->get(ProjectModes::class);
+        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'project-mode-round');
     }
 
     private function reviewChange(): ReviewChange
@@ -209,6 +180,29 @@ final class ProjectModeRoundTest extends KernelTestCase
         return new ChangeReviewRequest($project, __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
     }
 
+    /**
+     * @return list<mixed>
+     */
+    private function recordedVerdictModes(): array
+    {
+        $verdicts = array_filter(iterator_to_array($this->fixture->ledger()->readInOrder(), false), static fn (RecordedEvent $recorded): bool => LedgerEventKind::VerdictReceived === $recorded->event->kind);
+
+        return array_values(array_map(static fn (RecordedEvent $recorded): mixed => self::payloadOf($recorded)['mode'] ?? null, $verdicts));
+    }
+
+    // Read through the container's handler, so the project's mode comes from its config as the merge will read it.
+    private function countedFor(ChangeReview $review): RoundVerdicts
+    {
+        $handler = self::getContainer()->get(VerdictsOfRoundHandler::class);
+
+        return $handler(new VerdictsOfRound($review->roundId, SampleIdentity::of(RoundFixture::TASK, $this->panel()), new HeadMove(HeadMoveKind::Unmoved, [])));
+    }
+
+    private function modes(): ProjectModes
+    {
+        return self::getContainer()->get(ProjectModes::class);
+    }
+
     private function panel(): Panel
     {
         $members = array_map(
@@ -219,8 +213,14 @@ final class ProjectModeRoundTest extends KernelTestCase
         return new Panel($members, QuorumPolicy::All);
     }
 
-    private static function compiledContainers(): CompiledContainers
+    /**
+     * @return array<array-key, mixed>
+     */
+    private static function payloadOf(RecordedEvent $recorded): array
     {
-        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'project-mode-round');
+        $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
+        assert(is_array($payload));
+
+        return $payload;
     }
 }

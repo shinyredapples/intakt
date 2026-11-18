@@ -832,6 +832,11 @@ final class FirstRunControllerTest extends WebTestCase
         new Filesystem()->remove([$this->file, $this->keptDirectory]);
     }
 
+    private static function compiledContainers(): CompiledContainers
+    {
+        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'first-run');
+    }
+
     /**
      * @param list<string> $keys
      */
@@ -864,10 +869,19 @@ final class FirstRunControllerTest extends WebTestCase
         return $page;
     }
 
-    // Read from the page's form, because the token belongs to the browser's session.
-    private function tokenFromThePage(): string
+    private function keptKeyDirectory(): string
     {
-        return $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('form.start-first-review input[name=_token]')->attr('value') ?? '';
+        $this->keptDirectory = sys_get_temp_dir().'/'.uniqid('first-run-kept-', true);
+
+        return $this->keptDirectory;
+    }
+
+    private function browser(): KernelBrowser
+    {
+        $browser = self::getClient();
+        self::assertInstanceOf(KernelBrowser::class, $browser);
+
+        return $browser;
     }
 
     // Set by the next page, because the page's own services take the bus when they are built.
@@ -879,24 +893,10 @@ final class FirstRunControllerTest extends WebTestCase
         return $commands;
     }
 
-    private function browser(): KernelBrowser
+    // Read from the page's form, because the token belongs to the browser's session.
+    private function tokenFromThePage(): string
     {
-        $browser = self::getClient();
-        self::assertInstanceOf(KernelBrowser::class, $browser);
-
-        return $browser;
-    }
-
-    private static function compiledContainers(): CompiledContainers
-    {
-        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'first-run');
-    }
-
-    private function keptKeyDirectory(): string
-    {
-        $this->keptDirectory = sys_get_temp_dir().'/'.uniqid('first-run-kept-', true);
-
-        return $this->keptDirectory;
+        return $this->firstRunPage(self::PROJECTS, ['ANTHROPIC_API_KEY'])->filter('form.start-first-review input[name=_token]')->attr('value') ?? '';
     }
 
     private function unsetVariable(string $name): void

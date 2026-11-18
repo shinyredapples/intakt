@@ -52,6 +52,41 @@ final readonly class BenchReport
         return [] === $lines ? ['  none'] : $lines;
     }
 
+    /**
+     * @return list<string>
+     */
+    private function changeFigures(RepeatedChange $change): array
+    {
+        $lines = [];
+        foreach ($change->runs as $index => $run) {
+            $lines[] = sprintf('%s run %d of %d: decision %s, measured %d act list findings', $change->change, $index + 1, count($change->runs), $run->decision->value, count($run->actList));
+            array_push($lines, ...array_map($this->reviewerLine(...), $run->reviewers));
+        }
+        $lines[] = sprintf('%s: %s, measured over %d compared of %d runs', $change->change, $this->agreementOf($change), count($change->comparedRuns()), count($change->runs));
+
+        return $lines;
+    }
+
+    /**
+     * @param list<RepeatedChange> $changes
+     *
+     * @return list<string>
+     */
+    private function totals(array $changes): array
+    {
+        $results = $this->everyReviewerResult($changes);
+        $byReviewer = [];
+        foreach ($results as $reviewer) {
+            $byReviewer[$this->totalsName($reviewer, $results)][] = $reviewer;
+        }
+
+        return array_map(
+            fn (string $name, array $results): string => $this->totalLine('  '.$name, $results),
+            array_keys($byReviewer),
+            $byReviewer,
+        );
+    }
+
     // A harness failure is one line with its reason, because its misses all share that cause.
     /**
      * @return list<string>
@@ -75,30 +110,6 @@ final readonly class BenchReport
                 $verdict->falseAlarms,
             ),
         ];
-    }
-
-    private function placeOf(Finding $finding): string
-    {
-        return match (true) {
-            null === $finding->file => 'without a place',
-            null === $finding->line => 'at '.$finding->file,
-            default => 'at '.$finding->file.':'.$finding->line,
-        };
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function changeFigures(RepeatedChange $change): array
-    {
-        $lines = [];
-        foreach ($change->runs as $index => $run) {
-            $lines[] = sprintf('%s run %d of %d: decision %s, measured %d act list findings', $change->change, $index + 1, count($change->runs), $run->decision->value, count($run->actList));
-            array_push($lines, ...array_map($this->reviewerLine(...), $run->reviewers));
-        }
-        $lines[] = sprintf('%s: %s, measured over %d compared of %d runs', $change->change, $this->agreementOf($change), count($change->comparedRuns()), count($change->runs));
-
-        return $lines;
     }
 
     private function reviewerLine(BenchReviewerResult $reviewer): string
@@ -131,21 +142,13 @@ final readonly class BenchReport
     /**
      * @param list<RepeatedChange> $changes
      *
-     * @return list<string>
+     * @return list<BenchReviewerResult>
      */
-    private function totals(array $changes): array
+    private function everyReviewerResult(array $changes): array
     {
-        $results = $this->everyReviewerResult($changes);
-        $byReviewer = [];
-        foreach ($results as $reviewer) {
-            $byReviewer[$this->totalsName($reviewer, $results)][] = $reviewer;
-        }
+        $runs = array_merge(...array_map(static fn (RepeatedChange $change): array => $change->runs, $changes));
 
-        return array_map(
-            fn (string $name, array $results): string => $this->totalLine('  '.$name, $results),
-            array_keys($byReviewer),
-            $byReviewer,
-        );
+        return array_merge(...array_map(static fn (BenchReview $run): array => $run->reviewers, $runs));
     }
 
     // A reviewer that failed before any call recorded a model joins the one model line of its role and tier, so its harness failure is not apart from the rest.
@@ -169,18 +172,6 @@ final readonly class BenchReport
     }
 
     /**
-     * @param list<RepeatedChange> $changes
-     *
-     * @return list<BenchReviewerResult>
-     */
-    private function everyReviewerResult(array $changes): array
-    {
-        $runs = array_merge(...array_map(static fn (RepeatedChange $change): array => $change->runs, $changes));
-
-        return array_merge(...array_map(static fn (BenchReview $run): array => $run->reviewers, $runs));
-    }
-
-    /**
      * @param non-empty-list<BenchReviewerResult> $results
      */
     private function totalLine(string $reviewer, array $results): string
@@ -201,5 +192,14 @@ final readonly class BenchReport
             $sum(static fn (BenchReviewerResult $result): int => $result->tokens->completion),
             $sum(static fn (BenchReviewerResult $result): int => $result->tokens->calls),
         );
+    }
+
+    private function placeOf(Finding $finding): string
+    {
+        return match (true) {
+            null === $finding->file => 'without a place',
+            null === $finding->line => 'at '.$finding->file,
+            default => 'at '.$finding->file.':'.$finding->line,
+        };
     }
 }

@@ -37,6 +37,11 @@ enum ReviewTool: string
         };
     }
 
+    private static function textOf(mixed $argument): ?string
+    {
+        return is_string($argument) && '' !== trim($argument) ? trim($argument) : null;
+    }
+
     // A trailing slash is trimmed because a model writes the root as `./` as often as `.`.
     private static function isRoot(?string $path): bool
     {
@@ -48,10 +53,5 @@ enum ReviewTool: string
         $searched = null === $text ? 'searched the files' : sprintf('searched for "%s"', $text);
 
         return self::isRoot($path) ? $searched : $searched.' in '.$path;
-    }
-
-    private static function textOf(mixed $argument): ?string
-    {
-        return is_string($argument) && '' !== trim($argument) ? trim($argument) : null;
     }
 }

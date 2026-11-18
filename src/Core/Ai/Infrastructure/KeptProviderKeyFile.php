@@ -102,6 +102,11 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
         throw new KeptProviderKeyNotWritten();
     }
 
+    private function file(): string
+    {
+        return $this->directory.'/'.self::FILE;
+    }
+
     private function parsed(#[SensitiveParameter] string $json): ProviderKey
     {
         try {
@@ -135,10 +140,5 @@ final readonly class KeptProviderKeyFile implements KeptProviderKeys
         }
 
         return $providerKey;
-    }
-
-    private function file(): string
-    {
-        return $this->directory.'/'.self::FILE;
     }
 }

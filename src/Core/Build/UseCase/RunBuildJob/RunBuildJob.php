@@ -128,16 +128,6 @@ final readonly class RunBuildJob
         return $file;
     }
 
-    private function ranJob(JobSpec $spec): ?JobResult
-    {
-        try {
-            return $this->jobs->run($spec);
-        } catch (JobOutputRefused) {
-            // No result, because the job wrote what the runner refuses to read.
-            return null;
-        }
-    }
-
     /**
      * @param list<JobInput> $inputs
      */
@@ -153,10 +143,14 @@ final readonly class RunBuildJob
         );
     }
 
-    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
-    private function idOf(BuildJob $job): JobId
+    private function ranJob(JobSpec $spec): ?JobResult
     {
-        return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
+        try {
+            return $this->jobs->run($spec);
+        } catch (JobOutputRefused) {
+            // No result, because the job wrote what the runner refuses to read.
+            return null;
+        }
     }
 
     private function outcomeOf(?JobResult $result): BuildJobOutcome
@@ -175,6 +169,12 @@ final readonly class RunBuildJob
                 ? new BuildJobOutcome(BuildVerdict::NoResult, log: $log)
                 : $this->handedBack($result->output, $log),
         };
+    }
+
+    // Length-prefixed, so no project and branch pair names another pair's job; one id per pair, so the runner refuses a second build of a branch while one runs.
+    private function idOf(BuildJob $job): JobId
+    {
+        return new JobId('build-'.substr(hash('sha256', strlen($job->project).':'.$job->project.$job->branch), 0, 40));
     }
 
     private function handedBack(JobOutput $output, string $log): BuildJobOutcome

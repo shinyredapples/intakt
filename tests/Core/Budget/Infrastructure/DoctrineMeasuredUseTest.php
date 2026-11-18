@@ -199,19 +199,6 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         $this->measured = new DoctrineMeasuredUse($entities, $this->clock);
     }
 
-    private function record(WindowReading $reading): void
-    {
-        self::assertSame(ReadingOutcome::Recorded, $this->measured->record($reading));
-    }
-
-    // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
-    private function worker(EventManager $events): DoctrineMeasuredUse
-    {
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
-
-        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock);
-    }
-
     private function claude(string $name): Account
     {
         return new Account(Provider::ClaudeCode, $name);
@@ -226,5 +213,18 @@ final class DoctrineMeasuredUseTest extends KernelTestCase
         };
 
         return new WindowReading($account, $window, new Usage($usedPercent, $resetsAt));
+    }
+
+    private function record(WindowReading $reading): void
+    {
+        self::assertSame(ReadingOutcome::Recorded, $this->measured->record($reading));
+    }
+
+    // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
+    private function worker(EventManager $events): DoctrineMeasuredUse
+    {
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
+
+        return new DoctrineMeasuredUse(new EntityManager($connection, $this->entities->getConfiguration(), $events), $this->clock);
     }
 }

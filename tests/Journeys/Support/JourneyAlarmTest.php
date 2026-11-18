@@ -352,6 +352,79 @@ final class JourneyAlarmTest extends TestCase
     }
 
     /**
+     * @return list<array{arguments: list<string>, input: string}>
+     */
+    private function callsOf(string $action): array
+    {
+        return array_values(array_filter($this->calls(), static fn (array $call): bool => $action === ('api' === $call['arguments'][0] ? 'api' : $call['arguments'][1] ?? null)));
+    }
+
+    private function raise(?string $output = null, ?string $run = null): string
+    {
+        $github = new GitHubIssues(self::REPOSITORY, $this->fakeGh(...));
+        $alarm = new JourneyAlarm($github, new LockFactory(new InMemoryStore()));
+
+        return $alarm->raise(JourneyRun::fromOutput($output ?? $this->fixtureOutput()), null === $run ? null : Uri::parse($run));
+    }
+
+    private function fixtureOutput(): string
+    {
+        return (string) file_get_contents($this->fixture());
+    }
+
+    /**
+     * @return list<array{arguments: list<string>, input: string}>
+     */
+    private function recordedCallsOf(string $action): array
+    {
+        return array_values(array_filter($this->recorded, static fn (array $call): bool => $action === ('api' === $call['arguments'][0] ? 'api' : $call['arguments'][1] ?? null)));
+    }
+
+    /**
+     * @param array{int, string} ...$issues
+     *
+     * @return list<array{number: int, body: string}>
+     */
+    private function issues(array ...$issues): array
+    {
+        return array_map(static fn (array $issue): array => ['number' => $issue[0], 'body' => $issue[1]], array_values($issues));
+    }
+
+    /**
+     * @return list<array{arguments: list<string>, input: string}>
+     */
+    private function calls(): array
+    {
+        $file = $this->directory.'/calls.jsonl';
+
+        if (!is_file($file)) {
+            return [];
+        }
+
+        return array_map($this->callFrom(...), (array) file($file, FILE_IGNORE_NEW_LINES));
+    }
+
+    private function openIssues(string $json): void
+    {
+        new Filesystem()->dumpFile($this->directory.'/issues.json', $json);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function fakeGh(array $arguments, string $input): string
+    {
+        $this->recorded[] = ['arguments' => $arguments, 'input' => $input];
+
+        return match ('api' === $arguments[0] ? 'api' : $arguments[1]) {
+            'api' => json_encode(array_chunk($this->issues, 100), JSON_THROW_ON_ERROR),
+            'create' => $this->fakeCreate($input),
+            'edit' => $this->fakeEdit((int) $arguments[2], $input),
+            default => $this->fakeClose((int) $arguments[2]),
+        };
+    }
+
+    /**
      * @param list<string>                $arguments
      * @param array<string, string|false> $environment
      */
@@ -376,47 +449,20 @@ final class JourneyAlarmTest extends TestCase
         return $process;
     }
 
-    private function openIssues(string $json): void
-    {
-        new Filesystem()->dumpFile($this->directory.'/issues.json', $json);
-    }
-
     /**
-     * @param array{int, string} ...$issues
-     *
-     * @return list<array{number: int, body: string}>
+     * @return array{arguments: list<string>, input: string}
      */
-    private function issues(array ...$issues): array
+    private function callFrom(mixed $line): array
     {
-        return array_map(static fn (array $issue): array => ['number' => $issue[0], 'body' => $issue[1]], array_values($issues));
-    }
+        self::assertIsString($line);
+        $call = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($call);
+        $arguments = $call['arguments'] ?? null;
+        $input = $call['input'] ?? null;
+        self::assertIsArray($arguments);
+        self::assertIsString($input);
 
-    private function fixtureOutput(): string
-    {
-        return (string) file_get_contents($this->fixture());
-    }
-
-    private function raise(?string $output = null, ?string $run = null): string
-    {
-        $github = new GitHubIssues(self::REPOSITORY, $this->fakeGh(...));
-        $alarm = new JourneyAlarm($github, new LockFactory(new InMemoryStore()));
-
-        return $alarm->raise(JourneyRun::fromOutput($output ?? $this->fixtureOutput()), null === $run ? null : Uri::parse($run));
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function fakeGh(array $arguments, string $input): string
-    {
-        $this->recorded[] = ['arguments' => $arguments, 'input' => $input];
-
-        return match ('api' === $arguments[0] ? 'api' : $arguments[1]) {
-            'api' => json_encode(array_chunk($this->issues, 100), JSON_THROW_ON_ERROR),
-            'create' => $this->fakeCreate($input),
-            'edit' => $this->fakeEdit((int) $arguments[2], $input),
-            default => $this->fakeClose((int) $arguments[2]),
-        };
+        return ['arguments' => array_values(array_map(static fn (mixed $argument): string => is_string($argument) ? $argument : self::fail('a recorded argument is no string'), $arguments)), 'input' => $input];
     }
 
     private function fakeCreate(string $body): string
@@ -444,51 +490,5 @@ final class JourneyAlarmTest extends TestCase
         $this->issues = array_values(array_filter($this->issues, static fn (array $issue): bool => $issue['number'] !== $number));
 
         return '';
-    }
-
-    /**
-     * @return list<array{arguments: list<string>, input: string}>
-     */
-    private function recordedCallsOf(string $action): array
-    {
-        return array_values(array_filter($this->recorded, static fn (array $call): bool => $action === ('api' === $call['arguments'][0] ? 'api' : $call['arguments'][1] ?? null)));
-    }
-
-    /**
-     * @return list<array{arguments: list<string>, input: string}>
-     */
-    private function callsOf(string $action): array
-    {
-        return array_values(array_filter($this->calls(), static fn (array $call): bool => $action === ('api' === $call['arguments'][0] ? 'api' : $call['arguments'][1] ?? null)));
-    }
-
-    /**
-     * @return list<array{arguments: list<string>, input: string}>
-     */
-    private function calls(): array
-    {
-        $file = $this->directory.'/calls.jsonl';
-
-        if (!is_file($file)) {
-            return [];
-        }
-
-        return array_map($this->callFrom(...), (array) file($file, FILE_IGNORE_NEW_LINES));
-    }
-
-    /**
-     * @return array{arguments: list<string>, input: string}
-     */
-    private function callFrom(mixed $line): array
-    {
-        self::assertIsString($line);
-        $call = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($call);
-        $arguments = $call['arguments'] ?? null;
-        $input = $call['input'] ?? null;
-        self::assertIsArray($arguments);
-        self::assertIsString($input);
-
-        return ['arguments' => array_values(array_map(static fn (mixed $argument): string => is_string($argument) ? $argument : self::fail('a recorded argument is no string'), $arguments)), 'input' => $input];
     }
 }

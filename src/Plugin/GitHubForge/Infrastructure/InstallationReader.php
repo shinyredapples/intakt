@@ -84,6 +84,32 @@ final readonly class InstallationReader
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function options(#[SensitiveParameter] string $credential): array
+    {
+        return ['auth_bearer' => $credential, 'headers' => self::HEADERS];
+    }
+
+    /**
+     * @param Closure(): ResponseInterface $request
+     *
+     * @return array<mixed>
+     */
+    private function answerTo(Closure $request): array
+    {
+        try {
+            $response = $request();
+            $status = $response->getStatusCode();
+            $body = 200 === $status ? $response->toArray(false) : [];
+        } catch (ExceptionInterface $failure) {
+            throw InstallationNotReadBack::becauseGitHubWasUnreachable($failure::class);
+        }
+
+        return 200 === $status ? $body : throw InstallationNotReadBack::becauseGitHubRefused($status);
+    }
+
+    /**
      * @return array{names: list<string>, total: int}
      */
     private function page(int $page, #[SensitiveParameter] string $token): array
@@ -138,31 +164,5 @@ final readonly class InstallationReader
         }
 
         return $name;
-    }
-
-    /**
-     * @param Closure(): ResponseInterface $request
-     *
-     * @return array<mixed>
-     */
-    private function answerTo(Closure $request): array
-    {
-        try {
-            $response = $request();
-            $status = $response->getStatusCode();
-            $body = 200 === $status ? $response->toArray(false) : [];
-        } catch (ExceptionInterface $failure) {
-            throw InstallationNotReadBack::becauseGitHubWasUnreachable($failure::class);
-        }
-
-        return 200 === $status ? $body : throw InstallationNotReadBack::becauseGitHubRefused($status);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function options(#[SensitiveParameter] string $credential): array
-    {
-        return ['auth_bearer' => $credential, 'headers' => self::HEADERS];
     }
 }

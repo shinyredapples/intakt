@@ -308,11 +308,43 @@ final class SymfonyAiKeyCheckTest extends TestCase
     }
 
     /**
+     * @param array<string, mixed> $answer
+     *
+     * @return list<array{string, string, array<mixed>}>
+     */
+    private function callsMadeFor(string $key, array $answer): array
+    {
+        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
+        $calls = new ArrayObject();
+
+        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
+
+        return array_values($calls->getArrayCopy());
+    }
+
+    /**
      * @param array<string, mixed> $body
      */
     private static function answer(int $status, array $body): MockResponse
     {
         return new MockResponse(json_encode($body, JSON_THROW_ON_ERROR), ['http_code' => $status, 'response_headers' => ['content-type: application/json']]);
+    }
+
+    /**
+     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
+     * @param Closure(array<mixed>): MockResponse                   $answer
+     */
+    private function http(ArrayObject $calls, Closure $answer): MockHttpClient
+    {
+        return new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
+            $body = $options['body'] ?? null;
+            self::assertIsString($body);
+            $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+            self::assertIsArray($request);
+            $calls->append([$method, $url, $request]);
+
+            return $answer($request);
+        });
     }
 
     // The model is "light-<project>", so a test sees which project's light tier gave it; by default one project per provider, so every key has one.
@@ -327,21 +359,6 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $tiers->method('configured')->willReturnCallback(static fn (string $project): ResolvedModel => new ResolvedModel($lightTiers[$project], 'light-'.$project));
 
         return $tiers;
-    }
-
-    /**
-     * @param array<string, mixed> $answer
-     *
-     * @return list<array{string, string, array<mixed>}>
-     */
-    private function callsMadeFor(string $key, array $answer): array
-    {
-        /** @var ArrayObject<int, array{string, string, array<mixed>}> $calls */
-        $calls = new ArrayObject();
-
-        $this->check($key, $calls, static fn (): MockResponse => self::answer(200, $answer));
-
-        return array_values($calls->getArrayCopy());
     }
 
     private function modelAsked(SymfonyAiProviderCatalog $providers, TierResolver $tiers): mixed
@@ -364,22 +381,5 @@ final class SymfonyAiKeyCheckTest extends TestCase
         $providers = new SymfonyAiProviderCatalog();
 
         return new SymfonyAiKeyCheck($this->http($calls, $answer), $providers, $this->tiers(), $this->log)->check(ProviderKey::recognise($key, $providers));
-    }
-
-    /**
-     * @param ArrayObject<int, array{string, string, array<mixed>}> $calls
-     * @param Closure(array<mixed>): MockResponse                   $answer
-     */
-    private function http(ArrayObject $calls, Closure $answer): MockHttpClient
-    {
-        return new MockHttpClient(static function (string $method, string $url, array $options) use ($calls, $answer): MockResponse {
-            $body = $options['body'] ?? null;
-            self::assertIsString($body);
-            $request = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-            self::assertIsArray($request);
-            $calls->append([$method, $url, $request]);
-
-            return $answer($request);
-        });
     }
 }

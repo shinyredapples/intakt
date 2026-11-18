@@ -153,14 +153,6 @@ final class PlayDemoRunHandlerTest extends TestCase
         new Filesystem()->remove($this->directory);
     }
 
-    private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
-    {
-        $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
-        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
-
-        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
-    }
-
     private function recordingFile(): string
     {
         $file = $this->directory.'/recording.json';
@@ -174,14 +166,12 @@ final class PlayDemoRunHandlerTest extends TestCase
         return $file;
     }
 
-    private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
+    private function handler(string $recording, string $composeService = 'intakt'): PlayDemoRunHandler
     {
-        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a'.$secondsAfterStart, $kind, $payload, new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
-    }
+        $marks = new ReplayMarks(new ReplayMarkBus([CreateDemoProjectCommand::NAME]));
+        $replays = new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory(new InMemoryStore()), $marks, TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $marks, $composeService)));
 
-    private function format(): RecordingFormat
-    {
-        return new RecordingFormat(StoredSerializerFactory::create());
+        return new PlayDemoRunHandler($replays, $this->format(), new Filesystem(), new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')), $recording, $composeService);
     }
 
     /**
@@ -197,5 +187,15 @@ final class PlayDemoRunHandlerTest extends TestCase
         self::assertSame(1, preg_match('/data-stage="([a-z-]+)"/', $stream, $match));
 
         return TourStage::from($match[1] ?? self::fail('The stream names no stage.'));
+    }
+
+    private function format(): RecordingFormat
+    {
+        return new RecordingFormat(StoredSerializerFactory::create());
+    }
+
+    private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
+    {
+        return new RecordedLedgerEvent('0196a000-0000-7000-8000-0000000000a'.$secondsAfterStart, $kind, $payload, new DateTimeImmutable('2026-11-16T08:00:00+00:00')->modify(sprintf('+%d seconds', $secondsAfterStart)));
     }
 }

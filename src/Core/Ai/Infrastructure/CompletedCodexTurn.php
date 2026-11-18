@@ -76,22 +76,21 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     }
 
     /**
-     * @param array<mixed> $item
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException
      */
-    private function readOf(array $item, ReviewServerAccess $access): bool
+    // The bridge throws on a non-zero exit before it reads the output, so the usage of a turn the CLI completed and then failed on would be lost though the account spent it; an error message keeps the conversion failing the reviewer while the extractor reads the usage.
+    private function failedWithReportedUsage(RuntimeException $processFailed): array
     {
-        return 'mcp_tool_call' === ($item[self::TYPE] ?? null)
-            && $access->name === ($item['server'] ?? null)
-            && in_array($item['tool'] ?? null, $access->tools, true)
-            && 'completed' === ($item['status'] ?? null)
-            && null === ($item['error'] ?? null)
-            && $this->answered($item['result'] ?? null);
-    }
+        $usage = $this->reportedUsage();
+        if (null === $usage) {
+            $this->failForAnAccountFailure();
 
-    // A tool refusal (a judged round, a path outside the change) still completes the call, so only a result that is not marked as an error showed the reviewer anything.
-    private function answered(mixed $result): bool
-    {
-        return is_array($result) && false === ($result['isError'] ?? false);
+            throw $processFailed;
+        }
+
+        return [self::TYPE => 'error', self::MESSAGE => $processFailed->getMessage(), self::USAGE => $usage];
     }
 
     /**
@@ -127,49 +126,31 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     }
 
     /**
-     * @return array<string, mixed>
-     *
-     * @throws RuntimeException
+     * @return list<array<mixed>>
      */
-    // The bridge throws on a non-zero exit before it reads the output, so the usage of a turn the CLI completed and then failed on would be lost though the account spent it; an error message keeps the conversion failing the reviewer while the extractor reads the usage.
-    private function failedWithReportedUsage(RuntimeException $processFailed): array
+    private function events(): array
     {
-        $usage = $this->reportedUsage();
-        if (null === $usage) {
-            $this->failForAnAccountFailure();
-
-            throw $processFailed;
+        $process = $this->inner->getObject();
+        if (!$process instanceof Process) {
+            return [];
         }
 
-        return [self::TYPE => 'error', self::MESSAGE => $processFailed->getMessage(), self::USAGE => $usage];
+        $events = array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput()));
+
+        return array_values(array_filter($events, is_array(...)));
     }
 
     /**
-     * @throws RuntimeException
+     * @param array<mixed> $item
      */
-    // Asked only of a turn that never completed, and read only from the CLI's own error events, never from an agent message, so a reviewer's text cannot take an account out.
-    private function failForAnAccountFailure(): void
+    private function readOf(array $item, ReviewServerAccess $access): bool
     {
-        foreach ($this->events() as $event) {
-            $failure = CodexAccountFailure::of($this->errorMessage($event));
-            if ($failure instanceof CodexAccountFailure) {
-                throw $failure->exception();
-            }
-        }
-    }
-
-    /**
-     * @param array<mixed> $event
-     */
-    private function errorMessage(array $event): string
-    {
-        $message = match ($event[self::TYPE] ?? null) {
-            'error' => $event[self::MESSAGE] ?? null,
-            'turn.failed' => is_array($event['error'] ?? null) ? $event['error'][self::MESSAGE] ?? null : null,
-            default => null,
-        };
-
-        return is_string($message) ? $message : '';
+        return 'mcp_tool_call' === ($item[self::TYPE] ?? null)
+            && $access->name === ($item['server'] ?? null)
+            && in_array($item['tool'] ?? null, $access->tools, true)
+            && 'completed' === ($item['status'] ?? null)
+            && null === ($item['error'] ?? null)
+            && $this->answered($item['result'] ?? null);
     }
 
     /**
@@ -188,17 +169,36 @@ final readonly class CompletedCodexTurn implements RawResultInterface, ReviewSer
     }
 
     /**
-     * @return list<array<mixed>>
+     * @throws RuntimeException
      */
-    private function events(): array
+    // Asked only of a turn that never completed, and read only from the CLI's own error events, never from an agent message, so a reviewer's text cannot take an account out.
+    private function failForAnAccountFailure(): void
     {
-        $process = $this->inner->getObject();
-        if (!$process instanceof Process) {
-            return [];
+        foreach ($this->events() as $event) {
+            $failure = CodexAccountFailure::of($this->errorMessage($event));
+            if ($failure instanceof CodexAccountFailure) {
+                throw $failure->exception();
+            }
         }
+    }
 
-        $events = array_map(static fn (string $line): mixed => json_decode($line, true), explode(PHP_EOL, $process->getOutput()));
+    // A tool refusal (a judged round, a path outside the change) still completes the call, so only a result that is not marked as an error showed the reviewer anything.
+    private function answered(mixed $result): bool
+    {
+        return is_array($result) && false === ($result['isError'] ?? false);
+    }
 
-        return array_values(array_filter($events, is_array(...)));
+    /**
+     * @param array<mixed> $event
+     */
+    private function errorMessage(array $event): string
+    {
+        $message = match ($event[self::TYPE] ?? null) {
+            'error' => $event[self::MESSAGE] ?? null,
+            'turn.failed' => is_array($event['error'] ?? null) ? $event['error'][self::MESSAGE] ?? null : null,
+            default => null,
+        };
+
+        return is_string($message) ? $message : '';
     }
 }

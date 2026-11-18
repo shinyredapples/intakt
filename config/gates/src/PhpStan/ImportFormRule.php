@@ -48,13 +48,34 @@ final readonly class ImportFormRule implements Rule
     /**
      * @param array<Node> $nodes
      *
-     * @return list<array<Node>>
+     * @return list<Import>
      */
-    private function namespaceScopes(array $nodes): array
+    private function importsIn(array $nodes): array
     {
-        $namespaces = array_values(array_filter($nodes, static fn (Node $node): bool => $node instanceof Namespace_));
+        $finder = new NodeFinder();
 
-        return [] === $namespaces ? [$nodes] : array_map(static fn (Namespace_ $namespace): array => $namespace->stmts, $namespaces);
+        return [
+            ...array_merge(...array_map($this->useImports(...), $finder->findInstanceOf($nodes, Use_::class))),
+            ...array_merge(...array_map($this->groupImports(...), $finder->findInstanceOf($nodes, GroupUse::class))),
+        ];
+    }
+
+    /**
+     * @param list<Import> $imports
+     *
+     * @return list<IdentifierRuleError>
+     */
+    private function functionAndConstantImports(array $imports): array
+    {
+        $functionsAndConstants = array_filter($imports, static fn (array $import): bool => Use_::TYPE_NORMAL !== $import['type']);
+
+        return array_values(array_map(
+            static fn (array $import): IdentifierRuleError => RuleErrorBuilder::message("Import of the function or constant {$import['name']}: write global functions and constants plain (count(), PHP_EOL), without a leading backslash or a use function or use const.")
+                ->identifier('intakt.functionOrConstantImport')
+                ->line($import['line'])
+                ->build(),
+            $functionsAndConstants,
+        ));
     }
 
     /**
@@ -70,16 +91,13 @@ final readonly class ImportFormRule implements Rule
     /**
      * @param array<Node> $nodes
      *
-     * @return list<Import>
+     * @return list<array<Node>>
      */
-    private function importsIn(array $nodes): array
+    private function namespaceScopes(array $nodes): array
     {
-        $finder = new NodeFinder();
+        $namespaces = array_values(array_filter($nodes, static fn (Node $node): bool => $node instanceof Namespace_));
 
-        return [
-            ...array_merge(...array_map($this->useImports(...), $finder->findInstanceOf($nodes, Use_::class))),
-            ...array_merge(...array_map($this->groupImports(...), $finder->findInstanceOf($nodes, GroupUse::class))),
-        ];
+        return [] === $namespaces ? [$nodes] : array_map(static fn (Namespace_ $namespace): array => $namespace->stmts, $namespaces);
     }
 
     /**
@@ -102,24 +120,6 @@ final readonly class ImportFormRule implements Rule
             static fn (UseItem $item): array => ['name' => $group->prefix->toString().'\\'.$item->name->toString(), 'alias' => $item->alias?->toString(), 'type' => Use_::TYPE_UNKNOWN === $group->type ? $item->type : $group->type, 'line' => $item->getStartLine()],
             array_values($group->uses),
         );
-    }
-
-    /**
-     * @param list<Import> $imports
-     *
-     * @return list<IdentifierRuleError>
-     */
-    private function functionAndConstantImports(array $imports): array
-    {
-        $functionsAndConstants = array_filter($imports, static fn (array $import): bool => Use_::TYPE_NORMAL !== $import['type']);
-
-        return array_values(array_map(
-            static fn (array $import): IdentifierRuleError => RuleErrorBuilder::message("Import of the function or constant {$import['name']}: write global functions and constants plain (count(), PHP_EOL), without a leading backslash or a use function or use const.")
-                ->identifier('intakt.functionOrConstantImport')
-                ->line($import['line'])
-                ->build(),
-            $functionsAndConstants,
-        ));
     }
 
     /**

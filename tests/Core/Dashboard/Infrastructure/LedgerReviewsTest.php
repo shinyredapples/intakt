@@ -308,14 +308,9 @@ final class LedgerReviewsTest extends TestCase
         $this->ledger = new DashboardLedger();
     }
 
-    /**
-     * @return list<ReviewSummary>
-     */
-    private function listWith(RoundCosts $costs, MessageBusInterface $queries, RoundEndings $endings): array
+    private function event(LedgerEventKind $kind, string $payload): RecordedEvent
     {
-        $pages = new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
-
-        return new LedgerReviews($pages)->newestFirst();
+        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 
     /**
@@ -329,6 +324,12 @@ final class LedgerReviewsTest extends TestCase
         return $this->listOf($ledger);
     }
 
+    // Serialized as the writers do, so the reader is shown the row it meets in production.
+    private function row(LedgerEventKind $kind, object $payload): RecordedEvent
+    {
+        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, 'json'));
+    }
+
     /**
      * @return list<ReviewSummary>
      */
@@ -337,14 +338,13 @@ final class LedgerReviewsTest extends TestCase
         return ListedReviews::on($ledger)->newestFirst();
     }
 
-    // Serialized as the writers do, so the reader is shown the row it meets in production.
-    private function row(LedgerEventKind $kind, object $payload): RecordedEvent
+    /**
+     * @return list<ReviewSummary>
+     */
+    private function listWith(RoundCosts $costs, MessageBusInterface $queries, RoundEndings $endings): array
     {
-        return $this->event($kind, StoredSerializerFactory::create()->serialize($payload, 'json'));
-    }
+        $pages = new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), $endings, new ReplayMarks($queries));
 
-    private function event(LedgerEventKind $kind, string $payload): RecordedEvent
-    {
-        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
+        return new LedgerReviews($pages)->newestFirst();
     }
 }

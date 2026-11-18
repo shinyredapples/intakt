@@ -60,11 +60,6 @@ enum ReviewOutcome: string
         };
     }
 
-    private static function ofReviewers(ReviewedRound $round): ?self
-    {
-        return $round->isJudged() && $round->reviewers > 0 && $round->failedReviewers() === $round->reviewers ? self::Failed : null;
-    }
-
     // A judged ending carries no outcome of its own, so the round falls back to its reviewers and quorum.
     private static function ofEnding(RoundEnding $ending): ?self
     {
@@ -73,5 +68,10 @@ enum ReviewOutcome: string
             RoundEnds::NoOutcomeInTime => self::Blocked,
             RoundEnds::Judged => null,
         };
+    }
+
+    private static function ofReviewers(ReviewedRound $round): ?self
+    {
+        return $round->isJudged() && $round->reviewers > 0 && $round->failedReviewers() === $round->reviewers ? self::Failed : null;
     }
 }

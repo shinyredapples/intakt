@@ -433,10 +433,9 @@ final class AiProvidersTest extends KernelTestCase
         $this->removeTheVaultsFolderWhenEmpty();
     }
 
-    // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
-    private function useMalformedDecryptionSecret(): void
+    private static function compiledContainers(): CompiledContainers
     {
-        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode('too short for a key pair');
+        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'ai-providers');
     }
 
     /**
@@ -477,9 +476,57 @@ final class AiProvidersTest extends KernelTestCase
         return new RebuiltContainer(self::getContainer());
     }
 
-    private static function compiledContainers(): CompiledContainers
+    private function keepKey(string $key): void
     {
-        return CompiledContainers::beside(self::createKernel()->getCacheDir(), 'ai-providers');
+        $providers = new SymfonyAiProviderCatalog();
+        new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise($key, $providers));
+    }
+
+    // Reflection, because the container resolves a variable only for a service argument and its method for that is protected.
+    private function resolvedVariable(string $name): mixed
+    {
+        $container = self::$kernel?->getContainer();
+        self::assertNotNull($container);
+
+        return new ReflectionMethod($container, 'getEnv')->invoke($container, $name);
+    }
+
+    private function vaultDirectory(): string
+    {
+        return self::createKernel()->getProjectDir().'/config/secrets/'.$this->vaultEnvironment();
+    }
+
+    // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
+    private function vaultEnvironment(): string
+    {
+        return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
+    }
+
+    // Base64 of the wrong length, because libsodium rejects it with an exception, where a right-length wrong key only fails to decrypt.
+    private function useMalformedDecryptionSecret(): void
+    {
+        $_SERVER['SYMFONY_DECRYPTION_SECRET'] = base64_encode('too short for a key pair');
+    }
+
+    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
+    private function keptKeyDirectory(): string
+    {
+        return sys_get_temp_dir().'/ai-providers-test-kept-key';
+    }
+
+    private function unsetVariable(string $name): void
+    {
+        unset($_SERVER[$name], $_ENV[$name]);
+        putenv($name);
+    }
+
+    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
+    private function removeTheVaultsFolderWhenEmpty(): void
+    {
+        $vaults = dirname($this->vaultDirectory());
+        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
+            rmdir($vaults);
+        }
     }
 
     // Every variable as each source holds it rather than as the config reads it, so a test of which source wins never reuses a container built for another.
@@ -500,52 +547,5 @@ final class AiProvidersTest extends KernelTestCase
         $kept = $this->keptKeyDirectory().'/provider-key.json';
 
         return [$variables, $vault, is_file($kept) ? file_get_contents($kept) : null];
-    }
-
-    // Reflection, because the container resolves a variable only for a service argument and its method for that is protected.
-    private function resolvedVariable(string $name): mixed
-    {
-        $container = self::$kernel?->getContainer();
-        self::assertNotNull($container);
-
-        return new ReflectionMethod($container, 'getEnv')->invoke($container, $name);
-    }
-
-    private function keepKey(string $key): void
-    {
-        $providers = new SymfonyAiProviderCatalog();
-        new KeptProviderKeyFile($this->keptKeyDirectory(), $providers)->keep(ProviderKey::recognise($key, $providers));
-    }
-
-    // Under the worker's own TMPDIR, so no test reads or writes the install's kept key in var/data and none removes another worker's.
-    private function keptKeyDirectory(): string
-    {
-        return sys_get_temp_dir().'/ai-providers-test-kept-key';
-    }
-
-    private function vaultDirectory(): string
-    {
-        return self::createKernel()->getProjectDir().'/config/secrets/'.$this->vaultEnvironment();
-    }
-
-    // Because the framework keeps its vault env loader whenever config/secrets/ exists, so a folder left empty here would change every container built after this test.
-    private function removeTheVaultsFolderWhenEmpty(): void
-    {
-        $vaults = dirname($this->vaultDirectory());
-        if (is_dir($vaults) && [] === array_diff((array) scandir($vaults), ['.', '..'])) {
-            rmdir($vaults);
-        }
-    }
-
-    // Because every test worker has a TMPDIR of its own, each gets a vault folder of its own and none removes another's.
-    private function vaultEnvironment(): string
-    {
-        return self::VAULT_ENVIRONMENT_PREFIX.'_'.hash('xxh128', sys_get_temp_dir());
-    }
-
-    private function unsetVariable(string $name): void
-    {
-        unset($_SERVER[$name], $_ENV[$name]);
-        putenv($name);
     }
 }

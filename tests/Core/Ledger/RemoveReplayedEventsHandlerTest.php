@@ -105,13 +105,6 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
         AppendOnlyTriggers::in($manager->getConnection());
     }
 
-    private function remove(Uuid ...$events): void
-    {
-        $commands = self::getContainer()->get('command.bus');
-        self::assertInstanceOf(MessageBusInterface::class, $commands);
-        $commands->dispatch(new RemoveReplayedEvents(array_values($events)));
-    }
-
     private function storedEvent(string $payload): Uuid
     {
         $id = new UuidV7();
@@ -119,6 +112,13 @@ final class RemoveReplayedEventsHandlerTest extends KernelTestCase
         $this->manager->flush();
 
         return $id;
+    }
+
+    private function remove(Uuid ...$events): void
+    {
+        $commands = self::getContainer()->get('command.bus');
+        self::assertInstanceOf(MessageBusInterface::class, $commands);
+        $commands->dispatch(new RemoveReplayedEvents(array_values($events)));
     }
 
     /**

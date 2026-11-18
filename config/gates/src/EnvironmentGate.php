@@ -89,10 +89,30 @@ final readonly class EnvironmentGate implements Gate
         return $settings;
     }
 
-    // PHP loads On as 1 and E_ALL & ~E_DEPRECATED as a number; a ${VAR} would take its value from whoever runs the gate.
-    private function loaded(string $written, mixed $loaded): string
+    /**
+     * @param array<string, array{written: string, loaded: string}> $settings
+     *
+     * @return list<string>
+     */
+    private function settingFindings(array $settings): array
     {
-        return str_contains($written, '${') || !is_scalar($loaded) ? $written : (string) $loaded;
+        $findings = [];
+
+        foreach ($settings as $name => $expected) {
+            if (!in_array($name, self::ALLOWED_SETTINGS, true)) {
+                continue;
+            }
+
+            $actual = $this->runtime->setting($name);
+
+            if (null !== $actual && $this->comparable($name, $actual) === $this->comparable($name, $expected['loaded'])) {
+                continue;
+            }
+
+            $findings[] = 'PHP setting '.$name.' is '.($actual ?? 'unset').' but '.self::CHECK_INI.' says '.$expected['written'];
+        }
+
+        return $findings;
     }
 
     /**
@@ -132,25 +152,23 @@ final readonly class EnvironmentGate implements Gate
      *
      * @return list<string>
      */
-    private function settingFindings(array $settings): array
+    private function unlistedFindings(array $settings): array
     {
         $findings = [];
 
-        foreach ($settings as $name => $expected) {
+        foreach (array_keys($settings) as $name) {
             if (!in_array($name, self::ALLOWED_SETTINGS, true)) {
-                continue;
+                $findings[] = 'PHP setting '.$name.' in '.self::CHECK_INI.' is not an allowed setting';
             }
-
-            $actual = $this->runtime->setting($name);
-
-            if (null !== $actual && $this->comparable($name, $actual) === $this->comparable($name, $expected['loaded'])) {
-                continue;
-            }
-
-            $findings[] = 'PHP setting '.$name.' is '.($actual ?? 'unset').' but '.self::CHECK_INI.' says '.$expected['written'];
         }
 
         return $findings;
+    }
+
+    // PHP loads On as 1 and E_ALL & ~E_DEPRECATED as a number; a ${VAR} would take its value from whoever runs the gate.
+    private function loaded(string $written, mixed $loaded): string
+    {
+        return str_contains($written, '${') || !is_scalar($loaded) ? $written : (string) $loaded;
     }
 
     // ini_set() keeps a word such as On as given, while the ini parser turns it into 1 or an empty string.
@@ -165,23 +183,5 @@ final readonly class EnvironmentGate implements Gate
             '1', 'on', 'yes', 'true' => '1',
             default => $value,
         };
-    }
-
-    /**
-     * @param array<string, array{written: string, loaded: string}> $settings
-     *
-     * @return list<string>
-     */
-    private function unlistedFindings(array $settings): array
-    {
-        $findings = [];
-
-        foreach (array_keys($settings) as $name) {
-            if (!in_array($name, self::ALLOWED_SETTINGS, true)) {
-                $findings[] = 'PHP setting '.$name.' in '.self::CHECK_INI.' is not an allowed setting';
-            }
-        }
-
-        return $findings;
     }
 }

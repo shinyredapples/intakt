@@ -305,18 +305,6 @@ final class ReviewJobTest extends TestCase
         new Filesystem()->remove($this->folder);
     }
 
-    private function request(?ResolvedModel $model = null, string $project = 'demo', string $reviewer = 'correctness'): ReviewJobRequest
-    {
-        return new ReviewJobRequest(
-            $project,
-            $this->folder.'/checkout',
-            self::HEAD,
-            $reviewer,
-            $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'),
-            'PLANT-prompt',
-        );
-    }
-
     private function answered(string $answer, string $provider = 'claude_code'): JobResult
     {
         return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([ReviewJob::ANSWER => $answer, ReviewJob::LOG => $provider." exited with 0\n"]));
@@ -336,6 +324,18 @@ final class ReviewJobTest extends TestCase
         });
 
         return $this->useCase($runner, $images);
+    }
+
+    private function request(?ResolvedModel $model = null, string $project = 'demo', string $reviewer = 'correctness'): ReviewJobRequest
+    {
+        return new ReviewJobRequest(
+            $project,
+            $this->folder.'/checkout',
+            self::HEAD,
+            $reviewer,
+            $model ?? new ResolvedModel(Provider::ClaudeCode, 'claude-sonnet-5-5'),
+            'PLANT-prompt',
+        );
     }
 
     /**

@@ -240,13 +240,6 @@ final class PublishedComparisonTest extends TestCase
         self::assertEquals([$this->moment('2026-11-02T00:00:00Z'), $this->moment('2026-11-09T00:00:00Z')], [$report->from, $report->until]);
     }
 
-    private function report(PostedComment ...$comments): WeeklyReport
-    {
-        $pullRequest = new RecordedPullRequest(7, self::LOOP, self::INTAKT, array_values($comments));
-
-        return new PublishedComparison(new LoopReviewReader(), new ReviewComparison())->report([$pullRequest], Week::endingAt($this->moment('2026-11-09T00:00:00Z')));
-    }
-
     private function loop(string $head, string $body): PostedComment
     {
         return new PostedComment(new PullRequestComment(self::LOOP, $head, self::GPT.$body), $this->moment('2026-11-04T10:00:00Z'));
@@ -255,6 +248,13 @@ final class PublishedComparisonTest extends TestCase
     private function intakt(string $head, string $body): PostedComment
     {
         return new PostedComment(new PullRequestComment(self::INTAKT, $head, $body), $this->moment('2026-11-04T10:05:00Z'));
+    }
+
+    private function report(PostedComment ...$comments): WeeklyReport
+    {
+        $pullRequest = new RecordedPullRequest(7, self::LOOP, self::INTAKT, array_values($comments));
+
+        return new PublishedComparison(new LoopReviewReader(), new ReviewComparison())->report([$pullRequest], Week::endingAt($this->moment('2026-11-09T00:00:00Z')));
     }
 
     private function moment(string $text): DateTimeImmutable

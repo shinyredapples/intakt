@@ -121,23 +121,21 @@ final readonly class RoundLedger
         ));
     }
 
-    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
-    /**
-     * @param list<string> $act
-     *
-     * @return list<JudgeDoneFinding>
-     */
-    private function recordedFindings(JudgedFindings $judged, array $act): array
+    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
     {
-        $findings = $judged->findings;
-        $entries = [];
-        foreach (new OnePerPlace()->actList($findings, $act, $judged->sameCause) as $entry) {
-            $entries[$entry->id] = $entry;
+        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
+
+        if (!$result->succeeded()) {
+            throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);
         }
+    }
 
-        $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
-
-        return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line), $shown);
+    /**
+     * @return array{round: string, reviewer: string, role: string, tier: Tier}
+     */
+    private function identify(RoundReviewer $reviewer): array
+    {
+        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
     }
 
     // A tier that does not resolve still records the start, without a model, because the reviewer's own call then fails on its usual path.
@@ -162,20 +160,22 @@ final readonly class RoundLedger
         return array_find($substitutes, static fn (ResolvedModel $model): bool => $substitute === $model->provider)?->model;
     }
 
+    // An act entry is recorded as the act list holds it (highest severity, merged ids), so the review page shows it the way the console does; the merged findings stay recorded for their ids.
     /**
-     * @return array{round: string, reviewer: string, role: string, tier: Tier}
+     * @param list<string> $act
+     *
+     * @return list<JudgeDoneFinding>
      */
-    private function identify(RoundReviewer $reviewer): array
+    private function recordedFindings(JudgedFindings $judged, array $act): array
     {
-        return ['round' => $reviewer->round()->id()->toRfc4122(), 'reviewer' => $reviewer->id()->toRfc4122(), 'role' => $reviewer->roleName(), 'tier' => $reviewer->tier()];
-    }
-
-    private function append(LedgerEventKind $kind, ReviewStarted|ReviewerStarted|VerdictReceived|CatchUpOwed|ReviewerFailed|ReviewerBlocked|ReviewerStopped|JudgeDone $payload): void
-    {
-        $result = $this->ledger->append(new LedgerEvent($kind, $this->serializer->serialize($payload, JsonEncoder::FORMAT)));
-
-        if (!$result->succeeded()) {
-            throw ReviewEventNotRecorded::for($kind->value, (string) $result->failure);
+        $findings = $judged->findings;
+        $entries = [];
+        foreach (new OnePerPlace()->actList($findings, $act, $judged->sameCause) as $entry) {
+            $entries[$entry->id] = $entry;
         }
+
+        $shown = array_map(static fn (Finding $finding): Finding => $entries[$finding->id] ?? $finding, $findings);
+
+        return array_map(static fn (Finding $finding): JudgeDoneFinding => new JudgeDoneFinding($finding->id, $finding->severity, $finding->text, $finding->merged, $finding->file, $finding->line), $shown);
     }
 }

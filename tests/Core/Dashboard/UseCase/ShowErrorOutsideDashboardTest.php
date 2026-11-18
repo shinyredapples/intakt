@@ -47,23 +47,6 @@ final class ShowErrorOutsideDashboardTest extends WebTestCase
         self::assertSame(['A dashboard page failed'], $this->controllerLogLines());
     }
 
-    /**
-     * @return list<string>
-     */
-    private function controllerLogLines(): array
-    {
-        // Taking every record marks the kernel's own critical line as asserted too; the reference is random, so only the wording before it is compared.
-        $messages = array_column(LogRecords::ofThisRun()?->takeErrors() ?? [], 'message');
-        $lines = [];
-        foreach ($messages as $message) {
-            if (1 === preg_match('/^(.+), reference [0-9a-f]{8}\.$/', $message, $match)) {
-                $lines[] = $match[1];
-            }
-        }
-
-        return $lines;
-    }
-
     // The failure is thrown once routing has named the route, so the kernel's error path runs as it does for a failing MCP or dashboard controller.
     private function failingRequest(string $method, string $path): Response
     {
@@ -81,5 +64,22 @@ final class ShowErrorOutsideDashboardTest extends WebTestCase
         );
 
         return $browser->getResponse();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function controllerLogLines(): array
+    {
+        // Taking every record marks the kernel's own critical line as asserted too; the reference is random, so only the wording before it is compared.
+        $messages = array_column(LogRecords::ofThisRun()?->takeErrors() ?? [], 'message');
+        $lines = [];
+        foreach ($messages as $message) {
+            if (1 === preg_match('/^(.+), reference [0-9a-f]{8}\.$/', $message, $match)) {
+                $lines[] = $match[1];
+            }
+        }
+
+        return $lines;
     }
 }

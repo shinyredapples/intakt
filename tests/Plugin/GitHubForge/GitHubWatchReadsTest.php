@@ -474,27 +474,6 @@ final class GitHubWatchReadsTest extends TestCase
         $this->clock = new MockClock('2026-11-25 10:00:00 UTC');
     }
 
-    /**
-     * @return list<CiRunState>
-     */
-    private function statesOfHead(): array
-    {
-        return array_map(static fn (CiRun $run): CiRunState => $run->state, $this->state()->runs);
-    }
-
-    private function state(): CiState
-    {
-        return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function listingRequests(): array
-    {
-        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
-    }
-
     private function reads(): GitHubWatchReads
     {
         $http = new MockHttpClient(function (string $method, string $url, array $options): ResponseInterface {
@@ -514,6 +493,38 @@ final class GitHubWatchReadsTest extends TestCase
         return new GitHubWatchReads(new GitHubCalls($http, $readings, $tokens), new CheckedInstallationTokens($readBack, $tokens), new WatchedRepositories(['alpha' => ['github' => 'acme/widgets'], 'beta' => []]), new GitHubCiRuns(new GitHubMoments()), new GitHubMoments(), FreshReadings::reserveOf($readings, $tokens, $clock));
     }
 
+    /**
+     * @return list<string>
+     */
+    private function listingRequests(): array
+    {
+        return array_values(array_filter($this->requested, static fn (string $request): bool => str_starts_with($request, self::PULLS)));
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function header(array $options, string $name): string
+    {
+        $headers = $options['normalized_headers'] ?? [];
+        $values = is_array($headers) ? ($headers[$name] ?? []) : [];
+
+        return is_array($values) && is_string($values[0] ?? null) ? preg_replace('/^[^:]+: /', '', $values[0]) ?? '' : '';
+    }
+
+    /**
+     * @return list<CiRunState>
+     */
+    private function statesOfHead(): array
+    {
+        return array_map(static fn (CiRun $run): CiRunState => $run->state, $this->state()->runs);
+    }
+
+    private function state(): CiState
+    {
+        return $this->reads()->ciStateOf('alpha', new CommitId(self::HEAD));
+    }
+
     private function answer(string $url): ResponseInterface
     {
         if ($this->failWith > 0) {
@@ -529,18 +540,6 @@ final class GitHubWatchReadsTest extends TestCase
             str_contains($url, '/actions/runs') => new MockResponse($this->fixture($this->runs), ['response_headers' => $this->budget()]),
             default => new MockResponse($this->fixture($this->suites), ['response_headers' => $this->budget()]),
         };
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function budget(): array
-    {
-        return null === $this->remaining ? [] : [
-            'x-ratelimit-limit' => '5000',
-            'x-ratelimit-remaining' => (string) $this->remaining,
-            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
-        ];
     }
 
     private function listingPage(string $url): MockResponse
@@ -560,21 +559,22 @@ final class GitHubWatchReadsTest extends TestCase
         };
     }
 
-    /**
-     * @param array<mixed> $options
-     */
-    private function header(array $options, string $name): string
-    {
-        $headers = $options['normalized_headers'] ?? [];
-        $values = is_array($headers) ? ($headers[$name] ?? []) : [];
-
-        return is_array($values) && is_string($values[0] ?? null) ? preg_replace('/^[^:]+: /', '', $values[0]) ?? '' : '';
-    }
-
     private function fixture(string $name): string
     {
         $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
 
         return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function budget(): array
+    {
+        return null === $this->remaining ? [] : [
+            'x-ratelimit-limit' => '5000',
+            'x-ratelimit-remaining' => (string) $this->remaining,
+            'x-ratelimit-reset' => (string) $this->clock->now()->modify('+30 minutes')->getTimestamp(),
+        ];
     }
 }

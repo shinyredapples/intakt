@@ -773,12 +773,9 @@ final class LedgerRoundsTest extends TestCase
         self::assertNull($review?->rounds[0]->ending);
     }
 
-    private function noCosts(): RoundCosts
+    private function event(LedgerEventKind $kind, string $payload, ?DateTimeImmutable $at = null): RecordedEvent
     {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-
-        return $costs;
+        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
     }
 
     private function reviewOf(string $round, RecordedEvent ...$events): ?Review
@@ -792,31 +789,6 @@ final class LedgerRoundsTest extends TestCase
         return $rounds->reviewOf($round);
     }
 
-    private function quorumStart(int $reviewers, QuorumPolicy $quorum): RecordedEvent
-    {
-        return $this->row(LedgerEventKind::ReviewStarted, new ReviewStarted('r1', 'alpha', $reviewers, 'feat/thing', 1, 'Add the thing.', quorum: $quorum));
-    }
-
-    private function approved(string $reviewer): RecordedEvent
-    {
-        return $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', $reviewer, 'correctness', Tier::Standard, Decision::Approve, 0, ProjectMode::Live));
-    }
-
-    private function failed(string $reviewer): RecordedEvent
-    {
-        return $this->row(LedgerEventKind::ReviewerFailed, new ReviewerFailed('r1', $reviewer, 'security', Tier::Strong, MaxOutputTokensException::class));
-    }
-
-    private function judged(): RecordedEvent
-    {
-        return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], []));
-    }
-
-    private function event(LedgerEventKind $kind, string $payload, ?DateTimeImmutable $at = null): RecordedEvent
-    {
-        return new RecordedEvent(Uuid::v7(), new LedgerEvent($kind, $payload), $at ?? new DateTimeImmutable('2026-10-28T12:00:00+00:00'));
-    }
-
     // Serialized as the writers do, so the reader is shown the row it meets in production.
     private function row(LedgerEventKind $kind, object $payload): RecordedEvent
     {
@@ -826,5 +798,33 @@ final class LedgerRoundsTest extends TestCase
     private function usage(int $prompt, int $completion): TokenUsageRow
     {
         return new TokenUsageRow('account', 'model-a', $prompt, $completion, null, null, null, null, null, $prompt + $completion, null, null, null);
+    }
+
+    private function quorumStart(int $reviewers, QuorumPolicy $quorum): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::ReviewStarted, new ReviewStarted('r1', 'alpha', $reviewers, 'feat/thing', 1, 'Add the thing.', quorum: $quorum));
+    }
+
+    private function failed(string $reviewer): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::ReviewerFailed, new ReviewerFailed('r1', $reviewer, 'security', Tier::Strong, MaxOutputTokensException::class));
+    }
+
+    private function approved(string $reviewer): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::VerdictReceived, new VerdictReceived('r1', $reviewer, 'correctness', Tier::Standard, Decision::Approve, 0, ProjectMode::Live));
+    }
+
+    private function judged(): RecordedEvent
+    {
+        return $this->row(LedgerEventKind::JudgeDone, new JudgeDone('r1', [], [], []));
+    }
+
+    private function noCosts(): RoundCosts
+    {
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::none());
+
+        return $costs;
     }
 }

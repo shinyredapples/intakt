@@ -76,6 +76,19 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
         $this->backOff('a hand-over failed', $failure);
     }
 
+    private function backOff(string $cause, Throwable $failure): void
+    {
+        $this->reopenEntityManager();
+        $this->holds->hold(SharedHold::FailureBackOff, $this->clock->now()->add(new DateInterval(self::BACK_OFF)));
+        $this->logger->error('The install-wide failure back-off started because {cause}.', ['cause' => $cause, 'exception' => $failure]);
+    }
+
+    // Length-prefixed parts, so no class name and message can be moved against each other to make two errors look alike.
+    private function errorKey(Throwable $failure): string
+    {
+        return hash('sha256', sprintf('%d:%s%d:%s', strlen($failure::class), $failure::class, strlen($failure->getMessage()), $failure->getMessage()));
+    }
+
     private function record(string $item, string $errorKey): void
     {
         $this->reopenEntityManager();
@@ -108,29 +121,16 @@ final readonly class DoctrineInstallWideFailures implements InstallWideFailures
         return 0 < (int) $others;
     }
 
-    private function cutoff(DateTimeImmutable $now): DateTimeImmutable
-    {
-        return $now->sub(new DateInterval(self::SAME_ERROR_WITHIN));
-    }
-
-    // Length-prefixed parts, so no class name and message can be moved against each other to make two errors look alike.
-    private function errorKey(Throwable $failure): string
-    {
-        return hash('sha256', sprintf('%d:%s%d:%s', strlen($failure::class), $failure::class, strlen($failure->getMessage()), $failure->getMessage()));
-    }
-
-    private function backOff(string $cause, Throwable $failure): void
-    {
-        $this->reopenEntityManager();
-        $this->holds->hold(SharedHold::FailureBackOff, $this->clock->now()->add(new DateInterval(self::BACK_OFF)));
-        $this->logger->error('The install-wide failure back-off started because {cause}.', ['cause' => $cause, 'exception' => $failure]);
-    }
-
     // The failure being reported is often a failed flush, which closes the entity manager for every holder and Doctrine refuses to reopen it, so without a reset the hold could not be written.
     private function reopenEntityManager(): void
     {
         if (!$this->entities->isOpen()) {
             $this->doctrine->resetManager();
         }
+    }
+
+    private function cutoff(DateTimeImmutable $now): DateTimeImmutable
+    {
+        return $now->sub(new DateInterval(self::SAME_ERROR_WITHIN));
     }
 }

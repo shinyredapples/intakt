@@ -180,16 +180,6 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         new Filesystem()->remove($this->directory);
     }
 
-    private function key(): string
-    {
-        return 'sk-ant-'.self::BODY;
-    }
-
-    private function file(): KeptProviderKeyFile
-    {
-        return new KeptProviderKeyFile($this->directory, new SymfonyAiProviderCatalog());
-    }
-
     /**
      * @param KeyCheckOutcome|Closure(): KeyCheckOutcome $outcome
      */
@@ -210,6 +200,16 @@ final class KeepProviderKeyControllerTest extends WebTestCase
         $container->set(EnabledAccounts::class, $accounts);
 
         return $browser;
+    }
+
+    private function key(): string
+    {
+        return 'sk-ant-'.self::BODY;
+    }
+
+    private function file(): KeptProviderKeyFile
+    {
+        return new KeptProviderKeyFile($this->directory, new SymfonyAiProviderCatalog());
     }
 
     private function post(KernelBrowser $browser, string $key): void

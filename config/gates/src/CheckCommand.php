@@ -85,6 +85,42 @@ final readonly class CheckCommand
     }
 
     /**
+     * @return list<string>
+     */
+    private function staticGateNames(): array
+    {
+        return array_values(array_map(static fn (Gate $gate): string => $gate->name(), array_filter($this->gates(null), static fn (Gate $gate): bool => !$gate instanceof RunsTheChangesCode)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function gateNames(): array
+    {
+        return array_map(static fn (Gate $gate): string => $gate->name(), $this->gates(null));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function print(array $payload): void
+    {
+        fwrite(STDOUT, json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n");
+    }
+
+    // Because the test workers count against the same processors as the gates, the parent sizes them as the tests gate will; a refused count fails that gate, so it counts as one.
+    private function slots(): ?GateSlots
+    {
+        $testWorkers = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), Processors::status(), Processors::cpuMax()) ?? 1;
+
+        $memoryLimits = [...new OwnCgroup()->fileAndAncestors('memory.max'), ...new OwnCgroup()->fileAndAncestors('memory.high')];
+
+        $byDefault = GateSlots::byDefault(Processors::available(Processors::status(), Processors::cpuMax()), $memoryLimits, $testWorkers);
+
+        return GateSlots::chosen($this->variable(GateSlots::VARIABLE), $byDefault, $testWorkers);
+    }
+
+    /**
      * @param list<string> $arguments
      */
     private function runGatesWhenToolsExist(Options $options, array $arguments, GateSlots $slots): int
@@ -105,56 +141,6 @@ final readonly class CheckCommand
     }
 
     /**
-     * @param list<string> $names
-     * @param list<string> $arguments
-     */
-    private function runGates(array $names, array $arguments, GateChildren $children): int
-    {
-        $failed = [];
-
-        foreach ($children->reportsOf($names, $arguments) as $report) {
-            fwrite(STDOUT, $report->line."\n");
-
-            if (!$report->isPassing()) {
-                $failed[] = $report->gate;
-            }
-        }
-
-        $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
-
-        return [] === $failed ? 0 : 1;
-    }
-
-    // Because the test workers count against the same processors as the gates, the parent sizes them as the tests gate will; a refused count fails that gate, so it counts as one.
-    private function slots(): ?GateSlots
-    {
-        $testWorkers = TestWorkerCount::chosen($this->variable(TestWorkerCount::VARIABLE), Processors::status(), Processors::cpuMax()) ?? 1;
-
-        $memoryLimits = [...new OwnCgroup()->fileAndAncestors('memory.max'), ...new OwnCgroup()->fileAndAncestors('memory.high')];
-
-        $byDefault = GateSlots::byDefault(Processors::available(Processors::status(), Processors::cpuMax()), $memoryLimits, $testWorkers);
-
-        return GateSlots::chosen($this->variable(GateSlots::VARIABLE), $byDefault, $testWorkers);
-    }
-
-    private function variable(string $name): ?string
-    {
-        $value = getenv($name);
-
-        return is_string($value) && '' !== $value ? $value : null;
-    }
-
-    private function resultOf(Gate $gate, Workspace $workspace): GateResult
-    {
-        // Because a gate that reads git cannot run then, and the reason belongs on its own line like any other failure.
-        try {
-            return $gate->run($workspace);
-        } catch (RepositoryAttributesRefused $refused) {
-            return GateResult::failedBecause($gate->name(), $refused->getMessage());
-        }
-    }
-
-    /**
      * @return list<Gate>
      */
     private function selectedGates(Options $options): array
@@ -170,20 +156,14 @@ final readonly class CheckCommand
         ));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function gateNames(): array
+    private function resultOf(Gate $gate, Workspace $workspace): GateResult
     {
-        return array_map(static fn (Gate $gate): string => $gate->name(), $this->gates(null));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function staticGateNames(): array
-    {
-        return array_values(array_map(static fn (Gate $gate): string => $gate->name(), array_filter($this->gates(null), static fn (Gate $gate): bool => !$gate instanceof RunsTheChangesCode)));
+        // Because a gate that reads git cannot run then, and the reason belongs on its own line like any other failure.
+        try {
+            return $gate->run($workspace);
+        } catch (RepositoryAttributesRefused $refused) {
+            return GateResult::failedBecause($gate->name(), $refused->getMessage());
+        }
     }
 
     /**
@@ -213,11 +193,31 @@ final readonly class CheckCommand
         ];
     }
 
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function print(array $payload): void
+    private function variable(string $name): ?string
     {
-        fwrite(STDOUT, json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n");
+        $value = getenv($name);
+
+        return is_string($value) && '' !== $value ? $value : null;
+    }
+
+    /**
+     * @param list<string> $names
+     * @param list<string> $arguments
+     */
+    private function runGates(array $names, array $arguments, GateChildren $children): int
+    {
+        $failed = [];
+
+        foreach ($children->reportsOf($names, $arguments) as $report) {
+            fwrite(STDOUT, $report->line."\n");
+
+            if (!$report->isPassing()) {
+                $failed[] = $report->gate;
+            }
+        }
+
+        $this->print(['result' => [] === $failed ? 'pass' : 'fail', 'failed' => $failed]);
+
+        return [] === $failed ? 0 : 1;
     }
 }

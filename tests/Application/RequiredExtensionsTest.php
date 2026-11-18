@@ -43,22 +43,20 @@ final class RequiredExtensionsTest extends TestCase
     }
 
     /**
-     * @return list<string>
+     * @return array<string, mixed>
      */
-    private function declaredExtensions(): array
+    private function decode(string $file): array
     {
-        return $this->extensionKeys($this->decode('composer.json')['require'] ?? null);
-    }
+        $decoded = json_decode((string) file_get_contents(self::ROOT.'/'.$file), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
 
-    /**
-     * @return list<string>
-     */
-    private function extensionKeys(mixed $requirements): array
-    {
-        self::assertIsArray($requirements);
-        $names = array_map(strval(...), array_keys($requirements));
+        $byKey = [];
 
-        return array_values(array_filter($names, static fn (string $name): bool => str_starts_with($name, 'ext-')));
+        foreach ($decoded as $key => $value) {
+            $byKey[(string) $key] = $value;
+        }
+
+        return $byKey;
     }
 
     /**
@@ -74,19 +72,21 @@ final class RequiredExtensionsTest extends TestCase
     }
 
     /**
-     * @return array<string, mixed>
+     * @return list<string>
      */
-    private function decode(string $file): array
+    private function extensionKeys(mixed $requirements): array
     {
-        $decoded = json_decode((string) file_get_contents(self::ROOT.'/'.$file), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($decoded);
+        self::assertIsArray($requirements);
+        $names = array_map(strval(...), array_keys($requirements));
 
-        $byKey = [];
+        return array_values(array_filter($names, static fn (string $name): bool => str_starts_with($name, 'ext-')));
+    }
 
-        foreach ($decoded as $key => $value) {
-            $byKey[(string) $key] = $value;
-        }
-
-        return $byKey;
+    /**
+     * @return list<string>
+     */
+    private function declaredExtensions(): array
+    {
+        return $this->extensionKeys($this->decode('composer.json')['require'] ?? null);
     }
 }

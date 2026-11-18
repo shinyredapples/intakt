@@ -224,40 +224,9 @@ final class StopReviewerTest extends KernelTestCase
         self::assertTrue($appended->succeeded());
     }
 
-    private function forged(): string
-    {
-        return VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::REVIEWER_STOPPED)->json();
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function stopsPublished(): array
-    {
-        return array_values(array_filter($this->fixture->updates->seen, static fn (string $update): bool => str_starts_with($update, 'stopped ')));
-    }
-
     private function agentAnswering(string $answer): AgentVendor
     {
         return $this->agentScripted(static fn (): string => $answer);
-    }
-
-    private function agentScripted(Closure $script): AgentVendor
-    {
-        $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests($this->fixture->ledger(), $this->fixture->ledgerPayloads())));
-
-        return new AgentVendor(new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), $runs), $platform);
-    }
-
-    /**
-     * @return list<LedgerEventKind>
-     */
-    private function stopRows(): array
-    {
-        $kinds = [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped];
-
-        return array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, $kinds, true)));
     }
 
     /**
@@ -271,5 +240,36 @@ final class StopReviewerTest extends KernelTestCase
 
             return $payload[$key] ?? null;
         }, array_values(iterator_to_array($this->fixture->ledger()->readOfKind($kind))));
+    }
+
+    /**
+     * @return list<LedgerEventKind>
+     */
+    private function stopRows(): array
+    {
+        $kinds = [LedgerEventKind::ReviewerStopRequested, LedgerEventKind::VerdictReceived, LedgerEventKind::ReviewerStopped];
+
+        return array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, $kinds, true)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stopsPublished(): array
+    {
+        return array_values(array_filter($this->fixture->updates->seen, static fn (string $update): bool => str_starts_with($update, 'stopped ')));
+    }
+
+    private function forged(): string
+    {
+        return VerdictDocument::fromTheDesign()->with('verdict', 'blocked')->with('resolved', [])->withFinding('id', Verdict::REVIEWER_STOPPED)->json();
+    }
+
+    private function agentScripted(Closure $script): AgentVendor
+    {
+        $platform = MockPlatformFactory::createPlatform($script, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $runs = new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests($this->fixture->ledger(), $this->fixture->ledgerPayloads())));
+
+        return new AgentVendor(new ReviewerAgent(new ReviewerPrompt(new Fence(), new PromptCut(new Fence()), new VerdictParser()), new ReviewerToolboxFactory()->create(...), $runs), $platform);
     }
 }

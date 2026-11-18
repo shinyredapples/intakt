@@ -112,6 +112,23 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return [] === $waits ? 0 : min($waits);
     }
 
+    private function coolDownFor(Account $account, int $resetInSeconds): void
+    {
+        $seconds = min(self::LONGEST_SECONDS, $resetInSeconds);
+        if ($seconds <= 0) {
+            return;
+        }
+
+        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
+
+        // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
+        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
+            return;
+        }
+
+        $this->record($account, $until);
+    }
+
     // Asked only for a spent plan's limit, which comes without a reset (issue #1749), so the account's measured readings say when it is usable again: the latest reset of a spent window still ahead.
     private function secondsUntilSpentWindowResets(Account $account): ?int
     {
@@ -131,32 +148,10 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return 0 < $longest ? $longest : null;
     }
 
-    private function coolDownFor(Account $account, int $resetInSeconds): void
+    // Beside the window in the same pool, so every worker sees why the account cools down; the account key holds a provider name and an account name the owner configured, never outside input.
+    private function rejectionKey(Account $account): string
     {
-        $seconds = min(self::LONGEST_SECONDS, $resetInSeconds);
-        if ($seconds <= 0) {
-            return;
-        }
-
-        $until = $this->clock->now()->modify(sprintf('+%d seconds', $seconds));
-
-        // Refused while a cooldown already runs, which is kept as it is, because only a call already in flight can still be limited then.
-        if (!$this->windowsEndingAt($until)->create($account->key())->consume()->isAccepted()) {
-            return;
-        }
-
-        $this->record($account, $until);
-    }
-
-    // At least a second while the window runs, so a cooling account is never reported free and retried at once.
-    private function secondsUntilFree(Account $account): int
-    {
-        $window = $this->window($account);
-        if (0 < $window->getRemainingTokens()) {
-            return 0;
-        }
-
-        return max(1, $window->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
+        return self::LIMITER.'-rejected-'.$account->key();
     }
 
     // No token, so reading the window never starts or saves one.
@@ -165,24 +160,11 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         return $this->windowsEndingAt($this->clock->now())->create($account->key())->consume(0);
     }
 
-    // Anchored at the end so the fixed window closes at the vendor's reset; one month because it is the shortest interval the RateLimiter anchors.
-    private function windowsEndingAt(DateTimeImmutable $end): RateLimiterFactory
+    // Marked before the lock is tried, so an error that finds the lock busy is left to the worker holding it, which looks again once it lets go.
+    private function reportOnce(Account $account): void
     {
-        $config = ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];
-
-        return new RateLimiterFactory($config, new CacheStorage($this->pool), $this->locks);
-    }
-
-    // Beside the window in the same pool, so every worker sees why the account cools down; the account key holds a provider name and an account name the owner configured, never outside input.
-    private function rejectionKey(Account $account): string
-    {
-        return self::LIMITER.'-rejected-'.$account->key();
-    }
-
-    // Kept without an expiry, unlike the rejection, so an error that outlasts its cooldown is not reported again on each retry; only an answer clears it.
-    private function reportKey(Account $account): string
-    {
-        return self::LIMITER.'-reported-'.$account->key();
+        $this->pool->save($this->pool->getItem($this->pendingKey($account))->set(true));
+        $this->reportPending($account);
     }
 
     // Strictly before, because an answer to a call sent before the report or at its moment may have been read after the error that came later.
@@ -210,11 +192,40 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         $this->reportPending($account);
     }
 
-    // Marked before the lock is tried, so an error that finds the lock busy is left to the worker holding it, which looks again once it lets go.
-    private function reportOnce(Account $account): void
+    // At least a second while the window runs, so a cooling account is never reported free and retried at once.
+    private function secondsUntilFree(Account $account): int
     {
-        $this->pool->save($this->pool->getItem($this->pendingKey($account))->set(true));
-        $this->reportPending($account);
+        $window = $this->window($account);
+        if (0 < $window->getRemainingTokens()) {
+            return 0;
+        }
+
+        return max(1, $window->getRetryAfter()->getTimestamp() - $this->clock->now()->getTimestamp());
+    }
+
+    // Anchored at the end so the fixed window closes at the vendor's reset; one month because it is the shortest interval the RateLimiter anchors.
+    private function windowsEndingAt(DateTimeImmutable $end): RateLimiterFactory
+    {
+        $config = ['id' => self::LIMITER, 'policy' => 'fixed_window', 'limit' => 1, 'interval' => '1 month', 'anchor_at' => $end];
+
+        return new RateLimiterFactory($config, new CacheStorage($this->pool), $this->locks);
+    }
+
+    private function record(Account $account, DateTimeImmutable $until): void
+    {
+        $payload = $this->serializer->serialize(new AccountCooledDown($account->key(), $until), 'json');
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountCooledDown, $payload));
+
+        // Logged, not thrown, because the cooldown holds without its record and failing here would hide the provider's own error.
+        if (!$appended->succeeded()) {
+            $this->logger->error('An account cooldown was not recorded.', ['cooldown' => $payload, 'reason' => $appended->failure]);
+        }
+    }
+
+    // Named apart from the report so its key never contains the report's key.
+    private function pendingKey(Account $account): string
+    {
+        return self::LIMITER.'-pending-'.$account->key();
     }
 
     // Tried without waiting and looked at again after each release, so an error marked while the lock was held is reported by whichever worker holds it last, and never twice.
@@ -228,6 +239,12 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
                 $lock->release();
             }
         }
+    }
+
+    // Kept without an expiry, unlike the rejection, so an error that outlasts its cooldown is not reported again on each retry; only an answer clears it.
+    private function reportKey(Account $account): string
+    {
+        return self::LIMITER.'-reported-'.$account->key();
     }
 
     private function isPending(Account $account): bool
@@ -248,12 +265,6 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         }
     }
 
-    // Named apart from the report so its key never contains the report's key.
-    private function pendingKey(Account $account): string
-    {
-        return self::LIMITER.'-pending-'.$account->key();
-    }
-
     private function report(Account $account): void
     {
         $reportedAt = $this->clock->now();
@@ -268,16 +279,5 @@ final readonly class AccountCooldownWindows implements AccountCooldowns
         }
 
         $this->pool->save($this->pool->getItem($this->reportKey($account))->set($reportedAt));
-    }
-
-    private function record(Account $account, DateTimeImmutable $until): void
-    {
-        $payload = $this->serializer->serialize(new AccountCooledDown($account->key(), $until), 'json');
-        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::AccountCooledDown, $payload));
-
-        // Logged, not thrown, because the cooldown holds without its record and failing here would hide the provider's own error.
-        if (!$appended->succeeded()) {
-            $this->logger->error('An account cooldown was not recorded.', ['cooldown' => $payload, 'reason' => $appended->failure]);
-        }
     }
 }

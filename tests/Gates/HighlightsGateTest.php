@@ -474,16 +474,16 @@ final class HighlightsGateTest extends SandboxTestCase
         return $sandbox->runGate($this->gate());
     }
 
-    private function gate(): HighlightsGate
-    {
-        return new HighlightsGate(new FencedCodeBlocks(), new HighlightFragments());
-    }
-
     private function sandboxWithKernel(): Sandbox
     {
         $sandbox = $this->emptySandbox();
         $sandbox->write('src/Kernel.php', "<?php\n");
 
         return $sandbox;
+    }
+
+    private function gate(): HighlightsGate
+    {
+        return new HighlightsGate(new FencedCodeBlocks(), new HighlightFragments());
     }
 }

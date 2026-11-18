@@ -281,6 +281,19 @@ final class WorkerModeTest extends TestCase
         $this->kernel?->shutdown();
     }
 
+    private function bootedKernel(KernelInterface $kernel): KernelInterface
+    {
+        $kernel->boot();
+        $this->kernel = $kernel;
+
+        return $kernel;
+    }
+
+    private function browserOn(KernelInterface $kernel): WorkerBrowser
+    {
+        return new WorkerBrowser($kernel, ['HTTP_HOST' => self::HOST]);
+    }
+
     // The kernel runs its services_resetter at the start of the next handle() after a terminate; calling it here reads the state a new request starts with, because reviewer work is not a request. A kernel cloned per request boots afresh first.
     #[NoDiscard]
     private function nextRequestSees(KernelInterface $kernel): WorkerState
@@ -290,6 +303,17 @@ final class WorkerModeTest extends TestCase
         $resetter->reset();
 
         return WorkerState::in($kernel);
+    }
+
+    private function otherLocale(): void
+    {
+        $other = 'C' === $this->processBefore->locale ? 'C.UTF-8' : 'C';
+        self::assertSame($other, setlocale(LC_ALL, $other));
+    }
+
+    private function requestThatRuns(WorkerBrowser $browser, Closure $step): void
+    {
+        $browser->requestRunning($step, '/mcp/owner', ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
     }
 
     // Read inside a real request, because that is what a request starts with after the kernel restored the process settings at the terminate of the one before.
@@ -305,28 +329,9 @@ final class WorkerModeTest extends TestCase
         return $seen;
     }
 
-    private function requestThatRuns(WorkerBrowser $browser, Closure $step): void
+    private function container(KernelInterface $kernel): TestContainer
     {
-        $browser->requestRunning($step, '/mcp/owner', ['HTTP_AUTHORIZATION' => 'Bearer '.self::OWNER_TOKEN, 'HTTP_HOST' => 'localhost']);
-    }
-
-    private function otherLocale(): void
-    {
-        $other = 'C' === $this->processBefore->locale ? 'C.UTF-8' : 'C';
-        self::assertSame($other, setlocale(LC_ALL, $other));
-    }
-
-    private function bootedKernel(KernelInterface $kernel): KernelInterface
-    {
-        $kernel->boot();
-        $this->kernel = $kernel;
-
-        return $kernel;
-    }
-
-    private function browserOn(KernelInterface $kernel): WorkerBrowser
-    {
-        return new WorkerBrowser($kernel, ['HTTP_HOST' => self::HOST]);
+        return $kernel->getContainer()->get('test.service_container');
     }
 
     private function startRoundAs(KernelBrowser $browser): void
@@ -338,6 +343,20 @@ final class WorkerModeTest extends TestCase
 
         self::assertSame(DashboardRoutes::START_REVIEW, $browser->getRequest()->attributes->get('_route'));
         self::assertSame(303, $browser->getResponse()->getStatusCode());
+    }
+
+    private function emptyDatabase(KernelInterface $kernel): void
+    {
+        EmptyDatabase::in($this->container($kernel));
+        $application = new Application($kernel);
+        $application->setAutoExit(false);
+        $console = new ApplicationTester($application);
+        $console->run(['command' => 'doctrine:migrations:migrate', '--no-interaction' => true]);
+        $console->assertCommandIsSuccessful($console->getDisplay());
+
+        $connection = $this->container($kernel)->get('doctrine.dbal.default_connection');
+        // MySQL and MariaDB commit implicitly at every DDL statement, which leaves the migrations' transactions counted as open; the next flush would then ask for a savepoint that does not exist.
+        $connection->close();
     }
 
     private function recordAnEvent(KernelInterface $kernel): void
@@ -366,24 +385,5 @@ final class WorkerModeTest extends TestCase
         self::assertInstanceOf(MessageStoreInterface::class, $store);
 
         return array_map(static fn (MessageInterface $message): string => $message instanceof UserMessage || $message instanceof AssistantMessage ? (string) $message->asText() : '', $store->load($conversation)->getMessages());
-    }
-
-    private function container(KernelInterface $kernel): TestContainer
-    {
-        return $kernel->getContainer()->get('test.service_container');
-    }
-
-    private function emptyDatabase(KernelInterface $kernel): void
-    {
-        EmptyDatabase::in($this->container($kernel));
-        $application = new Application($kernel);
-        $application->setAutoExit(false);
-        $console = new ApplicationTester($application);
-        $console->run(['command' => 'doctrine:migrations:migrate', '--no-interaction' => true]);
-        $console->assertCommandIsSuccessful($console->getDisplay());
-
-        $connection = $this->container($kernel)->get('doctrine.dbal.default_connection');
-        // MySQL and MariaDB commit implicitly at every DDL statement, which leaves the migrations' transactions counted as open; the next flush would then ask for a savepoint that does not exist.
-        $connection->close();
     }
 }

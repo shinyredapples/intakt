@@ -85,36 +85,6 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         return $round;
     }
 
-    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened; past the idle lines, because the progress published at the round's start pushes the headline before any reviewer started.
-    private function readThePushedHeadline(string $round): void
-    {
-        $lines = $this->pushedHeadlines();
-        $first = array_find($lines, static fn (Crawler $line): bool => self::IDLE !== $line->text());
-
-        self::assertNotNull($first);
-        self::assertMatchesRegularExpression(self::REVIEWING, $first->text());
-        self::assertSame(['/reviews/'.$round], $first->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
-    }
-
-    // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
-    private function readTheBoardHeadline(): void
-    {
-        $line = $this->visit('/')->filter('#board-headline')->text();
-
-        self::assertSame(self::IDLE, $line);
-        self::assertSame($line, array_last($this->pushedHeadlines())?->text());
-    }
-
-    /**
-     * @return list<Crawler>
-     */
-    private function pushedHeadlines(): array
-    {
-        $headlines = array_filter($this->publishedUpdates(), static fn (Update $update): bool => in_array(DashboardTopics::SHELL, $update->getTopics(), true) && str_contains($update->getData(), self::HEADLINE_TARGET));
-
-        return array_values(array_map(static fn (Update $update): Crawler => new Crawler($update->getData())->filter('turbo-stream[target="board-headline"] template'), $headlines));
-    }
-
     private function openTheRunningRound(string $round): Crawler
     {
         // Without a live listener, because the instance has no hub secret to authorize one, so the updates are read from the recording hub.
@@ -160,6 +130,17 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertSame(array_values(array_unique(array_column($now, 1))), array_values(array_unique(array_column($table, 1))));
     }
 
+    // Read from the hub, because a reviewer starts and answers within one worker step, so no page load between steps finds it running; its link is the address the step "open the running round" opened; past the idle lines, because the progress published at the round's start pushes the headline before any reviewer started.
+    private function readThePushedHeadline(string $round): void
+    {
+        $lines = $this->pushedHeadlines();
+        $first = array_find($lines, static fn (Crawler $line): bool => self::IDLE !== $line->text());
+
+        self::assertNotNull($first);
+        self::assertMatchesRegularExpression(self::REVIEWING, $first->text());
+        self::assertSame(['/reviews/'.$round], $first->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
+    }
+
     private function openTheJudgedRound(string $round): Crawler
     {
         $page = $this->visit('/reviews/'.$round);
@@ -191,6 +172,15 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
         self::assertStringNotContainsStringIgnoringCase('reload', $shown);
     }
 
+    // Compared with the last pushed line too, because a page that missed no update must end where a new load starts.
+    private function readTheBoardHeadline(): void
+    {
+        $line = $this->visit('/')->filter('#board-headline')->text();
+
+        self::assertSame(self::IDLE, $line);
+        self::assertSame($line, array_last($this->pushedHeadlines())?->text());
+    }
+
     /**
      * @return array<string,string>
      */
@@ -202,5 +192,15 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function configuration(): string
     {
         return $this->directory.'/intakt.yaml';
+    }
+
+    /**
+     * @return list<Crawler>
+     */
+    private function pushedHeadlines(): array
+    {
+        $headlines = array_filter($this->publishedUpdates(), static fn (Update $update): bool => in_array(DashboardTopics::SHELL, $update->getTopics(), true) && str_contains($update->getData(), self::HEADLINE_TARGET));
+
+        return array_values(array_map(static fn (Update $update): Crawler => new Crawler($update->getData())->filter('turbo-stream[target="board-headline"] template'), $headlines));
     }
 }

@@ -76,81 +76,6 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
     }
 
     /**
-     * @return list<array<mixed>>
-     */
-    private function laterPulls(RepositoryAddress $repository): array
-    {
-        $pulls = [];
-        for ($page = 2; $page <= self::MAX_PAGES; ++$page) {
-            $more = $this->pullsOf($this->read($repository->path().'/pulls', ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page])['body']);
-            $pulls = [...$pulls, ...$more];
-            if (count($more) < self::PAGE_SIZE) {
-                return $pulls;
-            }
-        }
-
-        throw new ForgeReadFailed('GitHub lists more open pull requests than this forge reads.');
-    }
-
-    /**
-     * @return list<array<mixed>>
-     */
-    private function pullsOf(string $body): array
-    {
-        $pulls = $this->decode($body);
-        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        if (!array_is_list($pulls) || !str_starts_with(ltrim($body), '[')) {
-            throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
-        }
-
-        return array_map(static fn (mixed $pull): array => is_array($pull) ? $pull : throw new ForgeReadFailed('GitHub listed a pull request that is not an object.'), $pulls);
-    }
-
-    /**
-     * @param array<mixed> $pull
-     */
-    private function openChange(array $pull): OpenChange
-    {
-        $id = new ChangeId($this->text($pull, 'html_url'));
-
-        try {
-            // Only an address the forge's other reads accept, so a listed change can be read by them.
-            PullRequestAddress::of($id);
-
-            return new OpenChange($id, new CommitId($this->text($pull, 'head', 'sha')), $this->moments->parse($this->text($pull, 'updated_at')));
-        } catch (ChangeNotFound|InvalidArgumentException|Exception $invalid) {
-            throw new ForgeReadFailed('GitHub listed a pull request this forge cannot read.', $invalid->getCode(), previous: $invalid);
-        }
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function decode(string $body): array
-    {
-        try {
-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
-    }
-
-    /**
      * @param array<string, int|string> $query
      *
      * @return array{status: int, body: string, etag: ?string}
@@ -182,10 +107,66 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         return ['status' => $status, 'body' => $body, 'etag' => $etag];
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
+    /**
+     * @return list<array<mixed>>
+     */
+    private function pullsOf(string $body): array
     {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+        $pulls = $this->decode($body);
+        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
+        if (!array_is_list($pulls) || !str_starts_with(ltrim($body), '[')) {
+            throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
+        }
+
+        return array_map(static fn (mixed $pull): array => is_array($pull) ? $pull : throw new ForgeReadFailed('GitHub listed a pull request that is not an object.'), $pulls);
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function laterPulls(RepositoryAddress $repository): array
+    {
+        $pulls = [];
+        for ($page = 2; $page <= self::MAX_PAGES; ++$page) {
+            $more = $this->pullsOf($this->read($repository->path().'/pulls', ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page])['body']);
+            $pulls = [...$pulls, ...$more];
+            if (count($more) < self::PAGE_SIZE) {
+                return $pulls;
+            }
+        }
+
+        throw new ForgeReadFailed('GitHub lists more open pull requests than this forge reads.');
+    }
+
+    /**
+     * @param array<mixed> $pull
+     */
+    private function openChange(array $pull): OpenChange
+    {
+        $id = new ChangeId($this->text($pull, 'html_url'));
+
+        try {
+            // Only an address the forge's other reads accept, so a listed change can be read by them.
+            PullRequestAddress::of($id);
+
+            return new OpenChange($id, new CommitId($this->text($pull, 'head', 'sha')), $this->moments->parse($this->text($pull, 'updated_at')));
+        } catch (ChangeNotFound|InvalidArgumentException|Exception $invalid) {
+            throw new ForgeReadFailed('GitHub listed a pull request this forge cannot read.', $invalid->getCode(), previous: $invalid);
+        }
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function decode(string $body): array
+    {
+        try {
+            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
     }
 
     private function bearer(): string
@@ -197,5 +178,24 @@ final readonly class GitHubWatchReads implements OpenChanges, HeadChecks
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $data;
+        foreach ($keys as $key) {
+            $value = is_array($value) ? ($value[$key] ?? null) : null;
+        }
+
+        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
     }
 }

@@ -256,12 +256,14 @@ final class BootGateTest extends KernelTestCase
         return new BootGate($bus, $this->authors(), $results, new WatcherLedger($this->ledger), $logger);
     }
 
-    private function authors(): AuthorTrust
+    private function project(): WatchedProject
     {
-        $authors = self::createStub(AuthorTrust::class);
-        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
+        return new WatchedProject('alpha', new ChangeSource('/repos/alpha', 'main'), 'Review it.');
+    }
 
-        return $authors;
+    private function green(): HeadDecision
+    {
+        return new HeadDecision(new OpenChange(new ChangeId('7'), new CommitId(str_repeat('b', 40)), new MockClock('2026-11-13T10:00:00+00:00')->now()), HeadAdmission::Green);
     }
 
     private function answer(object $query): CommitId|BootOutcome|string
@@ -279,13 +281,11 @@ final class BootGateTest extends KernelTestCase
         };
     }
 
-    private function project(): WatchedProject
+    private function authors(): AuthorTrust
     {
-        return new WatchedProject('alpha', new ChangeSource('/repos/alpha', 'main'), 'Review it.');
-    }
+        $authors = self::createStub(AuthorTrust::class);
+        $authors->method('isAuthorTrusted')->willReturnCallback(fn (): bool => $this->trustCheckDown ? throw new RuntimeException('The permission API is down.') : $this->authorTrusted);
 
-    private function green(): HeadDecision
-    {
-        return new HeadDecision(new OpenChange(new ChangeId('7'), new CommitId(str_repeat('b', 40)), new MockClock('2026-11-13T10:00:00+00:00')->now()), HeadAdmission::Green);
+        return $authors;
     }
 }

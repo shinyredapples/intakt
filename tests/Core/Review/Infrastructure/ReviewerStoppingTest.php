@@ -144,23 +144,15 @@ final class ReviewerStoppingTest extends TestCase
         $this->reviewer = new UuidV7();
     }
 
-    private function conversation(UuidV7 $conversation): ReviewerConversation
-    {
-        return new ReviewerConversation('You review.', $conversation, $this->round, $this->reviewer);
-    }
-
     private function record(LedgerEventKind $kind, Uuid $reviewer): void
     {
         $appended = $this->ledger->append(new LedgerEvent($kind, $this->payloadOf($kind, $reviewer)));
         self::assertTrue($appended->succeeded());
     }
 
-    // A stop row carries role and tier, because RoundLedger writes it so and a row without them no longer reads back.
-    private function payloadOf(LedgerEventKind $kind, Uuid $reviewer): string
+    private function conversation(UuidV7 $conversation): ReviewerConversation
     {
-        $pair = ['round' => $this->round->toRfc4122(), 'reviewer' => $reviewer->toRfc4122()];
-
-        return json_encode(LedgerEventKind::ReviewerStopped === $kind ? $pair + ['role' => 'security', 'tier' => 'strong'] : $pair, JSON_THROW_ON_ERROR);
+        return new ReviewerConversation('You review.', $conversation, $this->round, $this->reviewer);
     }
 
     // Drives the run as the verdict path does, through its updates, and keeps the stages that reached the agent's loop.
@@ -177,5 +169,13 @@ final class ReviewerStoppingTest extends TestCase
         self::assertNotSame([], iterator_to_array($execution, false));
 
         return $execution->getStatus();
+    }
+
+    // A stop row carries role and tier, because RoundLedger writes it so and a row without them no longer reads back.
+    private function payloadOf(LedgerEventKind $kind, Uuid $reviewer): string
+    {
+        $pair = ['round' => $this->round->toRfc4122(), 'reviewer' => $reviewer->toRfc4122()];
+
+        return json_encode(LedgerEventKind::ReviewerStopped === $kind ? $pair + ['role' => 'security', 'tier' => 'strong'] : $pair, JSON_THROW_ON_ERROR);
     }
 }

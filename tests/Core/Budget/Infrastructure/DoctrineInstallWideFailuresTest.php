@@ -232,6 +232,26 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         $this->failures = $this->worker($entities);
     }
 
+    private function keyOfNotFound(): string
+    {
+        $recorded = new DoctrineInstallWideFailures($this->entities, $this->doctrine(), $this->holds, $this->clock, new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')));
+        $recorded->itemFailed('probe', new RuntimeException('record not found'));
+        $key = $this->entities->getRepository(ItemFailureRecord::class)->findOneBy(['item' => 'probe'])?->errorKey;
+        self::assertNotNull($key);
+        $this->entities->clear();
+        $this->entities->getConnection()->executeStatement('DELETE FROM budget_item_failure');
+
+        return $key;
+    }
+
+    // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
+    private function entityManagerOf(EventManager $events): EntityManager
+    {
+        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
+
+        return new EntityManager($connection, $this->entities->getConfiguration(), $events);
+    }
+
     private function worker(EntityManagerInterface $entities): DoctrineInstallWideFailures
     {
         $records = LogRecords::ofThisRun();
@@ -246,25 +266,5 @@ final class DoctrineInstallWideFailuresTest extends KernelTestCase
         self::assertInstanceOf(ManagerRegistry::class, $doctrine);
 
         return $doctrine;
-    }
-
-    // Its own connection and entity manager, because another messenger:consume process shares neither with this one.
-    private function entityManagerOf(EventManager $events): EntityManager
-    {
-        $connection = DriverManager::getConnection($this->entities->getConnection()->getParams());
-
-        return new EntityManager($connection, $this->entities->getConfiguration(), $events);
-    }
-
-    private function keyOfNotFound(): string
-    {
-        $recorded = new DoctrineInstallWideFailures($this->entities, $this->doctrine(), $this->holds, $this->clock, new RecordingLogger(LogRecords::ofThisRun() ?? self::fail('No log records.')));
-        $recorded->itemFailed('probe', new RuntimeException('record not found'));
-        $key = $this->entities->getRepository(ItemFailureRecord::class)->findOneBy(['item' => 'probe'])?->errorKey;
-        self::assertNotNull($key);
-        $this->entities->clear();
-        $this->entities->getConnection()->executeStatement('DELETE FROM budget_item_failure');
-
-        return $key;
     }
 }

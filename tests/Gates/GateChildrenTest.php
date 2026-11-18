@@ -210,17 +210,56 @@ final class GateChildrenTest extends SandboxTestCase
         self::assertSame(1, $child->exitCode);
     }
 
-    private function checkWithFakeGates(string ...$arguments): CheckRun
-    {
-        return new CheckRun($this->runWithFakeGates(...$arguments));
-    }
-
     /**
      * @param array<string, string> $environment
      */
     private function checkWithFakeGatesIn(array $environment, string ...$arguments): CheckRun
     {
         return new CheckRun($this->runWithFakeGatesIn($environment, ...$arguments));
+    }
+
+    private function fakeGatesHome(): Sandbox
+    {
+        $real = dirname(__DIR__, 2);
+        $home = $this->sandboxWith('gate-children');
+        $home->write('bin/check', (string) file_get_contents($real.'/bin/check'));
+        $home->symlink('vendor', $real.'/vendor');
+
+        return $home;
+    }
+
+    /**
+     * @param list<string> $gates
+     *
+     * @return list<int>
+     */
+    private function pidsOnceWritten(string $directory, array $gates): array
+    {
+        $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
+        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
+
+        while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
+            usleep(10000);
+        }
+
+        return array_map(static fn (string $file): int => (int) @file_get_contents($file), $files);
+    }
+
+    // Because a stopped child whose parent died stays a zombie until it is reaped, which takes a moment on a busy machine; the limit only ends a hang.
+    private function runsOnAfterAWhile(int $pid): bool
+    {
+        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
+
+        while ($this->runs($pid) && hrtime(true) < $until) {
+            usleep(10000);
+        }
+
+        return $this->runs($pid);
+    }
+
+    private function checkWithFakeGates(string ...$arguments): CheckRun
+    {
+        return new CheckRun($this->runWithFakeGates(...$arguments));
     }
 
     private function runWithFakeGates(string ...$arguments): ProcessResult
@@ -240,50 +279,11 @@ final class GateChildrenTest extends SandboxTestCase
         return new ProcessRunner()->run(['php', $home->root.'/bin/check', '--root='.$repository->root, ...array_values($arguments)], $home->root, $environment);
     }
 
-    private function fakeGatesHome(): Sandbox
-    {
-        $real = dirname(__DIR__, 2);
-        $home = $this->sandboxWith('gate-children');
-        $home->write('bin/check', (string) file_get_contents($real.'/bin/check'));
-        $home->symlink('vendor', $real.'/vendor');
-
-        return $home;
-    }
-
-    // Because a stopped child whose parent died stays a zombie until it is reaped, which takes a moment on a busy machine; the limit only ends a hang.
-    private function runsOnAfterAWhile(int $pid): bool
-    {
-        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
-
-        while ($this->runs($pid) && hrtime(true) < $until) {
-            usleep(10000);
-        }
-
-        return $this->runs($pid);
-    }
-
     private function runs(int $pid): bool
     {
         $status = (string) @file_get_contents('/proc/'.$pid.'/stat');
         $end = strrpos($status, ')');
 
         return false !== $end && 'Z' !== substr($status, $end + 2, 1);
-    }
-
-    /**
-     * @param list<string> $gates
-     *
-     * @return list<int>
-     */
-    private function pidsOnceWritten(string $directory, array $gates): array
-    {
-        $files = array_map(static fn (string $gate): string => $directory.'/'.$gate.'.pid', $gates);
-        $until = hrtime(true) + self::SAFETY_LIMIT_NANOSECONDS;
-
-        while ([] !== array_filter($files, static fn (string $file): bool => '' === (string) @file_get_contents($file)) && hrtime(true) < $until) {
-            usleep(10000);
-        }
-
-        return array_map(static fn (string $file): int => (int) @file_get_contents($file), $files);
     }
 }

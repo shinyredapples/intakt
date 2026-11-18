@@ -98,167 +98,6 @@ final readonly class MercureRoundUpdates implements RoundUpdates
     {
     }
 
-    // Read from the whole round, because a reviewer can be stopped after it answered and its row must keep the verdict and findings a reload shows; a stop is rare, unlike streamed text. Marked stopped here too, because this stream announces the stop whatever the read saw.
-    private function stoppedReviewerOf(Uuid $round, string $reviewer): ?ReviewerOutcome
-    {
-        $recorded = array_find($this->outcomesOf($round), static fn (ReviewerOutcome $outcome): bool => $outcome->id === $reviewer);
-
-        return ($recorded ?? $this->startedReviewerOf($round, $reviewer))?->stopped();
-    }
-
-    // Waited for, because a judged round's state must stay the last update of its topic: a worker publishing a tool call's summary finishes first, and the final summary goes out under the same lock, right before the state.
-    private function publishJudged(Uuid $round, RoundProgress $progress): void
-    {
-        $lock = $this->summaryLockOf($round);
-
-        if (!$this->doneOrLogged($round, static fn () => $lock->acquire(true))) {
-            $this->publishJudgedState($round, $progress);
-
-            return;
-        }
-
-        try {
-            $this->doneOrLogged($round, fn () => $this->publishFinalSummary($round));
-            $this->publishJudgedState($round, $progress);
-        } finally {
-            // Through doneOrLogged, because this runs inside the judge's event dispatch, outside the guard summaryChanged() puts around its own release.
-            $this->doneOrLogged($round, static fn () => $lock->release(), 'The live session summary lock was not released.');
-        }
-    }
-
-    // Logged and swallowed, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
-    private function doneOrLogged(Uuid $round, Closure $step, string $failureMessage = 'A live session summary was not published.'): bool
-    {
-        try {
-            $step();
-
-            return true;
-        } catch (Throwable $failure) {
-            $this->logger->warning($failureMessage, ['round' => $round->toRfc4122(), 'exception' => $failure]);
-
-            return false;
-        }
-    }
-
-    private function publishFinalSummary(Uuid $round): void
-    {
-        $summary = $this->summaries->ofRound($round->toRfc4122());
-
-        if ($summary instanceof SessionSummary) {
-            $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $this->summaryStreamOf($round, $summary)));
-        }
-    }
-
-    // One worker at a time reads a round's summary and publishes it, because a worker whose older read was published last would leave the page showing fewer calls than were made.
-    private function publishLatestSummary(Uuid $round): void
-    {
-        $lock = $this->summaryLockOf($round);
-        $seen = null;
-
-        // Tried without waiting, because the worker holding the lock reads the summary again after it lets go, and so publishes what this one would have.
-        while ($lock->acquire(false)) {
-            try {
-                $seen = $this->runningSummaryPublishedOnce($round, $seen);
-            } finally {
-                $lock->release();
-            }
-
-            $latest = $this->runningSummaryStreamOf($round);
-
-            if (null === $latest || $latest === $seen) {
-                return;
-            }
-        }
-    }
-
-    private function runningSummaryPublishedOnce(Uuid $round, ?string $seen): ?string
-    {
-        $latest = $this->runningSummaryStreamOf($round);
-
-        if (null !== $latest && $latest !== $seen) {
-            $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $latest));
-        }
-
-        return $latest;
-    }
-
-    // Null once the round is judged, because its final summary goes out with its judged state, under this lock, and nothing may follow that state.
-    private function runningSummaryStreamOf(Uuid $round): ?string
-    {
-        $summary = $this->summaries->ofRound($round->toRfc4122());
-
-        if (!$summary instanceof SessionSummary || $summary->judged) {
-            return null;
-        }
-
-        return $this->summaryStreamOf($round, $summary);
-    }
-
-    // Compared as the rendered stream, because that is exactly what the page would change to.
-    private function summaryStreamOf(Uuid $round, SessionSummary $summary): string
-    {
-        return $this->twig->render(RoundStream::SummaryChanged->template(), ['round' => $round->toRfc4122(), 'summary' => $summary]);
-    }
-
-    private function summaryLockOf(Uuid $round): LockInterface
-    {
-        return $this->locks->createLock('dashboard-session-summary-'.$round->toRfc4122());
-    }
-
-    private function publishState(Uuid $round, RoundProgress $progress): void
-    {
-        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'outcomes' => $this->outcomesOf($round)]);
-    }
-
-    private function publishJudgedState(Uuid $round, RoundProgress $progress): void
-    {
-        $review = $this->reviewOfJudged($round);
-        $reviewed = $this->roundIn($review, $round->toRfc4122());
-
-        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'review' => $review, 'outcomes' => $reviewed->outcomes ?? []]);
-    }
-
-    // Read as the page reads it, because the live findings, tokens and totals must be exactly what a reload shows; null leaves them to that reload.
-    private function reviewOfJudged(Uuid $round): ?Review
-    {
-        try {
-            $review = $this->pages->reviewOf($round->toRfc4122());
-        } catch (Throwable $failure) {
-            // Logged and swallowed, because the judged state must still go out when its findings cannot be read.
-            $this->logger->warning('The judged round was not read for its live update.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
-
-            return null;
-        }
-
-        return true === $this->roundIn($review, $round->toRfc4122())?->isJudged() ? $review : null;
-    }
-
-    // Read as the page reads it, because a reviewer placed by a finish must show the role, model, outcome and findings a reload shows.
-    /**
-     * @return list<ReviewerOutcome>
-     */
-    private function outcomesOf(Uuid $round): array
-    {
-        try {
-            return $this->roundOf($round->toRfc4122())->outcomes ?? [];
-        } catch (Throwable $failure) {
-            // Logged and swallowed, because the progress must still go out when its reviewers cannot be named.
-            $this->logger->warning('The round was not read for its live reviewer rows.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
-
-            return [];
-        }
-    }
-
-    private function roundOf(string $id): ?ReviewedRound
-    {
-        return $this->roundIn($this->pages->reviewOf($id), $id);
-    }
-
-    private function roundIn(?Review $review, string $id): ?ReviewedRound
-    {
-        return array_find($review->rounds ?? [], static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id);
-    }
-
     // Null leaves the reviewer unnamed until a reload, because a live update must go out even when the ledger cannot be read.
     private function startedReviewerOf(Uuid $round, string $reviewer): ?ReviewerOutcome
     {
@@ -286,5 +125,166 @@ final readonly class MercureRoundUpdates implements RoundUpdates
         }
 
         $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $turboStream));
+    }
+
+    // Waited for, because a judged round's state must stay the last update of its topic: a worker publishing a tool call's summary finishes first, and the final summary goes out under the same lock, right before the state.
+    private function publishJudged(Uuid $round, RoundProgress $progress): void
+    {
+        $lock = $this->summaryLockOf($round);
+
+        if (!$this->doneOrLogged($round, static fn () => $lock->acquire(true))) {
+            $this->publishJudgedState($round, $progress);
+
+            return;
+        }
+
+        try {
+            $this->doneOrLogged($round, fn () => $this->publishFinalSummary($round));
+            $this->publishJudgedState($round, $progress);
+        } finally {
+            // Through doneOrLogged, because this runs inside the judge's event dispatch, outside the guard summaryChanged() puts around its own release.
+            $this->doneOrLogged($round, static fn () => $lock->release(), 'The live session summary lock was not released.');
+        }
+    }
+
+    private function publishState(Uuid $round, RoundProgress $progress): void
+    {
+        $this->publish($round, RoundStream::RoundChanged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'outcomes' => $this->outcomesOf($round)]);
+    }
+
+    // One worker at a time reads a round's summary and publishes it, because a worker whose older read was published last would leave the page showing fewer calls than were made.
+    private function publishLatestSummary(Uuid $round): void
+    {
+        $lock = $this->summaryLockOf($round);
+        $seen = null;
+
+        // Tried without waiting, because the worker holding the lock reads the summary again after it lets go, and so publishes what this one would have.
+        while ($lock->acquire(false)) {
+            try {
+                $seen = $this->runningSummaryPublishedOnce($round, $seen);
+            } finally {
+                $lock->release();
+            }
+
+            $latest = $this->runningSummaryStreamOf($round);
+
+            if (null === $latest || $latest === $seen) {
+                return;
+            }
+        }
+    }
+
+    // Logged and swallowed, for the same reason as a render failure: the summary is a view and its loss must not touch the round.
+    private function doneOrLogged(Uuid $round, Closure $step, string $failureMessage = 'A live session summary was not published.'): bool
+    {
+        try {
+            $step();
+
+            return true;
+        } catch (Throwable $failure) {
+            $this->logger->warning($failureMessage, ['round' => $round->toRfc4122(), 'exception' => $failure]);
+
+            return false;
+        }
+    }
+
+    // Read from the whole round, because a reviewer can be stopped after it answered and its row must keep the verdict and findings a reload shows; a stop is rare, unlike streamed text. Marked stopped here too, because this stream announces the stop whatever the read saw.
+    private function stoppedReviewerOf(Uuid $round, string $reviewer): ?ReviewerOutcome
+    {
+        $recorded = array_find($this->outcomesOf($round), static fn (ReviewerOutcome $outcome): bool => $outcome->id === $reviewer);
+
+        return ($recorded ?? $this->startedReviewerOf($round, $reviewer))?->stopped();
+    }
+
+    private function summaryLockOf(Uuid $round): LockInterface
+    {
+        return $this->locks->createLock('dashboard-session-summary-'.$round->toRfc4122());
+    }
+
+    private function publishJudgedState(Uuid $round, RoundProgress $progress): void
+    {
+        $review = $this->reviewOfJudged($round);
+        $reviewed = $this->roundIn($review, $round->toRfc4122());
+
+        $this->publish($round, RoundStream::RoundJudged, ['round' => $round->toRfc4122(), 'progress' => $progress, 'reviewed' => $reviewed, 'review' => $review, 'outcomes' => $reviewed->outcomes ?? []]);
+    }
+
+    private function publishFinalSummary(Uuid $round): void
+    {
+        $summary = $this->summaries->ofRound($round->toRfc4122());
+
+        if ($summary instanceof SessionSummary) {
+            $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $this->summaryStreamOf($round, $summary)));
+        }
+    }
+
+    // Read as the page reads it, because a reviewer placed by a finish must show the role, model, outcome and findings a reload shows.
+    /**
+     * @return list<ReviewerOutcome>
+     */
+    private function outcomesOf(Uuid $round): array
+    {
+        try {
+            return $this->roundOf($round->toRfc4122())->outcomes ?? [];
+        } catch (Throwable $failure) {
+            // Logged and swallowed, because the progress must still go out when its reviewers cannot be named.
+            $this->logger->warning('The round was not read for its live reviewer rows.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+
+            return [];
+        }
+    }
+
+    private function runningSummaryPublishedOnce(Uuid $round, ?string $seen): ?string
+    {
+        $latest = $this->runningSummaryStreamOf($round);
+
+        if (null !== $latest && $latest !== $seen) {
+            $this->live->publish(new LiveEvent(self::topicOf($round->toRfc4122()), $latest));
+        }
+
+        return $latest;
+    }
+
+    // Null once the round is judged, because its final summary goes out with its judged state, under this lock, and nothing may follow that state.
+    private function runningSummaryStreamOf(Uuid $round): ?string
+    {
+        $summary = $this->summaries->ofRound($round->toRfc4122());
+
+        if (!$summary instanceof SessionSummary || $summary->judged) {
+            return null;
+        }
+
+        return $this->summaryStreamOf($round, $summary);
+    }
+
+    // Read as the page reads it, because the live findings, tokens and totals must be exactly what a reload shows; null leaves them to that reload.
+    private function reviewOfJudged(Uuid $round): ?Review
+    {
+        try {
+            $review = $this->pages->reviewOf($round->toRfc4122());
+        } catch (Throwable $failure) {
+            // Logged and swallowed, because the judged state must still go out when its findings cannot be read.
+            $this->logger->warning('The judged round was not read for its live update.', ['round' => $round->toRfc4122(), 'exception' => $failure]);
+
+            return null;
+        }
+
+        return true === $this->roundIn($review, $round->toRfc4122())?->isJudged() ? $review : null;
+    }
+
+    private function roundIn(?Review $review, string $id): ?ReviewedRound
+    {
+        return array_find($review->rounds ?? [], static fn (ReviewedRound $reviewed): bool => $reviewed->round === $id);
+    }
+
+    // Compared as the rendered stream, because that is exactly what the page would change to.
+    private function summaryStreamOf(Uuid $round, SessionSummary $summary): string
+    {
+        return $this->twig->render(RoundStream::SummaryChanged->template(), ['round' => $round->toRfc4122(), 'summary' => $summary]);
+    }
+
+    private function roundOf(string $id): ?ReviewedRound
+    {
+        return $this->roundIn($this->pages->reviewOf($id), $id);
     }
 }

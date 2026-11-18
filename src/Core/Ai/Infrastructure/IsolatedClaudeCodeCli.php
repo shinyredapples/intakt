@@ -59,6 +59,12 @@ final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
         return new RemovedAfterRun($run, $configuration);
     }
 
+    // Built for each request because a worker lives on while variables are added to its environment, and each must reach the CLI emptied.
+    private function client(): ModelClient
+    {
+        return new ModelClient(null, $this->directory, self::TIMEOUT, $this->environment());
+    }
+
     // A file and never the flag's inline JSON, because Process puts the command line into its timeout message, which is logged; one file per run, so runs of other rounds never share one.
     private function configurationFileFor(ReviewServerAccess $access): string
     {
@@ -69,12 +75,6 @@ final readonly class IsolatedClaudeCodeCli implements ModelClientInterface
         $files->appendToFile($file, json_encode($access->mcpConfiguration(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
 
         return $file;
-    }
-
-    // Built for each request because a worker lives on while variables are added to its environment, and each must reach the CLI emptied.
-    private function client(): ModelClient
-    {
-        return new ModelClient(null, $this->directory, self::TIMEOUT, $this->environment());
     }
 
     /**

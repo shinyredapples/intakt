@@ -239,6 +239,16 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $this->ledger = new InMemoryLedger();
     }
 
+    private function unreachable(): never
+    {
+        throw new TransportException('Could not resolve host: localhost');
+    }
+
+    private function namedFinding(): TextResult
+    {
+        return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
+    }
+
     /**
      * @param Closure(): ResultInterface $first
      * @param Closure(): ResultInterface $second
@@ -250,69 +260,6 @@ final class ReviewerRetryVendorTest extends KernelTestCase
 
             return 1 === count($this->askedToNameFindings) ? $first() : $second();
         };
-    }
-
-    // Read from the encoded input, because the platform hands its model client the normalized messages, never the message bag.
-    /**
-     * @param array<mixed>|string|object $input
-     */
-    private function asksToNameFindings(array|string|object $input): bool
-    {
-        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
-    }
-
-    private function unreachable(): never
-    {
-        throw new TransportException('Could not resolve host: localhost');
-    }
-
-    private function changesWithoutFindings(): TextResult
-    {
-        return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->with('findings', [])->json());
-    }
-
-    // In the shape the live log of #2450 showed, because the default correctness model answered a verdict with no finding on both tries of a first review.
-    private function recordedVerdictOnly(): TextResult
-    {
-        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_CHANGES));
-    }
-
-    private function blockedWithoutFindings(): TextResult
-    {
-        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_BLOCKED));
-    }
-
-    private function approvalWithoutFindings(): TextResult
-    {
-        return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('resolved', [])->with('findings', [])->json());
-    }
-
-    private function exampleFinding(): TextResult
-    {
-        return new TextResult('{"verdict":"changes","findings":['.ReviewerPrompt::EXAMPLE_FINDING.'],"resolved":[],"follow_ups":[]}');
-    }
-
-    private function namedFinding(): TextResult
-    {
-        return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->json());
-    }
-
-    private function thrownBy(Closure $call): ?Throwable
-    {
-        try {
-            $call();
-        } catch (Throwable $thrown) {
-            return $thrown;
-        }
-
-        return null;
-    }
-
-    private function request(): ReviewRequest
-    {
-        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
-
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     // Optionally on accounts, because config/packages/ai.php puts an AccountFailoverPlatform in front of every configured provider and its failover can hide a transport error thrown while sending, which the retry depends on.
@@ -328,5 +275,58 @@ final class ReviewerRetryVendorTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(): ReviewRequest
+    {
+        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+    }
+
+    private function thrownBy(Closure $call): ?Throwable
+    {
+        try {
+            $call();
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
+    }
+
+    private function changesWithoutFindings(): TextResult
+    {
+        return new TextResult(VerdictDocument::fromTheDesign()->with('resolved', [])->with('findings', [])->json());
+    }
+
+    // In the shape the live log of #2450 showed, because the default correctness model answered a verdict with no finding on both tries of a first review.
+    private function recordedVerdictOnly(): TextResult
+    {
+        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_CHANGES));
+    }
+
+    private function exampleFinding(): TextResult
+    {
+        return new TextResult('{"verdict":"changes","findings":['.ReviewerPrompt::EXAMPLE_FINDING.'],"resolved":[],"follow_ups":[]}');
+    }
+
+    private function blockedWithoutFindings(): TextResult
+    {
+        return new TextResult(RecordedAnswer::named(RecordedAnswer::VERDICT_ONLY_BLOCKED));
+    }
+
+    private function approvalWithoutFindings(): TextResult
+    {
+        return new TextResult(VerdictDocument::fromTheDesign()->with('verdict', 'approve')->with('resolved', [])->with('findings', [])->json());
+    }
+
+    // Read from the encoded input, because the platform hands its model client the normalized messages, never the message bag.
+    /**
+     * @param array<mixed>|string|object $input
+     */
+    private function asksToNameFindings(array|string|object $input): bool
+    {
+        return str_contains(json_encode($input, JSON_THROW_ON_ERROR), substr(json_encode(ReviewerPrompt::NAME_FINDINGS_OR_APPROVE, JSON_THROW_ON_ERROR), 1, -1));
     }
 }

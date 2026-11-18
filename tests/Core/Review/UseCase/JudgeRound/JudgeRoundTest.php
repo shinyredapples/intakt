@@ -548,39 +548,6 @@ final class JudgeRoundTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
-    /**
-     * @param list<Finding> $findings
-     */
-    private function roundReporting(array $findings): ReviewRound
-    {
-        $round = $this->fixture->start(1);
-        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-
-        return $this->fixture->round($round->id()->toRfc4122());
-    }
-
-    // At one place, so a finding that is dropped would otherwise be merged with the other.
-    private function quoting(string $id, Severity $severity, string $text): Finding
-    {
-        return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
-    }
-
-    private function atLine(string $id, Severity $severity, int $line): Finding
-    {
-        return new Finding($id, $severity, 'src/Thing.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    private function twoSeparateEntries(int $lineOfB): array
-    {
-        return [
-            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3],
-            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB],
-        ];
-    }
-
     private function judgingOf(ReviewRound $round): JudgeRound
     {
         return new JudgeRound($round->id()->toRfc4122());
@@ -612,6 +579,19 @@ final class JudgeRoundTest extends KernelTestCase
     /**
      * @return list<array{string, string}>
      */
+    private function idsAndTexts(JudgeRequest $request): array
+    {
+        return array_map(static fn (Finding $finding): array => [$finding->id, $finding->text], $request->findings);
+    }
+
+    private function finding(string $id, Severity $severity): Finding
+    {
+        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @return list<array{string, string}>
+     */
     private function askedAbout(ReviewRound $round): array
     {
         $judge = new ScriptedJudgement(new Judgement([]));
@@ -622,16 +602,36 @@ final class JudgeRoundTest extends KernelTestCase
         return $this->idsAndTexts($asked);
     }
 
-    /**
-     * @return list<array{string, string}>
-     */
-    private function idsAndTexts(JudgeRequest $request): array
+    // At one place, so a finding that is dropped would otherwise be merged with the other.
+    private function quoting(string $id, Severity $severity, string $text): Finding
     {
-        return array_map(static fn (Finding $finding): array => [$finding->id, $finding->text], $request->findings);
+        return new Finding($id, $severity, 'src/Thing.php', 1, null, $text, FixableBy::Builder, false, null, null);
     }
 
-    private function finding(string $id, Severity $severity): Finding
+    /**
+     * @param list<Finding> $findings
+     */
+    private function roundReporting(array $findings): ReviewRound
     {
-        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+        $round = $this->fixture->start(1);
+        $this->fixture->deliver($this->fixture->bus->messages[0], new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+
+        return $this->fixture->round($round->id()->toRfc4122());
+    }
+
+    private function atLine(string $id, Severity $severity, int $line): Finding
+    {
+        return new Finding($id, $severity, 'src/Thing.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function twoSeparateEntries(int $lineOfB): array
+    {
+        return [
+            ['id' => 'F1', 'severity' => 'P2', 'text' => 'Text of A.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => 3],
+            ['id' => 'F2', 'severity' => 'P1', 'text' => 'Text of B.', 'merged' => [], 'file' => 'src/Thing.php', 'line' => $lineOfB],
+        ];
     }
 }

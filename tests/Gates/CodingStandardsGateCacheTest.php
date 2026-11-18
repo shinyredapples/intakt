@@ -74,24 +74,6 @@ final class CodingStandardsGateCacheTest extends SandboxTestCase
         self::assertNull(new CodingStandardsGate()->cacheFile($this->emptySandbox()->root, '/cache'));
     }
 
-    // Because the hash PHP CS Fixer keeps for a file is its own: a run with a single rule the file meets records it in a cache beside the gate's.
-    private function recordAsChecked(string $checked, string $file, string $directory): void
-    {
-        $probe = $directory.'/probe.cache';
-        $result = new ProcessRunner()->run(
-            [self::HOME.'/vendor/bin/php-cs-fixer', 'fix', '--dry-run', '--no-interaction', '--rules=encoding', '--using-cache=yes', '--cache-file='.$probe, $checked],
-            $directory,
-        );
-        self::assertTrue($result->succeeded(), $result->output.$result->errors);
-
-        $cache = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
-        self::assertIsArray($cache);
-        $recorded = $this->hashesIn($probe);
-        self::assertCount(1, $recorded);
-        $cache['hashes'] = array_fill_keys(array_keys($this->hashesIn($file)), reset($recorded));
-        file_put_contents($file, json_encode($cache, JSON_THROW_ON_ERROR));
-    }
-
     /**
      * @return array<string, string>
      */
@@ -109,5 +91,23 @@ final class CodingStandardsGateCacheTest extends SandboxTestCase
         }
 
         return $hashes;
+    }
+
+    // Because the hash PHP CS Fixer keeps for a file is its own: a run with a single rule the file meets records it in a cache beside the gate's.
+    private function recordAsChecked(string $checked, string $file, string $directory): void
+    {
+        $probe = $directory.'/probe.cache';
+        $result = new ProcessRunner()->run(
+            [self::HOME.'/vendor/bin/php-cs-fixer', 'fix', '--dry-run', '--no-interaction', '--rules=encoding', '--using-cache=yes', '--cache-file='.$probe, $checked],
+            $directory,
+        );
+        self::assertTrue($result->succeeded(), $result->output.$result->errors);
+
+        $cache = json_decode((string) file_get_contents($file), true, 512, JSON_THROW_ON_ERROR);
+        self::assertIsArray($cache);
+        $recorded = $this->hashesIn($probe);
+        self::assertCount(1, $recorded);
+        $cache['hashes'] = array_fill_keys(array_keys($this->hashesIn($file)), reset($recorded));
+        file_put_contents($file, json_encode($cache, JSON_THROW_ON_ERROR));
     }
 }

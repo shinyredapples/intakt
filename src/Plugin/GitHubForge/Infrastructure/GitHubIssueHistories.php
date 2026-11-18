@@ -96,12 +96,6 @@ final readonly class GitHubIssueHistories
         return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object.');
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
-    {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
-    }
-
     /**
      * @param array<mixed> $answer
      *
@@ -156,6 +150,48 @@ final readonly class GitHubIssueHistories
         return array_values($applied);
     }
 
+    private function bearer(): string
+    {
+        try {
+            return $this->tokens->current()->value;
+        } catch (InstallationTokenNotMinted $notMinted) {
+            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
+        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
+            throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
+        }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function at(array $data, string ...$keys): mixed
+    {
+        $value = $data;
+        foreach ($keys as $key) {
+            $value = is_array($value) ? ($value[$key] ?? null) : null;
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function login(array $data, string $key): string
+    {
+        // The type is required, because without it an App and a person with the same login could not be told apart.
+        $type = $this->text($data, $key, '__typename');
+        $login = $this->text($data, $key, 'login');
+
+        return self::APP === $type ? $login.self::APP_SUFFIX : $login;
+    }
+
     /**
      * @param array<mixed> $issue
      *
@@ -187,46 +223,10 @@ final readonly class GitHubIssueHistories
     /**
      * @param array<mixed> $data
      */
-    private function login(array $data, string $key): string
-    {
-        // The type is required, because without it an App and a person with the same login could not be told apart.
-        $type = $this->text($data, $key, '__typename');
-        $login = $this->text($data, $key, 'login');
-
-        return self::APP === $type ? $login.self::APP_SUFFIX : $login;
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
     private function text(array $data, string ...$keys): string
     {
         $value = $this->at($data, ...$keys);
 
         return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function at(array $data, string ...$keys): mixed
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return $value;
-    }
-
-    private function bearer(): string
-    {
-        try {
-            return $this->tokens->current()->value;
-        } catch (InstallationTokenNotMinted $notMinted) {
-            throw new ForgeReadFailed('No GitHub installation token for a read.', $notMinted->getCode(), previous: $notMinted);
-        } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
-            throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
-        }
     }
 }

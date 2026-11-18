@@ -89,6 +89,14 @@ final readonly class Scope
     }
 
     /**
+     * @return list<string>
+     */
+    private function existingFiles(): array
+    {
+        return $this->repositoryFiles();
+    }
+
+    /**
      * @param list<string> $paths
      *
      * @return list<string>
@@ -102,28 +110,19 @@ final readonly class Scope
     }
 
     /**
+     * @param list<string> $arguments
+     *
      * @return list<string>
      */
-    private function existingFiles(): array
+    private function gitLines(array $arguments): array
     {
-        return $this->repositoryFiles();
-    }
+        $result = $this->runner->git($arguments, $this->root);
 
-    /**
-     * @return list<string>
-     */
-    private function walkDirectory(): array
-    {
-        $files = [];
-        $walker = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->root, RecursiveDirectoryIterator::SKIP_DOTS));
-
-        foreach ($walker as $file) {
-            if ($file instanceof SplFileInfo) {
-                $files[] = substr($file->getPathname(), strlen($this->root) + 1);
-            }
+        if (!$result->succeeded()) {
+            throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());
         }
 
-        return array_values(array_filter($files, static fn (string $path): bool => !str_starts_with($path, 'vendor/')));
+        return array_values(array_filter(explode("\0", $result->output), static fn (string $path): bool => '' !== $path));
     }
 
     /**
@@ -147,6 +146,23 @@ final readonly class Scope
     }
 
     /**
+     * @return list<string>
+     */
+    private function walkDirectory(): array
+    {
+        $files = [];
+        $walker = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->root, RecursiveDirectoryIterator::SKIP_DOTS));
+
+        foreach ($walker as $file) {
+            if ($file instanceof SplFileInfo) {
+                $files[] = substr($file->getPathname(), strlen($this->root) + 1);
+            }
+        }
+
+        return array_values(array_filter($files, static fn (string $path): bool => !str_starts_with($path, 'vendor/')));
+    }
+
+    /**
      * @return list<array{string, string, string}>
      */
     private function indexEntries(): array
@@ -160,12 +176,6 @@ final readonly class Scope
         }
 
         return $entries;
-    }
-
-    private function modeOf(string $path): string
-    {
-        // Git records only the owner's execute bit, so that bit alone decides the mode it would see.
-        return 0 !== ((int) fileperms($this->root.'/'.$path) & 0o100) ? '100755' : '100644';
     }
 
     /**
@@ -191,19 +201,9 @@ final readonly class Scope
         return $blobs;
     }
 
-    /**
-     * @param list<string> $arguments
-     *
-     * @return list<string>
-     */
-    private function gitLines(array $arguments): array
+    private function modeOf(string $path): string
     {
-        $result = $this->runner->git($arguments, $this->root);
-
-        if (!$result->succeeded()) {
-            throw new ScopeFailure('git '.$arguments[0].' failed: '.$result->firstErrorLine());
-        }
-
-        return array_values(array_filter(explode("\0", $result->output), static fn (string $path): bool => '' !== $path));
+        // Git records only the owner's execute bit, so that bit alone decides the mode it would see.
+        return 0 !== ((int) fileperms($this->root.'/'.$path) & 0o100) ? '100755' : '100644';
     }
 }

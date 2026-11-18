@@ -318,22 +318,11 @@ final class RatchetListsGateTest extends SandboxTestCase
         return implode("\n", $findings);
     }
 
-    /**
-     * @param array<string, string> $lists
-     *
-     * @return array<string, IgnoredErrors>
-     */
-    private function readEntriesOf(array $lists): array
+    private function configurationIncluding(string ...$lists): string
     {
-        $workspace = new Workspace($this->emptySandbox()->root, dirname(__DIR__, 2), Mode::Full, null);
-        $scratch = ScratchDirectory::create('intakt-ratchet-test');
-        self::assertInstanceOf(ScratchDirectory::class, $scratch);
+        $includes = array_map(static fn (string $list): string => '    - '.$list."\n", ['../../vendor/phpstan/phpstan-strict-rules/rules.neon', 'phpstan-cache.php', ...$lists]);
 
-        try {
-            return new IgnoredErrorsReader()->read($workspace, $scratch, array_map(static fn (string $list): RatchetListFile => new RatchetListFile(self::LIST, $list), $lists));
-        } finally {
-            $scratch->remove();
-        }
+        return "includes:\n".implode('', $includes)."\nparameters:\n    level: max\n";
     }
 
     private function repositoryOnMain(string $configuration, ?string $list = null): Sandbox
@@ -352,11 +341,9 @@ final class RatchetListsGateTest extends SandboxTestCase
         return $sandbox;
     }
 
-    private function configurationIncluding(string ...$lists): string
+    private static function entry(string $message, int $count, string $path): string
     {
-        $includes = array_map(static fn (string $list): string => '    - '.$list."\n", ['../../vendor/phpstan/phpstan-strict-rules/rules.neon', 'phpstan-cache.php', ...$lists]);
-
-        return "includes:\n".implode('', $includes)."\nparameters:\n    level: max\n";
+        return "\t\t-\n\t\t\tmessage: '".$message."'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tcount: ".$count."\n\t\t\tpath: ".$path."\n";
     }
 
     private static function listOf(string $header, string $entries): string
@@ -364,8 +351,21 @@ final class RatchetListsGateTest extends SandboxTestCase
         return $header."parameters:\n\tignoreErrors:\n".$entries;
     }
 
-    private static function entry(string $message, int $count, string $path): string
+    /**
+     * @param array<string, string> $lists
+     *
+     * @return array<string, IgnoredErrors>
+     */
+    private function readEntriesOf(array $lists): array
     {
-        return "\t\t-\n\t\t\tmessage: '".$message."'\n\t\t\tidentifier: if.condNotBoolean\n\t\t\tcount: ".$count."\n\t\t\tpath: ".$path."\n";
+        $workspace = new Workspace($this->emptySandbox()->root, dirname(__DIR__, 2), Mode::Full, null);
+        $scratch = ScratchDirectory::create('intakt-ratchet-test');
+        self::assertInstanceOf(ScratchDirectory::class, $scratch);
+
+        try {
+            return new IgnoredErrorsReader()->read($workspace, $scratch, array_map(static fn (string $list): RatchetListFile => new RatchetListFile(self::LIST, $list), $lists));
+        } finally {
+            $scratch->remove();
+        }
     }
 }

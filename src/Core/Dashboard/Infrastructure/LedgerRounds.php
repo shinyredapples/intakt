@@ -145,30 +145,6 @@ final class LedgerRounds
         return array_map($this->decidedAsOnThePage(...), array_values($this->started));
     }
 
-    /**
-     * @return list<ReviewedRound>
-     */
-    private function membersOf(string $round): array
-    {
-        $chosen = $this->started[$round] ?? null;
-
-        if (!$chosen instanceof ReviewedRound) {
-            return [];
-        }
-
-        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
-        $rounds = [$chosen, ...array_values($others)];
-        usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
-
-        return $rounds;
-    }
-
-    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
-    private function markOf(ReviewedRound $round): ReplayMark
-    {
-        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
-    }
-
     private function addUsage(RecordedEvent $recorded): void
     {
         $usage = $this->payloads->usageOf($recorded);
@@ -199,12 +175,51 @@ final class LedgerRounds
         }
     }
 
-    /**
-     * @return list<RoundFinding>
-     */
-    private function droppedFindings(RecordedEvent $recorded): array
+    private function addReviewerRow(RecordedEvent $recorded): void
     {
-        return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
+        $row = $this->payloads->reviewerRowOf($recorded);
+
+        if (null !== $row) {
+            $outcome = $this->outcomes[$row->round][$row->reviewer] ?? new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt);
+            $this->outcomes[$row->round][$row->reviewer] = $this->moved($outcome, $row, $recorded->recordedAt);
+        }
+    }
+
+    /**
+     * @return list<ReviewedRound>
+     */
+    private function membersOf(string $round): array
+    {
+        $chosen = $this->started[$round] ?? null;
+
+        if (!$chosen instanceof ReviewedRound) {
+            return [];
+        }
+
+        $others = array_filter($this->started, static fn (ReviewedRound $other): bool => $other !== $chosen && $chosen->isOfTheSameReviewAs($other));
+        $rounds = [$chosen, ...array_values($others)];
+        usort($rounds, static fn (ReviewedRound $one, ReviewedRound $other): int => ($one->number ?? 0) <=> ($other->number ?? 0));
+
+        return $rounds;
+    }
+
+    private function completed(ReviewedRound $round): ReviewedRound
+    {
+        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
+    }
+
+    // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.
+    private function decidedAsOnThePage(ReviewedRound $round): ReviewedRound
+    {
+        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []));
+
+        $judged = $this->judged[$round->round] ?? null;
+
+        return match (true) {
+            null === $judged => $this->endedOrRunning($completed),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
+            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
+        };
     }
 
     /**
@@ -222,6 +237,52 @@ final class LedgerRounds
             in_array($finding->id, $judge->followUps, true) => $finding->calledBy(JudgeCall::FollowUp),
             default => $finding,
         }, [...$this->entriesOf($recorded), ...$this->markedOnly($judge, $recorded)]);
+    }
+
+    /**
+     * @return list<RoundFinding>
+     */
+    private function droppedFindings(RecordedEvent $recorded): array
+    {
+        return array_map(static fn (DroppedFinding $finding): RoundFinding => new RoundFinding($finding->id, $finding->severity->value, $finding->text, [], $finding->file, $finding->line, $finding->reason), $this->payloads->droppedOf($recorded));
+    }
+
+    private function moved(ReviewerOutcome $outcome, ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerBlocked|ReviewerStopped|CatchUpOwed $row, DateTimeImmutable $at): ReviewerOutcome
+    {
+        return match (true) {
+            $row instanceof ReviewerStarted => $outcome->restarted($at, $row->model),
+            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode),
+            $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
+            $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
+            $row instanceof ReviewerStopped => $outcome->stopped(),
+            $row instanceof CatchUpOwed => $outcome->substitutedBy($row->substitute->value, $row->model),
+        };
+    }
+
+    // Each round keeps its own mark, never one of its review, because a replay round opened after a live round of the same change is still a replay; kept per round for one read, because the board and a review page may ask for the same round more than once.
+    private function markOf(ReviewedRound $round): ReplayMark
+    {
+        return $this->roundMarks[$round->round] ??= $this->marks->ofRound($round->round, $round->project);
+    }
+
+    private function endedOrRunning(ReviewedRound $round): ReviewedRound
+    {
+        $ending = $this->endings->ofUnjudged($round->round, $round->reviewers, $round->startedAt);
+
+        return $ending instanceof RoundEnding ? $round->endedAs($ending) : $round;
+    }
+
+    // Only a judged round with a recorded quorum gets an outcome, because the console decides once the judge is done and a policy must never be guessed.
+    private function decided(ReviewedRound $round): ReviewedRound
+    {
+        if (!$round->quorum instanceof QuorumPolicy) {
+            return $round;
+        }
+
+        $votes = array_map(static fn (ReviewerOutcome $outcome): PanelVerdict => new PanelVerdict(Tier::from($outcome->tier), new Verdict(self::voteOf($outcome), [], [], [])), $round->outcomes);
+        $unstarted = array_fill(0, max(0, $round->reviewers - count($votes)), new PanelVerdict(Tier::Standard, new Verdict(Decision::Blocked, [], [], [])));
+
+        return $round->decidedAs($this->decision->of($round->quorum, [...$votes, ...$unstarted]));
     }
 
     /**
@@ -247,67 +308,6 @@ final class LedgerRounds
         $recordedIds = array_map(static fn (RoundFinding $finding): string => $finding->id, $recorded);
 
         return array_map(static fn (string $id): RoundFinding => new RoundFinding($id, null, null), array_values(array_diff(array_unique([...$judge->act, ...$judge->followUps]), $recordedIds)));
-    }
-
-    private function addReviewerRow(RecordedEvent $recorded): void
-    {
-        $row = $this->payloads->reviewerRowOf($recorded);
-
-        if (null !== $row) {
-            $outcome = $this->outcomes[$row->round][$row->reviewer] ?? new ReviewerOutcome($row->reviewer, $row->role, $row->tier->value, $recorded->recordedAt);
-            $this->outcomes[$row->round][$row->reviewer] = $this->moved($outcome, $row, $recorded->recordedAt);
-        }
-    }
-
-    private function moved(ReviewerOutcome $outcome, ReviewerStarted|VerdictReceived|ReviewerFailed|ReviewerBlocked|ReviewerStopped|CatchUpOwed $row, DateTimeImmutable $at): ReviewerOutcome
-    {
-        return match (true) {
-            $row instanceof ReviewerStarted => $outcome->restarted($at, $row->model),
-            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode),
-            $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
-            $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
-            $row instanceof ReviewerStopped => $outcome->stopped(),
-            $row instanceof CatchUpOwed => $outcome->substitutedBy($row->substitute->value, $row->model),
-        };
-    }
-
-    private function completed(ReviewedRound $round): ReviewedRound
-    {
-        return $this->decidedAsOnThePage($round->withTokens($this->tokens->ofRound($round->round))->withCost($this->costs->costOf($round->round))->markedAs($this->markOf($round)));
-    }
-
-    // The one place that decides a round's outcomes, findings, ending and state, so the review list and the review page never decide them apart.
-    private function decidedAsOnThePage(ReviewedRound $round): ReviewedRound
-    {
-        $completed = $round->withOutcomes(array_values($this->outcomes[$round->round] ?? []));
-
-        $judged = $this->judged[$round->round] ?? null;
-
-        return match (true) {
-            null === $judged => $this->endedOrRunning($completed),
-            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
-            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
-        };
-    }
-
-    private function endedOrRunning(ReviewedRound $round): ReviewedRound
-    {
-        $ending = $this->endings->ofUnjudged($round->round, $round->reviewers, $round->startedAt);
-
-        return $ending instanceof RoundEnding ? $round->endedAs($ending) : $round;
-    }
-
-    // Only a judged round with a recorded quorum gets an outcome, because the console decides once the judge is done and a policy must never be guessed.
-    private function decided(ReviewedRound $round): ReviewedRound
-    {
-        if (!$round->quorum instanceof QuorumPolicy) {
-            return $round;
-        }
-
-        $votes = array_map(static fn (ReviewerOutcome $outcome): PanelVerdict => new PanelVerdict(Tier::from($outcome->tier), new Verdict(self::voteOf($outcome), [], [], [])), $round->outcomes);
-        $unstarted = array_fill(0, max(0, $round->reviewers - count($votes)), new PanelVerdict(Tier::Standard, new Verdict(Decision::Blocked, [], [], [])));
-
-        return $round->decidedAs($this->decision->of($round->quorum, [...$votes, ...$unstarted]));
     }
 
     // A reviewer without a verdict votes as blocked, as in the Review module, so a failed or unstarted reviewer never helps a quorum.

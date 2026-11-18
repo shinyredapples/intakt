@@ -32,27 +32,6 @@ final readonly class Network
         return $this->loopbackWorks() ? null : 'the loopback interface lo is down';
     }
 
-    // A down lo still owns 127.0.0.1, so binding alone passes; only a connection through it shows the state.
-    private function loopbackWorks(): bool
-    {
-        $server = @stream_socket_server('tcp://'.$this->loopbackAddress);
-
-        if (false === $server) {
-            return false;
-        }
-
-        $client = @stream_socket_client('tcp://'.stream_socket_get_name($server, false), $code, $message, 1);
-        fclose($server);
-
-        if (false === $client) {
-            return false;
-        }
-
-        fclose($client);
-
-        return true;
-    }
-
     /**
      * @return ?list<string>
      */
@@ -75,6 +54,27 @@ final readonly class Network
         }
 
         return $names;
+    }
+
+    // A down lo still owns 127.0.0.1, so binding alone passes; only a connection through it shows the state.
+    private function loopbackWorks(): bool
+    {
+        $server = @stream_socket_server('tcp://'.$this->loopbackAddress);
+
+        if (false === $server) {
+            return false;
+        }
+
+        $client = @stream_socket_client('tcp://'.stream_socket_get_name($server, false), $code, $message, 1);
+        fclose($server);
+
+        if (false === $client) {
+            return false;
+        }
+
+        fclose($client);
+
+        return true;
     }
 }
 
@@ -152,12 +152,56 @@ final readonly class Probe
         ];
     }
 
+    private function runOffline(string $file): int
+    {
+        $command = $this->command($file);
+        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR, 3 => ['pipe', 'w']];
+
+        $process = proc_open($command, $descriptors, $pipes, $this->root);
+
+        if (false === $process) {
+            fwrite(STDERR, "cannot start the offline instance\n");
+
+            return 1;
+        }
+
+        $status = trim((string) stream_get_contents($pipes[3]));
+        fclose($pipes[3]);
+        $exit = proc_close($process);
+
+        return $this->exitOf($exit, $status);
+    }
+
     // Because a missing tool otherwise shows up only as an instance that never became ready.
     private function missingTools(): ?string
     {
         $missing = array_filter(['unshare', 'sh', 'ip'], fn (string $tool): bool => !$this->isOnPath($tool));
 
         return [] === $missing ? null : implode(PHP_EOL, array_map(static fn (string $tool): string => $tool.' not found, see docs/architecture/requirements.md', $missing));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function probeCommand(string $file): array
+    {
+        if (str_ends_with($file, 'Test.php')) {
+            return [PHP_BINARY, 'vendor/bin/phpunit', '--no-configuration', '--bootstrap', 'tests/bootstrap.php', '--do-not-record-test-run-history', $file];
+        }
+
+        return [PHP_BINARY, $file];
+    }
+
+    private function exitOf(int $exit, string $status): int
+    {
+        // Exact lines rather than decoded JSON, because anything else from the instance must count as not ready.
+        if (in_array($status, ['{"status":"ready"}', '{"status":"ready","mode":"worker"}'], true)) {
+            return $exit;
+        }
+
+        fwrite(STDERR, 'the instance did not become ready: '.('' === $status ? 'no status reported (is unshare with network namespaces available, or PROBE_ISOLATED set by a caller that isolates the run?)' : $status).PHP_EOL);
+
+        return 0 === $exit ? 1 : $exit;
     }
 
     private function isOnPath(string $tool): bool
@@ -184,50 +228,6 @@ final readonly class Probe
         }
 
         return str_starts_with($entry, '/') ? $entry : $this->root.'/'.$entry;
-    }
-
-    private function runOffline(string $file): int
-    {
-        $command = $this->command($file);
-        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR, 3 => ['pipe', 'w']];
-
-        $process = proc_open($command, $descriptors, $pipes, $this->root);
-
-        if (false === $process) {
-            fwrite(STDERR, "cannot start the offline instance\n");
-
-            return 1;
-        }
-
-        $status = trim((string) stream_get_contents($pipes[3]));
-        fclose($pipes[3]);
-        $exit = proc_close($process);
-
-        return $this->exitOf($exit, $status);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function probeCommand(string $file): array
-    {
-        if (str_ends_with($file, 'Test.php')) {
-            return [PHP_BINARY, 'vendor/bin/phpunit', '--no-configuration', '--bootstrap', 'tests/bootstrap.php', '--do-not-record-test-run-history', $file];
-        }
-
-        return [PHP_BINARY, $file];
-    }
-
-    private function exitOf(int $exit, string $status): int
-    {
-        // Exact lines rather than decoded JSON, because anything else from the instance must count as not ready.
-        if (in_array($status, ['{"status":"ready"}', '{"status":"ready","mode":"worker"}'], true)) {
-            return $exit;
-        }
-
-        fwrite(STDERR, 'the instance did not become ready: '.('' === $status ? 'no status reported (is unshare with network namespaces available, or PROBE_ISOLATED set by a caller that isolates the run?)' : $status).PHP_EOL);
-
-        return 0 === $exit ? 1 : $exit;
     }
 }
 

@@ -178,6 +178,28 @@ final readonly class ReviewRounds
         }
     }
 
+    // Thrown inside the transaction, so the number taken is rolled back with it.
+    private function refuseAnotherNumber(RunReviewRound $command, ChangeRound $opened): void
+    {
+        $expected = $command->round->number;
+
+        if (null !== $expected && $expected !== $opened->number) {
+            throw RoundNotNext::for($expected, $opened->number);
+        }
+    }
+
+    private function newId(): UuidV7
+    {
+        return new UuidV7(UuidV7::generate($this->clock->now()));
+    }
+
+    private function markAsReplayWhenItsProjectIs(ReviewRound $round): void
+    {
+        if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
+            $round->markAsReplay();
+        }
+    }
+
     /**
      * @template T
      *
@@ -201,27 +223,5 @@ final readonly class ReviewRounds
 
             throw $failure;
         }
-    }
-
-    // Thrown inside the transaction, so the number taken is rolled back with it.
-    private function refuseAnotherNumber(RunReviewRound $command, ChangeRound $opened): void
-    {
-        $expected = $command->round->number;
-
-        if (null !== $expected && $expected !== $opened->number) {
-            throw RoundNotNext::for($expected, $opened->number);
-        }
-    }
-
-    private function markAsReplayWhenItsProjectIs(ReviewRound $round): void
-    {
-        if ($this->entities->find(ReplayProject::class, $round->project()) instanceof ReplayProject) {
-            $round->markAsReplay();
-        }
-    }
-
-    private function newId(): UuidV7
-    {
-        return new UuidV7(UuidV7::generate($this->clock->now()));
     }
 }

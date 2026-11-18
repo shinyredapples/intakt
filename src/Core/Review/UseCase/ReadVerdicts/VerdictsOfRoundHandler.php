@@ -32,6 +32,18 @@ final readonly class VerdictsOfRoundHandler
         return new RoundVerdicts($standing, $this->countingOf($round, $standing));
     }
 
+    private function storedRound(string $roundId): ReviewRound
+    {
+        if (!Uuid::isValid($roundId)) {
+            throw RoundNotFound::for($roundId);
+        }
+
+        // Cleared because a worker keeps its entity manager between messages, and the verdicts other workers stored since are the truth.
+        $this->entities->clear();
+
+        return $this->entities->find(ReviewRound::class, Uuid::fromString($roundId)) ?? throw RoundNotFound::for($roundId);
+    }
+
     /**
      * @return list<PanelVerdict>
      */
@@ -47,17 +59,5 @@ final readonly class VerdictsOfRoundHandler
         }
 
         return $this->verdicts->of($round);
-    }
-
-    private function storedRound(string $roundId): ReviewRound
-    {
-        if (!Uuid::isValid($roundId)) {
-            throw RoundNotFound::for($roundId);
-        }
-
-        // Cleared because a worker keeps its entity manager between messages, and the verdicts other workers stored since are the truth.
-        $this->entities->clear();
-
-        return $this->entities->find(ReviewRound::class, Uuid::fromString($roundId)) ?? throw RoundNotFound::for($roundId);
     }
 }

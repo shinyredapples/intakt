@@ -130,11 +130,6 @@ final class HighlightsAssemblyGateTest extends SandboxTestCase
         self::assertTrue($run->passed('highlights'), $run->output());
     }
 
-    private function gate(): HighlightsGate
-    {
-        return new HighlightsGate(new FencedCodeBlocks(), new HighlightFragments());
-    }
-
     private function sandboxWithFragments(): Sandbox
     {
         $sandbox = $this->emptySandbox();
@@ -142,5 +137,10 @@ final class HighlightsAssemblyGateTest extends SandboxTestCase
         $sandbox->write('docs/highlights.d/5-gates.md', "## Tooling\n| Gates | done | T1 (#5) |\n");
 
         return $sandbox;
+    }
+
+    private function gate(): HighlightsGate
+    {
+        return new HighlightsGate(new FencedCodeBlocks(), new HighlightFragments());
     }
 }

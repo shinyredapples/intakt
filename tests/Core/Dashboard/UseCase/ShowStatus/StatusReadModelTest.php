@@ -531,16 +531,44 @@ final class StatusReadModelTest extends TestCase
         $this->ledger = new DashboardLedger();
     }
 
-    private function schemaAt(string ...$path): mixed
+    private function queueHolding(int $messages): ReceiverInterface
     {
-        $node = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
+        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
+        $queue->method('getMessageCount')->willReturn($messages);
+        self::assertInstanceOf(ReceiverInterface::class, $queue);
 
-        foreach ($path as $key) {
-            self::assertIsArray($node);
-            $node = $node[$key] ?? null;
-        }
+        return $queue;
+    }
 
-        return $node;
+    private function readModel(string $redacting = ''): StatusReadModel
+    {
+        $holds = self::createStub(Holds::class);
+        $holds->method('sharedInEffect')->willReturn($this->holds);
+        $redactor = self::createStub(Redactor::class);
+        $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn(Cost::none());
+        $ledger = $this->readFrom ?? $this->ledger;
+        $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
+        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
+        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
+
+        return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function schemaErrorsOf(string $json): array
+    {
+        $document = json_decode($json);
+        $validator = new Validator();
+        $validator->validate($document, (object) ['$ref' => 'file://'.realpath(self::SCHEMA)]);
+
+        /** @var list<array{property: string, message: string}> $errors */
+        $errors = $validator->getErrors();
+
+        return array_map(static fn (array $error): string => $error['property'].': '.$error['message'], $errors);
     }
 
     /**
@@ -567,43 +595,15 @@ final class StatusReadModelTest extends TestCase
         return $project;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function schemaErrorsOf(string $json): array
+    private function schemaAt(string ...$path): mixed
     {
-        $document = json_decode($json);
-        $validator = new Validator();
-        $validator->validate($document, (object) ['$ref' => 'file://'.realpath(self::SCHEMA)]);
+        $node = json_decode((string) file_get_contents(self::SCHEMA), true, flags: JSON_THROW_ON_ERROR);
 
-        /** @var list<array{property: string, message: string}> $errors */
-        $errors = $validator->getErrors();
+        foreach ($path as $key) {
+            self::assertIsArray($node);
+            $node = $node[$key] ?? null;
+        }
 
-        return array_map(static fn (array $error): string => $error['property'].': '.$error['message'], $errors);
-    }
-
-    private function readModel(string $redacting = ''): StatusReadModel
-    {
-        $holds = self::createStub(Holds::class);
-        $holds->method('sharedInEffect')->willReturn($this->holds);
-        $redactor = self::createStub(Redactor::class);
-        $redactor->method('redact')->willReturnCallback(static fn (string $text): string => '' === $redacting ? $text : str_replace($redacting, '[redacted]', $text));
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn(Cost::none());
-        $ledger = $this->readFrom ?? $this->ledger;
-        $marks = new ReplayMarks(new ReplayMarkBus($this->replays, $this->storedMarks));
-        $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), $marks);
-        $projects = new ProjectStatuses($ledger, $pages, new LedgerFailingHeads($ledger), new LedgerWaitingHeads(), new LedgerBuildSteps(), $redactor, $marks, ['alpha' => [], 'beta' => []]);
-
-        return new StatusReadModel(new MockClock('2026-10-28T12:30:00+00:00'), $holds, new MessageQueues($this->receivers), $projects);
-    }
-
-    private function queueHolding(int $messages): ReceiverInterface
-    {
-        $queue = self::createStubForIntersectionOfInterfaces([ReceiverInterface::class, MessageCountAwareInterface::class]);
-        $queue->method('getMessageCount')->willReturn($messages);
-        self::assertInstanceOf(ReceiverInterface::class, $queue);
-
-        return $queue;
+        return $node;
     }
 }

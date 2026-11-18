@@ -103,6 +103,41 @@ final readonly class UsageLedger
     }
 
     /**
+     * @return list<TokenUsageRow>
+     */
+    private function usagesOfRounds(DeferredResult ...$rounds): array
+    {
+        return array_merge(...array_map($this->usagesOf(...), $rounds));
+    }
+
+    /**
+     * @throws UsageNotRecorded
+     */
+    private function leaveUnreadableUnsettled(UsageReservation $reservation, Throwable $unreadable, DeferredResult ...$rounds): void
+    {
+        // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
+        $this->logger->warning('Token usage of an answered call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
+        $this->leaveUnsettled($reservation, $unreadable, ...$rounds);
+    }
+
+    /**
+     * @throws UsageNotRecorded
+     */
+    private function record(UsageStarted|UsageSettled|UsageUnsettled $payload, ?Throwable $failure = null): void
+    {
+        $usage = $this->serializer->serialize($payload, 'json');
+        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $usage));
+        if ($appended->succeeded()) {
+            return;
+        }
+
+        // Logged with the full row, because a call that ran must be settled later from its usage, never lost (docs/design/05-architecture/06-budget-and-model-planner.md).
+        $this->logger->error('Token usage was not recorded.', ['usage' => $usage, 'reason' => $appended->failure]);
+
+        throw new UsageNotRecorded($usage, (string) $appended->failure, $failure);
+    }
+
+    /**
      * @param list<DeferredResult> $rounds
      *
      * @return list<TokenUsageRow>
@@ -124,24 +159,6 @@ final readonly class UsageLedger
     }
 
     /**
-     * @throws UsageNotRecorded
-     */
-    private function leaveUnreadableUnsettled(UsageReservation $reservation, Throwable $unreadable, DeferredResult ...$rounds): void
-    {
-        // Unsettled, not failed, because the answer arrived and its verdict stands; the vendor's usage settles the call later (docs/design/05-architecture/06-budget-and-model-planner.md).
-        $this->logger->warning('Token usage of an answered call could not be read.', ['call' => $reservation->call, 'exception' => $unreadable]);
-        $this->leaveUnsettled($reservation, $unreadable, ...$rounds);
-    }
-
-    /**
-     * @return list<TokenUsageRow>
-     */
-    private function usagesOfRounds(DeferredResult ...$rounds): array
-    {
-        return array_merge(...array_map($this->usagesOf(...), $rounds));
-    }
-
-    /**
      * @return list<TokenUsageRow>
      */
     private function usagesOf(DeferredResult $result): array
@@ -157,14 +174,6 @@ final readonly class UsageLedger
         return array_values(array_map(fn (TokenUsageInterface $part): TokenUsageRow => $this->asRow($part, $account), $usages));
     }
 
-    // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
-    private function accountOf(DeferredResult $result): ?string
-    {
-        $account = $result->getMetadata()->get(Account::METADATA);
-
-        return is_string($account) ? $account : null;
-    }
-
     // An answer that fails to map leaves no metadata on the deferred result, yet its tokens were spent, so they are read from the raw answer.
     private function tokenUsageOf(DeferredResult $result): ?TokenUsageInterface
     {
@@ -176,24 +185,12 @@ final readonly class UsageLedger
         return $usage instanceof TokenUsageInterface ? $usage : null;
     }
 
-    // A stream carries the last usage it reported on its own metadata, which the deferred result and the extractor do not see, so it is read first; a result that fails to convert has no stream.
-    private function streamedUsageOf(DeferredResult $result): mixed
+    // Each row names the account its round ran on, because a reading belongs to its account (docs/design/05-architecture/06-budget-and-model-planner.md).
+    private function accountOf(DeferredResult $result): ?string
     {
-        try {
-            $converted = $result->getResult();
-        } catch (ExceptionInterface|HttpClientExceptionInterface) {
-            return null;
-        }
+        $account = $result->getMetadata()->get(Account::METADATA);
 
-        return $converted instanceof StreamResult ? $converted->getMetadata()->get(self::TOKEN_USAGE) : null;
-    }
-
-    // Needed because an in-memory platform (MockPlatformFactory) has no extractor and hands over a converted result that carries the usage.
-    private function convertedUsageOf(RawResultInterface $raw): mixed
-    {
-        $converted = $raw->getObject();
-
-        return $converted instanceof ResultInterface ? $converted->getMetadata()->get(self::TOKEN_USAGE) : null;
+        return is_string($account) ? $account : null;
     }
 
     private function asRow(TokenUsageInterface $usage, ?string $account): TokenUsageRow
@@ -215,20 +212,23 @@ final readonly class UsageLedger
         );
     }
 
-    /**
-     * @throws UsageNotRecorded
-     */
-    private function record(UsageStarted|UsageSettled|UsageUnsettled $payload, ?Throwable $failure = null): void
+    // A stream carries the last usage it reported on its own metadata, which the deferred result and the extractor do not see, so it is read first; a result that fails to convert has no stream.
+    private function streamedUsageOf(DeferredResult $result): mixed
     {
-        $usage = $this->serializer->serialize($payload, 'json');
-        $appended = $this->ledger->append(new LedgerEvent(LedgerEventKind::UsageRecorded, $usage));
-        if ($appended->succeeded()) {
-            return;
+        try {
+            $converted = $result->getResult();
+        } catch (ExceptionInterface|HttpClientExceptionInterface) {
+            return null;
         }
 
-        // Logged with the full row, because a call that ran must be settled later from its usage, never lost (docs/design/05-architecture/06-budget-and-model-planner.md).
-        $this->logger->error('Token usage was not recorded.', ['usage' => $usage, 'reason' => $appended->failure]);
+        return $converted instanceof StreamResult ? $converted->getMetadata()->get(self::TOKEN_USAGE) : null;
+    }
 
-        throw new UsageNotRecorded($usage, (string) $appended->failure, $failure);
+    // Needed because an in-memory platform (MockPlatformFactory) has no extractor and hands over a converted result that carries the usage.
+    private function convertedUsageOf(RawResultInterface $raw): mixed
+    {
+        $converted = $raw->getObject();
+
+        return $converted instanceof ResultInterface ? $converted->getMetadata()->get(self::TOKEN_USAGE) : null;
     }
 }

@@ -549,32 +549,6 @@ final class GitHubForgeTest extends TestCase
         self::assertCount($requestsBefore, $this->requested);
     }
 
-    private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
-    {
-        try {
-            $forge->postReview('widgets', $change, $comment);
-        } catch (RuntimeException $failure) {
-            return $failure;
-        }
-
-        throw new LogicException('The post was expected to fail.');
-    }
-
-    private function comment(string $body, string ...$credentials): ReviewComment
-    {
-        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
-    }
-
-    private function movedChange(GitHubForge $forge): Change
-    {
-        $this->pullFixture = 'pull_request_moved.json';
-        $this->compareFixture = 'compare_merge_base.json';
-        $change = $forge->change(new ChangeId(self::PULL));
-        $this->compareFixture = 'compare_ahead.json';
-
-        return $change;
-    }
-
     /**
      * @param ?Closure(string, array<mixed>): ?ResponseInterface $override
      */
@@ -591,6 +565,40 @@ final class GitHubForgeTest extends TestCase
         }, 'https://api.github.com'), new GenericRetryStrategy(delayMs: 0), 2));
     }
 
+    private static function fixture(string $name): string
+    {
+        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
+
+        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
+    }
+
+    /**
+     * @param array<mixed> $options
+     */
+    private function isBranchComparison(string $url, array $options): bool
+    {
+        return str_contains($url, '/compare/main...') && !str_ends_with(self::header($options, 'accept'), 'github.diff');
+    }
+
+    private static function comparison(string $mergeBase, int $files): string
+    {
+        return json_encode([
+            'status' => 'ahead',
+            'merge_base_commit' => ['sha' => $mergeBase],
+            'files' => array_map(static fn (int $number): array => ['filename' => 'docs/F'.$number.'.md', 'status' => 'added'], range(1, $files)),
+        ], JSON_THROW_ON_ERROR);
+    }
+
+    private function movedChange(GitHubForge $forge): Change
+    {
+        $this->pullFixture = 'pull_request_moved.json';
+        $this->compareFixture = 'compare_merge_base.json';
+        $change = $forge->change(new ChangeId(self::PULL));
+        $this->compareFixture = 'compare_ahead.json';
+
+        return $change;
+    }
+
     private function forgeOver(HttpClientInterface $http): GitHubForge
     {
         $clock = new MockClock('2026-11-25 10:00:00 UTC');
@@ -605,11 +613,6 @@ final class GitHubForgeTest extends TestCase
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
         return new GitHubForge($calls, $checked, $this->secretScan(), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())), new GitHubAppSetting('12345', new NullLogger()));
-    }
-
-    private function secretScan(): SecretScan
-    {
-        return new SecretScan(dirname(__DIR__, 3), 'gitleaks');
     }
 
     /**
@@ -632,9 +635,33 @@ final class GitHubForgeTest extends TestCase
     /**
      * @param array<mixed> $options
      */
-    private function isBranchComparison(string $url, array $options): bool
+    private static function header(array $options, string $name): string
     {
-        return str_contains($url, '/compare/main...') && !str_ends_with(self::header($options, 'accept'), 'github.diff');
+        $headers = $options['normalized_headers'] ?? [];
+        $values = is_array($headers) ? ($headers[$name] ?? []) : [];
+
+        return is_array($values) && is_string($values[0] ?? null) ? $values[0] : '';
+    }
+
+    private function secretScan(): SecretScan
+    {
+        return new SecretScan(dirname(__DIR__, 3), 'gitleaks');
+    }
+
+    private function comment(string $body, string ...$credentials): ReviewComment
+    {
+        return new ReviewComment($body, new ReviewToken(self::TOKEN), new JobCredentials(...$credentials));
+    }
+
+    private function failureOfPost(GitHubForge $forge, Change $change, ReviewComment $comment): RuntimeException
+    {
+        try {
+            $forge->postReview('widgets', $change, $comment);
+        } catch (RuntimeException $failure) {
+            return $failure;
+        }
+
+        throw new LogicException('The post was expected to fail.');
     }
 
     private function postedBody(): string
@@ -642,32 +669,5 @@ final class GitHubForgeTest extends TestCase
         $body = $this->sent[self::POST_REVIEW]['body'] ?? null;
 
         return is_string($body) ? $body : throw new LogicException('No review was posted.');
-    }
-
-    private static function comparison(string $mergeBase, int $files): string
-    {
-        return json_encode([
-            'status' => 'ahead',
-            'merge_base_commit' => ['sha' => $mergeBase],
-            'files' => array_map(static fn (int $number): array => ['filename' => 'docs/F'.$number.'.md', 'status' => 'added'], range(1, $files)),
-        ], JSON_THROW_ON_ERROR);
-    }
-
-    private static function fixture(string $name): string
-    {
-        $content = file_get_contents(__DIR__.'/Fixtures/'.$name);
-
-        return false === $content ? throw new LogicException('Missing fixture '.$name) : $content;
-    }
-
-    /**
-     * @param array<mixed> $options
-     */
-    private static function header(array $options, string $name): string
-    {
-        $headers = $options['normalized_headers'] ?? [];
-        $values = is_array($headers) ? ($headers[$name] ?? []) : [];
-
-        return is_array($values) && is_string($values[0] ?? null) ? $values[0] : '';
     }
 }

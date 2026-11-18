@@ -67,12 +67,6 @@ final readonly class ProviderLiteralRule implements Rule
         return $findings;
     }
 
-    // every text part of an interpolated string, because an id can follow the interpolation as well as lead it
-    private function isLiteral(Node $node): bool
-    {
-        return $node instanceof String_ || $node instanceof InterpolatedStringPart;
-    }
-
     /**
      * @param array<Node> $nodes
      *
@@ -96,17 +90,10 @@ final readonly class ProviderLiteralRule implements Rule
         return $literals;
     }
 
-    // a named class that implements the descriptor contract, read through reflection, so a class only named like a descriptor is still checked; an anonymous class has no namespacedName at all, so it counts only inside a descriptor
-    private function isInTheCatalog(ClassLike $class): bool
+    // every text part of an interpolated string, because an id can follow the interpolation as well as lead it
+    private function isLiteral(Node $node): bool
     {
-        if (!$class->name instanceof Identifier) {
-            return false;
-        }
-
-        $name = $class->namespacedName?->toString() ?? '';
-
-        return $this->reflections->hasClass($name)
-            && $this->reflections->getClass($name)->implementsInterface($this->catalog);
+        return $node instanceof String_ || $node instanceof InterpolatedStringPart;
     }
 
     private function messageFor(Node $literal): ?string
@@ -121,6 +108,19 @@ final readonly class ProviderLiteralRule implements Rule
         $host = $this->firstMatchOf(self::PROVIDER_HOST, $text);
 
         return null === $host ? null : sprintf("'%s' names a provider host: name it in a provider descriptor of the catalog, not in code.", $host);
+    }
+
+    // a named class that implements the descriptor contract, read through reflection, so a class only named like a descriptor is still checked; an anonymous class has no namespacedName at all, so it counts only inside a descriptor
+    private function isInTheCatalog(ClassLike $class): bool
+    {
+        if (!$class->name instanceof Identifier) {
+            return false;
+        }
+
+        $name = $class->namespacedName?->toString() ?? '';
+
+        return $this->reflections->hasClass($name)
+            && $this->reflections->getClass($name)->implementsInterface($this->catalog);
     }
 
     private function firstMatchOf(string $pattern, string $text): ?string

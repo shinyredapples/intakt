@@ -59,6 +59,16 @@ final readonly class FlagParameterRule implements Rule
         return array_values(array_map($this->finding(...), $flags));
     }
 
+    private function isBoolean(Identifier|Name|ComplexType|null $type): bool
+    {
+        return match (true) {
+            $type instanceof Identifier => in_array($type->toLowerString(), self::BOOLEAN_TYPES, true),
+            $type instanceof NullableType => $this->isBoolean($type->type),
+            $type instanceof UnionType => array_any($type->types, fn (Identifier|Name|IntersectionType $member): bool => $this->isBoolean($member)),
+            default => false,
+        };
+    }
+
     // a readonly service is still a service, so a boolean is data only when a readonly class the container skips keeps it as it is
     private function isValueObjectData(Param $parameter, FunctionLike $node, Scope $scope): bool
     {
@@ -72,6 +82,13 @@ final readonly class FlagParameterRule implements Rule
             && $this->isOnlyStored($parameter, $node, $class);
     }
 
+    private function finding(Param $parameter): IdentifierRuleError
+    {
+        $message = sprintf('Parameter $%s is a flag: model the modes with a backed enum, or split the method in two. A boolean that is data is a property a readonly value object marked #[Exclude] stores as it is.', $this->nameOf($parameter) ?? 'parameter');
+
+        return RuleErrorBuilder::message($message)->identifier('intakt.flagParameter')->line($parameter->getStartLine())->build();
+    }
+
     // any call, eval or include can read the arguments out of sight (a backtrace, an exception trace, the local scope), and naming every way never ends, so a boolean is kept as it is only by a body of plain $this->x = $y statements that hands $x to none or exactly one of them
     private function isOnlyStored(Param $parameter, ClassMethod $constructor, ClassReflection $class): bool
     {
@@ -83,6 +100,11 @@ final readonly class FlagParameterRule implements Rule
         }
 
         return ($parameter->isPromoted() ? 0 : 1) === $this->variableUses($statements, $name);
+    }
+
+    private function nameOf(Param $parameter): ?string
+    {
+        return $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : null;
     }
 
     private function isPlainAssignment(Stmt $statement, ClassReflection $class): bool
@@ -99,13 +121,6 @@ final readonly class FlagParameterRule implements Rule
             && is_string($assign->expr->name);
     }
 
-    // only a property the class declares itself, since PHP hands any other assignment (undeclared, or private to a parent) to __set(), which can read the value
-    private function declares(ClassReflection $class, string $property): bool
-    {
-        return $class->hasNativeProperty($property)
-            && $class->getNativeProperty($property)->getDeclaringClass()->getName() === $class->getName();
-    }
-
     /**
      * @param array<Stmt> $statements
      */
@@ -114,25 +129,10 @@ final readonly class FlagParameterRule implements Rule
         return count(new NodeFinder()->find($statements, fn (Node $found): bool => $found instanceof Variable && $found->name === $name));
     }
 
-    private function isBoolean(Identifier|Name|ComplexType|null $type): bool
+    // only a property the class declares itself, since PHP hands any other assignment (undeclared, or private to a parent) to __set(), which can read the value
+    private function declares(ClassReflection $class, string $property): bool
     {
-        return match (true) {
-            $type instanceof Identifier => in_array($type->toLowerString(), self::BOOLEAN_TYPES, true),
-            $type instanceof NullableType => $this->isBoolean($type->type),
-            $type instanceof UnionType => array_any($type->types, fn (Identifier|Name|IntersectionType $member): bool => $this->isBoolean($member)),
-            default => false,
-        };
-    }
-
-    private function nameOf(Param $parameter): ?string
-    {
-        return $parameter->var instanceof Variable && is_string($parameter->var->name) ? $parameter->var->name : null;
-    }
-
-    private function finding(Param $parameter): IdentifierRuleError
-    {
-        $message = sprintf('Parameter $%s is a flag: model the modes with a backed enum, or split the method in two. A boolean that is data is a property a readonly value object marked #[Exclude] stores as it is.', $this->nameOf($parameter) ?? 'parameter');
-
-        return RuleErrorBuilder::message($message)->identifier('intakt.flagParameter')->line($parameter->getStartLine())->build();
+        return $class->hasNativeProperty($property)
+            && $class->getNativeProperty($property)->getDeclaringClass()->getName() === $class->getName();
     }
 }

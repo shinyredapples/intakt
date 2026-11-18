@@ -121,6 +121,11 @@ final class StreamedPageTest extends TestCase
         $this->streamed($this->stream('refresh', 'target="round-round-1-state"', ''));
     }
 
+    private function stream(string $action, string $target, string $template): string
+    {
+        return sprintf('<turbo-stream action="%s" %s><template>%s</template></turbo-stream>', $action, $target, $template);
+    }
+
     private function streamed(string $data): Crawler
     {
         return new StreamedPage()->after(self::ROUND, [$this->update($data)], $this->page());
@@ -129,11 +134,6 @@ final class StreamedPageTest extends TestCase
     private function update(string $data): Update
     {
         return new Update(MercureRoundUpdates::topicOf(self::ROUND), $data);
-    }
-
-    private function stream(string $action, string $target, string $template): string
-    {
-        return sprintf('<turbo-stream action="%s" %s><template>%s</template></turbo-stream>', $action, $target, $template);
     }
 
     private function page(): Crawler

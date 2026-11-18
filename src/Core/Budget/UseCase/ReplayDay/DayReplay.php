@@ -41,19 +41,6 @@ final readonly class DayReplay
         };
     }
 
-    /**
-     * @return list<string>
-     */
-    private function arguments(ScriptedStep $step, int $count): array
-    {
-        $arguments = array_slice($step->words, 1);
-        if (count($arguments) !== $count) {
-            throw ScriptLineNotUnderstood::because($step->line, sprintf('%s takes %d arguments', $step->words[0], $count));
-        }
-
-        return $arguments;
-    }
-
     private function read(ScriptedStep $step): string
     {
         [$account, $window, $percent, $resetsAt] = $this->arguments($step, 4);
@@ -98,6 +85,19 @@ final readonly class DayReplay
         $this->arguments($step, 0);
 
         return $this->guard->decideMerge()->value;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function arguments(ScriptedStep $step, int $count): array
+    {
+        $arguments = array_slice($step->words, 1);
+        if (count($arguments) !== $count) {
+            throw ScriptLineNotUnderstood::because($step->line, sprintf('%s takes %d arguments', $step->words[0], $count));
+        }
+
+        return $arguments;
     }
 
     private function accountOf(ScriptedStep $step, string $key): Account

@@ -122,6 +122,41 @@ final readonly class StoredFindings
         return true;
     }
 
+    private function locked(string $project, string $change): ChangeFindings
+    {
+        $this->createIfMissing($project, $change);
+        // Locked with a write, because on SQLite only a write takes the lock, and a snapshot gone stale then fails here, where the transaction starts over, rather than in the flush, which closes the entity manager.
+        $this->entities->getConnection()->executeStatement('UPDATE change_findings SET rounds = rounds WHERE project = ? AND change_ref = ?', [$project, $change]);
+        $stored = $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
+
+        return $stored ?? throw ChangeFindingsNotFound::for($project, $change);
+    }
+
+    private function ledgerOf(ChangeFindings $stored): FindingLedger
+    {
+        return new FindingLedger($this->trackedIn($stored));
+    }
+
+    /**
+     * @param list<Finding>|list<TrackedFinding> $findings
+     */
+    private function written(array $findings): string
+    {
+        return $this->serializer->serialize($findings, JsonEncoder::FORMAT);
+    }
+
+    /**
+     * @return list<Finding>
+     */
+    private function findingsIn(?string $json): array
+    {
+        if (null === $json) {
+            return [];
+        }
+
+        return array_values($this->serializer->deserialize($json, Finding::class.'[]', JsonEncoder::FORMAT));
+    }
+
     // Every verdict of the round at once, when it completes, so a round reaches the ledger as one step that the recorded round number orders against the other rounds of the change.
     private function recordVerdictsOf(ReviewRound $round): void
     {
@@ -149,27 +184,6 @@ final readonly class StoredFindings
         $stored->recordFindings($round->number(), $this->written($ledger->all()));
     }
 
-    /**
-     * @return list<TrackedFinding>
-     */
-    private function resolvedIn(ReviewRound $round, FindingLedger $ledger): array
-    {
-        $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : $verdict->resolved, $this->verdictsOf($round)));
-
-        // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
-        return array_values(array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true)));
-    }
-
-    private function locked(string $project, string $change): ChangeFindings
-    {
-        $this->createIfMissing($project, $change);
-        // Locked with a write, because on SQLite only a write takes the lock, and a snapshot gone stale then fails here, where the transaction starts over, rather than in the flush, which closes the entity manager.
-        $this->entities->getConnection()->executeStatement('UPDATE change_findings SET rounds = rounds WHERE project = ? AND change_ref = ?', [$project, $change]);
-        $stored = $this->entities->find(ChangeFindings::class, ['project' => $project, 'change' => $change], LockMode::PESSIMISTIC_WRITE);
-
-        return $stored ?? throw ChangeFindingsNotFound::for($project, $change);
-    }
-
     // A row that does not exist yet cannot be locked, so two first rounds of a change can both find none; the one whose insert loses takes the other's row instead of failing.
     private function createIfMissing(string $project, string $change): void
     {
@@ -189,23 +203,11 @@ final readonly class StoredFindings
     }
 
     /**
-     * @param list<Finding>|list<TrackedFinding> $findings
+     * @return list<TrackedFinding>
      */
-    private function written(array $findings): string
+    private function trackedIn(ChangeFindings $stored): array
     {
-        return $this->serializer->serialize($findings, JsonEncoder::FORMAT);
-    }
-
-    /**
-     * @return list<Finding>
-     */
-    private function findingsIn(?string $json): array
-    {
-        if (null === $json) {
-            return [];
-        }
-
-        return array_values($this->serializer->deserialize($json, Finding::class.'[]', JsonEncoder::FORMAT));
+        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', JsonEncoder::FORMAT));
     }
 
     // A round overtaken by a newer recorded one gives its new findings ids of its own, because the ids of its ledger, which is never stored, would name other findings of the stored one later.
@@ -218,19 +220,6 @@ final readonly class StoredFindings
         return $this->ledgerOf($stored);
     }
 
-    private function ledgerOf(ChangeFindings $stored): FindingLedger
-    {
-        return new FindingLedger($this->trackedIn($stored));
-    }
-
-    /**
-     * @return list<TrackedFinding>
-     */
-    private function trackedIn(ChangeFindings $stored): array
-    {
-        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', JsonEncoder::FORMAT));
-    }
-
     /**
      * @return list<Verdict>
      */
@@ -239,5 +228,16 @@ final readonly class StoredFindings
         $stored = array_filter(array_map(static fn ($reviewer): ?string => $reviewer->verdictJson(), $round->reviewers()), static fn (?string $json): bool => null !== $json);
 
         return array_values(array_map(fn (string $json): Verdict => $this->serializer->deserialize($json, Verdict::class, JsonEncoder::FORMAT), $stored));
+    }
+
+    /**
+     * @return list<TrackedFinding>
+     */
+    private function resolvedIn(ReviewRound $round, FindingLedger $ledger): array
+    {
+        $claimed = array_merge([], ...array_map(static fn (Verdict $verdict): array => $verdict->isFailedReview() ? [] : $verdict->resolved, $this->verdictsOf($round)));
+
+        // The ledger decides, because a claim the ledger refused (a finding reported again in the same round) leaves the finding open.
+        return array_values(array_filter($ledger->all(), static fn (TrackedFinding $tracked): bool => !$tracked->isOpen() && in_array($tracked->id, $claimed, true)));
     }
 }

@@ -349,63 +349,6 @@ final class SeedSampleProjectCommandTest extends TestCase
         return $tester;
     }
 
-    private function tester(SeedSampleProjectCommand $command): CommandTester
-    {
-        $application = new Application();
-        $application->addCommand($command);
-
-        return new CommandTester($application->find('intakt:sample:seed'));
-    }
-
-    private function project(Provider ...$keyed): SampleProject
-    {
-        $accounts = self::createStub(EnabledAccounts::class);
-        $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
-
-        return new SampleProject($accounts, $this->compatibleBaseUrl, $this->data);
-    }
-
-    // Made-up names, prices and date, so a value that still came from code instead of the data file would show.
-    private function givenADataFile(): void
-    {
-        $file = $this->directory.'/sample-project.yaml';
-        new Filesystem()->dumpFile($file, Yaml::dump([
-            'router_url' => 'https://router.example.test',
-            'price_date' => '2030-01-02',
-            'models' => [
-                'anthropic' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
-                'openai' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
-                'openai_compatible' => ['strong' => 'made-up-router', 'standard' => 'made-up-router', 'light' => 'made-up-router'],
-            ],
-            'second_maker' => 'made-up-second-maker',
-            'prices' => [
-                'made-up-strong' => ['input' => 7, 'output' => 70],
-                'made-up-standard' => ['input' => 0.7, 'output' => 7],
-                'made-up-router' => ['input' => 1, 'output' => 2],
-                'made-up-second-maker' => ['input' => 3, 'output' => 4],
-            ],
-        ]));
-        $this->data = new SampleProjectData($file);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function panelProviders(): array
-    {
-        return array_values(array_unique(array_column($this->writtenProject()['review']['reviewers'], 'provider')));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function reviewerModels(): array
-    {
-        $project = $this->writtenProject();
-
-        return array_map(static fn (array $reviewer): string => $project['tiers'][$reviewer['tier']]['model'], $project['review']['reviewers']);
-    }
-
     /**
      * @return array{tiers: array<string, array{provider: string, model: string}>, review: array{quorum: string, reviewers: list<array{role: string, tier: string, provider: string}>}}
      */
@@ -433,11 +376,50 @@ final class SeedSampleProjectCommandTest extends TestCase
         return $written;
     }
 
-    private function git(string ...$arguments): string
+    /**
+     * @return list<string>
+     */
+    private function panelProviders(): array
     {
-        $call = new HardenedGit()->call(array_values($arguments), $this->repository());
+        return array_values(array_unique(array_column($this->writtenProject()['review']['reviewers'], 'provider')));
+    }
 
-        return new Process($call->command, $call->directory, $call->environment)->mustRun()->getOutput();
+    /**
+     * @return list<string>
+     */
+    private function reviewerModels(): array
+    {
+        $project = $this->writtenProject();
+
+        return array_map(static fn (array $reviewer): string => $project['tiers'][$reviewer['tier']]['model'], $project['review']['reviewers']);
+    }
+
+    private function configuration(): string
+    {
+        return $this->directory.'/intakt.yaml';
+    }
+
+    // Made-up names, prices and date, so a value that still came from code instead of the data file would show.
+    private function givenADataFile(): void
+    {
+        $file = $this->directory.'/sample-project.yaml';
+        new Filesystem()->dumpFile($file, Yaml::dump([
+            'router_url' => 'https://router.example.test',
+            'price_date' => '2030-01-02',
+            'models' => [
+                'anthropic' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
+                'openai' => ['strong' => 'made-up-strong', 'standard' => 'made-up-standard', 'light' => 'made-up-strong'],
+                'openai_compatible' => ['strong' => 'made-up-router', 'standard' => 'made-up-router', 'light' => 'made-up-router'],
+            ],
+            'second_maker' => 'made-up-second-maker',
+            'prices' => [
+                'made-up-strong' => ['input' => 7, 'output' => 70],
+                'made-up-standard' => ['input' => 0.7, 'output' => 7],
+                'made-up-router' => ['input' => 1, 'output' => 2],
+                'made-up-second-maker' => ['input' => 3, 'output' => 4],
+            ],
+        ]));
+        $this->data = new SampleProjectData($file);
     }
 
     private function repository(): string
@@ -445,8 +427,26 @@ final class SeedSampleProjectCommandTest extends TestCase
         return $this->directory.'/sample-repository';
     }
 
-    private function configuration(): string
+    private function git(string ...$arguments): string
     {
-        return $this->directory.'/intakt.yaml';
+        $call = new HardenedGit()->call(array_values($arguments), $this->repository());
+
+        return new Process($call->command, $call->directory, $call->environment)->mustRun()->getOutput();
+    }
+
+    private function project(Provider ...$keyed): SampleProject
+    {
+        $accounts = self::createStub(EnabledAccounts::class);
+        $accounts->method('of')->willReturnCallback(static fn (Provider $provider): array => in_array($provider, $keyed, true) ? [new Account($provider, Account::DEFAULT)] : []);
+
+        return new SampleProject($accounts, $this->compatibleBaseUrl, $this->data);
+    }
+
+    private function tester(SeedSampleProjectCommand $command): CommandTester
+    {
+        $application = new Application();
+        $application->addCommand($command);
+
+        return new CommandTester($application->find('intakt:sample:seed'));
     }
 }

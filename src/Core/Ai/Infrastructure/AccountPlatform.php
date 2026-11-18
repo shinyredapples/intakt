@@ -79,21 +79,6 @@ final readonly class AccountPlatform implements PlatformInterface
         return $this->platform->getModelCatalog();
     }
 
-    // A streamed answer clears the account's reported error only once it was read whole, because a stream can still fail after it converted.
-    private function followAnswer(ResultInterface $result, DateTimeImmutable $sentAt): ResultInterface
-    {
-        if (!$result instanceof StreamResult) {
-            $this->cooldowns->answered($this->account, $sentAt);
-
-            return $result;
-        }
-
-        $result->addListener(new AccountStreamFailures($this->failed(...)));
-        $result->addListener(new AccountStreamAnswered(fn () => $this->cooldowns->answered($this->account, $sentAt)));
-
-        return $result;
-    }
-
     private function failed(Throwable $failure): void
     {
         // Once the answer has started, StreamedAnswer wraps the provider's exception, so the cooldown looks through to it.
@@ -120,6 +105,21 @@ final readonly class AccountPlatform implements PlatformInterface
             $failure instanceof RetryableExceptionInterface => fn () => $this->cooldowns->coolDown($this->account, null),
             default => null,
         };
+    }
+
+    // A streamed answer clears the account's reported error only once it was read whole, because a stream can still fail after it converted.
+    private function followAnswer(ResultInterface $result, DateTimeImmutable $sentAt): ResultInterface
+    {
+        if (!$result instanceof StreamResult) {
+            $this->cooldowns->answered($this->account, $sentAt);
+
+            return $result;
+        }
+
+        $result->addListener(new AccountStreamFailures($this->failed(...)));
+        $result->addListener(new AccountStreamAnswered(fn () => $this->cooldowns->answered($this->account, $sentAt)));
+
+        return $result;
     }
 
     // A spent subscription plan is raised as a limit without a reset (CodexAccountFailure), so only that limit waits for the plan's measured reset; any other failure keeps its own wait.

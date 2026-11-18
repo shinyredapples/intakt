@@ -85,6 +85,16 @@ final class GateChildTreeTest extends TestCase
     }
 
     /**
+     * @return list<string>
+     */
+    private function gateLeavingADescendant(string $then): array
+    {
+        $gate = 'proc_open('.var_export([PHP_BINARY, '-r', $this->descendant()], true).', [], $pipes); echo "started"; fflush(STDOUT); '.$then;
+
+        return [PHP_BINARY, '-r', $gate];
+    }
+
+    /**
      * @param list<string> $gate
      *
      * @return array{running: bool, signaled: bool, termsig: int}
@@ -113,14 +123,9 @@ final class GateChildTreeTest extends TestCase
         return $status;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function gateLeavingADescendant(string $then): array
+    private function descendant(string $first = ''): string
     {
-        $gate = 'proc_open('.var_export([PHP_BINARY, '-r', $this->descendant()], true).', [], $pipes); echo "started"; fflush(STDOUT); '.$then;
-
-        return [PHP_BINARY, '-r', $gate];
+        return $first.' usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
     }
 
     /**
@@ -131,10 +136,5 @@ final class GateChildTreeTest extends TestCase
         $gate = 'require '.var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true).'; echo "started"; fflush(STDOUT); new '.ProcessRunner::class.'()->runWithin('.var_export([PHP_BINARY, '-r', $program], true).', sys_get_temp_dir(), 30);';
 
         return [PHP_BINARY, '-r', $gate];
-    }
-
-    private function descendant(string $first = ''): string
-    {
-        return $first.' usleep(1500000); file_put_contents('.var_export($this->marker, true).', "still running");';
     }
 }

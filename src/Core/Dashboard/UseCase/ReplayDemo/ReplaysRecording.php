@@ -129,6 +129,16 @@ final readonly class ReplaysRecording
         }
     }
 
+    private static function roundOf(string $payload): ?string
+    {
+        return self::stringOf($payload, 'round');
+    }
+
+    private static function callOf(string $payload): ?string
+    {
+        return self::stringOf($payload, 'call');
+    }
+
     // Merged rather than sorted, so each list keeps its recorded order; a row goes before an update of the same moment, because the page an update reloads must find that row.
     /**
      * @return list<RecordedLedgerEvent|CapturedUpdate>
@@ -146,16 +156,9 @@ final readonly class ReplaysRecording
         return [...$steps, ...$events, ...$updates];
     }
 
-    private function append(LedgerEvent $event, Recording $recording, int $number): void
+    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
     {
-        $result = $this->ledger->append($event);
-
-        if (!$result->succeeded()) {
-            throw ReplayStopped::at($recording, $number, (string) $result->failure);
-        }
-
-        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
-        $this->captions->publishTheStage();
+        return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
     }
 
     // A step recorded before the first one follows at once, because the ledger and the capture keep the recorded order.
@@ -184,19 +187,16 @@ final readonly class ReplaysRecording
         return json_encode($row, JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
     }
 
-    private function momentOf(RecordedLedgerEvent|CapturedUpdate $step): DateTimeImmutable
+    private function append(LedgerEvent $event, Recording $recording, int $number): void
     {
-        return $step instanceof CapturedUpdate ? $step->at : $step->recordedAt;
-    }
+        $result = $this->ledger->append($event);
 
-    private static function roundOf(string $payload): ?string
-    {
-        return self::stringOf($payload, 'round');
-    }
+        if (!$result->succeeded()) {
+            throw ReplayStopped::at($recording, $number, (string) $result->failure);
+        }
 
-    private static function callOf(string $payload): ?string
-    {
-        return self::stringOf($payload, 'call');
+        // After each row, because the stage is read from the rows and no recorded update reaches a page that is not the review's.
+        $this->captions->publishTheStage();
     }
 
     private static function stringOf(string $payload, string $key): ?string

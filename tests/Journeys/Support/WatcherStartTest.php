@@ -174,24 +174,9 @@ final class WatcherStartTest extends TestCase
         new Filesystem()->remove($this->directory);
     }
 
-    private function start(string $ledger, string $before = "0 events\n"): string
+    private function queued(string $round, string $head, string $event = '01a19b8a-30e4-7aa3-8780-141b1014c71a'): string
     {
-        $this->ledgers = [$before, $ledger];
-
-        $console = $this->console(...);
-
-        return new WatcherStart($console, new ContainerRebuild($this->directory.'/cache/container.php', $console))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
-    }
-
-    /**
-     * @param list<string>         $arguments
-     * @param array<string,string> $environment
-     */
-    private function console(array $arguments, array $environment, int $seconds): string
-    {
-        $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
-
-        return 'intakt:ledger:events' === $arguments[0] ? array_shift($this->ledgers) ?? '' : '';
+        return '2026-11-08T10:00:00Z '.$event.' round_queued {"project":"sample","change":"1","head":"'.$head.'","round":"'.$round.'"}';
     }
 
     private function ledgerWith(string ...$lines): string
@@ -199,9 +184,13 @@ final class WatcherStartTest extends TestCase
         return implode(PHP_EOL, [...$lines, count($lines).' events']).PHP_EOL;
     }
 
-    private function queued(string $round, string $head, string $event = '01a19b8a-30e4-7aa3-8780-141b1014c71a'): string
+    private function start(string $ledger, string $before = "0 events\n"): string
     {
-        return '2026-11-08T10:00:00Z '.$event.' round_queued {"project":"sample","change":"1","head":"'.$head.'","round":"'.$round.'"}';
+        $this->ledgers = [$before, $ledger];
+
+        $console = $this->console(...);
+
+        return new WatcherStart($console, new ContainerRebuild($this->directory.'/cache/container.php', $console))->startOnSamplePullRequest($this->directory.'/sample', $this->configuration());
     }
 
     /**
@@ -223,5 +212,16 @@ final class WatcherStartTest extends TestCase
     private function recordingFile(): string
     {
         return $this->directory.'/watcher-recording.json';
+    }
+
+    /**
+     * @param list<string>         $arguments
+     * @param array<string,string> $environment
+     */
+    private function console(array $arguments, array $environment, int $seconds): string
+    {
+        $this->calls[] = ['arguments' => $arguments, 'environment' => $environment, 'seconds' => $seconds];
+
+        return 'intakt:ledger:events' === $arguments[0] ? array_shift($this->ledgers) ?? '' : '';
     }
 }

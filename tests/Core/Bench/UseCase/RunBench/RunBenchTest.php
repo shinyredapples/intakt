@@ -191,11 +191,6 @@ final class RunBenchTest extends KernelTestCase
         return $decoded;
     }
 
-    private function findsTheBoundary(): VerdictPerRole
-    {
-        return new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/shipping.js', 3, null, 'Off by one.', FixableBy::Builder, false, null, null)], [], [])]);
-    }
-
     /**
      * @param list<WrittenChange> $changes
      *
@@ -206,6 +201,21 @@ final class RunBenchTest extends KernelTestCase
         $change = array_find($changes, static fn (array $change): bool => $name === $change['change']) ?? self::fail($name.' is not in the result file');
 
         return $change['runs'][0];
+    }
+
+    private function findsTheBoundary(): VerdictPerRole
+    {
+        return new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/shipping.js', 3, null, 'Off by one.', FixableBy::Builder, false, null, null)], [], [])]);
+    }
+
+    private function panel(): Panel
+    {
+        $members = array_map(
+            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
+            [1, 2],
+        );
+
+        return new Panel($members, QuorumPolicy::All);
     }
 
     private function reviewChange(Vendor $vendor): ReviewChange
@@ -238,15 +248,5 @@ final class RunBenchTest extends KernelTestCase
             $vendor,
             new FailedJudgings($failures),
         );
-    }
-
-    private function panel(): Panel
-    {
-        $members = array_map(
-            static fn (int $number): PanelReviewer => new PanelReviewer(new ReviewerRole('role-'.$number, 'Look at part '.$number.'.'), new ReviewerModel(Tier::Standard, Provider::Anthropic), 1),
-            [1, 2],
-        );
-
-        return new Panel($members, QuorumPolicy::All);
     }
 }

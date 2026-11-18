@@ -933,6 +933,27 @@ final class BuildTaskTest extends TestCase
         $this->remote->remove();
     }
 
+    // In a clone of the build clone, because the job commits in a clone of its own in the container, and bundled against main, because docker/job/build.sh bundles it so.
+    private function committingRunner(string $ref = 'feat/task', string $text = "feat: task 7\n"): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($ref, $text): JobResult {
+            $job = $this->clone.'-job';
+            $this->git(['clone', '--quiet', $spec->inputs[0]->hostPath, $job], dirname($job));
+            new Filesystem()->dumpFile($job.'/b.txt', 'two');
+            $this->git(['add', 'b.txt'], $job);
+            $this->git([...self::IDENTITY, 'commit', '--quiet', '-m', 'Build task 7'], $job);
+            $this->git(['update-ref', 'refs/heads/'.$ref, 'HEAD'], $job);
+            $this->git(['bundle', 'create', '--quiet', $job.'.bundle', $ref, '^origin/main'], $job);
+            $bundle = (string) file_get_contents($job.'.bundle');
+            new Filesystem()->remove([$job, $job.'.bundle']);
+
+            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
+        });
+
+        return $runner;
+    }
+
     /**
      * @param list<ListedIssue> $issues
      */
@@ -941,25 +962,9 @@ final class BuildTaskTest extends TestCase
         return $this->buildTask($this->listing($issues), $this->checkout(), $ledger);
     }
 
-    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
+    private function request(int $issue, string $remote): BuildTaskRequest
     {
-        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
-        $git = new RepositoryGit(new HardenedGit());
-        $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
-        $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
-        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
-
-        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $ledger);
-    }
-
-    // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
-    private function branchPush(InMemoryLedger $ledger): PushBranch
-    {
-        $branches = new BranchGit(new HardenedGit());
-        $file = $this->mirrors.'-key';
-        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem());
-
-        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
+        return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone, self::IMAGE);
     }
 
     /**
@@ -968,6 +973,22 @@ final class BuildTaskTest extends TestCase
     private function stepsIn(InMemoryLedger $ledger): array
     {
         return array_values(array_filter($ledger->payloads(), static fn (array $payload): bool => isset($payload['step'])));
+    }
+
+    private function inClone(string ...$arguments): string
+    {
+        return $this->git(array_values($arguments), $this->clone);
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function git(array $arguments, string $directory): string
+    {
+        $process = new Process(['git', ...$arguments], $directory);
+        $process->mustRun();
+
+        return $process->getOutput();
     }
 
     private function remoteTip(): ?string
@@ -987,6 +1008,20 @@ final class BuildTaskTest extends TestCase
             $this->checked = $spec;
 
             return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput($files));
+        });
+
+        return $runner;
+    }
+
+    // Because the remote can move while the build job runs, and only a change after the job shows which mirror the pre-push check reads.
+    private function runnerAfterWhich(JobRunner $built, callable $change): JobRunner
+    {
+        $runner = self::createStub(JobRunner::class);
+        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use ($built, $change): JobResult {
+            $result = $built->run($spec);
+            $change();
+
+            return $result;
         });
 
         return $runner;
@@ -1037,55 +1072,20 @@ final class BuildTaskTest extends TestCase
         return $files;
     }
 
-    // In a clone of the build clone, because the job commits in a clone of its own in the container, and bundled against main, because docker/job/build.sh bundles it so.
-    private function committingRunner(string $ref = 'feat/task', string $text = "feat: task 7\n"): JobRunner
+    private function checkout(): GitBuildCheckout
     {
-        $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturnCallback(function (JobSpec $spec) use ($ref, $text): JobResult {
-            $job = $this->clone.'-job';
-            $this->git(['clone', '--quiet', $spec->inputs[0]->hostPath, $job], dirname($job));
-            new Filesystem()->dumpFile($job.'/b.txt', 'two');
-            $this->git(['add', 'b.txt'], $job);
-            $this->git([...self::IDENTITY, 'commit', '--quiet', '-m', 'Build task 7'], $job);
-            $this->git(['update-ref', 'refs/heads/'.$ref, 'HEAD'], $job);
-            $this->git(['bundle', 'create', '--quiet', $job.'.bundle', $ref, '^origin/main'], $job);
-            $bundle = (string) file_get_contents($job.'.bundle');
-            new Filesystem()->remove([$job, $job.'.bundle']);
-
-            return new JobResult(new JobEnd(JobCause::Exited, 0), new JobOutput([RunBuildJob::BUNDLE => $bundle, RunBuildJob::PULL_REQUEST_TEXT => $text]));
-        });
-
-        return $runner;
+        return $this->checkoutIn($this->mirrors);
     }
 
-    // Because the remote can move while the build job runs, and only a change after the job shows which mirror the pre-push check reads.
-    private function runnerAfterWhich(JobRunner $built, callable $change): JobRunner
+    private function buildTask(IssueReads $issues, GitBuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
     {
-        $runner = self::createStub(JobRunner::class);
-        $runner->method('run')->willReturnCallback(static function (JobSpec $spec) use ($built, $change): JobResult {
-            $result = $built->run($spec);
-            $change();
+        $builds = new RunBuildJob($this->tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $this->runner, new PhpGate(), new GatesAtOnce(12, 1), new Filesystem(), self::SCRIPT, $this->mirrors.'-prompts');
+        $git = new RepositoryGit(new HardenedGit());
+        $checks = new CheckHandBack($git, new BundleFile(), new StrippedCommits(), new IncomingObjects(), new BundleSecretScan($this->scanner));
+        $files = new HandBackFile($checkout, $this->handBackFiles, $this->mirrors.'-hand-backs');
+        $checkJobs = new RunCheckJob($checks, new LostContentCheck($git), $this->checkRunner, new PhpGate(), new Filesystem(), self::CHECK_SCRIPT);
 
-            return $result;
-        });
-
-        return $runner;
-    }
-
-    private function inClone(string ...$arguments): string
-    {
-        return $this->git(array_values($arguments), $this->clone);
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function git(array $arguments, string $directory): string
-    {
-        $process = new Process(['git', ...$arguments], $directory);
-        $process->mustRun();
-
-        return $process->getOutput();
+        return new BuildTask($issues, $checkout, $this->routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($this->branchPush($ledger), $checkout), $ledger);
     }
 
     /**
@@ -1099,19 +1099,9 @@ final class BuildTaskTest extends TestCase
         return $reads;
     }
 
-    private function checkout(): GitBuildCheckout
-    {
-        return $this->checkoutIn($this->mirrors);
-    }
-
     private function checkoutIn(string $directory): GitBuildCheckout
     {
         return $this->checkoutWith(new Mirrors($directory), new InMemoryStore());
-    }
-
-    private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
-    {
-        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
     }
 
     private function mirrorUpdate(Mirrors $mirrors, PersistingStoreInterface $locks): UpdateMirror
@@ -1121,8 +1111,18 @@ final class BuildTaskTest extends TestCase
         return new UpdateMirror(new HardenedGit(), $network, new Filesystem(), new LockFactory($locks), $mirrors);
     }
 
-    private function request(int $issue, string $remote): BuildTaskRequest
+    private function checkoutWith(Mirrors $mirrors, PersistingStoreInterface $locks): GitBuildCheckout
     {
-        return new BuildTaskRequest('alpha', $issue, $remote, 'feat/task', $this->clone, self::IMAGE);
+        return new GitBuildCheckout($this->mirrorUpdate($mirrors, $locks), new MakeBuildClone(new HardenedGit(), new Filesystem(), $mirrors), $mirrors, new TakeCheckedHead(new HardenedGit(), $mirrors));
+    }
+
+    // Records in the run's own ledger, as the container wires it, so the push's events sit between the steps' events.
+    private function branchPush(InMemoryLedger $ledger): PushBranch
+    {
+        $branches = new BranchGit(new HardenedGit());
+        $file = $this->mirrors.'-key';
+        $key = new SigningKey(is_file($file) ? $file : PushScenario::generateKey($file), new Filesystem());
+
+        return new PushBranch($branches, new SignedCommits($branches, $key), new PushRecords($ledger), $this->changes, new LockFactory(new InMemoryStore()));
     }
 }

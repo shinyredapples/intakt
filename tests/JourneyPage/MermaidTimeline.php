@@ -76,6 +76,11 @@ final readonly class MermaidTimeline
         return $sections;
     }
 
+    private function refused(int $index, string $reason): JourneyInputFailed
+    {
+        return new JourneyInputFailed('timeline line '.($index + 1).' is refused: '.$reason);
+    }
+
     /**
      * @return list<string>
      */
@@ -84,10 +89,5 @@ final readonly class MermaidTimeline
         $events = preg_split(self::SEPARATOR, ' '.trim($text).' ');
 
         return array_values(array_filter(array_map(trim(...), false === $events ? [] : $events), static fn (string $event): bool => '' !== $event));
-    }
-
-    private function refused(int $index, string $reason): JourneyInputFailed
-    {
-        return new JourneyInputFailed('timeline line '.($index + 1).' is refused: '.$reason);
     }
 }

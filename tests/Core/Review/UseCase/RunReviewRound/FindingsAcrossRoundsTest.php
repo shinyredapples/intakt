@@ -338,6 +338,20 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         $this->fixture = new RoundFixture(self::getContainer());
     }
 
+    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
+    }
+
+    /**
+     * @param list<string>  $resolved
+     * @param list<Finding> $findings
+     */
+    private function changes(array $resolved, array $findings): Verdict
+    {
+        return new Verdict(Decision::Changes, $findings, $resolved, []);
+    }
+
     /**
      * @param array<string, Verdict> $verdicts
      */
@@ -346,12 +360,18 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return $this->deliver($this->started($change), $verdicts);
     }
 
-    private function started(string $change): RecordingBus
+    // The message of SQLite's stale snapshot, because that is the failure a retry is for.
+    private static function databaseLocked(): LockWaitTimeoutException
     {
-        $queue = new RecordingBus();
-        $this->fixture->startFor($change, $queue, 2);
+        return new LockWaitTimeoutException(Exception::new(new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')), null);
+    }
 
-        return $queue;
+    /**
+     * @return list<string>
+     */
+    private function openIds(ReviewBrief $brief): array
+    {
+        return array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
     }
 
     /**
@@ -368,31 +388,11 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         return $vendor;
     }
 
-    /**
-     * @return list<string>
-     */
-    private function openIds(ReviewBrief $brief): array
+    private function started(string $change): RecordingBus
     {
-        return array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
-    }
+        $queue = new RecordingBus();
+        $this->fixture->startFor($change, $queue, 2);
 
-    /**
-     * @param list<string>  $resolved
-     * @param list<Finding> $findings
-     */
-    private function changes(array $resolved, array $findings): Verdict
-    {
-        return new Verdict(Decision::Changes, $findings, $resolved, []);
-    }
-
-    private function finding(string $id, bool $repeat = false, Severity $severity = Severity::P2): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, null, null);
-    }
-
-    // The message of SQLite's stale snapshot, because that is the failure a retry is for.
-    private static function databaseLocked(): LockWaitTimeoutException
-    {
-        return new LockWaitTimeoutException(Exception::new(new PDOException('SQLSTATE[HY000]: General error: 5 database is locked')), null);
+        return $queue;
     }
 }

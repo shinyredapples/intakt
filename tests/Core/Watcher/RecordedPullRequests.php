@@ -63,16 +63,9 @@ final readonly class RecordedPullRequests implements OpenChanges, HeadChecks, Au
         return true === ($pull['author_trusted'] ?? false);
     }
 
-    /**
-     * @param Run $run
-     */
-    private function stateOf(array $run): CiRunState
+    private function file(): string
     {
-        return match (true) {
-            'completed' !== $run['status'] => CiRunState::Unfinished,
-            'success' === $run['conclusion'] => CiRunState::Succeeded,
-            default => CiRunState::Failed,
-        };
+        return is_file($this->recording) ? $this->recording : throw new LogicException('WATCHER_RECORDING names no recording file.');
     }
 
     private function momentOf(string $recorded): DateTimeImmutable
@@ -93,8 +86,15 @@ final readonly class RecordedPullRequests implements OpenChanges, HeadChecks, Au
         return $recorded;
     }
 
-    private function file(): string
+    /**
+     * @param Run $run
+     */
+    private function stateOf(array $run): CiRunState
     {
-        return is_file($this->recording) ? $this->recording : throw new LogicException('WATCHER_RECORDING names no recording file.');
+        return match (true) {
+            'completed' !== $run['status'] => CiRunState::Unfinished,
+            'success' === $run['conclusion'] => CiRunState::Succeeded,
+            default => CiRunState::Failed,
+        };
     }
 }

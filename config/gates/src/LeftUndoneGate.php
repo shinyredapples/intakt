@@ -91,11 +91,6 @@ final readonly class LeftUndoneGate implements Gate
         ));
     }
 
-    private function isScanned(Workspace $workspace, string $path): bool
-    {
-        return $workspace->isPhpFileInScope($path) && !array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
-    }
-
     private function sourceOf(Workspace $workspace, string $path): ?string
     {
         $file = $workspace->root.'/'.$path;
@@ -137,5 +132,10 @@ final readonly class LeftUndoneGate implements Gate
     private function nulSeparated(string $output): array
     {
         return array_values(array_filter(explode("\0", $output), static fn (string $path): bool => '' !== $path));
+    }
+
+    private function isScanned(Workspace $workspace, string $path): bool
+    {
+        return $workspace->isPhpFileInScope($path) && !array_any(self::FIXTURE_PREFIXES, static fn (string $prefix): bool => str_starts_with($path, $prefix));
     }
 }

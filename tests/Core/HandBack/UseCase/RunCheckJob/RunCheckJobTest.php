@@ -465,14 +465,6 @@ final class RunCheckJobTest extends TestCase
         $this->history->remove();
     }
 
-    private function givenMainHolds(string $path, string $content): void
-    {
-        $this->history->checkout('main');
-        $this->history->commitFile($path, $content, 'Add '.$path);
-        $this->history->push('main');
-        $this->history->startBranch('task', 'main');
-    }
-
     /**
      * @param array<string, string> $files
      */
@@ -481,6 +473,21 @@ final class RunCheckJobTest extends TestCase
         $runner = $this->runnerLeaving(new JobResult($end ?? new JobEnd(JobCause::Exited, 1), new JobOutput($files)));
 
         return $this->checkJob($runner)->run($job ?? $this->job($this->history->bundle('main..task'), null, []));
+    }
+
+    /**
+     * @param list<string> $named
+     */
+    private function job(string $bundle, ?string $command, array $named): CheckJob
+    {
+        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, $named);
+    }
+
+    private function ranSpec(): JobSpec
+    {
+        self::assertInstanceOf(JobSpec::class, $this->ran);
+
+        return $this->ran;
     }
 
     private function runnerLeaving(JobResult $result): JobRunner
@@ -493,14 +500,6 @@ final class RunCheckJobTest extends TestCase
         });
 
         return $runner;
-    }
-
-    /**
-     * @param list<string> $named
-     */
-    private function job(string $bundle, ?string $command, array $named): CheckJob
-    {
-        return new CheckJob(new HandBack($this->history->mirror, 'task', $bundle, false, new JobCredentials()), 'job-image', $command, $named);
     }
 
     private function checkJob(JobRunner $runner, ?Gate $gate = null): RunCheckJob
@@ -517,11 +516,17 @@ final class RunCheckJobTest extends TestCase
         );
     }
 
-    private function ranSpec(): JobSpec
+    private function lines(int $count): string
     {
-        self::assertInstanceOf(JobSpec::class, $this->ran);
+        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
+    }
 
-        return $this->ran;
+    private function givenMainHolds(string $path, string $content): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile($path, $content, 'Add '.$path);
+        $this->history->push('main');
+        $this->history->startBranch('task', 'main');
     }
 
     /**
@@ -530,10 +535,5 @@ final class RunCheckJobTest extends TestCase
     private function lostIn(CheckJobOutcome $outcome): array
     {
         return array_map(static fn (LostContent $lost): array => [$lost->path, $lost->linesBefore, $lost->linesAfter], $outcome->lostContent);
-    }
-
-    private function lines(int $count): string
-    {
-        return implode('', array_map(static fn (int $line): string => sprintf("line %03d of the file\n", $line), range(1, $count)));
     }
 }

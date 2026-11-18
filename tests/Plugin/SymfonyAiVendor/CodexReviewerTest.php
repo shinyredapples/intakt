@@ -594,28 +594,17 @@ final class CodexReviewerTest extends KernelTestCase
         chmod($this->root.'/bin/codex', 0o700);
     }
 
+    private function review(?ReviewServerAccesses $servers = null, ?ReviewRequest $request = null): VendorReview
+    {
+        return $this->vendor($servers)->review('alpha', Tier::Strong, $request ?? $this->request());
+    }
+
     /**
      * @return list<string>
      */
     private function arguments(): array
     {
         return explode("\0", rtrim((string) file_get_contents($this->root.'/arguments'), "\0"));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function serverSettings(): array
-    {
-        return array_values(array_filter($this->arguments(), static fn (string $argument): bool => str_starts_with($argument, 'mcp_servers.')));
-    }
-
-    private function servers(): ReviewServerAccesses
-    {
-        $servers = self::createStub(ReviewServerAccesses::class);
-        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
-
-        return $servers;
     }
 
     private function failureOfReview(): Throwable
@@ -629,14 +618,12 @@ final class CodexReviewerTest extends KernelTestCase
         self::fail('The review gave a verdict.');
     }
 
-    private function review(?ReviewServerAccesses $servers = null, ?ReviewRequest $request = null): VendorReview
+    private function servers(): ReviewServerAccesses
     {
-        return $this->vendor($servers)->review('alpha', Tier::Strong, $request ?? $this->request());
-    }
+        $servers = self::createStub(ReviewServerAccesses::class);
+        $servers->method('forRound')->willReturn(new ReviewServerAccess('intakt-review', 'http://localhost:7780/mcp/review', 'round-credential', ['read_file', 'list_directory', 'search_files']));
 
-    private function request(): ReviewRequest
-    {
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+        return $servers;
     }
 
     private function requestInRound(): ReviewRequest
@@ -646,9 +633,12 @@ final class CodexReviewerTest extends KernelTestCase
         return new ReviewRequest($request->checkout, $request->brief, new ReviewerConversation('You review for correctness.', new UuidV7(), new UuidV7()));
     }
 
-    private function openFinding(string $id): Finding
+    /**
+     * @return list<string>
+     */
+    private function serverSettings(): array
     {
-        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+        return array_values(array_filter($this->arguments(), static fn (string $argument): bool => str_starts_with($argument, 'mcp_servers.')));
     }
 
     private function vendor(?ReviewServerAccesses $servers): SymfonyAiVendor
@@ -664,5 +654,15 @@ final class CodexReviewerTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
         return new SymfonyAiVendor(new TierPlatform($resolver, $platforms, $this->cooldowns, new NullLogger()), $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, $clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $clock, $servers ?? $this->servers());
+    }
+
+    private function request(): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7()));
+    }
+
+    private function openFinding(string $id): Finding
+    {
+        return new Finding($id, Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
     }
 }

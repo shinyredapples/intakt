@@ -98,41 +98,6 @@ final readonly class WatcherStart
         $this->container->rebuild([self::CONFIGURATION_VARIABLE => $configuration], self::COMMAND_SECONDS);
     }
 
-    private function tick(string $configuration, string $recording): void
-    {
-        $limit = $this->intervalSeconds() + self::TICK_MARGIN_SECONDS;
-
-        ($this->console)(
-            ['messenger:consume', 'scheduler_watcher', '--limit=1', '--time-limit='.$limit],
-            [self::CONFIGURATION_VARIABLE => $configuration, self::RECORDING_VARIABLE => $recording],
-            $limit + self::PROCESS_MARGIN_SECONDS,
-        );
-    }
-
-    private function intervalSeconds(): int
-    {
-        $interval = DateInterval::createFromDateString(WatcherSchedule::INTERVAL);
-
-        return new DateTimeImmutable('@0')->add($interval)->getTimestamp();
-    }
-
-    // From the ledger, because the watcher's handler returns nothing a console process could pass on, and the ledger is what a user's round leaves behind.
-    /**
-     * @param array<string,true> $before
-     */
-    private function queuedRound(string $configuration, string $head, array $before): ?string
-    {
-        $rounds = [];
-
-        foreach ($this->ledgerLines($configuration) as $fields) {
-            if (!isset($before[$fields[1]]) && LedgerEventKind::RoundQueued->value === $fields[2]) {
-                $rounds[] = $this->roundOf($fields[3], $head);
-            }
-        }
-
-        return array_last(array_filter($rounds, static fn (?string $round): bool => null !== $round));
-    }
-
     /**
      * @return list<array{0: string, 1: string, 2: string, 3: string}>
      */
@@ -160,6 +125,41 @@ final readonly class WatcherStart
     private function eventIdsIn(array $lines): array
     {
         return array_fill_keys(array_column($lines, 1), true);
+    }
+
+    private function tick(string $configuration, string $recording): void
+    {
+        $limit = $this->intervalSeconds() + self::TICK_MARGIN_SECONDS;
+
+        ($this->console)(
+            ['messenger:consume', 'scheduler_watcher', '--limit=1', '--time-limit='.$limit],
+            [self::CONFIGURATION_VARIABLE => $configuration, self::RECORDING_VARIABLE => $recording],
+            $limit + self::PROCESS_MARGIN_SECONDS,
+        );
+    }
+
+    // From the ledger, because the watcher's handler returns nothing a console process could pass on, and the ledger is what a user's round leaves behind.
+    /**
+     * @param array<string,true> $before
+     */
+    private function queuedRound(string $configuration, string $head, array $before): ?string
+    {
+        $rounds = [];
+
+        foreach ($this->ledgerLines($configuration) as $fields) {
+            if (!isset($before[$fields[1]]) && LedgerEventKind::RoundQueued->value === $fields[2]) {
+                $rounds[] = $this->roundOf($fields[3], $head);
+            }
+        }
+
+        return array_last(array_filter($rounds, static fn (?string $round): bool => null !== $round));
+    }
+
+    private function intervalSeconds(): int
+    {
+        $interval = DateInterval::createFromDateString(WatcherSchedule::INTERVAL);
+
+        return new DateTimeImmutable('@0')->add($interval)->getTimestamp();
     }
 
     private function roundOf(string $payload, string $head): ?string

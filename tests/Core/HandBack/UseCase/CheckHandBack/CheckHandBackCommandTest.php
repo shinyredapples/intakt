@@ -225,6 +225,14 @@ final class CheckHandBackCommandTest extends TestCase
         $this->history->remove();
     }
 
+    private function text(string $content = 'Adds the change.'): string
+    {
+        $path = $this->history->folder.'/'.bin2hex(random_bytes(4)).'.md';
+        new Filesystem()->dumpFile($path, $content);
+
+        return $path;
+    }
+
     /**
      * @param array<string, string|bool|list<string>> $input
      */
@@ -238,14 +246,6 @@ final class CheckHandBackCommandTest extends TestCase
         $tester->execute($input);
 
         return $tester;
-    }
-
-    private function text(string $content = 'Adds the change.'): string
-    {
-        $path = $this->history->folder.'/'.bin2hex(random_bytes(4)).'.md';
-        new Filesystem()->dumpFile($path, $content);
-
-        return $path;
     }
 
     private function flat(CommandTester $tester): string

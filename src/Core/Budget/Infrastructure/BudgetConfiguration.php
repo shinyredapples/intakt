@@ -31,17 +31,6 @@ final class BudgetConfiguration implements ConfigurationInterface
         return $tree;
     }
 
-    private static function isDay(mixed $date): bool
-    {
-        if (!is_string($date)) {
-            return false;
-        }
-
-        $day = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
-
-        return false !== $day && $day->format('Y-m-d') === $date;
-    }
-
     private function windows(ArrayNodeDefinition $node, float $default): void
     {
         $windows = $node->addDefaultsIfNotSet()->normalizeKeys(false)->children();
@@ -65,6 +54,17 @@ final class BudgetConfiguration implements ConfigurationInterface
         $this->amount($amounts, 'cache_write');
         // A provider without cache prices bills cached tokens as input, so the input price stands in for a cache price left out.
         $price->validate()->always(static fn (array $amounts): array => $amounts + ['cache_read' => $amounts['input'], 'cache_write' => $amounts['input']]);
+    }
+
+    private static function isDay(mixed $date): bool
+    {
+        if (!is_string($date)) {
+            return false;
+        }
+
+        $day = DateTimeImmutable::createFromFormat('!Y-m-d', $date, new DateTimeZone('UTC'));
+
+        return false !== $day && $day->format('Y-m-d') === $date;
     }
 
     private function amount(NodeBuilder $amounts, string $name): FloatNodeDefinition

@@ -118,20 +118,6 @@ final class CutStreamRetryTest extends KernelTestCase
         };
     }
 
-    private function cutMidAnswer(): Generator
-    {
-        yield new TextDelta('{"verdict":"changes",');
-
-        throw new IncompleteStreamException('The stream ended before its last event.');
-    }
-
-    private function deliverAll(SymfonyAiVendor $vendor): void
-    {
-        foreach ($this->fixture->bus->messages as $message) {
-            $this->fixture->deliver($message, $vendor);
-        }
-    }
-
     private function vendor(Closure $answer): SymfonyAiVendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => 8000]]]], []);
@@ -141,6 +127,13 @@ final class CutStreamRetryTest extends KernelTestCase
         $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 2);
 
         return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function deliverAll(SymfonyAiVendor $vendor): void
+    {
+        foreach ($this->fixture->bus->messages as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
     }
 
     /**
@@ -178,5 +171,12 @@ final class CutStreamRetryTest extends KernelTestCase
         }
 
         return $phases;
+    }
+
+    private function cutMidAnswer(): Generator
+    {
+        yield new TextDelta('{"verdict":"changes",');
+
+        throw new IncompleteStreamException('The stream ended before its last event.');
     }
 }

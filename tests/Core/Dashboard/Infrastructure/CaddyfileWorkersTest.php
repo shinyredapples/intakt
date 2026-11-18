@@ -161,66 +161,11 @@ final class CaddyfileWorkersTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $environment
-     */
-    private function migrate(array $environment): void
-    {
-        $php = new PhpExecutableFinder()->find();
-        self::assertNotFalse($php);
-        new Process([$php, 'bin/console', 'doctrine:migrations:migrate', '--no-interaction'], dirname(__DIR__, 4), $environment)->mustRun();
-    }
-
-    /**
      * @return array<string, int>
      */
     private function requestsPerWorkerFile(int $served): array
     {
         return self::requestsOnceServed($this->threads(...), $served);
-    }
-
-    /**
-     * @param Closure(): list<array<mixed>> $threads
-     *
-     * @return array<string, int>
-     */
-    // Polled, because FrankenPHP counts a request only when the worker has finished it, after its answer is sent.
-    private static function requestsOnceServed(Closure $threads, int $served): array
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
-
-        do {
-            $counts = self::requestsPerWorkerFileOf($threads());
-
-            if (array_sum($counts) >= $served) {
-                return $counts;
-            }
-
-            usleep(100_000);
-        } while (hrtime(true) < $deadline);
-
-        return $counts;
-    }
-
-    /**
-     * @param list<array<mixed>> $threads
-     *
-     * @return array<string, int>
-     */
-    // Counted by the file each thread runs, because the admin API names worker threads by file, not by worker name.
-    private static function requestsPerWorkerFileOf(array $threads): array
-    {
-        $counts = ['index.php' => 0, 'mcp.php' => 0];
-
-        foreach ($threads as $thread) {
-            $name = $thread['Name'] ?? null;
-            $requests = $thread['RequestCount'] ?? null;
-
-            if (is_string($name) && is_int($requests) && str_starts_with($name, 'Worker') && isset($counts[basename($name)])) {
-                $counts[basename($name)] += $requests;
-            }
-        }
-
-        return $counts;
     }
 
     // A worker that ends inside its last request is never counted, so the sign is memory: a replaced worker has not booted the kernel yet, and one that served past the ceiling still holds it. Polled, because the worker ends only after its answer is sent.
@@ -241,11 +186,6 @@ final class CaddyfileWorkersTest extends TestCase
         return $held;
     }
 
-    private function largestServingAppWorkerMemory(): int
-    {
-        return self::largestMemoryOfAppWorkers($this->threads());
-    }
-
     /**
      * @param list<array<mixed>> $threads
      */
@@ -264,6 +204,14 @@ final class CaddyfileWorkersTest extends TestCase
         }
 
         return $held ?? PHP_INT_MAX;
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private static function appThreadWithRequests(int $requests): array
+    {
+        return [['Name' => 'Worker /app/public/index.php', 'RequestCount' => $requests]];
     }
 
     /**
@@ -291,22 +239,36 @@ final class CaddyfileWorkersTest extends TestCase
     }
 
     /**
-     * @return list<array<mixed>>
+     * @param Closure(): list<array<mixed>> $threads
+     *
+     * @return array<string, int>
      */
-    private static function appThreadWithRequests(int $requests): array
+    // Polled, because FrankenPHP counts a request only when the worker has finished it, after its answer is sent.
+    private static function requestsOnceServed(Closure $threads, int $served): array
     {
-        return [['Name' => 'Worker /app/public/index.php', 'RequestCount' => $requests]];
+        $deadline = hrtime(true) + self::SECONDS_TO_FINISH * 1_000_000_000;
+
+        do {
+            $counts = self::requestsPerWorkerFileOf($threads());
+
+            if (array_sum($counts) >= $served) {
+                return $counts;
+            }
+
+            usleep(100_000);
+        } while (hrtime(true) < $deadline);
+
+        return $counts;
     }
 
     /**
-     * @return list<array<mixed>>
+     * @param array<string, string> $environment
      */
-    private function threads(): array
+    private function migrate(array $environment): void
     {
-        $threads = $this->client->request('GET', 'http://'.$this->admin.'/frankenphp/threads')->toArray()['ThreadDebugStates'] ?? [];
-        self::assertIsArray($threads);
-
-        return array_values(array_filter($threads, is_array(...)));
+        $php = new PhpExecutableFinder()->find();
+        self::assertNotFalse($php);
+        new Process([$php, 'bin/console', 'doctrine:migrations:migrate', '--no-interaction'], dirname(__DIR__, 4), $environment)->mustRun();
     }
 
     private function waitForTheWorkers(): void
@@ -326,5 +288,43 @@ final class CaddyfileWorkersTest extends TestCase
         }
 
         self::fail('FrankenPHP did not start: '.$this->server->getErrorOutput());
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function threads(): array
+    {
+        $threads = $this->client->request('GET', 'http://'.$this->admin.'/frankenphp/threads')->toArray()['ThreadDebugStates'] ?? [];
+        self::assertIsArray($threads);
+
+        return array_values(array_filter($threads, is_array(...)));
+    }
+
+    private function largestServingAppWorkerMemory(): int
+    {
+        return self::largestMemoryOfAppWorkers($this->threads());
+    }
+
+    /**
+     * @param list<array<mixed>> $threads
+     *
+     * @return array<string, int>
+     */
+    // Counted by the file each thread runs, because the admin API names worker threads by file, not by worker name.
+    private static function requestsPerWorkerFileOf(array $threads): array
+    {
+        $counts = ['index.php' => 0, 'mcp.php' => 0];
+
+        foreach ($threads as $thread) {
+            $name = $thread['Name'] ?? null;
+            $requests = $thread['RequestCount'] ?? null;
+
+            if (is_string($name) && is_int($requests) && str_starts_with($name, 'Worker') && isset($counts[basename($name)])) {
+                $counts[basename($name)] += $requests;
+            }
+        }
+
+        return $counts;
     }
 }

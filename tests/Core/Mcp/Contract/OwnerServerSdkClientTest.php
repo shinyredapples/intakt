@@ -223,62 +223,6 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         return $client;
     }
 
-    private function useTestReviews(): void
-    {
-        $container = self::getContainer();
-        $container->set(ChangeReviews::class, $container->get('intakt.test.mcp.review_change'));
-        $container->set(Panels::class, $container->get(OnePanel::class));
-    }
-
-    private function transport(): HttpTransport
-    {
-        $headers = null === $this->bearer ? [] : ['Authorization' => 'Bearer '.$this->bearer];
-
-        return new HttpTransport('http://localhost/mcp/owner', $headers, $this->kernelClient);
-    }
-
-    private function setEnvironment(string $access): void
-    {
-        foreach (['MCP_OWNER_TOKEN' => $this->ownerToken, 'MCP_OWNER_ACCESS' => $access] as $name => $value) {
-            $current = $_SERVER[$name] ?? '';
-            $this->previous[$name] = is_string($current) ? $current : '';
-            $_ENV[$name] = $_SERVER[$name] = $value;
-            putenv($name.'='.$value);
-        }
-    }
-
-    private function seedRound(): void
-    {
-        $fixture = new RoundFixture(self::getContainer());
-        $round = $fixture->start(2);
-        $this->roundId = $round->id()->toRfc4122();
-        $findings = [new Finding('A', Severity::P1, null, null, null, 'Text of A.', FixableBy::Builder, false, null, null)];
-
-        foreach ($fixture->bus->messages as $message) {
-            $fixture->deliver($message, new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
-        }
-
-        $fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))(new JudgeRound($this->roundId));
-    }
-
-    /**
-     * @param array<string, mixed> $extra
-     */
-    private function start(Client $client, array $extra = [], ?callable $onProgress = null): CallToolResult
-    {
-        return $client->callTool('start_review', $this->reviewArguments($extra), $onProgress);
-    }
-
-    /**
-     * @param array<string, mixed> $extra
-     *
-     * @return array<string, mixed>
-     */
-    private function reviewArguments(array $extra = []): array
-    {
-        return ['review' => ['project' => 'alpha', 'task' => 'Add the thing.', 'change' => 'sample', 'repository' => $this->repository->path, ...$extra]];
-    }
-
     /**
      * @return array<string, Tool>
      */
@@ -295,6 +239,11 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         return $tools;
     }
 
+    private function annotations(Tool $tool): ToolAnnotations
+    {
+        return $tool->annotations ?? self::fail($tool->name.' has no annotations.');
+    }
+
     /**
      * @return array<mixed>
      */
@@ -304,23 +253,6 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         self::assertIsArray($result->structuredContent);
 
         return $result->structuredContent;
-    }
-
-    /**
-     * @param array<mixed> $answer
-     *
-     * @return list<mixed>
-     */
-    private function actIds(array $answer): array
-    {
-        self::assertIsArray($answer['act']);
-
-        return array_column($answer['act'], 'id');
-    }
-
-    private function annotations(Tool $tool): ToolAnnotations
-    {
-        return $tool->annotations ?? self::fail($tool->name.' has no annotations.');
     }
 
     /**
@@ -338,8 +270,76 @@ final class OwnerServerSdkClientTest extends KernelTestCase
         return $verdict['verdict'];
     }
 
+    /**
+     * @param array<mixed> $answer
+     *
+     * @return list<mixed>
+     */
+    private function actIds(array $answer): array
+    {
+        self::assertIsArray($answer['act']);
+
+        return array_column($answer['act'], 'id');
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     */
+    private function start(Client $client, array $extra = [], ?callable $onProgress = null): CallToolResult
+    {
+        return $client->callTool('start_review', $this->reviewArguments($extra), $onProgress);
+    }
+
     private function text(CallToolResult $result): string
     {
         return implode("\n", array_map(static fn (Content $content): string => $content instanceof TextContent && is_string($content->text) ? $content->text : '', $result->content));
+    }
+
+    private function transport(): HttpTransport
+    {
+        $headers = null === $this->bearer ? [] : ['Authorization' => 'Bearer '.$this->bearer];
+
+        return new HttpTransport('http://localhost/mcp/owner', $headers, $this->kernelClient);
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     *
+     * @return array<string, mixed>
+     */
+    private function reviewArguments(array $extra = []): array
+    {
+        return ['review' => ['project' => 'alpha', 'task' => 'Add the thing.', 'change' => 'sample', 'repository' => $this->repository->path, ...$extra]];
+    }
+
+    private function setEnvironment(string $access): void
+    {
+        foreach (['MCP_OWNER_TOKEN' => $this->ownerToken, 'MCP_OWNER_ACCESS' => $access] as $name => $value) {
+            $current = $_SERVER[$name] ?? '';
+            $this->previous[$name] = is_string($current) ? $current : '';
+            $_ENV[$name] = $_SERVER[$name] = $value;
+            putenv($name.'='.$value);
+        }
+    }
+
+    private function useTestReviews(): void
+    {
+        $container = self::getContainer();
+        $container->set(ChangeReviews::class, $container->get('intakt.test.mcp.review_change'));
+        $container->set(Panels::class, $container->get(OnePanel::class));
+    }
+
+    private function seedRound(): void
+    {
+        $fixture = new RoundFixture(self::getContainer());
+        $round = $fixture->start(2);
+        $this->roundId = $round->id()->toRfc4122();
+        $findings = [new Finding('A', Severity::P1, null, null, null, 'Text of A.', FixableBy::Builder, false, null, null)];
+
+        foreach ($fixture->bus->messages as $message) {
+            $fixture->deliver($message, new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, $findings, [], [])]));
+        }
+
+        $fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Act)])))(new JudgeRound($this->roundId));
     }
 }

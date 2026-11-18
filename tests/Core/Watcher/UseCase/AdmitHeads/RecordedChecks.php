@@ -58,38 +58,6 @@ final class RecordedChecks implements HeadChecks
         return new CiState($head, $runs);
     }
 
-    // A check suite names no event, so its kind stands in for one.
-    /**
-     * @param Recorded $entry
-     */
-    private function originOf(array $entry): CiRunOrigin
-    {
-        $change = array_first($entry['pull_requests']);
-
-        return new CiRunOrigin(
-            $entry['name'] ?? $entry['app']['slug'] ?? 'check',
-            $entry['event'] ?? 'check_suite',
-            null === $change ? null : new ChangeId((string) $change['number']),
-        );
-    }
-
-    private function momentOf(string $recorded): DateTimeImmutable
-    {
-        $moment = DateTimeImmutable::createFromFormat(DATE_ATOM, $recorded, new DateTimeZone('UTC'));
-
-        return false === $moment ? throw new LogicException('Not a recorded moment: '.$recorded) : $moment;
-    }
-
-    private function stateOf(string $status, ?string $conclusion): CiRunState
-    {
-        return match (true) {
-            'completed' !== $status => CiRunState::Unfinished,
-            in_array($conclusion, ['success', 'neutral', 'skipped'], true) => CiRunState::Succeeded,
-            'cancelled' === $conclusion => CiRunState::Cancelled,
-            default => CiRunState::Failed,
-        };
-    }
-
     /**
      * @return array<string, list<Recorded>>
      */
@@ -109,5 +77,37 @@ final class RecordedChecks implements HeadChecks
         }
 
         return $recorded;
+    }
+
+    // A check suite names no event, so its kind stands in for one.
+    /**
+     * @param Recorded $entry
+     */
+    private function originOf(array $entry): CiRunOrigin
+    {
+        $change = array_first($entry['pull_requests']);
+
+        return new CiRunOrigin(
+            $entry['name'] ?? $entry['app']['slug'] ?? 'check',
+            $entry['event'] ?? 'check_suite',
+            null === $change ? null : new ChangeId((string) $change['number']),
+        );
+    }
+
+    private function stateOf(string $status, ?string $conclusion): CiRunState
+    {
+        return match (true) {
+            'completed' !== $status => CiRunState::Unfinished,
+            in_array($conclusion, ['success', 'neutral', 'skipped'], true) => CiRunState::Succeeded,
+            'cancelled' === $conclusion => CiRunState::Cancelled,
+            default => CiRunState::Failed,
+        };
+    }
+
+    private function momentOf(string $recorded): DateTimeImmutable
+    {
+        $moment = DateTimeImmutable::createFromFormat(DATE_ATOM, $recorded, new DateTimeZone('UTC'));
+
+        return false === $moment ? throw new LogicException('Not a recorded moment: '.$recorded) : $moment;
     }
 }

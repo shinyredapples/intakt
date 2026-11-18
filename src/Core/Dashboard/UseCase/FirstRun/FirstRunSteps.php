@@ -77,16 +77,6 @@ final readonly class FirstRunSteps
         );
     }
 
-    // Only on a demo install, because without the sample there is no demo review to run and no replay project to play one into.
-    private function choices(ProviderStep $providers, FirstReviewStep $firstReview): ?DemoChoices
-    {
-        if (!$this->sample->hasRepository()) {
-            return null;
-        }
-
-        return new DemoChoices($providers, $firstReview);
-    }
-
     private function providers(?string $firstProject): ProviderStep
     {
         $keyed = array_filter(Provider::cases(), fn (Provider $provider): bool => [] !== $this->accounts->of($provider));
@@ -109,22 +99,6 @@ final readonly class FirstRunSteps
             $unreadable,
             array_map(static fn (ProviderDescriptor $descriptor): string => $descriptor->label(), $this->providerCatalog->descriptors()),
         );
-    }
-
-    /**
-     * @return list<TierLine>
-     */
-    private function tiersOf(string $project): array
-    {
-        return array_map(function (Tier $tier) use ($project): TierLine {
-            try {
-                $resolved = $this->tiers->resolve($project, $tier);
-            } catch (TierResolutionFailure $failure) {
-                return new TierLine($tier->value, '-', $failure->getMessage());
-            }
-
-            return new TierLine($tier->value, $resolved->provider->value, $resolved->model);
-        }, Tier::cases());
     }
 
     private function panelOf(string $project): PanelOfProject
@@ -152,5 +126,31 @@ final readonly class FirstRunSteps
             ToolAccess::Write === $this->ownerAccess,
             $this->composeService,
         );
+    }
+
+    // Only on a demo install, because without the sample there is no demo review to run and no replay project to play one into.
+    private function choices(ProviderStep $providers, FirstReviewStep $firstReview): ?DemoChoices
+    {
+        if (!$this->sample->hasRepository()) {
+            return null;
+        }
+
+        return new DemoChoices($providers, $firstReview);
+    }
+
+    /**
+     * @return list<TierLine>
+     */
+    private function tiersOf(string $project): array
+    {
+        return array_map(function (Tier $tier) use ($project): TierLine {
+            try {
+                $resolved = $this->tiers->resolve($project, $tier);
+            } catch (TierResolutionFailure $failure) {
+                return new TierLine($tier->value, '-', $failure->getMessage());
+            }
+
+            return new TierLine($tier->value, $resolved->provider->value, $resolved->model);
+        }, Tier::cases());
     }
 }

@@ -120,17 +120,6 @@ final class AppImageWorkflowTest extends TestCase
     }
 
     /**
-     * @return Step
-     */
-    private function stepRunning(string $script): array
-    {
-        $step = array_first(array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => str_contains($step['run'] ?? '', $script)));
-        self::assertIsArray($step);
-
-        return $step;
-    }
-
-    /**
      * @return list<string>
      */
     private function jobsRunning(string $command): array
@@ -142,45 +131,6 @@ final class AppImageWorkflowTest extends TestCase
         }
 
         return $found;
-    }
-
-    /**
-     * @return array<string, list<string>>
-     */
-    private function runsByJob(): array
-    {
-        $runs = [];
-        foreach ($this->workflowsOnPullRequestsOrBranchPushes() as $file => $workflow) {
-            foreach ($workflow['jobs'] ?? [] as $name => $job) {
-                $runs[$file.' '.$name] = array_column($job['steps'] ?? [], 'run');
-            }
-        }
-
-        return $runs;
-    }
-
-    /**
-     * @return array<string, WorkflowFile>
-     */
-    private function workflowsOnPullRequestsOrBranchPushes(): array
-    {
-        $workflows = [];
-        foreach (new Finder()->files()->in(self::WORKFLOWS)->name(['*.yml', '*.yaml'])->sortByName() as $file) {
-            $workflow = $this->parse($file->getPathname());
-            if ($this->runsOnPullRequestsOrBranchPushes($workflow)) {
-                $workflows[$file->getFilename()] = $workflow;
-            }
-        }
-
-        return $workflows;
-    }
-
-    /**
-     * @param WorkflowFile $workflow
-     */
-    private function runsOnPullRequestsOrBranchPushes(array $workflow): bool
-    {
-        return $this->startsOnPullRequestsOrBranchPushes($workflow['on'] ?? []);
     }
 
     /**
@@ -209,6 +159,32 @@ final class AppImageWorkflowTest extends TestCase
     }
 
     /**
+     * @return Step
+     */
+    private function stepRunning(string $script): array
+    {
+        $step = array_first(array_filter($this->imageJob()['steps'] ?? [], static fn (array $step): bool => str_contains($step['run'] ?? '', $script)));
+        self::assertIsArray($step);
+
+        return $step;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function runsByJob(): array
+    {
+        $runs = [];
+        foreach ($this->workflowsOnPullRequestsOrBranchPushes() as $file => $workflow) {
+            foreach ($workflow['jobs'] ?? [] as $name => $job) {
+                $runs[$file.' '.$name] = array_column($job['steps'] ?? [], 'run');
+            }
+        }
+
+        return $runs;
+    }
+
+    /**
      * @return WorkflowFile
      */
     private function parse(string $path): array
@@ -217,5 +193,29 @@ final class AppImageWorkflowTest extends TestCase
         $workflow = Yaml::parseFile($path);
 
         return $workflow;
+    }
+
+    /**
+     * @return array<string, WorkflowFile>
+     */
+    private function workflowsOnPullRequestsOrBranchPushes(): array
+    {
+        $workflows = [];
+        foreach (new Finder()->files()->in(self::WORKFLOWS)->name(['*.yml', '*.yaml'])->sortByName() as $file) {
+            $workflow = $this->parse($file->getPathname());
+            if ($this->runsOnPullRequestsOrBranchPushes($workflow)) {
+                $workflows[$file->getFilename()] = $workflow;
+            }
+        }
+
+        return $workflows;
+    }
+
+    /**
+     * @param WorkflowFile $workflow
+     */
+    private function runsOnPullRequestsOrBranchPushes(array $workflow): bool
+    {
+        return $this->startsOnPullRequestsOrBranchPushes($workflow['on'] ?? []);
     }
 }

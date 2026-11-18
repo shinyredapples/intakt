@@ -67,21 +67,6 @@ final readonly class HeadLocks
         return $this->locks->createLock('watcher-change-'.hash('sha256', json_encode([$project, $open->id->value], JSON_THROW_ON_ERROR)), autoRelease: false);
     }
 
-    // Reported outside any head's back-off, because every head's lock lives in the one store, so its failure is no head's own.
-    /**
-     * @param list<LockInterface> $held
-     */
-    private function giveBack(array $held): void
-    {
-        $failure = array_first($this->releaseEach($held));
-
-        if ($failure instanceof LockReleasingException) {
-            $this->report($failure);
-
-            throw $failure;
-        }
-    }
-
     // The failure that ended the tick is the one rethrown, so a release failure after it is only reported, which logs it with its trace.
     /**
      * @param list<LockInterface> $held
@@ -96,13 +81,18 @@ final readonly class HeadLocks
         }
     }
 
-    // Contained, because the failure that ended the tick is the one to rethrow, and Budget's write fails on its own when its table is locked or the database connection is lost.
-    private function report(Throwable $storeFailure): void
+    // Reported outside any head's back-off, because every head's lock lives in the one store, so its failure is no head's own.
+    /**
+     * @param list<LockInterface> $held
+     */
+    private function giveBack(array $held): void
     {
-        try {
-            $this->installWide->lockStoreFailed($storeFailure);
-        } catch (Throwable $notReported) {
-            $this->logger->error('The lock store failure could not start the install-wide failure back-off.', ['exception' => $notReported, 'lock_store_failure' => $storeFailure]);
+        $failure = array_first($this->releaseEach($held));
+
+        if ($failure instanceof LockReleasingException) {
+            $this->report($failure);
+
+            throw $failure;
         }
     }
 
@@ -125,5 +115,15 @@ final readonly class HeadLocks
         }
 
         return $failures;
+    }
+
+    // Contained, because the failure that ended the tick is the one to rethrow, and Budget's write fails on its own when its table is locked or the database connection is lost.
+    private function report(Throwable $storeFailure): void
+    {
+        try {
+            $this->installWide->lockStoreFailed($storeFailure);
+        } catch (Throwable $notReported) {
+            $this->logger->error('The lock store failure could not start the install-wide failure back-off.', ['exception' => $notReported, 'lock_store_failure' => $storeFailure]);
+        }
     }
 }

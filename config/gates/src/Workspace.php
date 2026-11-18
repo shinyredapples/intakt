@@ -214,6 +214,13 @@ final readonly class Workspace
         return $files;
     }
 
+    private function isHead(string $commit): bool
+    {
+        $head = $this->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
+
+        return $head->succeeded() && trim($head->output) === $commit;
+    }
+
     /**
      * @param list<string> $prefixes
      */
@@ -230,23 +237,16 @@ final readonly class Workspace
         return false;
     }
 
-    private function changesImportedServices(string $mergeBase): bool
-    {
-        return array_any($this->scope->changedPaths($mergeBase), static fn (string $path): bool => str_starts_with($path, 'tests/') && str_ends_with($path, self::IMPORTED_SERVICES));
-    }
-
-    private function isHead(string $commit): bool
-    {
-        $head = $this->git(['rev-parse', '--verify', '--quiet', 'HEAD^{commit}']);
-
-        return $head->succeeded() && trim($head->output) === $commit;
-    }
-
     /**
      * @return list<string>
      */
     private function candidateBases(): array
     {
         return null === $this->requestedBase ? self::DEFAULT_BASES : [$this->requestedBase];
+    }
+
+    private function changesImportedServices(string $mergeBase): bool
+    {
+        return array_any($this->scope->changedPaths($mergeBase), static fn (string $path): bool => str_starts_with($path, 'tests/') && str_ends_with($path, self::IMPORTED_SERVICES));
     }
 }

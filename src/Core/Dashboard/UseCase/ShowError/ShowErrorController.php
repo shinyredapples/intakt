@@ -66,6 +66,15 @@ final readonly class ShowErrorController
         return is_string($route) && !str_starts_with($route, DashboardRoutes::PREFIX);
     }
 
+    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
+    private function referenceFor(Throwable $exception, string $log): string
+    {
+        $reference = bin2hex(random_bytes(4));
+        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
+
+        return $reference;
+    }
+
     /**
      * @param array<mixed> $headers
      */
@@ -85,15 +94,6 @@ final readonly class ShowErrorController
         };
     }
 
-    // The page shows only the reference, because the trace stays in the log, where the same reference finds it.
-    private function referenceFor(Throwable $exception, string $log): string
-    {
-        $reference = bin2hex(random_bytes(4));
-        $this->logger->error($log, ['reference' => $reference, 'exception' => $exception]);
-
-        return $reference;
-    }
-
     private function render(int $status, string $message, ?string $reference): string
     {
         try {
@@ -103,6 +103,13 @@ final readonly class ShowErrorController
 
             return $this->plainPage($message, $reference);
         }
+    }
+
+    private function plainPage(string $message, ?string $reference): string
+    {
+        $note = null === $reference ? '' : sprintf('<p>Reference: <code>%s</code></p>', htmlspecialchars($reference));
+
+        return sprintf('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Intakt</title></head><body><h1>Intakt</h1><p>%s</p>%s<p><a href="/">Back to the board</a></p></body></html>', htmlspecialchars($message), $note);
     }
 
     // The shell's project filter is its only ledger read, and the ledger may be the very thing that failed, so the shell still answers without the projects.
@@ -118,12 +125,5 @@ final readonly class ShowErrorController
 
             return [];
         }
-    }
-
-    private function plainPage(string $message, ?string $reference): string
-    {
-        $note = null === $reference ? '' : sprintf('<p>Reference: <code>%s</code></p>', htmlspecialchars($reference));
-
-        return sprintf('<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Intakt</title></head><body><h1>Intakt</h1><p>%s</p>%s<p><a href="/">Back to the board</a></p></body></html>', htmlspecialchars($message), $note);
     }
 }

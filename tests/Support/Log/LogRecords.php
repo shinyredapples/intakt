@@ -102,6 +102,26 @@ final readonly class LogRecords
     }
 
     /**
+     * @param Record $record
+     */
+    private function encoded(array $record): string
+    {
+        return json_encode($record, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE).PHP_EOL;
+    }
+
+    /**
+     * @param resource $handle
+     *
+     * @return list<Record>
+     */
+    private function records($handle): array
+    {
+        $lines = explode(PHP_EOL, (string) stream_get_contents($handle, offset: 0));
+
+        return array_map($this->decoded(...), array_values(array_filter($lines, static fn (string $line): bool => '' !== $line)));
+    }
+
+    /**
      * @template T
      *
      * @param Closure(resource): T $change
@@ -124,18 +144,6 @@ final readonly class LogRecords
     }
 
     /**
-     * @param resource $handle
-     *
-     * @return list<Record>
-     */
-    private function records($handle): array
-    {
-        $lines = explode(PHP_EOL, (string) stream_get_contents($handle, offset: 0));
-
-        return array_map($this->decoded(...), array_values(array_filter($lines, static fn (string $line): bool => '' !== $line)));
-    }
-
-    /**
      * @param resource     $handle
      * @param list<Record> $records
      */
@@ -145,14 +153,6 @@ final readonly class LogRecords
         rewind($handle);
         fwrite($handle, implode('', array_map($this->encoded(...), $records)));
         fflush($handle);
-    }
-
-    /**
-     * @param Record $record
-     */
-    private function encoded(array $record): string
-    {
-        return json_encode($record, JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE).PHP_EOL;
     }
 
     /**

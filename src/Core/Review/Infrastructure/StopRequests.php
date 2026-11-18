@@ -56,17 +56,6 @@ final readonly class StopRequests
         return array_map(strval(...), array_keys(array_filter($last[$id] ?? [], static fn (LedgerEventKind $kind): bool => LedgerEventKind::ReviewerStopped === $kind)));
     }
 
-    private function answerOf(RecordedEvent $row): ?object
-    {
-        return match ($row->event->kind) {
-            LedgerEventKind::VerdictReceived => $this->payloads->of($row, VerdictReceived::class),
-            LedgerEventKind::ReviewerFailed => $this->payloads->of($row, ReviewerFailed::class),
-            LedgerEventKind::ReviewerBlocked => $this->payloads->of($row, ReviewerBlocked::class),
-            LedgerEventKind::ReviewerStopped => $this->payloads->of($row, ReviewerStopped::class),
-            default => null,
-        };
-    }
-
     private function lastRowFor(Uuid $round, Uuid $reviewer): ?LedgerEventKind
     {
         $pair = [$round->toRfc4122(), $reviewer->toRfc4122()];
@@ -78,6 +67,27 @@ final readonly class StopRequests
         $rows = array_filter(iterator_to_array($this->ledger->readInOrder()), fn (RecordedEvent $row): bool => in_array($row->event->kind, self::ROWS, true) && $pair === $this->pairOf($row));
 
         return array_last($rows)?->event->kind;
+    }
+
+    /**
+     * @return array{string, string}|null
+     */
+    private function stoppedPairOf(RecordedEvent $row): ?array
+    {
+        $stopped = $this->payloads->of($row, ReviewerStopped::class);
+
+        return null === $stopped ? null : [$stopped->round, $stopped->reviewer];
+    }
+
+    private function answerOf(RecordedEvent $row): ?object
+    {
+        return match ($row->event->kind) {
+            LedgerEventKind::VerdictReceived => $this->payloads->of($row, VerdictReceived::class),
+            LedgerEventKind::ReviewerFailed => $this->payloads->of($row, ReviewerFailed::class),
+            LedgerEventKind::ReviewerBlocked => $this->payloads->of($row, ReviewerBlocked::class),
+            LedgerEventKind::ReviewerStopped => $this->payloads->of($row, ReviewerStopped::class),
+            default => null,
+        };
     }
 
     // Requests are few and progress updates many, so the whole ledger is read only for a reviewer someone asked to stop.
@@ -95,16 +105,6 @@ final readonly class StopRequests
     private function pairOf(RecordedEvent $row): ?array
     {
         return LedgerEventKind::ReviewerStopped === $row->event->kind ? $this->stoppedPairOf($row) : $this->requestedPairOf($row);
-    }
-
-    /**
-     * @return array{string, string}|null
-     */
-    private function stoppedPairOf(RecordedEvent $row): ?array
-    {
-        $stopped = $this->payloads->of($row, ReviewerStopped::class);
-
-        return null === $stopped ? null : [$stopped->round, $stopped->reviewer];
     }
 
     // Read as an array, because the dashboard writes the request row without a payload class.

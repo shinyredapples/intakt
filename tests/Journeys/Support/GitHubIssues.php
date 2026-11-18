@@ -75,35 +75,6 @@ final readonly class GitHubIssues
     }
 
     /**
-     * @return list<mixed>
-     */
-    private function pageFrom(mixed $page): array
-    {
-        return is_array($page) && array_is_list($page) ? $page : throw $this->notAnIssueList();
-    }
-
-    /**
-     * @return array{number: int, body: string}
-     */
-    private function issueFrom(mixed $issue): array
-    {
-        $number = is_array($issue) ? $issue['number'] ?? null : null;
-        $hasBody = is_array($issue) && array_key_exists('body', $issue);
-        $body = $hasBody ? $issue['body'] : null;
-
-        if (!is_int($number) || !$hasBody || (null !== $body && !is_string($body))) {
-            throw $this->notAnIssueList();
-        }
-
-        return ['number' => $number, 'body' => $body ?? ''];
-    }
-
-    private function notAnIssueList(): GitHubCallFailed
-    {
-        return new GitHubCallFailed('gh api answered something that is not a list of issues with a number and a body');
-    }
-
-    /**
      * @param list<string> $arguments
      */
     private function issueCommand(array $arguments, string $input): string
@@ -125,6 +96,35 @@ final readonly class GitHubIssues
         }
 
         return ($this->runner ?? $this->runProcess(...))($arguments, $input);
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function pageFrom(mixed $page): array
+    {
+        return is_array($page) && array_is_list($page) ? $page : throw $this->notAnIssueList();
+    }
+
+    private function notAnIssueList(): GitHubCallFailed
+    {
+        return new GitHubCallFailed('gh api answered something that is not a list of issues with a number and a body');
+    }
+
+    /**
+     * @return array{number: int, body: string}
+     */
+    private function issueFrom(mixed $issue): array
+    {
+        $number = is_array($issue) ? $issue['number'] ?? null : null;
+        $hasBody = is_array($issue) && array_key_exists('body', $issue);
+        $body = $hasBody ? $issue['body'] : null;
+
+        if (!is_int($number) || !$hasBody || (null !== $body && !is_string($body))) {
+            throw $this->notAnIssueList();
+        }
+
+        return ['number' => $number, 'body' => $body ?? ''];
     }
 
     /**

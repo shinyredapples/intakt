@@ -193,6 +193,11 @@ final class BoardTest extends TestCase
         self::assertSame(['The Code reviewers are reviewing change feat/a of alpha.', 'Nothing needs you.'], [$headline->opening(), $headline->waitingWords()]);
     }
 
+    private function round(string $round, string $change, int $number): ReviewedRound
+    {
+        return $this->started(new RoundStart($round, 'alpha', 2), new RoundPlace($change, $number), $this->morning());
+    }
+
     /**
      * @return list<string>
      */
@@ -201,18 +206,13 @@ final class BoardTest extends TestCase
         return array_map(static fn (Review $card): string => $card->latest()->round, $board->cardsIn($column));
     }
 
-    private function round(string $round, string $change, int $number): ReviewedRound
+    private function morning(): DateTimeImmutable
     {
-        return $this->started(new RoundStart($round, 'alpha', 2), new RoundPlace($change, $number), $this->morning());
+        return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
     }
 
     private function started(RoundStart $start, RoundPlace $place, DateTimeImmutable $startedAt): ReviewedRound
     {
         return new ReviewedRound($start, $place, $startedAt, null);
-    }
-
-    private function morning(): DateTimeImmutable
-    {
-        return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
     }
 }

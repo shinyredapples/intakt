@@ -386,24 +386,6 @@ final class ReplaysRecordingTest extends TestCase
         $this->updates = new ClockedLiveUpdates($this->clock, $this->ledger);
     }
 
-    private function replays(): ReplaysRecording
-    {
-        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')));
-    }
-
-    private function marks(): ReplayMarks
-    {
-        return new ReplayMarks(new MarkAnsweringQueries($this->demoProject));
-    }
-
-    /**
-     * @return list<RecordedEvent>
-     */
-    private function appended(): array
-    {
-        return iterator_to_array($this->ledger->readInOrder(), false);
-    }
-
     // Written through the stored serializer and read back from a file, as the record command leaves it, so the rows are the text a live review stores.
     private function recordedRun(): Recording
     {
@@ -423,13 +405,9 @@ final class ReplaysRecordingTest extends TestCase
         ])));
     }
 
-    /**
-     * @param list<RecordedLedgerEvent> $events
-     * @param list<CapturedUpdate>      $updates
-     */
-    private function recording(array $events, array $updates = []): Recording
+    private function replays(): ReplaysRecording
     {
-        return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, $updates);
+        return new ReplaysRecording($this->ledger, $this->updates, $this->clock, new LockFactory($this->locks), $this->marks(), TourCaptionsOn::captions($this->updates, TourCaptionsOn::tour($this->ledger, $this->marks(), '')));
     }
 
     private function row(LedgerEventKind $kind, string $payload, int $secondsAfterStart): RecordedLedgerEvent
@@ -444,6 +422,28 @@ final class ReplaysRecordingTest extends TestCase
             self::TOPIC,
             sprintf('<turbo-stream action="replace" target="round-state"><template>at %d ms</template></turbo-stream>', $millisecondsAfterStart),
         );
+    }
+
+    /**
+     * @param list<RecordedLedgerEvent> $events
+     * @param list<CapturedUpdate>      $updates
+     */
+    private function recording(array $events, array $updates = []): Recording
+    {
+        return new Recording(new DateTimeImmutable('2026-11-16T09:00:00+00:00'), 'dev-main', ['claude-opus-5-5'], 'sample', 'sample-change', $events, $updates);
+    }
+
+    /**
+     * @return list<RecordedEvent>
+     */
+    private function appended(): array
+    {
+        return iterator_to_array($this->ledger->readInOrder(), false);
+    }
+
+    private function marks(): ReplayMarks
+    {
+        return new ReplayMarks(new MarkAnsweringQueries($this->demoProject));
     }
 
     private static function withProject(string $payload, string $project): string

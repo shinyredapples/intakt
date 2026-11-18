@@ -295,21 +295,14 @@ final class RunBenchCommandTest extends TestCase
         new Filesystem()->remove([$this->workspace, $this->results]);
     }
 
-    private function checkoutsNow(): int
+    private function reviews(): ChangeReviews
     {
-        $entries = glob($this->workspace.'/*');
+        $finding = new Finding('F1', Severity::P1, 'src/shipping.js', $this->plantedLine(), null, 'Off by one.', FixableBy::Builder, false, null, null);
+        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, ['big']);
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$reviewer]));
 
-        return false === $entries ? 0 : count($entries);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function resultFiles(): array
-    {
-        $files = glob($this->results.'/*.json');
-
-        return false === $files ? [] : $files;
+        return $reviews;
     }
 
     /**
@@ -332,6 +325,23 @@ final class RunBenchCommandTest extends TestCase
     }
 
     /**
+     * @return list<string>
+     */
+    private function resultFiles(): array
+    {
+        $files = glob($this->results.'/*.json');
+
+        return false === $files ? [] : $files;
+    }
+
+    private function checkoutsNow(): int
+    {
+        $entries = glob($this->workspace.'/*');
+
+        return false === $entries ? 0 : count($entries);
+    }
+
+    /**
      * @return ResultDocument
      */
     private function resultDocument(): array
@@ -347,6 +357,11 @@ final class RunBenchCommandTest extends TestCase
         $failed = new ReviewerOutcome('role-1', Tier::Standard, null, 'stopped at its output limit', new RoundTokens(1, 100, 0, 0, 0, 0, 100), 500, ['big']);
 
         return $this->everySecondReview(new ChangeReview('round', 1, Decision::Blocked, [], [], new RoundTokens(1, 100, 0, 0, 0, 0, 100), Cost::none(), [], reviewers: [$failed]));
+    }
+
+    private function plantedLine(): int
+    {
+        return Expectations::fromJson(new Filesystem()->readFile(self::FIXTURES.'/bench/free-shipping/expectations.json'))->defects[0]->from;
     }
 
     /**
@@ -371,20 +386,5 @@ final class RunBenchCommandTest extends TestCase
         });
 
         return $reviews;
-    }
-
-    private function reviews(): ChangeReviews
-    {
-        $finding = new Finding('F1', Severity::P1, 'src/shipping.js', $this->plantedLine(), null, 'Off by one.', FixableBy::Builder, false, null, null);
-        $reviewer = new ReviewerOutcome('role-1', Tier::Standard, new Verdict(Decision::Changes, [$finding], [], []), null, new RoundTokens(1, 500, 0, 0, 0, 40, 540), 3000, ['big']);
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturn(new ChangeReview('round', 1, Decision::Changes, [], [$finding], new RoundTokens(1, 500, 0, 0, 0, 40, 540), Cost::none(), [], reviewers: [$reviewer]));
-
-        return $reviews;
-    }
-
-    private function plantedLine(): int
-    {
-        return Expectations::fromJson(new Filesystem()->readFile(self::FIXTURES.'/bench/free-shipping/expectations.json'))->defects[0]->from;
     }
 }

@@ -123,13 +123,13 @@ final class DoctrineOutageNoticesTest extends KernelTestCase
         return new DoctrineOutageNotices($this->entities, $this->locks, $logger);
     }
 
-    private function outageOf(Account $account, DateTimeImmutable $lastReadingAt): UsageReadingsStayedAway
-    {
-        return new UsageReadingsStayedAway($account, $lastReadingAt, $lastReadingAt->modify('+4 hours'));
-    }
-
     private function claude(string $name): Account
     {
         return new Account(Provider::ClaudeCode, $name);
+    }
+
+    private function outageOf(Account $account, DateTimeImmutable $lastReadingAt): UsageReadingsStayedAway
+    {
+        return new UsageReadingsStayedAway($account, $lastReadingAt, $lastReadingAt->modify('+4 hours'));
     }
 }

@@ -70,15 +70,15 @@ final readonly class VerdictForTheLoop
         return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not publish its review of this head.', null, $this->tokenOf($round));
     }
 
-    private function unreviewed(ReviewRound $round): PublishedVerdict
-    {
-        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
-    }
-
     // The round's id, so a retried publication finds the comment an earlier attempt posted.
     private function tokenOf(ReviewRound $round): ReviewToken
     {
         return new ReviewToken($round->id()->toRfc4122());
+    }
+
+    private function unreviewed(ReviewRound $round): PublishedVerdict
+    {
+        return new PublishedVerdict($round->identity()->commits->head, HeadStatus::Error, 'Intakt could not review this head.', null, $this->tokenOf($round));
     }
 
     // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.

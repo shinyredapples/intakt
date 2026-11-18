@@ -27,6 +27,18 @@ final readonly class LoadTimeDeprecationResolver implements Resolver
         return new Resolution($callee, null);
     }
 
+    /**
+     * @param array<string, mixed> $frame
+     *
+     * @return non-empty-string|null
+     */
+    private function fileOf(array $frame): ?string
+    {
+        $file = $frame['file'] ?? null;
+
+        return is_string($file) && '' !== $file ? $file : null;
+    }
+
     // Because the frame of an autoloader call carries the file of the code that needed the class, or none when an internal function such as class_exists() needed it; any registered callable shape counts, so a closure loader cannot hide the caller. Only the loading itself may be skipped: a frame outside the autoloader before its call is code that called the deprecated symbol while the file loaded, and it stays the caller.
     /**
      * @param list<array<string, mixed>> $frames
@@ -46,17 +58,5 @@ final readonly class LoadTimeDeprecationResolver implements Resolver
         }
 
         return null;
-    }
-
-    /**
-     * @param array<string, mixed> $frame
-     *
-     * @return non-empty-string|null
-     */
-    private function fileOf(array $frame): ?string
-    {
-        $file = $frame['file'] ?? null;
-
-        return is_string($file) && '' !== $file ? $file : null;
     }
 }

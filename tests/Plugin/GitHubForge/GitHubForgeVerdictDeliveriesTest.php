@@ -113,23 +113,6 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
         self::assertSame([self::POST_STATUS, self::POST_STATUS], $this->posts);
     }
 
-    private function publish(GitHubForge $forge, ?string $comment): void
-    {
-        $status = null === $comment ? HeadStatus::Error : HeadStatus::Success;
-        $forge->publishVerdict('widgets', new ChangeId(self::PULL), new PublishedVerdict(new CommitId(self::HEAD), $status, 'The description.', $comment, new ReviewToken('round-7-token-0123456789')));
-    }
-
-    private function failureOf(Closure $delivery): ForgeWriteFailed
-    {
-        try {
-            $delivery();
-        } catch (ForgeWriteFailed $failure) {
-            return $failure;
-        }
-
-        self::fail('The delivery must fail.');
-    }
-
     /**
      * @param Closure(string): ResponseInterface $answer
      */
@@ -155,5 +138,22 @@ final class GitHubForgeVerdictDeliveriesTest extends TestCase
         $checked = new CheckedInstallationTokens($readBack, $tokens);
 
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())), new GitHubAppSetting('12345', new NullLogger()));
+    }
+
+    private function publish(GitHubForge $forge, ?string $comment): void
+    {
+        $status = null === $comment ? HeadStatus::Error : HeadStatus::Success;
+        $forge->publishVerdict('widgets', new ChangeId(self::PULL), new PublishedVerdict(new CommitId(self::HEAD), $status, 'The description.', $comment, new ReviewToken('round-7-token-0123456789')));
+    }
+
+    private function failureOf(Closure $delivery): ForgeWriteFailed
+    {
+        try {
+            $delivery();
+        } catch (ForgeWriteFailed $failure) {
+            return $failure;
+        }
+
+        self::fail('The delivery must fail.');
     }
 }

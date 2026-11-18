@@ -215,6 +215,12 @@ final class ProbeTest extends TestCase
         new Filesystem()->remove($this->scratch);
     }
 
+    // Named by the process, because the copy outlives a test while two runs of this class side by side must not share it.
+    private static function sharedProject(): string
+    {
+        return sys_get_temp_dir().'/intakt-probe-test-project-'.getmypid();
+    }
+
     // Same rule as the gate tests: a host without unprivileged namespaces cannot run a probe, which the refusal test covers.
     private function skipWhenNetworkNamespacesAreRefused(): void
     {
@@ -239,21 +245,6 @@ final class ProbeTest extends TestCase
         return '<?php system('.var_export($start, true).'); while (!is_file('.var_export($marker, true).')) { usleep(10_000); }';
     }
 
-    private function transcriptOf(Process $run): string
-    {
-        return 'exit '.$run->getExitCode()."\nstdout:\n".$run->getOutput()."\nstderr:\n".$run->getErrorOutput();
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function entriesOf(string $directory): array
-    {
-        $found = scandir($directory);
-
-        return array_values(array_diff(false === $found ? [] : $found, ['.', '..']));
-    }
-
     private function probe(string $name, string $code): void
     {
         new Filesystem()->dumpFile($this->project.'/tests/Probe/'.$name, $code);
@@ -270,24 +261,9 @@ final class ProbeTest extends TestCase
         return $process;
     }
 
-    /**
-     * @param array<string, string> $environment
-     */
-    private function runProbeFromTheScratchFolder(string $file, array $environment): Process
+    private function transcriptOf(Process $run): string
     {
-        $process = new Process([PHP_BINARY, $this->project.'/bin/probe', $file], $this->scratch, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', ...$environment]);
-        $process->run();
-
-        return $process;
-    }
-
-    // Each tool fails at once, so a run that finds them stops before the probe instead of reaching the network.
-    private function failingTools(string $folder): void
-    {
-        foreach (['unshare', 'sh', 'ip'] as $tool) {
-            new Filesystem()->dumpFile($folder.'/'.$tool, "#!/bin/sh\nexit 1\n");
-            new Filesystem()->chmod($folder.'/'.$tool, 0o755);
-        }
+        return 'exit '.$run->getExitCode()."\nstdout:\n".$run->getOutput()."\nstderr:\n".$run->getErrorOutput();
     }
 
     /**
@@ -310,6 +286,36 @@ final class ProbeTest extends TestCase
         return $found;
     }
 
+    // Each tool fails at once, so a run that finds them stops before the probe instead of reaching the network.
+    private function failingTools(string $folder): void
+    {
+        foreach (['unshare', 'sh', 'ip'] as $tool) {
+            new Filesystem()->dumpFile($folder.'/'.$tool, "#!/bin/sh\nexit 1\n");
+            new Filesystem()->chmod($folder.'/'.$tool, 0o755);
+        }
+    }
+
+    /**
+     * @param array<string, string> $environment
+     */
+    private function runProbeFromTheScratchFolder(string $file, array $environment): Process
+    {
+        $process = new Process([PHP_BINARY, $this->project.'/bin/probe', $file], $this->scratch, ['TMPDIR' => $this->scratch.'/tmp', 'APP_ENV' => 'test', ...$environment]);
+        $process->run();
+
+        return $process;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function entriesOf(string $directory): array
+    {
+        $found = scandir($directory);
+
+        return array_values(array_diff(false === $found ? [] : $found, ['.', '..']));
+    }
+
     private function copyOfTheProject(): string
     {
         $project = self::sharedProject();
@@ -319,11 +325,5 @@ final class ProbeTest extends TestCase
         new Filesystem()->remove($project.'/config/reference.php');
 
         return $project;
-    }
-
-    // Named by the process, because the copy outlives a test while two runs of this class side by side must not share it.
-    private static function sharedProject(): string
-    {
-        return sys_get_temp_dir().'/intakt-probe-test-project-'.getmypid();
     }
 }

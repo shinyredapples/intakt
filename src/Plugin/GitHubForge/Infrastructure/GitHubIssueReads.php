@@ -51,6 +51,31 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
+     * @return array<string, int|string>
+     */
+    private function page(int $page): array
+    {
+        return ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page];
+    }
+
+    /**
+     * @param array<string, int|string> $query
+     *
+     * @return array{status: int, body: string, etag: ?string, next: bool}
+     */
+    private function get(string $path, array $query, ?string $validator = null): array
+    {
+        $headers = null === $validator ? [] : ['If-None-Match' => $validator];
+        $answer = $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
+        if (self::NOT_MODIFIED !== $answer['status']) {
+            return $answer;
+        }
+
+        // Without a validator there is no earlier listing a 304 could stand for, so taking it as unchanged would report issues never read.
+        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
+    }
+
+    /**
      * @param array{status: int, body: string, etag: ?string, next: bool} $first
      *
      * @return array{issues: list<array<mixed>>, pages: int}
@@ -80,28 +105,6 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
-     * @return array<string, int|string>
-     */
-    private function page(int $page): array
-    {
-        return ['state' => 'open', 'per_page' => self::PAGE_SIZE, 'page' => $page];
-    }
-
-    /**
-     * @return list<array<mixed>>
-     */
-    private function issuesOf(string $body): array
-    {
-        $issues = $this->decode($body);
-        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
-        if (!array_is_list($issues) || !str_starts_with(ltrim($body), '[')) {
-            throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
-        }
-
-        return array_map(static fn (mixed $issue): array => is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub listed an issue that is not an object.'), $issues);
-    }
-
-    /**
      * @param array<mixed> $issue
      */
     private function listed(array $issue): ListedIssue
@@ -123,75 +126,6 @@ final readonly class GitHubIssueReads implements IssueReads
             is_string($due) ? $this->moments->parse($due) : null,
             array_key_exists('pull_request', $issue),
         );
-    }
-
-    /**
-     * @param array<mixed> $issue
-     *
-     * @return list<string>
-     */
-    private function labelsOf(array $issue): array
-    {
-        $labels = $issue['labels'] ?? [];
-        if (!is_array($labels)) {
-            throw new ForgeReadFailed('GitHub listed an issue with labels this forge cannot read.');
-        }
-
-        return array_values(array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), $labels));
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function at(array $data, string ...$keys): mixed
-    {
-        $value = $data;
-        foreach ($keys as $key) {
-            $value = is_array($value) ? ($value[$key] ?? null) : null;
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<mixed> $data
-     */
-    private function text(array $data, string ...$keys): string
-    {
-        $value = $this->at($data, ...$keys);
-
-        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
-    }
-
-    /**
-     * @return array<mixed>
-     */
-    private function decode(string $body): array
-    {
-        try {
-            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
-        } catch (JsonException $invalid) {
-            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
-        }
-
-        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
-    }
-
-    /**
-     * @param array<string, int|string> $query
-     *
-     * @return array{status: int, body: string, etag: ?string, next: bool}
-     */
-    private function get(string $path, array $query, ?string $validator = null): array
-    {
-        $headers = null === $validator ? [] : ['If-None-Match' => $validator];
-        $answer = $this->send('GET', $path, ['query' => $query, 'headers' => $headers]);
-        if (self::NOT_MODIFIED !== $answer['status']) {
-            return $answer;
-        }
-
-        // Without a validator there is no earlier listing a 304 could stand for, so taking it as unchanged would report issues never read.
-        return null !== $validator ? ['status' => $answer['status'], 'body' => '', 'etag' => $validator, 'next' => false] : throw new ForgeReadFailed('GitHub answered 304 to a read without a validator.');
     }
 
     /**
@@ -223,17 +157,55 @@ final readonly class GitHubIssueReads implements IssueReads
     }
 
     /**
-     * @param list<string> $links
+     * @return list<array<mixed>>
      */
-    private function namesNext(array $links): bool
+    private function issuesOf(string $body): array
     {
-        return array_any($links, static fn (string $link): bool => 1 === preg_match('/;\s*rel="?next"?/i', $link));
+        $issues = $this->decode($body);
+        // `{}` decodes to the same empty array as `[]`, so only the answer's first character tells an empty object from an empty list.
+        if (!array_is_list($issues) || !str_starts_with(ltrim($body), '[')) {
+            throw new ForgeReadFailed('GitHub answered a listing that is not a list.');
+        }
+
+        return array_map(static fn (mixed $issue): array => is_array($issue) ? $issue : throw new ForgeReadFailed('GitHub listed an issue that is not an object.'), $issues);
     }
 
-    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
-    private function unreachable(string $failure): ForgeReadFailed
+    /**
+     * @param array<mixed> $data
+     */
+    private function at(array $data, string ...$keys): mixed
     {
-        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+        $value = $data;
+        foreach ($keys as $key) {
+            $value = is_array($value) ? ($value[$key] ?? null) : null;
+        }
+
+        return $value;
+    }
+
+    /**
+     * @param array<mixed> $data
+     */
+    private function text(array $data, string ...$keys): string
+    {
+        $value = $this->at($data, ...$keys);
+
+        return is_string($value) && '' !== $value ? $value : throw new ForgeReadFailed(sprintf('GitHub answered without "%s".', implode('.', $keys)));
+    }
+
+    /**
+     * @param array<mixed> $issue
+     *
+     * @return list<string>
+     */
+    private function labelsOf(array $issue): array
+    {
+        $labels = $issue['labels'] ?? [];
+        if (!is_array($labels)) {
+            throw new ForgeReadFailed('GitHub listed an issue with labels this forge cannot read.');
+        }
+
+        return array_values(array_map(fn (mixed $label): string => is_array($label) ? $this->text($label, 'name') : throw new ForgeReadFailed('GitHub listed a label that is not an object.'), $labels));
     }
 
     private function bearer(): string
@@ -245,5 +217,33 @@ final readonly class GitHubIssueReads implements IssueReads
         } catch (InstallationNotReadBack|InstallationDoesNotMatchConfiguration $refused) {
             throw new ForgeReadFailed('No GitHub read before the installation is confirmed: '.$refused->getMessage(), $refused->getCode(), previous: $refused);
         }
+    }
+
+    // Not chained to the client's exception, because its trace holds the request options with the bearer token.
+    private function unreachable(string $failure): ForgeReadFailed
+    {
+        return new ForgeReadFailed(sprintf('GitHub could not be reached (%s).', $failure));
+    }
+
+    /**
+     * @param list<string> $links
+     */
+    private function namesNext(array $links): bool
+    {
+        return array_any($links, static fn (string $link): bool => 1 === preg_match('/;\s*rel="?next"?/i', $link));
+    }
+
+    /**
+     * @return array<mixed>
+     */
+    private function decode(string $body): array
+    {
+        try {
+            $data = json_decode($body, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $invalid) {
+            throw new ForgeReadFailed('GitHub answered something other than JSON.', $invalid->getCode(), previous: $invalid);
+        }
+
+        return is_array($data) ? $data : throw new ForgeReadFailed('GitHub answered JSON that is not an object or a list.');
     }
 }

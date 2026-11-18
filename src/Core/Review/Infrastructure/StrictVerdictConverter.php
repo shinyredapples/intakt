@@ -91,6 +91,15 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $this->inner->getTokenUsageExtractor();
     }
 
+    private function verdictFrom(string $content): Verdict
+    {
+        try {
+            return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
+        } catch (ExceptionInterface $exception) {
+            throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
+        }
+    }
+
     // Kept as parts, because the thinking blocks and their signatures must go back to the provider with the next request.
     private function convertedMultiPart(MultiPartResult $parts, RawResultInterface $result): ResultInterface
     {
@@ -117,12 +126,32 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $rebuilt;
     }
 
-    // Checked here because Symfony AI's Validator subscriber checks only an object result, never one among parts.
-    private function validated(Verdict $verdict): Verdict
+    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block. The rule is deliberately simpler than Markdown and fails closed: anything but one plain top-level block leaves the text as it is, which then fails as invalid, because refusing a verdict costs a review while reading the wrong one of two costs the change.
+    private function fencedBlockOf(string $content): string
     {
-        $violations = $this->validator->validate($verdict);
+        // Counted anywhere, whatever comes before it on the line, so a second block in any Markdown form, or a mention in the prose, makes the answer ambiguous.
+        if (1 !== preg_match_all('/(?:`{3,}|~{3,})[ \t]*json\b/i', $content)) {
+            return $content;
+        }
 
-        return 0 === count($violations) ? $verdict : throw new ValidationException($violations);
+        if (1 !== preg_match('/^```json[ \t]*\r?\n(.*?)\r?\n```[ \t]*(?=\r?\n|\z)/ms', $content, $block, PREG_OFFSET_CAPTURE)) {
+            return $content;
+        }
+
+        return $this->isNested(substr($content, 0, $block[0][1])) ? $content : $block[1][0];
+    }
+
+    /**
+     * @throws ExceptionInterface
+     */
+    private function deserialized(string $content): Verdict
+    {
+        try {
+            return $this->serializer->deserialize($content, Verdict::class, JsonEncoder::FORMAT, self::STRICT);
+        } catch (TypeError $error) {
+            // Kept so a constructor's type error still fails the mapping, because serializers before 8.2.0-BETA2 passed an object on as a list of findings: upstream/serializer-object-collection-accepts-any-object
+            throw new UnexpectedValueException($error->getMessage(), $error->getCode(), $error);
+        }
     }
 
     // Dropped here because Symfony AI's structured output would read the narration before a tool call as the answer and fail on it.
@@ -137,28 +166,12 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         return $rebuilt;
     }
 
-    private function verdictFrom(string $content): Verdict
+    // Checked here because Symfony AI's Validator subscriber checks only an object result, never one among parts.
+    private function validated(Verdict $verdict): Verdict
     {
-        try {
-            return $this->deserialized(AnswerForm::ProseAroundBlock === $this->form ? $this->fencedBlockOf($content) : $content);
-        } catch (ExceptionInterface $exception) {
-            throw new RuntimeException(sprintf('Cannot deserialize the content into the "%s" class.', Verdict::class), $exception->getCode(), previous: $exception);
-        }
-    }
+        $violations = $this->validator->validate($verdict);
 
-    // The subscription CLIs cannot hold the answer to a schema, so the model writes prose and one fenced block. The rule is deliberately simpler than Markdown and fails closed: anything but one plain top-level block leaves the text as it is, which then fails as invalid, because refusing a verdict costs a review while reading the wrong one of two costs the change.
-    private function fencedBlockOf(string $content): string
-    {
-        // Counted anywhere, whatever comes before it on the line, so a second block in any Markdown form, or a mention in the prose, makes the answer ambiguous.
-        if (1 !== preg_match_all('/(?:`{3,}|~{3,})[ \t]*json\b/i', $content)) {
-            return $content;
-        }
-
-        if (1 !== preg_match('/^```json[ \t]*\r?\n(.*?)\r?\n```[ \t]*(?=\r?\n|\z)/ms', $content, $block, PREG_OFFSET_CAPTURE)) {
-            return $content;
-        }
-
-        return $this->isNested(substr($content, 0, $block[0][1])) ? $content : $block[1][0];
+        return 0 === count($violations) ? $verdict : throw new ValidationException($violations);
     }
 
     // Refused because a block inside another fence is an example in the prose, not the answer; the odd count is the maintainer's rule, the open fence also catches a fence line with an info string, which never closes a block.
@@ -181,18 +194,5 @@ final readonly class StrictVerdictConverter implements ResultConverterInterface
         }
 
         return $open instanceof FenceLine;
-    }
-
-    /**
-     * @throws ExceptionInterface
-     */
-    private function deserialized(string $content): Verdict
-    {
-        try {
-            return $this->serializer->deserialize($content, Verdict::class, JsonEncoder::FORMAT, self::STRICT);
-        } catch (TypeError $error) {
-            // Kept so a constructor's type error still fails the mapping, because serializers before 8.2.0-BETA2 passed an object on as a list of findings: upstream/serializer-object-collection-accepts-any-object
-            throw new UnexpectedValueException($error->getMessage(), $error->getCode(), $error);
-        }
     }
 }

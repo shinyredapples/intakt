@@ -52,6 +52,20 @@ final readonly class HandBackRoutes
     }
 
     /**
+     * @param array<string, string|null> $payload
+     *
+     * @throws HandBackRoundNotRecorded
+     */
+    private function append(LedgerEventKind $kind, array $payload): void
+    {
+        $result = $this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+
+        if (!$result->succeeded()) {
+            throw HandBackRoundNotRecorded::for($kind->value, (string) $result->failure);
+        }
+    }
+
+    /**
      * @template T
      *
      * @param array{repository: string, branch: string} $task
@@ -88,16 +102,6 @@ final readonly class HandBackRoutes
         return $last;
     }
 
-    /**
-     * @param array{repository: string, branch: string} $task
-     */
-    private function isOf(array $task, string $payload): bool
-    {
-        $line = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
-
-        return is_array($line) && ($line['repository'] ?? null) === $task['repository'] && ($line['branch'] ?? null) === $task['branch'];
-    }
-
     private function kindOf(HandBackRoute $route): LedgerEventKind
     {
         return match ($route) {
@@ -107,16 +111,12 @@ final readonly class HandBackRoutes
     }
 
     /**
-     * @param array<string, string|null> $payload
-     *
-     * @throws HandBackRoundNotRecorded
+     * @param array{repository: string, branch: string} $task
      */
-    private function append(LedgerEventKind $kind, array $payload): void
+    private function isOf(array $task, string $payload): bool
     {
-        $result = $this->ledger->append(new LedgerEvent($kind, json_encode($payload, JSON_THROW_ON_ERROR)));
+        $line = json_decode($payload, true, flags: JSON_THROW_ON_ERROR);
 
-        if (!$result->succeeded()) {
-            throw HandBackRoundNotRecorded::for($kind->value, (string) $result->failure);
-        }
+        return is_array($line) && ($line['repository'] ?? null) === $task['repository'] && ($line['branch'] ?? null) === $task['branch'];
     }
 }

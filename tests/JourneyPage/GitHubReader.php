@@ -43,34 +43,6 @@ final readonly class GitHubReader
     }
 
     /**
-     * @return list<array<mixed>>
-     */
-    private function items(JourneyResource $resource): array
-    {
-        $items = array_merge([], ...array_map(fn (mixed $page): array => $this->listOf($page, $resource), $this->pages($resource)));
-
-        return array_map(fn (mixed $item): array => is_array($item) && !array_is_list($item) ? $item : throw $this->malformed($resource), $items);
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function pages(JourneyResource $resource): array
-    {
-        $json = $this->api->pages($resource);
-
-        return $this->listOf(json_validate($json) ? json_decode($json, true) : null, $resource);
-    }
-
-    /**
-     * @return list<mixed>
-     */
-    private function listOf(mixed $value, JourneyResource $resource): array
-    {
-        return is_array($value) && array_is_list($value) ? $value : throw $this->malformed($resource);
-    }
-
-    /**
      * @param array<mixed> $item
      */
     private function milestoneFrom(array $item): Milestone
@@ -84,6 +56,16 @@ final readonly class GitHubReader
         }
 
         return new Milestone($number, $title, $goal, $this->moment($item, 'due_on'));
+    }
+
+    /**
+     * @return list<array<mixed>>
+     */
+    private function items(JourneyResource $resource): array
+    {
+        $items = array_merge([], ...array_map(fn (mixed $page): array => $this->listOf($page, $resource), $this->pages($resource)));
+
+        return array_map(fn (mixed $item): array => is_array($item) && !array_is_list($item) ? $item : throw $this->malformed($resource), $items);
     }
 
     /**
@@ -126,15 +108,33 @@ final readonly class GitHubReader
         return false === $moment || !$this->parsedCleanly() ? throw new JourneyInputFailed('the GitHub answer holds a date that is not a UTC moment: '.json_encode($text)) : $moment->setTimezone(new DateTimeZone('UTC'));
     }
 
+    private function malformed(JourneyResource $resource): JourneyInputFailed
+    {
+        return new JourneyInputFailed('the GitHub answer for '.$resource->value.' is not a list of pages of objects with the fields the journey page reads');
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function listOf(mixed $value, JourneyResource $resource): array
+    {
+        return is_array($value) && array_is_list($value) ? $value : throw $this->malformed($resource);
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function pages(JourneyResource $resource): array
+    {
+        $json = $this->api->pages($resource);
+
+        return $this->listOf(json_validate($json) ? json_decode($json, true) : null, $resource);
+    }
+
     private function parsedCleanly(): bool
     {
         $errors = DateTimeImmutable::getLastErrors();
 
         return false === $errors || (0 === $errors['warning_count'] && 0 === $errors['error_count']);
-    }
-
-    private function malformed(JourneyResource $resource): JourneyInputFailed
-    {
-        return new JourneyInputFailed('the GitHub answer for '.$resource->value.' is not a list of pages of objects with the fields the journey page reads');
     }
 }

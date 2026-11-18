@@ -204,34 +204,6 @@ final class PublishProjectFilterTest extends TestCase
         $this->log = new BufferingLogger();
     }
 
-    private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
-    {
-        $projects = new FilterProjects(ListedReviews::on($ledger));
-        $updates = new MercureLiveUpdates(new Hub(self::HUB, new StaticTokenProvider(self::TOKEN), httpClient: $hub), $this->log);
-
-        return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $locks, $this->log);
-    }
-
-    private function ledgerOf(string ...$projects): Ledger
-    {
-        $ledger = self::createStub(Ledger::class);
-        $ledger->method('readInOrder')->willReturn($this->eventsOf(...$projects));
-
-        return $ledger;
-    }
-
-    private function eventsOf(string ...$projects): RecordedEvents
-    {
-        $events = [];
-
-        foreach (array_values($projects) as $index => $project) {
-            $payload = json_encode(['round' => 'r'.($index + 1), 'project' => $project, 'reviewers' => 1], JSON_THROW_ON_ERROR);
-            $events[] = new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewStarted, $payload), new DateTimeImmutable('2026-11-10T12:00:00+00:00'));
-        }
-
-        return new RecordedEvents($events);
-    }
-
     private function hubThatAccepts(): MockHttpClient
     {
         return new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
@@ -242,18 +214,20 @@ final class PublishProjectFilterTest extends TestCase
         });
     }
 
-    /**
-     * @return list<array{mixed, mixed, mixed, mixed, class-string|null}>
-     */
-    private function loggedWarnings(): array
+    private function ledgerOf(string ...$projects): Ledger
     {
-        return array_values(array_map(static function (mixed $record): array {
-            $record = is_array($record) ? $record : [];
-            $context = is_array($record[2] ?? null) ? $record[2] : [];
-            $exception = $context['exception'] ?? null;
+        $ledger = self::createStub(Ledger::class);
+        $ledger->method('readInOrder')->willReturn($this->eventsOf(...$projects));
 
-            return [$record[0] ?? null, $record[1] ?? null, $context['round'] ?? null, $context['project'] ?? null, is_object($exception) ? $exception::class : null];
-        }, $this->log->cleanLogs()));
+        return $ledger;
+    }
+
+    private function publisher(MockHttpClient $hub, Ledger $ledger, LockFactory $locks = new LockFactory(new InMemoryStore())): PublishProjectFilter
+    {
+        $projects = new FilterProjects(ListedReviews::on($ledger));
+        $updates = new MercureLiveUpdates(new Hub(self::HUB, new StaticTokenProvider(self::TOKEN), httpClient: $hub), $this->log);
+
+        return new PublishProjectFilter($projects, new Environment(new FilesystemLoader(__DIR__.'/../../../../templates')), $updates, $locks, $this->log);
     }
 
     private function postedStream(int $post = 0): string
@@ -271,5 +245,31 @@ final class PublishProjectFilterTest extends TestCase
         preg_match_all('#<option value="([^"]*)">([^<]*)</option>#', $stream, $options, PREG_SET_ORDER);
 
         return array_map(static fn (array $option): array => [$option[1], $option[2]], $options);
+    }
+
+    /**
+     * @return list<array{mixed, mixed, mixed, mixed, class-string|null}>
+     */
+    private function loggedWarnings(): array
+    {
+        return array_values(array_map(static function (mixed $record): array {
+            $record = is_array($record) ? $record : [];
+            $context = is_array($record[2] ?? null) ? $record[2] : [];
+            $exception = $context['exception'] ?? null;
+
+            return [$record[0] ?? null, $record[1] ?? null, $context['round'] ?? null, $context['project'] ?? null, is_object($exception) ? $exception::class : null];
+        }, $this->log->cleanLogs()));
+    }
+
+    private function eventsOf(string ...$projects): RecordedEvents
+    {
+        $events = [];
+
+        foreach (array_values($projects) as $index => $project) {
+            $payload = json_encode(['round' => 'r'.($index + 1), 'project' => $project, 'reviewers' => 1], JSON_THROW_ON_ERROR);
+            $events[] = new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::ReviewStarted, $payload), new DateTimeImmutable('2026-11-10T12:00:00+00:00'));
+        }
+
+        return new RecordedEvents($events);
     }
 }

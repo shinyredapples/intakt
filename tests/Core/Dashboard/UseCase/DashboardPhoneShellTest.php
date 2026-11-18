@@ -224,11 +224,16 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
     }
 
     /**
-     * @return array<string, string>
+     * @return list<string>
      */
-    private function phoneRules(): array
+    private function sheets(string ...$names): array
     {
-        return $this->phoneRulesOf($this->sheets('components')[0]);
+        // One page first, and only one, because the client boots a fresh kernel for each request, which drops the test ledger the page reads.
+        $page = $this->browser->request('GET', '/reviews');
+        self::assertResponseIsSuccessful();
+        $addresses = array_map(static fn (string $name): string => (string) $page->filter('link[rel="stylesheet"][href*="/'.$name.'-"]')->attr('href'), $names);
+
+        return array_values(array_map($this->servedAsset(...), $addresses));
     }
 
     /**
@@ -242,25 +247,11 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
     }
 
     /**
-     * @return list<string>
+     * @return array<string, string>
      */
-    private function sheets(string ...$names): array
+    private function phoneRules(): array
     {
-        // One page first, and only one, because the client boots a fresh kernel for each request, which drops the test ledger the page reads.
-        $page = $this->browser->request('GET', '/reviews');
-        self::assertResponseIsSuccessful();
-        $addresses = array_map(static fn (string $name): string => (string) $page->filter('link[rel="stylesheet"][href*="/'.$name.'-"]')->attr('href'), $names);
-
-        return array_values(array_map($this->servedAsset(...), $addresses));
-    }
-
-    private function servedAsset(string $address): string
-    {
-        $this->browser->request('GET', $address);
-        self::assertResponseIsSuccessful();
-
-        // Read from the internal response, because the asset server answers with a BinaryFileResponse, whose getContent() is empty.
-        return $this->browser->getInternalResponse()->getContent();
+        return $this->phoneRulesOf($this->sheets('components')[0]);
     }
 
     /**
@@ -271,5 +262,14 @@ final class DashboardPhoneShellTest extends DashboardPageTestCase
         preg_match_all('/([^{}]+)\{([^{}]*)\}/', (string) preg_replace('~/\*.*?\*/~s', '', $sheet), $rules, PREG_SET_ORDER);
 
         return array_column(array_map(static fn (array $rule): array => [trim($rule[1]), $rule[2]], $rules), 1, 0);
+    }
+
+    private function servedAsset(string $address): string
+    {
+        $this->browser->request('GET', $address);
+        self::assertResponseIsSuccessful();
+
+        // Read from the internal response, because the asset server answers with a BinaryFileResponse, whose getContent() is empty.
+        return $this->browser->getInternalResponse()->getContent();
     }
 }

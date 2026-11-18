@@ -78,40 +78,6 @@ final readonly class ReviewerAgent implements Reviewer
         return $this->checkedAgainst($request->brief, $verdict);
     }
 
-    // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
-    private function approvesCutText(Verdict $verdict, ReviewBrief $brief, FencedToolbox $fenced): bool
-    {
-        return Decision::Approve === $verdict->verdict && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
-    }
-
-    // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
-    private function checkedAgainst(ReviewBrief $brief, Verdict $verdict): Verdict
-    {
-        $open = array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
-        $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
-        $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
-
-        if ([] !== $unknown) {
-            throw $this->unknownIds($unknown);
-        }
-
-        // Refused, because the ledger cannot tell which of the two the reviewer meant; key-safe, because every id named here is an open one the ledger gave.
-        $contradicted = array_unique(array_intersect($verdict->resolved, $repeated));
-
-        return [] === $contradicted ? $verdict : throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
-    }
-
-    // The ids are the model's own text, so they are recorded only when each has the short shape of a ledger id, which leaves no room for a key.
-    /**
-     * @param array<string> $unknown
-     */
-    private function unknownIds(array $unknown): VerdictUnreadable
-    {
-        $reason = sprintf('the verdict names ids that were not open: %s.', implode(', ', $unknown));
-
-        return [] === preg_grep(self::LEDGER_ID, $unknown, PREG_GREP_INVERT) ? VerdictUnreadable::becauseKeySafe($reason) : VerdictUnreadable::because($reason);
-    }
-
     // Read from the model's catalog entry, never from model text, so the choice to stream is made by plain code.
     /**
      * @param non-empty-string $model
@@ -135,18 +101,32 @@ final readonly class ReviewerAgent implements Reviewer
         return $this->answeredUnstreamed($agent, $conversation, $reviewer);
     }
 
-    private function fellBackUnlessAccepted(StreamAcceptance $stream, BadRequestException|InvalidRequestException $refused, ReviewerConversation $reviewer): void
-    {
-        if ($stream->accepted()) {
-            throw $refused;
-        }
-
-        $this->runs->fellBackToUnstreamed($reviewer);
-    }
-
     private function answeredUnstreamed(Agent $agent, MessageBag $conversation, ReviewerConversation $reviewer): Verdict
     {
         return $this->answerOf($this->runs->reporting($agent->call($conversation, self::UNSTREAMED), $reviewer), $reviewer);
+    }
+
+    // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
+    private function approvesCutText(Verdict $verdict, ReviewBrief $brief, FencedToolbox $fenced): bool
+    {
+        return Decision::Approve === $verdict->verdict && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
+    }
+
+    // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.
+    private function checkedAgainst(ReviewBrief $brief, Verdict $verdict): Verdict
+    {
+        $open = array_map(static fn (Finding $finding): string => $finding->id, $brief->open);
+        $repeated = array_map(static fn (Finding $finding): string => $finding->id, array_filter($verdict->findings, static fn (Finding $finding): bool => $finding->repeat));
+        $unknown = array_unique([...array_diff($verdict->resolved, $open), ...array_diff($repeated, $open)]);
+
+        if ([] !== $unknown) {
+            throw $this->unknownIds($unknown);
+        }
+
+        // Refused, because the ledger cannot tell which of the two the reviewer meant; key-safe, because every id named here is an open one the ledger gave.
+        $contradicted = array_unique(array_intersect($verdict->resolved, $repeated));
+
+        return [] === $contradicted ? $verdict : throw VerdictUnreadable::becauseKeySafe(sprintf('the verdict marks ids both resolved and repeat: %s.', implode(', ', $contradicted)));
     }
 
     private function answerOf(ExecutionInterface $execution, ReviewerConversation $reviewer): Verdict
@@ -166,6 +146,26 @@ final readonly class ReviewerAgent implements Reviewer
             // Read from the execution, never from the message, so only a run ReviewerStopping cancelled ends as stopped and any other failure stays an error.
             return ExecutionStatus::Cancelled === $execution->getStatus() ? Verdict::reviewerStopped() : throw $failure;
         }
+    }
+
+    private function fellBackUnlessAccepted(StreamAcceptance $stream, BadRequestException|InvalidRequestException $refused, ReviewerConversation $reviewer): void
+    {
+        if ($stream->accepted()) {
+            throw $refused;
+        }
+
+        $this->runs->fellBackToUnstreamed($reviewer);
+    }
+
+    // The ids are the model's own text, so they are recorded only when each has the short shape of a ledger id, which leaves no room for a key.
+    /**
+     * @param array<string> $unknown
+     */
+    private function unknownIds(array $unknown): VerdictUnreadable
+    {
+        $reason = sprintf('the verdict names ids that were not open: %s.', implode(', ', $unknown));
+
+        return [] === preg_grep(self::LEDGER_ID, $unknown, PREG_GREP_INVERT) ? VerdictUnreadable::becauseKeySafe($reason) : VerdictUnreadable::because($reason);
     }
 
     private function reportedAsRead(Verdict $verdict, ReviewerConversation $reviewer): Verdict

@@ -234,6 +234,11 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         $this->memory = new StoreProjectMemory(new Retriever($store, $vectorizer), $documents);
     }
 
+    private function finding(string $id, bool $repeat = false): Finding
+    {
+        return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, 'The rule '.$id.'.', new Evidence('probe '.$id, 'output '.$id));
+    }
+
     /**
      * @param list<Finding> $findings
      */
@@ -248,6 +253,16 @@ final class IndexResolvedFindingsTest extends KernelTestCase
     private function roundResolving(array $resolved): string
     {
         return $this->deliveredRound([self::FIRST => new Verdict(Decision::Changes, [], $resolved, [])]);
+    }
+
+    /**
+     * @param list<string> $files
+     *
+     * @return list<MemoryEntry>
+     */
+    private function remembered(array $files): array
+    {
+        return $this->memory->relevantTo(new MemoryQuery('alpha', $files, 100000))->entries;
     }
 
     /**
@@ -275,26 +290,11 @@ final class IndexResolvedFindingsTest extends KernelTestCase
         }
     }
 
-    /**
-     * @param list<string> $files
-     *
-     * @return list<MemoryEntry>
-     */
-    private function remembered(array $files): array
-    {
-        return $this->memory->relevantTo(new MemoryQuery('alpha', $files, 100000))->entries;
-    }
-
     private function indexFailingWith(Throwable $failure): MemoryIndex
     {
         $index = self::createStub(MemoryIndex::class);
         $index->method('index')->willThrowException($failure);
 
         return $index;
-    }
-
-    private function finding(string $id, bool $repeat = false): Finding
-    {
-        return new Finding($id, Severity::P2, 'src/A.php', 3, null, 'Text '.$id, FixableBy::Builder, $repeat, 'The rule '.$id.'.', new Evidence('probe '.$id, 'output '.$id));
     }
 }

@@ -44,6 +44,13 @@ final class HistorySecretsGate extends GitleaksGate
         ];
     }
 
+    private function hasCommits(Workspace $workspace, string $mergeBase): bool
+    {
+        $result = $workspace->git(['rev-list', '--count', $mergeBase.'..HEAD']);
+
+        return !$result->succeeded() || '0' !== trim($result->output);
+    }
+
     private function scanWithConfigurationFrom(Workspace $workspace, string $mergeBase): GateResult
     {
         $source = $this->configurationSource($workspace);
@@ -63,6 +70,18 @@ final class HistorySecretsGate extends GitleaksGate
         unlink($configPath);
 
         return $result;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function commitsWith(ProcessResult $commits, string $problem): array
+    {
+        if (!$commits->succeeded()) {
+            return ['cannot search the commits: '.$commits->firstErrorLine()];
+        }
+
+        return array_map(static fn (string $commit): string => 'commit '.$commit.' '.$problem, $this->lines($commits->output));
     }
 
     private function configurationSource(Workspace $workspace): ?string
@@ -105,24 +124,5 @@ final class HistorySecretsGate extends GitleaksGate
         }
 
         return $path;
-    }
-
-    private function hasCommits(Workspace $workspace, string $mergeBase): bool
-    {
-        $result = $workspace->git(['rev-list', '--count', $mergeBase.'..HEAD']);
-
-        return !$result->succeeded() || '0' !== trim($result->output);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function commitsWith(ProcessResult $commits, string $problem): array
-    {
-        if (!$commits->succeeded()) {
-            return ['cannot search the commits: '.$commits->firstErrorLine()];
-        }
-
-        return array_map(static fn (string $commit): string => 'commit '.$commit.' '.$problem, $this->lines($commits->output));
     }
 }

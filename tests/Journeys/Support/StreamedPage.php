@@ -57,22 +57,6 @@ final readonly class StreamedPage
     /**
      * @return list<DOMNode>
      */
-    private function targetsOf(Crawler $stream, Crawler $page, int $position): array
-    {
-        $target = (string) $stream->attr('target');
-        $found = $this->matching($stream, $page);
-
-        // A targets selector may rightly match nothing, as Turbo then drops the stream, but content for a single target must find it on the page.
-        if ('' === $target || [] !== $found) {
-            return $found;
-        }
-
-        throw new AssertionFailedError(sprintf('update %d targets "%s", which names no element on the page', $position, $target));
-    }
-
-    /**
-     * @return list<DOMNode>
-     */
     private function matching(Crawler $stream, Crawler $page): array
     {
         $target = (string) $stream->attr('target');
@@ -89,6 +73,22 @@ final readonly class StreamedPage
         foreach ($targets as $target) {
             $target->parentNode?->removeChild($target);
         }
+    }
+
+    /**
+     * @return list<DOMNode>
+     */
+    private function targetsOf(Crawler $stream, Crawler $page, int $position): array
+    {
+        $target = (string) $stream->attr('target');
+        $found = $this->matching($stream, $page);
+
+        // A targets selector may rightly match nothing, as Turbo then drops the stream, but content for a single target must find it on the page.
+        if ('' === $target || [] !== $found) {
+            return $found;
+        }
+
+        throw new AssertionFailedError(sprintf('update %d targets "%s", which names no element on the page', $position, $target));
     }
 
     /**

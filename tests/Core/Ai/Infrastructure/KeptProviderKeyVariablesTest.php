@@ -170,15 +170,14 @@ final class KeptProviderKeyVariablesTest extends TestCase
     }
 
     /**
-     * @param list<EnvVarLoaderInterface> $otherLoaders
+     * @param array<string, string> $secrets
      */
-    private function loaderOf(string $key, array $otherLoaders): KeptProviderKeyVariables
+    private function processorWithVault(array $secrets): EnvVarProcessor
     {
-        $providers = new SymfonyAiProviderCatalog();
-        $keys = self::createStub(KeptProviderKeys::class);
-        $keys->method('read')->willReturn(ProviderKey::recognise($key, $providers));
+        $vault = new FixedEnvVars($secrets);
 
-        return new KeptProviderKeyVariables($keys, $providers, otherLoaders: $otherLoaders);
+        // The vault's loader comes first because the container ranks it above the kept key's, and the kept key gets it too, as the container hands it every other loader.
+        return new EnvVarProcessor(new Container(), new ArrayIterator([$vault, $this->loaderOf('hf_'.self::BODY, [$vault])]));
     }
 
     // Returns nothing because the processor reads a plain string variable itself and calls this only for a prefix it chains.
@@ -188,13 +187,14 @@ final class KeptProviderKeyVariablesTest extends TestCase
     }
 
     /**
-     * @param array<string, string> $secrets
+     * @param list<EnvVarLoaderInterface> $otherLoaders
      */
-    private function processorWithVault(array $secrets): EnvVarProcessor
+    private function loaderOf(string $key, array $otherLoaders): KeptProviderKeyVariables
     {
-        $vault = new FixedEnvVars($secrets);
+        $providers = new SymfonyAiProviderCatalog();
+        $keys = self::createStub(KeptProviderKeys::class);
+        $keys->method('read')->willReturn(ProviderKey::recognise($key, $providers));
 
-        // The vault's loader comes first because the container ranks it above the kept key's, and the kept key gets it too, as the container hands it every other loader.
-        return new EnvVarProcessor(new Container(), new ArrayIterator([$vault, $this->loaderOf('hf_'.self::BODY, [$vault])]));
+        return new KeptProviderKeyVariables($keys, $providers, otherLoaders: $otherLoaders);
     }
 }

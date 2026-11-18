@@ -89,6 +89,22 @@ final readonly class BootResults
         }
     }
 
+    // Claimed and recorded in one transaction, because the ledger writes through the same connection: a refused alert, or a worker that stops before the commit, leaves the row pending, so a later ask records it. A crash is no alert, because it is the boot step's fault and not main's, and would repeat after every back-off.
+    private function alert(BootKey $key, BootOutcome $outcome): void
+    {
+        try {
+            $this->entities->getConnection()->transactional(function (Connection $claiming) use ($key, $outcome): void {
+                if ($this->claimedAlert($claiming, $key)) {
+                    $this->ledger->mainBootFailed($key, $outcome);
+                }
+            });
+        } catch (Throwable $unrecorded) {
+            // Reset as the ledger resets it after a failed flush, because a line the ledger flushed before the rollback stays managed though the database no longer holds it, and the next flush would close the manager.
+            $this->registry->resetManager();
+            $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
+        }
+    }
+
     // Turned into an outcome because a boot that throws would stop the review it only gates.
     private function boot(BootHarness|BootHarnessAtMain $query): BootOutcome
     {
@@ -138,19 +154,12 @@ final readonly class BootResults
         return true;
     }
 
-    // Claimed and recorded in one transaction, because the ledger writes through the same connection: a refused alert, or a worker that stops before the commit, leaves the row pending, so a later ask records it. A crash is no alert, because it is the boot step's fault and not main's, and would repeat after every back-off.
-    private function alert(BootKey $key, BootOutcome $outcome): void
+    private function record(BootKey $key, BootOutcome $outcome): void
     {
         try {
-            $this->entities->getConnection()->transactional(function (Connection $claiming) use ($key, $outcome): void {
-                if ($this->claimedAlert($claiming, $key)) {
-                    $this->ledger->mainBootFailed($key, $outcome);
-                }
-            });
+            $this->ledger->bootResultComputed($key, $outcome);
         } catch (Throwable $unrecorded) {
-            // Reset as the ledger resets it after a failed flush, because a line the ledger flushed before the rollback stays managed though the database no longer holds it, and the next flush would close the manager.
-            $this->registry->resetManager();
-            $this->logger->error("Main's boot failure could not be recorded in the ledger as an alert.", ['exception' => $unrecorded]);
+            $this->logger->error("Main's computed boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
         }
     }
 
@@ -167,14 +176,5 @@ final readonly class BootResults
         $inner->delete(BootRecord::TABLE, ['project' => $row['project'], 'main_commit' => $row['main_commit'], 'tool_fingerprint' => $row['tool_fingerprint'], 'state' => BootState::Crashed->value]);
 
         return $inner->insert(BootRecord::TABLE, $row, BootRecord::rowTypes());
-    }
-
-    private function record(BootKey $key, BootOutcome $outcome): void
-    {
-        try {
-            $this->ledger->bootResultComputed($key, $outcome);
-        } catch (Throwable $unrecorded) {
-            $this->logger->error("Main's computed boot result could not be recorded in the ledger.", ['exception' => $unrecorded]);
-        }
     }
 }

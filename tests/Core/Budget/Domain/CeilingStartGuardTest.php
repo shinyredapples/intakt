@@ -198,33 +198,18 @@ final class CeilingStartGuardTest extends TestCase
         $this->weekResets = $this->clock->now()->modify('+6 days');
     }
 
-    /**
-     * @param array<string, float> $ceilings
-     */
-    private function decide(int $callsRunning, array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): StartDecision
-    {
-        return $this->guard($ceilings)->decide($this->account(), $callsRunning);
-    }
-
-    /**
-     * @param array<string, float> $ceilings
-     */
-    private function guard(array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): CeilingStartGuard
-    {
-        return new CeilingStartGuard($this->readings, $this->clock, $ceilings);
-    }
-
     private function read(float $fiveHour, float $weekly): void
     {
         $this->readWindow(UsageWindow::FiveHour, $fiveHour, $this->fiveHourReset());
         $this->readWindow(UsageWindow::Weekly, $weekly, $this->weekResets);
     }
 
-    private function readFor(Account $account, float $percent): void
+    /**
+     * @param array<string, float> $ceilings
+     */
+    private function decide(int $callsRunning, array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): StartDecision
     {
-        foreach (UsageWindow::cases() as $window) {
-            $this->readings->record(new WindowReading($account, $window, new Usage($percent, $this->fiveHourReset())));
-        }
+        return $this->guard($ceilings)->decide($this->account(), $callsRunning);
     }
 
     private function readWindow(UsageWindow $window, float $percent, ?DateTimeImmutable $resetsAt): void
@@ -235,6 +220,21 @@ final class CeilingStartGuardTest extends TestCase
     private function fiveHourReset(): DateTimeImmutable
     {
         return $this->clock->now()->modify('+3 hours');
+    }
+
+    private function readFor(Account $account, float $percent): void
+    {
+        foreach (UsageWindow::cases() as $window) {
+            $this->readings->record(new WindowReading($account, $window, new Usage($percent, $this->fiveHourReset())));
+        }
+    }
+
+    /**
+     * @param array<string, float> $ceilings
+     */
+    private function guard(array $ceilings = ['five-hour' => 90.0, 'weekly' => 90.0]): CeilingStartGuard
+    {
+        return new CeilingStartGuard($this->readings, $this->clock, $ceilings);
     }
 
     private function account(): Account

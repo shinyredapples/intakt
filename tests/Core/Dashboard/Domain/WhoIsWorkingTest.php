@@ -121,12 +121,9 @@ final class WhoIsWorkingTest extends TestCase
         self::assertSame(['r1-b'], $this->reviewers($working));
     }
 
-    /**
-     * @return list<string>
-     */
-    private function reviewers(WhoIsWorking $working): array
+    private function running(string $id): ReviewerOutcome
     {
-        return array_map(static fn (Lane $lane): string => $lane->reviewer, $working->lanes());
+        return new ReviewerOutcome($id, 'correctness', 'standard', $this->since());
     }
 
     /**
@@ -137,6 +134,11 @@ final class WhoIsWorkingTest extends TestCase
         return new Review([$this->round($change, $number, $outcomes)]);
     }
 
+    private function since(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+    }
+
     /**
      * @param list<ReviewerOutcome> $outcomes
      */
@@ -145,13 +147,11 @@ final class WhoIsWorkingTest extends TestCase
         return new ReviewedRound(new RoundStart('r'.$number.$change, 'alpha', 2), new RoundPlace($change, $number), $this->since(), null)->withOutcomes($outcomes);
     }
 
-    private function running(string $id): ReviewerOutcome
+    /**
+     * @return list<string>
+     */
+    private function reviewers(WhoIsWorking $working): array
     {
-        return new ReviewerOutcome($id, 'correctness', 'standard', $this->since());
-    }
-
-    private function since(): DateTimeImmutable
-    {
-        return new DateTimeImmutable('2026-11-01T10:00:00+00:00');
+        return array_map(static fn (Lane $lane): string => $lane->reviewer, $working->lanes());
     }
 }

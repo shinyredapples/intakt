@@ -236,14 +236,6 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewer('round-1', 'security');
     }
 
-    /**
-     * @return list<mixed>
-     */
-    private function requested(): array
-    {
-        return array_map(static fn ($row): mixed => json_decode($row->event->payload, true), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
-    }
-
     // Read from a page's form, because the token belongs to the browser's session.
     private function token(): string
     {
@@ -251,5 +243,13 @@ final class StopRoundControllerTest extends DashboardPageTestCase
         $this->ledger->startReviewer('token-page', 'security');
 
         return $this->browser->request('GET', '/reviews/token-page')->filter('form.stop-round input[name=_token]')->attr('value') ?? '';
+    }
+
+    /**
+     * @return list<mixed>
+     */
+    private function requested(): array
+    {
+        return array_map(static fn ($row): mixed => json_decode($row->event->payload, true), iterator_to_array($this->ledger->readOfKind(LedgerEventKind::ReviewerStopRequested), false));
     }
 }

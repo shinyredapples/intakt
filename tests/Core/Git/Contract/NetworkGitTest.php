@@ -167,6 +167,12 @@ final class NetworkGitTest extends TestCase
         new Filesystem()->remove($this->directory);
     }
 
+    private function initBare(string $path): void
+    {
+        $process = new Process(['git', 'init', '--quiet', '--bare', $path]);
+        $process->mustRun();
+    }
+
     private function listRemote(string $remote): GitCall
     {
         return new GitCall(['git', 'ls-remote', '--', $remote], $this->directory, ['GIT_CONFIG_GLOBAL' => '/dev/null']);
@@ -178,11 +184,5 @@ final class NetworkGitTest extends TestCase
         $process->run();
 
         return trim($process->getErrorOutput());
-    }
-
-    private function initBare(string $path): void
-    {
-        $process = new Process(['git', 'init', '--quiet', '--bare', $path]);
-        $process->mustRun();
     }
 }

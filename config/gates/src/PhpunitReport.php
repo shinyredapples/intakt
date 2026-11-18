@@ -41,11 +41,6 @@ final class PhpunitReport
         return array_map(static fn (string $event): string => $run.': '.$event, $triggered[1]);
     }
 
-    private static function finding(string $run, string $test, string $message): string
-    {
-        return '' === $message ? $run.': '.$test : $run.': '.$test.': '.$message;
-    }
-
     private static function reason(ProcessResult $result): string
     {
         if ('' !== trim($result->errors)) {
@@ -55,5 +50,10 @@ final class PhpunitReport
         $lines = preg_split('/\R/', trim($result->output));
 
         return false === $lines ? '' : (string) end($lines);
+    }
+
+    private static function finding(string $run, string $test, string $message): string
+    {
+        return '' === $message ? $run.': '.$test : $run.': '.$test.': '.$message;
     }
 }

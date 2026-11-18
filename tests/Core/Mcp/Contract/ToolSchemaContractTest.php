@@ -50,6 +50,16 @@ final class ToolSchemaContractTest extends KernelTestCase
         self::assertLoggedError('error', 'Tool not found');
     }
 
+    private function client(): McpServerClient
+    {
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $client = new McpServerClient($kernel);
+        $client->initialize('2025-11-25');
+
+        return $client;
+    }
+
     /**
      * @return array<mixed>
      */
@@ -62,15 +72,5 @@ final class ToolSchemaContractTest extends KernelTestCase
         self::assertIsArray($found);
 
         return $found;
-    }
-
-    private function client(): McpServerClient
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $client = new McpServerClient($kernel);
-        $client->initialize('2025-11-25');
-
-        return $client;
     }
 }

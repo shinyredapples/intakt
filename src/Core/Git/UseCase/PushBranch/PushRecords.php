@@ -90,33 +90,6 @@ final readonly class PushRecords
         $this->append(LedgerEventKind::ChangeOpened, [...$this->keyOf($request, $head), 'change' => $change, self::TEXT_DIGEST => $this->digestOf($request->text)]);
     }
 
-    // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.
-    private function digestOf(ChangeText $text): string
-    {
-        return hash('sha256', strlen($text->title).':'.$text->title.$text->body);
-    }
-
-    /**
-     * @return array{project: string, branch: string, head: string}
-     */
-    private function keyOf(BranchPushRequest $request, string $head): array
-    {
-        return ['project' => $request->project, 'branch' => $request->branch, 'head' => $head];
-    }
-
-    /**
-     * @return iterable<RecordedEvent>
-     */
-    // Read in ledger order across both kinds, because a read of one kind cannot say whether an intent came after the last record.
-    private function changeRecords(): iterable
-    {
-        foreach ($this->ledger->readInOrder() as $recorded) {
-            if (in_array($recorded->event->kind, self::CHANGE_KINDS, true)) {
-                yield $recorded;
-            }
-        }
-    }
-
     /**
      * @param iterable<RecordedEvent> $events
      */
@@ -137,6 +110,19 @@ final readonly class PushRecords
     }
 
     /**
+     * @return iterable<RecordedEvent>
+     */
+    // Read in ledger order across both kinds, because a read of one kind cannot say whether an intent came after the last record.
+    private function changeRecords(): iterable
+    {
+        foreach ($this->ledger->readInOrder() as $recorded) {
+            if (in_array($recorded->event->kind, self::CHANGE_KINDS, true)) {
+                yield $recorded;
+            }
+        }
+    }
+
+    /**
      * @return array<mixed>
      */
     private function decoded(string $payload): array
@@ -149,6 +135,20 @@ final readonly class PushRecords
         }
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    // A digest, because the ledger keeps none of the builder's words; the title's length goes first, so no title and body read as another pair.
+    private function digestOf(ChangeText $text): string
+    {
+        return hash('sha256', strlen($text->title).':'.$text->title.$text->body);
+    }
+
+    /**
+     * @return array{project: string, branch: string, head: string}
+     */
+    private function keyOf(BranchPushRequest $request, string $head): array
+    {
+        return ['project' => $request->project, 'branch' => $request->branch, 'head' => $head];
     }
 
     /**

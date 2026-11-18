@@ -360,18 +360,6 @@ final readonly class RoundFixture
         }
     }
 
-    private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
-    {
-        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), $this->roundLedger($ledger ?? $this->ledger), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
-
-        return new ReviewerLeases($entities, $moves, $this->clock);
-    }
-
-    private function roundLedger(Ledger $ledger): RoundLedger
-    {
-        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []));
-    }
-
     private function startWith(RunReviewRound $command, MessageBusInterface $queue): string
     {
         return $this->startHandlerOn($queue)($command);
@@ -382,19 +370,19 @@ final readonly class RoundFixture
         return new RunReviewRound(new ReviewTarget($this->subject(), $this->identityAt($head, $reviewers)), $this->panelOf($reviewers), new RequestedRound($change));
     }
 
-    private function subject(): ReviewSubject
-    {
-        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
-    }
-
     private function rounds(EntityManagerInterface $entities): ReviewRounds
     {
         return new ReviewRounds($entities, $this->clock, $this->storedFindingsOn($entities));
     }
 
-    private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
+    private function roundLedger(Ledger $ledger): RoundLedger
     {
-        return new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round'));
+        return new RoundLedger($ledger, $this->modes, $this->serializer, new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => self::MODEL, 'substitutes' => [['provider' => 'openai', 'model' => self::SUBSTITUTE_MODEL]]]]]], []));
+    }
+
+    private function subject(): ReviewSubject
+    {
+        return new ReviewSubject('alpha', __DIR__, self::TASK, self::DIFF);
     }
 
     private function panelOf(int $reviewers): Panel
@@ -405,5 +393,17 @@ final readonly class RoundFixture
         );
 
         return new Panel($members, QuorumPolicy::All);
+    }
+
+    private function leases(EntityManagerInterface $entities, ?Ledger $ledger = null): ReviewerLeases
+    {
+        $moves = new ReviewerMoves($this->machine('state_machine.reviewer'), $this->roundLedger($ledger ?? $this->ledger), $this->serializer, new StopRequests($ledger ?? $this->ledger, $this->ledgerPayloads()));
+
+        return new ReviewerLeases($entities, $moves, $this->clock);
+    }
+
+    private function storedFindingsOn(EntityManagerInterface $entities): StoredFindings
+    {
+        return new StoredFindings($entities, $this->serializer, $this->machine('state_machine.review_round'));
     }
 }

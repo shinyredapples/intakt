@@ -341,15 +341,16 @@ final class DoctrineLedgerTest extends KernelTestCase
         $this->createSchema();
     }
 
-    // Takes a plain Closure because static analysis refuses a discarded call it can see, and the engine still checks this one.
-    private function discardTheResult(Closure $append, LedgerEvent $event): void
-    {
-        $append($event);
-    }
-
     private function ledger(string $now, string $timezone): DoctrineLedger
     {
         return new DoctrineLedger($this->registry, new MockClock($now, $timezone));
+    }
+
+    private function dropTable(): void
+    {
+        $manager = $this->registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+        $manager->getConnection()->executeStatement('DROP TABLE ledger_event');
     }
 
     private function createSchema(): void
@@ -366,6 +367,14 @@ final class DoctrineLedgerTest extends KernelTestCase
     private function closeTheManager(): void
     {
         $this->entityManager()->close();
+    }
+
+    private function entityManager(): EntityManagerInterface
+    {
+        $manager = $this->registry->getManager();
+        self::assertInstanceOf(EntityManagerInterface::class, $manager);
+
+        return $manager;
     }
 
     private function storedEvent(): EventRecord
@@ -388,18 +397,9 @@ final class DoctrineLedgerTest extends KernelTestCase
         self::fail('the flush was not refused');
     }
 
-    private function entityManager(): EntityManagerInterface
+    // Takes a plain Closure because static analysis refuses a discarded call it can see, and the engine still checks this one.
+    private function discardTheResult(Closure $append, LedgerEvent $event): void
     {
-        $manager = $this->registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-
-        return $manager;
-    }
-
-    private function dropTable(): void
-    {
-        $manager = $this->registry->getManager();
-        self::assertInstanceOf(EntityManagerInterface::class, $manager);
-        $manager->getConnection()->executeStatement('DROP TABLE ledger_event');
+        $append($event);
     }
 }

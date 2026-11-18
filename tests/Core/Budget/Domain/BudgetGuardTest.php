@@ -209,15 +209,20 @@ final class BudgetGuardTest extends TestCase
         }
     }
 
-    private function readLow(Account $account): void
+    private function claude(string $name): Account
     {
-        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(10.0, $this->clock->now()->modify('+4 hours'))));
-        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, $this->clock->now()->modify('+6 days'))));
+        return new Account(Provider::ClaudeCode, $name);
     }
 
     private function coolDown(Account $account, string $resetIn): void
     {
         $this->holds->coolDown($account, $this->later($resetIn));
+    }
+
+    private function readLow(Account $account): void
+    {
+        $this->readings->record(new WindowReading($account, UsageWindow::FiveHour, new Usage(10.0, $this->clock->now()->modify('+4 hours'))));
+        $this->readings->record(new WindowReading($account, UsageWindow::Weekly, new Usage(5.0, $this->clock->now()->modify('+6 days'))));
     }
 
     private function hold(SharedHold $hold, string $until): void
@@ -228,10 +233,5 @@ final class BudgetGuardTest extends TestCase
     private function later(string $modifier): DateTimeImmutable
     {
         return $this->clock->now()->modify($modifier);
-    }
-
-    private function claude(string $name): Account
-    {
-        return new Account(Provider::ClaudeCode, $name);
     }
 }

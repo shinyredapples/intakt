@@ -300,6 +300,14 @@ final class BuildTaskCommandTest extends TestCase
         new Filesystem()->remove($this->folder);
     }
 
+    /**
+     * @param array<string, string> $input
+     */
+    private function execute(InMemoryLedger $ledger, BuildCheckout $checkout, array $input): CommandTester
+    {
+        return $this->tester($this->buildTask($this->listing(Issues::task(7)), $checkout, $ledger), $input);
+    }
+
     private function displayOfTitle(string $title): string
     {
         $listed = Issues::task(7);
@@ -309,12 +317,12 @@ final class BuildTaskCommandTest extends TestCase
         return $this->tester($build, ['project' => 'alpha', 'issue' => '7', ...$this->options])->getDisplay();
     }
 
-    /**
-     * @param array<string, string> $input
-     */
-    private function execute(InMemoryLedger $ledger, BuildCheckout $checkout, array $input): CommandTester
+    private function listing(ListedIssue $task): IssueReads
     {
-        return $this->tester($this->buildTask($this->listing(Issues::task(7)), $checkout, $ledger), $input);
+        $reads = self::createStub(IssueReads::class);
+        $reads->method('listOpen')->willReturn(IssueListing::listed([$task], null));
+
+        return $reads;
     }
 
     private function buildTask(IssueReads $issues, BuildCheckout $checkout, InMemoryLedger $ledger): BuildTask
@@ -333,14 +341,6 @@ final class BuildTaskCommandTest extends TestCase
         $branches->method('push')->willReturn($this->pushed);
 
         return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $ledger);
-    }
-
-    private function listing(ListedIssue $task): IssueReads
-    {
-        $reads = self::createStub(IssueReads::class);
-        $reads->method('listOpen')->willReturn(IssueListing::listed([$task], null));
-
-        return $reads;
     }
 
     /**

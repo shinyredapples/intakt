@@ -82,6 +82,31 @@ final readonly class GateChildren
         return $results;
     }
 
+    // Because a gate ran in bin/check's own directory before it had a child process, the child starts there too.
+    private function directory(): string
+    {
+        $directory = getcwd();
+
+        return is_string($directory) ? $directory : $this->home;
+    }
+
+    // Because each group gets its grace in turn, all of them are asked first, so none waits for the grace of another.
+    /**
+     * @param array<string, RunningChild|ProcessResult> $running
+     */
+    private static function stopAll(array $running): void
+    {
+        $groups = array_map(static fn (RunningChild $child): ProcessGroup => $child->group, array_filter($running, static fn (RunningChild|ProcessResult $child): bool => $child instanceof RunningChild));
+
+        foreach ($groups as $group) {
+            $group->askToStop();
+        }
+
+        foreach ($groups as $group) {
+            $group->stop();
+        }
+    }
+
     /**
      * @param list<string>                              $waiting
      * @param array<string, RunningChild|ProcessResult> $running
@@ -99,23 +124,6 @@ final readonly class GateChildren
         }
 
         return [$waiting, $started];
-    }
-
-    /**
-     * @param non-empty-list<string> $waiting
-     * @param list<string>           $running
-     */
-    private function mayStart(array $waiting, array $running): bool
-    {
-        $staticGatesLeft = [] !== array_diff([...$waiting, ...$running], $this->runningTheChangesCode);
-
-        return $this->slots->allow($running, $waiting[0]) && (!$staticGatesLeft || !in_array($waiting[0], $this->runningTheChangesCode, true));
-    }
-
-    private function started(ChildCommand $child): RunningChild|ProcessResult
-    {
-        // Because the preflight finds `setsid` and `sh` from the workspace root, the child's launcher is searched from there too.
-        return $this->runner->startToItsEndWithToolsFrom($this->root, $child);
     }
 
     /**
@@ -139,28 +147,20 @@ final readonly class GateChildren
         return $ended;
     }
 
-    // Because each group gets its grace in turn, all of them are asked first, so none waits for the grace of another.
     /**
-     * @param array<string, RunningChild|ProcessResult> $running
+     * @param non-empty-list<string> $waiting
+     * @param list<string>           $running
      */
-    private static function stopAll(array $running): void
+    private function mayStart(array $waiting, array $running): bool
     {
-        $groups = array_map(static fn (RunningChild $child): ProcessGroup => $child->group, array_filter($running, static fn (RunningChild|ProcessResult $child): bool => $child instanceof RunningChild));
+        $staticGatesLeft = [] !== array_diff([...$waiting, ...$running], $this->runningTheChangesCode);
 
-        foreach ($groups as $group) {
-            $group->askToStop();
-        }
-
-        foreach ($groups as $group) {
-            $group->stop();
-        }
+        return $this->slots->allow($running, $waiting[0]) && (!$staticGatesLeft || !in_array($waiting[0], $this->runningTheChangesCode, true));
     }
 
-    // Because a gate ran in bin/check's own directory before it had a child process, the child starts there too.
-    private function directory(): string
+    private function started(ChildCommand $child): RunningChild|ProcessResult
     {
-        $directory = getcwd();
-
-        return is_string($directory) ? $directory : $this->home;
+        // Because the preflight finds `setsid` and `sh` from the workspace root, the child's launcher is searched from there too.
+        return $this->runner->startToItsEndWithToolsFrom($this->root, $child);
     }
 }

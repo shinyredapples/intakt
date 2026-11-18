@@ -119,46 +119,44 @@ final class Instance
         return $status;
     }
 
-    private function runCommand(): int
+    private function stop(): void
     {
-        // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
-        $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
-        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR];
-        $environment = [...$this->environment(), 'INTAKT_INSTANCE_URL' => 'http://127.0.0.1:'.$this->listeningPort(), ...$this->web->commandEnvironment()];
-
-        $process = proc_open($command, $descriptors, $pipes, $this->root, $environment);
-
-        if (false === $process) {
-            throw new RuntimeException('cannot start the command');
+        if (null === $this->server) {
+            return;
         }
 
-        return $this->awaitExit($process);
-    }
+        proc_terminate($this->server);
+        $deadline = hrtime(true) + self::STOP_SECONDS * 1_000_000_000;
 
-    /**
-     * @param resource $process
-     */
-    private function awaitExit($process): int
-    {
-        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
-
-        while (hrtime(true) < $deadline) {
-            $state = proc_get_status($process);
-
-            if (!$state['running']) {
-                proc_close($process);
-
-                return $state['exitcode'];
-            }
-
+        while ($this->serverRuns() && hrtime(true) < $deadline) {
             usleep(50_000);
         }
 
-        proc_terminate($process, 9);
-        proc_close($process);
-        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
+        if ($this->serverRuns()) {
+            proc_terminate($this->server, 9);
+        }
 
-        return self::COMMAND_TIMED_OUT;
+        proc_close($this->server);
+        $this->server = null;
+    }
+
+    private function readLog(): string
+    {
+        return is_file($this->logPath()) ? (string) file_get_contents($this->logPath()) : '';
+    }
+
+    private function removeScratch(): void
+    {
+        if ('' === $this->scratch) {
+            return;
+        }
+
+        $this->directoryRemoval->remove($this->scratch);
+
+        if ($this->createdFallback) {
+            // Another run may be using var/, so a plain rmdir that fails on a non-empty folder is the right check.
+            @rmdir($this->root.'/var');
+        }
     }
 
     private function createScratch(): string
@@ -190,6 +188,48 @@ final class Instance
         }
 
         $this->server = $process;
+    }
+
+    private function awaitAnswer(): InstanceStatus
+    {
+        $deadline = hrtime(true) + self::BOOT_SECONDS * 1_000_000_000;
+
+        while (hrtime(true) < $deadline) {
+            if (!$this->serverRuns()) {
+                return InstanceStatus::failed('the server exited: '.$this->logSummary());
+            }
+
+            $statusLine = $this->statusLineOf($this->listeningPort());
+
+            if (null !== $statusLine) {
+                return $this->statusFrom($statusLine);
+            }
+
+            usleep(100_000);
+        }
+
+        return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
+    }
+
+    private function runCommand(): int
+    {
+        // Same descriptor rule as the server: the command must not inherit the caller's descriptor 3.
+        $command = ['sh', '-c', 'exec "$@" 3>&-', 'sh', ...$this->command];
+        $descriptors = [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR];
+        $environment = [...$this->environment(), 'INTAKT_INSTANCE_URL' => 'http://127.0.0.1:'.$this->listeningPort(), ...$this->web->commandEnvironment()];
+
+        $process = proc_open($command, $descriptors, $pipes, $this->root, $environment);
+
+        if (false === $process) {
+            throw new RuntimeException('cannot start the command');
+        }
+
+        return $this->awaitExit($process);
+    }
+
+    private function serverRuns(): bool
+    {
+        return null !== $this->server && proc_get_status($this->server)['running'];
     }
 
     private function logPath(): string
@@ -226,39 +266,6 @@ final class Instance
         ];
     }
 
-    private function variable(string $name): ?string
-    {
-        $value = getenv($name);
-
-        return false === $value || '' === $value || '0' === $value ? null : $value;
-    }
-
-    private function awaitAnswer(): InstanceStatus
-    {
-        $deadline = hrtime(true) + self::BOOT_SECONDS * 1_000_000_000;
-
-        while (hrtime(true) < $deadline) {
-            if (!$this->serverRuns()) {
-                return InstanceStatus::failed('the server exited: '.$this->logSummary());
-            }
-
-            $statusLine = $this->statusLineOf($this->listeningPort());
-
-            if (null !== $statusLine) {
-                return $this->statusFrom($statusLine);
-            }
-
-            usleep(100_000);
-        }
-
-        return InstanceStatus::failed('no answer within '.self::BOOT_SECONDS.' seconds: '.$this->logSummary());
-    }
-
-    private function serverRuns(): bool
-    {
-        return null !== $this->server && proc_get_status($this->server)['running'];
-    }
-
     private function logSummary(): string
     {
         $lines = preg_split('/\R/', $this->readLog());
@@ -278,22 +285,6 @@ final class Instance
         $lastWords = array_last($this->withoutServerBookkeeping($lines));
 
         return null === $lastWords ? 'the server log names no reason' : mb_substr($lastWords, 0, 500);
-    }
-
-    /**
-     * @param list<string> $lines
-     *
-     * @return list<string>
-     */
-    private function withoutServerBookkeeping(array $lines): array
-    {
-        // The built-in server logs its start and every request, so its last line would only restate the status code.
-        return array_values(array_filter($lines, static fn (string $line): bool => 1 !== preg_match(self::BUILT_IN_SERVER_LINE, $line)));
-    }
-
-    private function readLog(): string
-    {
-        return is_file($this->logPath()) ? (string) file_get_contents($this->logPath()) : '';
     }
 
     private function listeningPort(): ?int
@@ -324,39 +315,48 @@ final class Instance
         return $code < 500 ? InstanceStatus::ready() : InstanceStatus::failed('HTTP '.$code.': '.$this->logSummary());
     }
 
-    private function stop(): void
+    /**
+     * @param resource $process
+     */
+    private function awaitExit($process): int
     {
-        if (null === $this->server) {
-            return;
-        }
+        $deadline = hrtime(true) + $this->commandSeconds * 1_000_000_000;
 
-        proc_terminate($this->server);
-        $deadline = hrtime(true) + self::STOP_SECONDS * 1_000_000_000;
+        while (hrtime(true) < $deadline) {
+            $state = proc_get_status($process);
 
-        while ($this->serverRuns() && hrtime(true) < $deadline) {
+            if (!$state['running']) {
+                proc_close($process);
+
+                return $state['exitcode'];
+            }
+
             usleep(50_000);
         }
 
-        if ($this->serverRuns()) {
-            proc_terminate($this->server, 9);
-        }
+        proc_terminate($process, 9);
+        proc_close($process);
+        fwrite(STDERR, 'the command ran longer than '.$this->commandSeconds." seconds and was killed\n");
 
-        proc_close($this->server);
-        $this->server = null;
+        return self::COMMAND_TIMED_OUT;
     }
 
-    private function removeScratch(): void
+    private function variable(string $name): ?string
     {
-        if ('' === $this->scratch) {
-            return;
-        }
+        $value = getenv($name);
 
-        $this->directoryRemoval->remove($this->scratch);
+        return false === $value || '' === $value || '0' === $value ? null : $value;
+    }
 
-        if ($this->createdFallback) {
-            // Another run may be using var/, so a plain rmdir that fails on a non-empty folder is the right check.
-            @rmdir($this->root.'/var');
-        }
+    /**
+     * @param list<string> $lines
+     *
+     * @return list<string>
+     */
+    private function withoutServerBookkeeping(array $lines): array
+    {
+        // The built-in server logs its start and every request, so its last line would only restate the status code.
+        return array_values(array_filter($lines, static fn (string $line): bool => 1 !== preg_match(self::BUILT_IN_SERVER_LINE, $line)));
     }
 }
 
@@ -473,20 +473,6 @@ final class WorkerServer implements Server
         return $ports;
     }
 
-    /**
-     * @return resource
-     */
-    private function freeSocket()
-    {
-        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
-
-        if (false === $socket) {
-            throw new RuntimeException('cannot find a free port: '.$message);
-        }
-
-        return $socket;
-    }
-
     // Not the repository's Caddyfile, because that one needs the Mercure settings and the mcp worker; num_threads is fixed because FrankenPHP's default of two threads per CPU makes the memory a boot needs grow with the host, and on a host with many CPUs under an address-space limit PHP then exits with a bare "Out of memory" before it serves; log_errors is turned on because FrankenPHP runs PHP with it off, and a fatal error during the boot would then only reach the response body, never the log the failure reason is read from; the site names no host because a Caddy site address also matches the Host header and Caddy answers a request no site matches with an empty 200, so bind alone keeps it on loopback.
     private function caddyfile(): string
     {
@@ -515,6 +501,20 @@ final class WorkerServer implements Server
             }
 
             CADDYFILE;
+    }
+
+    /**
+     * @return resource
+     */
+    private function freeSocket()
+    {
+        $socket = stream_socket_server('tcp://127.0.0.1:0', $code, $message);
+
+        if (false === $socket) {
+            throw new RuntimeException('cannot find a free port: '.$message);
+        }
+
+        return $socket;
     }
 }
 

@@ -43,12 +43,6 @@ final readonly class ListReviewsController
         ]));
     }
 
-    // A name the install does not list is no option of the filter, which then shows every project, so no breadcrumb or rail mark may name it.
-    private function listed(?string $project): ?string
-    {
-        return in_array($project, $this->filterProjects->names(), true) ? $project : null;
-    }
-
     /**
      * @return list<ReviewRow>
      */
@@ -57,5 +51,11 @@ final readonly class ListReviewsController
         $now = $this->clock->now();
 
         return array_map(static fn (ReviewSummary $review): ReviewRow => new ReviewRow($review, $now), $this->reviews->newestFirst());
+    }
+
+    // A name the install does not list is no option of the filter, which then shows every project, so no breadcrumb or rail mark may name it.
+    private function listed(?string $project): ?string
+    {
+        return in_array($project, $this->filterProjects->names(), true) ? $project : null;
     }
 }

@@ -92,6 +92,15 @@ final readonly class ReviewerLeases
         });
     }
 
+    // Loaded fresh under the lock, because another worker may have changed the row since this worker loaded it; cleared first, since refreshing a loaded row would set its readonly columns again.
+    private function lockedRow(Uuid $reviewerId): RoundReviewer
+    {
+        $this->entities->clear();
+        $reviewer = $this->entities->find(RoundReviewer::class, $reviewerId, LockMode::PESSIMISTIC_WRITE);
+
+        return $reviewer ?? throw ReviewerNotFound::for($reviewerId->toRfc4122());
+    }
+
     private function decide(RoundReviewer $reviewer, DateTimeImmutable $now): void
     {
         if ($reviewer->isFinished()) {
@@ -118,6 +127,31 @@ final readonly class ReviewerLeases
     /**
      * @template T
      *
+     * @param Closure(): T $work
+     *
+     * @return T
+     */
+    private function inOneTransaction(Closure $work): mixed
+    {
+        // The connection's transaction rather than wrapInTransaction, because that closes the entity manager when the ledger refuses an event, and the hand-back and the next message still need it.
+        try {
+            return $this->entities->getConnection()->transactional(function () use ($work): mixed {
+                $result = $work();
+                $this->entities->flush();
+
+                return $result;
+            });
+            // Boundary: clears the entity manager and rethrows because rolled-back entities and their database ids would collide with the next transaction.
+        } catch (Throwable $failure) {
+            $this->entities->clear();
+
+            throw $failure;
+        }
+    }
+
+    /**
+     * @template T
+     *
      * @param Closure(RoundReviewer): T $move
      *
      * @return T|null
@@ -139,6 +173,20 @@ final readonly class ReviewerLeases
                 throw ResultNotStored::after($attempts, $refused);
             }
         }
+    }
+
+    // The attempt too, because after the hold another worker may have started the reviewer again, and the row is then running for that worker.
+    private function isStillHeldBy(RoundReviewer $taken, RoundReviewer $stored): bool
+    {
+        return ReviewerState::Running === $stored->state() && $stored->isSameAttemptAs($taken);
+    }
+
+    // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.
+    private function withinTheHold(RoundReviewer $reviewer, DateTimeImmutable $now): bool
+    {
+        $heldUntil = $reviewer->heldUntil();
+
+        return $heldUntil instanceof DateTimeImmutable && $heldUntil > $now;
     }
 
     /**
@@ -168,53 +216,5 @@ final readonly class ReviewerLeases
 
             return $move($stored);
         });
-    }
-
-    // The attempt too, because after the hold another worker may have started the reviewer again, and the row is then running for that worker.
-    private function isStillHeldBy(RoundReviewer $taken, RoundReviewer $stored): bool
-    {
-        return ReviewerState::Running === $stored->state() && $stored->isSameAttemptAs($taken);
-    }
-
-    // The hold is the review's ceiling too, because a result after it would land on a reviewer any redelivery may already treat as stopped.
-    private function withinTheHold(RoundReviewer $reviewer, DateTimeImmutable $now): bool
-    {
-        $heldUntil = $reviewer->heldUntil();
-
-        return $heldUntil instanceof DateTimeImmutable && $heldUntil > $now;
-    }
-
-    // Loaded fresh under the lock, because another worker may have changed the row since this worker loaded it; cleared first, since refreshing a loaded row would set its readonly columns again.
-    private function lockedRow(Uuid $reviewerId): RoundReviewer
-    {
-        $this->entities->clear();
-        $reviewer = $this->entities->find(RoundReviewer::class, $reviewerId, LockMode::PESSIMISTIC_WRITE);
-
-        return $reviewer ?? throw ReviewerNotFound::for($reviewerId->toRfc4122());
-    }
-
-    /**
-     * @template T
-     *
-     * @param Closure(): T $work
-     *
-     * @return T
-     */
-    private function inOneTransaction(Closure $work): mixed
-    {
-        // The connection's transaction rather than wrapInTransaction, because that closes the entity manager when the ledger refuses an event, and the hand-back and the next message still need it.
-        try {
-            return $this->entities->getConnection()->transactional(function () use ($work): mixed {
-                $result = $work();
-                $this->entities->flush();
-
-                return $result;
-            });
-            // Boundary: clears the entity manager and rethrows because rolled-back entities and their database ids would collide with the next transaction.
-        } catch (Throwable $failure) {
-            $this->entities->clear();
-
-            throw $failure;
-        }
     }
 }

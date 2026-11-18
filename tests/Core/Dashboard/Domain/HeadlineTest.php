@@ -242,6 +242,11 @@ final class HeadlineTest extends TestCase
         self::assertSame('legacy-round-a', $this->headline([$this->unnamed('legacy-round-a')], [])->runningRound());
     }
 
+    private function running(string $project, string $change, string ...$roles): Review
+    {
+        return $this->review(new RoundStart('r-'.$project.'-'.$change, $project, 2), $change, ...$roles);
+    }
+
     /**
      * @param list<Review> $running
      * @param list<Review> $waiting
@@ -249,11 +254,6 @@ final class HeadlineTest extends TestCase
     private function headline(array $running, array $waiting): Headline
     {
         return new Headline(new WhoIsWorking($running), $waiting, count($running) + count($waiting));
-    }
-
-    private function running(string $project, string $change, string ...$roles): Review
-    {
-        return $this->review(new RoundStart('r-'.$project.'-'.$change, $project, 2), $change, ...$roles);
     }
 
     private function unnamed(string $round, string ...$roles): Review

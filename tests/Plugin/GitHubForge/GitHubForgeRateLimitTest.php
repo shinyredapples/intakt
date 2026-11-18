@@ -216,15 +216,12 @@ final class GitHubForgeRateLimitTest extends TestCase
         $this->readings = FreshReadings::at($this->clock);
     }
 
-    private function rateLimitOf(Closure $call): ForgeRateLimited
+    /**
+     * @param array<string, string> $headers
+     */
+    private function limited(int $status, array $headers): MockResponse
     {
-        try {
-            $call();
-        } catch (ForgeRateLimited $limited) {
-            return $limited;
-        }
-
-        throw new LogicException('The call was expected to be rate limited.');
+        return new MockResponse('{"message":"rate limit"}', ['http_code' => $status, 'response_headers' => $headers]);
     }
 
     /**
@@ -251,6 +248,22 @@ final class GitHubForgeRateLimitTest extends TestCase
         return new GitHubForge($calls, $checked, new SecretScan(dirname(__DIR__, 3), 'gitleaks'), new PostedComments($calls, $checked, '12345'), new VerdictLocks(new LockFactory(new InMemoryStore())), new GitHubAppSetting('12345', new NullLogger()));
     }
 
+    private function rateLimitOf(Closure $call): ForgeRateLimited
+    {
+        try {
+            $call();
+        } catch (ForgeRateLimited $limited) {
+            return $limited;
+        }
+
+        throw new LogicException('The call was expected to be rate limited.');
+    }
+
+    private static function pull(): string
+    {
+        return self::fixture('pull_request.json');
+    }
+
     private function plain(string $url): MockResponse
     {
         return match (true) {
@@ -258,19 +271,6 @@ final class GitHubForgeRateLimitTest extends TestCase
             str_contains($url, '/pulls/7') => new MockResponse(self::pull()),
             default => new MockResponse(self::fixture('compare_merge_base.json')),
         };
-    }
-
-    /**
-     * @param array<string, string> $headers
-     */
-    private function limited(int $status, array $headers): MockResponse
-    {
-        return new MockResponse('{"message":"rate limit"}', ['http_code' => $status, 'response_headers' => $headers]);
-    }
-
-    private static function pull(): string
-    {
-        return self::fixture('pull_request.json');
     }
 
     /**

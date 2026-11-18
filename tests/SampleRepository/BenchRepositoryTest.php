@@ -102,6 +102,20 @@ final class BenchRepositoryTest extends TestCase
         }
     }
 
+    private function build(): TemporaryRepository
+    {
+        $repository = $this->repository = new TemporaryRepository();
+        $this->commitTree($repository, self::SAMPLE.'/base');
+
+        foreach (self::changes() as $change) {
+            $repository->checkout('main');
+            $repository->checkoutNewBranch('bench/'.$change);
+            $this->commitTree($repository, self::SAMPLE.'/bench/'.$change.'/tree');
+        }
+
+        return $repository;
+    }
+
     /**
      * @return list<string>
      */
@@ -135,6 +149,13 @@ final class BenchRepositoryTest extends TestCase
         return $added;
     }
 
+    private function commitTree(TemporaryRepository $repository, string $directory): void
+    {
+        foreach (new Finder()->files()->in($directory) as $file) {
+            $repository->commitFile($file->getRelativePathname(), $file->getContents());
+        }
+    }
+
     /**
      * @return list<int>
      */
@@ -165,26 +186,5 @@ final class BenchRepositoryTest extends TestCase
         }
 
         return $added;
-    }
-
-    private function build(): TemporaryRepository
-    {
-        $repository = $this->repository = new TemporaryRepository();
-        $this->commitTree($repository, self::SAMPLE.'/base');
-
-        foreach (self::changes() as $change) {
-            $repository->checkout('main');
-            $repository->checkoutNewBranch('bench/'.$change);
-            $this->commitTree($repository, self::SAMPLE.'/bench/'.$change.'/tree');
-        }
-
-        return $repository;
-    }
-
-    private function commitTree(TemporaryRepository $repository, string $directory): void
-    {
-        foreach (new Finder()->files()->in($directory) as $file) {
-            $repository->commitFile($file->getRelativePathname(), $file->getContents());
-        }
     }
 }

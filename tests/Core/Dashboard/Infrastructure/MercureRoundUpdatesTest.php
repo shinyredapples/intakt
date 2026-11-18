@@ -701,30 +701,6 @@ final class MercureRoundUpdatesTest extends TestCase
         $this->costs->method('costOf')->willReturn(Cost::none());
     }
 
-    private function readAnswer(string $title): ReadAnswer
-    {
-        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
-    }
-
-    /**
-     * @return list<class-string>
-     */
-    private function exceptionsLogged(): array
-    {
-        $classes = [];
-
-        foreach ($this->log->cleanLogs() as $log) {
-            self::assertIsArray($log);
-            $context = $log[2];
-            self::assertIsArray($context);
-            $exception = $context['exception'];
-            self::assertIsObject($exception);
-            $classes[] = $exception::class;
-        }
-
-        return $classes;
-    }
-
     /**
      * @param (callable(Update): string)|null $publisher
      */
@@ -749,9 +725,51 @@ final class MercureRoundUpdatesTest extends TestCase
         );
     }
 
+    private function actionAndTargetOf(Update|string $update): string
+    {
+        preg_match('/action="(\w+)" target="([^"]+)"/', $update instanceof Update ? $update->getData() : $update, $found);
+
+        return ($found[1] ?? '').' '.($found[2] ?? '');
+    }
+
+    private function readAnswer(string $title): ReadAnswer
+    {
+        return ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P1, 'src/Cart.php', 12, null, $title, FixableBy::Builder, false, null, null)], [], []));
+    }
+
+    /**
+     * @param (callable(Update): string)|null $publisher
+     */
+    private function live(?callable $publisher = null): MercureLiveUpdates
+    {
+        $publisher ??= function (Update $update): string {
+            $this->published[] = $update;
+
+            return 'id-'.count($this->published);
+        };
+
+        return new MercureLiveUpdates(new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), $publisher), $this->log);
+    }
+
     private function pages(): LedgerReviewPages
     {
         return new LedgerReviewPages($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), $this->costs, new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
+    }
+
+    private function summaries(?SessionSummary $summary): SessionSummaries
+    {
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturn($summary);
+
+        return $summaries;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function streamsOf(Update $update): array
+    {
+        return array_values(array_filter(explode('</turbo-stream>', $update->getData()), static fn (string $stream): bool => str_contains($stream, '<turbo-stream')));
     }
 
     // The first read pauses its fiber and answers a running round, because it stands for a read taken before the judge committed; every later one finds the round judged, since the judge commits before it publishes.
@@ -772,40 +790,22 @@ final class MercureRoundUpdatesTest extends TestCase
         return $summaries;
     }
 
-    private function summaries(?SessionSummary $summary): SessionSummaries
-    {
-        $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturn($summary);
-
-        return $summaries;
-    }
-
     /**
-     * @param (callable(Update): string)|null $publisher
+     * @return list<class-string>
      */
-    private function live(?callable $publisher = null): MercureLiveUpdates
+    private function exceptionsLogged(): array
     {
-        $publisher ??= function (Update $update): string {
-            $this->published[] = $update;
+        $classes = [];
 
-            return 'id-'.count($this->published);
-        };
+        foreach ($this->log->cleanLogs() as $log) {
+            self::assertIsArray($log);
+            $context = $log[2];
+            self::assertIsArray($context);
+            $exception = $context['exception'];
+            self::assertIsObject($exception);
+            $classes[] = $exception::class;
+        }
 
-        return new MercureLiveUpdates(new MockHub('http://localhost/.well-known/mercure', new StaticTokenProvider('token'), $publisher), $this->log);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function streamsOf(Update $update): array
-    {
-        return array_values(array_filter(explode('</turbo-stream>', $update->getData()), static fn (string $stream): bool => str_contains($stream, '<turbo-stream')));
-    }
-
-    private function actionAndTargetOf(Update|string $update): string
-    {
-        preg_match('/action="(\w+)" target="([^"]+)"/', $update instanceof Update ? $update->getData() : $update, $found);
-
-        return ($found[1] ?? '').' '.($found[2] ?? '');
+        return $classes;
     }
 }

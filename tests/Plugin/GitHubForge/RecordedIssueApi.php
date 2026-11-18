@@ -88,29 +88,6 @@ final class RecordedIssueApi
     /**
      * @param array<string, mixed> $options
      */
-    private function keepConditions(array $options): void
-    {
-        $headers = $options['headers'] ?? [];
-        foreach (is_array($headers) ? $headers : [] as $header) {
-            if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
-                $this->conditions[] = substr($header, strlen('If-None-Match: '));
-            }
-        }
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
-    private function answerHistory(array $options): ResponseInterface
-    {
-        $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
-
-        return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql, ['response_headers' => $this->graphqlHeaders]);
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     */
     private function answer(string $method, string $url, array $options): ResponseInterface
     {
         $this->requests[] = $method.' '.$url;
@@ -137,5 +114,28 @@ final class RecordedIssueApi
         }
 
         return new MockResponse($body, ['response_headers' => $headers]);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function keepConditions(array $options): void
+    {
+        $headers = $options['headers'] ?? [];
+        foreach (is_array($headers) ? $headers : [] as $header) {
+            if (is_string($header) && str_starts_with($header, 'If-None-Match: ')) {
+                $this->conditions[] = substr($header, strlen('If-None-Match: '));
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function answerHistory(array $options): ResponseInterface
+    {
+        $this->graphqlRequests[] = is_string($options['body'] ?? null) ? $options['body'] : '';
+
+        return 1 === preg_match('/^\d{3}$/', $this->graphql) ? new MockResponse('{}', ['http_code' => (int) $this->graphql]) : new MockResponse($this->graphql, ['response_headers' => $this->graphqlHeaders]);
     }
 }

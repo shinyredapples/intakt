@@ -308,6 +308,22 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->credential = $credential;
     }
 
+    private function serverFor(string $round): McpServerClient
+    {
+        $client = new McpServerClient($this->app, '/mcp/review', $this->credential->issueFor($round));
+        $client->initialize('2025-11-25');
+
+        return $client;
+    }
+
+    /**
+     * @param array<string, string> $arguments
+     */
+    private function call(McpServerClient $server, string $tool, array $arguments): void
+    {
+        $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
+    }
+
     private function summaryOf(string $roundId, ?Cost $cost = null): SessionSummary
     {
         $summary = $this->summaries($cost)->ofRound($roundId);
@@ -316,12 +332,28 @@ final class StoredSessionSummariesTest extends KernelTestCase
         return $summary;
     }
 
-    private function summaries(?Cost $cost = null): StoredSessionSummaries
+    // The table is dropped, because then the insert fails in the database itself, as it would when the database refuses it.
+    private function recordingFails(): void
     {
-        $costs = self::createStub(RoundCosts::class);
-        $costs->method('costOf')->willReturn($cost ?? Cost::none());
+        $this->fixture->entities->getConnection()->executeStatement('DROP TABLE round_tool_call');
+    }
 
-        return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, new RoundToolCalls($this->fixture->entities, new NullLogger()));
+    /**
+     * @param array<string, string> $arguments
+     *
+     * @return array{isError: bool, text: string}
+     */
+    private function answerOf(McpServerClient $server, string $tool, array $arguments): array
+    {
+        /** @var array{result: array{isError?: bool, content: list<array{text: string}>}} $response */
+        $response = $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
+
+        return ['isError' => $response['result']['isError'] ?? false, 'text' => $response['result']['content'][0]['text']];
+    }
+
+    private function finding(string $id, ?string $text = null): Finding
+    {
+        return new Finding($id, Severity::P2, 'src/A.php', 3, null, $text ?? 'Text '.$id, FixableBy::Builder, false, null, null);
     }
 
     private function completedRound(Verdict $verdict): string
@@ -330,6 +362,27 @@ final class StoredSessionSummariesTest extends KernelTestCase
         $this->finish($started, $verdict);
 
         return $started['round'];
+    }
+
+    /**
+     * @param list<Finding> $findings
+     *
+     * @return list<string>
+     */
+    private function ids(array $findings): array
+    {
+        return array_map(static fn (Finding $finding): string => $finding->id, $findings);
+    }
+
+    // Written back through SQL, because the round has no way to forget its ledger ids, and a round completed before migration Version20261112110000 kept none and its resolved finding under its reviewer's id.
+    private function completedBeforeLedgerIds(string $round, Finding $kept): void
+    {
+        $this->fixture->entities->getConnection()->executeStatement(
+            'UPDATE review_round SET resolved_findings = ?, resolved_finding_ids = NULL WHERE id = ?',
+            [$this->storedSerializer()->serialize([$kept], JsonEncoder::FORMAT), Uuid::fromString($round)],
+            [Types::TEXT, UuidType::NAME],
+        );
+        $this->fixture->entities->clear();
     }
 
     /**
@@ -354,15 +407,12 @@ final class StoredSessionSummariesTest extends KernelTestCase
         }
     }
 
-    // Written back through SQL, because the round has no way to forget its ledger ids, and a round completed before migration Version20261112110000 kept none and its resolved finding under its reviewer's id.
-    private function completedBeforeLedgerIds(string $round, Finding $kept): void
+    private function summaries(?Cost $cost = null): StoredSessionSummaries
     {
-        $this->fixture->entities->getConnection()->executeStatement(
-            'UPDATE review_round SET resolved_findings = ?, resolved_finding_ids = NULL WHERE id = ?',
-            [$this->storedSerializer()->serialize([$kept], JsonEncoder::FORMAT), Uuid::fromString($round)],
-            [Types::TEXT, UuidType::NAME],
-        );
-        $this->fixture->entities->clear();
+        $costs = self::createStub(RoundCosts::class);
+        $costs->method('costOf')->willReturn($cost ?? Cost::none());
+
+        return new StoredSessionSummaries($this->fixture->transactions(), $this->fixture->findingStore(), $costs, new RoundToolCalls($this->fixture->entities, new NullLogger()));
     }
 
     private function storedSerializer(): SerializerInterface
@@ -371,55 +421,5 @@ final class StoredSessionSummariesTest extends KernelTestCase
         self::assertInstanceOf(SerializerInterface::class, $serializer);
 
         return $serializer;
-    }
-
-    private function serverFor(string $round): McpServerClient
-    {
-        $client = new McpServerClient($this->app, '/mcp/review', $this->credential->issueFor($round));
-        $client->initialize('2025-11-25');
-
-        return $client;
-    }
-
-    /**
-     * @param array<string, string> $arguments
-     */
-    private function call(McpServerClient $server, string $tool, array $arguments): void
-    {
-        $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
-    }
-
-    /**
-     * @param array<string, string> $arguments
-     *
-     * @return array{isError: bool, text: string}
-     */
-    private function answerOf(McpServerClient $server, string $tool, array $arguments): array
-    {
-        /** @var array{result: array{isError?: bool, content: list<array{text: string}>}} $response */
-        $response = $server->call('tools/call', ['name' => $tool, 'arguments' => $arguments], 3);
-
-        return ['isError' => $response['result']['isError'] ?? false, 'text' => $response['result']['content'][0]['text']];
-    }
-
-    // The table is dropped, because then the insert fails in the database itself, as it would when the database refuses it.
-    private function recordingFails(): void
-    {
-        $this->fixture->entities->getConnection()->executeStatement('DROP TABLE round_tool_call');
-    }
-
-    private function finding(string $id, ?string $text = null): Finding
-    {
-        return new Finding($id, Severity::P2, 'src/A.php', 3, null, $text ?? 'Text '.$id, FixableBy::Builder, false, null, null);
-    }
-
-    /**
-     * @param list<Finding> $findings
-     *
-     * @return list<string>
-     */
-    private function ids(array $findings): array
-    {
-        return array_map(static fn (Finding $finding): string => $finding->id, $findings);
     }
 }

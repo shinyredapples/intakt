@@ -65,6 +65,43 @@ final readonly class BuildTask
         return $this->runSteps($request, $task);
     }
 
+    // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
+    private function readTask(BuildTaskRequest $request): ListedIssue|string
+    {
+        try {
+            $listing = $this->issues->listOpen($request->project, null);
+        } catch (ForgeReadFailed|ForgeRateLimited $failure) {
+            return $failure->getMessage();
+        }
+
+        foreach ($listing->issues() as $issue) {
+            // Because GitHub lists pull requests among the issues, and a pull request is no task.
+            if ($issue->number === $request->issue && !$issue->isPullRequest) {
+                return $issue;
+            }
+        }
+
+        return sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
+    }
+
+    private function record(BuildTaskRequest $request, BuildStep $step, ?string $failure): void
+    {
+        // Because the title and body are untrusted text, the payload names the task by its number only.
+        $payload = json_encode([
+            'project' => $request->project,
+            'task' => (string) $request->issue,
+            'step' => $step->value,
+            'outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value,
+            'failure' => $failure,
+        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+
+        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
+
+        if (!$result->succeeded()) {
+            throw BuildStepNotRecorded::for($request, $step, (string) $result->failure);
+        }
+    }
+
     /**
      * @throws BuildStepNotRecorded
      */
@@ -97,31 +134,6 @@ final readonly class BuildTask
         }
 
         return new BuildTaskOutcome(array_last(BuildStep::cases()), null, $task);
-    }
-
-    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
-    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
-    {
-        return is_string($result) ? $result : null;
-    }
-
-    // The failure's text when the task cannot be read, because the caller names the issue and no other issue may stand in for it.
-    private function readTask(BuildTaskRequest $request): ListedIssue|string
-    {
-        try {
-            $listing = $this->issues->listOpen($request->project, null);
-        } catch (ForgeReadFailed|ForgeRateLimited $failure) {
-            return $failure->getMessage();
-        }
-
-        foreach ($listing->issues() as $issue) {
-            // Because GitHub lists pull requests among the issues, and a pull request is no task.
-            if ($issue->number === $request->issue && !$issue->isPullRequest) {
-                return $issue;
-            }
-        }
-
-        return sprintf('project "%s" has no open issue %d', $request->project, $request->issue);
     }
 
     private function updateMirror(BuildTaskRequest $request): ?string
@@ -171,16 +183,6 @@ final readonly class BuildTask
     /**
      * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
      */
-    private function builtIn(array $results): BuildJobOutcome
-    {
-        $built = $results[BuildStep::BuildJob->value] ?? null;
-
-        return $built instanceof BuildJobOutcome ? $built : throw new LogicException('the checks and the push run only after a build job that built');
-    }
-
-    /**
-     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
-     */
     private function push(BuildTaskRequest $request, array $results): ?string
     {
         $accepted = $results[BuildStep::HandBackCheck->value] ?? null;
@@ -196,12 +198,10 @@ final readonly class BuildTask
         return $changeText instanceof ChangeText ? $this->pushes->failureOf($request, $accepted, $changeText) : $changeText;
     }
 
-    // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
-    private function changeTextOf(string $text): ChangeText|string
+    // A job that built and a hand-back the check accepted give their result instead of a failure, so their step passed.
+    private function failureIn(BuildJobOutcome|AcceptedHandBack|string|null $result): ?string
     {
-        [$title, $body] = [...explode("\n", $text, 2), ''];
-
-        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), trim($body));
+        return is_string($result) ? $result : null;
     }
 
     private function jobOf(BuildTaskRequest $request, ListedIssue $task): BuildJob
@@ -213,21 +213,21 @@ final readonly class BuildTask
         return new BuildJob($request->project, $request->directory, $request->branch, $brief, $choice->tier, $request->image);
     }
 
-    private function record(BuildTaskRequest $request, BuildStep $step, ?string $failure): void
+    /**
+     * @param array<string, BuildJobOutcome|AcceptedHandBack|string|null> $results
+     */
+    private function builtIn(array $results): BuildJobOutcome
     {
-        // Because the title and body are untrusted text, the payload names the task by its number only.
-        $payload = json_encode([
-            'project' => $request->project,
-            'task' => (string) $request->issue,
-            'step' => $step->value,
-            'outcome' => (null === $failure ? BuildStepOutcome::Passed : BuildStepOutcome::Failed)->value,
-            'failure' => $failure,
-        ], JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE);
+        $built = $results[BuildStep::BuildJob->value] ?? null;
 
-        $result = $this->ledger->append(new LedgerEvent(LedgerEventKind::BuildStepEnded, $payload));
+        return $built instanceof BuildJobOutcome ? $built : throw new LogicException('the checks and the push run only after a build job that built');
+    }
 
-        if (!$result->succeeded()) {
-            throw BuildStepNotRecorded::for($request, $step, (string) $result->failure);
-        }
+    // The title on the first line and the body after it, as BuilderPrompt asks the builder to write them; fixed words for a text without a title, because the forge opens no pull request without one.
+    private function changeTextOf(string $text): ChangeText|string
+    {
+        [$title, $body] = [...explode("\n", $text, 2), ''];
+
+        return '' === trim($title) ? 'the pull request text has no title on its first line' : new ChangeText(trim($title), trim($body));
     }
 }

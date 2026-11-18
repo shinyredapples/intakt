@@ -101,6 +101,51 @@ final readonly class HighlightFragments
         return new HighlightAssembly([] === $findings ? $layout->assembledWith($rows) : '', $findings);
     }
 
+    private function contentsOf(string $file): ?string
+    {
+        $contents = is_file($file) ? file_get_contents($file) : false;
+
+        return false === $contents ? null : $contents;
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function linesOf(string $file): ?array
+    {
+        $contents = $this->contentsOf($file);
+
+        return null === $contents ? null : array_map(rtrim(...), explode("\n", $contents));
+    }
+
+    /**
+     * @return array<string, int>|string
+     */
+    private function additionsOn(string $root): array|string
+    {
+        // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
+        $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
+
+        // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
+        if (!$head instanceof ProcessResult || self::UNBORN_HEAD === $head->exitCode) {
+            return [];
+        }
+
+        $unreadable = $this->unreadableHistoryFinding($root, $head);
+
+        if (null !== $unreadable) {
+            return $unreadable;
+        }
+
+        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
+
+        if (!$log->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
+        }
+
+        return $this->additionsIn($log->output);
+    }
+
     /**
      * @return list<string>
      */
@@ -151,74 +196,6 @@ final readonly class HighlightFragments
     }
 
     /**
-     * @return array<string, int>|string
-     */
-    private function additionsOn(string $root): array|string
-    {
-        // First-parent history, because on the main branch a merge or squash commit adds a change's fragment when it is merged, not when it was written.
-        $head = file_exists($root.'/.git') ? $this->runner->git(['rev-parse', '--verify', '--quiet', 'HEAD'], $root) : null;
-
-        // With --quiet, exit status 1 is a branch without commits; any other failure is history git cannot read.
-        if (!$head instanceof ProcessResult || self::UNBORN_HEAD === $head->exitCode) {
-            return [];
-        }
-
-        $unreadable = $this->unreadableHistoryFinding($root, $head);
-
-        if (null !== $unreadable) {
-            return $unreadable;
-        }
-
-        $log = $this->runner->git(['log', '--first-parent', '--diff-merges=first-parent', '--no-renames', '--reverse', '--diff-filter=A', '--name-only', '--format=%H', '--', self::DIRECTORY.'/'], $root);
-
-        if (!$log->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$log->firstErrorLine();
-        }
-
-        return $this->additionsIn($log->output);
-    }
-
-    /**
-     * @return array<string, int>
-     */
-    private function additionsIn(string $log): array
-    {
-        $history = [];
-        $commit = 0;
-
-        foreach (explode("\n", $log) as $line) {
-            if (1 === preg_match(self::COMMIT, $line)) {
-                ++$commit;
-            } elseif ('' !== $line) {
-                $history[basename($line)] = $commit;
-            }
-        }
-
-        return $history;
-    }
-
-    private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
-    {
-        if (!$head->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
-        }
-
-        return $this->shallowHistoryFinding($root);
-    }
-
-    // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
-    private function shallowHistoryFinding(string $root): ?string
-    {
-        $shallow = $this->runner->git(['rev-parse', '--is-shallow-repository'], $root);
-
-        if (!$shallow->succeeded()) {
-            return 'cannot read the history of '.self::DIRECTORY.'/: '.$shallow->firstErrorLine();
-        }
-
-        return 'false' === trim($shallow->output) ? null : 'the history of '.self::DIRECTORY.'/ is shallow, so the order its fragments were merged in is unknown: fetch the full history (git fetch --unshallow)';
-    }
-
-    /**
      * @return array{array<string, array<string, string>>, list<string>}
      */
     private function rowsOf(string $root, string $name, HighlightLayout $layout): array
@@ -246,20 +223,43 @@ final readonly class HighlightFragments
         return $rows;
     }
 
-    /**
-     * @return list<string>|null
-     */
-    private function linesOf(string $file): ?array
+    private function unreadableHistoryFinding(string $root, ProcessResult $head): ?string
     {
-        $contents = $this->contentsOf($file);
+        if (!$head->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$head->firstErrorLine();
+        }
 
-        return null === $contents ? null : array_map(rtrim(...), explode("\n", $contents));
+        return $this->shallowHistoryFinding($root);
     }
 
-    private function contentsOf(string $file): ?string
+    /**
+     * @return array<string, int>
+     */
+    private function additionsIn(string $log): array
     {
-        $contents = is_file($file) ? file_get_contents($file) : false;
+        $history = [];
+        $commit = 0;
 
-        return false === $contents ? null : $contents;
+        foreach (explode("\n", $log) as $line) {
+            if (1 === preg_match(self::COMMIT, $line)) {
+                ++$commit;
+            } elseif ('' !== $line) {
+                $history[basename($line)] = $commit;
+            }
+        }
+
+        return $history;
+    }
+
+    // A shallow clone hides the commits that added the older fragments, which would quietly reorder them.
+    private function shallowHistoryFinding(string $root): ?string
+    {
+        $shallow = $this->runner->git(['rev-parse', '--is-shallow-repository'], $root);
+
+        if (!$shallow->succeeded()) {
+            return 'cannot read the history of '.self::DIRECTORY.'/: '.$shallow->firstErrorLine();
+        }
+
+        return 'false' === trim($shallow->output) ? null : 'the history of '.self::DIRECTORY.'/ is shallow, so the order its fragments were merged in is unknown: fetch the full history (git fetch --unshallow)';
     }
 }

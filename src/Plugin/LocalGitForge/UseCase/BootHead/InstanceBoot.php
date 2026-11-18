@@ -63,27 +63,6 @@ final readonly class InstanceBoot
         }
     }
 
-    // One empty home beside each snapshot, removed with it, so what Composer or the commit's code writes there (an auth.json, a config) reaches neither the install's home nor the next boot; without a filesystem sandbox (a later part) the commit's code can still compute the install's real home and read it, only what the environment and Composer hand over is removed here.
-    /**
-     * @param Closure(): BootOutcome $work
-     */
-    private function withScratchHomeOf(string $snapshot, Closure $work): BootOutcome
-    {
-        $filesystem = new Filesystem();
-        $filesystem->mkdir($this->homeOf($snapshot), 0o700);
-
-        try {
-            return $work();
-        } finally {
-            $filesystem->remove($this->homeOf($snapshot));
-        }
-    }
-
-    private function homeOf(string $snapshot): string
-    {
-        return $snapshot.self::SCRATCH_HOME_SUFFIX;
-    }
-
     private function forgeFor(ChangeSource $source): LocalGitForge
     {
         return new LocalGitForge(LocalRepository::existingAt($source->repository, $source->base), new NameStatusParser());
@@ -111,6 +90,33 @@ final readonly class InstanceBoot
         return $this->outcomeOf($this->run([...self::STATUS_ON_STDOUT, PHP_BINARY, self::HARNESS], $snapshot, self::BOOT_SECONDS));
     }
 
+    // One empty home beside each snapshot, removed with it, so what Composer or the commit's code writes there (an auth.json, a config) reaches neither the install's home nor the next boot; without a filesystem sandbox (a later part) the commit's code can still compute the install's real home and read it, only what the environment and Composer hand over is removed here.
+    /**
+     * @param Closure(): BootOutcome $work
+     */
+    private function withScratchHomeOf(string $snapshot, Closure $work): BootOutcome
+    {
+        $filesystem = new Filesystem();
+        $filesystem->mkdir($this->homeOf($snapshot), 0o700);
+
+        try {
+            return $work();
+        } finally {
+            $filesystem->remove($this->homeOf($snapshot));
+        }
+    }
+
+    /**
+     * @param list<string> $command
+     */
+    private function run(array $command, string $snapshot, int $seconds): Process
+    {
+        $process = new Process($command, $snapshot, $this->environment($this->homeOf($snapshot)), timeout: $seconds);
+        $process->run();
+
+        return $process;
+    }
+
     // A link is refused, because writing the harness through it would change a file outside the snapshot.
     private function hasPlainBinFolder(string $snapshot): bool
     {
@@ -127,15 +133,22 @@ final readonly class InstanceBoot
         $filesystem->dumpFile($snapshot.'/'.self::HARNESS, $harness->content);
     }
 
-    /**
-     * @param list<string> $command
-     */
-    private function run(array $command, string $snapshot, int $seconds): Process
+    private function outcomeOf(Process $boot): BootOutcome
     {
-        $process = new Process($command, $snapshot, $this->environment($this->homeOf($snapshot)), timeout: $seconds);
-        $process->run();
+        $line = trim($boot->getOutput());
+        $status = json_decode($line, true);
 
-        return $process;
+        return match (true) {
+            !is_array($status) => BootOutcome::crashed('bin/instance reported no status line.'),
+            in_array($line, self::READY_LINES, true) && $boot->isSuccessful() => BootOutcome::booted(),
+            null !== ($reason = $this->failureReasonOf($status)) => BootOutcome::failed($reason),
+            default => BootOutcome::crashed('bin/instance reported a status line it does not define: '.$line),
+        };
+    }
+
+    private function homeOf(string $snapshot): string
+    {
+        return $snapshot.self::SCRATCH_HOME_SUFFIX;
     }
 
     /**
@@ -155,19 +168,6 @@ final readonly class InstanceBoot
         }
 
         return [...$environment, 'HOME' => $home, 'COMPOSER_HOME' => $home];
-    }
-
-    private function outcomeOf(Process $boot): BootOutcome
-    {
-        $line = trim($boot->getOutput());
-        $status = json_decode($line, true);
-
-        return match (true) {
-            !is_array($status) => BootOutcome::crashed('bin/instance reported no status line.'),
-            in_array($line, self::READY_LINES, true) && $boot->isSuccessful() => BootOutcome::booted(),
-            null !== ($reason = $this->failureReasonOf($status)) => BootOutcome::failed($reason),
-            default => BootOutcome::crashed('bin/instance reported a status line it does not define: '.$line),
-        };
     }
 
     /**

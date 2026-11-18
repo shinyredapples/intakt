@@ -89,20 +89,6 @@ final class RecordingFormatTest extends TestCase
         self::format()->read($json);
     }
 
-    private static function written(): string
-    {
-        return self::format()->write(self::recording());
-    }
-
-    private static function without(string $key): string
-    {
-        $decoded = json_decode(self::written(), true, flags: JSON_THROW_ON_ERROR);
-        self::assertIsArray($decoded);
-        unset($decoded[$key]);
-
-        return json_encode($decoded, JSON_THROW_ON_ERROR);
-    }
-
     private static function format(): RecordingFormat
     {
         return new RecordingFormat(StoredSerializerFactory::create());
@@ -119,5 +105,19 @@ final class RecordingFormatTest extends TestCase
             [new RecordedLedgerEvent('0196a000-0000-7000-8000-000000000001', LedgerEventKind::ReviewStarted, '{"round":"r-1","note":"café \/ <b>"}', new DateTimeImmutable('2026-11-01T10:00:00.123456+00:00'))],
             [new CapturedUpdate(new DateTimeImmutable('2026-11-01T10:00:01+00:00'), 'review/rounds/r-1', '<turbo-stream action="replace"></turbo-stream>')],
         );
+    }
+
+    private static function without(string $key): string
+    {
+        $decoded = json_decode(self::written(), true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($decoded);
+        unset($decoded[$key]);
+
+        return json_encode($decoded, JSON_THROW_ON_ERROR);
+    }
+
+    private static function written(): string
+    {
+        return self::format()->write(self::recording());
     }
 }

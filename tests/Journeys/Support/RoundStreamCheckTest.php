@@ -196,23 +196,17 @@ final class RoundStreamCheckTest extends TestCase
         $this->check([]);
     }
 
-    /**
-     * @param list<string> $data
-     */
-    private function check(array $data): void
+    private function placed(string $reviewer): string
     {
-        new RoundStreamCheck()->assertFitsThePage(self::ROUND, array_map($this->onTopic(...), $data), new Crawler(self::PAGE));
+        return sprintf(
+            '<turbo-stream action="append" targets="#round-round-1-live:not(:has(#reviewer-round-1-%1$s-text))"><template><section><pre id="reviewer-round-1-%1$s-text"></pre><ul id="reviewer-round-1-%1$s-activity"></ul></section></template></turbo-stream>',
+            $reviewer,
+        );
     }
 
-    private function expectFailure(string $message): void
+    private function update(string $action, string $target, string $content): string
     {
-        $this->expectException(AssertionFailedError::class);
-        $this->expectExceptionMessageMatches('/'.preg_quote($message, '/').'/');
-    }
-
-    private function onTopic(string $data): Update
-    {
-        return new Update(MercureRoundUpdates::topicOf(self::ROUND), $data, true);
+        return sprintf('<turbo-stream action="%s" target="%s"><template>%s</template></turbo-stream>', $action, $target, $content);
     }
 
     private function progress(int $finished): string
@@ -225,21 +219,27 @@ final class RoundStreamCheckTest extends TestCase
         return $this->state('Judged.');
     }
 
+    /**
+     * @param list<string> $data
+     */
+    private function check(array $data): void
+    {
+        new RoundStreamCheck()->assertFitsThePage(self::ROUND, array_map($this->onTopic(...), $data), new Crawler(self::PAGE));
+    }
+
+    private function onTopic(string $data): Update
+    {
+        return new Update(MercureRoundUpdates::topicOf(self::ROUND), $data, true);
+    }
+
+    private function expectFailure(string $message): void
+    {
+        $this->expectException(AssertionFailedError::class);
+        $this->expectExceptionMessageMatches('/'.preg_quote($message, '/').'/');
+    }
+
     private function state(string $text): string
     {
         return $this->update('replace', 'round-round-1-state', sprintf('<p id="round-round-1-state">%s</p>', $text));
-    }
-
-    private function placed(string $reviewer): string
-    {
-        return sprintf(
-            '<turbo-stream action="append" targets="#round-round-1-live:not(:has(#reviewer-round-1-%1$s-text))"><template><section><pre id="reviewer-round-1-%1$s-text"></pre><ul id="reviewer-round-1-%1$s-activity"></ul></section></template></turbo-stream>',
-            $reviewer,
-        );
-    }
-
-    private function update(string $action, string $target, string $content): string
-    {
-        return sprintf('<turbo-stream action="%s" target="%s"><template>%s</template></turbo-stream>', $action, $target, $content);
     }
 }

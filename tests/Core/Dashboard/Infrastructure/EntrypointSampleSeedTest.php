@@ -466,12 +466,81 @@ final class EntrypointSampleSeedTest extends TestCase
     }
 
     /**
+     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
+     */
+    private function theDefaultDemo(): array
+    {
+        return self::$defaultDemo ??= $this->runTheDefaultDemo();
+    }
+
+    /**
      * @param array<string, string> $environment
      */
     private function startEntrypoint(array $environment): void
     {
         $this->entrypoint = $this->entrypointWith($environment);
         $this->entrypoint->start();
+    }
+
+    private function waitForTheServer(): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && (!str_contains($this->calls(), 'frankenphp run') || !str_contains($this->calls(), 'messenger:consume scheduler_watcher'))) {
+            usleep(50_000);
+        }
+
+        self::assertStringContainsString('frankenphp run', $this->calls(), (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    private function callsFile(): string
+    {
+        return $this->directory.'/calls';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function consoleCallsBeforeTheConsumers(): array
+    {
+        $calls = [];
+        foreach (explode("\n", $this->calls()) as $call) {
+            if (str_contains($call, 'messenger:consume')) {
+                break;
+            }
+
+            if (str_starts_with($call, 'php ')) {
+                $calls[] = substr($call, 4);
+            }
+        }
+
+        return $calls;
+    }
+
+    private function seen(): string
+    {
+        return new Filesystem()->readFile($this->callsFile().'.seen');
+    }
+
+    private function givenTheDataFileRouterLine(string $line): void
+    {
+        $filesystem = new Filesystem();
+        $contents = preg_replace('/^router_url:.*$/m', $line, $filesystem->readFile($this->dataFile()), 1, $replaced);
+        self::assertSame(1, $replaced);
+        $filesystem->dumpFile($this->dataFile(), (string) $contents);
+    }
+
+    private function calls(): string
+    {
+        $calls = @file_get_contents($this->callsFile());
+
+        return is_string($calls) ? $calls : '';
+    }
+
+    // Where the image's working directory holds it, because the entrypoint reads it by that relative path.
+    private function dataFile(): string
+    {
+        return $this->directory.'/config/sample-project.yaml';
     }
 
     // A stand-in od holds each start after the token check until the test lets it go, so the test forces both starts past the check before either writes.
@@ -511,6 +580,63 @@ final class EntrypointSampleSeedTest extends TestCase
         self::assertFileExists($file);
     }
 
+    private function waitForTheAddress(): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && !str_contains((string) $this->entrypoint?->getOutput(), 'http://localhost:7781')) {
+            usleep(50_000);
+        }
+
+        self::assertStringContainsString('http://localhost:7781', (string) $this->entrypoint?->getOutput(), (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    // Two and a half polls of the entrypoint's one-second loop, so a step it repeats or prints later would have run.
+    private function waitForMorePolls(): void
+    {
+        usleep(2_500_000);
+    }
+
+    private function waitForTheCall(string $call): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && !str_contains($this->calls(), $call)) {
+            usleep(50_000);
+        }
+
+        self::assertStringContainsString($call, $this->calls(), (string) $this->entrypoint?->getErrorOutput());
+    }
+
+    // The signal reaches only the entrypoint, as a container stop does, so its children end only when its trap runs.
+    private function secondsToStop(): float
+    {
+        $sent = hrtime(true);
+        $this->entrypoint?->signal(self::TERMINATE);
+        $this->entrypoint?->wait();
+
+        return (hrtime(true) - $sent) / 1_000_000_000;
+    }
+
+    /**
+     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
+     */
+    private function runTheDefaultDemo(): array
+    {
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($this->directory.'/var/cache/test/image-container', 'old');
+        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
+        $this->waitForTheServer();
+
+        return [
+            'consoleCalls' => array_map(fn (string $call): string => str_replace($this->directory, '<directory>', $call), $this->consoleCallsBeforeTheConsumers()),
+            'cacheDirectoryExists' => is_dir($this->directory.'/var/cache/test'),
+            'keptToken' => trim($filesystem->readFile($this->directory.'/mcp-owner-token')),
+            'seen' => trim($this->seen()),
+            'compatible' => trim($filesystem->readFile($this->callsFile().'.compatible')),
+        ];
+    }
+
     /**
      * @param array<string, string> $environment
      */
@@ -544,33 +670,6 @@ final class EntrypointSampleSeedTest extends TestCase
         return $process;
     }
 
-    /**
-     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
-     */
-    private function theDefaultDemo(): array
-    {
-        return self::$defaultDemo ??= $this->runTheDefaultDemo();
-    }
-
-    /**
-     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
-     */
-    private function runTheDefaultDemo(): array
-    {
-        $filesystem = new Filesystem();
-        $filesystem->dumpFile($this->directory.'/var/cache/test/image-container', 'old');
-        $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
-        $this->waitForTheServer();
-
-        return [
-            'consoleCalls' => array_map(fn (string $call): string => str_replace($this->directory, '<directory>', $call), $this->consoleCallsBeforeTheConsumers()),
-            'cacheDirectoryExists' => is_dir($this->directory.'/var/cache/test'),
-            'keptToken' => trim($filesystem->readFile($this->directory.'/mcp-owner-token')),
-            'seen' => trim($this->seen()),
-            'compatible' => trim($filesystem->readFile($this->callsFile().'.compatible')),
-        ];
-    }
-
     // Stand-ins that note each call; the console steps end at once (the seed with SEED_STATUS), the server and the consumers wait to be stopped, without the test's pipes, so a sleep the entrypoint leaves behind cannot hold the test.
     private function stubPrograms(): string
     {
@@ -585,104 +684,5 @@ final class EntrypointSampleSeedTest extends TestCase
         $filesystem->chmod([$programs.'/php', $programs.'/frankenphp', $programs.'/curl'], 0755);
 
         return $programs;
-    }
-
-    private function waitForTheAddress(): void
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
-
-        while (hrtime(true) < $deadline && !str_contains((string) $this->entrypoint?->getOutput(), 'http://localhost:7781')) {
-            usleep(50_000);
-        }
-
-        self::assertStringContainsString('http://localhost:7781', (string) $this->entrypoint?->getOutput(), (string) $this->entrypoint?->getErrorOutput());
-    }
-
-    private function waitForTheCall(string $call): void
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
-
-        while (hrtime(true) < $deadline && !str_contains($this->calls(), $call)) {
-            usleep(50_000);
-        }
-
-        self::assertStringContainsString($call, $this->calls(), (string) $this->entrypoint?->getErrorOutput());
-    }
-
-    // The signal reaches only the entrypoint, as a container stop does, so its children end only when its trap runs.
-    private function secondsToStop(): float
-    {
-        $sent = hrtime(true);
-        $this->entrypoint?->signal(self::TERMINATE);
-        $this->entrypoint?->wait();
-
-        return (hrtime(true) - $sent) / 1_000_000_000;
-    }
-
-    // Two and a half polls of the entrypoint's one-second loop, so a step it repeats or prints later would have run.
-    private function waitForMorePolls(): void
-    {
-        usleep(2_500_000);
-    }
-
-    private function waitForTheServer(): void
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
-
-        while (hrtime(true) < $deadline && (!str_contains($this->calls(), 'frankenphp run') || !str_contains($this->calls(), 'messenger:consume scheduler_watcher'))) {
-            usleep(50_000);
-        }
-
-        self::assertStringContainsString('frankenphp run', $this->calls(), (string) $this->entrypoint?->getErrorOutput());
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function consoleCallsBeforeTheConsumers(): array
-    {
-        $calls = [];
-        foreach (explode("\n", $this->calls()) as $call) {
-            if (str_contains($call, 'messenger:consume')) {
-                break;
-            }
-
-            if (str_starts_with($call, 'php ')) {
-                $calls[] = substr($call, 4);
-            }
-        }
-
-        return $calls;
-    }
-
-    private function seen(): string
-    {
-        return new Filesystem()->readFile($this->callsFile().'.seen');
-    }
-
-    private function calls(): string
-    {
-        $calls = @file_get_contents($this->callsFile());
-
-        return is_string($calls) ? $calls : '';
-    }
-
-    private function givenTheDataFileRouterLine(string $line): void
-    {
-        $filesystem = new Filesystem();
-        $contents = preg_replace('/^router_url:.*$/m', $line, $filesystem->readFile($this->dataFile()), 1, $replaced);
-        self::assertSame(1, $replaced);
-        $filesystem->dumpFile($this->dataFile(), (string) $contents);
-    }
-
-    // Where the image's working directory holds it, because the entrypoint reads it by that relative path.
-    private function dataFile(): string
-    {
-        return $this->directory.'/config/sample-project.yaml';
-    }
-
-    private function callsFile(): string
-    {
-        return $this->directory.'/calls';
     }
 }

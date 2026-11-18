@@ -168,11 +168,38 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         self::assertTrue($sandbox->runGate(new CommitSubjectsGate())->failed('commits'));
     }
 
-    private function describe(Sandbox $sandbox): string
+    /**
+     * @param list<string> $subjects
+     */
+    private function checkCommitsWith(array $subjects): CheckRun
     {
-        $parents = explode(' ', trim($sandbox->git('log', '--format=%P', '--max-count=1', 'HEAD')->output));
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
 
-        return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.$parents[1];
+        foreach ($subjects as $subject) {
+            $sandbox->commitAll($subject);
+        }
+
+        return $sandbox->runGate(new CommitSubjectsGate());
+    }
+
+    private function branchWithAMergeCommit(string $message): Sandbox
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->startRepository();
+        $sandbox->commitAll('chore: start');
+        $sandbox->git('switch', '--quiet', '--create', 'change');
+        $sandbox->write('change.txt', "change\n");
+        $sandbox->commitAll('feat: change');
+        $sandbox->git('switch', '--quiet', 'main');
+        $sandbox->write('main.txt', "main\n");
+        $sandbox->commitAll('chore: advance main');
+        $sandbox->git('switch', '--quiet', 'change');
+        $sandbox->git('merge', '--quiet', '--no-ff', '--message', $message, 'main');
+
+        return $sandbox;
     }
 
     // Because main~1 plays the base the event reports, a merge on it is GitHub's test merge before main moved.
@@ -182,6 +209,13 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox->git('switch', '--quiet', '--create', 'test-merge', 'main~1');
 
         return $this->mergeChange($sandbox);
+    }
+
+    private function describe(Sandbox $sandbox): string
+    {
+        $parents = explode(' ', trim($sandbox->git('log', '--format=%P', '--max-count=1', 'HEAD')->output));
+
+        return trim($sandbox->git('rev-parse', 'HEAD')->output).':'.$parents[1];
     }
 
     private function testMergeOnMovedBase(): Sandbox
@@ -224,39 +258,5 @@ final class CommitSubjectsGateTest extends SandboxTestCase
         $sandbox->git('merge', '--quiet', '--no-ff', '--message', 'Merge '.str_repeat('a', 40).' into '.str_repeat('b', 40), 'change');
 
         return $sandbox;
-    }
-
-    private function branchWithAMergeCommit(string $message): Sandbox
-    {
-        $sandbox = $this->emptySandbox();
-        $sandbox->startRepository();
-        $sandbox->commitAll('chore: start');
-        $sandbox->git('switch', '--quiet', '--create', 'change');
-        $sandbox->write('change.txt', "change\n");
-        $sandbox->commitAll('feat: change');
-        $sandbox->git('switch', '--quiet', 'main');
-        $sandbox->write('main.txt', "main\n");
-        $sandbox->commitAll('chore: advance main');
-        $sandbox->git('switch', '--quiet', 'change');
-        $sandbox->git('merge', '--quiet', '--no-ff', '--message', $message, 'main');
-
-        return $sandbox;
-    }
-
-    /**
-     * @param list<string> $subjects
-     */
-    private function checkCommitsWith(array $subjects): CheckRun
-    {
-        $sandbox = $this->emptySandbox();
-        $sandbox->startRepository();
-        $sandbox->commitAll('chore: start');
-        $sandbox->git('switch', '--quiet', '--create', 'change');
-
-        foreach ($subjects as $subject) {
-            $sandbox->commitAll($subject);
-        }
-
-        return $sandbox->runGate(new CommitSubjectsGate());
     }
 }

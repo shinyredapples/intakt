@@ -189,18 +189,6 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $this->cooldowns = new AccountCooldownWindows(new ReadingsInMemory(new NativeClock()), new ArrayAdapter(), new LockFactory(new InMemoryStore()), new NativeClock(), $this->fixture->ledger(), new NullLogger(), StoredSerializerFactory::create(), [Provider::Anthropic->value => [Account::DEFAULT, 'team']]);
     }
 
-    // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.
-    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor): void
-    {
-        try {
-            $this->fixture->deliver($message, $vendor);
-            self::fail('The limited account gave a verdict.');
-        } catch (ReviewerMovesToAnotherAccount) {
-        }
-
-        $this->fixture->deliver($message, $vendor);
-    }
-
     private function vendorOnTwoAccounts(): Vendor
     {
         $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
@@ -223,6 +211,18 @@ final class SameVendorAccountFailoverTest extends KernelTestCase
         $vendor = new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, self::createStub(ReviewServerAccesses::class));
 
         return new AccountLimitedVendor($vendor, $resolver, $this->cooldowns);
+    }
+
+    // Delivered again as Messenger does after the recoverable move, so the retry runs on the next account.
+    private function deliverUntilItStays(ReviewWithReviewer $message, Vendor $vendor): void
+    {
+        try {
+            $this->fixture->deliver($message, $vendor);
+            self::fail('The limited account gave a verdict.');
+        } catch (ReviewerMovesToAnotherAccount) {
+        }
+
+        $this->fixture->deliver($message, $vendor);
     }
 
     /**

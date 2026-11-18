@@ -103,6 +103,20 @@ final readonly class TestsGate implements RunsTheChangesCode
         return ['sqlite' => self::CONFIGURATION, 'gates' => self::GATES_CONFIGURATION];
     }
 
+    private function variable(string $name): ?string
+    {
+        $value = getenv($name);
+
+        return is_string($value) && '' !== $value ? $value : null;
+    }
+
+    private function scratchDirectory(): ?string
+    {
+        $directory = sys_get_temp_dir().'/intakt-tests-'.bin2hex(random_bytes(8));
+
+        return mkdir($directory, 0o700) ? $directory : null;
+    }
+
     /**
      * @param array<string, string> $passes
      */
@@ -112,6 +126,21 @@ final readonly class TestsGate implements RunsTheChangesCode
             ->withSlowest($this->recordedDurations($workspace, $workers));
 
         return isset($passes['gates']) ? $result : $result->noted(self::SKIPPED_GATES_PASS);
+    }
+
+    private function remove(string $directory): void
+    {
+        $entries = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+
+        foreach ($entries as $entry) {
+            if ($entry instanceof SplFileInfo && $entry->isDir() && !$entry->isLink()) {
+                rmdir($entry->getPathname());
+            } elseif ($entry instanceof SplFileInfo) {
+                unlink($entry->getPathname());
+            }
+        }
+
+        rmdir($directory);
     }
 
     /**
@@ -152,6 +181,35 @@ final readonly class TestsGate implements RunsTheChangesCode
         }
 
         return $findings;
+    }
+
+    /**
+     * @return array<string, float>
+     */
+    private function recordedDurations(Workspace $workspace, TestWorkers $workers): array
+    {
+        $durations = new TestDurations($workspace->root);
+        $seconds = $durations->read($workers->junitReports());
+        $durations->write($seconds, GatesCache::directory());
+
+        return $durations->slowest($seconds);
+    }
+
+    /**
+     * @param list<TestWorker>                  $workers
+     * @param Closure(TestWorker): list<string> $flags
+     *
+     * @return array<string, ProcessResult>
+     */
+    private function concurrently(Workspace $workspace, array $workers, Closure $flags): array
+    {
+        $commands = [];
+
+        foreach ($workers as $worker) {
+            $commands[$worker->run] = [$this->command($workspace, $worker, $flags($worker)), $worker->environment()];
+        }
+
+        return $workspace->commandsConcurrently($commands);
     }
 
     /**
@@ -215,33 +273,6 @@ final readonly class TestsGate implements RunsTheChangesCode
     }
 
     /**
-     * @param list<TestWorker>                  $workers
-     * @param Closure(TestWorker): list<string> $flags
-     *
-     * @return array<string, ProcessResult>
-     */
-    private function concurrently(Workspace $workspace, array $workers, Closure $flags): array
-    {
-        $commands = [];
-
-        foreach ($workers as $worker) {
-            $commands[$worker->run] = [$this->command($workspace, $worker, $flags($worker)), $worker->environment()];
-        }
-
-        return $workspace->commandsConcurrently($commands);
-    }
-
-    /**
-     * @param list<string> $flags
-     *
-     * @return list<string>
-     */
-    private function command(Workspace $workspace, TestWorker $worker, array $flags): array
-    {
-        return [$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$worker->configuration, ...$flags, ...$worker->arguments()];
-    }
-
-    /**
      * @param array<string, ProcessResult> $results
      *
      * @return list<string>
@@ -257,47 +288,6 @@ final readonly class TestsGate implements RunsTheChangesCode
         return $findings;
     }
 
-    private function variable(string $name): ?string
-    {
-        $value = getenv($name);
-
-        return is_string($value) && '' !== $value ? $value : null;
-    }
-
-    /**
-     * @return array<string, float>
-     */
-    private function recordedDurations(Workspace $workspace, TestWorkers $workers): array
-    {
-        $durations = new TestDurations($workspace->root);
-        $seconds = $durations->read($workers->junitReports());
-        $durations->write($seconds, GatesCache::directory());
-
-        return $durations->slowest($seconds);
-    }
-
-    private function scratchDirectory(): ?string
-    {
-        $directory = sys_get_temp_dir().'/intakt-tests-'.bin2hex(random_bytes(8));
-
-        return mkdir($directory, 0o700) ? $directory : null;
-    }
-
-    private function remove(string $directory): void
-    {
-        $entries = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
-
-        foreach ($entries as $entry) {
-            if ($entry instanceof SplFileInfo && $entry->isDir() && !$entry->isLink()) {
-                rmdir($entry->getPathname());
-            } elseif ($entry instanceof SplFileInfo) {
-                unlink($entry->getPathname());
-            }
-        }
-
-        rmdir($directory);
-    }
-
     /**
      * @return list<string>
      */
@@ -307,5 +297,15 @@ final readonly class TestsGate implements RunsTheChangesCode
             ...self::FAIL_CLOSED,
             '--display-phpunit-notices', '--display-phpunit-deprecations', '--do-not-record-test-run-history', '--log-junit='.$worker->junitReport(), '--colors=never', '--no-progress',
         ];
+    }
+
+    /**
+     * @param list<string> $flags
+     *
+     * @return list<string>
+     */
+    private function command(Workspace $workspace, TestWorker $worker, array $flags): array
+    {
+        return [$workspace->tool('phpunit'), '--configuration='.$workspace->root.'/'.$worker->configuration, ...$flags, ...$worker->arguments()];
     }
 }

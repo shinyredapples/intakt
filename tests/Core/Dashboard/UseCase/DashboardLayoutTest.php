@@ -119,14 +119,6 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         self::assertStringContainsString('--on-btn: #121816;', $this->themeBlockOf($sheet, 'dark'));
     }
 
-    private function layout(): Crawler
-    {
-        $page = $this->browser->request('GET', '/reviews');
-        self::assertResponseIsSuccessful();
-
-        return $page;
-    }
-
     /**
      * @return list<string>
      */
@@ -139,6 +131,14 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         self::assertNotEmpty($addresses);
 
         return $addresses;
+    }
+
+    private function layout(): Crawler
+    {
+        $page = $this->browser->request('GET', '/reviews');
+        self::assertResponseIsSuccessful();
+
+        return $page;
     }
 
     /**
@@ -163,22 +163,6 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         return $this->servedAsset((string) $href);
     }
 
-    private function servedAsset(string $address): string
-    {
-        $this->browser->request('GET', $address);
-        self::assertResponseIsSuccessful();
-
-        // Read from the internal response, because the asset server answers with a BinaryFileResponse, whose getContent() is empty.
-        return $this->browser->getInternalResponse()->getContent();
-    }
-
-    private function themeBlockOf(string $sheet, string $theme): string
-    {
-        self::assertSame(1, preg_match('/\[data-theme="'.$theme.'"\]\s*\{([^}]*)\}/', $sheet, $block));
-
-        return $block[1];
-    }
-
     /**
      * @return list<array{string, string, string}>
      */
@@ -188,5 +172,21 @@ final class DashboardLayoutTest extends DashboardPageTestCase
         self::assertCount(13, $rows);
 
         return array_map(static fn (array $row): array => [$row[1], $row[2], $row[3]], $rows);
+    }
+
+    private function themeBlockOf(string $sheet, string $theme): string
+    {
+        self::assertSame(1, preg_match('/\[data-theme="'.$theme.'"\]\s*\{([^}]*)\}/', $sheet, $block));
+
+        return $block[1];
+    }
+
+    private function servedAsset(string $address): string
+    {
+        $this->browser->request('GET', $address);
+        self::assertResponseIsSuccessful();
+
+        // Read from the internal response, because the asset server answers with a BinaryFileResponse, whose getContent() is empty.
+        return $this->browser->getInternalResponse()->getContent();
     }
 }

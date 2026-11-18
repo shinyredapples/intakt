@@ -417,14 +417,6 @@ final class ReviewChangeTest extends KernelTestCase
         $this->tiers = new VerdictPerRole([]);
     }
 
-    private function mapping(Tier ...$mapped): Vendor
-    {
-        $vendor = self::createStub(Vendor::class);
-        $vendor->method('mapsAModelTo')->willReturnCallback(static fn (string $project, Tier $tier): bool => in_array($tier, $mapped, true));
-
-        return $vendor;
-    }
-
     private function reviewWith(Vendor $vendor, ?int $round = null, ?Closure $duringTheRound = null): ChangeReview
     {
         $delivered = 0;
@@ -446,21 +438,20 @@ final class ReviewChangeTest extends KernelTestCase
         return $this->reviewChange($work)->review($this->request($round));
     }
 
-    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
-    /**
-     * @param Closure(): string $round
-     */
-    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
+    private function finding(string $id, Severity $severity): Finding
     {
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
 
-        return function () use ($vendor, $round): void {
-            foreach ($this->fixture->bus->messages as $message) {
-                $this->fixture->deliver($message, $vendor);
-            }
-
-            $this->parked = [new Envelope(new JudgeRound($round()))];
-        };
+    /**
+     * @return array<string, Verdict>
+     */
+    private function bothReportLines(int $first, int $second, Severity $secondSeverity = Severity::P1): array
+    {
+        return [
+            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', $first, Severity::P1)], [], []),
+            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', $second, $secondSeverity)], [], []),
+        ];
     }
 
     // Two seconds a reviewer and one for the judge, so the two-reviewer panel's upper wait is 5 seconds.
@@ -489,12 +480,44 @@ final class ReviewChangeTest extends KernelTestCase
         );
     }
 
-    private function failureTransport(): ListableReceiverInterface
+    private function request(?int $round = null): ChangeReviewRequest
     {
-        $transport = self::createStub(ListableReceiverInterface::class);
-        $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
+        $panel = $this->panel();
 
-        return $transport;
+        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE, $round), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+    }
+
+    private function openRoundId(): string
+    {
+        $round = array_first($this->fixture->storedRounds());
+        self::assertInstanceOf(ReviewRound::class, $round);
+
+        return $round->id()->toRfc4122();
+    }
+
+    // The reviewers answer with a finding, so the judge would be asked, and the judging is parked in the failure transport instead, as a worker parks it after its last retry.
+    /**
+     * @param Closure(): string $round
+     */
+    private function reviewersFinishAndTheJudgingOf(Closure $round): Closure
+    {
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], [])]);
+
+        return function () use ($vendor, $round): void {
+            foreach ($this->fixture->bus->messages as $message) {
+                $this->fixture->deliver($message, $vendor);
+            }
+
+            $this->parked = [new Envelope(new JudgeRound($round()))];
+        };
+    }
+
+    // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
+    private function recordUsage(string $call, int $total, ?string $round = null): void
+    {
+        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => 'big'];
+        $this->append(null === $round ? $started : $started + ['round' => $round]);
+        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'model' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
     }
 
     // Messenger's own handling, so a refusal reaches the caller unwrapped as the application's command bus unwraps it; the reviewers' messages go to the test's workers.
@@ -505,16 +528,30 @@ final class ReviewChangeTest extends KernelTestCase
         return new MessageBus([new HandleMessageMiddleware(new HandlersLocator([RunReviewRound::class => [$handler]]))], unwrapExceptions: true);
     }
 
+    private function mapping(Tier ...$mapped): Vendor
+    {
+        $vendor = self::createStub(Vendor::class);
+        $vendor->method('mapsAModelTo')->willReturnCallback(static fn (string $project, Tier $tier): bool => in_array($tier, $mapped, true));
+
+        return $vendor;
+    }
+
+    private function findingAt(string $id, int $line, Severity $severity): Finding
+    {
+        return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
     private function serializer(): SerializerInterface
     {
         return self::getContainer()->get('serializer.stored');
     }
 
-    private function request(?int $round = null): ChangeReviewRequest
+    private function failureTransport(): ListableReceiverInterface
     {
-        $panel = $this->panel();
+        $transport = self::createStub(ListableReceiverInterface::class);
+        $transport->method('all')->willReturnCallback(fn (): array => $this->parked);
 
-        return new ChangeReviewRequest('alpha', __DIR__, RoundFixture::TASK, RoundFixture::DIFF, new RequestedRound(RoundFixture::CHANGE, $round), SampleIdentity::of(RoundFixture::TASK, $panel), $panel);
+        return $transport;
     }
 
     // The roles and prompts RoundFixture's workers answer by, so a scripted verdict reaches the reviewer it names.
@@ -528,22 +565,6 @@ final class ReviewChangeTest extends KernelTestCase
         return new Panel($members, QuorumPolicy::All);
     }
 
-    private function openRoundId(): string
-    {
-        $round = array_first($this->fixture->storedRounds());
-        self::assertInstanceOf(ReviewRound::class, $round);
-
-        return $round->id()->toRfc4122();
-    }
-
-    // Both rows UsageLedger writes, because only the started one names the round and only the settled one carries the tokens.
-    private function recordUsage(string $call, int $total, ?string $round = null): void
-    {
-        $started = ['call' => $call, 'phase' => 'started', 'project' => 'alpha', 'tier' => 'standard', 'model' => 'big'];
-        $this->append(null === $round ? $started : $started + ['round' => $round]);
-        $this->append(['call' => $call, 'phase' => 'settled', 'usages' => [['account' => null, 'model' => null, 'prompt' => $total - intdiv($total, 6), 'completion' => intdiv($total, 6), 'total' => $total]]]);
-    }
-
     /**
      * @param array<string, mixed> $payload
      */
@@ -551,26 +572,5 @@ final class ReviewChangeTest extends KernelTestCase
     {
         $appended = $this->fixture->ledger()->append(new LedgerEvent(LedgerEventKind::UsageRecorded, json_encode($payload, JSON_THROW_ON_ERROR)));
         self::assertTrue($appended->succeeded());
-    }
-
-    /**
-     * @return array<string, Verdict>
-     */
-    private function bothReportLines(int $first, int $second, Severity $secondSeverity = Severity::P1): array
-    {
-        return [
-            'Look at part 1.' => new Verdict(Decision::Changes, [$this->findingAt('A', $first, Severity::P1)], [], []),
-            'Look at part 2.' => new Verdict(Decision::Changes, [$this->findingAt('B', $second, $secondSeverity)], [], []),
-        ];
-    }
-
-    private function findingAt(string $id, int $line, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, 'src/A.php', $line, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
-    }
-
-    private function finding(string $id, Severity $severity): Finding
-    {
-        return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
     }
 }

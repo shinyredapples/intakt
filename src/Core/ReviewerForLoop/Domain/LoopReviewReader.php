@@ -78,6 +78,51 @@ final readonly class LoopReviewReader
     }
 
     /**
+     * @param list<array{text: string, json: bool}> $lines
+     */
+    private function reviewerOf(array $lines): string
+    {
+        foreach ($lines as $line) {
+            if (!$line['json'] && 1 === preg_match(self::REVIEWER_LINE, $line['text'], $match)) {
+                return $match[1];
+            }
+        }
+
+        return self::UNKNOWN_REVIEWER;
+    }
+
+    /**
+     * @param list<array{text: string, json: bool}> $lines
+     *
+     * @return array<int, array{text: string, json: bool}>
+     */
+    private function verdictCandidates(array $lines): array
+    {
+        return array_filter($lines, static fn (array $line): bool => $line['json'] || str_starts_with(ltrim($line['text']), '{'));
+    }
+
+    /**
+     * @param list<array{text: string, json: bool}> $lines
+     */
+    private function verdictOf(array $lines): LoopVerdict
+    {
+        $declared = $this->declaredVerdict($lines);
+
+        // An open P1 or P2 finding means changes whatever the JSON says, because the loop's rules count it so.
+        return LoopVerdict::Approve === $declared && $this->hasBlockingFinding($lines) ? LoopVerdict::Changes : $declared;
+    }
+
+    /**
+     * @param list<array{text: string, json: bool}> $lines
+     *
+     * @return list<LoopFinding>
+     */
+    private function findingsOf(array $lines): array
+    {
+        return array_values(array_filter(array_map($this->findingIn(...), $lines)));
+    }
+
+    /**
      * @return array{marker: string, json: bool, body: list<string>}|null
      */
     private function fenceOpenedBy(string $line): ?array
@@ -119,48 +164,22 @@ final readonly class LoopReviewReader
     /**
      * @param list<array{text: string, json: bool}> $lines
      */
-    private function reviewerOf(array $lines): string
+    private function declaredVerdict(array $lines): LoopVerdict
     {
-        foreach ($lines as $line) {
-            if (!$line['json'] && 1 === preg_match(self::REVIEWER_LINE, $line['text'], $match)) {
-                return $match[1];
-            }
+        $candidates = $this->verdictCandidates($lines);
+        if ([] === $candidates) {
+            return LoopVerdict::Unreadable;
         }
 
-        return self::UNKNOWN_REVIEWER;
-    }
-
-    /**
-     * @param list<array{text: string, json: bool}> $lines
-     *
-     * @return list<LoopFinding>
-     */
-    private function findingsOf(array $lines): array
-    {
-        return array_values(array_filter(array_map($this->findingIn(...), $lines)));
-    }
-
-    /**
-     * @param array{text: string, json: bool} $line
-     */
-    private function findingIn(array $line): ?LoopFinding
-    {
-        if ($line['json'] || 1 !== preg_match(self::FINDING_LINE, $line['text'], $match)) {
-            return null;
+        try {
+            $decoded = json_decode(array_last($candidates)['text'], true, 16, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return LoopVerdict::Unreadable;
         }
 
-        return new LoopFinding($match[2], (int) $match[3], Severity::from($match[1]));
-    }
+        $value = is_array($decoded) ? ($decoded['verdict'] ?? null) : null;
 
-    /**
-     * @param list<array{text: string, json: bool}> $lines
-     */
-    private function verdictOf(array $lines): LoopVerdict
-    {
-        $declared = $this->declaredVerdict($lines);
-
-        // An open P1 or P2 finding means changes whatever the JSON says, because the loop's rules count it so.
-        return LoopVerdict::Approve === $declared && $this->hasBlockingFinding($lines) ? LoopVerdict::Changes : $declared;
+        return (is_string($value) ? LoopVerdict::tryFrom($value) : null) ?? LoopVerdict::Unreadable;
     }
 
     // A P2 after a "Follow-ups:" line does not block, because the loop files a re-review's P2 there and still approves.
@@ -182,33 +201,14 @@ final readonly class LoopReviewReader
     }
 
     /**
-     * @param list<array{text: string, json: bool}> $lines
+     * @param array{text: string, json: bool} $line
      */
-    private function declaredVerdict(array $lines): LoopVerdict
+    private function findingIn(array $line): ?LoopFinding
     {
-        $candidates = $this->verdictCandidates($lines);
-        if ([] === $candidates) {
-            return LoopVerdict::Unreadable;
+        if ($line['json'] || 1 !== preg_match(self::FINDING_LINE, $line['text'], $match)) {
+            return null;
         }
 
-        try {
-            $decoded = json_decode(array_last($candidates)['text'], true, 16, JSON_THROW_ON_ERROR);
-        } catch (JsonException) {
-            return LoopVerdict::Unreadable;
-        }
-
-        $value = is_array($decoded) ? ($decoded['verdict'] ?? null) : null;
-
-        return (is_string($value) ? LoopVerdict::tryFrom($value) : null) ?? LoopVerdict::Unreadable;
-    }
-
-    /**
-     * @param list<array{text: string, json: bool}> $lines
-     *
-     * @return array<int, array{text: string, json: bool}>
-     */
-    private function verdictCandidates(array $lines): array
-    {
-        return array_filter($lines, static fn (array $line): bool => $line['json'] || str_starts_with(ltrim($line['text']), '{'));
+        return new LoopFinding($match[2], (int) $match[3], Severity::from($match[1]));
     }
 }

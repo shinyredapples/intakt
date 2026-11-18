@@ -199,18 +199,6 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         self::assertMatchesRegularExpression('/\.ls-findings \.mono \{[^}]*flex: none; min-width: 4ch;[^}]*white-space: nowrap;/', $sheet);
     }
 
-    private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
-    {
-        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
-        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'act']);
-        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
-        $this->ledger->startReviewer('round-2', 'correctness');
-
-        $summaries = self::createStub(SessionSummaries::class);
-        $summaries->method('ofRound')->willReturnMap([['round-2', $summary]]);
-        self::getContainer()->set(SessionSummaries::class, $summaries);
-    }
-
     /**
      * @param list<Finding>|null $reported
      */
@@ -230,9 +218,16 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         );
     }
 
-    private function finding(string $id, Severity $severity, string $text): Finding
+    private function givenTheRunningRoundRecorded(?SessionSummary $summary): void
     {
-        return new Finding($id, $severity, 'src/PushGate.php', 12, null, $text, FixableBy::Builder, false, null, null);
+        $this->ledger->startRoundOf('feat/thing', 'round-1', 1);
+        $this->ledger->judgeFindings('round-1', ['F1' => 'act', 'F2' => 'act']);
+        $this->ledger->startRoundOf('feat/thing', 'round-2', 2);
+        $this->ledger->startReviewer('round-2', 'correctness');
+
+        $summaries = self::createStub(SessionSummaries::class);
+        $summaries->method('ofRound')->willReturnMap([['round-2', $summary]]);
+        self::getContainer()->set(SessionSummaries::class, $summaries);
     }
 
     /**
@@ -243,19 +238,24 @@ final class SessionSummaryPageTest extends DashboardPageTestCase
         return $list->filter('dt')->each(static fn (Crawler $term): array => [$term->text(), self::wordsOf($term->nextAll()->first())]);
     }
 
-    // A label's tooltip words are inside it, so they are left out to read the figure as a person sees it.
-    private static function wordsOf(Crawler $node): string
-    {
-        $tips = $node->filter('.figure-kind-tip')->each(static fn (Crawler $tip): string => $tip->text());
-
-        return str_replace($tips, '', $node->text());
-    }
-
     /**
      * @return list<string>
      */
     private function linesOf(Crawler $items): array
     {
         return $items->each(static fn (Crawler $item): string => trim(preg_replace('/\s+/', ' ', $item->text()) ?? ''));
+    }
+
+    private function finding(string $id, Severity $severity, string $text): Finding
+    {
+        return new Finding($id, $severity, 'src/PushGate.php', 12, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    // A label's tooltip words are inside it, so they are left out to read the figure as a person sees it.
+    private static function wordsOf(Crawler $node): string
+    {
+        $tips = $node->filter('.figure-kind-tip')->each(static fn (Crawler $tip): string => $tip->text());
+
+        return str_replace($tips, '', $node->text());
     }
 }

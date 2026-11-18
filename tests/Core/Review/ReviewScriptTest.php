@@ -571,18 +571,112 @@ final class ReviewScriptTest extends TestCase
         new Filesystem()->remove($this->folder);
     }
 
-    /**
-     * @param array<string, string> $files
-     */
-    private function commitFiles(array $files): string
+    private function givenTheCli(string $name, string $script): void
     {
-        foreach ($files as $path => $content) {
-            new Filesystem()->dumpFile($this->source.'/'.$path, $content);
-        }
-        $this->git($this->source, 'add', '--all');
-        $this->git($this->source, ...[...self::IDENTITY, 'commit', '--quiet', '-m', 'Start']);
+        file_put_contents($this->bin.'/'.$name, "#!/bin/sh\ntouch \"\$RECORD/ran\"\n".$script."\n");
+        chmod($this->bin.'/'.$name, 0o755);
+    }
 
-        return $this->git($this->source, 'rev-parse', 'HEAD');
+    /**
+     * @param array<string, string|false> $environment
+     */
+    private function whenTheReviewRuns(array $environment = []): Process
+    {
+        return $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5'], $environment);
+    }
+
+    private function outputFile(string $name): string
+    {
+        return is_file($this->output.'/'.$name) ? (string) file_get_contents($this->output.'/'.$name) : '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function recordedLines(string $name): array
+    {
+        return explode("\n", rtrim($this->recorded($name), "\n"));
+    }
+
+    private function recorded(string $name): string
+    {
+        return (string) file_get_contents($this->folder.'/'.$name);
+    }
+
+    private function whenTheReviewRunsWith(string $provider, string $model): Process
+    {
+        return $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, $provider, $model], []);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function disabledCodexFeatures(): array
+    {
+        /** @var array{disable: list<string>} $confinement */
+        $confinement = new ReflectionClassConstant(IsolatedCodexCli::class, 'CONFINEMENT')->getValue();
+
+        return $confinement['disable'];
+    }
+
+    /**
+     * @param list<string> $arguments
+     *
+     * @return list<string>
+     */
+    private function valuesOf(string $option, array $arguments): array
+    {
+        $values = [];
+        foreach ($arguments as $position => $argument) {
+            if ($option === $argument) {
+                $values[] = $arguments[$position + 1];
+            }
+        }
+
+        return $values;
+    }
+
+    private function whenTheReviewRunsOnAWritableCheckout(): Process
+    {
+        return $this->runTheScript([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5'], []);
+    }
+
+    private function assertRefused(Process $run, string $reason): void
+    {
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('review.log'));
+        self::assertStringContainsString('refused: '.$reason, $this->outputFile('review.log'));
+        self::assertFileDoesNotExist($this->folder.'/ran');
+        self::assertFileDoesNotExist($this->output.'/answer');
+    }
+
+    /**
+     * @param list<string>                $arguments
+     * @param array<string, string|false> $environment
+     */
+    private function runOnAReadOnlyCheckout(array $arguments, array $environment, ?string $writable = null): Process
+    {
+        $this->changeTheCheckoutsModes(static fn (int $mode): int => $mode & ~0o222);
+        if (null !== $writable) {
+            chmod($this->checkout.'/'.$writable, fileperms($this->checkout.'/'.$writable) | 0o200);
+        }
+
+        return $this->runTheScript($arguments, $environment);
+    }
+
+    private function whenTheReviewRunsAt(string $head): Process
+    {
+        return $this->runOnAReadOnlyCheckout([$this->checkout, $head, $this->prompt, 'claude_code', 'claude-opus-5-5'], []);
+    }
+
+    private function git(string $directory, string ...$arguments): string
+    {
+        $git = new Process(['git', ...$arguments], $directory, ['GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_NOSYSTEM' => '1']);
+        $git->run();
+        if (!$git->isSuccessful()) {
+            throw new RuntimeException($git->getErrorOutput());
+        }
+
+        return trim($git->getOutput());
     }
 
     private function givenAHeadWithAnIdKeyword(?string $attributes = null): void
@@ -608,53 +702,6 @@ final class ReviewScriptTest extends TestCase
         $this->git($this->folder, 'clone', '--quiet', $this->source, $this->checkout);
     }
 
-    // Because the image's git may be older than this machine's, which would refuse --attr-source as git before 2.40 does.
-    private function givenAGitReporting(string $version, bool $knowsTheAttributeSource): void
-    {
-        $git = new ExecutableFinder()->find('git') ?? throw new RuntimeException('git is not on the path.');
-        $refusal = $knowsTheAttributeSource ? '' : "for argument do case \"\$argument\" in --attr-source=*) echo \"unknown option: \$argument\" >&2; exit 129 ;; esac; done\n";
-        file_put_contents($this->bin.'/git', "#!/bin/sh\nif [ \"\$1\" = --version ]; then echo '".$version."'; exit 0; fi\n".$refusal.'exec '.$git." \"\$@\"\n");
-        chmod($this->bin.'/git', 0o755);
-    }
-
-    private function givenTheCli(string $name, string $script): void
-    {
-        file_put_contents($this->bin.'/'.$name, "#!/bin/sh\ntouch \"\$RECORD/ran\"\n".$script."\n");
-        chmod($this->bin.'/'.$name, 0o755);
-    }
-
-    /**
-     * @param array<string, string|false> $environment
-     */
-    private function whenTheReviewRuns(array $environment = []): Process
-    {
-        return $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5'], $environment);
-    }
-
-    private function whenTheReviewRunsWith(string $provider, string $model): Process
-    {
-        return $this->runOnAReadOnlyCheckout([$this->checkout, $this->head, $this->prompt, $provider, $model], []);
-    }
-
-    private function whenTheReviewRunsAt(string $head): Process
-    {
-        return $this->runOnAReadOnlyCheckout([$this->checkout, $head, $this->prompt, 'claude_code', 'claude-opus-5-5'], []);
-    }
-
-    /**
-     * @param list<string>                $arguments
-     * @param array<string, string|false> $environment
-     */
-    private function runOnAReadOnlyCheckout(array $arguments, array $environment, ?string $writable = null): Process
-    {
-        $this->changeTheCheckoutsModes(static fn (int $mode): int => $mode & ~0o222);
-        if (null !== $writable) {
-            chmod($this->checkout.'/'.$writable, fileperms($this->checkout.'/'.$writable) | 0o200);
-        }
-
-        return $this->runTheScript($arguments, $environment);
-    }
-
     // Only the write bits change, so the files keep the modes git compares.
     /**
      * @param Closure(int): int $change
@@ -668,11 +715,6 @@ final class ReviewScriptTest extends TestCase
         foreach ([$this->checkout, ...array_keys(iterator_to_array($entries))] as $path) {
             chmod($path, $change(fileperms($path) & 0o7777));
         }
-    }
-
-    private function whenTheReviewRunsOnAWritableCheckout(): Process
-    {
-        return $this->runTheScript([$this->checkout, $this->head, $this->prompt, 'claude_code', 'claude-opus-5-5'], []);
     }
 
     /**
@@ -690,6 +732,29 @@ final class ReviewScriptTest extends TestCase
         $run->run();
 
         return $run;
+    }
+
+    // Because the image's git may be older than this machine's, which would refuse --attr-source as git before 2.40 does.
+    private function givenAGitReporting(string $version, bool $knowsTheAttributeSource): void
+    {
+        $git = new ExecutableFinder()->find('git') ?? throw new RuntimeException('git is not on the path.');
+        $refusal = $knowsTheAttributeSource ? '' : "for argument do case \"\$argument\" in --attr-source=*) echo \"unknown option: \$argument\" >&2; exit 129 ;; esac; done\n";
+        file_put_contents($this->bin.'/git', "#!/bin/sh\nif [ \"\$1\" = --version ]; then echo '".$version."'; exit 0; fi\n".$refusal.'exec '.$git." \"\$@\"\n");
+        chmod($this->bin.'/git', 0o755);
+    }
+
+    /**
+     * @param array<string, string> $files
+     */
+    private function commitFiles(array $files): string
+    {
+        foreach ($files as $path => $content) {
+            new Filesystem()->dumpFile($this->source.'/'.$path, $content);
+        }
+        $this->git($this->source, 'add', '--all');
+        $this->git($this->source, ...[...self::IDENTITY, 'commit', '--quiet', '-m', 'Start']);
+
+        return $this->git($this->source, 'rev-parse', 'HEAD');
     }
 
     /**
@@ -722,70 +787,5 @@ final class ReviewScriptTest extends TestCase
         }
 
         return $environment;
-    }
-
-    private function assertRefused(Process $run, string $reason): void
-    {
-        self::assertSame(1, $run->getExitCode(), $this->outputFile('review.log'));
-        self::assertStringContainsString('refused: '.$reason, $this->outputFile('review.log'));
-        self::assertFileDoesNotExist($this->folder.'/ran');
-        self::assertFileDoesNotExist($this->output.'/answer');
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function disabledCodexFeatures(): array
-    {
-        /** @var array{disable: list<string>} $confinement */
-        $confinement = new ReflectionClassConstant(IsolatedCodexCli::class, 'CONFINEMENT')->getValue();
-
-        return $confinement['disable'];
-    }
-
-    /**
-     * @param list<string> $arguments
-     *
-     * @return list<string>
-     */
-    private function valuesOf(string $option, array $arguments): array
-    {
-        $values = [];
-        foreach ($arguments as $position => $argument) {
-            if ($option === $argument) {
-                $values[] = $arguments[$position + 1];
-            }
-        }
-
-        return $values;
-    }
-
-    private function git(string $directory, string ...$arguments): string
-    {
-        $git = new Process(['git', ...$arguments], $directory, ['GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_NOSYSTEM' => '1']);
-        $git->run();
-        if (!$git->isSuccessful()) {
-            throw new RuntimeException($git->getErrorOutput());
-        }
-
-        return trim($git->getOutput());
-    }
-
-    private function recorded(string $name): string
-    {
-        return (string) file_get_contents($this->folder.'/'.$name);
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function recordedLines(string $name): array
-    {
-        return explode("\n", rtrim($this->recorded($name), "\n"));
-    }
-
-    private function outputFile(string $name): string
-    {
-        return is_file($this->output.'/'.$name) ? (string) file_get_contents($this->output.'/'.$name) : '';
     }
 }

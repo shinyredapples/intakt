@@ -339,27 +339,25 @@ final class ReviewChangeCommandTest extends TestCase
         }
     }
 
-    /**
-     * @param Closure(string): void $look
-     */
-    private function reviewingTheSnapshot(Closure $look): ChangeReviews
-    {
-        $reviews = self::createStub(ChangeReviews::class);
-        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($look): ChangeReview {
-            $look($request->checkoutRoot);
-
-            return $this->outcome(Decision::Approve);
-        });
-
-        return $reviews;
-    }
-
     private function reviewing(Decision $decision): ChangeReviews
     {
         $reviews = self::createStub(ChangeReviews::class);
         $reviews->method('review')->willReturn($this->outcome($decision));
 
         return $reviews;
+    }
+
+    /**
+     * @param array<string, string> $input
+     */
+    private function whenTheCommandRuns(ChangeReviews $reviews, array $input = [], ?Panels $panels = null): CommandTester
+    {
+        return $this->whenTheCommandIsRun(new ReviewChangeCommand(new LocalChangeReview($panels ?? $this->onePanel(), $reviews), $this->report()), $input);
+    }
+
+    private function report(): ReviewReport
+    {
+        return new ReviewReport(StoredSerializerFactory::create());
     }
 
     private function outcome(Decision $decision): ChangeReview
@@ -373,12 +371,13 @@ final class ReviewChangeCommandTest extends TestCase
         return new ChangeReview('0192a000-0000-7000-8000-000000000000', 1, $decision, $verdicts, [$finding], RoundTokens::of(2, new TokenFigures(100, 0, 0, 0, 20)), Cost::inUsd(0.00014), Decision::Blocked === $decision ? ['correctness: provider refused the key'] : []);
     }
 
-    /**
-     * @param array<string, string> $input
-     */
-    private function whenTheCommandRuns(ChangeReviews $reviews, array $input = [], ?Panels $panels = null): CommandTester
+    private function onePanel(): Panels
     {
-        return $this->whenTheCommandIsRun(new ReviewChangeCommand(new LocalChangeReview($panels ?? $this->onePanel(), $reviews), $this->report()), $input);
+        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+
+        return $panels;
     }
 
     /**
@@ -394,17 +393,18 @@ final class ReviewChangeCommandTest extends TestCase
         return $tester;
     }
 
-    private function report(): ReviewReport
+    /**
+     * @param Closure(string): void $look
+     */
+    private function reviewingTheSnapshot(Closure $look): ChangeReviews
     {
-        return new ReviewReport(StoredSerializerFactory::create());
-    }
+        $reviews = self::createStub(ChangeReviews::class);
+        $reviews->method('review')->willReturnCallback(function (ChangeReviewRequest $request) use ($look): ChangeReview {
+            $look($request->checkoutRoot);
 
-    private function onePanel(): Panels
-    {
-        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+            return $this->outcome(Decision::Approve);
+        });
 
-        return $panels;
+        return $reviews;
     }
 }

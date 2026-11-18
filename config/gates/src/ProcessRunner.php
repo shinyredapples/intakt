@@ -171,6 +171,123 @@ final class ProcessRunner
         return $this->endedWith($child, $failure);
     }
 
+    private function namespacesAreAvailable(): bool
+    {
+        $probe = new Process([$this->unshare, ...self::NAMESPACE_OPTIONS, 'true'], null, null, null, self::PROBE_TIMEOUT_SECONDS);
+
+        try {
+            return 0 === $probe->run();
+        } catch (ExceptionInterface) {
+            return false;
+        }
+    }
+
+    private function runCall(GitCall $call): ProcessResult
+    {
+        return $this->run($call->command, $call->directory, $call->environment);
+    }
+
+    private function refusal(string $program, int $seconds): ?ProcessResult
+    {
+        if (!function_exists('posix_kill')) {
+            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': the PHP posix extension is missing');
+        }
+
+        return $seconds < 1 ? $this->timedOut($program, $seconds) : null;
+    }
+
+    /**
+     * @param list<string> $command
+     *
+     * @return list<string>
+     */
+    private function contained(array $command): array
+    {
+        if (self::PID_NAMESPACE === $this->containment()) {
+            return $this->held([$this->unshare, ...self::NAMESPACE_OPTIONS, ...$command]);
+        }
+
+        return $this->held($command);
+    }
+
+    private function startHeld(Process $process, InputStream $release): ?ProcessGroup
+    {
+        $leader = [] === $this->startAll([$process]) ? $process->getPid() : null;
+        $release->write("\n");
+        $release->close();
+
+        if (null === $leader) {
+            $process->stop(0);
+
+            return null;
+        }
+
+        return new ProcessGroup($leader);
+    }
+
+    private function resultOf(Process $process, ?int $failure, string $program): ProcessResult
+    {
+        if (self::TIMED_OUT === $failure) {
+            return $this->timedOut($program, (int) $process->getTimeout());
+        }
+
+        $exitCode = null === $failure ? $process->getExitCode() : null;
+
+        if (null === $exitCode) {
+            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program);
+        }
+
+        return new ProcessResult($exitCode, $process->getOutput(), $process->getErrorOutput());
+    }
+
+    /**
+     * @param array<array-key, Process> $processes
+     *
+     * @return array<array-key, int>
+     */
+    private function waitForAll(array $processes): array
+    {
+        $failures = [];
+
+        while ([] !== $processes) {
+            $finished = $this->pollAll($processes);
+            $processes = array_diff_key($processes, $finished);
+            $failures += array_filter($finished, static fn (?int $failure): bool => null !== $failure);
+
+            usleep(self::POLL_MICROSECONDS);
+        }
+
+        return $failures;
+    }
+
+    private function timedOut(string $program, int $seconds): ProcessResult
+    {
+        return new ProcessResult(self::TIMED_OUT, '', $program.' timed out after '.$seconds.' seconds');
+    }
+
+    /**
+     * @param array<array-key, Process> $processes
+     *
+     * @return array<array-key, int>
+     */
+    private function failuresOf(array $processes): array
+    {
+        $failures = $this->startAll($processes);
+
+        return $failures + $this->waitForAll(array_diff_key($processes, $failures));
+    }
+
+    // Because in a PID and user namespace git saw other owners and a gate child became PID 1, a gate child gets only a session.
+    /**
+     * @param list<string> $command
+     *
+     * @return list<string>
+     */
+    private function held(array $command): array
+    {
+        return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
+    }
+
     private function startedHeld(Process $process, string $program, int $seconds): RunningChild|ProcessResult
     {
         $refusal = $this->refusal($program, $seconds);
@@ -204,17 +321,25 @@ final class ProcessRunner
         return $result;
     }
 
-    private function waitedFor(RunningChild $child): ProcessResult
+    private function poll(Process $process): ?int
     {
-        while (true) {
-            $result = $this->endOf($child);
+        try {
+            $process->checkTimeout();
 
-            if ($result instanceof ProcessResult) {
-                return $result;
+            if ($process->isRunning()) {
+                return self::STILL_RUNNING;
             }
 
-            usleep(self::POLL_MICROSECONDS);
+            $process->wait();
+        } catch (ProcessTimedOutException) {
+            return self::TIMED_OUT;
+        } catch (ExceptionInterface) {
+            $process->stop(0);
+
+            return self::CANNOT_RUN;
         }
+
+        return null;
     }
 
     private function endedWith(RunningChild $child, ?int $failure): ProcessResult
@@ -232,92 +357,6 @@ final class ProcessRunner
         }
 
         return $this->resultOf($process, $failure, $child->program);
-    }
-
-    // Because a gate child that crashes on a signal must still fail its gate with what it printed before the signal.
-    private function signaled(Process $process, string $program): ProcessResult
-    {
-        $signal = $process->getTermSignal();
-        $ended = $program.' was killed by signal '.$signal;
-
-        return new ProcessResult($process->getExitCode() ?? 128 + $signal, $process->getOutput(), trim($process->getErrorOutput()."\n".$ended));
-    }
-
-    private function runCall(GitCall $call): ProcessResult
-    {
-        return $this->run($call->command, $call->directory, $call->environment);
-    }
-
-    /**
-     * @param array<array-key, Process> $processes
-     *
-     * @return array<array-key, int>
-     */
-    private function failuresOf(array $processes): array
-    {
-        $failures = $this->startAll($processes);
-
-        return $failures + $this->waitForAll(array_diff_key($processes, $failures));
-    }
-
-    /**
-     * @param list<string> $command
-     *
-     * @return list<string>
-     */
-    private function contained(array $command): array
-    {
-        if (self::PID_NAMESPACE === $this->containment()) {
-            return $this->held([$this->unshare, ...self::NAMESPACE_OPTIONS, ...$command]);
-        }
-
-        return $this->held($command);
-    }
-
-    // Because in a PID and user namespace git saw other owners and a gate child became PID 1, a gate child gets only a session.
-    /**
-     * @param list<string> $command
-     *
-     * @return list<string>
-     */
-    private function held(array $command): array
-    {
-        return ['setsid', 'sh', '-c', self::HOLD_UNTIL_RELEASED, 'sh', ...$command];
-    }
-
-    private function refusal(string $program, int $seconds): ?ProcessResult
-    {
-        if (!function_exists('posix_kill')) {
-            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program.': the PHP posix extension is missing');
-        }
-
-        return $seconds < 1 ? $this->timedOut($program, $seconds) : null;
-    }
-
-    private function startHeld(Process $process, InputStream $release): ?ProcessGroup
-    {
-        $leader = [] === $this->startAll([$process]) ? $process->getPid() : null;
-        $release->write("\n");
-        $release->close();
-
-        if (null === $leader) {
-            $process->stop(0);
-
-            return null;
-        }
-
-        return new ProcessGroup($leader);
-    }
-
-    private function namespacesAreAvailable(): bool
-    {
-        $probe = new Process([$this->unshare, ...self::NAMESPACE_OPTIONS, 'true'], null, null, null, self::PROBE_TIMEOUT_SECONDS);
-
-        try {
-            return 0 === $probe->run();
-        } catch (ExceptionInterface) {
-            return false;
-        }
     }
 
     /**
@@ -343,26 +382,6 @@ final class ProcessRunner
     /**
      * @param array<array-key, Process> $processes
      *
-     * @return array<array-key, int>
-     */
-    private function waitForAll(array $processes): array
-    {
-        $failures = [];
-
-        while ([] !== $processes) {
-            $finished = $this->pollAll($processes);
-            $processes = array_diff_key($processes, $finished);
-            $failures += array_filter($finished, static fn (?int $failure): bool => null !== $failure);
-
-            usleep(self::POLL_MICROSECONDS);
-        }
-
-        return $failures;
-    }
-
-    /**
-     * @param array<array-key, Process> $processes
-     *
      * @return array<array-key, int|null>
      */
     private function pollAll(array $processes): array
@@ -380,44 +399,25 @@ final class ProcessRunner
         return $finished;
     }
 
-    private function poll(Process $process): ?int
+    private function waitedFor(RunningChild $child): ProcessResult
     {
-        try {
-            $process->checkTimeout();
+        while (true) {
+            $result = $this->endOf($child);
 
-            if ($process->isRunning()) {
-                return self::STILL_RUNNING;
+            if ($result instanceof ProcessResult) {
+                return $result;
             }
 
-            $process->wait();
-        } catch (ProcessTimedOutException) {
-            return self::TIMED_OUT;
-        } catch (ExceptionInterface) {
-            $process->stop(0);
-
-            return self::CANNOT_RUN;
+            usleep(self::POLL_MICROSECONDS);
         }
-
-        return null;
     }
 
-    private function resultOf(Process $process, ?int $failure, string $program): ProcessResult
+    // Because a gate child that crashes on a signal must still fail its gate with what it printed before the signal.
+    private function signaled(Process $process, string $program): ProcessResult
     {
-        if (self::TIMED_OUT === $failure) {
-            return $this->timedOut($program, (int) $process->getTimeout());
-        }
+        $signal = $process->getTermSignal();
+        $ended = $program.' was killed by signal '.$signal;
 
-        $exitCode = null === $failure ? $process->getExitCode() : null;
-
-        if (null === $exitCode) {
-            return new ProcessResult(self::CANNOT_RUN, '', 'cannot run '.$program);
-        }
-
-        return new ProcessResult($exitCode, $process->getOutput(), $process->getErrorOutput());
-    }
-
-    private function timedOut(string $program, int $seconds): ProcessResult
-    {
-        return new ProcessResult(self::TIMED_OUT, '', $program.' timed out after '.$seconds.' seconds');
+        return new ProcessResult($process->getExitCode() ?? 128 + $signal, $process->getOutput(), trim($process->getErrorOutput()."\n".$ended));
     }
 }

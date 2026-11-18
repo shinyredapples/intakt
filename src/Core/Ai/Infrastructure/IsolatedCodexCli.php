@@ -58,6 +58,18 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
     }
 
     /**
+     * @return array<string, string>
+     */
+    private function environment(string $home, ?ReviewServerAccess $access): array
+    {
+        // Process hands a child every inherited variable unless each is overridden by name, so Intakt's keys and secrets are emptied; the bridge accepts strings only.
+        $inherited = array_fill_keys(array_map(strval(...), array_keys([...getenv(), ...$_ENV])), '');
+        $bearer = $access instanceof ReviewServerAccess ? [self::BEARER => $access->bearer] : [];
+
+        return [...$inherited, 'PATH' => (string) getenv('PATH'), 'HOME' => $home, 'CODEX_HOME' => $home, ...$bearer];
+    }
+
+    /**
      * @param array<string|int, mixed>|string $payload
      *
      * @return array<string, mixed>|string
@@ -105,17 +117,5 @@ final readonly class IsolatedCodexCli implements ModelClientInterface
     private function toml(string|array $value): string
     {
         return json_encode($value, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function environment(string $home, ?ReviewServerAccess $access): array
-    {
-        // Process hands a child every inherited variable unless each is overridden by name, so Intakt's keys and secrets are emptied; the bridge accepts strings only.
-        $inherited = array_fill_keys(array_map(strval(...), array_keys([...getenv(), ...$_ENV])), '');
-        $bearer = $access instanceof ReviewServerAccess ? [self::BEARER => $access->bearer] : [];
-
-        return [...$inherited, 'PATH' => (string) getenv('PATH'), 'HOME' => $home, 'CODEX_HOME' => $home, ...$bearer];
     }
 }

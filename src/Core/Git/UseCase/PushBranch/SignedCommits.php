@@ -57,6 +57,11 @@ final readonly class SignedCommits
         }
     }
 
+    private function signatureHeader(string $repository): string
+    {
+        return 'sha256' === $this->git->lines($repository, ['rev-parse', '--show-object-format']) ? 'gpgsig-sha256' : 'gpgsig';
+    }
+
     /**
      * @param list<string> $excluded
      *
@@ -67,10 +72,5 @@ final readonly class SignedCommits
         $listed = $this->git->lines($repository, ['rev-list', '--reverse', '--topo-order', $head, '--not', ...$excluded]);
 
         return '' === $listed ? [] : explode("\n", $listed);
-    }
-
-    private function signatureHeader(string $repository): string
-    {
-        return 'sha256' === $this->git->lines($repository, ['rev-parse', '--show-object-format']) ? 'gpgsig-sha256' : 'gpgsig';
     }
 }

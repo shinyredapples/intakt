@@ -157,13 +157,6 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
         return VerdictDocument::fromTheDesign()->with('resolved', [])->json();
     }
 
-    private function deliverAll(SymfonyAiVendor $vendor): void
-    {
-        foreach ($this->fixture->bus->messages as $message) {
-            $this->fixture->deliver($message, $vendor);
-        }
-    }
-
     /**
      * @param list<string|MaxOutputTokensException> $answers
      */
@@ -177,15 +170,11 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
         });
     }
 
-    private function vendor(Closure $answer): SymfonyAiVendor
+    private function deliverAll(SymfonyAiVendor $vendor): void
     {
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::MAX_OUTPUT]]]], []);
-        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $tiers = new TierPlatform($resolver, new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
-        $this->conversations = new ConversationsSeen(new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create()))))));
-        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 2);
-
-        return new SymfonyAiVendor($tiers, $resolver, $this->conversations, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, self::createStub(ReviewServerAccesses::class));
+        foreach ($this->fixture->bus->messages as $message) {
+            $this->fixture->deliver($message, $vendor);
+        }
     }
 
     /**
@@ -220,5 +209,16 @@ final class ChangesWithoutFindingsRetryTest extends KernelTestCase
         }
 
         return $failures;
+    }
+
+    private function vendor(Closure $answer): SymfonyAiVendor
+    {
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['standard' => ['provider' => 'anthropic', 'model' => 'big', 'max_output' => self::MAX_OUTPUT]]]], []);
+        $platform = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $tiers = new TierPlatform($resolver, new ServiceLocator(['anthropic' => static fn (): PlatformInterface => $platform]), new NoCooldowns(), new NullLogger());
+        $this->conversations = new ConversationsSeen(new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress(new RecordedRoundUpdates()), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create()))))));
+        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 2);
+
+        return new SymfonyAiVendor($tiers, $resolver, $this->conversations, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->fixture->ledger(), $this->fixture->clock, new NullLogger(), StoredSerializerFactory::create()), $limit, $this->fixture->clock, self::createStub(ReviewServerAccesses::class));
     }
 }

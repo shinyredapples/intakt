@@ -80,6 +80,21 @@ final readonly class BinaryFiles
     }
 
     /**
+     * @param Closure(string): string $blob
+     */
+    private function binaryNamed(string $file, Closure $blob): ?string
+    {
+        $header = $this->blobHeader($file);
+
+        return null === $header ? null : $this->namedWhen($header, $blob, static fn (string $bytes): bool => true);
+    }
+
+    private function textShown(string $file): string
+    {
+        return null === $this->blobHeader($file) ? $this->withoutBlobs($file) : $this->escaped($file);
+    }
+
+    /**
      * @param Closure(string): string $shown
      */
     private function eachFile(string $patch, Closure $shown): string
@@ -96,16 +111,6 @@ final readonly class BinaryFiles
     /**
      * @param Closure(string): string $blob
      */
-    private function binaryNamed(string $file, Closure $blob): ?string
-    {
-        $header = $this->blobHeader($file);
-
-        return null === $header ? null : $this->namedWhen($header, $blob, static fn (string $bytes): bool => true);
-    }
-
-    /**
-     * @param Closure(string): string $blob
-     */
     private function imageNamed(string $file, Closure $blob): ?string
     {
         $header = $this->blobHeader($file);
@@ -116,11 +121,12 @@ final readonly class BinaryFiles
             : $this->namedWhen($header, $blob, static fn (string $bytes): bool => str_starts_with($bytes, $signature));
     }
 
-    private function isPlainFile(string $header): bool
+    /**
+     * @return ?array{0: string, 1: string, 2: string}
+     */
+    private function blobHeader(string $file): ?array
     {
-        preg_match_all(self::MODE, $header, $modes);
-
-        return [] !== $modes[1] && array_all($modes[1], static fn (string $mode): bool => self::NOT_RUNNABLE_MODE === $mode);
+        return 1 === preg_match(self::HEADER, $file, $header) && 1 !== preg_match(self::SUBMODULE, $file) ? $header : null;
     }
 
     /**
@@ -139,19 +145,6 @@ final readonly class BinaryFiles
             : null;
     }
 
-    /**
-     * @return ?array{0: string, 1: string, 2: string}
-     */
-    private function blobHeader(string $file): ?array
-    {
-        return 1 === preg_match(self::HEADER, $file, $header) && 1 !== preg_match(self::SUBMODULE, $file) ? $header : null;
-    }
-
-    private function textShown(string $file): string
-    {
-        return null === $this->blobHeader($file) ? $this->withoutBlobs($file) : $this->escaped($file);
-    }
-
     private function withoutBlobs(string $file): string
     {
         if (str_contains($file, "\0") || !mb_check_encoding($file, 'UTF-8')) {
@@ -159,6 +152,13 @@ final readonly class BinaryFiles
         }
 
         return $file;
+    }
+
+    private function isPlainFile(string $header): bool
+    {
+        preg_match_all(self::MODE, $header, $modes);
+
+        return [] !== $modes[1] && array_all($modes[1], static fn (string $mode): bool => self::NOT_RUNNABLE_MODE === $mode);
     }
 
     /**

@@ -260,15 +260,26 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         };
     }
 
-    private function cutMidAnswer(Throwable $cut): Generator
+    /**
+     * @param ?Closure(PlatformInterface): PlatformInterface $accounts
+     */
+    private function vendor(Closure $answer, ?Closure $accounts = null, AccountCooldowns $cooldowns = new NoCooldowns()): SymfonyAiVendor
     {
-        yield new TokenUsage(
-            promptTokens: 100,
-            model: 'big',
-        );
-        yield new TextDelta('{"verdict":"approve",');
+        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
+        $mock = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
+        $platform = $accounts instanceof Closure ? $accounts($mock) : $mock;
+        $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), $cooldowns, new NullLogger());
+        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress($this->updates), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
+        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
 
-        throw $cut;
+        return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+    }
+
+    private function request(?ReviewerConversation $conversation = null): ReviewRequest
+    {
+        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), $conversation ?? new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function cutAgain(): never
@@ -287,25 +298,14 @@ final class CutStreamRetryVendorTest extends KernelTestCase
         return null;
     }
 
-    private function request(?ReviewerConversation $conversation = null): ReviewRequest
+    private function cutMidAnswer(Throwable $cut): Generator
     {
-        $open = new Finding('F1', Severity::P2, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null);
+        yield new TokenUsage(
+            promptTokens: 100,
+            model: 'big',
+        );
+        yield new TextDelta('{"verdict":"approve",');
 
-        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$open]), $conversation ?? new ReviewerConversation('You review for correctness.', new UuidV7()));
-    }
-
-    /**
-     * @param ?Closure(PlatformInterface): PlatformInterface $accounts
-     */
-    private function vendor(Closure $answer, ?Closure $accounts = null, AccountCooldowns $cooldowns = new NoCooldowns()): SymfonyAiVendor
-    {
-        $resolver = new ConfiguredTierResolver(['alpha' => ['tiers' => ['strong' => ['provider' => 'anthropic', 'model' => 'big']]]], []);
-        $mock = MockPlatformFactory::createPlatform($answer, eventDispatcher: ScriptedReviewer::in(self::getContainer())->dispatcher);
-        $platform = $accounts instanceof Closure ? $accounts($mock) : $mock;
-        $tiers = new TierPlatform($resolver, new ServiceLocator([Provider::Anthropic->value => static fn (): PlatformInterface => $platform]), $cooldowns, new NullLogger());
-        $reviewer = new ReviewerAgent(RemembersNothing::prompt(), new ReviewerToolboxFactory()->create(...), new ReviewerRuns(new InMemoryMessageStore(), new StreamingFallbacks(new InMemoryLedger(), new NullLogger()), new LiveProgress($this->updates), new ReviewerStopping(new StopRequests(new InMemoryLedger(), new LedgerPayloads(StoredSerializerFactory::create())))));
-        $limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-
-        return new SymfonyAiVendor($tiers, $resolver, $reviewer, new JudgeAgent(new JudgePrompt(new Fence())), new UsageLedger($this->ledger, new MockClock(self::NOW), new NullLogger(), StoredSerializerFactory::create()), $limit, new MockClock(self::NOW), self::createStub(ReviewServerAccesses::class));
+        throw $cut;
     }
 }

@@ -219,60 +219,6 @@ final class EntrypointProcessesTest extends TestCase
         $this->entrypoint->start();
     }
 
-    // Stand-ins that loop over sleep without exec, so /proc keeps their arguments; a bash script dies on SIGTERM and stops on SIGSTOP like the real programs, and the real start is proved by the image smoke test and CaddyfileWorkersTest.
-    private function standInPrograms(): string
-    {
-        $programs = $this->directory.'/stubs';
-        $filesystem = new Filesystem();
-        $loop = "while :; do sleep 1; done\n";
-
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\n".$loop);
-        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) exit 0;; esac\n".$loop);
-        // The entrypoint's one second poll runs a tenth as long, so a restart takes tenths of a second; the 0.1 second steps of its stop and every other sleep keep their length, so the grace period stays 8 seconds.
-        $filesystem->dumpFile($programs.'/sleep', "#!/bin/bash\n[[ \"\$*\" == 1 ]] && set -- 0.1\nexec \"\$(PATH=\${PATH#*:} command -v sleep)\" \"\$@\"\n");
-        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp', $programs.'/sleep'], 0755);
-
-        return $programs;
-    }
-
-    // Stand-ins that note every start, so a web server or consumer started after the rejection shows in the output.
-    private function stubProgramsWithARejectedCaddyfile(): string
-    {
-        $programs = $this->directory.'/rejecting-stubs';
-        $filesystem = new Filesystem();
-        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\necho \"started: php \$*\" >&2\nexec sleep 300\n");
-        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) echo '".self::CADDYFILE_REJECTED."' >&2; exit 1;; esac\necho \"started: frankenphp \$*\" >&2\nexec sleep 300\n");
-        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
-
-        return $programs;
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function childrenStartedBeforeTheStop(): array
-    {
-        $noted = @file_get_contents($this->childrenStartedBeforeTheStopFile());
-
-        return is_string($noted) ? array_values(array_map(intval(...), array_filter(explode("\n", $noted), static fn (string $line): bool => '' !== $line))) : [];
-    }
-
-    private function childrenStartedBeforeTheStopFile(): string
-    {
-        return $this->directory.'/children-started-before-the-stop';
-    }
-
-    private function waitForTheEntrypointToEnd(int $seconds): void
-    {
-        $deadline = hrtime(true) + $seconds * 1_000_000_000;
-
-        while (hrtime(true) < $deadline && $this->entrypoint->isRunning()) {
-            usleep(50_000);
-        }
-
-        self::assertFalse($this->entrypoint->isRunning(), sprintf('The entrypoint still runs %d seconds after SIGTERM, with %d children left.', $seconds, count(array_filter($this->childrenStartedBeforeTheStop(), static fn (int $pid): bool => file_exists('/proc/'.$pid)))));
-    }
-
     /**
      * @param array<string, int> $expected
      * @param list<int>          $gone
@@ -297,46 +243,6 @@ final class EntrypointProcessesTest extends TestCase
         }
 
         self::fail('The entrypoint did not start every process: '.$this->entrypoint->getOutput().$this->entrypoint->getErrorOutput());
-    }
-
-    private function waitForErrorOutput(string $line, int $times): void
-    {
-        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
-
-        while (hrtime(true) < $deadline && substr_count($this->entrypoint->getErrorOutput(), $line) < $times) {
-            usleep(10_000);
-        }
-
-        self::assertGreaterThanOrEqual($times, substr_count($this->entrypoint->getErrorOutput(), $line), $this->entrypoint->getErrorOutput());
-    }
-
-    /**
-     * @param list<int> $pids
-     *
-     * @return list<int>
-     */
-    private function inEntrypointOrder(array $pids, int $web): array
-    {
-        sort($pids);
-        // Bash orders the keys of an associative array the same way for the same keys inserted in the same order, so this is the order the entrypoint checks its children in.
-        $order = new Process(['bash', '-c', 'declare -A running=(); for pid in "$@"; do running[$pid]=x; done; printf "%s\n" "${!running[@]}"', 'bash', ...array_map(strval(...), $pids)]);
-        $order->mustRun();
-
-        return array_values(array_diff(array_map(intval(...), explode("\n", trim($order->getOutput()))), [$web]));
-    }
-
-    /**
-     * @param list<string> $arguments
-     */
-    private function roleOf(array $arguments): string
-    {
-        if ('frankenphp' === basename($arguments[0])) {
-            return 'web';
-        }
-
-        $consume = array_search('messenger:consume', $arguments, true);
-
-        return false === $consume ? 'other' : ($arguments[$consume + 1] ?? 'other');
     }
 
     /**
@@ -364,6 +270,100 @@ final class EntrypointProcessesTest extends TestCase
         }
 
         return $arguments;
+    }
+
+    /**
+     * @param list<int> $pids
+     *
+     * @return list<int>
+     */
+    private function inEntrypointOrder(array $pids, int $web): array
+    {
+        sort($pids);
+        // Bash orders the keys of an associative array the same way for the same keys inserted in the same order, so this is the order the entrypoint checks its children in.
+        $order = new Process(['bash', '-c', 'declare -A running=(); for pid in "$@"; do running[$pid]=x; done; printf "%s\n" "${!running[@]}"', 'bash', ...array_map(strval(...), $pids)]);
+        $order->mustRun();
+
+        return array_values(array_diff(array_map(intval(...), explode("\n", trim($order->getOutput()))), [$web]));
+    }
+
+    private function waitForErrorOutput(string $line, int $times): void
+    {
+        $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && substr_count($this->entrypoint->getErrorOutput(), $line) < $times) {
+            usleep(10_000);
+        }
+
+        self::assertGreaterThanOrEqual($times, substr_count($this->entrypoint->getErrorOutput(), $line), $this->entrypoint->getErrorOutput());
+    }
+
+    private function childrenStartedBeforeTheStopFile(): string
+    {
+        return $this->directory.'/children-started-before-the-stop';
+    }
+
+    private function waitForTheEntrypointToEnd(int $seconds): void
+    {
+        $deadline = hrtime(true) + $seconds * 1_000_000_000;
+
+        while (hrtime(true) < $deadline && $this->entrypoint->isRunning()) {
+            usleep(50_000);
+        }
+
+        self::assertFalse($this->entrypoint->isRunning(), sprintf('The entrypoint still runs %d seconds after SIGTERM, with %d children left.', $seconds, count(array_filter($this->childrenStartedBeforeTheStop(), static fn (int $pid): bool => file_exists('/proc/'.$pid)))));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function childrenStartedBeforeTheStop(): array
+    {
+        $noted = @file_get_contents($this->childrenStartedBeforeTheStopFile());
+
+        return is_string($noted) ? array_values(array_map(intval(...), array_filter(explode("\n", $noted), static fn (string $line): bool => '' !== $line))) : [];
+    }
+
+    // Stand-ins that note every start, so a web server or consumer started after the rejection shows in the output.
+    private function stubProgramsWithARejectedCaddyfile(): string
+    {
+        $programs = $this->directory.'/rejecting-stubs';
+        $filesystem = new Filesystem();
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\necho \"started: php \$*\" >&2\nexec sleep 300\n");
+        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) echo '".self::CADDYFILE_REJECTED."' >&2; exit 1;; esac\necho \"started: frankenphp \$*\" >&2\nexec sleep 300\n");
+        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp'], 0755);
+
+        return $programs;
+    }
+
+    // Stand-ins that loop over sleep without exec, so /proc keeps their arguments; a bash script dies on SIGTERM and stops on SIGSTOP like the real programs, and the real start is proved by the image smoke test and CaddyfileWorkersTest.
+    private function standInPrograms(): string
+    {
+        $programs = $this->directory.'/stubs';
+        $filesystem = new Filesystem();
+        $loop = "while :; do sleep 1; done\n";
+
+        $filesystem->dumpFile($programs.'/php', "#!/bin/bash\ncase \"\$*\" in *migrate*) exit 0;; esac\n".$loop);
+        $filesystem->dumpFile($programs.'/frankenphp', "#!/bin/bash\ncase \"\$*\" in *validate*) exit 0;; esac\n".$loop);
+        // The entrypoint's one second poll runs a tenth as long, so a restart takes tenths of a second; the 0.1 second steps of its stop and every other sleep keep their length, so the grace period stays 8 seconds.
+        $filesystem->dumpFile($programs.'/sleep', "#!/bin/bash\n[[ \"\$*\" == 1 ]] && set -- 0.1\nexec \"\$(PATH=\${PATH#*:} command -v sleep)\" \"\$@\"\n");
+        $filesystem->chmod([$programs.'/php', $programs.'/frankenphp', $programs.'/sleep'], 0755);
+
+        return $programs;
+    }
+
+    /**
+     * @param list<string> $arguments
+     */
+    private function roleOf(array $arguments): string
+    {
+        if ('frankenphp' === basename($arguments[0])) {
+            return 'web';
+        }
+
+        $consume = array_search('messenger:consume', $arguments, true);
+
+        return false === $consume ? 'other' : ($arguments[$consume + 1] ?? 'other');
     }
 
     /**

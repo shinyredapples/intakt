@@ -101,6 +101,19 @@ final class AiServiceState
     }
 
     /**
+     * @param array<string> $names
+     *
+     * @return list<string>
+     */
+    private function sorted(array $names): array
+    {
+        $names = array_values(array_unique($names));
+        sort($names);
+
+        return $names;
+    }
+
+    /**
      * @return list<string>
      */
     private static function serviceIds(KernelInterface $kernel): array
@@ -151,6 +164,14 @@ final class AiServiceState
         }
     }
 
+    /**
+     * @return list<ReflectionProperty>
+     */
+    private function properties(object $object): array
+    {
+        return array_values(array_filter(new ReflectionObject($object)->getProperties(), static fn (ReflectionProperty $property): bool => !$property->isStatic()));
+    }
+
     private function record(object $object, ReflectionProperty $property, Trail $trail): void
     {
         $at = $trail->key();
@@ -165,27 +186,6 @@ final class AiServiceState
             $this->values[$at][$name] = self::fingerprint($property->getValue($object), 0);
             $this->visit($property->getValue($object), $trail->into($name));
         }
-    }
-
-    /**
-     * @return list<ReflectionProperty>
-     */
-    private function properties(object $object): array
-    {
-        return array_values(array_filter(new ReflectionObject($object)->getProperties(), static fn (ReflectionProperty $property): bool => !$property->isStatic()));
-    }
-
-    /**
-     * @param array<string> $names
-     *
-     * @return list<string>
-     */
-    private function sorted(array $names): array
-    {
-        $names = array_values(array_unique($names));
-        sort($names);
-
-        return $names;
     }
 
     // By content to a few levels, not by identity, because a reset that puts a fresh, empty object in place of the used one has left nothing behind.

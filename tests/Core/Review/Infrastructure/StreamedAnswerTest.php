@@ -173,28 +173,19 @@ final class StreamedAnswerTest extends TestCase
     }
 
     /**
-     * @param list<DeltaInterface> $deltas
+     * @return array<string, mixed>
      */
-    private function brokenAfter(array $deltas, Throwable $outage): StreamResult
+    private function textBlock(): array
     {
-        $broken = static function () use ($deltas, $outage): Generator {
-            yield from $deltas;
-
-            throw $outage;
-        };
-
-        return new StreamResult(new StreamedAnswer(new AnthropicTextBlocks(new InMemoryRawResult()), new StreamTally())->of(new StreamResult($broken())));
+        return ['type' => 'content_block_start', 'content_block' => ['type' => 'text', 'text' => '']];
     }
 
-    private function thrownBy(StreamResult $stream): ?Throwable
+    /**
+     * @return array<string, mixed>
+     */
+    private function text(string $text): array
     {
-        try {
-            iterator_to_array($stream->getContent(), false);
-        } catch (Throwable $thrown) {
-            return $thrown;
-        }
-
-        return null;
+        return ['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => $text]];
     }
 
     /**
@@ -222,6 +213,39 @@ final class StreamedAnswerTest extends TestCase
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function toolUse(): array
+    {
+        return ['type' => 'content_block_start', 'content_block' => ['type' => 'tool_use', 'id' => 'toolu_01', 'name' => 'read_file', 'input' => []]];
+    }
+
+    /**
+     * @param list<DeltaInterface> $deltas
+     */
+    private function brokenAfter(array $deltas, Throwable $outage): StreamResult
+    {
+        $broken = static function () use ($deltas, $outage): Generator {
+            yield from $deltas;
+
+            throw $outage;
+        };
+
+        return new StreamResult(new StreamedAnswer(new AnthropicTextBlocks(new InMemoryRawResult()), new StreamTally())->of(new StreamResult($broken())));
+    }
+
+    private function thrownBy(StreamResult $stream): ?Throwable
+    {
+        try {
+            iterator_to_array($stream->getContent(), false);
+        } catch (Throwable $thrown) {
+            return $thrown;
+        }
+
+        return null;
+    }
+
+    /**
      * @return Generator<DeltaInterface>
      */
     private function deltasOf(AnthropicTextBlocks $blocks): Generator
@@ -238,29 +262,5 @@ final class StreamedAnswerTest extends TestCase
                 yield new ToolCallStart('toolu_01', 'read_file');
             }
         }
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function textBlock(): array
-    {
-        return ['type' => 'content_block_start', 'content_block' => ['type' => 'text', 'text' => '']];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function text(string $text): array
-    {
-        return ['type' => 'content_block_delta', 'delta' => ['type' => 'text_delta', 'text' => $text]];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function toolUse(): array
-    {
-        return ['type' => 'content_block_start', 'content_block' => ['type' => 'tool_use', 'id' => 'toolu_01', 'name' => 'read_file', 'input' => []]];
     }
 }

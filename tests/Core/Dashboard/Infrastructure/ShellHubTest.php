@@ -210,13 +210,6 @@ final class ShellHubTest extends TestCase
         }
     }
 
-    private function updates(): MercureLiveUpdates
-    {
-        $hub = new Hub($this->url, new StaticTokenProvider($this->token(Grant::ACTION_PUBLISH, '*')), httpClient: $this->client);
-
-        return new MercureLiveUpdates($hub, $this->logger);
-    }
-
     private function subscribeToTheShell(): ResponseInterface
     {
         $response = $this->client->request('GET', $this->url, [
@@ -227,6 +220,13 @@ final class ShellHubTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
 
         return $response;
+    }
+
+    private function updates(): MercureLiveUpdates
+    {
+        $hub = new Hub($this->url, new StaticTokenProvider($this->token(Grant::ACTION_PUBLISH, '*')), httpClient: $this->client);
+
+        return new MercureLiveUpdates($hub, $this->logger);
     }
 
     /**
@@ -266,11 +266,6 @@ final class ShellHubTest extends TestCase
         return $received;
     }
 
-    private function token(string $action, string $topic): string
-    {
-        return new LcobucciFactory(self::SECRET)->create([new Grant([$action], [$topic])], ['iss' => $this->issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => $this->url]);
-    }
-
     private function waitForTheHub(int $port): void
     {
         $deadline = hrtime(true) + self::SECONDS_TO_WAIT * 1_000_000_000;
@@ -288,5 +283,10 @@ final class ShellHubTest extends TestCase
         }
 
         self::fail('The hub did not start: '.$this->hub->getErrorOutput());
+    }
+
+    private function token(string $action, string $topic): string
+    {
+        return new LcobucciFactory(self::SECRET)->create([new Grant([$action], [$topic])], ['iss' => $this->issuer, 'sub' => 'test', 'client_id' => 'test', 'aud' => $this->url]);
     }
 }

@@ -120,6 +120,15 @@ final class StartReviewAtHeadHandlerTest extends TestCase
         $this->repository->remove();
     }
 
+    private function review(ChangeReviews $reviews): LocalChangeReview
+    {
+        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
+        $panels = self::createStub(Panels::class);
+        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
+
+        return new LocalChangeReview($panels, $reviews);
+    }
+
     private function startAt(string $head): StartReviewAtHead
     {
         return new StartReviewAtHead(new StartReview('alpha', 'Add the thing.', new RequestedRound('7', null, new ChangeSource($this->repository->path, 'main'))), new CommitId($head));
@@ -128,14 +137,5 @@ final class StartReviewAtHeadHandlerTest extends TestCase
     private function removeSnapshot(string $snapshot): void
     {
         new LocalGitForge(LocalRepository::existingAt($this->repository->path, 'main'), new NameStatusParser())->removeSnapshot($snapshot);
-    }
-
-    private function review(ChangeReviews $reviews): LocalChangeReview
-    {
-        $reviewer = new PanelReviewer(new ReviewerRole('core', 'Review the change.'), new ReviewerModel(Tier::Strong, Provider::Anthropic), 10);
-        $panels = self::createStub(Panels::class);
-        $panels->method('panelForChange')->willReturn(new Panel([$reviewer], QuorumPolicy::All));
-
-        return new LocalChangeReview($panels, $reviews);
     }
 }

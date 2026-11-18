@@ -56,6 +56,15 @@ final class FirstInstallJourneyTest extends JourneyTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $this->visit('/')->filter('#board-headline')->text());
     }
 
+    private function followTheBoardLinkToTheFirstRunPage(): void
+    {
+        $link = $this->visit('/')->filter('.page-head .actions a.btn.primary');
+
+        self::assertSame('Set up Intakt', $link->text());
+        self::assertSame(self::FIRST_RUN, $link->attr('href'));
+        self::assertCount(4, $this->visit(self::FIRST_RUN)->filter('ol.steps > li'));
+    }
+
     private function openProjectsOfAFreshInstall(): void
     {
         self::assertStringContainsString('No project has started a review yet.', $this->visit('/projects')->text());
@@ -84,15 +93,6 @@ final class FirstInstallJourneyTest extends JourneyTestCase
 
         self::assertStringContainsString('Reviews', $page);
         self::assertStringContainsString('No review has started yet.', $page);
-    }
-
-    private function followTheBoardLinkToTheFirstRunPage(): void
-    {
-        $link = $this->visit('/')->filter('.page-head .actions a.btn.primary');
-
-        self::assertSame('Set up Intakt', $link->text());
-        self::assertSame(self::FIRST_RUN, $link->attr('href'));
-        self::assertCount(4, $this->visit(self::FIRST_RUN)->filter('ol.steps > li'));
     }
 
     // Through the journey's own kernel, because only it has the sample repository the start button needs; it writes to the instance's ledger, so the instance shows the round; the container is rebuilt first, because the sample repository is read when it is built.

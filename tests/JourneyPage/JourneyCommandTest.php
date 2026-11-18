@@ -173,9 +173,19 @@ final class JourneyCommandTest extends TestCase
         return (string) file_get_contents($this->root.'/docs/journey.md');
     }
 
+    private function expected(string $name): string
+    {
+        return (string) file_get_contents(self::FIXTURES.'/expected/'.$name.'.svg');
+    }
+
     private function drawing(string $name): string
     {
         return (string) file_get_contents($this->root.'/docs/journey/'.$name.'.svg');
+    }
+
+    private function outsideMarkers(string $page): string
+    {
+        return (string) preg_replace('/(<!-- journey:begin [a-z-]+ -->\n).*?(<!-- journey:end [a-z-]+ -->)/s', '$1$2', $page);
     }
 
     private function region(string $name): string
@@ -183,15 +193,5 @@ final class JourneyCommandTest extends TestCase
         preg_match('/<!-- journey:begin '.$name.' -->\n(.*?)<!-- journey:end '.$name.' -->/s', $this->page(), $region);
 
         return $region[1] ?? '';
-    }
-
-    private function expected(string $name): string
-    {
-        return (string) file_get_contents(self::FIXTURES.'/expected/'.$name.'.svg');
-    }
-
-    private function outsideMarkers(string $page): string
-    {
-        return (string) preg_replace('/(<!-- journey:begin [a-z-]+ -->\n).*?(<!-- journey:end [a-z-]+ -->)/s', '$1$2', $page);
     }
 }

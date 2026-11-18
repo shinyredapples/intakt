@@ -36,6 +36,18 @@ final readonly class GateReport
         return true === self::verdictOf($this->gate, $this->line);
     }
 
+    // Because only the exact bytes a gate's own GateResult writes may pass: no stray byte, repeated key or object where a list belongs.
+    private static function verdictOf(string $gate, string $line): ?bool
+    {
+        $report = json_decode($line, true);
+
+        if (!is_array($report) || !self::isEncodedAs($report, $line) || [] !== array_diff(array_keys($report), self::FIELDS) || $gate !== ($report['gate'] ?? null)) {
+            return null;
+        }
+
+        return self::consistentVerdict($report);
+    }
+
     // Because a finding is cut at its end, and the end of what a child wrote names why it stopped (a timeout, a signal, a fatal error).
     private static function endOf(ProcessResult $child, string $reason): string
     {
@@ -53,18 +65,6 @@ final readonly class GateReport
         }
 
         return '...'.$end;
-    }
-
-    // Because only the exact bytes a gate's own GateResult writes may pass: no stray byte, repeated key or object where a list belongs.
-    private static function verdictOf(string $gate, string $line): ?bool
-    {
-        $report = json_decode($line, true);
-
-        if (!is_array($report) || !self::isEncodedAs($report, $line) || [] !== array_diff(array_keys($report), self::FIELDS) || $gate !== ($report['gate'] ?? null)) {
-            return null;
-        }
-
-        return self::consistentVerdict($report);
     }
 
     /**

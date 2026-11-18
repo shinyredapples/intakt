@@ -130,6 +130,11 @@ final class FencedPlantsTest extends TestCase
         self::assertSame(['PLANT-1', 'PLANT-5', 'PLANT-2', 'PLANT-3', 'PLANT-4', 'PLANT-6'], $plants);
     }
 
+    private function brief(string $task): BuildBrief
+    {
+        return new BuildBrief($task, [], null);
+    }
+
     private function refusalOf(BuildBrief $brief, string $prompt): string
     {
         try {
@@ -139,10 +144,5 @@ final class FencedPlantsTest extends TestCase
         }
 
         self::fail('The gate passed a prompt it must refuse.');
-    }
-
-    private function brief(string $task): BuildBrief
-    {
-        return new BuildBrief($task, [], null);
     }
 }

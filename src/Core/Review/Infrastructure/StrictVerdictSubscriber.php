@@ -42,16 +42,16 @@ final readonly class StrictVerdictSubscriber implements EventSubscriberInterface
         $event->setDeferredResult(new DeferredResult($converter, $deferred->getRawResult(), $event->getOptions()));
     }
 
-    private function formOf(Model $model): AnswerForm
-    {
-        return $model instanceof ClaudeCode || $model instanceof Codex ? AnswerForm::ProseAroundBlock : AnswerForm::Json;
-    }
-
     /**
      * @param array<string, mixed> $options
      */
     private function asksForAVerdict(array $options): bool
     {
         return ($options[PlatformSubscriber::RESPONSE_FORMAT] ?? null) === $this->responseFormats->create(Verdict::class);
+    }
+
+    private function formOf(Model $model): AnswerForm
+    {
+        return $model instanceof ClaudeCode || $model instanceof Codex ? AnswerForm::ProseAroundBlock : AnswerForm::Json;
     }
 }
