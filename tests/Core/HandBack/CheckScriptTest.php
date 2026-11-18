@@ -272,7 +272,7 @@ final class CheckScriptTest extends TestCase
         $shim = $this->history->folder.'/shim';
         new Filesystem()->dumpFile($shim.'/git', "#!/bin/sh\nfor argument; do\n    if [ \"\$argument\" = merge ]; then\n        exec '$git' \"\$@\" --no-commit\n    fi\ndone\nexec '$git' \"\$@\"\n");
         new Filesystem()->chmod($shim.'/git', 0o700);
-        $this->path = $shim.\PATH_SEPARATOR.getenv('PATH');
+        $this->path = $shim.PATH_SEPARATOR.getenv('PATH');
 
         $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'touch ran');
 
@@ -420,7 +420,7 @@ final class CheckScriptTest extends TestCase
             $environment['PATH'] = $this->path;
         }
 
-        $environment['GIT_CONFIG_COUNT'] =(string) count($this->gitConfiguration);
+        $environment['GIT_CONFIG_COUNT'] = (string) count($this->gitConfiguration);
         foreach (array_keys($this->gitConfiguration) as $index => $key) {
             $environment['GIT_CONFIG_KEY_'.$index] = $key;
             $environment['GIT_CONFIG_VALUE_'.$index] = $this->gitConfiguration[$key];
