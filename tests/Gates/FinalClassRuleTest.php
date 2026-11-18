@@ -71,6 +71,16 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
         $this->assertRuleRejects('non-final-script-class', 'bin/Runner.php:7 intakt.finalClass Class Runner is not final');
     }
 
+    public function testANonFinalClassDeclaredInAMethodOfAnUnusedTraitFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('non-final-class-in-unused-trait', 'src/Factories.php:11 intakt.finalClass Class Product is not final');
+    }
+
+    public function testANonFinalClassDeclaredInsideAConditionFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('non-final-conditional-class', 'src/Polyfill.php:8 intakt.finalClass Class Polyfill is not final');
+    }
+
     public function testANonFinalClassOutsideTheRepositoryCodeFoldersPassesStaticAnalysis(): void
     {
         $this->assertRuleAccepts('non-final-migration');
