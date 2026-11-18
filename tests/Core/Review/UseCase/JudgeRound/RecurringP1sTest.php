@@ -134,13 +134,54 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertSame([LedgerEventKind::JudgeDone], array_values(array_filter($this->fixture->ledgerKinds(), static fn (LedgerEventKind $kind): bool => in_array($kind, [LedgerEventKind::JudgeDone, LedgerEventKind::RecurringP1Found], true))));
     }
 
-    public function testAP1IsComparedWithTheNewestEarlierHeadOnly(): void
+    public function testAP1FlaggedAgainAfterAHeadThatDidNotFlagItIsRecurring(): void
     {
-        $this->judgedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', null));
+        $first = $this->judgedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', null));
         $this->judgedRoundAt(SampleIdentity::NEW_HEAD, $this->p1('VerdictPerRole.php', null));
-        $this->judgedRoundAt(self::LATER_HEAD, $this->p1('RoundFixture.php', null));
+        $third = $this->judgedRoundAt(self::LATER_HEAD, $this->p1('RoundFixture.php', null));
 
-        self::assertSame([], $this->recurringP1s());
+        self::assertSame([[$third->number(), $first->number()]], $this->pairs());
+    }
+
+    public function testAP1FlaggedOnThreeHeadsIsPairedWithTheNewestEarlierHeadEachTime(): void
+    {
+        foreach ([SampleIdentity::HEAD, SampleIdentity::NEW_HEAD, self::LATER_HEAD] as $head) {
+            $this->judgedRoundAt($head, $this->p1('RoundFixture.php', null));
+        }
+
+        self::assertSame([[2, 1], [3, 2]], $this->pairs());
+    }
+
+    public function testTwoHeadsStillRecurWhenTheNewerHeadIsJudgedFirst(): void
+    {
+        $first = $this->reviewedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', null));
+        $second = $this->reviewedRoundAt(SampleIdentity::NEW_HEAD, $this->p1('RoundFixture.php', null));
+
+        $this->judge($second);
+        $this->judge($first);
+
+        self::assertSame([[2, 1]], $this->pairs());
+        self::assertSame($second, $this->recurringP1s()[0]['round']);
+    }
+
+    public function testARoundJudgedLateIsNotPairedWithALaterRoundWhoseRecurrenceIsRecorded(): void
+    {
+        $rounds = array_map(fn (string $head): string => $this->reviewedRoundAt($head, $this->p1('RoundFixture.php', null)), [SampleIdentity::HEAD, SampleIdentity::NEW_HEAD, self::LATER_HEAD]);
+
+        $this->judge($rounds[0]);
+        $this->judge($rounds[2]);
+        $this->judge($rounds[1]);
+
+        self::assertSame([[3, 1], [2, 1]], $this->pairs());
+    }
+
+    public function testARecurringP1IsFoundBesideAnotherFindingOnItsLine(): void
+    {
+        $this->judgedRoundAt(SampleIdentity::HEAD, $this->p1('RoundFixture.php', 'RoundFixture::judge'));
+        $other = new Finding('B', Severity::P2, 'RoundFixture.php', 3, 'RoundFixture::start', 'Starting has unclear output.', FixableBy::Builder, false, 'The start message explains the outcome.', null);
+        $this->judgedRoundAt(SampleIdentity::NEW_HEAD, $other, $this->p1('RoundFixture.php', 'RoundFixture::judge'));
+
+        self::assertSame([['F3', 'RoundFixture::judge']], array_map(static fn (array $one): array => [$one['finding'], $one['symbol']], $this->recurringP1s()));
     }
 
     public function testAJudgingDeliveredAgainRecordsNoSecondRecurringP1(): void
@@ -153,19 +194,38 @@ final class RecurringP1sTest extends KernelTestCase
         self::assertCount(1, $this->recurringP1s());
     }
 
-    private function judgedRoundAt(string $head, Finding $finding): ReviewRound
+    private function judgedRoundAt(string $head, Finding ...$findings): ReviewRound
+    {
+        $roundId = $this->reviewedRoundAt($head, ...$findings);
+        $this->judge($roundId);
+
+        return $this->fixture->round($roundId);
+    }
+
+    private function reviewedRoundAt(string $head, Finding ...$findings): string
     {
         $delivered = count($this->fixture->bus->messages);
         $roundId = $this->fixture->startAtHead(RoundFixture::CHANGE, $head);
-        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$finding], [], [])]);
+        $vendor = new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, array_values($findings), [], [])]);
 
         foreach (array_slice($this->fixture->bus->messages, $delivered) as $message) {
             $this->fixture->deliver($message, $vendor);
         }
 
-        $this->fixture->judge($vendor)(new JudgeRound($roundId));
+        return $roundId;
+    }
 
-        return $this->fixture->round($roundId);
+    private function judge(string $roundId): void
+    {
+        $this->fixture->judge(new VerdictPerRole([]))(new JudgeRound($roundId));
+    }
+
+    /**
+     * @return list<array{mixed, mixed}>
+     */
+    private function pairs(): array
+    {
+        return array_map(static fn (array $one): array => [$one['number'], $one['earlier_number']], $this->recurringP1s());
     }
 
     /**

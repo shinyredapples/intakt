@@ -12,7 +12,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class RecurringP1
 {
-    // Act entries of both rounds, because only what the builder was told to fix can come back; each pair is this round's P1 and the earlier one in its place.
+    // The act findings of both rounds one by one, never merged entries, because a merged entry keeps the text and symbol of whichever finding came first at its line. Each pair is this round's first P1 at a place and the earlier one there.
     /**
      * @param list<Finding> $earlier
      * @param list<Finding> $current
@@ -23,16 +23,30 @@ final readonly class RecurringP1
     {
         $earlierP1s = $this->p1sOf($earlier);
         $recurring = [];
+        $paired = [];
 
         foreach ($this->p1sOf($current) as $finding) {
-            $before = array_find($earlierP1s, fn (Finding $one): bool => $this->inSamePlace($one, $finding));
+            $place = $this->placeOf($finding);
+
+            if (null === $place || isset($paired[$place])) {
+                continue;
+            }
+
+            $before = array_find($earlierP1s, fn (Finding $one): bool => $this->placeOf($one) === $place);
 
             if ($before instanceof Finding) {
+                $paired[$place] = true;
                 $recurring[] = [$finding, $before];
             }
         }
 
         return $recurring;
+    }
+
+    // The file and the symbol, a missing symbol being a place of its own (the file as a whole), never the line, because the fix of a finding moves the lines around it on the next head. JSON encoded, so no file and symbol can shift into another pair; none without a file.
+    public function placeOf(Finding $finding): ?string
+    {
+        return null === $finding->file ? null : json_encode([$finding->file, $finding->symbol], JSON_THROW_ON_ERROR);
     }
 
     /**
@@ -43,15 +57,5 @@ final readonly class RecurringP1
     private function p1sOf(array $findings): array
     {
         return array_values(array_filter($findings, static fn (Finding $finding): bool => Severity::P1 === $finding->severity));
-    }
-
-    // The place is the file and, when both name one, the symbol, never the line, because the fix of a finding moves the lines around it on the next head.
-    private function inSamePlace(Finding $one, Finding $other): bool
-    {
-        if (null === $one->file || $one->file !== $other->file) {
-            return false;
-        }
-
-        return null === $one->symbol || null === $other->symbol || $one->symbol === $other->symbol;
     }
 }

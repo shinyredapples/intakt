@@ -126,20 +126,21 @@ final readonly class ReviewRounds
         return array_any($later, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash === $head->hash);
     }
 
-    // The newest judged round of the change before this one that reviewed another head, because a P1 recurs only when a new head still has it; a round of the same head is a review again, not a new head.
-    public function judgedBeforeOnAnotherHead(ReviewRound $round): ?ReviewRound
+    // Every other judged round of the change, earlier and later, because rounds of two heads can be judged in either order.
+    /**
+     * @return list<ReviewRound>
+     */
+    public function judgedBesides(ReviewRound $round): array
     {
-        /** @var list<ReviewRound> $earlier */
-        $earlier = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.change.number < :number AND r.state = :judged ORDER BY r.change.number DESC', ReviewRound::class))
+        /** @var list<ReviewRound> $judged */
+        $judged = $this->entities->createQuery(sprintf('SELECT r FROM %s r WHERE r.subject.project = :project AND r.change.change = :change AND r.change.number <> :number AND r.state = :judged ORDER BY r.change.number ASC', ReviewRound::class))
             ->setParameter('project', $round->project())
             ->setParameter('change', $round->change())
             ->setParameter('number', $round->number())
             ->setParameter('judged', RoundState::Judged->value)
             ->getResult();
 
-        $head = $round->identity()->commits->head;
-
-        return array_find($earlier, static fn (ReviewRound $other): bool => $other->identity()->commits->head->hash !== $head->hash);
+        return $judged;
     }
 
     /**

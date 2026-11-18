@@ -110,6 +110,12 @@ final readonly class StoredFindings
         return $ids;
     }
 
+    // For work that reads the other rounds of the change and must not run beside another round's, in the caller's transaction after the round's lock, the order every writer takes them in.
+    public function lockChangeOf(ReviewRound $round): void
+    {
+        $this->locked($round->project(), $round->change());
+    }
+
     // False when the round is judged already, so a judgement is recorded once however often the round is judged; the caller holds the round's lock.
     public function markJudged(ReviewRound $round): bool
     {

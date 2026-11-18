@@ -91,6 +91,52 @@ final class FindingKeysTest extends TestCase
         self::assertNull($this->keyOf($this->finding('src/Thing.php', 'Breaks src/Gone.php too.')));
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function proseThatIsNoPathOfTheCheckout(): iterable
+    {
+        yield 'two words' => ['The lock and/or the save in src/Thing.php is not restart safe.'];
+        yield 'a pair of modes' => ['The read/write lock is missing.'];
+        yield 'two versions' => ['Fails on PHP 8.5/8.6.'];
+        yield 'a route' => ['The page /reviews fails.'];
+        yield 'a directory' => ['Everything in src is affected, see src/Sub.'];
+        yield 'an abbreviation' => ['Some writes, e.g. the save, are lost.'];
+        yield 'a missing file name without a directory' => ['Kernel.php is not restart safe.'];
+    }
+
+    #[DataProvider('proseThatIsNoPathOfTheCheckout')]
+    public function testProseThatReadsLikeAPathButIsNoFileOfTheCheckoutKeepsTheKey(string $text): void
+    {
+        $this->repository->commitFile('src/Sub/Inner.php', "<?php\n");
+
+        self::assertSame(
+            new FindingKey()->of($this->finding('src/Thing.php', $text), ['src/Thing.php' => (string) hash_file('sha256', $this->repository->path.'/src/Thing.php')]),
+            $this->keyOf($this->finding('src/Thing.php', $text)),
+        );
+    }
+
+    public function testTheKeyChangesWhenAFileNamedWithoutADirectoryChanges(): void
+    {
+        $this->repository->commitFile('README.md', "The limit is 3.\n");
+        $finding = $this->finding('src/Thing.php', 'README.md still states the old limit.');
+        $before = $this->keyOf($finding);
+        $this->repository->commitFile('README.md', "The limit is 4.\n");
+
+        self::assertNotNull($before);
+        self::assertNotSame($before, $this->keyOf($finding));
+    }
+
+    public function testTheKeyChangesWhenAPathWithoutAnExtensionNamingAFileChanges(): void
+    {
+        $this->repository->commitFile('bin/run', "#!/bin/sh\n");
+        $finding = $this->finding('src/Thing.php', 'The script bin/run skips the lock.');
+        $before = $this->keyOf($finding);
+        $this->repository->commitFile('bin/run', "#!/bin/sh\nexit 1\n");
+
+        self::assertNotSame($before, $this->keyOf($finding));
+    }
+
     public function testASymlinkToAFileOutsideTheCheckoutGetsNoKey(): void
     {
         $outside = dirname($this->repository->path).'/outside-'.basename($this->repository->path).'.php';

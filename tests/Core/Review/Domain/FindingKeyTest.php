@@ -42,7 +42,35 @@ final class FindingKeyTest extends TestCase
 
     public function testAnAbsolutePathOrOneLeavingTheCheckoutIsNamedSoItCanBeRefused(): void
     {
-        self::assertSame(['/etc/passwd', '../outside/file.php'], new FindingKey()->namedPaths($this->finding(null, 'Reads /etc/passwd and ../outside/file.php.')));
+        self::assertSame(['/etc/passwd.conf', '../outside/file.php'], new FindingKey()->namedPaths($this->finding(null, 'Reads /etc/passwd.conf and ../outside/file.php.')));
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function fragmentsThatMayBeAPath(): iterable
+    {
+        yield 'two words' => ['The lock and/or the save is lost.', 'and/or'];
+        yield 'a pair of modes' => ['The read/write lock is missing.', 'read/write'];
+        yield 'two versions' => ['Fails on PHP 8.5/8.6.', '8.5/8.6'];
+        yield 'a directory' => ['Everything in src/Core is affected.', 'src/Core'];
+        yield 'a route' => ['The page /reviews fails.', '/reviews'];
+        yield 'a file name without a directory' => ['README.md still states the old limit.', 'README.md'];
+        yield 'an abbreviation' => ['Some writes, e.g. the save, are lost.', 'e.g'];
+    }
+
+    #[DataProvider('fragmentsThatMayBeAPath')]
+    public function testAFragmentThatReadsAsProseAsWellIsAPathOnlyWhenTheCheckoutHasIt(string $text, string $fragment): void
+    {
+        $finding = $this->finding('src/Thing.php', $text);
+
+        self::assertSame(['src/Thing.php'], new FindingKey()->namedPaths($finding));
+        self::assertSame([$fragment], new FindingKey()->possiblePaths($finding));
+    }
+
+    public function testAPathTheFindingCertainlyNamesIsNoPossiblePath(): void
+    {
+        self::assertSame([], new FindingKey()->possiblePaths($this->finding('src/Thing.php', 'Breaks src/Thing.php and src/Other.php.')));
     }
 
     public function testTheSameTextAndFilesGiveTheSameKeyInAnyOrder(): void
@@ -55,11 +83,19 @@ final class FindingKeyTest extends TestCase
         );
     }
 
-    public function testTheKeyIgnoresCaseAndSpacingOfTheText(): void
+    public function testTheKeyIgnoresSpacingOfTheText(): void
     {
         self::assertSame(
             new FindingKey()->of($this->finding('src/Thing.php', 'Not restart  safe.'), ['src/Thing.php' => 'aaa']),
-            new FindingKey()->of($this->finding('src/Thing.php', "not\nRestart safe."), ['src/Thing.php' => 'aaa']),
+            new FindingKey()->of($this->finding('src/Thing.php', " Not\nrestart safe."), ['src/Thing.php' => 'aaa']),
+        );
+    }
+
+    public function testTheKeyKeepsTheCaseOfTheText(): void
+    {
+        self::assertNotSame(
+            new FindingKey()->of($this->finding('src/Thing.php', 'The role `Admin` is never checked.'), ['src/Thing.php' => 'aaa']),
+            new FindingKey()->of($this->finding('src/Thing.php', 'The role `admin` is never checked.'), ['src/Thing.php' => 'aaa']),
         );
     }
 

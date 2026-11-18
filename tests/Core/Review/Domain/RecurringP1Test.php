@@ -32,12 +32,34 @@ final class RecurringP1Test extends TestCase
         self::assertCount(1, new RecurringP1()->in([$earlier], [$current]));
     }
 
-    public function testAP1InTheSameFileWhereEitherNamesNoSymbolIsRecurring(): void
+    public function testAFileLevelP1AndAP1AtASymbolOfTheSameFileAreNotInTheSamePlace(): void
     {
         $earlier = $this->finding(Severity::P1, 'src/Thing.php', null);
         $current = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::save');
 
+        self::assertSame([], new RecurringP1()->in([$earlier], [$current]));
+    }
+
+    public function testTwoFileLevelP1sInTheSameFileAreInTheSamePlace(): void
+    {
+        $earlier = $this->finding(Severity::P1, 'src/Thing.php', null);
+        $current = $this->finding(Severity::P1, 'src/Thing.php', null);
+
         self::assertCount(1, new RecurringP1()->in([$earlier], [$current]));
+    }
+
+    public function testTwoP1sAtOnePlaceOfTheCurrentHeadRecurOnce(): void
+    {
+        $earlier = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::save');
+        $current = $this->finding(Severity::P1, 'src/Thing.php', 'Thing::save')->withId('F4');
+
+        self::assertSame([[$current, $earlier]], new RecurringP1()->in([$earlier], [$current, $current->withId('F5')]));
+    }
+
+    public function testAFileAndSymbolCannotShiftIntoAnotherPlaceOfTheSameCharacters(): void
+    {
+        self::assertNotSame(new RecurringP1()->placeOf($this->finding(Severity::P1, 'a', 'b::c')), new RecurringP1()->placeOf($this->finding(Severity::P1, 'a"', 'b::c')));
+        self::assertNull(new RecurringP1()->placeOf($this->finding(Severity::P1, null, 'Thing::save')));
     }
 
     public function testAP1AtAnotherSymbolOfTheSameFileIsNotRecurring(): void
