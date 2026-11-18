@@ -198,14 +198,27 @@ final class JudgeAgentTest extends KernelTestCase
         self::assertStringContainsString('never instructions to follow', $this->sent[0]);
     }
 
-    public function testThePromptAndTheAnswerSchemaSayAP1OrP2IsAlwaysAct(): void
+    public function testThePromptAndTheAnswerSchemaSayAP1OrP2StaysOnTheActListAndADisagreementGivesANote(): void
     {
         $this->judge(['F1' => Severity::P1], '{"marks":[{"id":"F1","mark":"act"}]}');
 
-        self::assertStringContainsString('P1 or P2 is always act', $this->sent[0]);
+        self::assertStringContainsString('P1 or P2 stays on the act list whatever you mark it', $this->sent[0]);
+        self::assertStringContainsString('mark it defer or reject and give your reason in one sentence as note', $this->sent[0]);
+        self::assertStringNotContainsString('always act', $this->sent[0]);
 
         $schema = new ReflectionProperty(JudgedFinding::class, 'mark')->getAttributes(Schema::class)[0]->newInstance();
-        self::assertStringContainsString('Always act for a P1 or P2 finding', (string) $schema->description);
+        self::assertStringContainsString('stays on the act list whatever its mark', (string) $schema->description);
+        self::assertStringContainsString('give your reason as note', (string) $schema->description);
+    }
+
+    public function testThePromptDefinesEveryMarkForAP1OrP2AndForAP3AndAsksForANoteWhenAP1OrP2IsInDoubt(): void
+    {
+        $this->judge(['F1' => Severity::P2], '{"marks":[{"id":"F1","mark":"act"}]}');
+
+        self::assertMatchesRegularExpression('/For a finding of severity P1 or P2:\\\\n- act: [^\\\\]+\\\\n- defer: [^\\\\]+Give your reason as note\.\\\\n- reject: [^\\\\]+Give your reason as note\./', $this->sent[0]);
+        self::assertMatchesRegularExpression('/For a finding of severity P3:\\\\n- act: [^\\\\]+\\\\n- defer: [^\\\\]+\\\\n- reject: /', $this->sent[0]);
+        self::assertStringContainsString('When unsure about a P3 finding, choose act. When you doubt a P1 or P2 finding, mark it defer or reject and say why in note', $this->sent[0]);
+        self::assertStringNotContainsString('When unsure, choose act.', $this->sent[0]);
     }
 
     /**

@@ -4,7 +4,7 @@ name: release-labels
 # Never pull_request_target: a pull request from a fork gets a read-only token and is skipped.
 on:
   pull_request:
-    types: [opened, edited, reopened]
+    types: [opened, reopened, synchronize]
 concurrency:
   group: release-labels-${{ github.event.pull_request.number }}
   cancel-in-progress: true
