@@ -54,8 +54,11 @@ It writes `check.log` (git's messages when the bundle cannot be applied; otherwi
 
 - `checkSteps(?string $configuredCommand): non-empty-list<string>`: the shell steps the check job runs.
 - `registryHosts(): list<string>`: the hosts the steps fetch dependencies from.
+- `dependencyStep(?string $configuredCommand): ?DependencyStep`: the dependency step of a check, or null when the gate names no lock inputs, so the check installs every time. `Plugin/Gate/Contract/DependencyStep` holds `lockFiles` (the files the locked install depends on), `platformProbe` (a command that prints the platform version inside the job image), `install` (the install of the locked packages in a clean environment, with scripts and plugins off) and `generate` (the command that makes the files that depend on the tree, run on the check's own tree after the install).
 
 `Plugin/PhpGate/Infrastructure/PhpGate` is the only implementation, so the container autowires it. Without a configured command (null, or only white space) its steps are `composer install --no-interaction --no-progress` and `bin/check --fast` (`Plugin/PhpGate/Contract/PhpGateSteps::INSTALL` and `CHECK`); a configured command (`--check-command`) is the only step, and installs what it needs itself. Its hosts are `repo.packagist.org`, `api.github.com` and `codeload.github.com`. The files a gate protects are not part of the contract yet.
+
+Its dependency step, without a configured command, is the Composer one: the lock files `composer.json` and `composer.lock`, the probe `php -r 'echo PHP_VERSION;'`, the install `composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader` (`PhpGateSteps::LOCKED_INSTALL`) and the generation `composer dump-autoload --no-interaction` (`PhpGateSteps::GENERATE`), which writes `vendor/autoload.php`, `vendor/composer/platform_check.php` and, through symfony/runtime's Composer plugin, `vendor/autoload_runtime.php`. The manifest is a lock input because its platform config and autoload rules change what an install from the same lock file holds. With a configured command it returns null, as for a language without support. No check uses the dependency step yet: the check job still runs `checkSteps()` with an empty Composer cache, and reusing one install for heads that share the lock inputs is later work of #1203.
 
 ## The console door
 
