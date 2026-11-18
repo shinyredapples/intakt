@@ -99,7 +99,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertCount(3, $panel->filter('ol > li'));
     }
 
-    public function testAFreshInstallsBoardKeepsSetUpIntaktAsItsOneHeadAction(): void
+    public function testAFreshInstallsBoardKeepsSetUpIntaktAsItsOnePrimaryHeadAction(): void
     {
         $head = $this->browser->request('GET', '/')->filter('.page-head');
 

@@ -1,6 +1,6 @@
 'use strict';
 // Evidence for #2731: the first-day board of a running instance with an empty ledger, light and dark, at 1440 and 390,
-// with bin/ui-check's own axe report and phone floors (bin/ui-check itself needs a review round, which the first day has none of),
+// with bin/ui-check's own axe report and phone floors (bin/ui-check itself needs a review round, which the first day has none of).
 // The mock's captures beside them, mock-firstday-<theme>-<width>.png, are copies of docs/design/mocks/tools/screenshots.js's
 // screens/index-<theme>-<width>-firstday.png, and mock-firstday-<theme>-390-waiting.png of screens/index-<theme>-390-firstday-waiting.png.
 // Usage: bin/instance -- sh -c "bin/console doctrine:migrations:migrate -n -q && bin/console asset-map:compile -q && NODE_PATH=$TMPDIR/node/node_modules node .evidence/2731/firstday-check.js"
