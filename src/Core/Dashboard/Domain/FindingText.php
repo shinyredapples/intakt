@@ -31,7 +31,7 @@ final readonly class FindingText
     // A single mark is also a wildcard, so it counts as cut emphasis only around one word right before the ellipsis: *test files… and *.php… keep their star.
     private const string PLAIN_CUT = '/'.self::OPENS.'([*_])((?=[^\s*_.\/])(?:(?!\1)\S)+?)(?<=[^*_\/])(?=…$)/u';
 
-    // Each pattern with the group that holds its text, in the order they apply: double marks before single ones, whole pairs before cut ones.
+    // Double marks go before single ones, because a single-mark pattern would otherwise pair the two halves of a double mark.
     private const array EMPHASIS = [self::STRONG => '$2', self::PLAIN => '$2'];
 
     private const array EMPHASIS_OF_A_CUT_TITLE = [self::STRONG => '$2', self::STRONG_CUT => '$3', self::PLAIN => '$2', self::PLAIN_CUT => '$2'];
@@ -52,9 +52,8 @@ final readonly class FindingText
         return $this->joined($this->withoutEmphasis($this->codeAndPlainSpans(), self::EMPHASIS));
     }
 
+    // Only the caller knows that it cut the text, because an ellipsis the reviewer wrote looks the same and must close no mark.
     /**
-     * Only the caller knows that it cut the text: an ellipsis the reviewer wrote looks the same and must close no mark.
-     *
      * @return list<array{text: string, code: bool}>
      */
     public function spansOfACutTitle(): array
