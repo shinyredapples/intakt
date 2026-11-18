@@ -12,6 +12,7 @@ use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -28,8 +29,32 @@ use PHPUnit\Framework\TestCase;
 #[UsesClass(PromptCut::class)]
 #[UsesClass(Finding::class)]
 #[UsesClass(Evidence::class)]
+#[UsesClass(PromptAssembly::class)]
 final class BuilderPromptTest extends TestCase
 {
+    public function testEachFenceOfAReworkFollowsItsOwnLeadAndOneBlankLine(): void
+    {
+        $prompt = $this->promptFor($this->rework());
+
+        self::assertStringContainsString("The task:\n\n<<<UNTRUSTED task fence-", $prompt);
+        self::assertStringContainsString("The maintainer's decisions on this task; apply each one:\n\n<<<UNTRUSTED decisions fence-", $prompt);
+        self::assertStringContainsString("The findings to act on:\n\n<<<UNTRUSTED act list fence-", $prompt);
+        self::assertStringContainsString("The excerpt of the failed CI log:\n\n<<<UNTRUSTED ci log fence-", $prompt);
+        self::assertStringContainsString("The published pull request text to edit:\n\n<<<UNTRUSTED pull request text fence-", $prompt);
+    }
+
+    public function testTheTaskSectionIsTheAssemblysUserTextAroundTheFencedTask(): void
+    {
+        $task = $this->plant(1);
+
+        $prompt = $this->promptFor(new BuildBrief($task, [], null));
+
+        $fenced = new PromptCut(new Fence())->fenced(UntrustedSource::Task, $task);
+        $section = new PromptAssembly()->userText('The task:', $fenced);
+        self::assertSame(1, preg_match('/<<<UNTRUSTED task (fence-[0-9a-f]{16})>>>/', $prompt, $sent));
+        self::assertStringContainsString(str_replace(self::boundaryOf($section), $sent[1], $section), $prompt);
+    }
+
     public function testEveryInputOfAFirstBuildReachesThePromptOnlyInsideAFence(): void
     {
         $brief = new BuildBrief($this->plant(1), [$this->plant(2), $this->plant(3)], null);
@@ -145,6 +170,13 @@ final class BuilderPromptTest extends TestCase
 
         self::assertStringContainsString(new Fence()->wrap($source, $text)->rendered(), $prompt);
         self::assertStringNotContainsString('Intakt cut this text', $prompt);
+    }
+
+    private static function boundaryOf(string $section): string
+    {
+        self::assertSame(1, preg_match('/<<<UNTRUSTED task (fence-[0-9a-f]{16})>>>/', $section, $boundary));
+
+        return $boundary[1];
     }
 
     private function promptFor(BuildBrief $brief): string

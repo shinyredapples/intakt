@@ -9,6 +9,7 @@ use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
 
@@ -30,6 +31,7 @@ final readonly class BuilderPrompt
     public function __construct(
         private Fence $fence,
         private PromptCut $cut,
+        private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }
 
@@ -37,7 +39,7 @@ final readonly class BuilderPrompt
     {
         return implode("\n\n", [
             self::INSTRUCTIONS,
-            "The task:\n\n".$this->cut->fenced(UntrustedSource::Task, $brief->task)->rendered(),
+            $this->assembly->userText('The task:', $this->cut->fenced(UntrustedSource::Task, $brief->task)),
             ...$this->decisionsOf($brief),
             ...$this->closingOf($brief->rework),
         ]);
@@ -58,7 +60,7 @@ final readonly class BuilderPrompt
             $brief->decisions,
         );
 
-        return ["The maintainer's decisions on this task; apply each one:\n\n".$this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered))->rendered()];
+        return [$this->assembly->userText("The maintainer's decisions on this task; apply each one:", $this->fence->wrap(UntrustedSource::Decisions, implode("\n", $numbered)))];
     }
 
     /**
@@ -74,7 +76,7 @@ final readonly class BuilderPrompt
             self::REWORK,
             ...$this->actListOf($rework),
             ...$this->ciLogOf($rework),
-            "The published pull request text to edit:\n\n".$this->cut->fenced(UntrustedSource::PullRequestText, $rework->publishedText)->rendered(),
+            $this->assembly->userText('The published pull request text to edit:', $this->cut->fenced(UntrustedSource::PullRequestText, $rework->publishedText)),
         ];
     }
 
@@ -89,7 +91,7 @@ final readonly class BuilderPrompt
 
         $entries = array_map($this->actEntryOf(...), $rework->actList);
 
-        return ["The findings to act on:\n\n".$this->fence->wrap(UntrustedSource::ActList, implode("\n\n", $entries))->rendered()];
+        return [$this->assembly->userText('The findings to act on:', $this->fence->wrap(UntrustedSource::ActList, implode("\n\n", $entries)))];
     }
 
     private function actEntryOf(Finding $finding): string
@@ -110,6 +112,6 @@ final readonly class BuilderPrompt
             return [];
         }
 
-        return ["The excerpt of the failed CI log:\n\n".$this->cut->fenced(UntrustedSource::CiLog, $rework->ciExcerpt)->rendered()];
+        return [$this->assembly->userText('The excerpt of the failed CI log:', $this->cut->fenced(UntrustedSource::CiLog, $rework->ciExcerpt))];
     }
 }

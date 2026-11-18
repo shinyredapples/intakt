@@ -12,6 +12,7 @@ use Intakt\Core\Ai\Contract\TierInvoker;
 use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierRequest;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Plugin\SymfonyAiVendor\UseCase\ProbeProviders\ProbeProvidersCommand;
 use Intakt\Plugin\SymfonyAiVendor\UseCase\ProbeProviders\ProbeUsage;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Message\UserMessage;
 use Symfony\AI\Platform\Result\DeferredResult;
 use Symfony\AI\Platform\Result\TextResult;
 use Symfony\AI\Platform\Test\MockPlatformFactory;
@@ -36,6 +38,7 @@ use Symfony\Component\Serializer\Serializer;
 #[UsesClass(Tier::class)]
 #[UsesClass(TierNotMapped::class)]
 #[UsesClass(TierRequest::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ProbeProvidersCommandTest extends TestCase
 {
     public function testEachConfiguredProviderIsCalledOnceAndItsUsageLineIsPrinted(): void
@@ -59,6 +62,28 @@ final class ProbeProvidersCommandTest extends TestCase
         self::assertSame(['anthropic/big', 'openai/big'], $calls->getArrayCopy());
         self::assertStringContainsString('anthropic: model big, prompt 12, completion 3, cached 4, total 15, remaining 900', $tester->getDisplay());
         self::assertStringContainsString('openai: model big, prompt 12', $tester->getDisplay());
+    }
+
+    public function testTheProbeSendsExactlyOneUserMessageHoldingTheFixedProbePrompt(): void
+    {
+        $requests = new ArrayObject();
+        $invoker = self::createStub(TierInvoker::class);
+        $invoker->method('invoke')->willReturnCallback(static function (ResolvedModel $model, TierRequest $request) use ($requests): DeferredResult {
+            $requests->append($request);
+
+            return MockPlatformFactory::createPlatform('ok')->invoke('big', $request->input);
+        });
+
+        $this->execute($this->resolver(), $invoker);
+
+        self::assertCount(2, $requests);
+        foreach ($requests as $request) {
+            self::assertInstanceOf(TierRequest::class, $request);
+            $messages = $request->input->getMessages();
+            self::assertCount(1, $messages);
+            self::assertInstanceOf(UserMessage::class, $messages[0]);
+            self::assertSame('Answer with the single word: ok', $messages[0]->asText());
+        }
     }
 
     public function testAnAnswerWithoutUsageSaysSo(): void

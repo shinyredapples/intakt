@@ -9,11 +9,11 @@ use Intakt\Core\Ai\Contract\ProviderKey;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Plugin\Vendor\Contract\KeyCheck;
 use Intakt\Plugin\Vendor\Contract\KeyCheckOutcome;
 use Psr\Log\LoggerInterface;
 use Symfony\AI\Platform\Exception\AuthenticationException;
-use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\MessageBag;
 use Symfony\AI\Platform\PlatformOptions;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -29,6 +29,7 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
         private SymfonyAiProviderCatalog $providers,
         private TierResolver $tiers,
         private LoggerInterface $logger,
+        private PromptAssembly $assembly = new PromptAssembly(),
     ) {
     }
 
@@ -43,7 +44,7 @@ final readonly class SymfonyAiKeyCheck implements KeyCheck
 
         try {
             $provider->platform($key->secret(), $model, $this->http)
-                ->invoke($model, new MessageBag(Message::ofUser(self::PROMPT)), [PlatformOptions::MAX_OUTPUT_TOKENS => $provider->answerTokensAtLeast()])
+                ->invoke($model, new MessageBag($this->assembly->notice(self::PROMPT)), [PlatformOptions::MAX_OUTPUT_TOKENS => $provider->answerTokensAtLeast()])
                 ->asText();
         } catch (AuthenticationException) {
             return KeyCheckOutcome::Refused;
