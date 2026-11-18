@@ -151,7 +151,7 @@ Intakt normally leaves room in each AI account for your own use and spreads the 
 2. Raise its **weekly ceiling** (up to all of the allowance).
 3. Choose **until the window resets**, so it ends with the week.
 
-Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. On an account that can bill past its plan, the ceiling stops at the plan's limit; anything past it counts against your spending cap, if you set one.
+Intakt then uses what is left until the reset, and goes back to the normal ceiling by itself. On an account that can bill past its plan, the ceiling stops at the plan's limit; anything past it counts against your spending cap, if you set one (the cap is planned).
 
 ### Pausing
 
@@ -162,4 +162,4 @@ Running jobs finish, nothing new starts, and finished work that is fully approve
 
 ### Accounts
 
-You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription (its long-lived token, or a login where the company has no such token) or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Intakt spends subscription credit that is about to expire first, then your subscriptions, then paid usage. Planned: paid usage runs up to your cap if you set one, otherwise until the balance runs out ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.
+You also add, order and remove your AI accounts here. Each account shows only what its AI company supports: a subscription (its long-lived token, or a login where the company has no such token) or an API key, its usage windows, whether it bills past the plan, prepaid credit and when it expires, a block the company has set and when it ends, and which work it may do. Planned: Intakt spends subscription credit that is about to expire first, then your subscriptions, then paid usage, up to your cap if you set one, otherwise until the balance runs out ([accounts and costs](accounts-and-costs.md)). A saved key is never shown again, only its last four characters. A **test** button checks an account with one tiny call and shows what is left.
