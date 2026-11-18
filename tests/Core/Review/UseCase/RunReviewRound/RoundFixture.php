@@ -79,6 +79,7 @@ use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\SerializerInterface;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Workflow\WorkflowInterface;
@@ -184,7 +185,7 @@ final readonly class RoundFixture
         $stored = $this->entities->find(ChangeFindings::class, ['project' => 'alpha', 'change' => $change]);
         assert($stored instanceof ChangeFindings);
 
-        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', 'json'));
+        return array_values($this->serializer->deserialize($stored->findingsJson(), TrackedFinding::class.'[]', JsonEncoder::FORMAT));
     }
 
     /**
@@ -230,7 +231,7 @@ final readonly class RoundFixture
 
     public function judge(Vendor $vendor): JudgeRoundHandler
     {
-        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths())), $vendor, $this->events);
+        return new JudgeRoundHandler(new JudgedRounds($this->rounds($this->entities), $this->storedFindingsOn($this->entities), $this->roundLedger($this->ledger), new ChangeText(new DiffPaths()), new DiffHunks(new DiffPaths()), new DiffPaths()), $vendor, $this->events);
     }
 
     // The application's queue, because the round's workflow, taken from the container, queues the judging through the application's bus.

@@ -12,6 +12,7 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Serializer\Encoder\JsonEncoder;
 use Symfony\Component\Serializer\Normalizer\AbstractNormalizer;
 use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
@@ -58,7 +59,7 @@ final class StoredFindingNormalizerTest extends TestCase
         $serializer = StoredSerializerFactory::create();
         self::assertInstanceOf(NormalizerInterface::class, $serializer);
 
-        $normalized = $serializer->normalize($finding, 'json', $context);
+        $normalized = $serializer->normalize($finding, JsonEncoder::FORMAT, $context);
         self::assertIsArray($normalized);
 
         return $normalized;

@@ -13,6 +13,8 @@ use Intakt\Core\Memory\Infrastructure\StoreMemoryIndex;
 use Intakt\Core\Memory\Infrastructure\StoreProjectMemory;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -53,6 +55,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
 #[UsesClass(RelevantMemory::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ReviewerMemoryTest extends TestCase
 {
     private const string PROJECT = 'alpha';
@@ -168,7 +172,7 @@ final class ReviewerMemoryTest extends TestCase
             $query->maxBytes,
         ));
 
-        $briefing = (string) new ReviewerMemory($memory, new Fence(), new DiffPaths())->briefingOn($this->brief(self::DIFF));
+        $briefing = (string) new ReviewerMemory($memory, new Fence(), new DiffPaths())->briefingOn($this->brief(self::DIFF))?->asText();
 
         self::assertLessThanOrEqual(4_000, strlen($briefing));
         self::assertStringNotContainsString('[note shortened]', $briefing);
@@ -260,7 +264,7 @@ final class ReviewerMemoryTest extends TestCase
 
     private function briefing(string $diff): string
     {
-        return (string) $this->memory->briefingOn($this->brief($diff));
+        return (string) $this->memory->briefingOn($this->brief($diff))?->asText();
     }
 
     private function messages(ReviewerPrompt $prompt): MessageBag
