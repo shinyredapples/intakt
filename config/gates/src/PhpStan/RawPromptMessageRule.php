@@ -9,8 +9,10 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use PhpParser\Node;
+use PhpParser\Node\Arg;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\New_;
+use PhpParser\Node\Expr\PropertyFetch;
 use PhpParser\Node\Expr\StaticCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Name;
@@ -19,6 +21,7 @@ use PHPStan\Reflection\ClassReflection;
 use PHPStan\Rules\IdentifierRuleError;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleErrorBuilder;
+use PHPStan\Type\ObjectType;
 use Symfony\AI\Platform\Message\Message;
 use Symfony\AI\Platform\Message\SystemMessage;
 use Symfony\AI\Platform\Message\UserMessage;
@@ -28,8 +31,8 @@ use Symfony\AI\Platform\Message\UserMessage;
  */
 final readonly class RawPromptMessageRule implements Rule
 {
-    // only src/, because tests hand fixed messages and conversations to fake platforms, and no outside text reaches a model from there
-    private const string CHECKED = '/src/';
+    // tests are left out, because they hand fixed messages and conversations to fake platforms, and no outside text reaches a model from there; every other analyzed file, configuration and bin/ included, is checked
+    private const string UNCHECKED = '/tests/';
 
     private const string ASSEMBLY = PromptAssembly::class;
     private const string MESSAGE = Message::class;
@@ -39,11 +42,10 @@ final readonly class RawPromptMessageRule implements Rule
 
     // the role prompt enters the system message verbatim (#2518, D2 exception), so a conversation is built only where that prompt comes from the panel member's role or is copied from an existing conversation
     private const string CONVERSATION = ReviewerConversation::class;
-    private const array CONVERSATION_SOURCES = [
-        ReviewWithReviewerHandler::class,
-        SymfonyAiVendor::class,
-    ];
-    private const string CONVERSATION_ADVICE = 'new ReviewerConversation sets a role prompt that enters the system message verbatim: build one only from the panel member\'s role (ReviewWithReviewerHandler) or by copying an existing conversation\'s role prompt (the retries of SymfonyAiVendor).';
+    private const string ROLE_SOURCE = ReviewWithReviewerHandler::class;
+    private const string RETRIES = SymfonyAiVendor::class;
+    private const string ROLE_PROMPT = 'rolePrompt';
+    private const string CONVERSATION_ADVICE = 'new ReviewerConversation sets a role prompt that enters the system message verbatim: build one only from the panel member\'s role (ReviewWithReviewerHandler) or, in the retries of SymfonyAiVendor, with an existing conversation\'s $conversation->rolePrompt as the role prompt.';
 
     public function __construct(private string $root)
     {
@@ -59,7 +61,7 @@ final readonly class RawPromptMessageRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!str_starts_with($scope->getFile(), $this->root.self::CHECKED)) {
+        if (str_starts_with($scope->getFile(), $this->root.self::UNCHECKED)) {
             return [];
         }
 
@@ -101,11 +103,29 @@ final readonly class RawPromptMessageRule implements Rule
             return [RuleErrorBuilder::message('new '.substr($message, (int) strrpos($message, '\\') + 1).self::MESSAGE_ADVICE)->identifier('intakt.rawPromptMessage')->build()];
         }
 
-        if (in_array(strtolower(self::CONVERSATION), $classes, true) && !array_any(self::CONVERSATION_SOURCES, fn (string $source): bool => $this->isInside($source, $scope))) {
+        if (in_array(strtolower(self::CONVERSATION), $classes, true) && !$this->isInside(self::ROLE_SOURCE, $scope) && !($this->isInside(self::RETRIES, $scope) && $this->copiesARolePrompt($construction, $scope))) {
             return [RuleErrorBuilder::message(self::CONVERSATION_ADVICE)->identifier('intakt.reviewerConversation')->build()];
         }
 
         return [];
+    }
+
+    // only `$conversation->rolePrompt` of an existing conversation proves where the text came from; an unpacked argument list hides which value is the role prompt, so it proves nothing
+    private function copiesARolePrompt(New_ $construction, Scope $scope): bool
+    {
+        $arguments = array_filter($construction->args, static fn (Node $argument): bool => $argument instanceof Arg);
+
+        if (array_any($arguments, static fn (Arg $argument): bool => $argument->unpack)) {
+            return false;
+        }
+
+        $rolePrompt = array_find($arguments, static fn (Arg $argument): bool => self::ROLE_PROMPT === $argument->name?->toString())
+            ?? array_find($arguments, static fn (Arg $argument): bool => !$argument->name instanceof Identifier);
+
+        return $rolePrompt?->value instanceof PropertyFetch
+            && $rolePrompt->value->name instanceof Identifier
+            && self::ROLE_PROMPT === $rolePrompt->value->name->toString()
+            && new ObjectType(self::CONVERSATION)->isSuperTypeOf($scope->getType($rolePrompt->value->var))->yes();
     }
 
     // through the scope, so an alias or a class name held in an expression still resolves to the class; in lower case, because PHP resolves a class name in any case

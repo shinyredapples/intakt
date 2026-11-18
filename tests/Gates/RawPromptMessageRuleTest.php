@@ -117,9 +117,33 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
 
     public function testTheVendorRetryMayCopyAConversationsRolePrompt(): void
     {
-        $findings = $this->ruleFindingsIn($this->sampleSandbox(SymfonyAiVendor::class, self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]));
+        $expressions = ['new ReviewerConversation($previous->rolePrompt, new UuidV7(), askedAgain: true)', 'new ReviewerConversation(id: new UuidV7(), rolePrompt: $previous->rolePrompt)'];
+
+        $findings = $this->ruleFindingsIn($this->sampleSandbox(SymfonyAiVendor::class, self::CONVERSATION_IMPORTS, $expressions));
 
         self::assertSame('', $findings);
+    }
+
+    public function testTheVendorMayNotBuildAConversationFromAnyOtherText(): void
+    {
+        $expressions = [self::NEW_CONVERSATION, 'new ReviewerConversation($text, $previous->id)', 'new ReviewerConversation(id: $previous->id, rolePrompt: $text)', 'new ReviewerConversation(...[$previous->rolePrompt, $previous->id])', "new ReviewerConversation(\$previous->rolePrompt.'!', \$previous->id)"];
+
+        $findings = $this->ruleFindingsIn($this->sampleSandbox(SymfonyAiVendor::class, self::CONVERSATION_IMPORTS, $expressions));
+
+        $this->assertEachCaseRefused($findings, 'intakt.reviewerConversation');
+    }
+
+    public function testMessagesAndConversationsBuiltInApplicationCodeOutsideSrcAreRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('config/packages/prompt.php', "<?php\n\ndeclare(strict_types=1);\n\nuse Intakt\\Core\\Review\\Contract\\ReviewerConversation;\nuse Symfony\\AI\\Platform\\Message\\Message;\nuse Symfony\\Component\\Uid\\UuidV7;\n\nreturn [\n    Message::ofUser((string) getenv('PROMPT')),\n    new ReviewerConversation((string) getenv('ROLE'), new UuidV7()),\n];\n");
+        $sandbox->write('bin/prompt.php', "<?php\n\ndeclare(strict_types=1);\n\nuse Symfony\\AI\\Platform\\Message\\SystemMessage;\n\nreturn new SystemMessage((string) getenv('PROMPT'));\n");
+
+        $findings = $this->ruleFindingsIn($sandbox);
+
+        self::assertStringContainsString('config/packages/prompt.php:10 intakt.rawPromptMessage', $findings);
+        self::assertStringContainsString('config/packages/prompt.php:11 intakt.reviewerConversation', $findings);
+        self::assertStringContainsString('bin/prompt.php:7 intakt.rawPromptMessage', $findings);
     }
 
     public function testTheAssemblyMayNotBuildAConversation(): void

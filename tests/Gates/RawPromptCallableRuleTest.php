@@ -48,6 +48,14 @@ final class RawPromptCallableRuleTest extends PhpStanRuleTestCase
         self::assertSame('', $findings);
     }
 
+    public function testAMessageFactoryTakenAsACallableInApplicationConfigurationIsRefused(): void
+    {
+        $sandbox = $this->emptySandbox();
+        $sandbox->write('config/packages/prompt.php', "<?php\n\ndeclare(strict_types=1);\n\nuse Symfony\\AI\\Platform\\Message\\Message;\n\nreturn Message::ofUser(...);\n");
+
+        self::assertStringContainsString('config/packages/prompt.php:7 intakt.rawPromptMessage', $this->ruleFindingsIn($sandbox));
+    }
+
     public function testTestsMayTakeAMessageFactoryAsACallable(): void
     {
         $findings = $this->ruleFindingsIn($this->sampleSandbox('Intakt\Tests\Sample\ReportTest', [Message::class], ['Message::ofUser(...)']));
