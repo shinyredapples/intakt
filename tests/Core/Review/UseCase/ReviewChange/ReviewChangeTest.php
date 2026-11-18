@@ -35,6 +35,7 @@ use Intakt\Core\Review\Contract\RoundProgress;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\OnePerPlace;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -76,6 +77,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[CoversClass(RoundEnds::class)]
 #[UsesClass(FailedJudgings::class)]
 #[UsesClass(OnePerPlace::class)]
+#[UsesClass(CountedVote::class)]
 #[UsesClass(ChangeDecision::class)]
 #[UsesClass(FailureInWords::class)]
 #[UsesClass(Cost::class)]
@@ -188,6 +190,50 @@ final class ReviewChangeTest extends KernelTestCase
 
         $review = $this->reviewWith(new RejectingJudge(new VerdictPerRole(['Look at part 1.' => $verdict])));
 
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
+    }
+
+    public function testAReviewerWhoseOnlyFindingsAreP3AndAllDeferredCountsAsApprovingWithFollowUps(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('A', Severity::P3), $this->finding('B', Severity::P3)], [], []);
+
+        $review = $this->reviewWith(new DeferringJudge(new VerdictPerRole(['Look at part 1.' => $verdict])));
+
+        self::assertSame(Decision::Approve, $review->decision);
+        self::assertSame([], $review->actList);
+    }
+
+    public function testAReviewerWhoseOnlyFindingIsAP3TheJudgeRejectsCountsAsApproving(): void
+    {
+        $review = $this->reviewWith(new RejectingJudge(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P3)], [], [])])));
+
+        self::assertSame(Decision::Approve, $review->decision);
+    }
+
+    public function testTheVerdictShownForAReviewerCountedAsApprovingStillReadsAsItsOwn(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('A', Severity::P3)], [], []);
+
+        $review = $this->reviewWith(new DeferringJudge(new VerdictPerRole(['Look at part 1.' => $verdict])));
+
+        self::assertSame([Decision::Changes, Decision::Approve], array_map(static fn ($vote): Decision => $vote->verdict->verdict, $review->verdicts));
+    }
+
+    public function testAP3TheJudgeMarksActKeepsTheRoundAtChangesWithThatFindingOnTheActList(): void
+    {
+        $review = $this->reviewWith(new JudgeRejectingFindings(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P3)], [], [])]), []));
+
+        self::assertSame(Decision::Changes, $review->decision);
+        self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
+    }
+
+    public function testARoundThatEndsAsChangesForAP2NamesItOnTheActList(): void
+    {
+        $verdict = new Verdict(Decision::Changes, [$this->finding('A', Severity::P2), $this->finding('B', Severity::P3)], [], []);
+
+        $review = $this->reviewWith(new DeferringJudge(new VerdictPerRole(['Look at part 1.' => $verdict])));
+
+        self::assertSame(Decision::Changes, $review->decision);
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
     }
 
