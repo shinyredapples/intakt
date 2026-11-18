@@ -101,6 +101,7 @@ use Symfony\AI\Platform\Exception\BadRequestException;
 use Symfony\AI\Platform\Exception\IncompleteStreamException;
 use Symfony\AI\Platform\Exception\MaxOutputTokensException;
 use Symfony\AI\Platform\Exception\RateLimitExceededException;
+use Symfony\AI\Platform\Exception\RuntimeException as PlatformRuntimeException;
 use Symfony\AI\Platform\Exception\ServerException;
 use Symfony\AI\Platform\Exception\UnexpectedResultTypeException;
 use Symfony\AI\Platform\Model;
@@ -1011,7 +1012,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
             model: 'big',
         ));
         $converter = self::createStub(ResultConverterInterface::class);
-        $converter->method('convert')->willThrowException(new RuntimeException('not a verdict'));
+        $converter->method('convert')->willThrowException(new PlatformRuntimeException('not a verdict'));
         $converter->method('getTokenUsageExtractor')->willReturn($extractor);
         $result = new DeferredResult($converter, new InMemoryRawResult());
         $ledger = new InMemoryLedger();

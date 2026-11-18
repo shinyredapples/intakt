@@ -1,6 +1,6 @@
 # Design scoring
 
-Status: decided design (owner decision 2026-11-04, issue #863); nothing of it is built yet. The plan tasks are T84 (objective checks), T85 (the rubric) and T86 (the taste ladder) in [the plan](../../plan.md#the-designer).
+Status: decided design (owner decision 2026-11-04, issue #863); nothing of it is built yet. The plan tasks are T89 (objective checks), T90 (the rubric) and T91 (the taste ladder) in [the plan](../../plan.md#the-designer).
 
 The Designer (see [the team](01-overview.md#the-team)) makes user-facing work measurable in three layers, from hard to soft: objective checks that block, a scored rubric with evidence, and taste learned from the owner by pairwise comparison. When the Designer is active and what it adds before a build are in [Reviews](07-reviews.md#the-designer); this page holds the scoring.
 
@@ -18,7 +18,7 @@ Each item is a check of its own, run by the check job like any other check of th
 
 ## Layer 2: the rubric
 
-On a user-facing head the Designer scores each screen the change touches against fixed usability heuristics: clarity, feedback, states, consistency, error recovery and copy. The heuristics are fixed so that scores stay comparable over time; the rubric task (T85) picks the scale.
+On a user-facing head the Designer scores each screen the change touches against fixed usability heuristics: clarity, feedback, states, consistency, error recovery and copy. The heuristics are fixed so that scores stay comparable over time; the rubric task (T90) picks the scale.
 
 - **Every score cites evidence:** a region of a named screenshot (the screen, the width and the area) and what is wrong there. The scores are part of the Designer's typed verdict, and plain code refuses a score without its evidence, as it refuses any invalid verdict ([Reviews](07-reviews.md)).
 - **A low score is a review finding, not a gate.** It enters the Designer's verdict as a finding with its evidence and goes through the judge like any reviewer's finding; no score threshold blocks a merge on its own.
@@ -31,7 +31,7 @@ Taste cannot be checked, so it is learned from the owner and measured.
 - **Variants and a ladder:** for a visible design choice (a layout, an emphasis, a tone of copy), the Designer creates variants and compares them in pairs. Each comparison is blind: the variants are shown under neutral names in random order, without saying which one is the current design or which one came first. The pairwise results rank the variants into a preference ladder.
 - **What the ranking session sees:** names and order alone are not blind if the judge remembers making the variants or has seen main. So the session that writes the variants never ranks them. Each pair is ranked by a fresh session with no tools and no memory of the task's sessions; plain code builds its whole input from an allow-list: the two screenshots the check job rendered, under neutral names, the task's stated outcome and the fixed heuristics. It gets no variant source, no diff, no screenshot of main, no plan or design text and no transcript of the session that wrote the variants. The neutral names are drawn at random per pair, so they carry no order. The mapping from a neutral name to its variant stays with the orchestrator.
 - **The owner votes on a sample:** the owner gets a sample of the pairs, not every pair, shown the same blind way and without the Designer's choice. The Designer's agreement with the owner (the share of sampled pairs where both chose the same variant) is measured and shown on the [dashboard](13-dashboard.md#design-scores).
-- **Asking follows agreement:** while agreement is low, a choice with character goes to the owner as options (a question that parks the task, see [Questions and steering](05-questions-and-steering.md)). As measured agreement rises, fewer such choices are asked, and the Designer takes the top of its ladder. Agreement only ever comes from the owner's own votes; the ladder task (T86) sets how the share of questions follows it.
+- **Asking follows agreement:** while agreement is low, a choice with character goes to the owner as options (a question that parks the task, see [Questions and steering](05-questions-and-steering.md)). As measured agreement rises, fewer such choices are asked, and the Designer takes the top of its ladder. Agreement only ever comes from the owner's own votes; the ladder task (T91) sets how the share of questions follows it.
 
 ## Tools
 
