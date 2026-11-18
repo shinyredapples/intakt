@@ -44,10 +44,12 @@ final readonly class Redaction
      */
     private function redactHeldCredentials(string $text, array $credentials): string
     {
-        // Longest first, so a credential that contains another is redacted whole.
-        usort($credentials, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        // A value read from a file often ends in a newline that a quote of it leaves out, so its trimmed form is held too.
+        $forms = array_merge($credentials, array_map(trim(...), $credentials));
+        // Longest first, so a credential that contains another, or its own trimmed form, is redacted whole.
+        usort($forms, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
 
-        foreach ($credentials as $credential) {
+        foreach (array_unique($forms) as $credential) {
             if ('' === $credential) {
                 continue;
             }

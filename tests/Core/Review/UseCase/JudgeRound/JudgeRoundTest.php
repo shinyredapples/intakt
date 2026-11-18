@@ -219,6 +219,26 @@ final class JudgeRoundTest extends KernelTestCase
         self::assertSame(['F1' => $redacted], $this->judgeDonePayloads()[0]['judge_notes']);
     }
 
+    public function testAJudgesNoteQuotingAHeldCredentialWithoutItsTrailingNewlineIsStoredRedacted(): void
+    {
+        $round = $this->completedRound();
+        $held = "synthetic opaque credential\n";
+        $original = $_ENV['APP_SECRET'] ?? null;
+        $_ENV['APP_SECRET'] = $held;
+
+        try {
+            $this->fixture->judge(new ScriptedJudgement(new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'The value was '.trim($held).' here.')])))($this->judgingOf($round));
+        } finally {
+            if (null === $original) {
+                unset($_ENV['APP_SECRET']);
+            } else {
+                $_ENV['APP_SECRET'] = $original;
+            }
+        }
+
+        self::assertSame(['F1' => 'The value was [redacted] here.'], $this->judgeDonePayloads()[0]['judge_notes']);
+    }
+
     public function testJudgeDoneHoldsEveryJudgedFindingWithItsLedgerIdSeverityAndText(): void
     {
         $round = $this->completedRound();

@@ -26,6 +26,27 @@ final class RedactionTest extends TestCase
         self::assertSame('value [redacted] here', $redacted);
     }
 
+    public function testItRedactsAHeldCredentialWithATrailingNewlineFoundWithoutIt(): void
+    {
+        $redacted = new Redaction()->redact('the value key-one ends here', "key-one\n");
+
+        self::assertSame('the value [redacted] ends here', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialWithEdgeSpacesFoundTrimmed(): void
+    {
+        $redacted = new Redaction()->redact('value:key-one.', '  key-one  ');
+
+        self::assertSame('value:[redacted].', $redacted);
+    }
+
+    public function testItRedactsAHeldCredentialFoundWithItsEdgeWhitespaceAsOneMarker(): void
+    {
+        $redacted = new Redaction()->redact("value: key-one \n.", " key-one \n");
+
+        self::assertSame('value:[redacted].', $redacted);
+    }
+
     public function testItRedactsAHeldCredentialEncodedTwice(): void
     {
         $credential = 'pa"ss/wo\\rd';
