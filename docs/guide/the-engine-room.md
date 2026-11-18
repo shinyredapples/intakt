@@ -24,6 +24,8 @@ flowchart LR
 
 How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
 
+Builders on one machine share its processors. What keeps them apart today is each build job's own limit: 2 processors and 4 GiB of memory, from which the builder's check sizes itself (one gate at a time, the tests gate included). Intakt also works out a ceiling for the checks a builder runs at a time when more slots share the machine: the machine's processors divided by the number of slots, rounded down to a whole number (11 processors and 3 slots give 3), at least 2 and at most 8. A build job passes this number on to its builder's check only when there is more than one slot and the number is lower than what the check would pick by itself from the job's limits; it never raises that pick, because the job's memory would not hold more. With today's job limits the ceiling (2 or more) is never lower than the check's own pick (1), so the number of slots does not change a build job's check yet. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)).
+
 ## Queues: who is next
 
 There are two queues: tasks **waiting to be built** and finished work **waiting to be reviewed**. They are sorted differently. *(Planned:)* The build queue will go milestone by milestone. Today it puts priority before the milestone's due date (`urgent`, then priority, then milestone, then the oldest task); the order described next is designed and arrives with the work-intake task. In it, `urgent` tasks come first, then the tasks of the milestone due soonest (tasks with no milestone, or a milestone without a due date, come last), and only within one milestone does priority decide (`high`, then `normal`, then `low`; a task with no priority counts as `normal`), then the oldest task. So a later milestone only gets build time when every ready task of the earlier one is taken or blocked. One exception in the build queue: a task whose pull request is already open (it needs a fix or an update) goes before any task not started yet, unless that task is `urgent`, so open work lands before new work begins. A task held back because its files are in use never lets a later milestone go ahead (see [the journey of a task](the-journey-of-a-task.md)). Today the review queue goes priority first (`urgent`, `high`, `normal`, `low`), then age. One exception in the review queue: a change that is approved, has green checks and needs nothing else is merged before any new review starts, whatever its priority, because waiting only creates more work.
@@ -44,6 +46,8 @@ Some loops run on a **tick**: a clock that wakes every lane every few minutes ("
 | you approve something | it moves on |
 
 Everything that waits has a **deadline** that wakes it, for example "check again in 2 minutes whether CI started". A slow **heartbeat** runs as a safety net, in case GitHub forgets to send an event. When nothing needs doing, nothing runs.
+
+*(Planned:)* GitHub does not tell Intakt when CI finishes or you approve something unless webhooks are set up, so Intakt has to look. While a bench waits for GitHub (CI, an approval, a new version of a bot's pull request), it will look again within seconds: after 30 seconds, then 1, 2 and 4 minutes, then at its usual pace. When its usual pace is already quicker than the next early look, the usual look takes over sooner. A look that finds GitHub still busy moves on to the next, longer wait, counted from that look, and the bench's usual look leaves alone whatever is not due yet, so the two never add up. A look that falls between two usual looks happens at its own time, not at the next usual look. If the bench is busy with something else when a look is due, the look happens as soon as the bench is free. Anything the bench actually does starts the count again, but never pushes a look later: a look that is already due still happens as soon as the bench is free. Each bench has at most one such early look waiting, and it never runs at the same time as the bench's usual look. When the hour's GitHub allowance runs low, the early looks stop until it refills. You can turn them off in your settings; they are on unless you do. The dashboard says when a bench looks next and what for, for example "next check in 60s, waiting for CI".
 
 ## CI: the second opinion
 
@@ -111,19 +115,32 @@ flowchart LR
 
 ## Draining and updates
 
-**Draining** is how Intakt updates itself without breaking work in progress:
+**Draining** means a part of Intakt starts no new jobs and lets the running ones finish. Intakt uses it to update itself without stopping your work (planned; this is the decided design):
 
 ```mermaid
 flowchart LR
-  a[New version ready] --> b[Drain:<br/>start no new jobs]
-  b --> c[Running jobs finish<br/>work waiting on CI or you is parked]
-  c --> d[Swap in the new version]
-  d --> e{Starts and works?}
-  e -- yes --> f[Resume]
-  e -- no --> g[Roll back to the old version,<br/>resume, alert]
+  a[New version ready] --> b[Installed beside the old one<br/>the old one keeps working]
+  b --> c{Its own check passes?<br/>a failure the old one<br/>has too doesn't count}
+  c -- no --> g[Drop the new version,<br/>alert you]
+  c -- yes --> d[One builder slot<br/>tries the new version]
+  d --> e{First build fine,<br/>or quiet for a while?}
+  e -- yes --> f[The other slots follow,<br/>each when its job is done]
+  e -- no --> h[Roll back,<br/>alert you]
+  f --> k{A job still running<br/>at its slot's deadline?}
+  k -- yes --> i[That job is saved<br/>and picked up<br/>on the new version]
+  k -- no --> j[Intakt's control process<br/>switches in seconds,<br/>running reviews keep going]
+  i --> j
 ```
 
-While a drain is on, the dashboard says "draining" and nothing new starts; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold the drain up.
+- **Beside the old one:** the new version is checked while the old one keeps building and reviewing. Intakt compares the two checks test by test: if a test fails the same way on the old version too (the same test, stopping at the same line with the same failure message), that is a problem of your project, not of the update, so you hear about it and the update goes on. A test that fails only on the new version, or fails there at a different line or with a different message, stops the update.
+- **The old one stays in charge:** until the end of the update, the old version alone hands out work and keeps the records, so nothing is picked up twice. At the end, Intakt's own control process switches in seconds (an old one that hangs is stopped after a short deadline, so new work never waits on it; if it hung before handing over, the old version starts again and carries on); reviews that are running keep running and their results arrive as usual.
+- **One slot first:** one builder slot tries the new version. The others follow once its first build ended without trouble from Intakt itself, or after a set time with no failure. A job always finishes on the version it started on.
+- **Only switching slots wait:** while a slot switches, it starts nothing new. First that is the one slot trying the new version; after it, the remaining builder slots switch together, so the dashboard can show several slots draining at once while the reviews go on. A slot waits only up to a deadline: a job still running then is stopped with its work kept, and continues on the new version.
+- **Everything pauses only rarely:** an update that changes stored data so the old version could not read it says so, and only such an update pauses all work, as one short drain of everything.
+- **Update windows:** updates that are not urgent wait for the times of day you set in the settings, at most a few a day; at the next window Intakt installs the newest version published by then. An urgent release (a security fix, or a fix for something that stops work) and a version you pick yourself install right away.
+- **If anything fails,** Intakt goes back to the old version, which stays installed until the update has proved itself, and tells you at once. One case cannot go back: when an update that changes stored data fails after work has resumed, the old version can no longer read the data, so Intakt pauses all work, tells you, and a newer version fixes it.
+
+While a slot drains, the dashboard says "draining" on that slot; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold a drain up.
 
 ## Holds, hand-overs and caps
 

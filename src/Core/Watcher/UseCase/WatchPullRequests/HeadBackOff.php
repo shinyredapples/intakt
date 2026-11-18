@@ -36,18 +36,45 @@ final readonly class HeadBackOff
         try {
             return $step();
         } catch (ForgeRateLimited $paused) {
-            // No failure, because the forge refused the read before any request and named when it answers again; counted as one, a pause of a few ticks handed a healthy head over.
-            $this->logger->info('A head waits for the forge\'s rate-limit reset.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'resets_at' => $paused->resetsAt->format(DATE_ATOM)]);
-            $this->pending->waitUntil($project, $head, $paused->resetsAt);
+            $this->waitForTheReset($project, $head, $paused);
 
             return null;
         } catch (Throwable $failure) {
-            $this->logger->error('A head failed; it backs off alone.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $failure]);
-            $this->reopenEntityManager();
-            $this->failed->backOff($project, $head, $failure);
+            $this->backOffAlone($project, $head, $failure);
 
             return null;
         }
+    }
+
+    // No failure, because the forge refused the read before any request and named when it answers again; counted as one, a pause of a few ticks handed a healthy head over.
+    private function waitForTheReset(string $project, OpenChange $head, ForgeRateLimited $paused): void
+    {
+        $this->logger->info('A head waits for the forge\'s rate-limit reset.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'resets_at' => $paused->resetsAt->format(DATE_ATOM)]);
+
+        // Boundary too, because a wait that cannot be stored is a failure of this head alone and must not end the tick for the heads after it.
+        try {
+            $this->pending->waitUntil($project, $head, $paused->resetsAt);
+        } catch (Throwable $failure) {
+            $this->backOffAfterAFailedWait($project, $head, $failure);
+        }
+    }
+
+    // Contained, because a database error of this head's row can reject the back-off as it rejected the wait, and the heads after it must still run; nothing was stored, so the head stays due for the next tick.
+    private function backOffAfterAFailedWait(string $project, OpenChange $head, Throwable $failure): void
+    {
+        try {
+            $this->backOffAlone($project, $head, $failure);
+        } catch (Throwable $notBackedOff) {
+            $this->logger->error('A head\'s back-off could not be stored; it stays due for the next tick.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $notBackedOff]);
+            $this->reopenEntityManager();
+        }
+    }
+
+    private function backOffAlone(string $project, OpenChange $head, Throwable $failure): void
+    {
+        $this->logger->error('A head failed; it backs off alone.', ['project' => $project, 'change' => $head->id->value, 'head' => $head->head->hash, 'exception' => $failure]);
+        $this->reopenEntityManager();
+        $this->failed->backOff($project, $head, $failure);
     }
 
     // A failed flush closes the entity manager for every holder and Doctrine refuses to reopen it, so without a reset the back-off and every later head would fail too.
