@@ -27,6 +27,8 @@ On the dashboard every card, lane and "Waiting on you" item carries its project,
 
 The AI accounts, and the builders and reviewers using them, are shown **once** for the whole install, each with the project and task it is working on, so you never see the same reviewer counted twice.
 
+*(Planned:)* The **New task** box at the top of the dashboard always asks which project the work is for (the filter's project, if it shows one), and words that describe work for two projects become two drafts, one per project ([starting a task from the dashboard](a-tour-of-the-dashboard.md#starting-a-task-from-the-dashboard)).
+
 ## Each project keeps to itself
 
 - Each project has its **own** tasks, queue, settings, checks, protected files and project memory.
