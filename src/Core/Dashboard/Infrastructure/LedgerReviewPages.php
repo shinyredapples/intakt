@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Dashboard\Infrastructure;
 
+use Intakt\Core\Build\Contract\BuildStep;
+use Intakt\Core\Build\Contract\BuildStepOutcome;
 use Intakt\Core\Dashboard\Domain\Board;
 use Intakt\Core\Dashboard\Domain\Review;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
@@ -89,7 +91,22 @@ final readonly class LedgerReviewPages
 
     public function boardOf(RecordedEvents $events): Board
     {
-        return new Board($this->rounds($events)->reviews(), count(new LedgerBuildSteps()->in($events)));
+        $tasks = new LedgerBuildSteps()->in($events);
+
+        return new Board($this->rounds($events)->reviews(), count($tasks), $this->projectsBuilding($tasks));
+    }
+
+    // A task whose latest step passed is still on its way to its push, while a failed step or a passed push leaves it at rest.
+    /**
+     * @param list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}> $tasks
+     *
+     * @return list<string>
+     */
+    private function projectsBuilding(array $tasks): array
+    {
+        $inFlight = array_filter($tasks, static fn (array $task): bool => BuildStepOutcome::Passed->value === $task['outcome'] && BuildStep::Push->value !== $task['step']);
+
+        return array_values(array_map(static fn (array $task): string => $task['project'], $inFlight));
     }
 
     private function rounds(RecordedEvents $events): LedgerRounds

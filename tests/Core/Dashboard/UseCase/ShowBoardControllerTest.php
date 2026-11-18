@@ -80,6 +80,43 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertCount(0, $page->filter('#board-octopus img[src*="octopus-waiting-"]'));
         self::assertCount(0, $page->selectLink('Set up Intakt'));
+        self::assertCount(0, $page->filter('#board-octopus:not([hidden]) img[src*="octopus-asleep-"]'));
+    }
+
+    public function testABuildBetweenItsTaskAndMirrorStepsShowsNoOctopus(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('#board-octopus[hidden]:empty'));
+        self::assertSame('A build is running. Nothing needs you.', $page->filter('.page-head .lead')->text());
+    }
+
+    public function testATaskWhoseLatestStepFailedWithNoCardShowsTheAsleepOctopus(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->failBuildStep('42', 'mirror', 'git fetch failed');
+
+        self::assertCount(2, $this->browser->request('GET', '/')->filter('#board-octopus:not([hidden]) img[alt=""][src*="octopus-asleep-"]'));
+    }
+
+    public function testATaskWhosePushPassedWithNoCardShowsTheAsleepOctopus(): void
+    {
+        $this->ledger->passBuildStep('alpha', '42', 'task');
+        $this->ledger->passBuildStep('alpha', '42', 'push');
+
+        self::assertCount(2, $this->browser->request('GET', '/')->filter('#board-octopus:not([hidden]) img[alt=""][src*="octopus-asleep-"]'));
+    }
+
+    public function testAProjectWithABuildInFlightIsLeftOutOfTheIdleProjects(): void
+    {
+        $this->ledger->startRound('round-1', 'beta');
+        $this->ledger->judgeRound('round-1');
+        $this->ledger->startRoundOf('42', 'round-2', 1);
+        $this->ledger->passBuildStep('beta', '7', 'clone');
+
+        self::assertNull($this->browser->request('GET', '/')->filter('#board-octopus')->attr('data-idle-projects'));
     }
 
     public function testAFreshInstallsBoardShowsTheWaitingOctopusAboveItsOneLineEmptyStateText(): void

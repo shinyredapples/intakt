@@ -38,7 +38,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testTheWaitingCountInTheBoardHeadlineCarriesTheNeedsYouStyle(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([]), [$this->review('round-7', '7'), $this->review('round-9', '9')], 2));
+        $line = $this->rendered(new Headline(new WhoIsWorking([]), [$this->review('round-7', '7'), $this->review('round-9', '9')], 2, 0));
 
         self::assertSame('Nothing is running. 2 need you: see what.', $line->text());
         self::assertSame(['2'], $line->filter('.count.needs')->each(static fn (Crawler $count): string => $count->text()));
@@ -49,7 +49,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
     {
         $running = $this->review('round-3', '3');
 
-        $line = $this->rendered(new Headline(new WhoIsWorking([$running]), [], 1));
+        $line = $this->rendered(new Headline(new WhoIsWorking([$running]), [], 1, 0));
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change. Nothing needs you.', $line->text());
         self::assertCount(0, $line->filter('.count'));
@@ -58,7 +58,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testTheLeadLinksToTheReviewOfTheRunningRound(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3'), $this->review('round-5', '5')]), [], 2));
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3'), $this->review('round-5', '5')]), [], 2, 0));
 
         $link = $line->filter('a');
 
@@ -68,7 +68,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testTheLeadLinkAndTheSeeWhatLinkStandSideBySide(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3')]), [$this->review('round-7', '7')], 2));
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3')]), [$this->review('round-7', '7')], 2, 0));
 
         self::assertSame(['/reviews/round-3', '/reviews/round-7'], $line->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('href')));
         self::assertCount(0, $line->filter('a a'));
@@ -76,14 +76,14 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testTheLeadHasNoLinkWhenNothingIsRunning(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 1));
+        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 1, 0));
 
         self::assertCount(0, $line->filter('a'));
     }
 
     public function testARunningChangeIsNamedOnWideScreensAndCountedOnPhones(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3'), $this->review('round-5', '5')]), [], 2));
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3'), $this->review('round-5', '5')]), [], 2, 0));
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample and change 5 of sample.', $line->filter('.headline-long')->text());
         self::assertSame('The Code reviewers are reviewing 2 changes.', $line->filter('.headline-short')->text());
@@ -91,7 +91,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testBothOpeningsComeBeforeTheSingularWaitingCountAndItsLink(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3')]), [$this->review('round-7', '7')], 2));
+        $line = $this->rendered(new Headline(new WhoIsWorking([$this->review('round-3', '3')]), [$this->review('round-7', '7')], 2, 0));
 
         self::assertSame('The Code reviewers are reviewing change 3 of sample. The Code reviewers are reviewing 1 change. 1 needs you: see what.', $line->text());
         self::assertSame(['1'], $line->filter('.count.needs')->each(static fn (Crawler $count): string => $count->text()));
@@ -100,7 +100,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testWithNothingRunningTheHeadlineHasOneOpening(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 1));
+        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 1, 0));
 
         self::assertSame('Nothing is running. Nothing needs you.', $line->text());
         self::assertCount(0, $line->filter('.headline-long, .headline-short'));
@@ -108,7 +108,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testAFreshInstallsHeadlineIsItsOpeningAlone(): void
     {
-        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 0));
+        $line = $this->rendered(new Headline(new WhoIsWorking([]), [], 0, 0));
 
         self::assertSame('Nothing is running yet. Start the first review.', $line->text());
         self::assertCount(0, $line->filter('.count'));
@@ -116,7 +116,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testAFreshInstallsHeadlineLinksTheFirstRunPage(): void
     {
-        $link = $this->rendered(new Headline(new WhoIsWorking([]), [], 0))->filter('a');
+        $link = $this->rendered(new Headline(new WhoIsWorking([]), [], 0, 0))->filter('a');
 
         self::assertSame(['/setup'], $link->each(static fn (Crawler $a): ?string => $a->attr('href')));
         self::assertSame('Nothing is running yet. Start the first review.', $link->text());
@@ -124,7 +124,7 @@ final class BoardHeadlineMarkupTest extends KernelTestCase
 
     public function testAFreshInstallsHeadlineLinkCarriesTheClassThatMakesItATouchTargetOnAPhone(): void
     {
-        self::assertSame(['headline-start'], $this->rendered(new Headline(new WhoIsWorking([]), [], 0))->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('class')));
+        self::assertSame(['headline-start'], $this->rendered(new Headline(new WhoIsWorking([]), [], 0, 0))->filter('a')->each(static fn (Crawler $a): ?string => $a->attr('class')));
     }
 
     private function rendered(Headline $headline): Crawler

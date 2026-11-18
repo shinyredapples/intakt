@@ -20,7 +20,7 @@ final class BoardColumnTemplateTest extends KernelTestCase
         self::assertInstanceOf(Environment::class, $twig);
 
         $html = $twig->render('dashboard/_board_column.html.twig', [
-            'board' => new Board([]),
+            'board' => new Board([], 0, []),
             'column' => BoardColumn::Done,
             'limit' => Board::PAGE_LIMIT,
         ]);
