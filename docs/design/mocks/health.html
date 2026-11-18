@@ -20,9 +20,9 @@
     <p class="lead">What Intakt itself needs to run work: the sandbox, package installs, the boot gate, access to your forge, and the jobs it runs on a schedule.</p>
   </div>
 </div>
-<nav class="subtabs" aria-label="Project views"><a href="projects.html">Projects</a><a href="health.html" aria-current="page">Health <span class="count" style="margin-left:6px">2 broken</span></a></nav>
+<nav class="subtabs" aria-label="Project views"><a href="projects.html">Projects</a><a href="health.html" aria-current="page">Health <span class="count" style="margin-left:6px" data-sum="tab">2 broken</span></a></nav>
 
-<p class="health-sum"><span class="dot broken"></span> 2 broken, both with the Maintainer. 1 waits on you. 7 working. 1 off. 5 of 6 background jobs on.</p>
+<p class="health-sum"><span class="dot broken"></span> <span data-sum="broken">2 broken, both with the Maintainer</span>. 1 waits on you. <span data-sum="working">7</span> working. <span data-sum="off">1</span> off. <span data-sum="on">5</span> of 6 background jobs on.</p>
 
 <div class="list health">
   <article class="hrow broken">
@@ -70,83 +70,83 @@
 <p class="muted">What Intakt runs on its own schedule, what each costs, and when it runs next. Only you can switch a job off or run it now.</p>
 <div class="list health">
   <article class="hrow broken">
-    <span class="dot broken" aria-hidden="true"></span>
+    <span class="dot broken" data-on="broken" aria-hidden="true"></span>
     <div class="body">
-      <h3>Usage probes <span class="red">broken</span></h3>
+      <h3>Usage probes <span class="red" data-when="on">broken</span> <span class="muted" data-when="off" hidden>off</span></h3>
       <dl class="kv">
         <dt>Purpose</dt><dd>Asks each vendor how much of every account's allowance is used, so builds start only when there is room.</dd>
         <dt>Runs</dt><dd>Every 10 minutes. Owned by the Maintainer. No tokens: plain code.</dd>
         <dt>Last run</dt><dd>11:20, failed: the vendor's usage page answers 429 for the Work subscription. 3 failed runs in a row, since 11:00. 0 tokens.</dd>
-        <dt>Next run</dt><dd>11:30</dd>
+        <dt>Next run</dt><dd data-next="11:30">11:30</dd>
         <dt>Who has it</dt><dd>The Maintainer. Until a probe works again, the planner uses the last reading, from 10:50.</dd>
       </dl>
     </div>
-    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Usage probes on"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Usage probes: running now">Run now</button></div>
+    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Usage probes"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Usage probes: running now">Run now</button></div>
   </article>
   <article class="hrow">
-    <span class="dot ok" aria-hidden="true"></span>
+    <span class="dot ok" data-on="ok" aria-hidden="true"></span>
     <div class="body">
-      <h3>Backlog sweep</h3>
+      <h3>Backlog sweep <span class="muted" data-when="off" hidden>off</span></h3>
       <dl class="kv">
         <dt>Purpose</dt><dd>Checks every ready issue that is not in flight against main and recent and open issues, for work that is done, superseded or a duplicate. Closes only what it can confirm, with the evidence, and lists the rest for the Product owner.</dd>
         <dt>Runs</dt><dd>Monthly, on the 1st at 03:00. Owned by the Maintainer. About 1M tokens a run, from acme-shop's weekly share.</dd>
         <dt>Last run</dt><dd>1 Nov 03:00, done in 2 h 10 min: 213 issues checked, 2 closed, 5 listed for the Product owner. 0.9M tokens.</dd>
-        <dt>Next run</dt><dd>1 Dec 03:00</dd>
+        <dt>Next run</dt><dd data-next="1 Dec 03:00">1 Dec 03:00</dd>
       </dl>
     </div>
-    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Backlog sweep on"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Backlog sweep: running now, about 1M tokens">Run now</button><a class="btn quiet sm" href="project.html">acme-shop</a></div>
+    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Backlog sweep"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Backlog sweep: running now, about 1M tokens">Run now</button><a class="btn quiet sm" href="project.html">acme-shop</a></div>
   </article>
   <article class="hrow">
-    <span class="dot ok" aria-hidden="true"></span>
+    <span class="dot ok" data-on="ok" aria-hidden="true"></span>
     <div class="body">
-      <h3>Watcher tick</h3>
+      <h3>Watcher tick <span class="muted" data-when="off" hidden>off</span></h3>
       <dl class="kv">
         <dt>Purpose</dt><dd>Looks at each watched project's open pull requests and starts a review for a new version once its checks are green.</dd>
         <dt>Runs</dt><dd>Every minute. Owned by the Maintainer. No tokens: plain code.</dd>
         <dt>Last run</dt><dd>11:29, done: 2 projects, 7 pull requests, 1 review started. 0 tokens.</dd>
-        <dt>Next run</dt><dd>11:30</dd>
+        <dt>Next run</dt><dd data-next="11:30">11:30</dd>
       </dl>
     </div>
-    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Watcher tick on"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Watcher tick: running now">Run now</button></div>
+    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Watcher tick"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Watcher tick: running now">Run now</button></div>
   </article>
   <article class="hrow">
-    <span class="dot ok" aria-hidden="true"></span>
+    <span class="dot ok" data-on="ok" aria-hidden="true"></span>
     <div class="body">
-      <h3>Deadlines</h3>
+      <h3>Deadlines <span class="muted" data-when="off" hidden>off</span></h3>
       <dl class="kv">
         <dt>Purpose</dt><dd>Wakes up tasks whose wait has reached its deadline.</dd>
         <dt>Runs</dt><dd>Every minute. Owned by the Maintainer. No tokens: plain code.</dd>
         <dt>Last run</dt><dd>11:29, done: nothing due. 0 tokens.</dd>
-        <dt>Next run</dt><dd>11:30</dd>
+        <dt>Next run</dt><dd data-next="11:30">11:30</dd>
       </dl>
     </div>
-    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Deadlines on"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Deadlines: running now">Run now</button></div>
+    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Deadlines"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Deadlines: running now">Run now</button></div>
   </article>
   <article class="hrow">
-    <span class="dot ok" aria-hidden="true"></span>
+    <span class="dot ok" data-on="ok" aria-hidden="true"></span>
     <div class="body">
-      <h3>Heartbeat</h3>
+      <h3>Heartbeat <span class="muted" data-when="off" hidden>off</span></h3>
       <dl class="kv">
-        <dt>Purpose</dt><dd>Sends a beat to the check outside your install, which alerts you when the beats stop. A beat goes out only when the consumers, the Scheduler and the Maintainer all finished work in the interval.</dd>
+        <dt>Purpose</dt><dd>Sends a beat to the check outside your install, which alerts you when the beats stop. A beat goes out only when the consumers, the Scheduler and the Maintainer each finished work or an idle check in the interval, so an idle install still sends beats and a hung worker stops them.</dd>
         <dt>Runs</dt><dd>Every 5 minutes. Owned by the Maintainer. No tokens: plain code. Switching it off stops the beats, so the outside check will alert you that Intakt went quiet.</dd>
         <dt>Last run</dt><dd>11:25, done: beat sent. 0 tokens.</dd>
-        <dt>Next run</dt><dd>11:30</dd>
+        <dt>Next run</dt><dd data-next="11:30">11:30</dd>
       </dl>
     </div>
-    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Heartbeat on"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Heartbeat: sending a beat now">Run now</button></div>
+    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" checked aria-label="Heartbeat"><span></span></span>On</label><button class="btn secondary sm" type="button" data-toast="Heartbeat: sending a beat now">Run now</button></div>
   </article>
   <article class="hrow">
-    <span class="dot idle" aria-hidden="true"></span>
+    <span class="dot idle" data-on="ok" aria-hidden="true"></span>
     <div class="body">
-      <h3>Weekly cleanup <span class="muted">off</span></h3>
+      <h3>Weekly cleanup <span class="muted" data-when="off">off</span></h3>
       <dl class="kv">
-        <dt>Purpose</dt><dd>Deletes the branches Intakt made once they are no longer needed: merged pull requests, closed ones after 30 days, and branches with no pull request after 60 days unless claimed. A week before, it lists what it will delete.</dd>
+        <dt>Purpose</dt><dd>Deletes the branches Intakt made once they are no longer needed: merged pull requests, closed ones after 30 days unless the pull request has the <span class="mono">keep</span> label, and branches with no pull request after 60 days unless claimed. A week before, it lists what it will delete.</dd>
         <dt>Runs</dt><dd>Weekly, Sundays at 04:00. Owned by the Maintainer. No tokens: plain code.</dd>
         <dt>Last run</dt><dd>2 Nov 04:00, done: 14 branches deleted. 0 tokens.</dd>
-        <dt>Next run</dt><dd>None while it is off. Switched off by you on 4 Nov 18:22.</dd>
+        <dt>Next run</dt><dd data-next="Sunday 04:00">None while it is off. Switched off by you on 4 Nov 18:22.</dd>
       </dl>
     </div>
-    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" aria-label="Weekly cleanup on"><span></span></span>Off</label><button class="btn secondary sm" type="button" data-toast="Weekly cleanup: running now">Run now</button></div>
+    <div class="side-actions"><label style="display:flex;align-items:center;gap:10px"><span class="switch"><input type="checkbox" role="switch" aria-label="Weekly cleanup"><span></span></span>Off</label><button class="btn secondary sm" type="button" data-toast="Weekly cleanup: running now">Run now</button></div>
   </article>
 </div>
 </section>
@@ -154,6 +154,30 @@
 </div>
 </div>
 <script src="assets/intakt.js"></script>
-<script>document.querySelectorAll(".switch input").forEach((c)=>c.addEventListener("change",()=>{c.closest("label").lastChild.textContent=c.checked?"On":"Off";}));</script>
+<script>
+(() => {
+  const count = (selector) => document.querySelectorAll(selector).length;
+  const sum = (key, text) => { document.querySelector('[data-sum="' + key + '"]').textContent = text; };
+  document.querySelectorAll("#jobs .hrow").forEach((row) => {
+    const box = row.querySelector(".switch input");
+    const dot = row.querySelector(".dot");
+    const next = row.querySelector("[data-next]");
+    box.addEventListener("change", () => {
+      const on = box.checked;
+      box.closest("label").lastChild.textContent = on ? "On" : "Off";
+      dot.className = "dot " + (on ? dot.dataset.on : "idle");
+      row.classList.toggle("broken", on && dot.dataset.on === "broken");
+      row.querySelectorAll("[data-when]").forEach((tag) => { tag.hidden = (tag.dataset.when === "on") !== on; });
+      next.textContent = on ? next.dataset.next : "None while it is off. Switched off by you just now.";
+      const broken = count(".hrow.broken");
+      sum("tab", broken + " broken");
+      sum("broken", broken === 2 ? "2 broken, both with the Maintainer" : broken + " broken, with the Maintainer");
+      sum("working", count(".hrow .dot.ok"));
+      sum("off", count(".hrow .dot.idle"));
+      sum("on", count("#jobs .switch input:checked"));
+    });
+  });
+})();
+</script>
 </body>
 </html>
