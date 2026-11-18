@@ -200,6 +200,31 @@ final class CheckScriptTest extends TestCase
         self::assertFileDoesNotExist($this->work.'/clone/ran');
     }
 
+    public function testAConflictThatLeavesNoUnmergedPathLeavesConflictsWithMainAndRunsNoStep(): void
+    {
+        $this->history->checkout('main');
+        $this->history->commitFile('old/a.txt', "first file\n", 'Add first file');
+        $this->history->commitFile('old/b.txt', "second file\n", 'Add second file');
+        $this->history->push('main');
+        $this->history->checkout('task');
+        $this->history->merge('main');
+        $this->history->commitFile('old/new.txt', "new file\n", 'Add a file to the directory');
+        $bundle = $this->history->bundle('main..task');
+        // Main splits the directory in two, so git cannot tell where the branch's new file belongs and stops without an unmerged path.
+        $this->history->checkout('main');
+        new Filesystem()->mkdir([$this->history->work.'/left', $this->history->work.'/right']);
+        $this->history->moveFile('old/a.txt', 'left/a.txt', 'Move first file');
+        $this->history->moveFile('old/b.txt', 'right/b.txt', 'Move second file');
+        $this->history->push('main');
+
+        $run = $this->whenTheCheckRuns($bundle, 'task', 'touch ran');
+
+        self::assertSame(1, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("conflicts-with-main\n", $this->outputFile('check-result'), $this->outputFile('check.log'));
+        self::assertStringContainsString('CONFLICT', $this->outputFile('check.log'));
+        self::assertFileDoesNotExist($this->work.'/clone/ran');
+    }
+
     public function testAMirrorWhoseHeadNamesNoCommitRunsTheStepsOnTheBranchHeadWithoutAMerge(): void
     {
         $head = $this->history->commit('Build work');

@@ -50,8 +50,8 @@ fi
 cd "$clone" || exit 1
 
 if ! merge_main >> "$log" 2>&1; then
-    # Only unmerged paths are a conflict; any other refusal of the merge is not the branch's to resolve.
-    if [ -n "$(git ls-files --unmerged 2>> "$log")" ]; then
+    # A merge git stopped to have it resolved is a conflict, and MERGE_HEAD tells it, because some conflicts (a directory renamed to two places) leave no unmerged path; any other refusal of the merge is not the branch's to resolve.
+    if git rev-parse --verify --quiet MERGE_HEAD > /dev/null 2>> "$log"; then
         result 'conflicts-with-main'
     else
         result 'not-merged'
