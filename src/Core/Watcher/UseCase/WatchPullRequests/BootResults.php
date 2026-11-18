@@ -203,7 +203,7 @@ final readonly class BootResults
         }
     }
 
-    // Read and appended under one lock per project, because two hits that both read the board before either appends would record the same change twice. Tried without waiting, because the review must not wait on it, and a hit that finds it busy leaves the change to the holder or to the next hit, which reads the board again.
+    // Read and appended under one lock per project, because two hits that both read the board before either appends would record the same change twice. Tried without waiting, because the review must not wait on it, and a hit that finds it busy appends nothing: the board then ends as if the dropped hit had come just before the holder's, and the next hit of the current main reads the board again and corrects it.
     private function recordWhileHolding(LockInterface $lock, BootKey $key, BootOutcome $outcome): void
     {
         if (!$lock->acquire(false)) {
