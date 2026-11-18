@@ -113,8 +113,11 @@ final class SeedSampleProjectCommandTest extends TestCase
     {
         $this->seed(Provider::OpenAiCompatible);
 
-        self::assertArrayHasKey('openai/gpt-oss-120b:novita', $this->writtenPrices());
-        self::assertArrayHasKey('moonshotai/Kimi-K3:deepinfra', $this->writtenPrices());
+        self::assertEquals([
+            'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra' => ['input' => 1.3, 'output' => 2.6],
+            'moonshotai/Kimi-K3.1-Pro:deepinfra' => ['input' => 1.9, 'output' => 9.5],
+        ], $this->writtenPrices());
+        self::assertSame('2026-11-18', $this->written()['budget']['price_date']);
     }
 
     public function testOneKeyPutsTheWholePanelOnThatProvider(): void
@@ -145,7 +148,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $display = $this->seed(Provider::OpenAiCompatible)->getDisplay();
 
         self::assertSame(['openai_compatible'], $this->panelProviders());
-        self::assertSame(['moonshotai/Kimi-K3:deepinfra', 'openai/gpt-oss-120b:novita'], $this->reviewerModels());
+        self::assertSame(['moonshotai/Kimi-K3.1-Pro:deepinfra', 'deepseek-ai/DeepSeek-V4-Pro-0813:deepinfra'], $this->reviewerModels());
         self::assertStringContainsString('its panel on openai_compatible', $display);
     }
 
@@ -154,7 +157,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $this->seed(Provider::Anthropic, Provider::OpenAiCompatible);
 
         self::assertSame(['anthropic', 'openai_compatible'], $this->panelProviders());
-        self::assertSame(['claude-opus-5-5', 'moonshotai/Kimi-K3:deepinfra'], $this->reviewerModels());
+        self::assertSame(['claude-opus-5-5', 'moonshotai/Kimi-K3.1-Pro:deepinfra'], $this->reviewerModels());
     }
 
     public function testAnOpenAiCompatibleEndpointOtherThanTheHuggingFaceRouterSeedsNothing(): void
@@ -192,7 +195,7 @@ final class SeedSampleProjectCommandTest extends TestCase
         $this->seed(Provider::Anthropic);
 
         self::assertSame('2030-01-02', $this->written()['budget']['price_date']);
-        self::assertStringContainsString('list prices read on 2030-01-02', new Filesystem()->readFile($this->configuration()));
+        self::assertStringContainsString('The price table is dated 2030-01-02', new Filesystem()->readFile($this->configuration()));
     }
 
     public function testWithOnlyTheRouterTheSecondMakerIsTheOneTheDataFileNames(): void
