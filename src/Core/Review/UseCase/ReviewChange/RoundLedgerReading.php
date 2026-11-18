@@ -54,7 +54,7 @@ final readonly class RoundLedgerReading implements RoundCosts
         return $this->judgeDoneOf($roundId)->sameCause ?? [];
     }
 
-    // The vote the judge step counted for the reviewer, and the verdict as given for a round judged before votes were counted.
+    // Falls back to the verdict as given, because a round judged before votes were counted recorded none.
     public function voteOf(string $roundId, string $reviewerId, Decision $given): Decision
     {
         return $this->judgeDoneOf($roundId)->votes[$reviewerId] ?? $given;

@@ -90,7 +90,7 @@ final class CountedVoteTest extends TestCase
     {
         $repeat = new Finding('F4', Severity::P3, null, null, null, 'My words.', FixableBy::Builder, true, null, null);
 
-        $vote = $this->counted([$this->finding('F4', Severity::P3, 'Other words.')], ['F4' => Mark::Act], shown: ['F4'])->of($this->changes($repeat));
+        $vote = $this->countedShowing(['F4'], [$this->finding('F4', Severity::P3, 'Other words.')], ['F4' => Mark::Act])->of($this->changes($repeat));
 
         self::assertSame(Decision::Changes, $vote);
     }
@@ -100,14 +100,14 @@ final class CountedVoteTest extends TestCase
         $repeat = new Finding('F1', Severity::P3, null, null, null, 'Rename the helper.', FixableBy::Builder, true, null, null);
         $another = new Finding('F2', Severity::P3, null, null, null, 'Rename the helper.', FixableBy::Builder, false, null, null);
 
-        $vote = $this->counted([$repeat, $another], ['F1' => Mark::Defer, 'F2' => Mark::Act], shown: ['F1'])->of($this->changes($repeat));
+        $vote = $this->countedShowing(['F1'], [$repeat, $another], ['F1' => Mark::Defer, 'F2' => Mark::Act])->of($this->changes($repeat));
 
         self::assertSame(Decision::Approve, $vote);
     }
 
     public function testARepeatNamingAnIdNotShownIsMatchedByItsPlaceAndText(): void
     {
-        $guessed = new Finding('F2', Severity::P3, 'src/A.php', 7, null, 'One.', FixableBy::Builder, true, null, null);
+        $guessed = new Finding('F1', Severity::P3, 'src/A.php', 7, null, 'One.', FixableBy::Builder, true, null, null);
         $reported = [$this->finding('F1', Severity::P3, 'Other.'), $this->finding('F2', Severity::P3, 'One.')];
 
         $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Act])->of($this->changes($guessed));
@@ -159,15 +159,33 @@ final class CountedVoteTest extends TestCase
      * @param list<Finding>       $reported
      * @param array<string, Mark> $marks
      * @param list<Finding>       $dropped
-     * @param list<string>        $shown
      */
-    private function counted(array $reported, array $marks, array $dropped = [], array $shown = []): CountedVote
+    private function counted(array $reported, array $marks, array $dropped = []): CountedVote
+    {
+        return new CountedVote($reported, [], $this->judged($reported, $marks, $dropped));
+    }
+
+    /**
+     * @param list<string>        $shown
+     * @param list<Finding>       $reported
+     * @param array<string, Mark> $marks
+     */
+    private function countedShowing(array $shown, array $reported, array $marks): CountedVote
+    {
+        return new CountedVote($reported, $shown, $this->judged($reported, $marks, []));
+    }
+
+    /**
+     * @param list<Finding>       $reported
+     * @param array<string, Mark> $marks
+     * @param list<Finding>       $dropped
+     */
+    private function judged(array $reported, array $marks, array $dropped): JudgedFindings
     {
         $kept = array_values(array_filter($reported, static fn (Finding $finding): bool => !in_array($finding, $dropped, true)));
         $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding($id, $mark), array_keys($marks), $marks));
-        $judged = JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
 
-        return new CountedVote($reported, $shown, $judged);
+        return JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
     }
 
     private function changes(Finding ...$findings): Verdict
