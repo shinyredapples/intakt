@@ -10,6 +10,8 @@ use Intakt\Core\Memory\Contract\ProjectMemory;
 use Intakt\Core\Memory\Contract\RelevantMemory;
 use Intakt\Core\Review\Contract\ChangeUnderReview;
 use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\PromptAssembly;
 use Intakt\Core\Review\Contract\ReviewBrief;
 use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\UntrustedSource;
@@ -35,6 +37,8 @@ use Symfony\Component\Uid\UuidV7;
 #[UsesClass(MemoryEntry::class)]
 #[UsesClass(MemoryQuery::class)]
 #[UsesClass(RelevantMemory::class)]
+#[UsesClass(FencedText::class)]
+#[UsesClass(PromptAssembly::class)]
 final class ReviewerPromptWiringTest extends KernelTestCase
 {
     public function testTheContainerWiresTheReviewerPromptWithProjectMemory(): void

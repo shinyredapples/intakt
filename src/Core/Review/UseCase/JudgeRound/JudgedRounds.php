@@ -10,6 +10,7 @@ use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
+use Intakt\Core\Review\Infrastructure\DiffPaths;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -22,7 +23,16 @@ final readonly class JudgedRounds
         private RoundLedger $ledger,
         private ChangeText $change,
         private DiffHunks $hunks,
+        private DiffPaths $paths,
     ) {
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function filesOf(ReviewRound $round): array
+    {
+        return $this->paths->in($round->diff());
     }
 
     /**

@@ -666,7 +666,7 @@ final class BuildTaskTest extends TestCase
         self::assertSame([realpath($this->clone), RunBuildJob::CLONE], [$ran->inputs[0]->hostPath, $ran->inputs[0]->containerPath]);
         self::assertSame(self::IMAGE, $ran->image);
         self::assertSame('feat/task', $ran->command[6]);
-        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body"), $prompt);
+        self::assertStringContainsString(new Fence()->wrap(UntrustedSource::Task, "Task 7\n\nPLANT-body")->rendered(), $prompt);
     }
 
     public function testATierLabelOfTheIssueChoosesTheBuildsTier(): void

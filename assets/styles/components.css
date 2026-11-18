@@ -484,6 +484,7 @@ kbd { padding: 2px calc(var(--s4) + 2px); border-radius: var(--r-chip); backgrou
 .page-head h1, .page-head .lead, .page-head .no-start { margin-bottom: 0; }
 /* DESIGN.md, Long titles: a title or a change name without spaces wraps rather than run off a phone, never clipped. */
 .page-head > div:first-child { min-width: 0; overflow-wrap: anywhere; }
+.page-head > #board-octopus[hidden] + div { min-width: 0; overflow-wrap: anywhere; }
 .page-head > .head-character { display: flex; flex: none; }
 .page-head > .head-character + div { min-width: 0; overflow-wrap: anywhere; }
 .page-head .meta span { white-space: normal; overflow-wrap: anywhere; }
