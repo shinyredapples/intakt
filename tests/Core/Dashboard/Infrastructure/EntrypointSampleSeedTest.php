@@ -26,10 +26,6 @@ final class EntrypointSampleSeedTest extends TestCase
 
     private string $directory;
 
-    // One default-env start serves four tests, because they read different results of the same run and none changes it.
-    /** @var array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}|null */
-    private static ?array $defaultDemo = null;
-
     private ?Process $entrypoint = null;
 
     protected function setUp(): void
@@ -549,7 +545,7 @@ final class EntrypointSampleSeedTest extends TestCase
      */
     private function theDefaultDemo(): array
     {
-        return self::$defaultDemo ??= $this->runTheDefaultDemo();
+        return $this->runTheDefaultDemo();
     }
 
     /**

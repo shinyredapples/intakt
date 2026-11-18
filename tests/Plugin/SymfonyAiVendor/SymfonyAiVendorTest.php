@@ -198,33 +198,26 @@ final class SymfonyAiVendorTest extends KernelTestCase
 
     private const int OUTPUT_LIMIT = 16000;
 
-    // One kernel for the class, because booting it is most of a test's time and only its dispatcher is used; the persistence test boots its own.
-    private static KernelInterface $platformKernel;
+    private KernelInterface $platformKernel;
 
     private VendorAccountLimit $limit;
 
     private EventDispatcherInterface $dispatcher;
 
     #[Override]
-    public static function setUpBeforeClass(): void
+    protected function tearDown(): void
     {
-        parent::setUpBeforeClass();
-        self::$platformKernel = self::createKernel();
-        self::$platformKernel->boot();
-    }
-
-    #[Override]
-    public static function tearDownAfterClass(): void
-    {
-        self::$platformKernel->shutdown();
-        parent::tearDownAfterClass();
+        $this->platformKernel->shutdown();
+        parent::tearDown();
     }
 
     #[Override]
     protected function setUp(): void
     {
         $this->limit = new VendorAccountLimit(new SemaphoreFactory(new LockStore(new LockFactory(new InMemoryStore()))), 1);
-        $container = self::$platformKernel->getContainer();
+        $this->platformKernel = self::createKernel();
+        $this->platformKernel->boot();
+        $container = $this->platformKernel->getContainer();
         // Reset before each test, because a listener of the shared kernel would otherwise carry what the previous test left.
         $resetter = $container->get('services_resetter');
         self::assertInstanceOf(ResetInterface::class, $resetter);
@@ -1198,7 +1191,7 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $this->vendor(static fn (): TextResult => self::withUsage(VerdictDocument::fromTheDesign()->json()))->review('alpha', Tier::Strong, $this->request());
         self::assertNotSame([], $this->dispatcher->getCalledListeners());
 
-        $resetter = self::$platformKernel->getContainer()->get('services_resetter');
+        $resetter = $this->platformKernel->getContainer()->get('services_resetter');
         self::assertInstanceOf(ResetInterface::class, $resetter);
         $resetter->reset();
 
