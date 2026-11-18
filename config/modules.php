@@ -11,6 +11,7 @@ return [
     'Core/Git',
     'Core/HandBack',
     'Core/Job',
+    'Core/Lanes',
     'Core/Ledger',
     'Core/Mcp',
     'Core/Memory',

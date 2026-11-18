@@ -161,6 +161,10 @@ final class WeeklyReportCommandTest extends TestCase
         yield 'a comment whose moment has no offset' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => '2026-11-03T00:00:00']]])];
         yield 'a comment whose moment is no date' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => '2026-13-01T00:00:00Z']]])];
         yield 'a comment whose moment holds a null byte' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'postedAt' => "2026-11-03T00:00:00Z\0"]]])];
+        yield 'a comment that is no object' => [self::json([...$pullRequest, 'comments' => ['loop-bot']])];
+        yield 'a comment whose author is no text' => [self::json([...$pullRequest, 'comments' => [[...$comment, 'author' => 7]]])];
+        yield 'a comment without moment' => [self::json([...$pullRequest, 'comments' => [['author' => 'loop-bot', 'head' => 'h1', 'body' => 'x']]])];
+        yield 'a malformed comment after a valid one' => [self::json([...$pullRequest, 'comments' => [$comment, [...$comment, 'head' => null]]])];
     }
 
     public function testAFolderWhoseNameHoldsGlobCharactersStillFindsItsFiles(): void

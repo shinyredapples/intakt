@@ -74,6 +74,7 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **Substitute** | a reviewer from another company reviewing in place of one whose every account is over its limit; a catch-up review follows | [engine room](the-engine-room.md#reviewers-substitutes-and-catch-ups) |
 | **Subscription reviewer** | a reviewer that runs on a Claude or Codex subscription; it reads its round's change through the read-only server, and its approval counts only when its call received that server and the reviewer read through it (a Claude or a Codex one alike); otherwise, an approval becomes blocked | [safety](why-the-ai-cant-wreck-your-project.md#a-reviewer-on-a-claude-or-codex-subscription) |
 | **Take-over** | a label that hands Intakt an issue or pull request it did not create (planned) | [steering](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back) |
+| **Test engineer** (planned, optional) | an AI agent that keeps the tests fast without losing what they prove | [how it works](how-intakt-works.md) |
 | **Tier** | `strong`, `standard` or `light`: a kind of AI model, mapped to each company's models | [costs](accounts-and-costs.md) |
 | **Verdict** | a reviewer's answer: approve, changes with findings, or blocked (held for a person) | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Waiting on you** | the dashboard column with only what needs a person | [dashboard](a-tour-of-the-dashboard.md#waiting-on-you) |
