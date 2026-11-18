@@ -112,7 +112,9 @@ final class HighlightsWorkflowTest extends TestCase
             $process = new Process(['sh', '-c', $prelude.str_replace(' /page/index.md', ' '.escapeshellarg($workspace.'/page/index.md'), $write)], $workspace);
             $process->run();
 
-            return ['status' => $process->getExitCode(), 'page' => (string) @file_get_contents($workspace.'/page/index.md')];
+            $page = $workspace.'/page/index.md';
+
+            return ['status' => $process->getExitCode(), 'page' => is_file($page) ? (string) file_get_contents($page) : ''];
         } finally {
             $filesystem->remove($workspace);
         }
