@@ -186,7 +186,7 @@ Intakt's CI runs the journeys on every pull request and every push to main, as t
 
 ## The log
 
-Intakt writes its warnings and errors to the service output (the journal, or `docker logs`), one JSON line per record: `time`, `level`, `message` and `context`. The context names the item a failure belongs to (for example `reviewer`, `round`, `call`, `project` or `account`), and a failure carries the exception's `class`, `message`, the `at` line and the `trace` (the file, line and function of each call, never the values passed to it), with the earlier exception it wraps under `previous`. Before a line is written, the credentials Intakt holds, whether set in the environment or in Symfony secrets (`APP_SECRET`, `MERCURE_JWT_SECRET`, `MCP_OWNER_TOKEN`, `GITHUB_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `HF_TOKEN`, and the same names with an account name appended, such as `ANTHROPIC_API_KEY_TEAM`), the userinfo of a URL (`https://user:pass@host` is written `https://[redacted]@host`), the values of authorization and cookie headers, and secret-shaped strings are replaced with `[redacted]`. This applies to context names too; when two names end up the same, the later one gets a number (`[redacted] 2`), so no value is lost from the line.
+Intakt writes its warnings and errors to the service output (the journal, or `docker logs`), one JSON line per record: `time`, `level`, `message` and `context`. The context names the item a failure belongs to (for example `reviewer`, `round`, `call`, `project` or `account`), and a failure carries the exception's `class`, `message`, the `at` line and the `trace` (the file, line and function of each call, never the values passed to it), with the earlier exception it wraps under `previous`. Before a line is written, the credentials Intakt holds, whether set in the environment or in Symfony secrets (`APP_SECRET`, `MERCURE_JWT_SECRET`, `MCP_OWNER_TOKEN`, `GITHUB_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENAI_COMPATIBLE_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `HF_TOKEN`, and the same names with an account name appended, such as `ANTHROPIC_API_KEY_TEAM`), the userinfo of a URL (`https://user:pass@host` is written `https://[redacted]@host`), the values of authorization and cookie headers, and secret-shaped strings are replaced with `[redacted]`. A held credential is found with or without its leading and trailing spaces or newlines, so a value saved with a newline at its end is still replaced where a line quotes it without that newline. This applies to context names too; when two names end up the same, the later one gets a number (`[redacted] 2`), so no value is lost from the line.
 
 ## Finding the slowest tests
 
@@ -305,6 +305,8 @@ A model id or a provider's host is written in one place, so that a retired model
 - **Where cannot be checked, shorten the cell:** the cell is too long for the gate to read (usually a stray backtick before a very long text); close or remove the backtick, or split the text.
 
 Tables inside a fenced code block (three or more backticks or tildes, indented at most three spaces) are examples and are skipped. The block ends at a line holding only a fence of the same character, at least as long as the opening one; a fence line with text after it stays inside the block. A block that is never closed runs to the end of the file.
+
+A fragment may hold `{{` or `{%`, in a code span for example: the published page shows them as written.
 
 ## When `bin/check` reports a reproductions finding
 
