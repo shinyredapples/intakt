@@ -6,7 +6,7 @@ namespace Intakt\Core\Review\Contract;
 
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
-// Matched by id because the judge's answer is data, and prose of a finding is never read; a P1 or P2 is always on the act list whatever its mark, and a P3 with no mark or marked reject is on neither list.
+// Matched by id because the judge's answer is data, and prose of a finding is never read; a P1 or P2 is always on the act list whatever its mark (a defer or reject keeps only the judge's note, as given, because the ledger redacts it when it stores it), and a P3 with no mark or marked reject is on neither list.
 #[Exclude]
 final readonly class JudgedFindings
 {
@@ -16,6 +16,7 @@ final readonly class JudgedFindings
      * @param list<FollowUp>        $followUps
      * @param list<DroppedFinding>  $dropped
      * @param array<string, string> $sameCause
+     * @param array<string, string> $notes
      */
     private function __construct(
         public array $findings,
@@ -23,6 +24,7 @@ final readonly class JudgedFindings
         public array $followUps,
         public array $dropped,
         public array $sameCause,
+        public array $notes,
     ) {
     }
 
@@ -34,6 +36,7 @@ final readonly class JudgedFindings
     {
         $marks = [];
         $sameCause = [];
+        $notes = [];
         $given = array_map(static fn (Finding $finding): string => $finding->id, $findings);
 
         foreach ($judgement->marks as $judged) {
@@ -47,6 +50,13 @@ final readonly class JudgedFindings
         $actList = array_values(array_filter($findings, static fn (Finding $finding): bool => $blocking($finding) || Mark::Act === ($marks[$finding->id] ?? null)));
         $deferred = array_values(array_filter($findings, static fn (Finding $finding): bool => !$blocking($finding) && Mark::Defer === ($marks[$finding->id] ?? null)));
 
-        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause);
+        foreach ($judgement->marks as $judged) {
+            $finding = array_find($findings, static fn (Finding $finding): bool => $finding->id === $judged->id);
+            if (null !== $judged->note && null !== $finding && $blocking($finding) && Mark::Act !== $judged->mark) {
+                $notes[$judged->id] = $judged->note;
+            }
+        }
+
+        return new self($findings, $actList, array_map(static fn (Finding $finding): FollowUp => new FollowUp($finding), $deferred), $dropped, $sameCause, $notes);
     }
 }

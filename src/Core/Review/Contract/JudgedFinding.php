@@ -19,6 +19,8 @@ final readonly class JudgedFinding
         public Mark $mark,
         #[Schema(description: 'The id of another finding you were given with the same cause in the same file (one change reported twice), or null.')]
         public ?string $same_cause_as = null,
+        #[Schema(description: 'Your reason in one sentence when you mark a P1 or P2 finding defer or reject, or null.')]
+        public ?string $note = null,
     ) {
     }
 }
