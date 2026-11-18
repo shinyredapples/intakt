@@ -242,15 +242,27 @@ final class BoardHeadlineLiveUpdatesTest extends DashboardPageTestCase
         self::assertCount(1, $updated->filter('.page-head .actions a[href="/reviews"]'));
     }
 
-    public function testThePushedHeadActionsAreTheSameMarkupAsTheActionsOfAPageLoadedAfterThem(): void
+    public function testThePushedSetUpSlotIsTheSameMarkupAsTheSlotOfAPageLoadedAfterIt(): void
     {
         $this->roundUpdates()->reviewerStarted(Uuid::fromString(self::ROUND), 'security');
 
-        $pushed = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][target="board-actions"] template');
+        $pushed = new Crawler($this->lastShellUpdate())->filter('turbo-stream[action="replace"][target="board-setup"] template');
 
         $page = $this->browser->request('GET', '/');
         self::assertCount(1, $pushed);
-        self::assertSame($page->filter('#board-actions')->outerHtml(), trim($pushed->html()));
+        self::assertSame($page->filter('#board-setup')->outerHtml(), trim($pushed->html()));
+    }
+
+    public function testThePushedBoardLeavesTheReviewListLinkInPlaceSoItKeepsTheKeyboardFocus(): void
+    {
+        $page = $this->browser->request('GET', '/');
+        $link = $page->filter('.page-head .actions a[href="/reviews"]')->getNode(0);
+        self::assertNotNull($link);
+
+        $updated = $this->replaced($page, $this->pushedHeadlineAfterAReviewerStarted());
+
+        self::assertSame($link, $updated->filter('.page-head .actions a[href="/reviews"]')->getNode(0));
+        self::assertStringNotContainsString('href="/reviews"', $this->lastShellUpdate());
     }
 
     public function testABoardPageLoadedAfterAReviewHoldsAnEmptyHiddenOctopusTarget(): void

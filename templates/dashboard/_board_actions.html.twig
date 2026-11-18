@@ -1,6 +1,0 @@
-{#- One home for the board's head actions, because the page renders them on load and the pushed board replaces them, so a board that becomes empty again gets back the Set up Intakt its first-day panel asks for. -#}
-<div class="actions" id="board-actions">
-    {#- Only while no review has run, because after that the Projects page carries the link (#2067, D3). -#}
-    {%- if board.firstDay %}<a class="btn primary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::FIRST_RUN')) }}">Set up Intakt</a>{% endif %}
-    <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
-</div>

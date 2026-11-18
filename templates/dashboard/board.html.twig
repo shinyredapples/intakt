@@ -11,7 +11,10 @@
         {# The id is the target of the pushed headline (LiveBoardHeadline), which updates only the words inside, so the line rendered here stays when live updates are off. #}
         <p class="lead" id="board-headline">{{ include('dashboard/_board_headline.html.twig', {headline: board.headline}, with_context = false) }}</p>
     </div>
-    {{ include('dashboard/_board_actions.html.twig', {board: board}, with_context = false) }}
+    <div class="actions">
+        {{ include('dashboard/_board_setup.html.twig', {board: board}, with_context = false) }}
+        <a class="btn secondary" href="{{ path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::LIST_REVIEWS')) }}">Open the review list</a>
+    </div>
 </div>
 {% for main in failing_mains %}
     {% set headline = 'Main of ' ~ main.project ~ ' does not boot' %}
