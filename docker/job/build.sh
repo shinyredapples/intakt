@@ -2,7 +2,7 @@
 # The build job's command: the builder works in a clone of its own, and only a bundle and the pull request text leave the job.
 # Usage: build.sh <build clone> <prompt file> <branch> <model> <max turns> <allowance seconds> <gates at once>
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
-# The builder's bin/check runs at most <gates at once> gates at the same time, so builders side by side do not oversubscribe the host; when it is empty, bin/check sizes its gates at once from the job's limits itself.
+# The builder's bin/check runs at most <gates at once> gates at the same time, so builders side by side do not oversubscribe the host; when it is empty (a single build slot), bin/check sizes its gates at once from the job's limits itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
 # Writes build.log, handback.bundle (only when the branch has new commits) and pull-request.md (only when PR.md is a regular file) into INTAKT_JOB_OUTPUT.
 set -u

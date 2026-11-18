@@ -17,7 +17,7 @@ final readonly class GatesAtOnce
 
     public int $count;
 
-    public function __construct(int $processors, int $slots)
+    public function __construct(int $processors, private int $slots)
     {
         if ($processors < 1 || $slots < 1) {
             throw new InvalidArgumentException(sprintf('The gates at once need at least one processor and one build slot, not %d and %d.', $processors, $slots));
@@ -26,9 +26,9 @@ final readonly class GatesAtOnce
         $this->count = min(self::MOST, max(self::FEWEST, intdiv($processors, $slots)));
     }
 
-    // Null at or above the most a job's limits let `bin/check` pick by itself, because its own default is sized from the job's CPUs and memory and an override would only raise it.
-    public function overridingBelow(int $jobsMost): ?int
+    // Null for a single build slot, because one builder alone keeps the default `bin/check` sizes from its job's limits (#2587, D2).
+    public function overridingTheDefault(): ?int
     {
-        return $this->count < $jobsMost ? $this->count : null;
+        return $this->slots > 1 ? $this->count : null;
     }
 }

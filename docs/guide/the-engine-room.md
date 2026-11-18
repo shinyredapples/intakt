@@ -24,7 +24,7 @@ flowchart LR
 
 How many build slots run at the same time depends on the budget (below): when the week's allowance is tight, only one does.
 
-Builders on one machine share its processors. So that their checks do not crowd each other out, each builder's checks run fewer at a time when more slots share the machine: the machine's processors divided by the number of slots, at least 2 and at most 8. A build job only passes this number on when it is lower than what the job's own processor and memory limits allow; today those limits are the smaller, so each check still sizes itself from them. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)).
+Builders on one machine share its processors. So that their checks do not crowd each other out, each builder's checks run fewer at a time when more slots share the machine: the machine's processors divided by the number of slots, at least 2 and at most 8. A build job passes this number on to its builder's check when there is more than one slot; with a single slot, the check sizes itself from the job's own processor and memory limits, as before. For now you set the number of slots yourself (`intakt.build.slots`, 1 by default; see the [user guide](../user/README.md#running-a-build)).
 
 ## Queues: who is next
 

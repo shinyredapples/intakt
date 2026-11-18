@@ -101,14 +101,24 @@ final class RunBuildJobTest extends TestCase
         );
     }
 
-    public function testABuildJobLeavesTheChecksOwnDefaultWhenItsGateCountIsNotBelowTheJobsLimits(): void
+    public function testABuildJobHandsItsBuilderTheGateCountOfSeveralBuildSlots(): void
+    {
+        $this->gatesAtOnce = new GatesAtOnce(12, 3);
+
+        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+
+        self::assertNotNull($this->ran);
+        self::assertSame('4', $this->ran->command[10]);
+    }
+
+    public function testABuildJobHandsTheFloorOfTwoGatesWhenSlotsOutnumberTheProcessors(): void
     {
         $this->gatesAtOnce = new GatesAtOnce(2, 3);
 
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame('', $this->ran->command[10]);
+        self::assertSame('2', $this->ran->command[10]);
     }
 
     public function testTheJobsTimeLimitLeavesRoomToBundleAfterTheAllowance(): void

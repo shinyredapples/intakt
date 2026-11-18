@@ -16,7 +16,7 @@ parameters:
     !php/const Intakt\Core\Job\Contract\JobServices::EGRESS_PROXY_IMAGE: intakt-egress-proxy
     # The share of a GitHub installation's hourly budget kept for essential calls (0 to 100); below it, each project's listing runs once per watcher tick.
     !php/const Intakt\Plugin\GitHubForge\Contract\GitHubForgeServices::RESERVE_PERCENT: 20
-    # The build slots that run at once on this host (at least 1); each builder's bin/check runs max(2, processors / slots) gates at once, at most 8, when that is below its job's own limits (docs/user/README.md#running-a-build).
+    # The build slots that run at once on this host (at least 1); each builder's bin/check runs max(2, processors / slots) gates at once, at most 8, when there is more than one slot (docs/user/README.md#running-a-build).
     !php/const Intakt\Core\Build\Contract\BuildServices::SLOTS: 1
     # One bare mirror per project lives here, rebuilt from the remote if lost.
     !php/const Intakt\Core\Git\Contract\GitServices::MIRRORS_DIRECTORY: '%kernel.project_dir%/var/mirrors'
