@@ -18,7 +18,7 @@ final readonly class DockerEngine
     private const string API = 'http://docker/v1.44/';
     private const string CONTAINER_ID = '/^[A-Za-z0-9]{1,128}$/D';
     private const string IMAGE_ID = '/\Asha256:[0-9a-f]{64}\z/D';
-    private const string NETWORK_NAME ='/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D';
+    private const string NETWORK_NAME = '/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/D';
     // Generous, because a step such as compiling an extension may print nothing for minutes; a whole build gets an hour before it counts as stuck.
     private const float BUILD_IDLE_SECONDS = 600.0;
     private const float BUILD_SECONDS = 3600.0;
