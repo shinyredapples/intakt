@@ -42,6 +42,21 @@ final class GatesAtOnceTest extends TestCase
         self::assertSame(8, new GatesAtOnce(18, 2)->count);
     }
 
+    public function testACountBelowTheMostAJobAllowsOverridesTheChecksOwnDefault(): void
+    {
+        self::assertSame(4, new GatesAtOnce(12, 3)->overridingBelow(8));
+    }
+
+    public function testACountAtTheMostAJobAllowsLeavesTheChecksOwnDefault(): void
+    {
+        self::assertNull(new GatesAtOnce(12, 6)->overridingBelow(2));
+    }
+
+    public function testACountAboveTheMostAJobAllowsLeavesTheChecksOwnDefault(): void
+    {
+        self::assertNull(new GatesAtOnce(12, 1)->overridingBelow(2));
+    }
+
     public function testNoBuildSlotIsRefused(): void
     {
         $this->expectException(InvalidArgumentException::class);

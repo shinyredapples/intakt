@@ -9,7 +9,7 @@ use InvalidArgumentException;
 // The gates a builder's `bin/check` runs at once, because three builders each running all 8 gates on 12 processors loaded the host to 22 to 28 and took 7 to 9 minutes a check (#1140).
 final readonly class GatesAtOnce
 {
-    // Eight, because that is every gate of `bin/check --fast`, so one builder alone keeps running them all at once.
+    // Eight, because the measured checks ran eight gates at once (#1140), so this count never asks for more than they did.
     public const int MOST = 8;
 
     // Two, because one gate runs beside the `tests` gate even on a small host.
@@ -24,5 +24,11 @@ final readonly class GatesAtOnce
         }
 
         $this->count = min(self::MOST, max(self::FEWEST, intdiv($processors, $slots)));
+    }
+
+    // Null at or above the most a job's limits let `bin/check` pick by itself, because its own default is sized from the job's CPUs and memory and an override would only raise it.
+    public function overridingBelow(int $jobsMost): ?int
+    {
+        return $this->count < $jobsMost ? $this->count : null;
     }
 }

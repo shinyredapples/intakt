@@ -50,6 +50,9 @@ final readonly class RunBuildJob
 
     private const float CPUS = 2.0;
 
+    // PHPStan's memory limit in `bin/check`, which gives each gate this much of its cgroup's memory when it sizes its own gates at once.
+    private const int GATE_MEMORY_BYTES = 2 * 1024 ** 3;
+
     // Fixed, because sizing the limits for each task is plan task T60 (#1710); the CLI ends its session after this many turns.
     private const int MAX_TURNS = 100;
 
@@ -146,7 +149,7 @@ final readonly class RunBuildJob
         return new JobSpec(
             $this->idOf($job),
             $job->image,
-            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->count],
+            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->overridingBelow(min((int) self::CPUS, intdiv(self::MEMORY_BYTES, self::GATE_MEMORY_BYTES)))],
             $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),
