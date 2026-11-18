@@ -24,6 +24,8 @@ final class BuildScriptTest extends TestCase
     private string $bin = '';
     private string $prompt = '';
     private string $gates = '4';
+    // False removes the variable, so a value the test run itself was started with never reaches the script.
+    private string|false $inherited = false;
 
     protected function setUp(): void
     {
@@ -90,6 +92,29 @@ final class BuildScriptTest extends TestCase
         $this->whenTheBuildRuns('task', 'claude-opus-5-5');
 
         self::assertSame("unset\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
+    public function testTheBuildScriptGivenNoGateCountKeepsAnIntaktGateSlotsItsEnvironmentAlreadySets(): void
+    {
+        $this->givenTheCli('printf "%s\n" "${INTAKT_GATE_SLOTS-unset}" > "$RECORD/gates"');
+
+        $this->gates = '';
+        $this->inherited = '3';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("3\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
+    public function testTheBuildScriptGivenAGateCountReplacesAnIntaktGateSlotsItsEnvironmentAlreadySets(): void
+    {
+        $this->givenTheCli('printf "%s\n" "${INTAKT_GATE_SLOTS-unset}" > "$RECORD/gates"');
+
+        $this->inherited = '3';
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("4\n", (string) file_get_contents($this->history->folder.'/gates'));
     }
 
     public function testASessionCutAtItsAllowanceAfterCommittingHandsBackABundleOfItsCommits(): void
@@ -421,6 +446,7 @@ final class BuildScriptTest extends TestCase
             'INTAKT_JOB_OUTPUT' => $this->output,
             'PATH' => $this->bin.':'.getenv('PATH'),
             'RECORD' => $this->history->folder,
+            'INTAKT_GATE_SLOTS' => $this->inherited,
         ];
         foreach (array_keys([...getenv(), ...$_ENV]) as $name) {
             if (is_string($name) && str_starts_with($name, 'GIT_')) {

@@ -15,6 +15,7 @@ use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Contract\TierReason;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\BuildTask\BuildStepNotRecorded;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTask;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskCommand;
@@ -106,6 +107,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]

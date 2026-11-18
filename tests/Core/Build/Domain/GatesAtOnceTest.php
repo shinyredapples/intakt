@@ -5,13 +5,19 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Build\Domain;
 
 use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
 final class GatesAtOnceTest extends TestCase
 {
+    private const int GIB = 1024 ** 3;
+
     public function testTwelveProcessorsAndOneBuildSlotRunEightGatesAtOnce(): void
     {
         self::assertSame(8, new GatesAtOnce(12, 1)->count);
@@ -42,19 +48,47 @@ final class GatesAtOnceTest extends TestCase
         self::assertSame(8, new GatesAtOnce(18, 2)->count);
     }
 
-    public function testOneBuildSlotKeepsTheChecksOwnDefault(): void
+    public function testThreeBuildSlotsLowerTheEightGatesOfAJobOfEightCpusAndThirtyTwoGibToFour(): void
     {
-        self::assertNull(new GatesAtOnce(12, 1)->overridingTheDefault());
+        self::assertSame(4, new GatesAtOnce(12, 3)->loweringTheDefaultOfAJobWith(8.0, 32 * self::GIB));
     }
 
-    public function testTwoBuildSlotsOverrideTheChecksDefaultWithTheirCount(): void
+    public function testTwoBuildSlotsLowerTheEightGatesOfAJobOfEightCpusAndThirtyTwoGibToSix(): void
     {
-        self::assertSame(6, new GatesAtOnce(12, 2)->overridingTheDefault());
+        self::assertSame(6, new GatesAtOnce(12, 2)->loweringTheDefaultOfAJobWith(8.0, 32 * self::GIB));
     }
 
-    public function testThreeBuildSlotsOnTwoProcessorsOverrideTheChecksDefaultWithTheFloor(): void
+    public function testOneBuildSlotKeepsTheChecksOwnDefaultEvenWhenItsCountIsLower(): void
     {
-        self::assertSame(2, new GatesAtOnce(2, 3)->overridingTheDefault());
+        self::assertNull(new GatesAtOnce(12, 1)->loweringTheDefaultOfAJobWith(16.0, 64 * self::GIB));
+    }
+
+    #[TestWith([2])]
+    #[TestWith([3])]
+    #[TestWith([6])]
+    public function testSeveralBuildSlotsNeverRaiseTheOneGateOfAJobOfTwoCpusAndFourGib(int $slots): void
+    {
+        self::assertNull(new GatesAtOnce(12, $slots)->loweringTheDefaultOfAJobWith(2.0, 4 * self::GIB));
+    }
+
+    public function testThreeBuildSlotsOnTwoProcessorsNeverRaiseTheOneGateOfAJobOfTwoCpusAndFourGib(): void
+    {
+        self::assertNull(new GatesAtOnce(2, 3)->loweringTheDefaultOfAJobWith(2.0, 4 * self::GIB));
+    }
+
+    public function testACountEqualToTheJobsDefaultIsNotHandedOver(): void
+    {
+        self::assertNull(new GatesAtOnce(12, 3)->loweringTheDefaultOfAJobWith(4.0, 14 * self::GIB));
+    }
+
+    public function testACountOneBelowTheJobsDefaultIsHandedOver(): void
+    {
+        self::assertSame(4, new GatesAtOnce(12, 3)->loweringTheDefaultOfAJobWith(5.0, 16 * self::GIB));
+    }
+
+    public function testACountAboveTheGatesTheJobsMemoryHoldsIsNotHandedOver(): void
+    {
+        self::assertNull(new GatesAtOnce(12, 2)->loweringTheDefaultOfAJobWith(8.0, 12 * self::GIB));
     }
 
     public function testNoBuildSlotIsRefused(): void

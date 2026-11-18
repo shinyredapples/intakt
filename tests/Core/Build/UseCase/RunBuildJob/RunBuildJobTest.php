@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -32,6 +33,7 @@ use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Plugin\PhpGate\Infrastructure\PhpGate;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
@@ -45,6 +47,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]
@@ -101,24 +104,18 @@ final class RunBuildJobTest extends TestCase
         );
     }
 
-    public function testABuildJobHandsItsBuilderTheGateCountOfSeveralBuildSlots(): void
+    #[TestWith([12, 2])]
+    #[TestWith([12, 3])]
+    #[TestWith([2, 3])]
+    public function testABuildJobHandsItsBuilderNoGateCountBecauseSeveralSlotsWouldRaiseTheOneGateItsLimitsAllow(int $processors, int $slots): void
     {
-        $this->gatesAtOnce = new GatesAtOnce(12, 3);
+        $this->gatesAtOnce = new GatesAtOnce($processors, $slots);
 
         (void) $this->runBuilds(new JobOutput([]))->run($this->job());
 
         self::assertNotNull($this->ran);
-        self::assertSame('4', $this->ran->command[10]);
-    }
-
-    public function testABuildJobHandsTheFloorOfTwoGatesWhenSlotsOutnumberTheProcessors(): void
-    {
-        $this->gatesAtOnce = new GatesAtOnce(2, 3);
-
-        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
-
-        self::assertNotNull($this->ran);
-        self::assertSame('2', $this->ran->command[10]);
+        self::assertSame('', $this->ran->command[10]);
+        self::assertSame(1, new GatesByDefault($processors, $this->ran->limits->cpus, $this->ran->limits->memoryBytes)->count);
     }
 
     public function testTheJobsTimeLimitLeavesRoomToBundleAfterTheAllowance(): void

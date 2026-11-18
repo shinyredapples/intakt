@@ -16,6 +16,7 @@ use Intakt\Core\Build\Contract\BuildStep;
 use Intakt\Core\Build\Contract\TierChoice;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\GatesAtOnce;
+use Intakt\Core\Build\Domain\GatesByDefault;
 use Intakt\Core\Build\Domain\ModelRouting;
 use Intakt\Core\Build\Domain\RoutingRules;
 use Intakt\Core\Build\Infrastructure\ConfiguredBuildRouting;
@@ -184,6 +185,7 @@ use Symfony\Component\Process\Process;
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
 #[UsesClass(GatesAtOnce::class)]
+#[UsesClass(GatesByDefault::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(PhpGate::class)]
