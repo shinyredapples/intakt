@@ -21,7 +21,8 @@ merged=''
 # The script's own git commands read no configuration or attributes of the image or the job's environment, as CI's test merge reads none of ours:
 # a merge option, strategy or signing setting there would change what the check runs on. A subshell, so the steps keep the job's environment.
 own_git() (
-    for name in $(env | sed -n 's/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    # The C locale, because in a UTF-8 one sed's pattern stops at a byte that is no text and leaves it on the name.
+    for name in $(env | LC_ALL=C sed -n 's/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do
         unset "$name"
     done
     GIT_CONFIG_NOSYSTEM=1
@@ -33,7 +34,8 @@ own_git() (
 )
 
 apply() {
-    own_git clone --quiet --no-hardlinks -- "$mirror" "$clone" || return 1
+    # No template, because git copies its default one of the image (its info/attributes, config and hooks) into the clone, which own_git does not shut out.
+    own_git clone --template= --quiet --no-hardlinks -- "$mirror" "$clone" || return 1
     # Read before the checkout moves HEAD; an empty mirror has no main to merge.
     main=$(own_git -C "$clone" rev-parse --verify --quiet HEAD) || main=''
     own_git -C "$clone" fetch --quiet --update-head-ok -- "$bundle" "+refs/heads/$branch:refs/heads/$branch" \

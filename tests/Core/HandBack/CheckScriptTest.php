@@ -246,6 +246,38 @@ final class CheckScriptTest extends TestCase
         $this->thenAConflictingBranchEndsConflictsWithMain();
     }
 
+    public function testTheGitAttributesInTheImagesDefaultTemplateDoNotHideAConflictWithCurrentMain(): void
+    {
+        // A git in front of the real one whose default template is a fixture, as an image's git copies its compiled-in template into every clone.
+        $git = (string) new ExecutableFinder()->find('git');
+        $template = $this->history->folder.'/template';
+        $shim = $this->history->folder.'/shim';
+        new Filesystem()->dumpFile($template.'/info/attributes', "shared.txt merge=union\n");
+        new Filesystem()->dumpFile($shim.'/git', "#!/bin/sh\nGIT_TEMPLATE_DIR='$template' exec '$git' \"\$@\"\n");
+        new Filesystem()->chmod($shim.'/git', 0o700);
+        $this->path = $shim.PATH_SEPARATOR.getenv('PATH');
+
+        $this->thenAConflictingBranchEndsConflictsWithMain();
+    }
+
+    public function testTheCloneHoldsNothingOfGitsDefaultTemplate(): void
+    {
+        $this->history->commit('Build work');
+
+        $run = $this->whenTheCheckRuns($this->history->bundle('main..task'), 'task', 'test ! -e .git/hooks', 'test ! -e .git/info', 'test ! -e .git/description');
+
+        self::assertSame(0, $run->getExitCode(), $this->outputFile('check.log'));
+        self::assertSame("passed\n", $this->outputFile('check-result'));
+    }
+
+    public function testAGitVariableWithBytesThatAreNoTextInTheJobsLocaleIsUnsetLikeAnyOther(): void
+    {
+        $this->gitConfiguration = ['branch.task.mergeOptions' => "-X theirs \xff"];
+        $this->jobVariables = ['LC_ALL' => 'C.UTF-8'];
+
+        $this->thenACleanMergeEndsPassedOnItsMergeCommit();
+    }
+
     public function testSignatureVerificationDoesNotRefuseTheMergeOfABranchNamedLikeGitsMergeStateFile(): void
     {
         $head = $this->history->commitFile('made.txt', "made by the build\n", 'Make a file');
