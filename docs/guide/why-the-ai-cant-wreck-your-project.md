@@ -137,6 +137,20 @@ On top, the **Security engineer** runs two separate sessions that never see what
 - **Updates roll back** on their own if a new version of Intakt doesn't start cleanly.
 - **Nothing is ever force-pushed:** history is only added to, so any change can be traced and reverted.
 
+## Checking the security of what is built
+
+The layers above keep the AI from harming your project. A separate question is whether the program it builds is safe for the people who use it. Intakt's **Security engineer** looks after that (planned: none of this is built yet, apart from the check for known holes in PHP packages, which runs on Intakt's own project today). Its rule is simple: automatic checks first, and the Security engineer for what a check cannot judge.
+
+The checks, layer by layer:
+- **The server side (backend):** text that comes from outside (a form, a web request, an AI's answer) must never reach a database query, a shell command or a file path without being made safe first; a check follows it there. Logins and sessions follow fixed rules, and a page that prints outside text without escaping it is refused. PHP packages with known security holes are refused.
+- **The browser side (frontend):** a test checks that every page tells the browser to run only the program's own scripts (a content security policy) and sends the other safety headers. Scripts written straight into a page, and Twig's `|raw`, which prints text without escaping it, are refused. JavaScript packages with known holes are refused too.
+- **The machines (infrastructure):** the container recipe (the Dockerfile) is checked for unsafe habits, the finished container and its settings are scanned for known holes, containers must not run as the all-powerful root user and must not change their own files, and the encryption (TLS) and web server settings are checked.
+- **The running program:** every night a scan visits the copy of Intakt that the journeys start and looks for what only shows while it runs, such as a page that forgets a safety header.
+
+A check that needs an extra tool is off until you switch it on for your project, so a simple install stays simple; Intakt's own project has them all on.
+
+The Security engineer adds what checks cannot do. When a change touches a sensitive area (code that handles outside input, the pages and scripts, or the container and web server setup), it reviews that change with a checklist for that area. Once a month it looks at how the scan results develop, keeps the list of threats up to date and files what it finds as tasks, which wait until you or someone with write access labels them. It also runs the two security sessions for changes to the rules (see [When Intakt asks you and why](#when-intakt-asks-you-and-why)), but the decision itself stays with plain code and with you.
+
 ## What this doesn't protect against
 
 No system is perfect, and it is better to be clear about the limits:

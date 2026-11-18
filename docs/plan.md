@@ -26,6 +26,7 @@ Status: approved by the owner on 2026-10-27. The tasks are issues #5 to #35, #60
 | M6 Reviewer for the loop | see [Replacing the existing loop](#replacing-the-existing-loop) | T37, T38, T40, T43 to T46, reviewer for the loop | tasks 2026-11-25; first weekly report 2026-12-03 |
 | M7 Builder half | see [Replacing the existing loop](#replacing-the-existing-loop) | T39, T47 to T69, T75 to T80, T82 | 2026-12-15 (range 2026-12-08 to 2026-12-23) |
 | M8 Switch | see [Replacing the existing loop](#replacing-the-existing-loop) | T70 to T74 | takeover 2027-01-08 (range 2026-12-22 to 2027-01-22) |
+| Product security | see [Product security](#product-security-864) | T84 to T88 | after M7, set by the owner |
 
 ## M1 Review core
 
@@ -676,3 +677,47 @@ Each stage starts with the owner's go and can be rolled back to the previous one
 - M6: T45 and T46 after T44, alongside T37, T38, T40 and T43.
 - M7: T39 after T33 and T14; T47 and T54 in parallel; T48 after T47; T49 to T52 in order, T49 after T45 and T46; T55 after T54; T53 after T51 and T55; T56 to T58 in order; T59 to T61 after T57; T62 to T65 in order (T64 also after T52 and T55); T66 after T62; T67 to T69 after T56; T75 after T18, then T76 and T78 in parallel, T77 after T76, T79 after T78, and T80 after T77 and T79; T82 after T51, T67, T68 and T76.
 - M8: T70 after T63; T71 after the M6 exit; T72 after M7; T73 after T69; T74 last.
+
+## Product security (#864)
+
+The Security engineer covers the security of the product being built, across infrastructure, backend and frontend: checks first, the role for what checks cannot judge ([Threat model](design/05-architecture/14-threat-model.md#the-products-surface), [Reviews](design/05-architecture/07-reviews.md#the-security-engineer)). One task per check family, then the role. Their reason is the owner decision of 2026-11-04 (security matters across all layers), not an escaped defect, so they are the stated exception to the rule that a new gate needs one ([Principles](design/02-principles.md)). Conventions, in addition to the ones above:
+
+- A check that needs a tool beyond PHP and Composer is opt-in per project (off by default, so the simplest install stays simple) and on for Intakt's own repository. On Intakt it is a new gate of `bin/check` (gate work grows by addition: its own class, test file and fixtures, one appended registry entry, a protected change); for a project the check job runs it once the project opts in.
+- A check that adds an external command updates `docs/architecture/requirements.md`, and each family updates `docs/architecture/quality-gates.md` and the guide [Why the AI can't wreck your project](guide/why-the-ai-cant-wreck-your-project.md#checking-the-security-of-what-is-built).
+- Dependency advisories for Composer already exist (the `audit` gate, and T77 for protected changes); no task here repeats them.
+
+| Milestone | Outcome | Tasks | Target |
+|---|---|---|---|
+| Product security | every layer of the product has its checks, on for Intakt, opt-in per project, and the Security engineer reviews by layer and audits monthly | T84 to T88 | after M7, set by the owner |
+
+### T84 Backend security checks
+- **Description:** Taint analysis from untrusted input (request data, forge and model output, files a job hands back) to dangerous sinks (queries, process calls, file paths, outgoing URLs, unserialize); rules for authentication and session handling (every route under an access rule or explicitly public, session cookies `Secure`, `HttpOnly` and `SameSite`, CSRF on every state-changing form); a response built from untrusted text outside the template engine's escaping is refused.
+- **Acceptance:** each rule has a fixture it refuses and a neighboring one it allows, written in the shapes the repository uses (`final readonly` services, controllers with attributes); a taint path through a helper method and through a constructor-injected service is found; the project switch is off by default and a project without it runs none of these checks.
+- **Evidence:** the gate's output on a fixture project with one finding per rule, and on Intakt's own tree.
+- **Waits for:** T51. **Size:** L. **Labels:** `class:tooling`, `priority:normal`, `plan:required`.
+
+### T85 Frontend security checks
+- **Description:** A test requests every route of the app and asserts a strict content security policy (no `unsafe-inline`, no `unsafe-eval`, scripts only from the app's own origin or by nonce) and the security headers (frame, content type, referrer, HSTS behind TLS); inline scripts and inline event handlers in templates, and Twig's `|raw`, are refused; frontend package advisories through `importmap:audit`.
+- **Acceptance:** a route added without the headers fails the test; an inline script, an `onclick` attribute and `|raw` in a template each fail, a script tag with `src` and an escaped variable pass; a package with an advisory in a recorded `importmap:audit` answer fails, a clean answer passes.
+- **Evidence:** the headers of the dashboard's pages from a running install, and the gate's output for a template with `|raw`.
+- **Waits for:** T51. **Size:** M. **Labels:** `class:tooling`, `priority:normal`.
+
+### T86 Infrastructure security checks
+- **Description:** A Dockerfile lint; a vulnerability scan of the built image and of its configuration (Dockerfile, compose files, the reverse-proxy config); an assertion that every container runs as a user other than root with a read-only root file system and only declared writable volumes; checks of the TLS and reverse-proxy settings (TLS on outside localhost, current protocol versions only, forwarded headers trusted only from the proxy, no admin port published).
+- **Acceptance:** each check has a failing fixture (a root `USER`, a writable root, a published admin port, an outdated TLS version, an image package with a recorded advisory) and the repository's own files pass; the scan runs against a recorded vulnerability database in tests.
+- **Evidence:** the checks' output on the repository's `Dockerfile`, `compose.yaml` and `Caddyfile`; a scan against the live database `(owner provides)`.
+- **Waits for:** T22, T51. **Size:** L. **Labels:** `class:tooling`, `priority:normal`, `plan:required`.
+
+### T87 Nightly baseline scan of the running application
+- **Description:** Every night, a baseline scan (passive, no attack payloads) runs against the install the journey suite boots, offline and on its own address only; its findings and their trend are kept for the Security engineer's monthly audit, and a new finding raises one notice.
+- **Acceptance:** the scan reaches no address but the booted install; a page that drops a security header or sets a cookie without its flags is reported; a finding already reported is not reported again; the scan stops what it started.
+- **Evidence:** a scan report of a booted install with one planted finding.
+- **Waits for:** T85. **Size:** M. **Labels:** `class:tooling`, `priority:normal`.
+
+### T88 The Security engineer's layer reviews and monthly audit
+- **Description:** Per layer (backend, frontend, infrastructure) a path trigger and a focus file, both protected paths, add the Security engineer as a blocking specialist with that layer's focus and the layer's check results, fenced; a monthly audit reads the scan trends and the threat model and files each finding as a task with its text inside an `<!-- external -->` block, redacted and scanned, built only once a person labels it. The threat model page lists both sessions.
+- **Acceptance:** a change matching one layer gets that layer's review, one matching two gets one review with both focus files, one matching none gets none; a trigger never removes a reviewer; with `MockPlatformFactory`, a scripted audit files one task per finding, a secret-scan hit files nothing, and a filed task is not built until labeled.
+- **Evidence:** the panel chosen for three changes (one per layer) by a dry-run command, and a scripted audit's filed tasks on a temporary repository.
+- **Waits for:** T8, T66. **Size:** L. **Labels:** `class:core`, `priority:normal`, `plan:required`.
+
+Parallel paths: T84, T85 and T86 in parallel after T51; T87 after T85; T88 after T8 and T66, alongside the checks, its reviews covering a layer until that layer's checks land.

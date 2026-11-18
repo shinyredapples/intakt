@@ -67,17 +67,17 @@ Every change gets the same **core panel**. On top of that, **specialist reviewer
 flowchart LR
   pr[A change] --> core[Core panel<br/>reviews every change]
   pr --> rules{What is it about?}
-  rules -- "touches security code" --> sec[Security reviewer]
+  rules -- "touches input handling, pages or containers" --> sec[Security engineer]
   rules -- "label review:performance" --> perf[Performance reviewer]
   rules -- "changes the project's checks" --> gates[Checks reviewer]
   rules -- "changes the user guide" --> docs[Docs reviewer]
 ```
 
 What brings in a specialist:
-- **the files the change touches**, for example security code;
+- **the files the change touches**, for example code that handles outside input, the pages and scripts, or the container setup, which bring in the Security engineer with the checklist for that area (planned, see [Checking the security of what is built](why-the-ai-cant-wreck-your-project.md#checking-the-security-of-what-is-built));
 - **a label on the task**, such as `review:security`, set by you or the maintainer agent;
 - **the kind or size of the task**, for example changes to the project's checks, or a very large change;
-- **the task's own wording**: when Intakt reads the task before building it, it can recommend a specialist (for example "parses user input" calls for the security reviewer).
+- **the task's own wording**: when Intakt reads the task before building it, it can recommend a specialist (for example "parses user input" calls for the Security engineer).
 
 A specialist can be **blocking** (it must approve, like the core panel) or **advisory** (its notes become small follow-up tasks), and it judges only its own area, so a docs reviewer never blocks a change over performance. These rules only ever add reviewers: nothing can make the core panel smaller, and the rules themselves are protected, so a change can't switch off the reviewer that would catch it.
 
