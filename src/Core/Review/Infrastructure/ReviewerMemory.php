@@ -37,7 +37,7 @@ final readonly class ReviewerMemory
         $entries = $this->memory->relevantTo(new MemoryQuery($brief->change->project, $this->paths->in($brief->change->diff), $room))->entries;
         $notes = $this->notesWithin($entries);
 
-        return null === $notes ? null : $this->assembly->user(self::LEAD, $notes);
+        return $notes instanceof FencedText ? $this->assembly->user(self::LEAD, $notes) : null;
     }
 
     // The separators still add bytes the memory does not count, so the least relevant entries are dropped until the whole briefing fits; a lone top entry is shortened instead, because the most relevant note is worth more than none.

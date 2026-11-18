@@ -144,7 +144,7 @@ final readonly class ReviewedRepository
         } catch (DomainException|RuntimeException|InvalidArgumentException $refused) {
             $this->recordedCall($round, $tool);
 
-            throw new ToolCallException($this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage())),$refused->getCode(), previous: $refused);
+            throw new ToolCallException($this->assembly->toolAnswer($this->fence->wrap(UntrustedSource::ToolResult, $refused->getMessage())), $refused->getCode(), previous: $refused);
         }
     }
 }

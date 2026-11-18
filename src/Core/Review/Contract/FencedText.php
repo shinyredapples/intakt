@@ -17,7 +17,7 @@ final readonly class FencedText
 
     public function __construct(UntrustedSource $source, string $content)
     {
-        $boundary = self::boundaryFor($content);
+        $boundary = $this->boundaryFor($content);
         $this->fence = sprintf("<<<UNTRUSTED %s %s>>>\n%s\n<<<END %s>>>", $source->value, $boundary, $content, $boundary);
         $this->note = '';
     }
@@ -34,7 +34,7 @@ final readonly class FencedText
     }
 
     // Derived from the text, not random, so the same text gives the same prompt and a provider's prompt cache still hits; the text cannot contain a hash of itself.
-    private static function boundaryFor(string $content): string
+    private function boundaryFor(string $content): string
     {
         return self::BOUNDARY_PREFIX.substr(hash('sha256', $content), 0, 16);
     }

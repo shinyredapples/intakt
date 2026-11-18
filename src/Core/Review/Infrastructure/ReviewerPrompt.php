@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\Infrastructure;
 
+use Symfony\AI\Platform\Message\UserMessage;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\PromptAssembly;
@@ -73,7 +74,7 @@ final readonly class ReviewerPrompt
         // A user message of its own, never part of the system message, so the notes stay data under the instructions' fencing rule.
         $briefing = $this->memory?->briefingOn($brief);
 
-        if (null !== $briefing) {
+        if ($briefing instanceof UserMessage) {
             $messages[] = $briefing;
         }
 
