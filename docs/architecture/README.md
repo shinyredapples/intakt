@@ -58,7 +58,7 @@ Builds:
 
 Reviews:
 - [Review flow](review-flow.md)
-- [Prompt assembly](reviewer-agent.md): untrusted text only as a `FencedText` (#844 D1), messages and prompt texts built only by `PromptAssembly` (D2), and the `phpstan` rule that refuses any other message or `ReviewerConversation` under `src/` (D3)
+- [Prompt assembly](reviewer-agent.md): untrusted text only as a `FencedText` (#844 D1), messages and prompt texts built only by `PromptAssembly` (D2), and the `phpstan` rule (D3) that, in every analyzed file outside `tests/`, refuses `Message::ofUser()`, `forSystem()`, `ofAssistant()`, `new UserMessage` and `new SystemMessage` outside `PromptAssembly`, and `new ReviewerConversation` except in the review handler (the panel member's role) and in the vendor's retries when they copy an existing conversation's `rolePrompt`
 - [Review job](review-job.md): `ReviewJob`, which runs one reviewer's CLI in a job container in the project's review image with only its vendor's host allowed and reads its answer, and the job's script, `docker/job/review.sh`, which refuses a checkout that is writable, carries settings a clone does not write, or is not exactly the head, and a job without its proxy, before it runs the CLI
 - [Boot step](boot-step.md): a commit booted once with `bin/instance` (main's for a head), its outcome booted, failed or crashed, never an exception
 - [Review rounds](review-rounds.md)
