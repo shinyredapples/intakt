@@ -756,8 +756,8 @@ final class BootResultsTest extends KernelTestCase
         $ledger = self::createStub(Ledger::class);
         $ledger->method('append')->willReturnCallback($this->ledger->append(...));
         $ledger->method('readMentioning')->willReturnCallback(function (array $texts) use ($results): RecordedEvents {
-            $before = $this->ledger->readMentioning($texts);
-            // The other worker's hit, between this worker's read of the board and its append.
+            $before = $this->ledger->readMentioning(array_values(array_filter($texts, is_string(...))));
+            // Run here, because only a hit between this worker's read of the board and its append forces the order of the race.
             $results->ofMain($this->key('b', 'tools-1'), $this->source());
 
             return $before;
