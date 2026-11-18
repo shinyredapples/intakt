@@ -72,8 +72,7 @@ final readonly class StoredFindings
         return $this->findingsIn($round->reportedFindingsJson());
     }
 
-    // One entry per place and per cause, because two reviewers reporting one file and line, or one change the judge linked, send the builder one fix; the act ids and the links are the judge's.
-    // The act list as the judge left it, from one judge_done row, so every reader of a round's act list builds it the same way; none before the judge answered.
+    // One entry per place and per cause from one judge_done row, because two reports of one place or one linked change send the builder one fix and every reader must build it alike; none before the judge answered.
     /**
      * @return list<Finding>
      */
