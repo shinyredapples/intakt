@@ -102,7 +102,7 @@ final class ShowComponentsControllerTest extends DashboardPageTestCase
                 $section->filter('.character-row')->each(static fn (Crawler $row): string => $row->text()),
                 $theme,
             );
-            self::assertCount(2 * (2 * 2 + 4),$section->filter('img.character[alt=""]'), $theme);
+            self::assertCount(2 * (2 * 2 + 4), $section->filter('img.character[alt=""]'), $theme);
         }
     }
 
