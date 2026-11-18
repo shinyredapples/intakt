@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace Intakt\Gates\PhpStan;
 
+use Intakt\Core\Review\Contract\PromptAssembly;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\UserMessage;
+use Symfony\AI\Platform\Message\SystemMessage;
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
+use PHPStan\Reflection\ClassReflection;
 use PhpParser\Node;
 use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\New_;
@@ -24,17 +32,17 @@ final readonly class RawPromptMessageRule implements Rule
     // only src/, because tests hand fixed messages and conversations to fake platforms, and no outside text reaches a model from there
     private const string CHECKED = '/src/';
 
-    private const string ASSEMBLY = 'Intakt\Core\Review\Contract\PromptAssembly';
-    private const string MESSAGE = 'Symfony\AI\Platform\Message\Message';
+    private const string ASSEMBLY = PromptAssembly::class;
+    private const string MESSAGE = Message::class;
     private const array MESSAGE_FACTORIES = ['ofuser', 'forsystem', 'ofassistant'];
-    private const array MESSAGE_CLASSES = ['Symfony\AI\Platform\Message\UserMessage', 'Symfony\AI\Platform\Message\SystemMessage'];
+    private const array MESSAGE_CLASSES = [UserMessage::class, SystemMessage::class];
     private const string MESSAGE_ADVICE = ' builds a model message from a plain string: build it through Intakt\Core\Review\Contract\PromptAssembly, which takes Intakt\'s own text as a literal-string and untrusted text only as a FencedText.';
 
     // the role prompt enters the system message verbatim (#2518, D2 exception), so a conversation is built only where that prompt comes from the panel member's role or is copied from an existing conversation
-    private const string CONVERSATION = 'Intakt\Core\Review\Contract\ReviewerConversation';
+    private const string CONVERSATION = ReviewerConversation::class;
     private const array CONVERSATION_SOURCES = [
-        'Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler',
-        'Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor',
+        ReviewWithReviewerHandler::class,
+        SymfonyAiVendor::class,
     ];
     private const string CONVERSATION_ADVICE = 'new ReviewerConversation sets a role prompt that enters the system message verbatim: build one only from the panel member\'s role (ReviewWithReviewerHandler) or by copying an existing conversation\'s role prompt (the retries of SymfonyAiVendor).';
 
@@ -96,7 +104,7 @@ final readonly class RawPromptMessageRule implements Rule
             return [RuleErrorBuilder::message('new '.substr($message, (int) strrpos($message, '\\') + 1).self::MESSAGE_ADVICE)->identifier('intakt.rawPromptMessage')->build()];
         }
 
-        if (in_array(strtolower(self::CONVERSATION), $classes, true) &&!array_any(self::CONVERSATION_SOURCES, fn (string $source): bool => $this->isInside($source, $scope))) {
+        if (in_array(strtolower(self::CONVERSATION), $classes, true) && !array_any(self::CONVERSATION_SOURCES, fn (string $source): bool => $this->isInside($source, $scope))) {
             return [RuleErrorBuilder::message(self::CONVERSATION_ADVICE)->identifier('intakt.reviewerConversation')->build()];
         }
 
@@ -121,6 +129,6 @@ final readonly class RawPromptMessageRule implements Rule
     // a trait body counts as outside, because any class could use it and lend it the exemption
     private function isInside(string $class, Scope $scope): bool
     {
-        return null === $scope->getTraitReflection() && 0 === strcasecmp($scope->getClassReflection()?->getName() ?? '', $class);
+        return !$scope->getTraitReflection() instanceof ClassReflection && 0 === strcasecmp($scope->getClassReflection()?->getName() ?? '', $class);
     }
 }

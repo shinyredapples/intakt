@@ -4,6 +4,18 @@ declare(strict_types=1);
 
 namespace Intakt\Tests\Gates;
 
+use Symfony\AI\Platform\Message\Content\Text;
+use Symfony\AI\Platform\Message\Message;
+use Symfony\AI\Platform\Message\SystemMessage;
+use Symfony\AI\Platform\Message\UserMessage;
+use Intakt\Core\Review\Contract\ReviewerConversation;
+use Symfony\Component\Uid\UuidV7;
+use Intakt\Core\Review\Contract\PromptAssembly;
+use Intakt\Core\Review\Contract\FencedText;
+use Symfony\AI\Platform\Message\MessageBag;
+use Symfony\AI\Platform\Result\ToolCall;
+use Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler;
+use Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor;
 use Intakt\Gates\PhpStan\RawPromptMessageRule;
 use PHPUnit\Framework\Attributes\CoversClass;
 
@@ -14,10 +26,10 @@ use PHPUnit\Framework\Attributes\CoversClass;
 final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
 {
     private const array MESSAGE_IMPORTS = [
-        'Symfony\AI\Platform\Message\Content\Text',
-        'Symfony\AI\Platform\Message\Message',
-        'Symfony\AI\Platform\Message\SystemMessage',
-        'Symfony\AI\Platform\Message\UserMessage',
+        Text::class,
+        Message::class,
+        SystemMessage::class,
+        UserMessage::class,
     ];
 
     private const array RAW_MESSAGES = [
@@ -28,7 +40,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
         'new SystemMessage($text)',
     ];
 
-    private const array CONVERSATION_IMPORTS = ['Intakt\Core\Review\Contract\ReviewerConversation', 'Symfony\Component\Uid\UuidV7'];
+    private const array CONVERSATION_IMPORTS = [ReviewerConversation::class, UuidV7::class];
 
     private const string NEW_CONVERSATION = 'new ReviewerConversation($text, new UuidV7())';
 
@@ -46,7 +58,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
 
     public function testTheAssemblyClassMayBuildMessagesFromStrings(): void
     {
-        $findings = $this->findingsOfOneClass('src/Core/Review/Contract/PromptAssembly.php', 'Intakt\Core\Review\Contract\PromptAssembly', self::MESSAGE_IMPORTS, self::RAW_MESSAGES);
+        $findings = $this->findingsOfOneClass('src/Core/Review/Contract/PromptAssembly.php', PromptAssembly::class, self::MESSAGE_IMPORTS, self::RAW_MESSAGES);
 
         self::assertSame('', $findings);
     }
@@ -55,7 +67,7 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     {
         $expressions = ["\$assembly->user('The task:', \$body)", "new MessageBag(\$assembly->system('You review.'), \$assembly->notice('Answer ok.'))"];
 
-        $findings = $this->findingsOfOneClass('src/Report.php', 'Intakt\Sample\Report', ['Intakt\Core\Review\Contract\FencedText', 'Intakt\Core\Review\Contract\PromptAssembly', 'Symfony\AI\Platform\Message\MessageBag'], $expressions, 'PromptAssembly $assembly, FencedText $body');
+        $findings = $this->findingsOfOneClass('src/Report.php', 'Intakt\Sample\Report', [FencedText::class, PromptAssembly::class, MessageBag::class], $expressions, 'PromptAssembly $assembly, FencedText $body');
 
         self::assertSame('', $findings);
     }
@@ -64,14 +76,14 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
     {
         $expressions = ['Prompt::ofUser($text)', 'prompt::OFUSER($text)', '(Prompt::class)::forSystem($text)', 'new (SystemMessage::class)($text)', 'Prompt::ofUser(...)', 'Prompt::{$text}($text)', 'new \symfony\ai\platform\message\usermessage(new Text($text))'];
 
-        $findings = $this->findingsOfOneClass('src/Report.php', 'Intakt\Sample\Report', ['Symfony\AI\Platform\Message\Content\Text', 'Symfony\AI\Platform\Message\Message as Prompt', 'Symfony\AI\Platform\Message\SystemMessage'], $expressions);
+        $findings = $this->findingsOfOneClass('src/Report.php', 'Intakt\Sample\Report', [Text::class, 'Symfony\AI\Platform\Message\Message as Prompt', SystemMessage::class], $expressions);
 
         $this->assertRefusedAt($findings, 'src/Report.php', 3, $expressions, 'intakt.rawPromptMessage');
     }
 
     public function testOtherMessageFactoriesAndUnrelatedStaticCallsPass(): void
     {
-        $findings = $this->findingsOfOneClass('src/Report.php', 'Intakt\Sample\Report', ['Symfony\AI\Platform\Message\Message', 'Symfony\AI\Platform\Message\MessageBag', 'Symfony\AI\Platform\Result\ToolCall', 'Symfony\Component\Uid\UuidV7'],['Message::ofToolCall($call, $text)', 'MessageBag::forId(new UuidV7())'], 'ToolCall $call, string $text');
+        $findings = $this->findingsOfOneClass('src/Report.php', 'Intakt\Sample\Report', [Message::class, MessageBag::class, ToolCall::class, UuidV7::class], ['Message::ofToolCall($call, $text)', 'MessageBag::forId(new UuidV7())'], 'ToolCall $call, string $text');
 
         self::assertSame('', $findings);
     }
@@ -101,21 +113,21 @@ final class RawPromptMessageRuleTest extends PhpStanRuleTestCase
 
     public function testTheReviewHandlerMayBuildAConversationFromThePanelRole(): void
     {
-        $findings = $this->findingsOfOneClass('src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php', 'Intakt\Core\Review\UseCase\RunReviewRound\ReviewWithReviewerHandler', self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]);
+        $findings = $this->findingsOfOneClass('src/Core/Review/UseCase/RunReviewRound/ReviewWithReviewerHandler.php', ReviewWithReviewerHandler::class, self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]);
 
         self::assertSame('', $findings);
     }
 
     public function testTheVendorRetryMayCopyAConversationsRolePrompt(): void
     {
-        $findings = $this->findingsOfOneClass('src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php', 'Intakt\Plugin\SymfonyAiVendor\Infrastructure\SymfonyAiVendor', self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]);
+        $findings = $this->findingsOfOneClass('src/Plugin/SymfonyAiVendor/Infrastructure/SymfonyAiVendor.php', SymfonyAiVendor::class, self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]);
 
         self::assertSame('', $findings);
     }
 
     public function testTheAssemblyMayNotBuildAConversation(): void
     {
-        $findings = $this->findingsOfOneClass('src/Core/Review/Contract/PromptAssembly.php', 'Intakt\Core\Review\Contract\PromptAssembly', self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]);
+        $findings = $this->findingsOfOneClass('src/Core/Review/Contract/PromptAssembly.php', PromptAssembly::class, self::CONVERSATION_IMPORTS, [self::NEW_CONVERSATION]);
 
         self::assertStringContainsString('src/Core/Review/Contract/PromptAssembly.php:14 intakt.reviewerConversation', $findings);
     }
