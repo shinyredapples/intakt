@@ -157,7 +157,7 @@ Use the plain wording in UI copy. Where the term must stay, mark it with `.term`
 
 | Term (internal) | Say in the UI | Standard explanation |
 |---|---|---|
-| head | version (with its short sha) | The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval, unless it leaves what you approved exactly as it was (for a limit like secrets: the same files, unchanged). |
+| head | version (with its short sha) | The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval, unless it leaves what you approved exactly as it was (planned, for a limit like secrets: the same files, unchanged). A revised held CI push always needs its own approval. |
 | held push | push on hold | Intakt stopped this push before checks ran, because it changes something only you can allow, such as CI files or protected files. |
 | share | weekly share | This project's part of the week's AI budget. Intakt paces work so spend follows it. |
 | round | round (review round in running text) | One build, its checks and its review. Sending work back starts the next round. |

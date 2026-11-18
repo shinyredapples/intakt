@@ -461,7 +461,7 @@
 
   /* Glossary: one standard explanation per term, used the same way everywhere (DESIGN.md, Glossary). */
   const GLOSSARY = {
-    version: "The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval, unless it leaves what you approved exactly as it was (for a limit like secrets: the same files, unchanged).",
+    version: "The exact commit Intakt built and checked. An approval covers this version only; a new push needs a new approval, unless it leaves what you approved exactly as it was (planned, for a limit like secrets: the same files, unchanged). A revised held CI push always needs its own approval.",
     hold: "Intakt stopped this push before checks ran, because it changes something only you can allow, such as CI files or protected files.",
     share: "This project's part of the week's AI budget. Intakt paces work so spend follows it.",
     round: "One build, its checks and its review. Sending work back starts the next round.",
