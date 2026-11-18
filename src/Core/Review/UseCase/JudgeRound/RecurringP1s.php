@@ -78,7 +78,7 @@ final readonly class RecurringP1s
     }
 
     /**
-     * @param list<Finding>                   $findings
+     * @param list<Finding>                 $findings
      * @param list<array{Finding, Finding}> $pairs
      *
      * @return list<Finding>
