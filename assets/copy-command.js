@@ -1,10 +1,19 @@
-const COPY = 'button[data-copy]';
+// Only inside a waiting item, so the Copy button the components page shows as a sample stays without effect.
+const COPY = '.wait-item button[data-copy]';
 const WHY = '.wait-item details.why';
 const PHONE = '(max-width: 760px)';
 const SHOWN_FOR_MS = 2000;
 
-// Not a Stimulus controller, because a page the hub cannot reach loads no import map and the owner still has to paste the command.
+// A page bound twice would answer one click twice: two clipboard writes, and the second run would keep "Copied" as the label to put back.
+const bound = new WeakSet();
+
+// Not a Stimulus controller, because a page the hub cannot reach loads no import map and the owner still has to paste the command. Listens on the page once, however often it is called.
 export function copyCommands(page, clipboard, phone, selection) {
+    closeWhyOnPhones(page, phone);
+    if (bound.has(page)) {
+        return;
+    }
+    bound.add(page);
     const shown = new WeakMap();
     page.addEventListener('click', async (event) => {
         const button = event.target?.closest?.(COPY);
@@ -19,7 +28,9 @@ export function copyCommands(page, clipboard, phone, selection) {
         }
     });
     page.addEventListener('keydown', (event) => closeWhyOnEscape(event, phone));
-    closeWhyOnPhones(page, phone);
+    // A visit or a refresh puts every Why in again as the server rendered it, which is open.
+    page.addEventListener('turbo:load', () => closeWhyOnPhones(page, phone));
+    page.addEventListener('turbo:render', () => closeWhyOnPhones(page, phone));
 }
 
 async function copied(clipboard, text) {

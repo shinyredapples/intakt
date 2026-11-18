@@ -45,6 +45,4 @@
 {% endfor %}
 </div>
 {% endif %}
-{# Only this page shows a command to copy and a Why that a phone folds, so only it loads the script; imported by its own address like the shell's, because the import map is absent when the hub is down. #}
-<script type="module">import { copyCommands } from '{{ asset('copy-command.js') }}'; copyCommands(document, navigator.clipboard ?? {}, matchMedia, getSelection());</script>
 {% endblock %}

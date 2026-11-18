@@ -47,6 +47,18 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertSame('Why', $item->filter('details.why summary')->text());
     }
 
+    // Turbo runs a body script again on every visit, so a binding in the body would leave the document's listeners twice.
+    public function testTheCopyScriptIsBoundFromTheHeadAndNeverFromTheBodyAVisitReplaces(): void
+    {
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        self::assertStringContainsString('copyCommands(document, navigator.clipboard ?? {}, matchMedia, getSelection());', $page->filter('head script[type="module"]')->text());
+        self::assertCount(0, $page->filter('body script[type="module"]'));
+        self::assertSame('php bin/console intakt:vendor:probe', $page->filter('.wait-item button[data-copy]')->attr('data-copy'));
+    }
+
     public function testTheOldestNoticeComesFirst(): void
     {
         $this->noticesAre(

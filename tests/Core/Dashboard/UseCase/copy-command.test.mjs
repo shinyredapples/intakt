@@ -12,6 +12,13 @@ class FakeCopyButton extends FakeElement {
     }
 
     closest(selector) {
+        return '.wait-item button[data-copy]' === selector ? this : null;
+    }
+}
+
+// The sample Copy button of the components page: it sits in no waiting item.
+class FakeSampleCopyButton extends FakeCopyButton {
+    closest(selector) {
         return 'button[data-copy]' === selector ? this : null;
     }
 }
@@ -39,8 +46,9 @@ class FakePage {
         this.whys = whys;
     }
 
+    // Every listener is kept, as a document keeps them, so a page bound twice answers twice.
     addEventListener(type, listener) {
-        this.listeners[type] = listener;
+        (this.listeners[type] ??= []).push(listener);
     }
 
     querySelectorAll(selector) {
@@ -49,12 +57,22 @@ class FakePage {
         return this.whys;
     }
 
+    dispatch(type, event = {}) {
+        return Promise.all((this.listeners[type] ?? []).map((listener) => listener(event)));
+    }
+
     click(target) {
-        return this.listeners.click({ target });
+        return this.dispatch('click', { target });
     }
 
     press(key, target) {
-        this.listeners.keydown({ key, target });
+        this.dispatch('keydown', { key, target });
+    }
+
+    // What Turbo does on a visit: the body's elements are new, the document and its listeners stay.
+    visit(whys, event = 'turbo:load') {
+        this.whys = whys;
+        this.dispatch(event);
     }
 }
 
@@ -107,6 +125,36 @@ test('a second quick click still brings the Copy label back', async (t) => {
     assert.equal(button.textContent, 'Copy');
 });
 
+test('a page bound twice writes the clipboard once per click and brings the Copy label back', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = new FakePage();
+    const clipboard = { ...writing, written: [] };
+    copyCommands(page, clipboard, desktop, selectionSpy());
+    copyCommands(page, clipboard, desktop, selectionSpy());
+    const button = new FakeCopyButton('cmd');
+
+    await page.click(button);
+    assert.equal(button.textContent, 'Copied');
+    t.mock.timers.tick(2000);
+
+    assert.deepEqual(clipboard.written, ['cmd']);
+    assert.equal(button.textContent, 'Copy');
+    assert.equal(page.listeners.click.length, 1);
+    assert.equal(page.listeners.keydown.length, 1);
+});
+
+test('a Copy button outside a waiting item, as on the components page, copies nothing', async () => {
+    const page = new FakePage();
+    const clipboard = { ...writing, written: [] };
+    copyCommands(page, clipboard, desktop, selectionSpy());
+    const button = new FakeSampleCopyButton('cmd');
+
+    await page.click(button);
+
+    assert.deepEqual(clipboard.written, []);
+    assert.equal(button.textContent, 'Copy');
+});
+
 test('a refused clipboard write says so and selects the command for a copy by hand', async () => {
     const page = new FakePage();
     const selection = selectionSpy();
@@ -145,6 +193,39 @@ test('a phone closes every Why behind its summary', () => {
     copyCommands(new FakePage([why]), writing, phone, selectionSpy());
 
     assert.equal(why.hasAttribute('open'), false);
+});
+
+for (const event of ['turbo:load', 'turbo:render']) {
+    test(`a second visit folds the new page's Why on a phone (${event})`, () => {
+        const page = new FakePage([new FakeWhy()]);
+        copyCommands(page, writing, phone, selectionSpy());
+        const why = new FakeWhy();
+
+        page.visit([why], event);
+
+        assert.equal(why.hasAttribute('open'), false);
+    });
+}
+
+test('a second call on a bound page still folds the Why it now holds on a phone', () => {
+    const page = new FakePage([new FakeWhy()]);
+    copyCommands(page, writing, phone, selectionSpy());
+    const why = new FakeWhy();
+    page.whys = [why];
+
+    copyCommands(page, writing, phone, selectionSpy());
+
+    assert.equal(why.hasAttribute('open'), false);
+});
+
+test('a second visit on a desktop keeps the new page\'s Why open', () => {
+    const page = new FakePage();
+    copyCommands(page, writing, desktop, selectionSpy());
+    const why = new FakeWhy();
+
+    page.visit([why]);
+
+    assert.equal(why.hasAttribute('open'), true);
 });
 
 test('a desktop keeps every Why open', () => {
