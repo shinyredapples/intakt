@@ -19,18 +19,12 @@ final class HighlightsWorkflowTest extends TestCase
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/highlights.yml';
     private const string MAIN_ONLY = "github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'";
 
-    public function testTheWorkflowRunsOnInputPushesToMainDailyAndOnDemand(): void
+    public function testTheWorkflowRunsOnInputPushesDailyAndOnDemand(): void
     {
         $workflow = $this->workflow();
 
         self::assertSame(['push', 'schedule', 'workflow_dispatch'], array_keys($workflow['on']));
-        self::assertSame(
-            [
-                'branches' => ['main'],
-                'paths' => ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/Highlight*.php', '.github/workflows/highlights.yml'],
-            ],
-            $workflow['on']['push'],
-        );
+        self::assertSame(['branches' => ['main'], 'paths' => ['docs/highlights.d/**', 'bin/highlights', 'config/gates/src/Highlight*.php', '.github/workflows/highlights.yml']], $workflow['on']['push']);
         self::assertSame([['cron' => '17 4 * * *']], $workflow['on']['schedule']);
     }
 
