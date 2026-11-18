@@ -14,7 +14,7 @@ services:
             # The service's own name, so the printed review command runs from the host shell in this folder.
             INTAKT_COMPOSE_SERVICE: intakt
         ports:
-            # Loopback only, because the dashboard is the owner's alone; the port matches DASHBOARD_PORT in the image.
+            # Loopback only: the dashboard has no login, so anyone who reaches the port can act, including every user of this host; the port matches DASHBOARD_PORT in the image.
             - 127.0.0.1:7781:7781
         volumes:
             - intakt-data:/app/var/data

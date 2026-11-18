@@ -22,7 +22,8 @@ flowchart TD
 | What you see | What it means | What to do |
 |---|---|---|
 | A card in **Waiting on you** | only a person can move it on | do what the card says |
-| **Draining** | Intakt is installing one of the rare updates that need running jobs to finish first; the dashboard says why | nothing: it resumes when they have finished |
+| **Draining** on a builder slot | Intakt is installing one of the rare updates whose release notes say running jobs must finish first; the dashboard says why. That slot lets its job finish, then moves to the new version, while the reviews go on (planned; an ordinary update drains nothing) | nothing: it resumes in minutes, and a job that runs too long is saved and continues on the new version |
+| **Draining** everywhere | an update that changes stored data, which the old version could not read, pauses all work while it switches (planned) | nothing: it resumes in minutes; only if such an update fails after work has resumed does work stay paused until a newer version is installed, and Intakt tells you |
 | **Paused** | someone paused the project or the install | resume it from the dashboard |
 | **budget** badge | the AI allowance is near its limit, or this week is spending fast | wait for the refill, or add an account ([costs](accounts-and-costs.md)) |
 | **Only one builder** is running | the week's pace says slow down | normal; it speeds up when there is room |

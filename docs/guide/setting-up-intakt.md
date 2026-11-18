@@ -11,9 +11,7 @@ The wizard is planned, not built yet. For now you create the GitHub App yourself
 ```mermaid
 flowchart TD
   run[Start the container] --> open[Open the dashboard]
-  open --> code[Type the setup code<br/>from docker logs]
-  code --> owner[Create your owner secret<br/>or passkey]
-  owner --> repo[1. Enter your repository]
+  open --> repo[1. Enter your repository]
   repo --> app[2. Create Intakt's own GitHub identity<br/>one click to confirm]
   app --> ai[3. Add your AI accounts]
   ai --> read[4. Intakt reads your project]
@@ -21,7 +19,7 @@ flowchart TD
   defaults --> go[It starts on tasks labeled intakt]
 ```
 
-First, the dashboard asks for a one-time **setup code**: run `docker logs intakt` on the computer Intakt runs on and copy it from there, which proves the install is yours. The code works once and expires an hour after it is printed; if it has expired, a command on that computer prints a new one. Then Intakt creates your **owner secret** (shown once) or registers a passkey; only you can change its settings or press a card's buttons with it ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). Then:
+There is no login, password or setup code: by default the dashboard's port is published on the computer's loopback address only, so only someone at the computer Intakt runs on can open it, and whoever can open it can use it; publish it on another address and anyone who reaches that address can use it too ([steering budgets and pauses](a-tour-of-the-dashboard.md#steering-budgets-and-pauses)). The wizard goes straight to:
 
 1. **Your repository:** paste its address; Intakt detects GitHub or Gitea.
 2. **Its own identity:** Intakt creates a GitHub App that acts as itself, never as you, so its comments and your approvals can always be told apart. It is installed only on the repositories you choose, with the narrowest permissions. You confirm once; you never hand Intakt a personal token. Before its first call to GitHub, Intakt reads the App's installation back and refuses to go on if its permissions or repositories differ from what you configured, naming the difference.
@@ -66,4 +64,4 @@ Intakt works out how many builders and reviewers fit each time it starts work, s
 
 ## Updating
 
-New versions install themselves safely, without stopping the work in progress: Intakt restarts once on the new version and checks it starts and works; running jobs finish on the version they started with, and new jobs use the new one. If anything fails, it rolls back and tells you ([updates](the-engine-room.md#draining-and-updates)).
+New versions install themselves safely, without stopping the work in progress (planned): Intakt checks the new version beside the old one while work goes on, tries it on one builder slot first, then moves the other slots over, and restarts itself once on the new version. Running jobs finish on the version they started with, and new jobs use the new one. Only an update whose release notes say so pauses work, and it tells you why. Updates that are not urgent wait for the update windows you set; an urgent one (a security fix, or a fix for something that stops work) and a version you pick yourself install right away. If anything fails, it rolls back and tells you; only when an update that changes stored data so the old version could not read it fails after work has resumed can it not go back, so work pauses until a newer version fixes it ([updates](the-engine-room.md#draining-and-updates)).
