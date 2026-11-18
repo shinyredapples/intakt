@@ -18,31 +18,41 @@ Intakt is a loop runner for AI coding agents on PHP 8.5 (8.5.12 or later), Symfo
 
 ## Code
 
-- `declare(strict_types=1)`, final classes, `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
+A rule marked "enforced by `bin/check`" is checked by the named gate, whose failure message says how to fix it ([Principles](docs/design/02-principles.md#how-code-reads)); the other lines are judgement, or wait for their rule's gate.
+
+- `declare(strict_types=1)`: enforced by `bin/check` (`cs`).
+- No `else` after a jump: enforced by `bin/check` (`cs`).
+- No nested `try`: enforced by `bin/check` (`phpstan`).
+- At most three parameters, unless a vendor method's signature fixes more; constructors are exempt (they hold dependencies or a value's fields): enforced by `bin/check` (`phpstan`).
+- No flag parameters: enforced by `bin/check` (`phpstan`).
+- Two or more named arguments in a call: each on its own line with a trailing comma, enforced by `bin/check` (`cs`).
+- Classes imported, global functions and constants written plain, class aliases only for a short-name clash and Doctrine's `ORM`: enforced by `bin/check` (`cs`, `phpstan`).
+- Time only through Symfony's `ClockInterface`: enforced by `bin/check` (`phpstan`).
+- A service with state that is not readonly implements `ResetInterface`: enforced by `bin/check` (`phpstan`).
+- A `Provider` case value is derived from the case, never re-spelled, and an `intakt.` container id or parameter name comes from the module's ids class (`<Module>Services` in its `Contract/`): enforced by `bin/check` (`phpstan`).
+- Handlers use `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler`: enforced by `bin/check` (`architecture`).
+- Final classes, `readonly` where possible, no public setters, no static state, no service locator, no magic methods, constructor injection only.
 - PHP 8.5 where it is clearer: `|>`, `clone()` with overrides, imported `#[NoDiscard]` on results that must not be ignored, `array_first()`/`array_last()`, `Uri\Rfc3986\Uri` for URLs, closures in constant expressions.
-- Small methods, early returns, no flag parameters, at most three parameters (unless a vendor method's signature fixes more), no `else` after a jump, no nested `try` (enforced). Constructors are exempt from the parameter limit (they hold dependencies or a value's fields); split a service whose dependencies keep growing by responsibility, not by count.
+- Small methods, early returns; split a service whose dependencies keep growing by responsibility, not by count.
 - Arguments are positional by default. Name one only where its value does not explain itself at the call site: a bare boolean, `null`, an unclear number or string literal, several scalars of the same type in a row, or skipped optional parameters; not when the variable name or type already says it.
-- A call with one named argument may stay on one line; with two or more, every argument goes on its own line with a trailing comma (enforced; attributes are left as they are).
 - Named arguments are no fix for a long parameter list: past the limit, split the method, or group values that form a real concept into a readonly value object (never an artificial parameter object).
 - Calls into a `Contract/` interface or across a plugin boundary use no named arguments: the parameter name would become public API, and an implementation that renames it would break callers.
-- Classes are imported, never fully qualified; global functions and constants are written plain (`count()`, `PHP_EOL`), with neither a backslash nor a `use function`/`use const` (enforced). A class alias only where two classes share a short name, plus Doctrine's `ORM`.
 - Names: commands imperative, events past tense, queries nouns or questions; exceptions named after the broken rule.
-- A closed set of values is a backed enum; a single named value stays a constant.
-- A name built from an enum value is derived from the case, never re-spelled; container service ids and parameter names live in the module's ids class (`<Module>Services` in its `Contract/`). The `phpstan` gate enforces this only for `Provider` values and `intakt.` ids.
+- A closed set of values is a backed enum; a single named value stays a constant. Any other name built from an enum value is derived from the case too, and every container service id and parameter name lives in its module's ids class.
 - Typed objects across module boundaries, never arrays; array shapes only inside a module.
-- Time only through Symfony's `ClockInterface`, `DateTimeImmutable` in UTC; system-time functions and non-literal moments are refused (enforced). `hrtime()` for elapsed time.
-- Worker mode: services keep no per-request state; what must reset implements `ResetInterface`.
-- Handlers use Intakt's `AsCommandHandler`/`AsQueryHandler`, never `AsMessageHandler`. A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
+- `DateTimeImmutable` in UTC, `hrtime()` for elapsed time.
+- A handler that ignores its message names it with `handles:` and takes no parameter, because Rector removes an unused one.
 - Routes, commands, listeners and MCP tools use Symfony's attributes; route names are `<module>_<use_case>`.
 - Logging, Doctrine mapping and the dependency policy: see [Conventions](docs/architecture/conventions.md).
 
 ## Tests
 
+- Every test class declares `#[CoversClass]` (or `#[CoversNothing]`): enforced by `bin/check` (`tests`).
+- A mock without expectations fails: enforced by `bin/check` (`tests`); `#[AllowMockObjectsWithoutExpectations]` is refused by `bin/check` (`phpstan`).
+- A test that ends with an unasserted error log record fails: enforced by `bin/check` (`tests`); assert it with `AssertsLoggedErrors`.
 - Every change brings tests named as sentences (`test...`), one behavior each, given/when/then, builders over long setup.
-- Every test class declares `#[CoversClass]` (or `#[CoversNothing]`), `#[UsesClass]` where it exercises other classes; strict coverage metadata waits until CI collects coverage.
-- `createStub` by default; `createMock` only to assert a call on an outside boundary. A mock without expectations fails the `tests` gate; `#[AllowMockObjectsWithoutExpectations]` is refused.
+- `#[UsesClass]` where a test exercises other classes. `createStub` by default; `createMock` only to assert a call on an outside boundary.
 - SQLite by default; persistence tests in the `persistence` group. Races proven by forced order, never repetition. No shipped config, real credentials or live providers in tests.
-- An expected error log is asserted with `AssertsLoggedErrors`, never printed; the `UnassertedErrorLogExtension` fails a test that ends with an unasserted error record.
 
 ## Symfony AI
 
