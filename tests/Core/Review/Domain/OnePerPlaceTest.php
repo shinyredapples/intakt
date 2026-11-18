@@ -53,6 +53,16 @@ final class OnePerPlaceTest extends TestCase
         self::assertSame('Rejected: unreachable.', $act[0]->judgeNote());
     }
 
+    public function testAnEntryMergedByCauseAcrossLinesTakesTheNoteOfTheFindingItMerged(): void
+    {
+        $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 9)->withJudgeNote('Rejected: unreachable.')], ['F1', 'F2'], ['F2' => 'F1']);
+
+        self::assertCount(1, $act);
+        self::assertSame(['F2'], $act[0]->merged);
+        self::assertSame(7, $act[0]->line);
+        self::assertSame('Rejected: unreachable.', $act[0]->judgeNote());
+    }
+
     public function testAMergedEntryWithoutAnyJudgeNoteHasNone(): void
     {
         $act = new OnePerPlace()->actList([$this->finding('F1', 'src/A.php', 7), $this->finding('F2', 'src/A.php', 7)], ['F1', 'F2']);
