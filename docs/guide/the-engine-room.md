@@ -113,19 +113,32 @@ flowchart LR
 
 ## Draining and updates
 
-**Draining** is how Intakt updates itself without breaking work in progress:
+**Draining** means a part of Intakt starts no new jobs and lets the running ones finish. Intakt uses it to update itself without stopping your work (planned; this is the decided design):
 
 ```mermaid
 flowchart LR
-  a[New version ready] --> b[Drain:<br/>start no new jobs]
-  b --> c[Running jobs finish<br/>work waiting on CI or you is parked]
-  c --> d[Swap in the new version]
-  d --> e{Starts and works?}
-  e -- yes --> f[Resume]
-  e -- no --> g[Roll back to the old version,<br/>resume, alert]
+  a[New version ready] --> b[Installed beside the old one<br/>the old one keeps working]
+  b --> c{Its own check passes?<br/>a failure the old one<br/>has too doesn't count}
+  c -- no --> g[Drop the new version,<br/>alert you]
+  c -- yes --> d[One builder slot<br/>tries the new version]
+  d --> e{First build fine,<br/>or quiet for a while?}
+  e -- yes --> f[The other slots follow,<br/>each when its job is done]
+  e -- no --> h[Roll back,<br/>alert you]
+  f --> k{A job still running<br/>at its slot's deadline?}
+  k -- yes --> i[That job is saved<br/>and picked up<br/>on the new version]
+  k -- no --> j[Intakt's control process<br/>switches in seconds,<br/>running reviews keep going]
+  i --> j
 ```
 
-While a drain is on, the dashboard says "draining" and nothing new starts; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold the drain up.
+- **Beside the old one:** the new version is checked while the old one keeps building and reviewing. Intakt compares the two checks test by test: if a test fails the same way on the old version too (the same test, stopping at the same line with the same failure message), that is a problem of your project, not of the update, so you hear about it and the update goes on. A test that fails only on the new version, or fails there at a different line or with a different message, stops the update.
+- **The old one stays in charge:** until the end of the update, the old version alone hands out work and keeps the records, so nothing is picked up twice. At the end, Intakt's own control process switches in seconds (an old one that hangs is stopped after a short deadline, so new work never waits on it; if it hung before handing over, the old version starts again and carries on); reviews that are running keep running and their results arrive as usual.
+- **One slot first:** one builder slot tries the new version. The others follow once its first build ended without trouble from Intakt itself, or after a set time with no failure. A job always finishes on the version it started on.
+- **Only switching slots wait:** while a slot switches, it starts nothing new. First that is the one slot trying the new version; after it, the remaining builder slots switch together, so the dashboard can show several slots draining at once while the reviews go on. A slot waits only up to a deadline: a job still running then is stopped with its work kept, and continues on the new version.
+- **Everything pauses only rarely:** an update that changes stored data so the old version could not read it says so, and only such an update pauses all work, as one short drain of everything.
+- **Update windows:** updates that are not urgent wait for the times of day you set in the settings, at most a few a day; at the next window Intakt installs the newest version published by then. An urgent release (a security fix, or a fix for something that stops work) and a version you pick yourself install right away.
+- **If anything fails,** Intakt goes back to the old version, which stays installed until the update has proved itself, and tells you at once. One case cannot go back: when an update that changes stored data fails after work has resumed, the old version can no longer read the data, so Intakt pauses all work, tells you, and a newer version fixes it.
+
+While a slot drains, the dashboard says "draining" on that slot; it usually takes minutes. Work that is only waiting (for CI, for you, on hold) doesn't hold a drain up.
 
 ## Holds, hand-overs and caps
 
