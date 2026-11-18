@@ -28,7 +28,7 @@ enum ReviewTool: string
         };
     }
 
-    // A model writes the root as `.` or `./` alike, and both mean the whole head.
+    // A trailing slash is trimmed because a model writes the root as `./` as often as `.`.
     private static function isRoot(?string $path): bool
     {
         return null === $path || self::ROOT === rtrim($path, '/');
