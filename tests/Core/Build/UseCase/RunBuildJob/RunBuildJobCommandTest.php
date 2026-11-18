@@ -11,6 +11,7 @@ use Intakt\Core\Ai\Contract\TierNotMapped;
 use Intakt\Core\Ai\Contract\TierResolver;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuilderNotOnClaudeCode;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJob;
 use Intakt\Core\Build\UseCase\RunBuildJob\BuildJobOutcome;
@@ -48,6 +49,7 @@ use Symfony\Component\Filesystem\Filesystem;
 #[UsesClass(BuilderNotOnClaudeCode::class)]
 #[UsesClass(BuildBrief::class)]
 #[UsesClass(BuilderPrompt::class)]
+#[UsesClass(GatesAtOnce::class)]
 #[UsesClass(Fence::class)]
 #[UsesClass(ResolvedModel::class)]
 #[UsesClass(TierNotMapped::class)]
@@ -175,6 +177,7 @@ final class RunBuildJobCommandTest extends TestCase
             new BuilderPrompt(new Fence()),
             $runner,
             new PhpGate(),
+            new GatesAtOnce(12, 1),
             new Filesystem(),
             self::SCRIPT,
             $this->folder.'/prompts',

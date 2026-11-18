@@ -71,6 +71,15 @@ final class BuildScriptTest extends TestCase
         );
     }
 
+    public function testTheBuildScriptExportsTheGateCountItIsGivenAsIntaktGateSlots(): void
+    {
+        $this->givenTheCli('printf "%s\n" "$INTAKT_GATE_SLOTS" > "$RECORD/gates"');
+
+        $this->whenTheBuildRuns('task', 'claude-opus-5-5');
+
+        self::assertSame("4\n", (string) file_get_contents($this->history->folder.'/gates'));
+    }
+
     public function testASessionCutAtItsAllowanceAfterCommittingHandsBackABundleOfItsCommits(): void
     {
         $this->givenTheCli(<<<'SH'
@@ -378,7 +387,7 @@ final class BuildScriptTest extends TestCase
     private function whenTheBuildRuns(string $branch, string $model, int $allowance = 600): Process
     {
         $run = new Process(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', $this->history->work, $this->prompt, $branch, $model, '7', (string) $allowance, '4'],
             null,
             $this->environment(),
             timeout: 20,
