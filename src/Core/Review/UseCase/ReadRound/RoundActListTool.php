@@ -43,6 +43,9 @@ final readonly class RoundActListTool
      */
     private function actOf(ReviewRound $round): array
     {
-        return $this->findings->judgedActListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122()));
+        return array_map(
+            static fn (Finding $finding): Finding => $finding->withJudgeNoteFenced(),
+            $this->findings->judgedActListOf($round, $this->ledger->judgeDoneOf($round->id()->toRfc4122())),
+        );
     }
 }
