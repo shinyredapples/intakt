@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Platform\Contract;
 
-/**
- * @phpstan-import-type Span from Redaction
- */
 final readonly class HeaderSpans
 {
     private const string HEADER_NAMES = 'proxy-authorization|authorization|set-cookie|cookie|x-api-key|x-auth-token';
@@ -15,7 +12,7 @@ final readonly class HeaderSpans
     private const string HEADER_HEAD = '(?<![\w-])(?:'.self::HEADER_NAMES.')[\\\\"\'\]]*\s*+(?:=>|:|=)\s*+';
 
     /**
-     * @return array{list<Span>, array<int, int>} the lists, and the end of each list whose following text is kept, by its start
+     * @return array{RedactedSpans, array<int, int>} the lists, and the end of each list whose following text is kept, by its start
      */
     public function lists(string $text): array
     {
@@ -23,7 +20,7 @@ final readonly class HeaderSpans
         $pattern = '~'.self::HEADER_HEAD.'(?<open>(?<printR>array\R[ \t]*\()|array\s*\(|(?!'.preg_quote(Redaction::MARKER, '~').')\[)~i';
 
         $before = '';
-        $spans = [];
+        $spans = new RedactedSpans();
         $keptTails = [];
         $offset = 0;
         while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
@@ -45,7 +42,7 @@ final readonly class HeaderSpans
                 && $this->isListShaped($text, $afterOpen, $end)) {
                 $keptTails[$listStart] = $end;
             }
-            $spans[] = [$listStart, $end, Redaction::MARKER];
+            $spans->add($listStart, $end);
             $before .= str_repeat(Redaction::MASK, $end - $listStart);
             $offset = $end;
         }
@@ -56,9 +53,8 @@ final readonly class HeaderSpans
     /**
      * @param array<int, int> $keptTails
      *
-     * @return list<Span>|null
      */
-    public function values(string $text, array $keptTails): ?array
+    public function values(string $text, array $keptTails): ?RedactedSpans
     {
         // A quoted value takes a backslash run and a quote as part of itself, so an escaped quote does not end it, and the other quote character is plain text in it.
         $quoted = '(?<open>\\\\*["\'])(?:(?!\k<open>)(?:\\\\+["\']|[^\\\\]|\\\\))*+(?:(?<close>\k<open>)|\z)';
@@ -66,7 +62,7 @@ final readonly class HeaderSpans
         $unquoted = '(?:[^\r\n"\']|"[^"\r\n]*")+';
         $pattern = '~(?<head>'.self::HEADER_HEAD.')(?:'.$quoted.'|'.$unquoted.')~i';
 
-        $spans = [];
+        $spans = new RedactedSpans();
         $offset = 0;
         while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
             $valueStart = $match['head'][1] + strlen($match['head'][0]);
@@ -77,7 +73,7 @@ final readonly class HeaderSpans
                 continue;
             }
 
-            $spans[] = $this->valueSpan($match, $valueStart);
+            $this->addValue($spans, $match, $valueStart);
             $offset = $match[0][1] + strlen($match[0][0]);
         }
 
@@ -86,19 +82,19 @@ final readonly class HeaderSpans
 
     /**
      * @param array<array-key, array{string, int}> $match
-     *
-     * @return Span
      */
-    private function valueSpan(array $match, int $valueStart): array
+    private function addValue(RedactedSpans $spans, array $match, int $valueStart): void
     {
         $open = $match['open'][0] ?? '';
         $valueEnd = $match[0][1] + strlen($match[0][0]);
         if ('' === $open || -1 !== ($match['close'][1] ?? -1)) {
-            return [$valueStart + strlen($open), $valueEnd - strlen($open), Redaction::MARKER];
+            $spans->add($valueStart + strlen($open), $valueEnd - strlen($open));
+
+            return;
         }
 
         // A quoted value cut off by the end of the text is closed after its marker, as it would have been.
-        return [$valueStart + strlen($open), $valueEnd, Redaction::MARKER.$open];
+        $spans->add($valueStart + strlen($open), $valueEnd, Redaction::MARKER.$open);
     }
 
     // Only structured data quotes its keys (JSON, var_export), so only there can a closing bracket be trusted to end the value.

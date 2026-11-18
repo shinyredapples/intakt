@@ -6,28 +6,26 @@ namespace Intakt\Core\Platform\Contract;
 
 use SensitiveParameter;
 
-/**
- * @phpstan-import-type Span from Redaction
- */
 final readonly class HeldCredentialSpans
 {
     private const array JSON_SHORT_ESCAPES = ["\x08" => 'b', "\f" => 'f', "\n" => 'n', "\r" => 'r', "\t" => 't'];
 
     /**
      * @param list<string> $credentials
-     *
-     * @return list<Span>|null
      */
-    public function in(string $text, #[SensitiveParameter] array $credentials): ?array
+    public function in(string $text, #[SensitiveParameter] array $credentials): ?RedactedSpans
     {
-        $spans = [];
+        $spans = new RedactedSpans();
         foreach ($this->withTrimmedForms($credentials) as $credential) {
-            if (false === preg_match_all($this->pattern($credential), $text, $matches, PREG_OFFSET_CAPTURE)) {
-                return null;
+            $pattern = $this->pattern($credential);
+            // One match at a time, because collecting every match of a short credential in a long text first would cost far more memory than the parts.
+            $offset = 0;
+            while (1 === preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE, $offset)) {
+                $offset = $match[0][1] + strlen($match[0][0]);
+                $spans->add($match[0][1], $offset);
             }
-
-            foreach ($matches[0] as [$found, $at]) {
-                $spans[] = [$at, $at + strlen($found), Redaction::MARKER];
+            if (PREG_NO_ERROR !== preg_last_error()) {
+                return null;
             }
         }
 

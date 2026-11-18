@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Platform\Contract;
 
 use Intakt\Core\Platform\Contract\HeaderSpans;
 use Intakt\Core\Platform\Contract\HeldCredentialSpans;
+use Intakt\Core\Platform\Contract\RedactedSpans;
 use Intakt\Core\Platform\Contract\Redaction;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -14,6 +15,7 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(Redaction::class)]
 #[CoversClass(HeldCredentialSpans::class)]
 #[CoversClass(HeaderSpans::class)]
+#[CoversClass(RedactedSpans::class)]
 final class RedactionTest extends TestCase
 {
     public function testItRedactsAHeldCredentialWhereverItAppears(): void
@@ -103,6 +105,46 @@ final class RedactionTest extends TestCase
         $redacted = new Redaction()->redact("Authorization: held-start\nheld-end and more", "held-start\nheld-end");
 
         self::assertSame('Authorization: [redacted] and more', $redacted);
+    }
+
+    public function testItStillRedactsTheCookieValueWhenAHeldCredentialEndsRightBeforeTheHeaderName(): void
+    {
+        $redacted = new Redaction()->redact('tag=example-prefixCookie: session=example-value', 'example-prefix');
+
+        self::assertSame('tag=[redacted]Cookie: [redacted]', $redacted);
+    }
+
+    public function testItStillRedactsABearerTokenWhenAHeldCredentialEndsRightBeforeItsScheme(): void
+    {
+        $redacted = new Redaction()->redact('tag=example-prefixBearer example-value', 'example-prefix');
+
+        self::assertSame('tag=[redacted][redacted]', $redacted);
+    }
+
+    public function testItKeepsTheClosingQuoteOfAnUnterminatedHeaderValueThatAHeldCredentialFills(): void
+    {
+        $redacted = new Redaction()->redact("Authorization: \"example-value\n", "example-value\n");
+
+        self::assertSame('Authorization: "[redacted]"', $redacted);
+    }
+
+    public function testItKeepsTheClosingQuoteOfAnUnterminatedHeaderValueThatATrimmedHeldCredentialFills(): void
+    {
+        $redacted = new Redaction()->redact('Authorization: "abc', 'abc');
+
+        self::assertSame('Authorization: "[redacted]"', $redacted);
+    }
+
+    public function testItRedactsEveryMatchOfAOneCharacterHeldCredentialInALongTextWithinBoundedMemory(): void
+    {
+        $text = str_repeat('0', 300_000);
+        memory_reset_peak_usage();
+        $before = memory_get_usage();
+
+        $redacted = new Redaction()->redact($text, "0\n");
+
+        self::assertSame(str_repeat('[redacted]', 300_000), $redacted);
+        self::assertLessThan(48 * 1024 * 1024, memory_get_peak_usage() - $before);
     }
 
     public function testItKeepsTwoHeldCredentialsThatOnlyTouchAsTwoMarkers(): void
