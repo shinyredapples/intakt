@@ -10,9 +10,14 @@ use Intakt\Gates\Processors;
 use Intakt\Gates\StaticAnalysisGate;
 use Intakt\Gates\TestWorkerCount;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(GatesByDefault::class)]
+#[UsesClass(GateSlots::class)]
+#[UsesClass(Processors::class)]
+#[UsesClass(StaticAnalysisGate::class)]
+#[UsesClass(TestWorkerCount::class)]
 final class GatesByDefaultTest extends TestCase
 {
     private const int GIB = 1024 ** 3;
