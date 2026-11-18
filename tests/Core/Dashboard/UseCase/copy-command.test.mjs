@@ -166,7 +166,7 @@ test('Esc closes an open Why and gives focus back to its summary', () => {
     assert.equal(why.summary.focused, true);
 });
 
-test('on a desktop Esc leaves the Why open, because no summary there could open it again', () => {
+test('on a desktop Esc leaves the Why open, because a desktop shows every Why open', () => {
     const page = new FakePage();
     copyCommands(page, writing, desktop, selectionSpy());
     const why = new FakeWhy();
