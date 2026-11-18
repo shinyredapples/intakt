@@ -24,8 +24,7 @@ final readonly class PhpGateSteps
     // Scripts and plugins off, because a reused install must hold only the locked packages and nothing a package ran.
     public const string LOCKED_INSTALL = self::LOCK_GUARD.' && composer install --no-interaction --no-progress --no-scripts --no-plugins --no-autoloader';
 
-    // Today's whole install on the populated vendor folder: it downloads nothing, and rewrites the autoloader, symfony/runtime's
-    // vendor/autoload_runtime.php and the root package's metadata in vendor/composer/installed.php from the check's own tree.
+    // The whole install, because dump-autoload leaves installed.php naming the head that made the install, while this rewrites it from the checked tree.
     public const string GENERATE = self::INSTALL;
 
     // Read inside the job image, so the version is the one the check runs on and not the orchestrator's.
