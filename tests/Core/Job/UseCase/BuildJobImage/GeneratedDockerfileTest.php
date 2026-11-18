@@ -59,7 +59,9 @@ final class GeneratedDockerfileTest extends TestCase
         yield 'capped with an included upper bound' => ['>8.4.1 <=8.4.5', '8.4.5'];
         yield 'capped above the released patches' => ['>=8.4.1 <8.4.100', '8.4.25'];
         yield 'one patch excluded far above the releases' => ['^8.4 !=8.4.9999', '8.5'];
-        yield 'one patch excluded far above the releases, inside one minor' => ['>=8.4.0 <8.5 !=8.4.9999', '8.4'];
+        yield 'one patch excluded far above the releases, inside one minor' => ['>=8.4.0 <8.5 !=8.4.9999', '8.4.25'];
+        yield 'the patch just above the released one excluded' => ['>=8.4.0 <8.5 !=8.4.26', '8.4.25'];
+        yield 'the released patch admitted only between gaps' => ['>=8.4.1 <8.4.20 || 8.4.25 || >=8.4.30 <8.5', '8.4.25'];
         yield 'a gap around the released patch, open far above it' => ['>=8.4.1 <8.4.20 || >=8.4.10000 <8.5', '8.4.19'];
         yield 'a gap around the released patch, open just above it' => ['>=8.4.1 <8.4.20 || >=8.4.30 <8.5', '8.4.19'];
         yield 'only the released patch excluded' => ['>=8.4.0 <8.5 !=8.4.25', '8.4.24'];

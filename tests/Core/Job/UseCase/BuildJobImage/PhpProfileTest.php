@@ -50,11 +50,32 @@ final class PhpProfileTest extends TestCase
         self::assertNull($php->imageVersionIn('8.3', 25));
     }
 
-    public function testARuleThatExcludesOnePatchFarAboveTheReleasesStillGetsTheMovingTagOfItsOwnMinor(): void
+    public function testTheCaretRuleOfAMinorIsItsMovingTag(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": "^8.4"}}');
+
+        self::assertSame('8.4', $php->imageVersionIn('8.4', 25));
+    }
+
+    public function testARuleThatExcludesThePatchJustAboveTheNewestReleasedPatchIsPinnedToThatPatch(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.0 <8.5 !=8.4.26"}}');
+
+        self::assertSame('8.4.25', $php->imageVersionIn('8.4', 25));
+    }
+
+    public function testARuleThatExcludesOnePatchFarAboveTheReleasesIsPinnedToTheNewestReleasedPatch(): void
     {
         $php = PhpProfile::fromComposerJson('{"require": {"php": "^8.4 !=8.4.9999"}}');
 
-        self::assertSame('8.4', $php->imageVersionIn('8.4', 20));
+        self::assertSame('8.4.25', $php->imageVersionIn('8.4', 25));
+    }
+
+    public function testARuleThatAdmitsTheNewestReleasedPatchOnlyBetweenGapsIsPinnedToThatPatch(): void
+    {
+        $php = PhpProfile::fromComposerJson('{"require": {"php": ">=8.4.1 <8.4.20 || 8.4.25 || >=8.4.30 <8.5"}}');
+
+        self::assertSame('8.4.25', $php->imageVersionIn('8.4', 25));
     }
 
     public function testARuleWithAGapAroundTheNewestReleasedPatchGetsTheHighestPatchBelowTheGap(): void

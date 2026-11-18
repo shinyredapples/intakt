@@ -61,18 +61,22 @@ final readonly class PhpProfile
         }
     }
 
-    // The minor's moving tag when the rule's last range runs to the minor's end and the rule admits the newest patch known to be released, the one that tag holds at least (a rule with a gap there would get an image it refuses); otherwise the highest admitted patch up to the newest one known to be released, because it carries the most fixes and its image exists; when the rule admits only newer patches, the lowest of them, the one most likely released.
+    // The minor's moving tag only when one admitted range runs without a gap from the newest known released patch to the minor's end, because the patch that tag holds later is unknown and any gap above the release could make the image one the rule refuses; otherwise the highest admitted patch up to that release, because it carries the most fixes and its image exists; when the rule admits only newer patches, the lowest of them, the one most likely released.
     public function imageVersionIn(string $minor, ?int $newestReleasedPatch): ?string
     {
-        $intervals = Intervals::get(MultiConstraint::create([new VersionParser()->parseConstraints($minor.'.*'), $this->constraint]))['numeric'];
+        $parser = new VersionParser();
+        $everyPatch = $parser->parseConstraints($minor.'.*');
+        $intervals = Intervals::get(MultiConstraint::create([$everyPatch, $this->constraint]))['numeric'];
 
         if ([] === $intervals) {
             return null;
         }
 
-        $runsToTheMinorsEnd = !str_starts_with(array_last($intervals)->getEnd()->getVersion(), $minor.'.');
+        $tagRange = null === $newestReleasedPatch
+            ? array_last($intervals)
+            : array_find($intervals, static fn (Interval $interval): bool => self::contains($interval, $parser->normalize($minor.'.'.$newestReleasedPatch)));
 
-        if ($runsToTheMinorsEnd && (null === $newestReleasedPatch || $this->allows($minor.'.'.$newestReleasedPatch))) {
+        if ($tagRange instanceof Interval && self::endsTogether($tagRange, Intervals::get($everyPatch)['numeric'][0])) {
             return $minor;
         }
 
@@ -83,6 +87,19 @@ final readonly class PhpProfile
         }
 
         return $this->lowestPatchAbove($intervals, $minor, $newestReleasedPatch ?? -1);
+    }
+
+    private static function contains(Interval $interval, string $version): bool
+    {
+        $exactly = new Constraint('==', $version);
+
+        return $interval->getStart()->matches($exactly) && $interval->getEnd()->matches($exactly);
+    }
+
+    private static function endsTogether(Interval $interval, Interval $other): bool
+    {
+        return $interval->getEnd()->getOperator() === $other->getEnd()->getOperator()
+            && $interval->getEnd()->getVersion() === $other->getEnd()->getVersion();
     }
 
     /**
