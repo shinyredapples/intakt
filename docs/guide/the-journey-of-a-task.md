@@ -33,9 +33,11 @@ One exception: a task whose pull request is already open (it needs a fix or an u
 
 - **Waiting on another task:** a task can say `Waits for #12`. It isn't picked until #12 is done, so nothing gets built on a missing foundation. *(Planned:)* Intakt learns whether #12 is done from the one list of open tasks it reads each round (a list that comes back incomplete releases no wait), never by asking about each waited-for task on its own, and a worker with no room for new work asks the site nothing, so routine checks never use up the site's hourly allowance.
 - **Too big:** large tasks are split into parts that each work on their own, with their own tests.
-- **Two new tasks touching the same files** are usually built one after the other, so they don't trip over each other; everything else can run in parallel.
+- **A new task that would touch files another change is already changing is skipped** for a task that doesn't, unless nothing else is ready; everything else can run in parallel.
 - **A task with an open pull request never waits** because another task is changing the same files.
 - **A task held back for files only lets a task of the same priority and kind go ahead, and only one that touches none of the files in flight**; if there is none, it is built anyway.
+- **A follow-up task waits** until the pull request it follows has merged.
+- **A task sent back to its builder for the third time is split** into smaller tasks instead of being built a fourth time, and only once.
 - **Pace:** how many builders run at once depends on how much of the week's AI allowance is left (see [Spending wisely](how-intakt-works.md#spending-wisely)).
 
 ## 2. Building
@@ -142,6 +144,7 @@ flowchart TD
 | A reviewer's account is over its limit | the same company's next account takes over; when all of them are out, a reviewer from another company takes its place as a substitute, and a catch-up review by the usual one is noted as owed (running it is planned) |
 | GitHub misses an update | Intakt notices that CI never started and nudges GitHub once, then hands it to the maintainer agent |
 | CI was cancelled | a newer push stopped the checks of the older version, which is not a failure; Intakt waits for the newer checks, starts them again once if nothing does, and otherwise hands it to the maintainer agent |
-| The change conflicts with main | the builder merges main in and resolves it |
+| The change conflicts with main, only in files many changes add to (lock file, lists, index pages) | Intakt merges main in itself and checks the result before anyone sees it |
+| The change conflicts with main in any other file | the builder merges main in and resolves it |
 | The same problem keeps coming back | a stronger model, then the maintainer agent |
 | Something needs a real decision | you get one message with the options and a recommendation |
