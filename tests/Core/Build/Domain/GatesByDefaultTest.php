@@ -67,7 +67,7 @@ final class GatesByDefaultTest extends TestCase
         }
     }
 
-    // What `bin/check` reads inside such a job: every processor of the host in its affinity list, the CPU limit as its quota and the memory limit as `memory.max`.
+    // Fed what `bin/check` reads inside such a job, because the engine leaves every processor of the host in the affinity list and sets the CPU limit as the quota and the memory limit as `memory.max`.
     private function theChecksDefault(int $processors, float $cpus, int $memoryBytes): int
     {
         $status = sprintf("Cpus_allowed_list:\t0-%d\n", $processors - 1);
