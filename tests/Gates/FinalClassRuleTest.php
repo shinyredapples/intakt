@@ -32,7 +32,7 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
             'AFinalEntityPassesStaticAnalysis' => ['final-entity'],
             'AnAbstractClassPassesStaticAnalysis' => ['abstract-class'],
             'AReadonlyClassWithoutFinalFailsStaticAnalysis' => ['non-final-readonly-class', 'src/Mailer.php:7 intakt.finalClass'],
-            'AnEntityWithoutFinalFailsStaticAnalysis' => ['non-final-entity', 'src/Note.php:9 intakt.finalClass'],
+            'AnEntityWithoutFinalFailsStaticAnalysis' => ['non-final-entity', 'src/Note.php:10 intakt.finalClass'],
         ]);
     }
 
@@ -40,5 +40,15 @@ final class FinalClassRuleTest extends PhpStanRuleTestCase
     public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
     {
         $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
+    }
+
+    public function testAnAnonymousClassInsideAFinalClassPassesStaticAnalysis(): void
+    {
+        $this->assertRuleAccepts('anonymous-class');
+    }
+
+    public function testANonFinalClassIsReportedOnTheLineOfItsNameNotItsAttribute(): void
+    {
+        $this->assertRuleRejects('attributed-non-final-class', 'src/Marker.php:10 intakt.finalClass');
     }
 }

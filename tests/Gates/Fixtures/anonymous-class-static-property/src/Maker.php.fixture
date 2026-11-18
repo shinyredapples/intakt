@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Maker
+{
+    public function make(): object
+    {
+        return new class {
+            public static int $made = 0;
+        };
+    }
+}

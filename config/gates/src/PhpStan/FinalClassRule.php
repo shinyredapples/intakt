@@ -27,14 +27,14 @@ final readonly class FinalClassRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!$node->name instanceof Identifier || $node->isFinal() || $node->isAbstract()) {
+        if ($node->isAnonymous() || !$node->name instanceof Identifier || $node->isFinal() || $node->isAbstract()) {
             return [];
         }
 
         return [
             RuleErrorBuilder::message(sprintf('Class %s is not final: declare it final (Doctrine entities too), or abstract if it is a base class.', $node->name->toString()))
                 ->identifier('intakt.finalClass')
-                ->line($node->getStartLine())
+                ->line($node->name->getStartLine())
                 ->build(),
         ];
     }

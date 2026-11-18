@@ -44,4 +44,14 @@ final class NoStaticPropertyRuleTest extends PhpStanRuleTestCase
     {
         $this->assertRuleRejects('trait-static-property', 'intakt.noStaticProperty');
     }
+
+    public function testAStaticPropertyInATraitNoClassUsesFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('unused-trait-static-property', 'src/Lonely.php:9 intakt.noStaticProperty');
+    }
+
+    public function testAStaticPropertyInAnAnonymousClassFailsStaticAnalysis(): void
+    {
+        $this->assertRuleRejects('anonymous-class-static-property', 'src/Maker.php:12 intakt.noStaticProperty');
+    }
 }

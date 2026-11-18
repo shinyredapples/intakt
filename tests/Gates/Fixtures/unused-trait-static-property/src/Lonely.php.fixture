@@ -1,0 +1,10 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+trait Lonely
+{
+    private static int $seen = 0;
+}

@@ -218,10 +218,6 @@ final class SymfonyAiVendorTest extends KernelTestCase
         $this->platformKernel = self::createKernel();
         $this->platformKernel->boot();
         $container = $this->platformKernel->getContainer();
-        // Reset before each test, because a listener of the shared kernel would otherwise carry what the previous test left.
-        $resetter = $container->get('services_resetter');
-        self::assertInstanceOf(ResetInterface::class, $resetter);
-        $resetter->reset();
         $this->dispatcher = ScriptedReviewer::in($container)->dispatcher;
     }
 

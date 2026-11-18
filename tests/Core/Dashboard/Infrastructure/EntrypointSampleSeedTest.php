@@ -545,14 +545,6 @@ final class EntrypointSampleSeedTest extends TestCase
      */
     private function theDefaultDemo(): array
     {
-        return $this->runTheDefaultDemo();
-    }
-
-    /**
-     * @return array{consoleCalls: list<string>, cacheDirectoryExists: bool, keptToken: string, seen: string, compatible: string}
-     */
-    private function runTheDefaultDemo(): array
-    {
         $filesystem = new Filesystem();
         $filesystem->dumpFile($this->directory.'/var/cache/test/image-container', 'old');
         $this->startEntrypoint(['INTAKT_SAMPLE_REPOSITORY' => '/data/sample', 'INTAKT_CONFIG' => $this->directory.'/intakt.yaml']);
