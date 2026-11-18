@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\Infrastructure;
 
 use Closure;
-use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\ReadAnswer;
 use Intakt\Core\Review\Contract\ReviewBrief;
@@ -81,7 +80,7 @@ final readonly class ReviewerAgent implements Reviewer
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.
     private function approvesCutText(Verdict $verdict, ReviewBrief $brief, FencedToolbox $fenced): bool
     {
-        return Decision::Approve === $verdict->verdict && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
+        return $verdict->mayCountAsApproval() && ($this->prompt->cutsInputOf($brief) || $fenced->cutAnAnswer());
     }
 
     // Plain code checks the ids, because only the request knows which findings were open; an id the reviewer invented would otherwise close or revive a finding that never existed.

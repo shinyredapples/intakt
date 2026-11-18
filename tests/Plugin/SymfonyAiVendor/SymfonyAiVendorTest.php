@@ -861,6 +861,24 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame(Verdict::UNREAD_APPROVAL, $review->verdict->findings[0]->id);
     }
 
+    public function testABlindOwnProviderCannotApproveThroughChangesOfOnlyP3Findings(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P3')->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame([Decision::Blocked, Verdict::UNREAD_APPROVAL], [$review->verdict->verdict, $review->verdict->findings[0]->id]);
+    }
+
+    public function testABlindOwnProviderAskingForChangesWithAP1KeepsItsVerdict(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->request());
+
+        self::assertSame(Decision::Changes, $review->verdict->verdict);
+    }
+
     public function testARoundWhoseUsageCannotBeReadBeforeAFailureIsLoggedAndTheFailureStillRecorded(): void
     {
         $extractor = self::createStub(TokenUsageExtractorInterface::class);

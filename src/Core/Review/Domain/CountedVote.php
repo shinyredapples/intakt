@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Symfony\Component\DependencyInjection\Attribute\Exclude;
@@ -14,45 +15,65 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 #[Exclude]
 final readonly class CountedVote
 {
-    // The reported findings are under the ledger's ids, because the act ids name those.
+    /** @var list<string> */
+    private array $judgedIds;
+
+    /** @var list<string> */
+    private array $actIds;
+
+    // The reported findings are under the ledger's ids, because the judge's lists name those; the shown ids are the open ones the round's reviewers were given, the only ids a repeat can name.
     /**
      * @param list<Finding> $reported
-     * @param list<string>  $actIds
+     * @param list<string>  $shownIds
      */
     public function __construct(
         private array $reported,
-        private array $actIds,
+        private array $shownIds,
+        JudgedFindings $judged,
     ) {
+        $this->judgedIds = array_map(static fn (Finding $finding): string => $finding->id, $judged->findings);
+        $this->actIds = array_map(static fn (Finding $finding): string => $finding->id, $judged->actList);
     }
 
-    // Only a changes verdict of P3 findings the judge left off the act list counts as approval, because its findings then reach the builder as follow-ups and never as a fix.
-    public function of(Verdict $verdict): Verdict
+    // A changes verdict counts as changes only with a finding on the act list, as approval when the judge deferred or rejected every one of its findings and all are P3, and otherwise as blocked, because the builder would be sent back with nothing to act on.
+    public function of(Verdict $verdict): Decision
     {
-        if (Decision::Changes !== $verdict->verdict || $verdict->isFailedReview() || !array_all($verdict->findings, $this->isFollowUp(...))) {
-            return $verdict;
+        if (Decision::Changes !== $verdict->verdict || $verdict->isFailedReview() || [] === $verdict->findings) {
+            return $verdict->verdict;
         }
 
-        return new Verdict(Decision::Approve, [], $verdict->resolved, [...$verdict->follow_ups, ...array_map(static fn (Finding $finding): string => $finding->id, $verdict->findings)]);
+        $matches = array_map($this->reportedAs(...), $verdict->findings);
+        $all = array_merge([], ...$matches);
+
+        return match (true) {
+            array_any($all, fn (Finding $reported): bool => in_array($reported->id, $this->actIds, true)) => Decision::Changes,
+            array_all($matches, $this->isJudgedFollowUp(...)) => Decision::Approve,
+            default => Decision::Blocked,
+        };
     }
 
-    // A finding no reported one matches keeps the vote as changes, because a vote is never approved on a guess.
-    private function isFollowUp(Finding $finding): bool
+    // From the ledger's finding, because its severity is the one the judge and the act list go by; a finding the quote check dropped was never judged.
+    /**
+     * @param list<Finding> $matches
+     */
+    private function isJudgedFollowUp(array $matches): bool
     {
-        $matches = array_filter($this->reported, static fn (Finding $reported): bool => self::isReportedAs($finding, $reported));
-
-        return Severity::P3 === $finding->severity
-            && [] !== $matches
-            && !array_any($matches, fn (Finding $reported): bool => in_array($reported->id, $this->actIds, true));
+        return [] !== $matches && array_all($matches, fn (Finding $reported): bool => Severity::P3 === $reported->severity && in_array($reported->id, $this->judgedIds, true));
     }
 
-    // By id for a repeat and by content for a new finding, because the ledger gives a new finding an id of its own and keeps its fields; a match by either keeps every possible act mark in view.
-    private static function isReportedAs(Finding $finding, Finding $reported): bool
+    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by its place and text, because the ledger gives it an id of its own and keeps them, and every match stays in view so no act mark is missed.
+    /**
+     * @return list<Finding>
+     */
+    private function reportedAs(Finding $finding): array
     {
-        return ($finding->repeat && $finding->id === $reported->id)
-            || ($finding->severity === $reported->severity
-                && $finding->file === $reported->file
-                && $finding->line === $reported->line
-                && $finding->symbol === $reported->symbol
-                && $finding->text === $reported->text);
+        if ($finding->repeat && in_array($finding->id, $this->shownIds, true)) {
+            return array_values(array_filter($this->reported, static fn (Finding $reported): bool => $finding->id === $reported->id));
+        }
+
+        return array_values(array_filter($this->reported, static fn (Finding $reported): bool => $finding->file === $reported->file
+            && $finding->line === $reported->line
+            && $finding->symbol === $reported->symbol
+            && $finding->text === $reported->text));
     }
 }

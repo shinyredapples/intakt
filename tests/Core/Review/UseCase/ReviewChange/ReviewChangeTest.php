@@ -237,6 +237,21 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(['F1'], array_map(static fn (Finding $finding): string => $finding->id, $review->actList));
     }
 
+    public function testARoundWhoseOnlyChangesAreAP2TheQuoteCheckDroppedIsBlockedAndNotSentBackWithNothingToAct(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->quotingMissingCode(Severity::P2)], [], [])]));
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame([], $review->actList);
+    }
+
+    public function testAP3TheQuoteCheckDroppedNeverCountsAsApprovalBecauseTheJudgeNeverSawIt(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->quotingMissingCode(Severity::P3)], [], [])]));
+
+        self::assertSame(Decision::Blocked, $review->decision);
+    }
+
     public function testTwoReviewersReportingOnePlaceGiveOneActEntryThatNamesBothFindings(): void
     {
         $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 7)));
@@ -618,5 +633,11 @@ final class ReviewChangeTest extends KernelTestCase
     private function finding(string $id, Severity $severity): Finding
     {
         return new Finding($id, $severity, null, null, null, 'Text of '.$id.'.', FixableBy::Builder, false, null, null);
+    }
+
+    // A quote of code the change does not hold, so the quote check drops it before the judge.
+    private function quotingMissingCode(Severity $severity): Finding
+    {
+        return new Finding('A', $severity, 'src/Thing.php', 3, null, 'The call to `missingProbeSymbol` needs a guard.', FixableBy::Builder, false, null, null);
     }
 }

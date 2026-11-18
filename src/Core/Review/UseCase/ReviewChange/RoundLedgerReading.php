@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\QuorumPolicy;
@@ -51,6 +52,12 @@ final readonly class RoundLedgerReading implements RoundCosts
     public function sameCauseOf(string $roundId): array
     {
         return $this->judgeDoneOf($roundId)->sameCause ?? [];
+    }
+
+    // The vote the judge step counted for the reviewer, and the verdict as given for a round judged before votes were counted.
+    public function voteOf(string $roundId, string $reviewerId, Decision $given): Decision
+    {
+        return $this->judgeDoneOf($roundId)->votes[$reviewerId] ?? $given;
     }
 
     /**

@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Decision;
+use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
+use Intakt\Core\Review\Contract\FollowUp;
+use Intakt\Core\Review\Contract\JudgedFinding;
+use Intakt\Core\Review\Contract\JudgedFindings;
+use Intakt\Core\Review\Contract\Judgement;
+use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\CountedVote;
@@ -17,87 +23,151 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(CountedVote::class)]
 #[UsesClass(Verdict::class)]
 #[UsesClass(Finding::class)]
+#[UsesClass(JudgedFindings::class)]
+#[UsesClass(JudgedFinding::class)]
+#[UsesClass(Judgement::class)]
+#[UsesClass(FollowUp::class)]
+#[UsesClass(DroppedFinding::class)]
 final class CountedVoteTest extends TestCase
 {
-    public function testAChangesVerdictWhoseFindingsAreAllP3AndOffTheActListCountsAsApprovalWithFollowUps(): void
+    public function testAChangesVerdictWhoseP3FindingsTheJudgeDeferredOrRejectedCountsAsApproval(): void
     {
-        $verdict = $this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P3, 'Two.'));
+        $reported = [$this->finding('F1', Severity::P3, 'One.'), $this->finding('F2', Severity::P3, 'Two.')];
 
-        $vote = new CountedVote([$this->finding('F1', Severity::P3, 'One.'), $this->finding('F2', Severity::P3, 'Two.')], [])->of($verdict);
+        $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Reject])->of($this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P3, 'Two.')));
 
-        self::assertSame(Decision::Approve, $vote->verdict);
-        self::assertSame([], $vote->findings);
-        self::assertSame(['A', 'B'], $vote->follow_ups);
+        self::assertSame(Decision::Approve, $vote);
     }
 
-    public function testAChangesVerdictWithOneP3OnTheActListStillCountsAsChanges(): void
+    public function testAChangesVerdictWithOneP3OnTheActListCountsAsChanges(): void
     {
-        $verdict = $this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P3, 'Two.'));
+        $reported = [$this->finding('F1', Severity::P3, 'One.'), $this->finding('F2', Severity::P3, 'Two.')];
 
-        $vote = new CountedVote([$this->finding('F1', Severity::P3, 'One.'), $this->finding('F2', Severity::P3, 'Two.')], ['F2'])->of($verdict);
+        $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Act])->of($this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P3, 'Two.')));
 
-        self::assertSame($verdict, $vote);
+        self::assertSame(Decision::Changes, $vote);
     }
 
-    public function testAChangesVerdictWithAP2CountsAsChanges(): void
+    public function testAChangesVerdictWithAJudgedP2CountsAsChanges(): void
     {
-        $verdict = $this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P2, 'Two.'));
+        $reported = [$this->finding('F1', Severity::P3, 'One.'), $this->finding('F2', Severity::P2, 'Two.')];
 
-        $vote = new CountedVote([$this->finding('F1', Severity::P3, 'One.'), $this->finding('F2', Severity::P2, 'Two.')], [])->of($verdict);
+        $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Defer])->of($this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P2, 'Two.')));
 
-        self::assertSame($verdict, $vote);
+        self::assertSame(Decision::Changes, $vote);
     }
 
-    public function testARepeatedP3IsFoundUnderItsLedgerIdThoughAnotherReviewersTextWasKept(): void
+    public function testAChangesVerdictWhoseOnlyP2TheQuoteCheckDroppedCountsAsBlocked(): void
     {
-        $verdict = $this->changes(new Finding('F4', Severity::P3, null, null, null, 'My words.', FixableBy::Builder, true, null, null));
+        $p2 = $this->finding('F1', Severity::P2, 'Call `ghost`.');
 
-        $vote = new CountedVote([$this->finding('F4', Severity::P3, 'Other words.')], ['F4'])->of($verdict);
+        $vote = $this->counted([$p2], [], [$p2])->of($this->changes($this->finding('A', Severity::P2, 'Call `ghost`.')));
 
-        self::assertSame($verdict, $vote);
+        self::assertSame(Decision::Blocked, $vote);
+    }
+
+    public function testAChangesVerdictWithAP3TheQuoteCheckDroppedCountsAsBlocked(): void
+    {
+        $dropped = $this->finding('F2', Severity::P3, 'Call `ghost`.');
+        $reported = [$this->finding('F1', Severity::P3, 'One.'), $dropped];
+
+        $vote = $this->counted($reported, ['F1' => Mark::Defer], [$dropped])->of($this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P3, 'Call `ghost`.')));
+
+        self::assertSame(Decision::Blocked, $vote);
+    }
+
+    public function testADroppedFindingBesideOneOnTheActListStillCountsAsChanges(): void
+    {
+        $dropped = $this->finding('F2', Severity::P2, 'Call `ghost`.');
+        $reported = [$this->finding('F1', Severity::P2, 'One.'), $dropped];
+
+        $vote = $this->counted($reported, ['F1' => Mark::Act], [$dropped])->of($this->changes($this->finding('A', Severity::P2, 'One.'), $this->finding('B', Severity::P2, 'Call `ghost`.')));
+
+        self::assertSame(Decision::Changes, $vote);
+    }
+
+    public function testARepeatOfAShownIdIsFoundUnderThatIdThoughAnotherReviewersTextWasKept(): void
+    {
+        $repeat = new Finding('F4', Severity::P3, null, null, null, 'My words.', FixableBy::Builder, true, null, null);
+
+        $vote = $this->counted([$this->finding('F4', Severity::P3, 'Other words.')], ['F4' => Mark::Act], shown: ['F4'])->of($this->changes($repeat));
+
+        self::assertSame(Decision::Changes, $vote);
+    }
+
+    public function testADeferredRepeatCountsAsApprovalThoughAFindingOfTheSameTextIsOnTheActList(): void
+    {
+        $repeat = new Finding('F1', Severity::P3, null, null, null, 'Rename the helper.', FixableBy::Builder, true, null, null);
+        $another = new Finding('F2', Severity::P3, null, null, null, 'Rename the helper.', FixableBy::Builder, false, null, null);
+
+        $vote = $this->counted([$repeat, $another], ['F1' => Mark::Defer, 'F2' => Mark::Act], shown: ['F1'])->of($this->changes($repeat));
+
+        self::assertSame(Decision::Approve, $vote);
+    }
+
+    public function testARepeatNamingAnIdNotShownIsMatchedByItsPlaceAndText(): void
+    {
+        $guessed = new Finding('F2', Severity::P3, 'src/A.php', 7, null, 'One.', FixableBy::Builder, true, null, null);
+        $reported = [$this->finding('F1', Severity::P3, 'Other.'), $this->finding('F2', Severity::P3, 'One.')];
+
+        $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Act])->of($this->changes($guessed));
+
+        self::assertSame(Decision::Changes, $vote);
     }
 
     public function testANewP3MatchingTwoReportedFindingsCountsAsChangesWhenEitherIsOnTheActList(): void
     {
-        $verdict = $this->changes($this->finding('A', Severity::P3, 'Same.'));
+        $reported = [$this->finding('F1', Severity::P3, 'Same.'), $this->finding('F2', Severity::P3, 'Same.')];
 
-        $vote = new CountedVote([$this->finding('F1', Severity::P3, 'Same.'), $this->finding('F2', Severity::P3, 'Same.')], ['F2'])->of($verdict);
+        $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Act])->of($this->changes($this->finding('A', Severity::P3, 'Same.')));
 
-        self::assertSame($verdict, $vote);
+        self::assertSame(Decision::Changes, $vote);
     }
 
-    public function testAP3NoReportedFindingMatchesKeepsTheVoteAsChanges(): void
+    public function testAP3NoReportedFindingMatchesCountsAsBlocked(): void
     {
-        $verdict = $this->changes($this->finding('A', Severity::P3, 'Mine.'));
+        $vote = $this->counted([$this->finding('F1', Severity::P3, 'Another.')], ['F1' => Mark::Defer])->of($this->changes($this->finding('A', Severity::P3, 'Mine.')));
 
-        $vote = new CountedVote([$this->finding('F1', Severity::P3, 'Another.')], [])->of($verdict);
+        self::assertSame(Decision::Blocked, $vote);
+    }
 
-        self::assertSame($verdict, $vote);
+    public function testAChangesVerdictWithoutFindingsIsNeverCountedAsApproval(): void
+    {
+        self::assertSame(Decision::Changes, $this->counted([], [])->of($this->changes()));
     }
 
     public function testAFailedReviewIsNeverCountedAsApproval(): void
     {
         $failed = new Verdict(Decision::Changes, [$this->finding(Verdict::NO_TOOLS, Severity::P3, 'No tools.')], [], []);
 
-        $vote = new CountedVote([$this->finding('F1', Severity::P3, 'No tools.')], [])->of($failed);
-
-        self::assertSame($failed, $vote);
+        self::assertSame(Decision::Changes, $this->counted([$this->finding('F1', Severity::P3, 'No tools.')], ['F1' => Mark::Defer])->of($failed));
     }
 
     public function testABlockedVerdictWithOnlyP3FindingsStaysBlocked(): void
     {
         $blocked = new Verdict(Decision::Blocked, [$this->finding('A', Severity::P3, 'One.')], [], []);
 
-        $vote = new CountedVote([$this->finding('F1', Severity::P3, 'One.')], [])->of($blocked);
-
-        self::assertSame($blocked, $vote);
+        self::assertSame(Decision::Blocked, $this->counted([$this->finding('F1', Severity::P3, 'One.')], ['F1' => Mark::Defer])->of($blocked));
     }
 
     public function testAnApprovalIsCountedAsItIs(): void
     {
-        $approval = new Verdict(Decision::Approve, [], [], []);
+        self::assertSame(Decision::Approve, $this->counted([], [])->of(new Verdict(Decision::Approve, [], [], [])));
+    }
 
-        self::assertSame($approval, new CountedVote([], [])->of($approval));
+    /**
+     * @param list<Finding>       $reported
+     * @param array<string, Mark> $marks
+     * @param list<Finding>       $dropped
+     * @param list<string>        $shown
+     */
+    private function counted(array $reported, array $marks, array $dropped = [], array $shown = []): CountedVote
+    {
+        $kept = array_values(array_filter($reported, static fn (Finding $finding): bool => !in_array($finding, $dropped, true)));
+        $judgement = new Judgement(array_map(static fn (string $id, Mark $mark): JudgedFinding => new JudgedFinding((string) $id, $mark), array_keys($marks), $marks));
+        $judged = JudgedFindings::of($judgement, $kept, array_map(static fn (Finding $finding): DroppedFinding => DroppedFinding::of($finding, 'none of its 1 quoted code fragments is in the change'), $dropped));
+
+        return new CountedVote($reported, $shown, $judged);
     }
 
     private function changes(Finding ...$findings): Verdict

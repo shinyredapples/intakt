@@ -23,7 +23,6 @@ use Intakt\Core\Review\Contract\RoundEnds;
 use Intakt\Core\Review\Contract\RoundNotNext;
 use Intakt\Core\Review\Contract\RoundTierNotMapped;
 use Intakt\Core\Review\Contract\Verdict;
-use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\ReviewSubject;
 use Intakt\Core\Review\Domain\ReviewTarget;
@@ -174,9 +173,7 @@ final readonly class ReviewChange implements ChangeReviews
             return Decision::Blocked;
         }
 
-        $counted = new CountedVote($this->findings->reportedIn($round), $this->ledger->actIdsOf($round->id()->toRfc4122()));
-
-        return $this->decision->of($request->panel->quorum, array_map(fn (RoundReviewer $reviewer): PanelVerdict => $this->voteOf($reviewer, $counted), $round->reviewers()));
+        return $this->decision->of($request->panel->quorum, array_map($this->voteOf(...), $round->reviewers()));
     }
 
     private function unfinished(ChangeReview $review, int $seconds): ChangeReview
@@ -184,12 +181,13 @@ final readonly class ReviewChange implements ChangeReviews
         return $review->blockedFor(RoundEnds::NoOutcomeInTime, $this->reasons->noOutcomeInTime($seconds));
     }
 
-    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
-    private function voteOf(RoundReviewer $reviewer, CountedVote $counted): PanelVerdict
+    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum; a verdict counts as the judge step recorded it.
+    private function voteOf(RoundReviewer $reviewer): PanelVerdict
     {
-        $verdict = $this->verdicts->ofReviewer($reviewer) ?? new Verdict(Decision::Blocked, [], [], []);
+        $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
+        $vote = null === $given ? Decision::Blocked : $this->ledger->voteOf($reviewer->round()->id()->toRfc4122(), $reviewer->id()->toRfc4122(), $given);
 
-        return new PanelVerdict($reviewer->tier(), $counted->of($verdict));
+        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
     }
 
     /**

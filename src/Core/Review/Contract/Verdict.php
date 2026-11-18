@@ -55,6 +55,14 @@ final readonly class Verdict
         return Decision::Blocked === $this->verdict && array_any($this->findings, static fn (Finding $finding): bool => self::REVIEWER_STOPPED === $finding->id);
     }
 
+    // An approval, or a changes verdict of P3 findings only, which the quorum counts as approval when the judge defers or rejects them all; the guards that refuse an approval refuse both, because the judge's marks come only after them.
+    #[Ignore]
+    public function mayCountAsApproval(): bool
+    {
+        return Decision::Approve === $this->verdict
+            || (Decision::Changes === $this->verdict && [] !== $this->findings && !$this->isFailedReview() && array_all($this->findings, static fn (Finding $finding): bool => Severity::P3 === $finding->severity));
+    }
+
     // A verdict that withholds approval names at least one finding, so a changes or blocked verdict that names none is not a valid verdict.
     #[Ignore]
     public function withholdsApprovalWithoutFinding(): bool
@@ -88,7 +96,7 @@ final readonly class Verdict
             file: null,
             line: null,
             symbol: null,
-            text: 'The reviewer approved a change it could not read: its provider gives it no access to the checkout, so the approval is refused and the review is blocked.',
+            text: 'The reviewer approved a change it could not read, or asked only for P3 changes, which can count as approval: its provider gives it no access to the checkout, so the approval is refused and the review is blocked.',
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'An approval counts only from a reviewer that could read the change.',
@@ -106,7 +114,7 @@ final readonly class Verdict
             file: null,
             line: null,
             symbol: null,
-            text: 'The reviewer approved a change whose task, diff or a tool answer Intakt cut to its size limit, and nothing shows that it read the part left out, so the approval is refused and the review is blocked.',
+            text: 'The reviewer approved, or asked only for P3 changes, which can count as approval, on a change whose task, diff or a tool answer Intakt cut to its size limit, and nothing shows that it read the part left out, so the approval is refused and the review is blocked.',
             fixable_by: FixableBy::Owner,
             repeat: false,
             requirement: 'An approval counts only from a reviewer that was shown the whole change.',

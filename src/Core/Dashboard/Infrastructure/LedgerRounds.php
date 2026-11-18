@@ -45,7 +45,7 @@ final class LedgerRounds
     /** @var array<string, array<string, ReviewerOutcome>> */
     private array $outcomes = [];
 
-    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable}> */
+    /** @var array<string, array{findings: list<RoundFinding>, dropped: list<RoundFinding>, textRecorded: bool, at: DateTimeImmutable, votes: array<string, Decision>}> */
     private array $judged = [];
 
     /** @var array<string, ReplayMark> */
@@ -195,7 +195,7 @@ final class LedgerRounds
 
         if ($judge instanceof JudgeDone) {
             $findings = $this->payloads->judgedFindingsOf($recorded);
-            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt]];
+            $this->judged += [$judge->round => ['findings' => $this->judgedFindings($judge, $findings ?? []), 'dropped' => $this->droppedFindings($recorded), 'textRecorded' => null !== $findings, 'at' => $recorded->recordedAt, 'votes' => $judge->votes]];
         }
     }
 
@@ -285,8 +285,8 @@ final class LedgerRounds
 
         return match (true) {
             null === $judged => $this->endedOrRunning($completed),
-            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
-            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped'])),
+            $judged['textRecorded'] => $this->decided($completed->judgedWith($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
+            default => $this->decided($completed->judgedFromMarksOnly($judged['findings'], $judged['at'])->withDropped($judged['dropped']), $judged['votes']),
         };
     }
 
@@ -298,25 +298,31 @@ final class LedgerRounds
     }
 
     // Only a judged round with a recorded quorum gets an outcome, because the console decides once the judge is done and a policy must never be guessed.
-    private function decided(ReviewedRound $round): ReviewedRound
+    /**
+     * @param array<string, Decision> $counted
+     */
+    private function decided(ReviewedRound $round, array $counted): ReviewedRound
     {
         if (!$round->quorum instanceof QuorumPolicy) {
             return $round;
         }
 
-        $votes = array_map(static fn (ReviewerOutcome $outcome): PanelVerdict => new PanelVerdict(Tier::from($outcome->tier), new Verdict(self::voteOf($outcome), [], [], [])), $round->outcomes);
+        $votes = array_map(static fn (ReviewerOutcome $outcome): PanelVerdict => new PanelVerdict(Tier::from($outcome->tier), new Verdict(self::voteOf($outcome, $counted), [], [], [])), $round->outcomes);
         $unstarted = array_fill(0, max(0, $round->reviewers - count($votes)), new PanelVerdict(Tier::Standard, new Verdict(Decision::Blocked, [], [], [])));
 
         return $round->decidedAs($this->decision->of($round->quorum, [...$votes, ...$unstarted]));
     }
 
-    // A reviewer without a verdict votes as blocked, as in the Review module, so a failed or unstarted reviewer never helps a quorum.
-    private static function voteOf(ReviewerOutcome $outcome): Decision
+    // A reviewer without a verdict votes as blocked, as in the Review module, so a failed or unstarted reviewer never helps a quorum; an answer counts as the judge step recorded it, as the console counts it.
+    /**
+     * @param array<string, Decision> $counted
+     */
+    private static function voteOf(ReviewerOutcome $outcome, array $counted): Decision
     {
         if (ReviewerProgress::Answered !== $outcome->progress) {
             return Decision::Blocked;
         }
 
-        return $outcome->decision ?? Decision::Blocked;
+        return $counted[$outcome->id] ?? $outcome->decision ?? Decision::Blocked;
     }
 }

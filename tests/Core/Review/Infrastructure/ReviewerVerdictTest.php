@@ -804,6 +804,15 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertFalse($verdict->isFailedReview());
     }
 
+    public function testChangesOfOnlyP3FindingsOnACutDiffEndAsBlockedBecauseTheyCanCountAsApproval(): void
+    {
+        $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->withFinding('severity', 'P3')->json());
+
+        self::assertSame([Decision::Blocked, Verdict::CUT_APPROVAL], [$verdict->verdict, $verdict->findings[0]->id]);
+    }
+
     public function testAnApprovalOfADiffAtTheCeilingStaysApprove(): void
     {
         $this->diff = str_repeat('x', PromptCut::CEILING_BYTES);

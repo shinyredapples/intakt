@@ -11,7 +11,6 @@ use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\QuorumPolicy;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\Verdict;
-use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundReviewer;
 use Intakt\Core\Review\Domain\RoundState;
@@ -50,8 +49,7 @@ final readonly class VerdictForTheLoop
             return $this->unreviewed($round);
         }
 
-        $counted = new CountedVote($this->findings->reportedIn($round), $this->ledger->actIdsOf($round->id()->toRfc4122()));
-        $votes = array_map(fn (RoundReviewer $reviewer): PanelVerdict => $this->voteOf($reviewer, $counted), $round->reviewers());
+        $votes = array_map($this->voteOf(...), $round->reviewers());
         $decision = $this->decisionOf($round, $votes);
         if (Decision::Blocked === $decision) {
             return $this->unreviewed($round);
@@ -83,10 +81,13 @@ final readonly class VerdictForTheLoop
         return new ReviewToken($round->id()->toRfc4122());
     }
 
-    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum.
-    private function voteOf(RoundReviewer $reviewer, CountedVote $counted): PanelVerdict
+    // A reviewer without a verdict votes as blocked, so a failed review can never help a quorum; a verdict counts as the judge step recorded it.
+    private function voteOf(RoundReviewer $reviewer): PanelVerdict
     {
-        return new PanelVerdict($reviewer->tier(), $counted->of($this->verdicts->ofReviewer($reviewer) ?? new Verdict(Decision::Blocked, [], [], [])));
+        $given = $this->verdicts->ofReviewer($reviewer)?->verdict;
+        $vote = null === $given ? Decision::Blocked : $this->ledger->voteOf($reviewer->round()->id()->toRfc4122(), $reviewer->id()->toRfc4122(), $given);
+
+        return new PanelVerdict($reviewer->tier(), new Verdict($vote, [], [], []));
     }
 
     /**
