@@ -46,19 +46,18 @@ final readonly class ShowBoardController
         $board = $this->reviewPages->boardOf($events);
 
         // Only on a demo install, because an install without the sample has nothing on the first-run page to start and keeps the board's own opening.
-        if ($board->hasNoReview() && $this->sample->hasRepository()) {
-            return new RedirectResponse($this->urls->generate(DashboardRoutes::FIRST_RUN), Response::HTTP_SEE_OTHER);
-        }
-
-        $answer = $this->isPhoneLanding($request)
-            ? new RedirectResponse($this->urls->generate(DashboardRoutes::LIST_WAITING), Response::HTTP_SEE_OTHER)
-            : new Response($this->pages->render($request, 'dashboard/board.html.twig', [
+        $answer = match (true) {
+            $board->hasNoReview() && $this->sample->hasRepository() => new RedirectResponse($this->urls->generate(DashboardRoutes::FIRST_RUN), Response::HTTP_SEE_OTHER),
+            $this->isPhoneLanding($request) => new RedirectResponse($this->urls->generate(DashboardRoutes::LIST_WAITING), Response::HTTP_SEE_OTHER),
+            default => new Response($this->pages->render($request, 'dashboard/board.html.twig', [
                 'board' => $board,
                 'failing' => array_map($this->redacted(...), $this->failingHeads->in($events)),
                 'failing_mains' => array_map($this->redactedMain(...), $this->failingMains->in($events)),
                 'working' => $board->whoIsWorking(),
                 'columns' => BoardColumn::cases(),
-            ]));
+            ])),
+        };
+        // On every answer of the address, the first-run redirect too, because a cache that kept one answer for every browser would give a phone the board or a computer Waiting on you.
         $answer->setVary(self::LANDING_HEADERS, false);
 
         return $answer;

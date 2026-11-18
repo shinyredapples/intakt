@@ -6,8 +6,10 @@ namespace Intakt\Core\Dashboard\Domain;
 
 use DateTimeImmutable;
 use Intakt\Core\Budget\Contract\OutageNotice;
+use Symfony\Component\DependencyInjection\Attribute\Exclude;
 
 // At most four choices, because more would make the owner compare instead of act, and the recommended one first because it is the one to take.
+#[Exclude]
 final readonly class WaitingItem
 {
     private const int MOST_CHOICES = 4;

@@ -14,7 +14,8 @@ export function copyCommands(page, clipboard, phone, selection) {
         return;
     }
     bound.add(page);
-    const shown = new WeakMap();
+    // A Map and not a WeakMap, because Turbo's snapshot needs every button that still shows a message; a button leaves it when its label is back.
+    const shown = new Map();
     page.addEventListener('click', async (event) => {
         const button = event.target?.closest?.(COPY);
         if (!button) {
@@ -31,6 +32,16 @@ export function copyCommands(page, clipboard, phone, selection) {
     // A visit or a refresh puts every Why in again as the server rendered it, which is open.
     page.addEventListener('turbo:load', () => closeWhyOnPhones(page, phone));
     page.addEventListener('turbo:render', () => closeWhyOnPhones(page, phone));
+    // The timer would reset the button that left the page, not the copy Turbo keeps, so a page restored with Back would keep "Copied".
+    page.addEventListener('turbo:before-cache', () => restoreLabels(shown));
+}
+
+function restoreLabels(shown) {
+    shown.forEach(({ label, timer }, button) => {
+        clearTimeout(timer);
+        button.textContent = label;
+    });
+    shown.clear();
 }
 
 async function copied(clipboard, text) {

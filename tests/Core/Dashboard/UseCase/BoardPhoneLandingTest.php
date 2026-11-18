@@ -95,6 +95,31 @@ final class BoardPhoneLandingTest extends DashboardPageTestCase
         self::assertResponseRedirects('/setup', Response::HTTP_SEE_OTHER);
     }
 
+    public function testTheFirstRunRedirectVariesByTheHeadersThatChooseTheLanding(): void
+    {
+        $container = self::getContainer();
+        $container->set(SampleChangeSource::class, new SampleChangeSource($container->get(TierResolver::class), '/repos/sample'));
+
+        $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::DESKTOP]);
+
+        self::assertResponseRedirects('/setup', Response::HTTP_SEE_OTHER);
+        self::assertSame(['Sec-CH-UA-Mobile', 'User-Agent'], $this->browser->getResponse()->getVary());
+    }
+
+    public function testAPhoneFollowingBackToTheBoardFromAMissingPageReachesTheBoard(): void
+    {
+        // One kernel for both requests, so the second still reads the ledger in memory.
+        $this->browser->disableReboot();
+        $server = ['HTTP_USER_AGENT' => self::IPHONE];
+        $page = $this->browser->request('GET', '/settings', server: $server);
+        self::assertResponseStatusCodeSame(Response::HTTP_NOT_FOUND);
+
+        $this->browser->request('GET', $page->selectLink('Back to the board')->link()->getUri(), server: $server);
+
+        self::assertResponseIsSuccessful();
+        self::assertSelectorExists('.rail a.nav[data-k="board"][aria-current="page"]');
+    }
+
     public function testTheBoardVariesByTheHeadersThatChooseTheLanding(): void
     {
         $this->browser->request('GET', '/', server: ['HTTP_USER_AGENT' => self::DESKTOP]);

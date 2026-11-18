@@ -125,6 +125,36 @@ test('a second quick click still brings the Copy label back', async (t) => {
     assert.equal(button.textContent, 'Copy');
 });
 
+test('Turbo caching the page before the two seconds pass puts the Copy label back and leaves no timer', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = new FakePage();
+    copyCommands(page, { ...writing, written: [] }, desktop, selectionSpy());
+    const button = new FakeCopyButton('cmd');
+    await page.click(button);
+    t.mock.timers.tick(500);
+
+    await page.dispatch('turbo:before-cache');
+
+    assert.equal(button.textContent, 'Copy');
+    button.textContent = 'cached copy';
+    t.mock.timers.runAll();
+    assert.equal(button.textContent, 'cached copy');
+});
+
+test('a click after Turbo cached the page still brings the Copy label back', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const page = new FakePage();
+    copyCommands(page, { ...writing, written: [] }, desktop, selectionSpy());
+    const button = new FakeCopyButton('cmd');
+    await page.click(button);
+    await page.dispatch('turbo:before-cache');
+
+    await page.click(button);
+    t.mock.timers.tick(2000);
+
+    assert.equal(button.textContent, 'Copy');
+});
+
 test('a page bound twice writes the clipboard once per click and brings the Copy label back', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const page = new FakePage();
