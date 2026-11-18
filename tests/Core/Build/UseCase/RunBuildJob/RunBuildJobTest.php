@@ -73,6 +73,8 @@ final class RunBuildJobTest extends TestCase
 
     private GatesAtOnce $gatesAtOnce;
 
+    private int $toolTimeLimit = 1500;
+
     protected function setUp(): void
     {
         $this->gatesAtOnce = new GatesAtOnce(12, 1);
@@ -101,9 +103,46 @@ final class RunBuildJobTest extends TestCase
 
         self::assertNotNull($this->ran);
         self::assertSame(
-            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', ''],
+            ['/bin/sh', '-c', (string) file_get_contents(self::SCRIPT), 'intakt-build', RunBuildJob::CLONE, RunBuildJob::PROMPT, 'task', 'claude-opus-5-5', '100', '3000', '', '1500'],
             $this->ran->command,
         );
+    }
+
+    #[TestWith([1800])]
+    #[TestWith([1])]
+    #[TestWith([2999])]
+    public function testTheBuilderSessionIsStartedWithTheToolTimeLimitFromConfiguration(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        (void) $this->runBuilds(new JobOutput([]))->run($this->job());
+
+        self::assertNotNull($this->ran);
+        self::assertSame((string) $seconds, $this->ran->command[11]);
+    }
+
+    #[TestWith([3000])]
+    #[TestWith([3001])]
+    public function testAToolTimeLimitNotBelowTheSessionsAllowanceIsRefused(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of 3000 seconds, not %d.', $seconds));
+
+        (void) $this->runBuilds(new JobOutput([]));
+    }
+
+    #[TestWith([0])]
+    #[TestWith([-1])]
+    public function testAToolTimeLimitBelowOneSecondIsRefused(int $seconds): void
+    {
+        $this->toolTimeLimit = $seconds;
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('at least 1 second');
+
+        (void) $this->runBuilds(new JobOutput([]));
     }
 
     #[TestWith([12, 2])]
@@ -282,6 +321,6 @@ final class RunBuildJobTest extends TestCase
         $tiers = self::createStub(TierResolver::class);
         $tiers->method('resolve')->willReturn($model);
 
-        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
+        return new RunBuildJob($tiers, new BuilderPrompt(new Fence(), new PromptCut(new Fence())), $runner, new PhpGate(), $this->gatesAtOnce, $this->toolTimeLimit, new Filesystem(), self::SCRIPT, $this->folder.'/prompts');
     }
 }

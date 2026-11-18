@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
@@ -65,6 +66,8 @@ final readonly class RunBuildJob
         private JobRunner $jobs,
         private Gate $gate,
         private GatesAtOnce $gatesAtOnce,
+        #[Autowire(param: BuildServices::TOOL_TIME_LIMIT)]
+        private int $toolTimeLimitSeconds,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
@@ -72,6 +75,10 @@ final readonly class RunBuildJob
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
     ) {
+        // Below the allowance, because a tool call that outlives the session is cut with it anyway.
+        if ($toolTimeLimitSeconds < 1 || $toolTimeLimitSeconds >= self::ALLOWANCE_SECONDS) {
+            throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of %d seconds, not %d.', self::ALLOWANCE_SECONDS, $toolTimeLimitSeconds));
+        }
     }
 
     /**
@@ -146,7 +153,7 @@ final readonly class RunBuildJob
         return new JobSpec(
             $this->idOf($job),
             $job->image,
-            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES)],
+            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds],
             $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),

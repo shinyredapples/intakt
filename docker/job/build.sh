@@ -1,7 +1,8 @@
 #!/bin/sh
 # The build job's command: the builder works in a clone of its own, and only a bundle and the pull request text leave the job.
-# Usage: build.sh <build clone> <prompt file> <branch> <model> <max turns> <allowance seconds> <gates at once>
+# Usage: build.sh <build clone> <prompt file> <branch> <model> <max turns> <allowance seconds> <gates at once> <tool time limit seconds>
 # Copies the build clone's branches into TMPDIR, runs Claude Code there with the prompt on its input, then bundles the branch's new commits.
+# Each of the session's tool calls may run up to <tool time limit seconds>, so the builder's own bin/check ends inside its call instead of going to the background.
 # The builder's bin/check runs <gates at once> gates at the same time, a count the orchestrator hands over only when it is below what bin/check picks from the job's limits; when it is empty, INTAKT_GATE_SLOTS is left as the job's environment has it (unset unless the image sets it), so bin/check uses the job's limits (its CPUs and memory) to size its gates at once itself.
 # The session ends at its turn limit or when the allowance is used up, and the script outlives it, so what it committed before is still bundled.
 # Writes build.log, handback.bundle (only when the branch has new commits) and pull-request.md (only when PR.md is a regular file) into INTAKT_JOB_OUTPUT.
@@ -14,6 +15,7 @@ model="$4"
 turns="$5"
 allowance="$6"
 gates="$7"
+tool_time_limit="$8"
 
 output="${INTAKT_JOB_OUTPUT:-/output}"
 clone="${TMPDIR:-/work}/clone"
@@ -46,6 +48,10 @@ if [ -n "$gates" ]; then
     INTAKT_GATE_SLOTS="$gates"
     export INTAKT_GATE_SLOTS
 fi
+# The CLI's default and its most for one command, both at the orchestrator's limit, so the builder can ask for neither more nor less than Intakt set.
+BASH_DEFAULT_TIMEOUT_MS="$((tool_time_limit * 1000))"
+BASH_MAX_TIMEOUT_MS="$BASH_DEFAULT_TIMEOUT_MS"
+export BASH_DEFAULT_TIMEOUT_MS BASH_MAX_TIMEOUT_MS
 # In a session of its own, so the processes it leaves running can be ended with it.
 setsid claude -p --model "$model" --max-turns "$turns" --output-format json --dangerously-skip-permissions < "$prompt" >> "$log" 2>&1 &
 session=$!
