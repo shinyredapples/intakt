@@ -29,6 +29,8 @@ flowchart TD
   q --> order[Ordered: urgent first,<br/>then priority, then milestone<br/>planned: milestone by milestone,<br/>priority within a milestone]
 ```
 
+Planned: within one priority and milestone, a task that other tasks wait on (directly or further down the chain) goes before an older one, so the work that frees the most tasks starts first. It never jumps ahead of a higher priority or an earlier milestone.
+
 One exception: a task whose pull request is already open (it needs a fix or an update) goes before every task not started yet, unless that task is `urgent`, so open work lands first. Each time a task joins the queue, Intakt looks its pull request up on the site where the code is hosted (GitHub or Gitea), so a task that comes back after a decision is still treated as a fix to its open pull request, never started over.
 
 - **Waiting on another task:** a task can say `Waits for #12`. It isn't picked until #12 is done, so nothing gets built on a missing foundation. *(Planned:)* Intakt learns whether #12 is done from the one list of open tasks it reads each round (a list that comes back incomplete releases no wait), never by asking about each waited-for task on its own, and a worker with no room for new work asks the site nothing, so routine checks never use up the site's hourly allowance.
@@ -132,7 +134,7 @@ flowchart TD
 ## 7. Afterwards
 
 - **Polish round (planned):** when every reviewer approves but small "fix now" notes remain, the builder gets one short extra pass to fix just those before the merge, and one reviewer checks only that pass. If it fails, the approved change merges without it and the notes become one follow-up task. A project setting turns it off.
-- **Follow-ups:** P3 notes that need their own design, tests or files outside the change become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks.
+- **Follow-ups:** P3 notes that need their own design, tests or files outside the change become a follow-up task. The maintainer agent checks each note against the code, drops what's already fixed, and turns the rest into small buildable tasks. Planned: such a follow-up waits for the next stage (milestone) instead of the one being finished, unless it fixes something that blocked the original or no later stage is open; it says which stage it came from, so you can move it back.
 - **Project memory:** what was learned (a fixed finding, a recurring failure and its cause) goes into the project memory, so the next builder and reviewers are briefed.
 - **Unblocking:** tasks that said `Waits for` this one become eligible.
 - **Tidying up:** the task's branch is cleaned up.
