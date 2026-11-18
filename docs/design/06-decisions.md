@@ -11,7 +11,7 @@
 9. Commit signing under the App: merges are created through the forge API, so they are verified as the App and the owner does not vouch for each merge; branch protection can require verified commits.
 10. Forges and trackers in v1: GitHub and Gitea; Jira is the first tracker plugin after v1.
 11. Spec and plan live in the repository (`docs/spec.md`, `docs/plan.md`), versioned and reviewed; the plan's tasks are created as issues.
-12. Vendor accounts: subscriptions, personal and company API keys and cloud sessions, equally configurable per vendor, with priorities, roles and capped paid overflow (see Budget and model planner).
+12. Vendor accounts: subscriptions, personal and company API keys and cloud sessions, equally configurable per vendor, with priorities, roles and paid overflow after the subscriptions, whose cap is optional (2026-11-04; see Budget and model planner).
 13. One owner per install in v1; collaborators work through the forge's own permissions.
 14. Distribution: a Docker image (Intakt is an application, not a library).
 15. The name stays Intakt.

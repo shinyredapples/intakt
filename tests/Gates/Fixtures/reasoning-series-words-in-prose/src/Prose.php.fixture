@@ -1,0 +1,28 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Sample;
+
+final readonly class Prose
+{
+    /**
+     * @return list<string>
+     */
+    public function words(): array
+    {
+        return [
+            'o2 sensor',
+            'Video o4',
+            'o3-compatible',
+            'o1 to o9',
+            'codex-cli',
+            'text-embedding',
+            'deepseek-',
+            'codex',
+            'codex-minimal',
+            'deepseek-chatbot',
+            'text-embedding-adapter',
+        ];
+    }
+}
