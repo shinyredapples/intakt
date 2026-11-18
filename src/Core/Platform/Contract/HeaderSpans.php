@@ -77,19 +77,23 @@ final readonly class HeaderSpans
                 continue;
             }
 
+            $spans[] = $this->valueSpan($match, $valueStart);
             $offset = $match[0][1] + strlen($match[0][0]);
-            $spans[] = $this->valueSpan($valueStart, $offset, $match['open'][0] ?? '', -1 !== ($match['close'][1] ?? -1));
         }
 
         return PREG_NO_ERROR === preg_last_error() ? $spans : null;
     }
 
     /**
+     * @param array<array-key, array{string, int}> $match
+     *
      * @return Span
      */
-    private function valueSpan(int $valueStart, int $valueEnd, string $open, bool $closed): array
+    private function valueSpan(array $match, int $valueStart): array
     {
-        if ('' === $open || $closed) {
+        $open = $match['open'][0] ?? '';
+        $valueEnd = $match[0][1] + strlen($match[0][0]);
+        if ('' === $open || -1 !== ($match['close'][1] ?? -1)) {
             return [$valueStart + strlen($open), $valueEnd - strlen($open), Redaction::MARKER];
         }
 

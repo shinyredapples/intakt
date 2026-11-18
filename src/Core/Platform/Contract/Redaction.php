@@ -7,9 +7,9 @@ namespace Intakt\Core\Platform\Contract;
 use NoDiscard;
 use SensitiveParameter;
 
-// One home for what must never leave Intakt in text: posted review text and log records both pass through it.
+// One home for what must never leave Intakt in text: posted review text and log records both pass through it. A Span is the start, end and replacement of a part to redact, in the original text.
 /**
- * @phpstan-type Span array{int, int, string} start, end and replacement of a part to redact, in the original text
+ * @phpstan-type Span array{int, int, string}
  */
 final readonly class Redaction
 {
