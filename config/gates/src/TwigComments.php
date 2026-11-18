@@ -137,6 +137,8 @@ final readonly class TwigComments implements CommentLanguage
      */
     private function inlineComment(string $source, int $inside): Generator
     {
+        // Because Twig reads `##` inside a tag as the opener of an inline documentation comment, both hashes are delimiter.
+        $inside += strspn($source, '#', $inside, 1);
         $end = $inside + strcspn($source, "\r\n", $inside);
 
         yield [$inside, substr($source, $inside, $end - $inside)];

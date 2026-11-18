@@ -35,6 +35,8 @@ final class TwigCommentsTest extends TestCase
         yield 'the second line of a multi-line comment' => ["{#\n  TODO show the total\n#}\n", [2 => 'TODO']];
         yield 'a starred line of a multi-line comment' => ["{#\n * The order\n * FIXME the total\n #}\n", [3 => 'FIXME']];
         yield 'an inline comment in an output tag' => ["{{ order.total # TODO round it\n}}\n", [1 => 'TODO']];
+        yield 'an inline documentation comment' => ["{{ order.total ## TODO round it\n}}\n", [1 => 'TODO']];
+        yield 'an inline documentation comment in a block tag' => ["{% set total = 3 ## FIXME read the total\n%}\n", [1 => 'FIXME']];
         yield 'an inline comment behind a star and a space' => ["{{ total # * TODO round it\n}}\n", [1 => 'TODO']];
         yield 'a one-line comment behind a star and a space' => ["{# * TODO show the total #}\n", [1 => 'TODO']];
         yield 'an inline comment in a block tag' => ["{% set total = 3 # FIXME read the total\n%}\n", [1 => 'FIXME']];
@@ -80,6 +82,7 @@ final class TwigCommentsTest extends TestCase
         yield 'a marker behind PHP line comment syntax' => ["{# // TODO is the PHP syntax in this example #}\n"];
         yield 'a marker behind PHP block comment syntax' => ["{# /* FIXME */ is the PHP syntax #}\n"];
         yield 'a marker behind a hash in a comment' => ["{# # TODO is shell syntax #}\n"];
+        yield 'a marker after the start of an inline documentation comment' => ["{{ order.total ## see the TODO list\n}}\n"];
         yield 'a marker behind PHP syntax in an inline comment' => ["{{ order.total # // TODO is PHP syntax\n}}\n"];
         yield 'a marker in Markdown emphasis' => ["{## *TODO* is shown in italics in this documentation. ##}\n"];
         yield 'a marker in Markdown strong emphasis' => ["{# **FIXME** is shown in bold #}\n"];
