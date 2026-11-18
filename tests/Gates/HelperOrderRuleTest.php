@@ -7,6 +7,7 @@ namespace Intakt\Tests\Gates;
 use Intakt\Gates\PhpStan\HelperOrderRule;
 use Intakt\Gates\StaticAnalysisGate;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 
 /**
@@ -16,7 +17,24 @@ use PHPUnit\Framework\Attributes\UsesClass;
 #[UsesClass(StaticAnalysisGate::class)]
 final class HelperOrderRuleTest extends PhpStanRuleTestCase
 {
-    public function testAPrivateHelperAboveItsCallerFailsStaticAnalysis(): void
+    /**
+     * @return iterable<string, non-empty-list<CheckRun|string>>
+     */
+    public static function casesOfOneRun(): iterable
+    {
+        return self::casesOfOnePhpstanRun([
+            'APrivateHelperAboveItsCallerFailsStaticAnalysis' => ['helper-above-its-caller', 'src/Report.php:14 intakt.helperOrder Private helper framed() sits above render(), its first caller: move it below render().'],
+            'HelpersBelowTheirCallerInCallOrderPassStaticAnalysis' => ['helpers-in-call-order'],
+        ]);
+    }
+
+    #[DataProvider('casesOfOneRun')]
+    public function testEachFixtureReportsItsFindingsUnderItsFolder(CheckRun $run, string $fixture, string ...$expectedFindings): void
+    {
+        $this->assertFindingsUnderItsFolder($run, $fixture, ...$expectedFindings);
+    }
+
+    public function testAPrivateHelperAboveItsCallerIsReportedWithHowToComply(): void
     {
         self::assertSame(
             'src/Report.php:14 intakt.helperOrder Private helper framed() sits above render(), its first caller: move it below render(). Helpers sit below the method that first calls them, in the order it first calls them.',
@@ -58,11 +76,6 @@ final class HelperOrderRuleTest extends PhpStanRuleTestCase
     public function testARecursiveHelperAndTwoUncalledPrivateMethodsCallingEachOtherPassStaticAnalysis(): void
     {
         $this->assertRuleAccepts('recursive-and-uncalled-helpers');
-    }
-
-    public function testHelpersBelowTheirCallerInCallOrderPassStaticAnalysis(): void
-    {
-        $this->assertRuleAccepts('helpers-in-call-order');
     }
 
     protected function ruleFor(string $root): HelperOrderRule

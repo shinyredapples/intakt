@@ -25,6 +25,8 @@ A rule marked "enforced by `bin/check`" is checked by the named gate, whose fail
 - No nested `try`: enforced by `bin/check` (`phpstan`).
 - At most three parameters, unless a vendor method's signature fixes more; constructors are exempt (they hold dependencies or a value's fields): enforced by `bin/check` (`phpstan`).
 - No flag parameters: enforced by `bin/check` (`phpstan`).
+- Constructor first, then public, protected and private methods: enforced by `bin/check` (`cs`).
+- Private helpers below the method that first calls them, in the order it first calls them: enforced by `bin/check` (`phpstan`).
 - Two or more named arguments in a call: each on its own line with a trailing comma, enforced by `bin/check` (`cs`).
 - Classes imported, global functions and constants written plain, class aliases only for a short-name clash and Doctrine's `ORM`: enforced by `bin/check` (`cs`, `phpstan`).
 - Time only through Symfony's `ClockInterface`: enforced by `bin/check` (`phpstan`).
