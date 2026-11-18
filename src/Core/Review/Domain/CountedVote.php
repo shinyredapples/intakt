@@ -6,6 +6,7 @@ namespace Intakt\Core\Review\Domain;
 
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\FollowUp;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
@@ -16,7 +17,7 @@ use Symfony\Component\DependencyInjection\Attribute\Exclude;
 final readonly class CountedVote
 {
     /** @var list<string> */
-    private array $judgedIds;
+    private array $setAsideIds;
 
     /** @var list<string> */
     private array $actIds;
@@ -31,14 +32,26 @@ final readonly class CountedVote
         private array $shownIds,
         JudgedFindings $judged,
     ) {
-        $this->judgedIds = array_map(static fn (Finding $finding): string => $finding->id, $judged->findings);
+        $this->setAsideIds = array_map(static fn (Finding $finding): string => $finding->id, [
+            ...array_map(static fn (FollowUp $followUp): Finding => $followUp->finding, $judged->followUps),
+            ...$judged->rejected,
+        ]);
         $this->actIds = array_map(static fn (Finding $finding): string => $finding->id, $judged->actList);
     }
 
     // A changes verdict counts as changes only with a finding on the act list, as approval when the judge deferred or rejected every one of its findings and all are P3, and otherwise as blocked, because the builder would be sent back with nothing to act on.
     public function of(Verdict $verdict): Decision
     {
-        if (Decision::Changes !== $verdict->verdict || $verdict->isFailedReview() || [] === $verdict->findings) {
+        if (Decision::Changes !== $verdict->verdict) {
+            return $verdict->verdict;
+        }
+
+        // Blocked, because the ledger records no finding of a failed review, so its changes vote could only send the builder back with nothing to act on; a model can name a reserved id itself.
+        if ($verdict->isFailedReview()) {
+            return Decision::Blocked;
+        }
+
+        if ([] === $verdict->findings) {
             return $verdict->verdict;
         }
 
@@ -52,16 +65,16 @@ final readonly class CountedVote
         };
     }
 
-    // From the ledger's finding, because its severity is the one the judge and the act list go by; a finding the quote check dropped was never judged.
+    // Only by the judge's own defer or reject mark, because a finding the quote check dropped was never judged and a judge answer that could not be read marks nothing, and neither may turn a changes verdict into an approval; from the ledger's finding, because its severity is the one the judge and the act list go by.
     /**
      * @param list<Finding> $matches
      */
     private function isJudgedFollowUp(array $matches): bool
     {
-        return [] !== $matches && array_all($matches, fn (Finding $reported): bool => Severity::P3 === $reported->severity && in_array($reported->id, $this->judgedIds, true));
+        return [] !== $matches && array_all($matches, fn (Finding $reported): bool => Severity::P3 === $reported->severity && in_array($reported->id, $this->setAsideIds, true));
     }
 
-    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by its place and text, because the ledger gives it an id of its own and keeps them, and every match stays in view so no act mark is missed.
+    // A repeat of a shown id by that id alone, because the ledger keeps it under that id; a new finding by its severity, place and text, because the ledger gives it an id of its own and keeps them (the stored verdict already holds the severity the goalpost rule left it), so another reviewer's P2 of the same words never counts for a P3, and every match stays in view so no act mark is missed.
     /**
      * @return list<Finding>
      */
@@ -71,7 +84,8 @@ final readonly class CountedVote
             return array_values(array_filter($this->reported, static fn (Finding $reported): bool => $finding->id === $reported->id));
         }
 
-        return array_values(array_filter($this->reported, static fn (Finding $reported): bool => $finding->file === $reported->file
+        return array_values(array_filter($this->reported, static fn (Finding $reported): bool => $finding->severity === $reported->severity
+            && $finding->file === $reported->file
             && $finding->line === $reported->line
             && $finding->symbol === $reported->symbol
             && $finding->text === $reported->text));

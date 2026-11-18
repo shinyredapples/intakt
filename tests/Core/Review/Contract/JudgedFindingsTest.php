@@ -54,6 +54,15 @@ final class JudgedFindingsTest extends TestCase
         self::assertSame([], $judged->followUps);
     }
 
+    public function testOnlyAP3TheJudgeMarkedRejectIsAmongTheRejected(): void
+    {
+        $blocking = new Finding('p2', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null);
+
+        $judged = JudgedFindings::of($this->marks(['a' => Mark::Reject, 'b' => Mark::Defer, 'c' => Mark::Act, 'p2' => Mark::Reject]), [...$this->findings('a', 'b', 'c', 'unmarked'), $blocking]);
+
+        self::assertEquals($this->findings('a'), $judged->rejected);
+    }
+
     public function testAfterAnInvalidJudgeAnswerEveryBlockingFindingIsOnTheActListAndNoFollowUpIsMade(): void
     {
         $findings = [$this->finding('a', Severity::P1), $this->finding('b', Severity::P2), $this->finding('c', Severity::P3)];

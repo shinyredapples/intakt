@@ -870,6 +870,33 @@ final class SymfonyAiVendorTest extends KernelTestCase
         self::assertSame([Decision::Blocked, Verdict::UNREAD_APPROVAL], [$review->verdict->verdict, $review->verdict->findings[0]->id]);
     }
 
+    public function testABlindOwnProviderCannotApproveThroughAP2TheSecondRoundLowersToP3(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P2')->withFinding('requirement', null)->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->requestInRound(2));
+
+        self::assertSame([Decision::Blocked, Verdict::UNREAD_APPROVAL], [$review->verdict->verdict, $review->verdict->findings[0]->id]);
+    }
+
+    public function testABlindOwnProviderAskingForChangesWithAP2ThatNamesARequirementKeepsItsVerdictInTheSecondRound(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P2')->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->requestInRound(2));
+
+        self::assertSame(Decision::Changes, $review->verdict->verdict);
+    }
+
+    public function testABlindOwnProviderAskingForChangesWithAP2WithoutARequirementKeepsItsVerdictInTheFirstRound(): void
+    {
+        $changes = static fn (): string => VerdictDocument::fromTheDesign()->withFinding('severity', 'P2')->withFinding('requirement', null)->json();
+
+        $review = $this->substitutedVendor($changes, $changes, new NoCooldowns())->review('alpha', Tier::Strong, $this->requestInRound(1));
+
+        self::assertSame(Decision::Changes, $review->verdict->verdict);
+    }
+
     public function testABlindOwnProviderAskingForChangesWithAP1KeepsItsVerdict(): void
     {
         $changes = static fn (): string => VerdictDocument::fromTheDesign()->json();
@@ -1233,6 +1260,11 @@ final class SymfonyAiVendorTest extends KernelTestCase
     private function request(?Uuid $round = null): ReviewRequest
     {
         return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')]), new ReviewerConversation('You review for correctness.', new UuidV7(), $round));
+    }
+
+    private function requestInRound(int $round): ReviewRequest
+    {
+        return new ReviewRequest(new Checkout(sys_get_temp_dir()), new ReviewBrief(new ChangeUnderReview('alpha', 'Review the change.', 'diff --git a/a b/a'), [$this->openFinding('F1'), $this->openFinding('F2')], $round), new ReviewerConversation('You review for correctness.', new UuidV7()));
     }
 
     private function openFinding(string $id): Finding

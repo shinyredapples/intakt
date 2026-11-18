@@ -140,7 +140,62 @@ final class CountedVoteTest extends TestCase
     {
         $failed = new Verdict(Decision::Changes, [$this->finding(Verdict::NO_TOOLS, Severity::P3, 'No tools.')], [], []);
 
-        self::assertSame(Decision::Changes, $this->counted([$this->finding('F1', Severity::P3, 'No tools.')], ['F1' => Mark::Defer])->of($failed));
+        self::assertSame(Decision::Blocked, $this->counted([$this->finding('F1', Severity::P3, 'No tools.')], ['F1' => Mark::Defer])->of($failed));
+    }
+
+    public function testAChangesVerdictNamingAReservedFailureIdBesideAP2CountsAsBlocked(): void
+    {
+        $failed = $this->changes($this->finding(Verdict::NO_TOOLS, Severity::P2, 'The review could not run.'), $this->finding('A', Severity::P2, 'One.'));
+
+        self::assertSame(Decision::Blocked, $this->counted([], [])->of($failed));
+    }
+
+    public function testAnApprovalNamingAReservedFailureIdKeepsItsDecision(): void
+    {
+        $failed = new Verdict(Decision::Approve, [$this->finding(Verdict::NO_TOOLS, Severity::P3, 'No tools.')], [], []);
+
+        self::assertSame(Decision::Approve, $this->counted([], [])->of($failed));
+    }
+
+    public function testABlockedFailedReviewStaysBlocked(): void
+    {
+        self::assertSame(Decision::Blocked, $this->counted([], [])->of(Verdict::noTools()));
+    }
+
+    public function testAP3TheJudgeGaveNoMarkNeverCountsAsApproval(): void
+    {
+        $reported = [$this->finding('F1', Severity::P3, 'One.')];
+
+        $vote = $this->counted($reported, [])->of($this->changes($this->finding('A', Severity::P3, 'One.')));
+
+        self::assertSame(Decision::Blocked, $vote);
+    }
+
+    public function testAP3TheJudgeGaveNoMarkBesideADeferredOneCountsAsBlocked(): void
+    {
+        $reported = [$this->finding('F1', Severity::P3, 'One.'), $this->finding('F2', Severity::P3, 'Two.')];
+
+        $vote = $this->counted($reported, ['F1' => Mark::Defer])->of($this->changes($this->finding('A', Severity::P3, 'One.'), $this->finding('B', Severity::P3, 'Two.')));
+
+        self::assertSame(Decision::Blocked, $vote);
+    }
+
+    public function testADeferredP3CountsAsApprovalThoughAnotherReviewersP2OfTheSameTextIsOnTheActList(): void
+    {
+        $reported = [$this->finding('F1', Severity::P3, 'Same.'), $this->finding('F2', Severity::P2, 'Same.')];
+
+        $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Act])->of($this->changes($this->finding('A', Severity::P3, 'Same.')));
+
+        self::assertSame(Decision::Approve, $vote);
+    }
+
+    public function testAP2CountsAsChangesThoughAnotherReviewersP3OfTheSameTextWasDeferred(): void
+    {
+        $reported = [$this->finding('F1', Severity::P3, 'Same.'), $this->finding('F2', Severity::P2, 'Same.')];
+
+        $vote = $this->counted($reported, ['F1' => Mark::Defer, 'F2' => Mark::Defer])->of($this->changes($this->finding('A', Severity::P2, 'Same.')));
+
+        self::assertSame(Decision::Changes, $vote);
     }
 
     public function testABlockedVerdictWithOnlyP3FindingsStaysBlocked(): void

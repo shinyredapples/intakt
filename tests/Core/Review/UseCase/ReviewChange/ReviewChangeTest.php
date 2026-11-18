@@ -252,6 +252,24 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(Decision::Blocked, $review->decision);
     }
 
+    public function testAChangesVerdictNamingAReservedFailureIdBlocksTheRoundAndSendsNoEmptyActList(): void
+    {
+        $failed = new Finding(Verdict::NO_TOOLS, Severity::P2, null, null, null, 'The review could not run.', FixableBy::Owner, false, null, null);
+
+        $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$failed], [], [])]));
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame([], $review->actList);
+    }
+
+    public function testAP3TheJudgeLeftWithoutAMarkBlocksTheRoundAndNeverCountsAsApproval(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => new Verdict(Decision::Changes, [$this->finding('A', Severity::P3)], [], [])]));
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame([], $review->actList);
+    }
+
     public function testTwoReviewersReportingOnePlaceGiveOneActEntryThatNamesBothFindings(): void
     {
         $review = $this->reviewWith(new VerdictPerRole($this->bothReportLines(7, 7)));

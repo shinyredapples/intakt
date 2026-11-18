@@ -13,6 +13,7 @@ use Intakt\Core\Review\Contract\ReviewerConversation;
 use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
+use Intakt\Core\Review\Domain\GoalpostRule;
 use Override;
 use Symfony\AI\Agent\Agent;
 use Symfony\AI\Agent\Exception\MaxIterationsExceededException;
@@ -70,11 +71,19 @@ final readonly class ReviewerAgent implements Reviewer
             throw VerdictUnreadable::becauseKeySafe('the reviewer made a malformed tool call.');
         }
 
-        if ($this->approvesCutText($verdict, $request->brief, $fenced)) {
+        $counted = $this->asTheRoundCounts($request->brief, $verdict);
+
+        if ($this->approvesCutText($counted, $request->brief, $fenced)) {
             return Verdict::cutApproval();
         }
 
-        return $this->checkedAgainst($request->brief, $verdict);
+        return $this->checkedAgainst($request->brief, $counted);
+    }
+
+    // Lowered here as the round lowers it before storing, because the cut-input guard below and the vendor's read guard refuse what can count as approval, and a P2 the goalpost rule turns into a P3 can.
+    private function asTheRoundCounts(ReviewBrief $brief, Verdict $verdict): Verdict
+    {
+        return new GoalpostRule()->applyToVerdict($brief->round, $verdict, $brief->open);
     }
 
     // Plain code refuses it, because the note asking the reviewer to read the rest is only prompt text, and a steered or lazy reviewer could approve code it never saw.

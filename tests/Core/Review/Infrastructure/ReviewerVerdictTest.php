@@ -155,6 +155,8 @@ final class ReviewerVerdictTest extends WebTestCase
      */
     private array $open = [];
 
+    private int $roundNumber = 1;
+
     /**
      * @var list<string>
      */
@@ -813,6 +815,46 @@ final class ReviewerVerdictTest extends WebTestCase
         self::assertSame([Decision::Blocked, Verdict::CUT_APPROVAL], [$verdict->verdict, $verdict->findings[0]->id]);
     }
 
+    public function testChangesOfAP2TheSecondRoundLowersToP3OnACutDiffEndAsBlocked(): void
+    {
+        $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
+        $this->roundNumber = 2;
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('severity', 'P2')->withFinding('requirement', null)->json());
+
+        self::assertSame([Decision::Blocked, Verdict::CUT_APPROVAL], [$verdict->verdict, $verdict->findings[0]->id]);
+    }
+
+    public function testChangesOfAP2ThatNamesARequirementOnACutDiffStayChangesInTheSecondRound(): void
+    {
+        $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
+        $this->roundNumber = 2;
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('severity', 'P2')->json());
+
+        self::assertSame([Decision::Changes, Severity::P2], [$verdict->verdict, $verdict->findings[0]->severity]);
+    }
+
+    public function testChangesOfAP2WithoutARequirementOnACutDiffStayChangesInTheFirstRound(): void
+    {
+        $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('severity', 'P2')->withFinding('requirement', null)->json());
+
+        self::assertSame([Decision::Changes, Severity::P2], [$verdict->verdict, $verdict->findings[0]->severity]);
+    }
+
+    public function testChangesRepeatingAnOpenP3UnderAHigherSeverityOnACutDiffEndAsBlocked(): void
+    {
+        $this->diff = str_repeat('+x', PromptCut::CEILING_BYTES + 1);
+        $this->roundNumber = 2;
+        $this->open = [new Finding('F1', Severity::P3, null, null, null, 'Earlier.', FixableBy::Builder, false, null, null)];
+
+        $verdict = $this->review('Add a cart.', [], VerdictDocument::fromTheDesign()->with('resolved', [])->withFinding('id', 'F1')->withFinding('repeat', true)->json());
+
+        self::assertSame([Decision::Blocked, Verdict::CUT_APPROVAL], [$verdict->verdict, $verdict->findings[0]->id]);
+    }
+
     public function testAnApprovalOfADiffAtTheCeilingStaysApprove(): void
     {
         $this->diff = str_repeat('x', PromptCut::CEILING_BYTES);
@@ -954,7 +996,7 @@ final class ReviewerVerdictTest extends WebTestCase
 
         // Collected in finally, so a case whose answer is refused can still count the calls and tool calls it made.
         try {
-            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open), new ReviewerConversation('You review for correctness.', $this->conversation, $this->inARound ? $this->round : null)), $platform, 'reviewer-model');
+            return $reviewer->review(new ReviewRequest($this->fixture->checkout, new ReviewBrief(new ChangeUnderReview('alpha', $task, $this->diff), $this->open, $this->roundNumber), new ReviewerConversation('You review for correctness.', $this->conversation, $this->inARound ? $this->round : null)), $platform, 'reviewer-model');
         } finally {
             $collector = new DataCollector($platform instanceof TraceablePlatform ? [$platform] : [], [$toolbox], [$toolbox], [], [], []);
             $collector->lateCollect();

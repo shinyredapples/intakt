@@ -289,14 +289,21 @@ final class RoundLedgerReadingTest extends KernelTestCase
     {
         $this->append(LedgerEventKind::JudgeDone, ['votes' => ['reviewer-a' => 'approve']] + $this->judgeDone(self::ROUND));
 
-        self::assertSame(Decision::Approve, $this->reading()->voteOf(self::ROUND, 'reviewer-a', Decision::Changes));
+        self::assertSame(['reviewer-a' => Decision::Approve], $this->reading()->votesOf(self::ROUND));
     }
 
-    public function testAReviewerWithoutACountedVoteVotesAsItsVerdictWasGiven(): void
+    public function testAJudgeDoneRowWrittenBeforeVotesWereCountedReadsAsNoVotes(): void
     {
-        $this->append(LedgerEventKind::JudgeDone, ['votes' => ['reviewer-a' => 'approve']] + $this->judgeDone(self::ROUND));
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
 
-        self::assertSame(Decision::Changes, $this->reading()->voteOf(self::ROUND, 'reviewer-b', Decision::Changes));
+        self::assertSame([], $this->reading()->votesOf(self::ROUND));
+    }
+
+    public function testTheVotesOfAnotherRoundAreNotRead(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['votes' => ['reviewer-a' => 'approve']] + $this->judgeDone('another-round'));
+
+        self::assertSame([], $this->reading()->votesOf(self::ROUND));
     }
 
     public function testTheDroppedFindingsOfAnotherRoundAreNotRead(): void
