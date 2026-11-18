@@ -8,9 +8,18 @@ namespace Intakt\Core\Dashboard\Domain;
 final readonly class FindingText
 {
     // An opening mark follows a space, a bracket or a quote and a closing one precedes a space or punctuation, so snake_case names, arithmetic and globs keep their marks.
-    private const string OPENS = '(?<=^|[\s(\[{"\'])';
+    private const string OPENS = '(?<=^|[\s(\[{"\'\p{Ps}\p{Pi}])';
 
-    private const string CLOSES = '(?=$|[\s)\]}"\']|[.,;:!?](?:$|[\s)\]}"\']))';
+    private const string CLOSES = '(?=$|[\s)\]}"\'\p{Pe}\p{Pf}]|[.,;:!?…]+(?:$|[\s)\]}"\'\p{Pe}\p{Pf}]))';
+
+    // A title cut short ends in an ellipsis, which can remove the closing mark, so an opening mark with no closer pairs with that ellipsis.
+    private const string CUT = '(?=…$)';
+
+    // A pair never spans a blank line, so stars in two paragraphs (a glob in each) never pair.
+    private const string PARAGRAPH = '\n[^\S\n]*\n';
+
+    // A mark followed by a dot pairs only around one word (**.env**), so a glob like *.php never pairs with a star later in the sentence.
+    private const string DOT_WORD = '\.(?:(?!\1)\S)*?';
 
     // Plain spans never hold a backtick, so a backtick stands in for each code span while the marks around it are paired.
     private const string CODE = '`';
@@ -78,8 +87,8 @@ final readonly class FindingText
         $codes = array_values(array_filter($spans, static fn (array $span): bool => $span['code']));
         $marked = implode('', array_map(static fn (array $span): string => $span['code'] ? self::CODE : $span['text'], $spans));
         // A lone __word__ is a dunder name (__DIR__, __init_subclass__), so it keeps its marks; the text between a pair never holds the mark's own character, so two separate marks (*x*/*y*, two globs) never pair across each other.
-        $strong = preg_replace('/'.self::OPENS.'(?!__[A-Za-z0-9_]+__)(\*\*|__)(?=[^\s.\/])((?:(?!\1(?![*_])).){1,300}?)(?<=[^\s\/])\1'.self::CLOSES.'/us', '$2', $marked) ?? $marked;
-        $plain = preg_replace('/'.self::OPENS.'([*_])(?=[^\s*_.\/])((?:(?!\1).){1,300}?)(?<=[^\s*_\/])\1'.self::CLOSES.'/us', '$2', $strong) ?? $strong;
+        $strong = preg_replace('/'.self::OPENS.'(?!__[A-Za-z0-9_]+__)(\*\*|__)((?=[^\s.\/])(?:(?!\1(?![*_])|'.self::PARAGRAPH.').)+?|'.self::DOT_WORD.')(?<=[^\s\/])(?:\1'.self::CLOSES.'|'.self::CUT.')/us', '$2', $marked) ?? $marked;
+        $plain = preg_replace('/'.self::OPENS.'([*_])((?=[^\s*_.\/])(?:(?!\1|'.self::PARAGRAPH.').)+?|'.self::DOT_WORD.')(?<=[^\s*_\/])(?:\1'.self::CLOSES.'|'.self::CUT.')/us', '$2', $strong) ?? $strong;
 
         $result = [];
         foreach (explode(self::CODE, $plain) as $index => $text) {

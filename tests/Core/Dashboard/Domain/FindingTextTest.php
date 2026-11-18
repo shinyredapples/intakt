@@ -143,6 +143,51 @@ final class FindingTextTest extends TestCase
         }
     }
 
+    public function testEmphasisAroundADotWordBeforePunctuationOrInCurlyQuotesLosesItsMarks(): void
+    {
+        foreach ([
+            'Fix **now**, then *retry*...' => 'Fix now, then retry...',
+            'Check **.env** first.' => 'Check .env first.',
+            '“*Retry*” first.' => '“Retry” first.',
+            'it ‘_failed_’ twice…' => 'it ‘failed’ twice…',
+        ] as $written => $shown) {
+            self::assertSame([['text' => $shown, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
+    public function testLongEmphasisLosesItsMarks(): void
+    {
+        $long = str_repeat('word ', 60).'end';
+
+        self::assertSame([['text' => $long, 'code' => false]], new FindingText('**'.$long.'**')->spans());
+    }
+
+    public function testAGlobAfterADotPairsWithNoStarLaterInTheSentence(): void
+    {
+        $written = 'matches *.php files and test*';
+
+        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+    }
+
+    public function testStarsInSeparateParagraphsNeverPair(): void
+    {
+        $written = "Copy *test.php.\n\nKeep files named build*.";
+
+        self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans());
+    }
+
+    public function testAnOpeningMarkOfATitleCutShortLosesItsMark(): void
+    {
+        self::assertSame([['text' => 'Update the word…', 'code' => false]], new FindingText('Update **the word…')->spans());
+    }
+
+    public function testAnEllipsisClosesNoMarkBeforeASpaceOrSlash(): void
+    {
+        foreach (['skip src/*…', 'a lone * …'] as $written) {
+            self::assertSame([['text' => $written, 'code' => false]], new FindingText($written)->spans(), $written);
+        }
+    }
+
     public function testEmphasisRunningOverALineBreakLosesItsMarks(): void
     {
         self::assertSame([['text' => "multi\nline", 'code' => false]], new FindingText("**multi\nline**")->spans());

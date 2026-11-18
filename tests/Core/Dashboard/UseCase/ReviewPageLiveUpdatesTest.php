@@ -1189,6 +1189,19 @@ final class ReviewPageLiveUpdatesTest extends DashboardPageTestCase
         self::assertSame(['<b>total()'], $line->filter('code')->each(static fn (Crawler $code): string => $code->text()));
     }
 
+    public function testAReadFindingWhoseTitleIsCutInsideEmphasisReachesTheLiveLogWithoutTheOpeningMark(): void
+    {
+        $this->givenARunningRound();
+        $page = $this->browser->request('GET', '/reviews/round-1');
+        $answer = ReadAnswer::of(new Verdict(Decision::Changes, [new Finding('F1', Severity::P2, null, null, null, 'Update **'.str_repeat('word ', 32).'here**.', FixableBy::Builder, false, null, null)], [], []));
+
+        $updated = $this->replaced($page, $this->stream('answer_read', ['round' => 'round-1', 'reviewer' => 'round-1-correctness', 'answer' => $answer]));
+
+        $line = $updated->filter('#reviewer-round-1-correctness-text .answer-finding')->text();
+        self::assertStringStartsWith('P2 Update word word', $line);
+        self::assertStringNotContainsString('*', $line);
+    }
+
     public function testThePageHoldsEveryPartOfTheSessionSummaryTheStreamReplaces(): void
     {
         $this->givenARunningRoundWithTheSummary(new SessionSummary([new ToolCallCount('read_file', 1)], Cost::inUsd(0.1), ['src/A.php'], [], [], [], false));
