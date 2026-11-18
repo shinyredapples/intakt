@@ -6,7 +6,7 @@ namespace Intakt\Core\Build\Domain;
 
 use InvalidArgumentException;
 
-// The most gates a builder's `bin/check` may run at once beside the other build slots, because three builders each running all 8 gates on 12 processors loaded the host to 22 to 28 and took 7 to 9 minutes a check (#1140).
+// The most gates a builder's `bin/check` may run at once beside the other build slots, because three builders on 12 processors, each running eight gates at once, loaded the host to 22 to 28 and took 7 to 9 minutes a check (#1140).
 final readonly class GatesAtOnce
 {
     // Eight, because the measured checks ran eight gates at once (#1140), so this count never asks for more than they did.
