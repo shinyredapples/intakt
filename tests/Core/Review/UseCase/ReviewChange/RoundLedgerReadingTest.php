@@ -322,6 +322,32 @@ final class RoundLedgerReadingTest extends KernelTestCase
         self::assertSame([], $this->reading()->p1KeysOf(self::ROUND));
     }
 
+    public function testTheJudgeDoneRowsOfSeveralRoundsAreReadByRoundInOnePass(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['p1_keys' => ['F1' => 'aaa']] + $this->judgeDone(self::OTHER_ROUND));
+        $this->append(LedgerEventKind::JudgeDone, ['p1_keys' => ['F1' => 'ccc']] + $this->judgeDone('a-round-not-asked-for'));
+        $this->append(LedgerEventKind::JudgeDone, ['p1_keys' => ['F1' => 'bbb']] + $this->judgeDone(self::ROUND));
+
+        $judged = $this->reading()->judgeDonesOf([self::ROUND, self::OTHER_ROUND]);
+
+        self::assertSame([self::OTHER_ROUND => ['F1' => 'aaa'], self::ROUND => ['F1' => 'bbb']], array_map(static fn (JudgeDone $done): array => $done->p1Keys, $judged));
+    }
+
+    public function testTheFirstJudgeDoneRowOfARoundIsTheOneReadForIt(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
+        $this->append(LedgerEventKind::JudgeDone, ['act' => ['F2']] + $this->judgeDone(self::ROUND));
+
+        self::assertSame(['F1', 'F3'], $this->reading()->judgeDonesOf([self::ROUND])[self::ROUND]->act);
+    }
+
+    public function testARoundWithoutAJudgeDoneRowIsLeftOutOfTheRowsRead(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::OTHER_ROUND));
+
+        self::assertSame([], $this->reading()->judgeDonesOf([self::ROUND]));
+    }
+
     public function testARoundTheJudgeHasNotAnsweredHasNoDroppedFindings(): void
     {
         self::assertSame([], $this->reading()->droppedOf(self::ROUND));

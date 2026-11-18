@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
 use Intakt\Core\Review\Contract\Finding;
+use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgedFindings;
 use Intakt\Core\Review\Contract\RecurringP1Found;
 use Intakt\Core\Review\Contract\Severity;
@@ -54,7 +55,9 @@ final readonly class RecurringP1s
     public function recordFor(ReviewRound $round, JudgedFindings $judged, array $p1Keys): void
     {
         $judgedNow = new FlaggedRound($round, $judged->actList, $p1Keys);
-        $others = array_map($this->flagged(...), $this->rounds->judgedBesides($round));
+        $besides = $this->rounds->judgedBesides($round);
+        $judgeDones = $this->reading->judgeDonesOf(array_map(static fn (ReviewRound $other): string => $other->id()->toRfc4122(), $besides));
+        $others = array_map(fn (ReviewRound $other): FlaggedRound => $this->flagged($other, $judgeDones[$other->id()->toRfc4122()] ?? null), $besides);
 
         $this->recordRecurrencesOf($judgedNow, $others);
 
@@ -114,13 +117,12 @@ final readonly class RecurringP1s
     }
 
     // The act findings of the round as its judge_done recorded their ids, one by one, so a finding dropped before its judge never counts as flagged.
-    private function flagged(ReviewRound $round): FlaggedRound
+    private function flagged(ReviewRound $round, ?JudgeDone $judgeDone): FlaggedRound
     {
-        $roundId = $round->id()->toRfc4122();
-        $actIds = $this->reading->actIdsOf($roundId);
+        $actIds = $judgeDone->act ?? [];
         $act = array_values(array_filter($this->findings->reportedIn($round), static fn (Finding $finding): bool => in_array($finding->id, $actIds, true)));
 
-        return new FlaggedRound($round, $act, $this->reading->p1KeysOf($roundId));
+        return new FlaggedRound($round, $act, $judgeDone->p1Keys ?? []);
     }
 
     // Keyed at the recurring round's head, because that is the code an escalation of the finding would judge: the key taken at its judging, and for a finding without one (also in a round judged before keys were recorded) read from its checkout now.

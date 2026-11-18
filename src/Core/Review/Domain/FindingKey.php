@@ -117,7 +117,7 @@ final readonly class FindingKey
         return str_contains($fragment, '/') && 1 === (false === $hasExtension ? preg_match(self::FILE_EXTENSION, $fragment) : $hasExtension);
     }
 
-    // Spacing ignored, because a reviewer rewording the same finding on the next head changes only that, but kept inside backticks and double quotes, because `Admin User` and `Admin  User` can be two values; case is kept, because `Admin` and `admin` can be two values.
+    // Spacing ignored, because a reviewer rewording the same finding on the next head changes only that, but kept inside backticks and double quotes, because `Admin User` and `Admin  User` can be two values; not inside single quotes, because a single quote is also an apostrophe ("the change's lock") and so cannot reliably mark a value. Case is kept, because `Admin` and `admin` can be two values.
     private function normalized(string $text): string
     {
         $parts = preg_split(self::QUOTED, $text, flags: PREG_SPLIT_DELIM_CAPTURE);

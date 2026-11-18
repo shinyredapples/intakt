@@ -139,6 +139,27 @@ final readonly class RoundLedgerReading implements RoundCosts
         return array_reduce($recorded, fn (Cost $sum, RecordedEvent $row): Cost => $sum->plus($this->costOfEnding($row, $models)), Cost::none());
     }
 
+    // In one pass over the judge_done events, by round id, the first recorded for each round, because a caller comparing many rounds would otherwise scan and decode them all once per round.
+    /**
+     * @param list<string> $roundIds
+     *
+     * @return array<string, JudgeDone>
+     */
+    public function judgeDonesOf(array $roundIds): array
+    {
+        $judged = [];
+
+        foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
+            $done = $this->payloads->of($recorded, JudgeDone::class);
+
+            if (null !== $done && in_array($done->round, $roundIds, true) && !isset($judged[$done->round])) {
+                $judged[$done->round] = $done;
+            }
+        }
+
+        return $judged;
+    }
+
     private function judgeDoneOf(string $roundId): ?JudgeDone
     {
         foreach ($this->ledger->readOfKind(LedgerEventKind::JudgeDone) as $recorded) {
