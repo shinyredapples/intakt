@@ -93,7 +93,8 @@ final readonly class FindingKey
      */
     private function wordsOf(string $text): array
     {
-        $words = array_map(static fn (string $word): string => rtrim((string) preg_replace(self::LINE, '', rtrim(ltrim($word, self::OPENING), self::CLOSING)), '.'), preg_split('~\s+~', $text, flags: PREG_SPLIT_NO_EMPTY) ?: []);
+        $split = preg_split('~\s+~', $text, flags: PREG_SPLIT_NO_EMPTY);
+        $words = array_map(static fn (string $word): string => rtrim((string) preg_replace(self::LINE, '', rtrim(ltrim($word, self::OPENING), self::CLOSING)), '.'), false === $split ? [] : $split);
 
         return array_values(array_filter($words, static fn (string $word): bool => '' !== $word));
     }
