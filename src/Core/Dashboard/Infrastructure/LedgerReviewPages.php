@@ -96,7 +96,7 @@ final readonly class LedgerReviewPages
         return new Board($this->rounds($events)->reviews(), count($tasks), $this->projectsBuilding($tasks));
     }
 
-    // A task whose latest step passed is still on its way to its push, while a failed step or a passed push leaves it at rest.
+    // Only a passed step short of the push, because a build run stops at its first failed step and ends with its push, so either leaves the task at rest (#2658).
     /**
      * @param list<array{project: string, task: string, step: string, outcome: string, failure: ?string, ended_at: string}> $tasks
      *

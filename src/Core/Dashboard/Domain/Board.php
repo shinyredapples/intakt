@@ -12,10 +12,10 @@ final readonly class Board
     /** @var list<Review> */
     private array $cards;
 
-    // Tasks are counted apart from the cards, because a task the build has worked on has no card yet but still ends the first day (#1792, D5). The projects of the tasks in flight come apart too, because a running build is not idle though it has no card (docs/design/05-architecture/08-merge.md, Adaptive intervals).
+    // Tasks are counted apart from the cards, because a task the build has worked on has no card yet but still ends the first day (#1792, D5). The project of each task in flight comes apart too, because a running build is not idle though it has no card (docs/design/05-architecture/08-merge.md, Adaptive intervals).
     /**
      * @param list<Review> $reviews
-     * @param list<string> $building one project per task in flight
+     * @param list<string> $building
      */
     public function __construct(array $reviews, private int $tasks, private array $building)
     {
