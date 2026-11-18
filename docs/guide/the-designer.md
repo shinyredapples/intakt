@@ -21,7 +21,7 @@ For a task that changes what people see, the Designer first writes down what the
 - what people using a screen reader, a keyboard or large text need;
 - which screens, and which parts of them, the work is meant to change.
 
-This happens even when your project has planning switched off. If the work turns out to change a screen nobody expected it to, it goes back to the Designer for this step before anyone reviews it, and then it is built again.
+This happens even when your project has planning switched off. Sometimes a task did not look like it would change any screen, so the Designer never did this step, and then the builder's work changes one after all. That work is held back before anyone reviews it: the Designer does this step first, and the builder carries on from what it already built. This happens at most once per task. A task that already has the Designer's notes does not go back; there, a surprise change on a screen is caught by the picture check below.
 
 ## Three ways to score the work
 
@@ -31,13 +31,13 @@ This happens even when your project has planning switched off. If the work turns
 - at each of the three sizes, nothing you have to scroll sideways, nothing on top of something else, no text spilling out of its box, and every button at least 44 pixels so a finger can hit it;
 - colors, spacing and fonts only from your project's own list of design values;
 - the speed and quality scores you set for each page;
-- a picture of every screen compared with the current version, so anything that changed by accident is caught, even on a screen the work was meant to change, as long as it is outside the parts the Designer said would change.
+- a picture of every screen compared with the current version, so anything that changed by accident is caught, even on a screen the work was meant to change, as long as it is outside the parts the Designer said would change. Those parts can be something changed, something new or something taken away. The Designer cannot mark a whole page as "expected to change": past a share of the screen that your project sets, the changes come to you to accept.
 
 If one of these fails, the work goes back to be fixed, like a failing test.
 
 **2. A score card.** The Designer gives each screen a score for clarity, feedback, states, consistency, recovering from errors, and wording. Every score has to point at a spot in a screenshot and say what is wrong there. A low score is a note to fix, not a hard stop. Scores are kept, so you can see on the dashboard when a screen got worse.
 
-**3. Learning your taste.** Some choices have no right answer. For those, the Designer makes a few versions and compares them two at a time, without knowing which is which, to put them in order. The comparing is done by a fresh AI session that only sees the two pictures, not the code, the current version or the session that made them. Now and then you get some of those pairs to pick from, the same blind way. The dashboard shows how often the Designer picks what you picked. While that is low, you are asked about the choices that give a screen its character. As it rises, you are asked less.
+**3. Learning your taste.** Some choices have no right answer. For those, the Designer makes a few versions and compares them two at a time, without knowing which is which, to put them in order. The comparing is done by a fresh AI session that only gets the two pictures, what the task is meant to achieve and the score card's criteria, not the code, the current version or the session that made them. Now and then you get some of those pairs to pick from, the same blind way. The dashboard shows how often the Designer picks what you picked. While that is low, you are asked about the choices that give a screen its character. As it rises, you are asked less.
 
 ## What you need to install
 
