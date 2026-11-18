@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Core\Dashboard\Infrastructure;
+namespace Intakt\Core\Watcher\Contract;
 
-use Intakt\Core\Dashboard\Domain\FailingMain;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\RecordedEvent;
 use Intakt\Core\Ledger\Contract\RecordedEvents;
+use JsonException;
 
-// A project whose main does not boot is an infrastructure item of its own, not a pull request's, because the gate is off for every head of the project until main boots again.
-final readonly class LedgerFailingMains
+// The one reading of main's boot lines, because the board shows its banner from it and the watcher compares a stored result with it: two readings would let the banner and the gate disagree.
+final readonly class FailingMains
 {
     /**
      * @return list<FailingMain>
@@ -37,7 +37,7 @@ final readonly class LedgerFailingMains
      */
     private function settled(array $failing, array $seen, RecordedEvent $recorded): array
     {
-        $payload = LedgerPayload::of($recorded);
+        $payload = $this->payloadOf($recorded);
         $pair = $this->pairOf($payload);
         $reason = $this->failureReasonOf($recorded, $payload);
         $booted = LedgerEventKind::BootResultComputed === $recorded->event->kind && 'booted' === ($payload['state'] ?? null);
@@ -60,8 +60,23 @@ final readonly class LedgerFailingMains
         return [$failing, $seen];
     }
 
+    // An unreadable payload decodes to nothing, so one bad row neither takes the board down nor stops the watcher.
     /**
-     * @param array<string, mixed> $payload
+     * @return array<array-key, mixed>
+     */
+    private function payloadOf(RecordedEvent $recorded): array
+    {
+        try {
+            $payload = json_decode($recorded->event->payload, true, 8, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return [];
+        }
+
+        return is_array($payload) ? $payload : [];
+    }
+
+    /**
+     * @param array<array-key, mixed> $payload
      */
     private function failureReasonOf(RecordedEvent $recorded, array $payload): ?string
     {
@@ -71,9 +86,9 @@ final readonly class LedgerFailingMains
         return is_string($reason) && (LedgerEventKind::MainBootFailed === $recorded->event->kind || $failedFromStore) ? $reason : null;
     }
 
-    // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when the state changed.
+    // A result read from the store is main's current state, because only a worker that answers the gate from the stored row writes it, and only when it differs from what this reading shows.
     /**
-     * @param array<string, mixed> $payload
+     * @param array<array-key, mixed> $payload
      */
     private function readFromStore(array $payload): bool
     {

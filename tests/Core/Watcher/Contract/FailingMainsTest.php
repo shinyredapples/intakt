@@ -2,20 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Dashboard\Infrastructure;
+namespace Intakt\Tests\Core\Watcher\Contract;
 
-use Intakt\Core\Dashboard\Domain\FailingMain;
-use Intakt\Core\Dashboard\Infrastructure\LedgerFailingMains;
-use Intakt\Core\Dashboard\Infrastructure\LedgerPayload;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
 use PHPUnit\Framework\Attributes\CoversClass;
-use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
-#[CoversClass(LedgerFailingMains::class)]
+#[CoversClass(FailingMains::class)]
 #[CoversClass(FailingMain::class)]
-#[UsesClass(LedgerPayload::class)]
-final class LedgerFailingMainsTest extends TestCase
+final class FailingMainsTest extends TestCase
 {
     private DashboardLedger $ledger;
 
@@ -133,6 +130,6 @@ final class LedgerFailingMainsTest extends TestCase
      */
     private function failing(): array
     {
-        return new LedgerFailingMains()->in($this->ledger->readInOrder());
+        return new FailingMains()->in($this->ledger->readInOrder());
     }
 }

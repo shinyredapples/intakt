@@ -9,7 +9,8 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Review\Contract\BootOutcome;
-use Intakt\Core\Review\Contract\BootState;
+use Intakt\Core\Watcher\Contract\FailingMain;
+use Intakt\Core\Watcher\Contract\FailingMains;
 use Intakt\Core\Watcher\Domain\BootKey;
 use Intakt\Core\Watcher\Domain\FailedBoot;
 use Intakt\Core\Watcher\Domain\HeadAdmission;
@@ -22,8 +23,10 @@ final readonly class WatcherLedger
 {
     private const string STORE = 'store';
 
-    public function __construct(private Ledger $ledger)
-    {
+    public function __construct(
+        private Ledger $ledger,
+        private FailingMains $failingMains = new FailingMains(),
+    ) {
     }
 
     // Skipped for a green head because the round it starts is recorded instead.
@@ -76,18 +79,12 @@ final readonly class WatcherLedger
         $this->append(LedgerEventKind::BootResultComputed, $this->bootResultOf($key, $outcome) + ['read_from' => self::STORE]);
     }
 
-    // Crashes are passed over, because a crash is the boot step's fault and changes nothing the board shows.
-    public function lastBootStateOf(string $project): ?BootState
+    // Read with the board's own rule over the project's lines, because a stored result must be compared with what the board shows, not with the last line, which the board may have passed over.
+    public function failingMainOf(string $project): ?FailingMain
     {
-        $last = null;
+        $lines = $this->ledger->readMentioning(['"project":'.json_encode($project, JSON_THROW_ON_ERROR)]);
 
-        foreach ($this->ledger->readOfKind(LedgerEventKind::BootResultComputed) as $recorded) {
-            $payload = json_decode($recorded->event->payload, true);
-            $state = is_array($payload) && $project === ($payload['project'] ?? null) && is_string($payload['state'] ?? null) ? BootState::tryFrom($payload['state']) : null;
-            $last = null === $state || BootState::Crashed === $state ? $last : $state;
-        }
-
-        return $last;
+        return array_find($this->failingMains->in($lines), static fn (FailingMain $failing): bool => $project === $failing->project);
     }
 
     // The infrastructure alert of a main that does not boot, so the gate is off for every head of the project until main boots again.
