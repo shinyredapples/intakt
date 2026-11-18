@@ -51,7 +51,7 @@ final readonly class FindingKeys
         return $hashes;
     }
 
-    // A fragment that is no regular file of the checkout is prose and skipped; one that is a file but cannot be read refuses the key, because its content is part of what the finding names.
+    // A word that is no regular file of the checkout is prose and skipped; one that is a file but cannot be read refuses the key, because its content is part of what the finding names.
     /**
      * @param list<string> $paths
      *

@@ -103,6 +103,8 @@ final class FindingKeysTest extends TestCase
         yield 'a directory' => ['Everything in src is affected, see src/Sub.'];
         yield 'an abbreviation' => ['Some writes, e.g. the save, are lost.'];
         yield 'a missing file name without a directory' => ['Kernel.php is not restart safe.'];
+        yield 'plain words' => ['The save is not restart safe.'];
+        yield 'a missing file name without a directory or an extension' => ['The target in `Makefile` skips the lock.'];
     }
 
     #[DataProvider('proseThatIsNoPathOfTheCheckout')]
@@ -125,6 +127,44 @@ final class FindingKeysTest extends TestCase
 
         self::assertNotNull($before);
         self::assertNotSame($before, $this->keyOf($finding));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function fileNamesWithoutADirectoryOrAnExtension(): iterable
+    {
+        yield 'Makefile' => ['Makefile'];
+        yield 'Dockerfile' => ['Dockerfile'];
+        yield 'LICENSE' => ['LICENSE'];
+    }
+
+    #[DataProvider('fileNamesWithoutADirectoryOrAnExtension')]
+    public function testTheKeyChangesWhenAFileNamedWithoutADirectoryOrAnExtensionChanges(string $name): void
+    {
+        $this->repository->commitFile($name, "before\n");
+        $finding = $this->finding('src/Thing.php', 'The target in `'.$name.'` still skips the lock.');
+        $before = $this->keyOf($finding);
+        $this->repository->commitFile($name, "after\n");
+
+        self::assertNotNull($before);
+        self::assertNotSame($before, $this->keyOf($finding));
+    }
+
+    public function testAnUnreadableFileNamedByAWordOfTheTextGetsNoKey(): void
+    {
+        if (0 === posix_geteuid()) {
+            self::markTestSkipped('The superuser reads every file.');
+        }
+
+        $this->repository->commitFile('Makefile', "before\n");
+        chmod($this->repository->path.'/Makefile', 0o000);
+
+        try {
+            self::assertNull($this->keyOf($this->finding('src/Thing.php', 'The target in `Makefile` still skips the lock.')));
+        } finally {
+            chmod($this->repository->path.'/Makefile', 0o644);
+        }
     }
 
     public function testTheKeyChangesWhenAPathWithoutAnExtensionNamingAFileChanges(): void

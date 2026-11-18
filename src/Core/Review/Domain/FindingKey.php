@@ -28,7 +28,7 @@ final readonly class FindingKey
         return array_values(array_unique([...(null === $finding->file ? [] : [$finding->file]), ...$inText]));
     }
 
-    // Fragments that read as prose too (`and/or`, `8.5/8.6`, a route, `e.g`) or name a file without a directory (`README.md`), so they count only where the checkout holds a regular file under that path.
+    // Every other word of the text, because a file at the root is cited by its bare name (`Makefile`, `LICENSE`, `README.md`) and reads like prose (`and/or`, `8.5/8.6`, a route, `e.g`); each counts only where the checkout holds a regular file under that path, so a wrong guess can only add a real file to the key, which errs toward judging again.
     /**
      * @return list<string>
      */
@@ -37,7 +37,7 @@ final readonly class FindingKey
         $named = $this->namedPaths($finding);
         $possible = array_filter(
             $this->fragmentsOf($finding->text),
-            fn (string $fragment): bool => !in_array($fragment, $named, true) && !$this->isCertainlyAPath($fragment) && (str_contains($fragment, '/') || 1 === preg_match(self::FILE_EXTENSION, $fragment)),
+            fn (string $fragment): bool => !in_array($fragment, $named, true) && !$this->isCertainlyAPath($fragment),
         );
 
         return array_values(array_unique($possible));

@@ -15,7 +15,7 @@ use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
 
-// Called in the judging's transaction on the round's lock, so a redelivered judging, which finds the round judged, records no recurrence twice. Each P1 of a round at a place is recorded once, paired with the newest earlier round on another head that flagged a P1 there, when the first such round is judged, whichever of the two is judged last.
+// Called in the judging's transaction on the round's lock, so a redelivered judging, which finds the round judged, records no recurrence twice. Each P1 of a round at a place is recorded once, at the moment it and a first earlier round on another head that flagged a P1 there are both judged, whichever of the two is judged last, paired with the newest such earlier round judged by then; an earlier round judged afterwards never changes the pair.
 final readonly class RecurringP1s
 {
     public function __construct(

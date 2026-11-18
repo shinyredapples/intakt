@@ -57,6 +57,7 @@ final class FindingKeyTest extends TestCase
         yield 'a route' => ['The page /reviews fails.', '/reviews'];
         yield 'a file name without a directory' => ['README.md still states the old limit.', 'README.md'];
         yield 'an abbreviation' => ['Some writes, e.g. the save, are lost.', 'e.g'];
+        yield 'a file name without a directory or an extension' => ['The target in `Makefile` skips the lock.', 'Makefile'];
     }
 
     #[DataProvider('fragmentsThatMayBeAPath')]
@@ -65,12 +66,17 @@ final class FindingKeyTest extends TestCase
         $finding = $this->finding('src/Thing.php', $text);
 
         self::assertSame(['src/Thing.php'], new FindingKey()->namedPaths($finding));
-        self::assertSame([$fragment], new FindingKey()->possiblePaths($finding));
+        self::assertContains($fragment, new FindingKey()->possiblePaths($finding));
+    }
+
+    public function testEveryWordOfTheTextMayBeAPath(): void
+    {
+        self::assertSame(['The', 'target', 'in', 'Makefile', 'and/or', 'skips', 'the', 'lock'], new FindingKey()->possiblePaths($this->finding('src/Thing.php', 'The target in `Makefile` and/or src/Other.php skips the lock.')));
     }
 
     public function testAPathTheFindingCertainlyNamesIsNoPossiblePath(): void
     {
-        self::assertSame([], new FindingKey()->possiblePaths($this->finding('src/Thing.php', 'Breaks src/Thing.php and src/Other.php.')));
+        self::assertSame(['Breaks', 'and'], new FindingKey()->possiblePaths($this->finding('src/Thing.php', 'Breaks src/Thing.php and src/Other.php.')));
     }
 
     public function testTheSameTextAndFilesGiveTheSameKeyInAnyOrder(): void
