@@ -79,6 +79,25 @@ final class CheckHandBackSecretsTest extends TestCase
         self::assertEquals(new RefusedHandBack(HandBackRefusal::HoldsSecret), $result);
     }
 
+    public function testAKeyAfterALargeBinaryBlobInTheSameFileIsRefused(): void
+    {
+        $this->history->commitFile('data.bin', $this->largeBinary()."\nkey = ".$this->fakeKey()."\n", 'Add the data');
+
+        $result = $this->check($this->history->bundle('main..task'));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::HoldsSecret), $result);
+    }
+
+    public function testAKeyInAFileCommittedAfterALargeBinaryFileIsRefused(): void
+    {
+        $this->history->commitFile('data.bin', $this->largeBinary(), 'Add the data');
+        $this->history->commitFile('settings.txt', 'key = '.$this->fakeKey()."\n", 'Add the settings');
+
+        $result = $this->check($this->history->bundle('main..task'));
+
+        self::assertEquals(new RefusedHandBack(HandBackRefusal::HoldsSecret), $result);
+    }
+
     public function testScannerSettingsAndAllowCommentsTheBuildCommittedAreIgnored(): void
     {
         $this->history->commitFile('.gitleaks.toml', self::NO_RULES, 'Configure the scanner');
@@ -229,6 +248,12 @@ final class CheckHandBackSecretsTest extends TestCase
     private function fakeKey(): string
     {
         return 'sk_live_'.bin2hex(random_bytes(12));
+    }
+
+    // Built at run time, so the repository holds no large file; random bytes with NUL runs, so git and the scanner both see binary content that does not compress away.
+    private function largeBinary(): string
+    {
+        return str_repeat(random_bytes(4096).str_repeat("\0", 4096), 640);
     }
 
     // No known shape, so only the redaction of mounted credentials can find it, never the scanner.

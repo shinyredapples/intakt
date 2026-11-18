@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Intakt\Tests\Core\Review\Infrastructure;
+namespace Intakt\Tests\Core\Review\Contract;
 
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
+use Intakt\Core\Review\Contract\PromptCut;
 use Intakt\Core\Review\Contract\UntrustedSource;
-use Intakt\Core\Review\Infrastructure\PromptCut;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
