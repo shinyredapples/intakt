@@ -93,7 +93,7 @@ final readonly class LeftUndoneGate implements Gate
         foreach ([...$this->addedLines->byPath($paths, $patch), ...$untracked] as [$path, $addedLines]) {
             $language = $this->isFixture($path) ? null : $this->languages->languageOf($workspace, $path);
 
-            if (null !== $language) {
+            if ($language instanceof CommentLanguage) {
                 $scanned[] = [$path, $addedLines, $language];
             }
         }
