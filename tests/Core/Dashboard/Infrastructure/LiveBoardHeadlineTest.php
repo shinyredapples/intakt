@@ -25,9 +25,12 @@ use Intakt\Tests\Support\StoredSerializerFactory;
 use Intakt\Tests\Support\UnpricedRoundCosts;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use RuntimeException;
 use Symfony\Component\DomCrawler\Crawler;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\PersistingStoreInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Uid\Uuid;
 use Twig\Environment;
@@ -53,6 +56,19 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertCount(1, $live->events);
         self::assertSame(DashboardTopics::SHELL, $live->events[0]->topic);
         self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.head-character'));
+    }
+
+    public function testAFailedPublishOfTheBoardIsLoggedAsAWarningAndNotThrown(): void
+    {
+        $store = $this->createStub(PersistingStoreInterface::class);
+        $store->method('save')->willThrowException(new RuntimeException('The lock store is down.'));
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::once())->method('warning')->with('The board headline was not published.');
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn(new DashboardLedger(), $live, new LockFactory($store), $logger)->publishTheBoard();
+
+        self::assertCount(0, $live->events);
     }
 
     public function testAPushedDoneColumnCarriesAtMostThePageLimitOfCards(): void
@@ -121,12 +137,12 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         return new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="col-done"] section#col-done');
     }
 
-    private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live): LiveBoardHeadline
+    private function headlineOn(DashboardLedger $ledger, PublishedLiveEvents $live, ?LockFactory $locks = null, ?LoggerInterface $logger = null): LiveBoardHeadline
     {
         $twig = self::getContainer()->get(Environment::class);
         self::assertInstanceOf(Environment::class, $twig);
         $pages = new LedgerReviewPages($ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create())), new UnpricedRoundCosts(), new ChangeDecision(), new FailureInWords(), new FixedRoundEndings(), new ReplayMarks(new ReplayMarkBus()));
 
-        return new LiveBoardHeadline($pages, $twig, $live, new LockFactory(new InMemoryStore()), new NullLogger());
+        return new LiveBoardHeadline($pages, $twig, $live, $locks ?? new LockFactory(new InMemoryStore()), $logger ?? new NullLogger());
     }
 }
