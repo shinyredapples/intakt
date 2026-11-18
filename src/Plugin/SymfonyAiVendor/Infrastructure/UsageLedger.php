@@ -178,7 +178,7 @@ final readonly class UsageLedger
     {
         try {
             $converted = $result->getResult();
-        } catch (ExceptionInterface | HttpClientExceptionInterface) {
+        } catch (ExceptionInterface|HttpClientExceptionInterface) {
             return null;
         }
 

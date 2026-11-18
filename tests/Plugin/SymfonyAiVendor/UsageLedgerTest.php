@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Intakt\Tests\Plugin\SymfonyAiVendor;
 
 use Generator;
-use LogicException;
 use Intakt\Core\Review\Infrastructure\FinalStreamedUsage;
 use Intakt\Plugin\SymfonyAiVendor\Contract\TokenUsageRow;
 use Intakt\Plugin\SymfonyAiVendor\Contract\UsageSettled;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageLedger;
 use Intakt\Plugin\SymfonyAiVendor\Infrastructure\UsageReservation;
 use Intakt\Tests\Support\StoredSerializerFactory;
+use LogicException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
