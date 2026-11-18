@@ -58,7 +58,8 @@ function jobsFor(theme) {
   for (const demo of BOARD_EXAMPLES) {
     const example = { query: '?demo=' + demo, variant: demo, note: 'example: ' + demo };
     add('index', DESKTOP, { full: true, ...example });
-    add('index', PHONE, example);
+    // The first day's empty columns sit below the fold on a phone, so its capture is the full page.
+    add('index', PHONE, demo === 'firstday' ? { full: true, ...example } : example);
   }
 
   return jobs;
