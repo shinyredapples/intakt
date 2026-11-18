@@ -53,7 +53,7 @@ flowchart TD
 In words:
 1. **A task is written.** You, or Intakt with you, describe one piece of work: what should happen, and how to tell it is done.
 2. **Intakt checks the task.** Is it clear? Is it small enough to build and review in one go? If not, it asks or splits it before any work is paid for.
-3. **It waits its turn.** Urgent tasks go first, then open pull requests (see [the engine room](the-engine-room.md#queues-who-is-next)), then priority, the milestone's due date and the older task. *(Planned:)* The rest will go milestone by milestone, with priority and then the older task deciding within one milestone.
+3. **It waits its turn.** Urgent tasks go first, then open pull requests (see [the engine room](the-engine-room.md#queues-who-is-next)), then priority, the milestone's due date and the older task. *(Planned:)* The rest will go milestone by milestone, with priority deciding within one milestone; among tasks of the same priority and stage, the one other tasks are waiting on goes first, then the older task. A follow-up from a reviewer's nice-to-have note waits for the next stage unless it fixes something that blocked the original or no later stage is open.
 4. **The builder writes the change** in a sealed-off workspace: it can't reach your accounts, your keys or the internet beyond what it needs.
 5. **The checks run.** Your project's own tests and rules either pass or they don't. A failure goes straight back to the builder.
 6. **The review panel reads it.** You choose the panel: how many reviewers, which AI companies, and what each one focuses on (security, the framework's conventions, tests, documentation), with its own checklist and test recipes. By default it is two reviewers from two different companies when you have both, so one company's blind spot doesn't decide; with one account it is one reviewer, plus a second model of the same company for protected, security-relevant and large changes (planned: not built yet). A fixed core panel reviews every change; specialists join when the change calls for them (see below). Reviewers can also run small experiments to test the change.
@@ -67,17 +67,17 @@ Every change gets the same **core panel**. On top of that, **specialist reviewer
 flowchart LR
   pr[A change] --> core[Core panel<br/>reviews every change]
   pr --> rules{What is it about?}
-  rules -- "touches security code" --> sec[Security reviewer]
+  rules -- "touches input handling, pages or containers" --> sec[Security engineer]
   rules -- "label review:performance" --> perf[Performance reviewer]
   rules -- "changes the project's checks" --> gates[Checks reviewer]
   rules -- "changes the user guide" --> docs[Docs reviewer]
 ```
 
 What brings in a specialist:
-- **the files the change touches**, for example security code;
+- **the files the change touches**, for example code that handles outside input, the pages and scripts, or the container setup, which bring in the Security engineer with the checklist for that area (planned, see [Checking the security of what is built](why-the-ai-cant-wreck-your-project.md#checking-the-security-of-what-is-built));
 - **a label on the task**, such as `review:security`, set by you or the maintainer agent;
 - **the kind or size of the task**, for example changes to the project's checks, or a very large change;
-- **the task's own wording**: when Intakt reads the task before building it, it can recommend a specialist (for example "parses user input" calls for the security reviewer).
+- **the task's own wording**: when Intakt reads the task before building it, it can recommend a specialist (for example "parses user input" calls for the Security engineer).
 
 A specialist can be **blocking** (it must approve, like the core panel) or **advisory** (its notes become small follow-up tasks), and it judges only its own area, so a docs reviewer never blocks a change over performance. These rules only ever add reviewers: nothing can make the core panel smaller, and the rules themselves are protected, so a change can't switch off the reviewer that would catch it.
 
