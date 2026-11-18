@@ -25,7 +25,7 @@ This is the only statement of it; every readiness rule in the design points here
 4. Every item of its Evidence list can be produced inside a job's sandbox; evidence only the owner or the orchestrator can produce is marked as such.
 5. It names the docs the change will touch.
 6. It names what it waits for (`Waits for #n`) and, for a split part, its source.
-7. A user-facing task (one the Designer joins, see [Reviews](05-architecture/07-reviews.md#the-designer)) also has its design: the flows, every state (empty, loading, error, success), the copy, the three widths (phone, tablet, desktop) and the accessibility needs, added by the Designer before the build (planned).
+7. A user-facing task (one the Designer joins, see [Reviews](05-architecture/07-reviews.md#the-designer)) also has its design: the flows, every state (empty, loading, error, success), the copy, the three widths (phone, tablet, desktop), the accessibility needs, and the screens and regions it is expected to change, added by the Designer before the build (planned).
 
 For a new project, the spec is Ready to plan when the Tech lead can break it into tasks that meet the first six points above.
 
