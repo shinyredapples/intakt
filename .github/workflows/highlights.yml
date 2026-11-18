@@ -3,7 +3,7 @@ name: highlights
 on:
   push:
     branches: [main]
-    # .github/ci/run-on-copy.sh and .github/actions/ci-image are left out, because the daily run picks them up within a day.
+    # Not listed: .github/ci/run-on-copy.sh and .github/actions/ci-image, because the daily run covers them.
     paths:
       - docs/highlights.d/**
       - bin/highlights
