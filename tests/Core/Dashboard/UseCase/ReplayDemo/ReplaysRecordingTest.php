@@ -316,6 +316,18 @@ final class ReplaysRecordingTest extends TestCase
         self::assertCount(1, $this->appended());
     }
 
+    public function testAStoppedReplayNamesTheCommandsThatClearTheRowsItWroteBeforeTheNextReplay(): void
+    {
+        $this->ledger->failAppend(2);
+
+        try {
+            $this->replays()->replay($this->recordedRun(), 1.0);
+            self::fail('The replay went on after a failed append.');
+        } catch (ReplayStopped $stopped) {
+            self::assertStringEndsWith('The events it wrote stay in the ledger: remove them with intakt:demo:remove, then run intakt:demo:create, before replaying this recording.', $stopped->getMessage());
+        }
+    }
+
     public function testARecordingWhoseRoundIsAlreadyInTheLedgerIsRefusedBeforeAnyRowIsWritten(): void
     {
         $this->replays()->replay($this->recordedRun(), 1.0);

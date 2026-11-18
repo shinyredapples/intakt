@@ -22,7 +22,8 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     // Not a credential, because the seed only checks that a key is present, and no step calls a provider.
     private const string PLACEHOLDER_KEY = 'journey-placeholder';
     private const string ENDED_TEXT = 'Judged.';
-    private const string JUDGED_HERE = 'The judge has judged this round. Its call and the findings to fix are in the round below.';
+    // The sample's test vendor leaves nothing to fix, so the link must not promise findings.
+    private const string ROUND_BELOW = 'See the round below.';
     private const string PROGRESS = '/^\d+ of \d+ reviewers finished\.$/';
     private const string NONE_STARTED = '0 of 2 reviewers started.';
     private const string ALL_STARTED = '2 of 2 reviewers started.';
@@ -173,9 +174,11 @@ final class LiveReviewProgressJourneyTest extends JourneyTestCase
     private function readTheJudgedContentWithoutAReload(string $round, Crawler $live, Crawler $judged): void
     {
         self::assertStringContainsString(self::ENDED_TEXT, $live->filter('#round-'.$round.'-state')->text());
-        self::assertSame(self::JUDGED_HERE, $live->filter('#round-'.$round.'-now-judge p.muted')->text());
+        self::assertStringStartsWith($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text().', ', $live->filter('#round-'.$round.'-now-judge')->text());
         self::assertSame($judged->filter('#round-'.$round.' .ev-head .chip:not(.replay-mark)')->text(), $live->filter('#round-'.$round.'-now-judge .now-outcome')->text());
         self::assertStringStartsWith($live->filter('#round-'.$round.'-now-findings a.sb-finding')->count().' ', $live->filter('#round-'.$round.'-now-judge .now-to-fix')->text());
+        self::assertSame('0 findings to fix', $live->filter('#round-'.$round.'-now-judge .now-to-fix')->text());
+        self::assertSame(self::ROUND_BELOW, $live->filter('#round-'.$round.'-now-judge p.muted')->text());
         self::assertNotSame('', $live->filter('#round-'.$round.'-judged')->text());
         self::assertSame([self::ALL_STARTED, self::ALL_FINISHED], [$live->filter('#round-'.$round.'-started')->text(), $live->filter('#round-'.$round.'-now-progress')->text()]);
 

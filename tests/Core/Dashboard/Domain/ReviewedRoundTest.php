@@ -48,6 +48,20 @@ final class ReviewedRoundTest extends TestCase
         self::assertSame(ReviewOutcome::of($round), $round->reviewOutcome());
     }
 
+    public function testARoundWhoseReviewersAllFailedIsFailedWhileItsQuorumIsBlocked(): void
+    {
+        $since = new DateTimeImmutable('2026-10-28T11:01:00+00:00');
+        $round = $this->round()
+            ->withOutcomes([
+                new ReviewerOutcome('a', 'correctness', 'standard', $since)->failed('The provider timed out.'),
+                new ReviewerOutcome('b', 'docs', 'standard', $since)->failed('The provider timed out.'),
+            ])
+            ->judgedWith([], new DateTimeImmutable('2026-10-28T11:10:00+00:00'))
+            ->decidedAs(Decision::Blocked);
+
+        self::assertSame([ReviewOutcome::Failed, ReviewOutcome::Blocked], [$round->reviewOutcome(), $round->quorumOutcome()]);
+    }
+
     public function testANewlyBuiltRoundHasNoReplayMarkUntilItIsMarked(): void
     {
         $round = $this->round();

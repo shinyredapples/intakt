@@ -8,6 +8,7 @@ use Composer\InstalledVersions;
 use DateTimeImmutable;
 use Intakt\Core\Dashboard\Domain\ReviewedRound;
 use Intakt\Core\Dashboard\Infrastructure\MercureRoundUpdates;
+use Intakt\Core\Dashboard\Infrastructure\ReplayedReviewRows;
 use Intakt\Core\Dashboard\Infrastructure\RoundPayloads;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdate;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\CapturedUpdates;
@@ -18,7 +19,6 @@ use Intakt\Core\Dashboard\UseCase\RecordDemo\Recording;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingFormat;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\RecordingNeedsCapturedUpdates;
 use Intakt\Core\Dashboard\UseCase\RecordDemo\ReviewRows;
-use Intakt\Core\Dashboard\UseCase\RecordDemo\ReviewRowsOfChange;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
 use Intakt\Tests\Core\Dashboard\UseCase\DashboardLedger;
@@ -32,7 +32,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\Filesystem\Filesystem;
 
 #[CoversClass(RecordDemoCommand::class)]
-#[CoversClass(ReviewRowsOfChange::class)]
+#[CoversClass(ReplayedReviewRows::class)]
 #[CoversClass(CapturedUpdates::class)]
 #[CoversClass(RecordingNeedsCapturedUpdates::class)]
 #[UsesClass(ReviewRows::class)]
@@ -270,7 +270,7 @@ final class RecordDemoCommandTest extends TestCase
         $filesystem = new Filesystem();
         $application = new Application();
         $application->addCommand(new RecordDemoCommand(
-            new ReviewRowsOfChange($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))),
+            new ReplayedReviewRows($this->ledger, new RoundPayloads(new LedgerPayloads(StoredSerializerFactory::create()))),
             new CapturedUpdates($capture, $this->format, $filesystem),
             $this->format,
             $filesystem,
