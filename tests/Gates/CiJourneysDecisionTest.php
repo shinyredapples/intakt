@@ -10,12 +10,13 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Runs the journeys job's decision step of ci.yml and the load step of the CI image action with a fake git and docker.
+ * Runs the steps themselves from the workflow files, so the tests break when the steps change: the journeys job's decision
+ * step of ci.yml and the load step of the CI image action, with a fake git and docker.
  */
 #[CoversNothing]
 final class CiJourneysDecisionTest extends SandboxTestCase
 {
-    // The fake git answers the merge base and exits from git diff with the status in diff-status, recording its arguments.
+    // A fake git, so each case can set the exit status of git diff (diff-status) and read the arguments it got.
     private const string FAKE_GIT = <<<'SH'
         #!/bin/sh
         case "$1" in
@@ -25,7 +26,7 @@ final class CiJourneysDecisionTest extends SandboxTestCase
         esac
         SH;
 
-    // The fake docker has the image when image-present exists; loading the tar adds it only when the tar holds the tag.
+    // A fake docker, so a case can load a tar with or without the expected tag; image-present stands for the tagged image.
     private const string FAKE_DOCKER = <<<'SH'
         #!/bin/sh
         case "$1" in
