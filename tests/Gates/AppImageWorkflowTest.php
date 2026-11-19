@@ -19,7 +19,8 @@ use Symfony\Component\Yaml\Yaml;
 final class AppImageWorkflowTest extends TestCase
 {
     private const string WORKFLOWS = __DIR__.'/../../.github/workflows';
-    private const string FORK_GUARD = "github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'";
+    // The fork guard behind the main job's answer: a push to main whose commit passed as a pull request's head skips this job.
+    private const string FORK_GUARD = "\${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}";
     private const string BUILD = 'docker build --tag intakt:ci .';
     private const string DECIDE = 'upgrade';
 

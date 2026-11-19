@@ -20,10 +20,86 @@ permissions:
 # it discards afterwards (a hosted runner service): the jobs then prepare the host as on GitHub's runners. The optional
 # secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN (read-only) log Docker in to Docker Hub before the jobs pull from it.
 jobs:
+  # A push to main whose commit already passed ci as the head of a pull request from this repository (.github/ci/pr-run-passed.sh)
+  # skips every other job: pull requests land by fast-forward, so that run checked the same tree. This job then only saves
+  # the Composer and CI image caches that pull requests restore. Any other push (a direct push, a release commit) runs all.
+  main:
+    if: github.event_name == 'push'
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      full: ${{ steps.passed.outputs.full }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A failing API call fails the step and the run, so it never reads as "passed".
+      - name: Decide whether the commit passed as a pull request's head
+        id: passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          passed=$(.github/ci/pr-run-passed.sh "$GITHUB_SHA")
+          echo "full=$([ "$passed" = yes ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
+          echo "passed as a pull request's head: $passed"
+      - name: Name the CI image cache
+        id: image-name
+        if: steps.passed.outputs.full == 'false'
+        run: echo "key=intakt-ci-image-$(.github/ci/build-image.sh --print-hash)" >> "$GITHUB_OUTPUT"
+      - name: Look up the CI image cache
+        id: image-cache
+        if: steps.passed.outputs.full == 'false'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/intakt-ci-image.tar
+          key: ${{ steps.image-name.outputs.key }}
+          lookup-only: true
+      - name: Restore Composer's cache
+        id: composer-cache
+        if: steps.passed.outputs.full == 'false'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+      - name: Log in to Docker Hub
+        if: steps.passed.outputs.full == 'false' && (steps.image-cache.outputs.cache-hit != 'true' || steps.composer-cache.outputs.cache-hit != 'true')
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: .github/ci/docker-hub-login.sh
+      # Builds and saves the CI image when main has none cached for its inputs; loads it for Composer otherwise.
+      - name: Build or restore the CI image
+        if: steps.passed.outputs.full == 'false' && (steps.image-cache.outputs.cache-hit != 'true' || steps.composer-cache.outputs.cache-hit != 'true')
+        uses: $/.github/actions/ci-image
+      - name: Fill Composer's cache
+        if: steps.passed.outputs.full == 'false' && steps.composer-cache.outputs.cache-hit != 'true'
+        run: |
+          set -eu
+          cache="$RUNNER_TEMP/composer-cache"
+          mkdir -p "$cache"
+          chmod -R a+rwX "$cache"
+          docker run --rm --user 1000:1000 \
+            --tmpfs /home/ci:rw,exec,uid=1000,gid=1000,mode=0755,size=3g \
+            --tmpfs /tmp:rw,exec,size=1g \
+            --volume "$cache:/composer-cache" --env COMPOSER_CACHE_DIR=/composer-cache --env COMPOSER_CACHE_READ_ONLY=0 \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            "$CI_IMAGE" sh /workspace/.github/ci/run-on-copy.sh true
+      - name: Save Composer's cache
+        if: steps.passed.outputs.full == 'false' && steps.composer-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/composer-cache
+          key: ${{ steps.composer-cache.outputs.cache-primary-key }}
   # bin/check runs in the CI image (.github/ci/Dockerfile: the PHP image pinned by digest plus the tools bin/check needs),
   # as uid 1000, the same steps on either kind of runner; no step runs the change's code as root or with the Docker socket.
   check:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 20
     steps:
@@ -128,7 +204,8 @@ jobs:
   # The journeys on the change itself, so one that breaks the first install or the live review page fails its own pull
   # request instead of the next nightly run. The steps and container options are those of the journeys job of journeys.yml.
   journeys:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     # Every journey at 300 seconds plus the image build.
     timeout-minutes: 40
@@ -166,7 +243,8 @@ jobs:
   # Doctrine anywhere in src/, or a test in group persistence that the change adds, removes or edits. Every push to
   # main runs the engines regardless, so a change this filter misses is caught on main.
   changes:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 5
     outputs:
@@ -312,7 +390,8 @@ jobs:
   # needed, docker/verify-upgrade.sh on it; every check is in the scripts. One job, because each job on an ephemeral runner
   # is a full machine reset and a build. The full history is fetched for the upgrade check's base commit.
   image:
-    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    needs: main
+    if: ${{ !cancelled() && !failure() && needs.main.outputs.full != 'false' && (github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push') }}
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
     timeout-minutes: 35
     steps:
