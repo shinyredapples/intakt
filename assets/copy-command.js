@@ -10,6 +10,7 @@ const PHONE = '(max-width: 760px)';
 
 const labels = new WeakMap();
 const timers = new WeakMap();
+const clicks = new WeakMap();
 
 // Not a Stimulus controller, because a page the hub cannot reach loads no import map, and its commands must still copy. Listens on the page once, so a command a visit puts in later is covered too.
 export function copyCommands(page, view) {
@@ -19,11 +20,16 @@ export function copyCommands(page, view) {
             copy(button, view);
         }
     });
-    // A page Turbo keeps for going back must come back saying Copy, with no timer left to change it.
-    page.addEventListener('turbo:before-cache', () => page.querySelectorAll(`[${MESSAGE}]`).forEach((button) => restore(button, view)));
+    // A page Turbo keeps for going back must come back saying Copy, with no timer left and no write still pending that could change it.
+    page.addEventListener('turbo:before-cache', () => page.querySelectorAll(COPY_BUTTON).forEach((button) => {
+        clicks.delete(button);
+        if (button.hasAttribute(MESSAGE)) {
+            restore(button, view);
+        }
+    }));
     page.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && view.matchMedia(PHONE).matches) {
-            closeWhy(event.target?.closest?.(WHY));
+            closeWhys(page, event.target);
         }
     });
 }
@@ -33,12 +39,19 @@ async function copy(button, view) {
     if (!button.hasAttribute(MESSAGE)) {
         labels.set(button, button.textContent);
     }
+    const click = {};
+    clicks.set(button, click);
+    let message = COPIED;
     try {
         // A browser without the clipboard (an address that is not localhost or HTTPS) throws here, and is told so like a refusal.
         await view.navigator.clipboard.writeText(button.dataset.copy);
-        show(button, COPIED, view);
     } catch {
-        show(button, FAILED, view);
+        message = FAILED;
+    }
+    // Writes can settle out of order, and a cached page must stay as it was stored, so only the latest click not yet forgotten speaks.
+    if (clicks.get(button) === click) {
+        clicks.delete(button);
+        show(button, message, view);
     }
 }
 
@@ -56,10 +69,12 @@ function restore(button, view) {
     button.textContent = labels.get(button);
 }
 
-function closeWhy(why) {
-    if (!why?.open) {
-        return;
-    }
-    why.open = false;
-    why.querySelector('summary').focus();
+// Closes every open Why, wherever the focus went since; only a focus the closing hides moves back to its summary.
+function closeWhys(page, focus) {
+    page.querySelectorAll(`${WHY}[open]`).forEach((why) => {
+        why.open = false;
+        if (focus?.closest?.(WHY) === why) {
+            why.querySelector('summary').focus();
+        }
+    });
 }

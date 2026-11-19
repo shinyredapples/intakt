@@ -56,6 +56,7 @@ class FakeInsideWhy extends FakeElement {
 class FakePage {
     listeners = new Map();
     buttons = [];
+    whys = [];
 
     addEventListener(type, listener) {
         assert.equal(this.listeners.has(type), false);
@@ -63,9 +64,12 @@ class FakePage {
     }
 
     querySelectorAll(selector) {
-        assert.equal(selector, '[data-copy-message]');
+        if (selector === 'button[data-copy]') {
+            return this.buttons;
+        }
+        assert.equal(selector, 'details.why[open]');
 
-        return this.buttons.filter((button) => button.hasAttribute('data-copy-message'));
+        return this.whys.filter((why) => why.open);
     }
 
     dispatch(type, event = {}) {
@@ -110,6 +114,15 @@ class FakeClipboard {
         this.written.push(text);
 
         return Promise.resolve();
+    }
+}
+
+// Answers each write only when the test says so, to settle writes in any order.
+class FakeSlowClipboard {
+    writes = [];
+
+    writeText() {
+        return new Promise((resolve, reject) => this.writes.push({ resolve, reject }));
     }
 }
 
@@ -215,6 +228,37 @@ test('a page Turbo caches before the two seconds passed keeps Copy and no timer'
     assert.equal(timers.pending.size, 0);
 });
 
+test('a write still pending when Turbo caches the page leaves Copy and no timer once it settles', async () => {
+    const clipboard = new FakeSlowClipboard();
+    const { page, timers, button } = pageWithACommand({ clipboard });
+    page.dispatch('click', { target: button });
+
+    page.dispatch('turbo:before-cache');
+    clipboard.writes[0].resolve();
+    await clipboardAnswered();
+
+    assert.equal(button.textContent, 'Copy');
+    assert.equal(button.hasAttribute('data-copy-message'), false);
+    assert.equal(timers.pending.size, 0);
+});
+
+test('an older write that succeeds after a newer one failed keeps Copy failed', async () => {
+    const clipboard = new FakeSlowClipboard();
+    const { page, timers, button } = pageWithACommand({ clipboard });
+    page.dispatch('click', { target: button });
+    page.dispatch('click', { target: button });
+
+    clipboard.writes[1].reject(new Error('Write permission denied.'));
+    await clipboardAnswered();
+    clipboard.writes[0].resolve();
+    await clipboardAnswered();
+
+    assert.equal(button.textContent, 'Copy failed');
+    assert.equal(timers.pending.size, 1);
+    timers.runPending();
+    assert.equal(button.textContent, 'Copy');
+});
+
 test('a click outside a Copy button copies nothing', async () => {
     const { page, timers, clipboard, button } = pageWithACommand();
 
@@ -230,6 +274,7 @@ test('a click outside a Copy button copies nothing', async () => {
 test('Escape on a phone closes the open Why and gives the focus back to its summary', () => {
     const { page } = pageWithACommand({ phone: true });
     const why = new FakeWhy(true);
+    page.whys.push(why);
 
     page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
 
@@ -237,9 +282,21 @@ test('Escape on a phone closes the open Why and gives the focus back to its summ
     assert.equal(why.summary.focused, true);
 });
 
+test('Escape on a phone closes the open Why after the focus moved to a control outside it, and leaves the focus there', () => {
+    const { page, button } = pageWithACommand({ phone: true });
+    const why = new FakeWhy(true);
+    page.whys.push(why);
+
+    page.dispatch('keydown', { key: 'Escape', target: button });
+
+    assert.equal(why.open, false);
+    assert.equal(why.summary.focused, false);
+});
+
 test('Escape on a wide screen leaves the Why open, because every Why shows there', () => {
     const { page } = pageWithACommand();
     const why = new FakeWhy(true);
+    page.whys.push(why);
 
     page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(why) });
 
@@ -250,14 +307,22 @@ test('Escape on a wide screen leaves the Why open, because every Why shows there
 test('another key or a closed Why changes nothing', () => {
     const { page } = pageWithACommand({ phone: true });
     const open = new FakeWhy(true);
-    const closed = new FakeWhy(false);
+    page.whys.push(open);
 
     page.dispatch('keydown', { key: 'Enter', target: new FakeInsideWhy(open) });
-    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(closed) });
-    page.dispatch('keydown', { key: 'Escape', target: { closest: () => null } });
-    page.dispatch('keydown', { key: 'Escape', target: null });
 
     assert.equal(open.open, true);
     assert.equal(open.summary.focused, false);
+});
+
+test('Escape on a phone with every Why closed moves no focus', () => {
+    const { page } = pageWithACommand({ phone: true });
+    const closed = new FakeWhy(false);
+    page.whys.push(closed);
+
+    page.dispatch('keydown', { key: 'Escape', target: new FakeInsideWhy(closed) });
+    page.dispatch('keydown', { key: 'Escape', target: null });
+
+    assert.equal(closed.open, false);
     assert.equal(closed.summary.focused, false);
 });
