@@ -181,7 +181,7 @@ final class RemoveDemoProjectCommandTest extends KernelTestCase
 
         $this->removal('intakt');
 
-        self::assertCount(2, $this->lastPushedBoard()->filter('#board-octopus.head-character:not([hidden]) img[src*="octopus-waiting-"]'));
+        self::assertCount(2, $this->lastPushedBoard()->filter('#board-octopus.firstday:not([hidden]) img[src*="octopus-waiting-"]'));
     }
 
     public function testARemovalRefusedOutsideTheComposeDemoPushesNothing(): void
