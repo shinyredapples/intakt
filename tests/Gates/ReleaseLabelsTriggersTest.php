@@ -11,12 +11,13 @@ use Symfony\Component\Yaml\Yaml;
 #[CoversNothing]
 final class ReleaseLabelsTriggersTest extends TestCase
 {
-    public function testAPushToAPullRequestTriggersNoReleaseLabelsRunAndOnlyATitleEditLabelsIt(): void
+    public function testOnlyOpeningReopeningOrRetitlingAPullRequestLabelsIt(): void
     {
-        /** @var array{on?: array<string, mixed>, jobs: array{label: array{if: string}}} $workflow */
+        /** @var array{on?: array<string, mixed>, jobs: array{label: array{if: string, concurrency?: mixed}}} $workflow */
         $workflow = Yaml::parseFile(__DIR__.'/../../.github/workflows/release-labels.yml');
 
         self::assertSame(['pull_request' => ['types' => ['opened', 'reopened', 'edited']]], $workflow['on'] ?? null);
         self::assertStringContainsString("&& (github.event.action != 'edited' || github.event.changes.title)", $workflow['jobs']['label']['if']);
+        self::assertSame(['group' => 'release-labels-${{ github.event.pull_request.number }}', 'cancel-in-progress' => true], $workflow['jobs']['label']['concurrency'] ?? null);
     }
 }

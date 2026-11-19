@@ -53,8 +53,8 @@ jobs:
     concurrency:
       group: release-image-latest
       cancel-in-progress: false
-    # Needs gh and docker buildx on the runner, so a CI_RUNS_ON runner must have them; it pulls nothing from Docker Hub.
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '"ubuntu-24.04"') }}
+    # GitHub's image has gh and docker buildx; the job pulls nothing from Docker Hub.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
