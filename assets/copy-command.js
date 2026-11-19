@@ -36,14 +36,17 @@ export function copyCommands(page, view) {
 
 async function copy(button, view) {
     // Read only while the button shows its own label, because a click during a message would keep the message as the label.
-    if (!button.hasAttribute(MESSAGE)) {
+    if (button.hasAttribute(MESSAGE)) {
+        // The 2 s count from the press, so a press just before the old deadline cannot have its write still pending when Copy comes back early.
+        arm(button, view);
+    } else {
         labels.set(button, button.textContent);
     }
     const click = {};
     clicks.set(button, click);
     let message = COPIED;
     try {
-        // A browser without the clipboard (an address that is not localhost or HTTPS) throws here, and is told so like a refusal.
+        // The browser offers the clipboard only in a secure context it allows (HTTPS or a loopback address such as localhost); without it this throws, and is told so like a refusal.
         await view.navigator.clipboard.writeText(button.dataset.copy);
     } catch {
         message = FAILED;
@@ -56,9 +59,13 @@ async function copy(button, view) {
 }
 
 function show(button, message, view) {
-    view.clearTimeout(timers.get(button));
     button.setAttribute(MESSAGE, '');
     button.textContent = message;
+    arm(button, view);
+}
+
+function arm(button, view) {
+    view.clearTimeout(timers.get(button));
     timers.set(button, view.setTimeout(() => restore(button, view), RESET_AFTER_MS));
 }
 

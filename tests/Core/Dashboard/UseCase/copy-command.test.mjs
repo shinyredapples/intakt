@@ -80,11 +80,12 @@ class FakePage {
 class FakeTimers {
     pending = new Map();
     next = 1;
+    now = 0;
 
     setTimeout(callback, delay) {
         assert.equal(delay, 2000);
         const id = this.next++;
-        this.pending.set(id, callback);
+        this.pending.set(id, { callback, at: this.now + delay });
 
         return id;
     }
@@ -96,7 +97,15 @@ class FakeTimers {
     runPending() {
         const due = [...this.pending.values()];
         this.pending.clear();
-        due.forEach((callback) => callback());
+        due.forEach(({ callback }) => callback());
+    }
+
+    advance(ms) {
+        this.now += ms;
+        [...this.pending].filter(([, timer]) => timer.at <= this.now).forEach(([id, { callback }]) => {
+            this.pending.delete(id);
+            callback();
+        });
     }
 }
 
@@ -214,6 +223,32 @@ test('a second click restarts the two seconds and the label still goes back to C
     assert.equal(button.textContent, 'Copied');
     timers.runPending();
     assert.equal(button.textContent, 'Copy');
+});
+
+test('a press just before the deadline with its write pending restarts the two seconds at the press', async () => {
+    const clipboard = new FakeSlowClipboard();
+    const { page, timers, button } = pageWithACommand({ clipboard });
+    page.dispatch('click', { target: button });
+    clipboard.writes[0].resolve();
+    await clipboardAnswered();
+    timers.advance(1900);
+
+    page.dispatch('click', { target: button });
+    timers.advance(100);
+    assert.equal(button.textContent, 'Copied');
+    timers.advance(1900);
+    assert.equal(button.textContent, 'Copy');
+    assert.equal(timers.pending.size, 0);
+
+    clipboard.writes[1].reject(new Error('Write permission denied.'));
+    await clipboardAnswered();
+    assert.equal(button.textContent, 'Copy failed');
+    timers.advance(1999);
+    assert.equal(button.textContent, 'Copy failed');
+    timers.advance(1);
+    assert.equal(button.textContent, 'Copy');
+    assert.equal(button.hasAttribute('data-copy-message'), false);
+    assert.equal(timers.pending.size, 0);
 });
 
 test('a page Turbo caches before the two seconds passed keeps Copy and no timer', async () => {
