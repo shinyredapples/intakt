@@ -72,16 +72,45 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('Nothing is running yet. Start the first review.', $page->filter('.page-head .lead')->text());
     }
 
-    public function testAFreshInstallsBoardShowsTheWaitingOctopusBesideItsOneSetUpLink(): void
+    public function testAFreshInstallsBoardShowsTheWaitingOctopusInEachThemeAsDecoration(): void
     {
-        $head = $this->browser->request('GET', '/')->filter('.page-head');
-        $images = $head->filter('img.character');
+        $images = $this->browser->request('GET', '/')->filter('#board-octopus img.character');
 
         self::assertSame(['', ''], $images->each(static fn (Crawler $image): ?string => $image->attr('alt')));
         self::assertSame([['144', '144', null], ['144', '144', null]], $images->each(static fn (Crawler $image): array => [$image->attr('width'), $image->attr('height'), $image->attr('role')]));
         self::assertSame(1, preg_match('~octopus-waiting-light[^"]*\.webp$~', $images->eq(0)->attr('src') ?? ''));
         self::assertSame(1, preg_match('~octopus-waiting-dark[^"]*\.webp$~', $images->eq(1)->attr('src') ?? ''));
+    }
+
+    public function testAFreshInstallsBoardStacksTheWaitingOctopusAboveTheFirstDayPanelsText(): void
+    {
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(1, $page->filter('main > section.firstday#board-octopus > img.character-light:first-child + img.character-dark + div > h2'));
+        self::assertCount(0, $page->filter('.page-head img.character'));
+    }
+
+    public function testAFreshInstallsBoardGivesTheThreeStepsToItsFirstTask(): void
+    {
+        $panel = $this->browser->request('GET', '/')->filter('#board-octopus');
+
+        self::assertSame('Give Intakt its first task', $panel->filter('h2')->text());
+        self::assertSame('board-octopus-h', $panel->attr('aria-labelledby'));
+        self::assertCount(3, $panel->filter('ol > li'));
+    }
+
+    public function testAFreshInstallsBoardKeepsSetUpIntaktAsItsOnePrimaryHeadAction(): void
+    {
+        $head = $this->browser->request('GET', '/')->filter('.page-head');
+
         self::assertSame(['Set up Intakt'], $head->filter('.btn.primary')->each(static fn (Crawler $link): string => $link->text()));
+    }
+
+    public function testABoardAfterAReviewShowsNoFirstDayPanel(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        self::assertCount(0, $this->browser->request('GET', '/')->filter('.firstday'));
     }
 
     public function testAFreshInstallsBoardShowsOneOctopusOnly(): void
@@ -245,26 +274,33 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame([], $this->cardNumbersIn($page, 'Done'));
     }
 
-    public function testEveryFlowColumnWithoutACardSaysNothingHere(): void
+    public function testOnceAReviewHasRunEveryColumnWithoutACardStillSaysWhatLandsThere(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
         $page = $this->browser->request('GET', '/');
 
+        $empty = array_values(array_filter(BoardColumn::cases(), static fn (BoardColumn $column): bool => BoardColumn::InReview !== $column));
         self::assertSame(
-            ['Backlog', 'Ready', 'Planned', 'Building', 'Checking', 'Merging', 'Done'],
-            $page->filter('.board > section.col:not(.col-needs)')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text()),
+            array_map(static fn (BoardColumn $column): string => $column->value.': '.$column->emptyLine(), $empty),
+            $page->filter('.board > section.col')->reduce(static fn (Crawler $column): bool => 1 === $column->filter('.col-empty')->count())->each(static fn (Crawler $column): string => $column->filter('h3')->text().': '.$column->filter('.col-empty')->text()),
         );
-        self::assertSame(['Nothing here'], array_values(array_unique($page->filter('.col:not(.col-needs) .col-empty')->each(static fn (Crawler $empty): string => $empty->text()))));
     }
 
-    public function testAnEmptyWaitingOnYouColumnSaysNothingNeedsYou(): void
+    public function testAColumnWithACardHasNoEmptyLine(): void
+    {
+        $this->ledger->startRoundOf('42', 'round-1', 1);
+
+        self::assertCount(0, $this->column($this->browser->request('GET', '/'), 'In review')->filter('.col-empty'));
+    }
+
+    public function testAnEmptyWaitingOnYouColumnSaysWhatOnlyYouCanDecideAppearsThere(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
 
         $column = $this->column($this->browser->request('GET', '/'), 'Waiting on you');
 
-        self::assertSame('Nothing needs you', $column->filter('.col-empty')->text());
+        self::assertSame('What only you can decide appears here when Intakt asks you', $column->filter('.col-empty')->text());
     }
 
     public function testOnlyTheFirstColumnIsPinnedAsWaitingOnYou(): void
@@ -619,14 +655,14 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         self::assertSame('2 working', $summary->text());
     }
 
-    public function testABoardWithNobodyRunningSaysNobodyIsWorkingInAPlainLineAboveTheColumns(): void
+    public function testOnceAReviewHasRunABoardWithNobodyRunningSaysInAPlainLineAboveTheColumnsWhatLandsThere(): void
     {
         $this->ledger->startRoundOf('42', 'round-1', 1);
         $this->ledger->judgeRound('round-1');
 
         $page = $this->browser->request('GET', '/');
 
-        self::assertSame('Nobody is working', $page->filter('p.working-none')->text());
+        self::assertSame('Nobody is working yet: reviewers appear here while they review a change', $page->filter('p.working-none')->text());
         self::assertCount(0, $page->filter('details.working, .working summary, .working .chev'));
         self::assertCount(1, $page->filter('p.working-none + section .board-wrap > .board'));
     }
@@ -672,7 +708,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(
-            array_map(static fn (BoardColumn $column): string => $column->firstDayLine(), BoardColumn::cases()),
+            array_map(static fn (BoardColumn $column): string => $column->emptyLine(), BoardColumn::cases()),
             $page->filter('.board > section.col .col-empty')->each(static fn (Crawler $empty): string => $empty->text()),
         );
     }
@@ -699,7 +735,7 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
         $page = $this->browser->request('GET', '/');
 
         self::assertSame(['alpha', 'beta'], $page->filter('.page-head ~ .banner.broken')->each(static fn (Crawler $banner): ?string => $banner->attr('data-project')));
-        self::assertCount(1, $page->filter('.banner + .working-none'));
+        self::assertCount(1, $page->filter('.banner ~ .working-none'));
         self::assertCount(0, $page->filter('.working-none ~ .banner'));
     }
 
@@ -791,6 +827,30 @@ final class ShowBoardControllerTest extends DashboardPageTestCase
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('export function toggleBanners(page)', $this->browser->getInternalResponse()->getContent());
+    }
+
+    public function testABoardWithoutLiveUpdatesStillImportsTheCopyCommandScript(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $page = $this->browser->request('GET', '/');
+
+        self::assertCount(0, $page->filter('script[type="importmap"]'));
+        $script = $page->filter('head script[type="module"]')->text();
+        self::assertStringContainsString(sprintf("import { copyCommands } from '%s';", $packages->getUrl('copy-command.js')), $script);
+        self::assertStringContainsString('copyCommands(document, window);', $script);
+    }
+
+    public function testTheCopyCommandScriptTheBoardImportsIsServedByTheInstall(): void
+    {
+        $packages = self::getContainer()->get(Packages::class);
+        self::assertInstanceOf(Packages::class, $packages);
+
+        $this->browser->request('GET', $packages->getUrl('copy-command.js'));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('export function copyCommands(page, view)', $this->browser->getInternalResponse()->getContent());
     }
 
     public function testTheBoardUsesTheFullWidthOfThePage(): void

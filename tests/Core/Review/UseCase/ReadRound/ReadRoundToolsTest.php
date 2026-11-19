@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\UseCase\ReadRound;
 
 use Intakt\Core\Budget\Infrastructure\ConfiguredPrices;
+use Intakt\Core\Review\Contract\ActEntryAnswer;
 use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
+use Intakt\Core\Review\Contract\Fence;
+use Intakt\Core\Review\Contract\FencedText;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\FixableBy;
 use Intakt\Core\Review\Contract\FlagProjectAsReplay;
@@ -16,6 +19,7 @@ use Intakt\Core\Review\Contract\Mark;
 use Intakt\Core\Review\Contract\PanelVerdict;
 use Intakt\Core\Review\Contract\ReplayMark;
 use Intakt\Core\Review\Contract\Severity;
+use Intakt\Core\Review\Contract\UntrustedSource;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\ReplayProject;
 use Intakt\Core\Review\Domain\ReviewRound;
@@ -67,6 +71,9 @@ use Symfony\Component\Serializer\SerializerInterface;
 #[UsesClass(FlagProjectAsReplay::class)]
 #[UsesClass(ReplayProject::class)]
 #[UsesClass(ReplayMark::class)]
+#[UsesClass(ActEntryAnswer::class)]
+#[UsesClass(Fence::class)]
+#[UsesClass(FencedText::class)]
 final class ReadRoundToolsTest extends KernelTestCase
 {
     private RoundFixture $fixture;
@@ -176,11 +183,58 @@ final class ReadRoundToolsTest extends KernelTestCase
         self::assertArrayNotHasKey('judge_note', $this->firstActEntryAsJson($answer));
     }
 
-    public function testAnActListEntryWithAJudgeNoteDoesNotShowItInTheToolAnswerYet(): void
+    public function testAnActListEntryWithAJudgeNoteShowsItFencedInTheToolAnswer(): void
     {
         $answer = new RoundActList('round', true, [$this->findingAt('A')->withJudgeNote('Rejected.')], ReplayMark::Live);
 
-        self::assertArrayNotHasKey('judge_note', $this->firstActEntryAsJson($answer));
+        self::assertSame('Rejected.', $this->fencedNoteOf($this->firstActEntryAsJson($answer)));
+    }
+
+    public function testTheToolAnswerKeepsItsFieldsBesideTheJudgeNote(): void
+    {
+        $answer = new RoundActList('round', true, [$this->findingAt('A')->withJudgeNote('Rejected.')], ReplayMark::Live);
+
+        /** @var array<string, mixed> $data */
+        $data = json_decode(json_encode($answer, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(['roundId', 'judged', 'act', 'mark'], array_keys($data));
+        self::assertSame(['id', 'severity', 'file', 'line', 'symbol', 'text', 'fixable_by', 'repeat', 'requirement', 'evidence', 'regression', 'merged', 'judge_note'], array_keys($this->firstActEntryAsJson($answer)));
+    }
+
+    public function testAJudgeAnswerThatRejectsAP1LeavesItOnTheActListWithTheJudgesNote(): void
+    {
+        $round = $this->judgedBy(new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'The branch is unreachable.'), new JudgedFinding('F2', Mark::Act)]));
+
+        $act = $this->actList()($round->id()->toRfc4122())->act;
+
+        self::assertSame(['F1' => 'The branch is unreachable.', 'F2' => null], $this->notesOf($act));
+    }
+
+    public function testAJudgeAnswerThatDefersAP2LeavesItOnTheActListWithTheJudgesNote(): void
+    {
+        $round = $this->judgedBy(new Judgement([new JudgedFinding('F1', Mark::Act), new JudgedFinding('F2', Mark::Defer, null, 'Needs its own design.')]));
+
+        $act = $this->actList()($round->id()->toRfc4122())->act;
+
+        self::assertSame(['F1' => null, 'F2' => 'Needs its own design.'], $this->notesOf($act));
+    }
+
+    public function testAP1WithoutAJudgeAnswerHasNoNoteOnTheActList(): void
+    {
+        $round = $this->judgedBy(new Judgement([new JudgedFinding('F2', Mark::Defer, null, 'Needs its own design.')]));
+
+        $act = $this->actList()($round->id()->toRfc4122())->act;
+
+        self::assertSame(['F1' => null, 'F2' => 'Needs its own design.'], $this->notesOf($act));
+    }
+
+    public function testTheJudgesNoteReachesTheToolAnswerFenced(): void
+    {
+        $round = $this->judgedBy(new Judgement([new JudgedFinding('F1', Mark::Reject, null, 'The branch is unreachable.')]));
+
+        $entry = $this->firstActEntryAsJson($this->actList()($round->id()->toRfc4122()));
+
+        self::assertSame('The branch is unreachable.', $this->fencedNoteOf($entry));
     }
 
     public function testTwoFindingsAtOnePlaceGiveOneActEntryThatNamesTheSecondAsMerged(): void
@@ -317,6 +371,24 @@ final class ReadRoundToolsTest extends KernelTestCase
         return $this->fixture->round($round->id()->toRfc4122());
     }
 
+    private function judgedBy(Judgement $judgement): ReviewRound
+    {
+        $round = $this->reviewedRound();
+        $this->fixture->judge(new ScriptedJudgement($judgement))(new JudgeRound($round->id()->toRfc4122()));
+
+        return $round;
+    }
+
+    /**
+     * @param list<Finding> $act
+     *
+     * @return array<string, string|null>
+     */
+    private function notesOf(array $act): array
+    {
+        return array_combine(array_map(static fn (Finding $entry): string => $entry->id, $act), array_map(static fn (Finding $entry): ?string => $entry->judgeNote(), $act));
+    }
+
     /**
      * @param list<Finding> $findings
      */
@@ -376,6 +448,17 @@ final class ReadRoundToolsTest extends KernelTestCase
         $data = json_decode(json_encode($answer, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
 
         return $data['act'][0];
+    }
+
+    /**
+     * @param array<string, mixed> $entry
+     */
+    private function fencedNoteOf(array $entry): ?string
+    {
+        $note = $entry['judge_note'] ?? null;
+        self::assertIsString($note);
+
+        return new Fence()->contentOf(UntrustedSource::ActList, $note);
     }
 
     // At one place, so a finding that is dropped would otherwise be merged with the other.
