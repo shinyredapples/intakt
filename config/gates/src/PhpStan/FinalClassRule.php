@@ -19,10 +19,11 @@ use PHPStan\Rules\RuleErrorBuilder;
  */
 final readonly class FinalClassRule implements Rule
 {
-    private const array REPOSITORY_CODE = ['/src/', '/tests/', '/bin/', '/config/gates/src/'];
+    private RepositoryCode $repositoryCode;
 
-    public function __construct(private string $root)
+    public function __construct(string $root)
     {
+        $this->repositoryCode = new RepositoryCode($root);
     }
 
     public function getNodeType(): string
@@ -35,7 +36,7 @@ final readonly class FinalClassRule implements Rule
      */
     public function processNode(Node $node, Scope $scope): array
     {
-        if (!$this->isRepositoryCode($scope->getFile())) {
+        if (!$this->repositoryCode->contains($scope->getFile())) {
             return [];
         }
 
@@ -57,10 +58,5 @@ final readonly class FinalClassRule implements Rule
         $message = sprintf('Class %s is not final: declare it final, or abstract when it is meant to be extended.', $name);
 
         return RuleErrorBuilder::message($message)->identifier('intakt.finalClass')->line($class->name?->getStartLine() ?? $class->getStartLine())->build();
-    }
-
-    private function isRepositoryCode(string $file): bool
-    {
-        return array_any(self::REPOSITORY_CODE, fn (string $folder): bool => str_starts_with($file, $this->root.$folder));
     }
 }
