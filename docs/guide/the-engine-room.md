@@ -94,7 +94,11 @@ flowchart LR
   c1[Cycle 1] -- changes --> c2[Cycle 2] -- changes --> c3[Cycle 3]
   c3 -- still not approved --> g2[Generation 2:<br/>a stronger model,<br/>fresh cycles]
   g2 -- still not approved --> m[The maintainer agent decides]
+  c3 -. "planned: third send-back" .-> s[Split into smaller tasks, once]
+  s -. "no way to split" .-> r[Rewrite the task, or one more try<br/>with a stronger model]
 ```
+
+Today the task moves on to generation 2 after its last cycle. The dotted arrows are planned: from the third send-back the task is split once instead, as the last bullet below says.
 
 - A task gets a **limited number of cycles**, so a change that keeps failing doesn't burn the budget forever.
 - A **generation** is a set of cycles with one kind of builder. Generation 1 uses the normal model; if it runs out of cycles, **generation 2** starts with a stronger model.
