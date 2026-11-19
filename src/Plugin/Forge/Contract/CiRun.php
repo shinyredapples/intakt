@@ -29,7 +29,7 @@ final readonly class CiRun
             return $order > 0;
         }
 
-        // The forge's run number breaks a tie of two runs created in the same second, and a forge that numbers none leaves it null.
+        // Compared by number too, because the forge stamps creation in whole seconds and two runs of one origin can share one.
         return null !== $this->number && null !== $other->number && $this->number > $other->number;
     }
 }
