@@ -9,8 +9,7 @@ use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Yaml\Yaml;
 
-// Runs the steps themselves from the workflow files, so the tests break when the steps change: the journeys job's decision
-// step of ci.yml and the load step of the CI image action, with a fake git and docker.
+// Runs the steps from the workflow files themselves, so the tests break when the steps change.
 #[CoversNothing]
 final class CiJourneysDecisionTest extends SandboxTestCase
 {
