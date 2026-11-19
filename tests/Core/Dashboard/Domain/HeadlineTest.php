@@ -160,6 +160,25 @@ final class HeadlineTest extends TestCase
         self::assertSame('Nothing is running.', $headline->opening());
     }
 
+    public function testABuildInFlightWithNoReviewerRunningSaysABuildIsRunning(): void
+    {
+        $headline = new Headline(new WhoIsWorking([]), [], 1, 1);
+
+        self::assertSame(['A build is running.', 'A build is running.'], [$headline->opening(), $headline->shortOpening()]);
+    }
+
+    public function testSeveralBuildsInFlightAreCounted(): void
+    {
+        self::assertSame('3 builds are running.', new Headline(new WhoIsWorking([]), [], 3, 3)->opening());
+    }
+
+    public function testARunningReviewerIsNamedBeforeABuildInFlight(): void
+    {
+        $headline = new Headline(new WhoIsWorking([$this->running('sample', '3')]), [], 2, 1);
+
+        self::assertSame('The Code reviewers are reviewing change 3 of sample.', $headline->opening());
+    }
+
     public function testALongProjectNameIsCutToThirtyTwoCharactersWithAnEllipsis(): void
     {
         $headline = $this->headline([$this->running('a-project-with-a-very-long-name-for-tests', '3')], []);
