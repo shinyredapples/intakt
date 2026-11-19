@@ -94,7 +94,18 @@ final readonly class GitHubCiRuns
     private function workflowRunStateOf(array $entry): CiRunState
     {
         // Only a queued first attempt never started, because a queued rerun keeps the first attempt's creation time; check suites stay Unfinished, because one app's suites share one origin.
-        return 'queued' === $this->text($entry, 'status') && 1 === $this->positive($entry, 'run_attempt') ? CiRunState::Queued : $this->stateOf($entry);
+        return 'queued' === $this->text($entry, 'status') && 1 === $this->positive($entry, 'run_attempt') && !$this->withoutItsPullRequest($entry) ? CiRunState::Queued : $this->stateOf($entry);
+    }
+
+    /**
+     * @param array<mixed> $entry
+     */
+    private function withoutItsPullRequest(array $entry): bool
+    {
+        // GitHub leaves out the pull request of a run from a fork, and two unknown pull requests are not one origin.
+        $pulls = $entry['pull_requests'] ?? null;
+
+        return str_starts_with($this->text($entry, 'event'), 'pull_request') && !is_array(is_array($pulls) ? ($pulls[0] ?? null) : null);
     }
 
     /**

@@ -303,6 +303,20 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertTrue($green->isNewerRunOf($queued));
     }
 
+    public function testAQueuedPullRequestRunWhosePullRequestGitHubLeftOutIsUnfinished(): void
+    {
+        $this->runs = 'runs_green_and_queued_without_their_pull_request.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testAQueuedPushRunWithoutAPullRequestIsQueued(): void
+    {
+        $this->runs = 'runs_queued_push_and_newer_green.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Queued], $this->statesOfHead());
+    }
+
     public function testAFailedWorkflowRunIsFailed(): void
     {
         $this->runs = 'runs_failed.json';
@@ -465,6 +479,24 @@ final class GitHubWatchReadsTest extends TestCase
         $this->runs = 'runs_without_workflow_id.json';
 
         $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "workflow_id".'));
+
+        $this->state();
+    }
+
+    public function testAQueuedWorkflowRunWithoutItsRunNumberRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_queued_without_run_number.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "run_number".'));
+
+        $this->state();
+    }
+
+    public function testAQueuedWorkflowRunWithoutItsRunAttemptRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_queued_without_run_attempt.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "run_attempt".'));
 
         $this->state();
     }
