@@ -109,6 +109,17 @@ If either Security engineer session cannot run, the decision waits, whichever ro
 
 You never approve a merge whose checks are failing: Intakt asks you to approve the merge only once the checks are green and the review panel has approved. (Planned:) A decision only you can make, such as a new package from an outside company, is asked as soon as it shows up, so you can answer while the checks are still being fixed.
 
+## Updates from a dependency bot
+
+A dependency bot is a helper on GitHub (such as Dependabot) that opens pull requests to update the packages your project uses. Intakt handles these updates on their own path, not as tasks (planned: not built yet):
+- **No label needed.** Intakt picks up the bot's pull requests by itself. It may only change the package list, the files that pin the exact package versions, and the lines of your CI setup that pin the versions of the CI's own building blocks (GitHub calls them actions); a pull request that changes anything else gets one comment and is left alone.
+- **Checked like any change.** Your project's checks and the review panel look at it as usual, but the builder never edits it. When the update falls behind your project's latest version, the bot brings it up to date itself.
+- **You approve it once.** No person asked for this change, so your approval is always needed before it merges, once the checks are green and every reviewer agrees. Your answer carries forward to a newer version of the bot's pull request only when it updates the same packages and its full set of file changes (including any CI action pins) stays exactly the same; if either differs, you are asked again.
+- **A failing check becomes an urgent task.** If the update breaks a check, Intakt writes one urgent task to fix it, and looks at the update again once that fix is merged.
+- **It lands through GitHub's own merge button.** Intakt merges it the way you would by hand, so GitHub shows it as merged and the bot keeps the credit, and Intakt records the merge as its own.
+
+Intakt also suggests telling the bot to wait a few days before offering a brand-new release (security fixes excepted), so a bad release is usually caught by others first. You cannot hand such a pull request to the builder with `take-over`; see [steering Intakt](steering-intakt.md#taking-an-item-over-by-hand-and-giving-it-back).
+
 ## When something gets stuck
 
 A task can stall for a reason the builder can't fix, for example it needs another task first, or a change to Intakt itself. Instead of trying again and again (which costs money and fixes nothing), Intakt puts it **on hold** and lets it go again on its own when the reason is gone.
@@ -174,7 +185,7 @@ It also avoids waste on purpose: it keeps descriptions and reviews short, doesn'
 | **Main** | the official version of your project |
 | **Merge** | adding a pull request's change to main |
 | **Checks / CI** | the automatic tests that run on every change |
-| **Review** | a reviewer's verdict: approve, or changes needed with a list of findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings counts as changes, unless it names a finding like one of Intakt's own failures, which counts as an answer that could not be read |
+| **Review** | a reviewer's verdict: approve, or changes needed with a list of findings; blocked (held for a person) only when Intakt holds the review back, and a reviewer that answers blocked with findings is recorded as changes, but a changes answer votes for changes only when one of its findings is on the list to fix (with only small points the judge set aside it counts as approving; otherwise, for example when every finding quoted code the change does not hold, so all were dropped, it counts as blocked and can still hold the round back), unless it names a finding like one of Intakt's own failures, which counts as an answer that could not be read |
 | **Protected files** | the project's rules: the checks that judge the code, the CI setup, the agents' instructions |
 | **Hold** | a pause that lifts by itself when its reason is gone |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label on the task |
