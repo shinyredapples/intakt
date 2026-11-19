@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Job\Infrastructure;
 
+use Closure;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
 use Intakt\Core\Job\Contract\JobId;
 use Intakt\Core\Job\Contract\JobServices;
@@ -43,26 +44,19 @@ final readonly class DockerEngine
         return $this->containerIdOf($answer['Id'] ?? null, 'containers/create');
     }
 
-    // With rm and forcerm, so no container of a step is left behind, also after a failed one; the context is streamed from its file, so a large repository does not have to fit in memory.
-    public function build(string $contextFile, string $tag, string $dockerfile): ImageBuild
+    /**
+     * @param Closure(int): string $context
+     */
+    // With rm and forcerm, so no container of a step is left behind, also after a failed one; the context is sent in chunks it hands out, so a large repository does not have to fit in memory.
+    public function build(Closure $context, string $tag, string $dockerfile): ImageBuild
     {
-        $stream = fopen($contextFile, 'r');
-
-        if (false === $stream) {
-            throw DockerEngineFailed::unexpected('build');
-        }
-
-        try {
-            return $this->send('POST', 'build', [
-                'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],
-                'headers' => ['Content-Type' => 'application/x-tar'],
-                'body' => $stream,
-                'timeout' => self::BUILD_IDLE_SECONDS,
-                'max_duration' => self::BUILD_SECONDS,
-            ])->built(200);
-        } finally {
-            fclose($stream);
-        }
+        return $this->send('POST', 'build', [
+            'query' => ['t' => $tag, 'dockerfile' => $dockerfile, 'rm' => 'true', 'forcerm' => 'true'],
+            'headers' => ['Content-Type' => 'application/x-tar'],
+            'body' => $context,
+            'timeout' => self::BUILD_IDLE_SECONDS,
+            'max_duration' => self::BUILD_SECONDS,
+        ])->built(200);
     }
 
     public function start(string $container): void

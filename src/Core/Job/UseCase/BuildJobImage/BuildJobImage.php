@@ -44,13 +44,13 @@ final readonly class BuildJobImage
         return new BuiltJobImage($plan, $build->output, $build->image, $plan->php instanceof PhpProfile ? $this->php->verify($tag, $build->image, $plan->php) : null);
     }
 
-    // Removed in finally, because the file must be gone after the request whether the engine built, refused or could not be reached.
+    // The upload removes the file once the engine read it all; removed in finally as well, because a request that failed before its end leaves it behind.
     private function sent(JobImagePlan $plan, string $directory, string $tag): ImageBuild
     {
         $file = $this->context->of($plan, $directory);
 
         try {
-            return $this->engine->build($file, $tag, $plan->dockerfile);
+            return $this->engine->build($this->context->upload($file), $tag, $plan->dockerfile);
         } finally {
             $this->context->remove($file);
         }
