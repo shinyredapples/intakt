@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Review\UseCase\JudgeRound;
 
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\Finding;
 use Intakt\Core\Review\Contract\JudgedFindings;
+use Intakt\Core\Review\Contract\Verdict;
+use Intakt\Core\Review\Domain\CountedVote;
 use Intakt\Core\Review\Domain\ReviewRound;
 use Intakt\Core\Review\Domain\RoundState;
 use Intakt\Core\Review\Infrastructure\ChangeText;
 use Intakt\Core\Review\Infrastructure\DiffHunks;
 use Intakt\Core\Review\Infrastructure\DiffPaths;
+use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\RunReviewRound\ReviewRounds;
 use Intakt\Core\Review\UseCase\RunReviewRound\RoundLedger;
 use Intakt\Core\Review\UseCase\RunReviewRound\StoredFindings;
@@ -24,6 +28,7 @@ final readonly class JudgedRounds
         private ChangeText $change,
         private DiffHunks $hunks,
         private DiffPaths $paths,
+        private StoredVerdicts $verdicts,
     ) {
     }
 
@@ -69,8 +74,29 @@ final readonly class JudgedRounds
     {
         $this->rounds->withLockedRound($round->id(), function (ReviewRound $locked) use ($judged): void {
             if ($this->findings->markJudged($locked)) {
-                $this->ledger->judgeDone($locked, $judged);
+                $this->ledger->judgeDone($locked, $judged, $this->votesOf($locked, $judged));
             }
         });
+    }
+
+    // Counted once, with the judgement, and recorded with it, so every reader of the round counts the same votes.
+    /**
+     * @return array<string, Decision>
+     */
+    private function votesOf(ReviewRound $round, JudgedFindings $judged): array
+    {
+        $shown = array_map(static fn (Finding $finding): string => $finding->id, $this->findings->openFor($round));
+        $counted = new CountedVote($this->findings->reportedIn($round), $shown, $judged);
+        $votes = [];
+
+        foreach ($round->reviewers() as $reviewer) {
+            $verdict = $this->verdicts->ofReviewer($reviewer);
+
+            if ($verdict instanceof Verdict) {
+                $votes[$reviewer->id()->toRfc4122()] = $counted->of($verdict);
+            }
+        }
+
+        return $votes;
     }
 }

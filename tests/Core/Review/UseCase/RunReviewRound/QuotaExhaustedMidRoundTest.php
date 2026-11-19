@@ -78,7 +78,7 @@ final class QuotaExhaustedMidRoundTest extends KernelTestCase
         self::assertCount(2, $review->reasons);
 
         foreach ($review->reasons as $reason) {
-            self::assertMatchesRegularExpression('/^role-[23] reviewer failed, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $reason);
+            self::assertMatchesRegularExpression('/^role-[23] reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $reason);
         }
     }
 
@@ -90,7 +90,7 @@ final class QuotaExhaustedMidRoundTest extends KernelTestCase
         self::assertCount(3, $review->reasons);
 
         foreach ($review->reasons as $reason) {
-            self::assertMatchesRegularExpression('/^role-\d reviewer failed, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $reason);
+            self::assertMatchesRegularExpression('/^role-\d reviewer blocked, Every provider of the tier is out: anthropic for \d+ s, openai for \d+ s\.$/', $reason);
         }
     }
 

@@ -1,0 +1,13 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Intakt\Gates\Sample;
+
+readonly class Strictness
+{
+    public function limit(): int
+    {
+        return 3;
+    }
+}

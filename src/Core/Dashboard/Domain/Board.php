@@ -12,10 +12,12 @@ final readonly class Board
     /** @var list<Review> */
     private array $cards;
 
+    // The build's tasks come apart from the cards, because a task has no card until the build lane lands, yet it ends the first day (#1792, D5) and keeps its project awake while in flight (docs/design/05-architecture/08-merge.md, Adaptive intervals).
     /**
-     * @param list<Review> $reviews
+     * @param list<Review>    $reviews
+     * @param list<BuildTask> $tasks
      */
-    public function __construct(array $reviews)
+    public function __construct(array $reviews, private array $tasks = [])
     {
         usort($reviews, static fn (Review $one, Review $other): int => $other->latest()->startedAt <=> $one->latest()->startedAt);
         $this->cards = $reviews;
@@ -43,13 +45,41 @@ final readonly class Board
     // From the same lanes and Waiting on you cards the page shows, so the line never tells a different story than the board below it.
     public function headline(): Headline
     {
-        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards));
+        return new Headline($this->whoIsWorking(), $this->cardsIn(BoardColumn::WaitingOnYou), count($this->cards) + count($this->tasks), count($this->tasksInFlight()));
     }
 
-    // A card is a review, so a board without one is an install on which no review has run yet.
+    // The first day is an install with no tasks and no reviews (#1792, D5), so a task the build has recorded ends it, in flight or at rest, before any review has run.
     public function isFirstDay(): bool
     {
-        return [] === $this->cards;
+        return [] === $this->cards && [] === $this->tasks;
+    }
+
+    // One home for the choice, because the page and the pushed board both show it. Idle is "no build or review job running" (docs/design/05-architecture/08-merge.md, Adaptive intervals): no task in flight and every card Done, since no column holds ready tasks yet (#2732).
+    public function mascot(): ?MascotPose
+    {
+        return match (true) {
+            $this->isFirstDay() => MascotPose::Waiting,
+            [] === $this->tasksInFlight() && $this->everyColumnButDoneIsEmpty() => MascotPose::Asleep,
+            default => null,
+        };
+    }
+
+    // The projects at rest while another works, so the project filter can show the asleep octopus for one of them: every card Done and no task in flight (#2732).
+    /**
+     * @return list<string>
+     */
+    public function idleProjects(): array
+    {
+        $busy = [
+            ...array_map(static fn (BuildTask $task): string => $task->project, $this->tasksInFlight()),
+            ...array_map(static fn (Review $card): string => $card->project, array_filter($this->cards, static fn (Review $card): bool => BoardColumn::Done !== $card->column())),
+        ];
+        $projects = [
+            ...array_map(static fn (Review $card): string => $card->project, $this->cards),
+            ...array_map(static fn (BuildTask $task): string => $task->project, $this->tasks),
+        ];
+
+        return array_values(array_diff(array_unique($projects), $busy));
     }
 
     // Null while the column holds a card, because only an empty column says what lands there and when (#2731).
@@ -84,6 +114,14 @@ final readonly class Board
     public function countOf(BoardColumn $column): int
     {
         return count($this->cardsIn($column));
+    }
+
+    /**
+     * @return list<BuildTask>
+     */
+    private function tasksInFlight(): array
+    {
+        return array_values(array_filter($this->tasks, static fn (BuildTask $task): bool => $task->inFlight));
     }
 
     private function everyColumnButDoneIsEmpty(): bool
