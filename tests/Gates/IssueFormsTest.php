@@ -34,33 +34,33 @@ final class IssueFormsTest extends TestCase
 
     public function testThereAreABugReportAndAFeatureRequestForm(): void
     {
-        self::assertSame(['bug_report.yml', 'feature_request.yml'], array_keys($this->forms()));
+        self::assertSame(['bug_report.yml', 'feature_request.yml'], array_keys(self::forms()));
     }
 
     #[DataProvider('forms')]
-    public function testAFormAppliesNoLabelButTriage(array $form): void
+    public function testAFormAppliesNoLabelButTriage(string $path): void
     {
-        $labels = (array) ($form['labels'] ?? []);
+        $labels = (array) ($this->form($path)['labels'] ?? []);
 
         self::assertSame([], array_diff($labels, [self::ALLOWED_LABEL]), 'An issue form may apply only the neutral label triage.');
     }
 
     #[DataProvider('forms')]
-    public function testAFormLinksTheGuideToWritingAGoodTask(array $form): void
+    public function testAFormLinksTheGuideToWritingAGoodTask(string $path): void
     {
-        $markdown = implode("\n", array_map(static fn (array $field): string => (string) ($field['attributes']['value'] ?? ''), $form['body']));
+        $markdown = implode("\n", array_map(static fn (array $field): string => $field['attributes']['value'] ?? '', $this->form($path)['body']));
 
         self::assertStringContainsString(self::GUIDE, $markdown);
     }
 
     #[DataProvider('forms')]
-    public function testEveryFieldOfAFormHasAUniqueId(array $form): void
+    public function testEveryInputOfAFormHasAUniqueId(string $path): void
     {
-        $inputs = array_values(array_filter($form['body'], static fn (array $field): bool => 'markdown' !== $field['type']));
-        $ids = array_map(static fn (array $field): string => (string) ($field['id'] ?? ''), $inputs);
+        $inputs = array_filter($this->form($path)['body'], static fn (array $field): bool => 'markdown' !== $field['type']);
+        $ids = array_values(array_map(static fn (array $field): string => $field['id'] ?? '', $inputs));
 
         self::assertNotContains('', $ids, 'Every input of an issue form needs an id.');
-        self::assertSame($ids, array_unique($ids));
+        self::assertSame($ids, array_values(array_unique($ids)));
     }
 
     public function testThePullRequestTemplateHoldsSummaryEvidenceAndAClosesLine(): void
@@ -74,14 +74,19 @@ final class IssueFormsTest extends TestCase
     }
 
     /**
-     * @return array<string, array{array{labels?: string|list<string>, body: list<array{type: string, id?: string, attributes?: array{value?: string}}>}}>
+     * @return array<string, array{string}>
      */
     public static function forms(): array
     {
         $forms = [];
-        foreach (glob(self::TEMPLATES.'/*.yml') ?: [] as $path) {
+        $paths = glob(self::TEMPLATES.'/*.yml');
+        if (false === $paths) {
+            return $forms;
+        }
+
+        foreach ($paths as $path) {
             if ('config.yml' !== basename($path)) {
-                $forms[basename($path)] = [Yaml::parseFile($path)];
+                $forms[basename($path)] = [$path];
             }
         }
 
@@ -89,10 +94,24 @@ final class IssueFormsTest extends TestCase
     }
 
     /**
+     * @return array{labels?: string|list<string>, body: list<array{type: string, id?: string, attributes?: array{value?: string}}>}
+     */
+    private function form(string $path): array
+    {
+        /** @var array{labels?: string|list<string>, body: list<array{type: string, id?: string, attributes?: array{value?: string}}>} $form */
+        $form = Yaml::parseFile($path);
+
+        return $form;
+    }
+
+    /**
      * @return array{blank_issues_enabled?: bool, contact_links?: list<array{name?: string, url?: string}>}
      */
     private function config(): array
     {
-        return Yaml::parseFile(self::TEMPLATES.'/config.yml');
+        /** @var array{blank_issues_enabled?: bool, contact_links?: list<array{name?: string, url?: string}>} $config */
+        $config = Yaml::parseFile(self::TEMPLATES.'/config.yml');
+
+        return $config;
     }
 }
