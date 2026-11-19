@@ -23,7 +23,7 @@ final readonly class BuildContext
     // As a tar in a folder only the owner can enter, because the engine takes the build context as one in the request body and the file is streamed from there.
     public function of(JobImagePlan $plan, string $directory): string
     {
-        $folder = sys_get_temp_dir().'/'.self::FOLDER_PREFIX.bin2hex(random_bytes(8));
+        $folder = $this->temporaryFolder().'/'.self::FOLDER_PREFIX.bin2hex(random_bytes(8));
         $filesystem = new Filesystem();
         $filesystem->mkdir($folder, 0o700);
         // A name that does not exist yet, because PharData refuses an empty file as a broken archive.
@@ -74,9 +74,15 @@ final readonly class BuildContext
     {
         $folder = dirname($file);
 
-        if (self::FILE_NAME !== basename($file) || sys_get_temp_dir() !== dirname($folder) || !str_starts_with(basename($folder), self::FOLDER_PREFIX)) {
+        if (self::FILE_NAME !== basename($file) || $this->temporaryFolder().'/'.basename($folder) !== $folder || !str_starts_with(basename($folder), self::FOLDER_PREFIX)) {
             throw new LogicException(sprintf('"%s" is not a build context.', $file));
         }
+    }
+
+    // Without trailing slashes, because PHP strips only one of them from a configured temporary directory and the guard compares the path this class built itself.
+    private function temporaryFolder(): string
+    {
+        return rtrim(sys_get_temp_dir(), '/');
     }
 
     private function write(JobImagePlan $plan, string $directory, string $file): void

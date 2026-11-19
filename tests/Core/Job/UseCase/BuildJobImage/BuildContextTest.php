@@ -15,6 +15,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\Process\Process;
 
 #[CoversClass(BuildContext::class)]
 #[UsesClass(JobImagePlan::class)]
@@ -74,6 +75,37 @@ final class BuildContextTest extends TestCase
         $upload(512);
 
         self::assertFileExists($this->file);
+    }
+
+    public function testAContextIsUploadedAndRemovedWhenTheTemporaryDirectoryEndsInSlashes(): void
+    {
+        // In a child process, because PHP reads sys_temp_dir only when it starts.
+        $child = <<<'PHP'
+            require $argv[1];
+            $context = new Intakt\Core\Job\UseCase\BuildJobImage\BuildContext(new Intakt\Core\Job\UseCase\BuildJobImage\ProjectFiles());
+            $plan = Intakt\Core\Job\UseCase\BuildJobImage\JobImagePlan::generated(Intakt\Core\Job\UseCase\BuildJobImage\JobImageSource::Generated, 'FROM scratch');
+            $file = $context->of($plan, sys_get_temp_dir());
+            try {
+                $upload = $context->upload($file);
+                $bytes = 0;
+                while ('' !== ($chunk = $upload(512))) {
+                    $bytes += strlen($chunk);
+                }
+                echo json_encode(['temporary' => sys_get_temp_dir(), 'bytes' => $bytes, 'left' => is_dir(dirname($file))]);
+            } finally {
+                new Symfony\Component\Filesystem\Filesystem()->remove(dirname($file));
+            }
+            PHP;
+        $process = new Process([\PHP_BINARY, '-d', 'sys_temp_dir='.sys_get_temp_dir().'///', '-r', $child, '--', dirname(__DIR__, 5).'/vendor/autoload.php']);
+
+        $process->run();
+
+        self::assertSame(0, $process->getExitCode(), $process->getErrorOutput().$process->getOutput());
+        $seen = json_decode($process->getOutput(), true, flags: \JSON_THROW_ON_ERROR);
+        self::assertIsArray($seen);
+        self::assertStringEndsWith('/', (string) $seen['temporary']);
+        self::assertGreaterThan(0, $seen['bytes']);
+        self::assertFalse($seen['left']);
     }
 
     #[DataProvider('pathsThatAreNoContext')]

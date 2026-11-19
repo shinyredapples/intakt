@@ -320,10 +320,11 @@ final class BuildJobImageCommandTest extends TestCase
     // From what the body reads, because a glob over the shared temp folder would also match the contexts of builds running beside this one.
     private function fileBehind(Closure $body): string
     {
-        $file = new ReflectionFunction($body)->getClosureUsedVariables()['file'] ?? null;
-        self::assertIsString($file);
+        // By its value and not its variable's name, so renaming a local of the upload does not break the test.
+        $files = array_filter(new ReflectionFunction($body)->getClosureUsedVariables(), static fn (mixed $used): bool => is_string($used) && is_file($used));
+        self::assertCount(1, $files);
 
-        return $file;
+        return (string) array_first($files);
     }
 
     private function bodyRead(Closure $body, ?int $disconnectAfter): string
