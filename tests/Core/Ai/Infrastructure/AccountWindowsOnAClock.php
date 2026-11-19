@@ -20,7 +20,7 @@ final class AccountWindowsOnAClock implements AccountCooldowns
     private array $ends = [];
 
     /**
-     * @param list<string> $names
+     * @param non-empty-list<string> $names
      */
     public function __construct(
         private readonly MockClock $clock,
