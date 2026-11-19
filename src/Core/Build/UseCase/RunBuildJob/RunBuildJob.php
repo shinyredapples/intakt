@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Ai\Contract\TierResolver;
+use Intakt\Core\Build\Contract\BuildServices;
 use Intakt\Core\Build\Domain\BuilderPrompt;
 use Intakt\Core\Build\Domain\GatesAtOnce;
 use Intakt\Core\Job\Contract\DockerEngineFailed;
@@ -59,12 +60,16 @@ final readonly class RunBuildJob
     // Beyond the allowance for the script's cleanup and bundle, so the runner's kill, which keeps no output, is a backstop that never fires first.
     private const int SECONDS = self::ALLOWANCE_SECONDS + 600;
 
+    private int $toolTimeLimitSeconds;
+
     public function __construct(
         private TierResolver $tiers,
         private BuilderPrompt $prompts,
         private JobRunner $jobs,
         private Gate $gate,
         private GatesAtOnce $gatesAtOnce,
+        #[Autowire(param: BuildServices::TOOL_TIME_LIMIT)]
+        mixed $toolTimeLimitSeconds,
         private Filesystem $filesystem,
         #[Autowire('%kernel.project_dir%/docker/job/build.sh')]
         private string $buildScript,
@@ -72,6 +77,15 @@ final readonly class RunBuildJob
         #[Autowire('%kernel.project_dir%/var/prompts')]
         private string $promptFolder,
     ) {
+        // Checked as given, because the compiled container would turn a YAML true into a one-second limit before a typed parameter saw it.
+        if (!is_int($toolTimeLimitSeconds)) {
+            throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be a whole number of seconds, not %s.', get_debug_type($toolTimeLimitSeconds)));
+        }
+        // Below the allowance, because a tool call that outlives the session is cut with it anyway.
+        if ($toolTimeLimitSeconds < 1 || $toolTimeLimitSeconds >= self::ALLOWANCE_SECONDS) {
+            throw new InvalidArgumentException(sprintf('The builder\'s tool time limit must be at least 1 second and below the session\'s allowance of %d seconds, not %d.', self::ALLOWANCE_SECONDS, $toolTimeLimitSeconds));
+        }
+        $this->toolTimeLimitSeconds = $toolTimeLimitSeconds;
     }
 
     /**
@@ -146,7 +160,7 @@ final readonly class RunBuildJob
         return new JobSpec(
             $this->idOf($job),
             $job->image,
-            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES)],
+            ['/bin/sh', '-c', $this->filesystem->readFile($this->buildScript), 'intakt-build', self::CLONE, self::PROMPT, $job->branch, $model, (string) self::MAX_TURNS, (string) self::ALLOWANCE_SECONDS, (string) $this->gatesAtOnce->loweringTheDefaultOfAJobWith(self::CPUS, self::MEMORY_BYTES), (string) $this->toolTimeLimitSeconds],
             $inputs,
             new JobLimits(self::MEMORY_BYTES, self::CPUS, self::SECONDS),
             JobEgress::to([self::VENDOR_HOST, ...$this->gate->registryHosts()]),
