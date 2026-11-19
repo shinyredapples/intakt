@@ -8,8 +8,11 @@ use Intakt\Core\Git\Contract\GitCall;
 use Intakt\Core\Git\Contract\HardenedGit;
 use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Domain\Mirrors;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Intakt\Core\Git\Domain\SourceLine;
+use Intakt\Core\Git\Domain\SourceLineNotUnique;
 use Intakt\Core\Git\Domain\TaskBranch;
+use Intakt\Core\Git\UseCase\MakeBuildClone\BranchNameRefused;
 use Intakt\Core\Git\UseCase\MakeBuildClone\BuildCloneNotMade;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildClone;
 use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneCommand;
@@ -17,6 +20,7 @@ use Intakt\Core\Git\UseCase\MakeBuildClone\MakeBuildCloneInput;
 use Intakt\Core\Git\UseCase\UpdateMirror\UpdateMirror;
 use Intakt\Tests\Core\Git\RecordingClock;
 use Intakt\Tests\Core\Git\TemporaryRepository;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -33,8 +37,11 @@ use Symfony\Component\Process\Process;
 #[UsesClass(MakeBuildClone::class)]
 #[UsesClass(MakeBuildCloneInput::class)]
 #[UsesClass(BuildCloneNotMade::class)]
+#[UsesClass(BranchNameRefused::class)]
 #[UsesClass(Mirrors::class)]
+#[UsesClass(ProjectNameRefused::class)]
 #[UsesClass(SourceLine::class)]
+#[UsesClass(SourceLineNotUnique::class)]
 #[UsesClass(TaskBranch::class)]
 #[UsesClass(UpdateMirror::class)]
 #[UsesClass(HardenedGit::class)]
@@ -196,6 +203,26 @@ final class MakeBuildCloneCommandTest extends TestCase
         self::assertDirectoryDoesNotExist($this->clone);
     }
 
+    public function testATaskBranchThatIsMainExitsWithOneAndSaysWhy(): void
+    {
+        $this->givenTheProjectHasAMirror();
+
+        $tester = $this->whenTheCommandRuns('alpha', 'main');
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('the task\'s branch "main" is main itself', $this->displayOnOneLine($tester));
+    }
+
+    public function testAnUnexpectedInvalidArgumentExceptionFromReadingTheTaskPassesThrough(): void
+    {
+        $filesystem = self::createStub(Filesystem::class);
+        $filesystem->method('readFile')->willThrowException(new InvalidArgumentException('unexpected'));
+
+        $this->expectExceptionObject(new InvalidArgumentException('unexpected'));
+
+        $this->whenTheCommandRuns('alpha', 'feat/task', ['--task' => $this->mirrors.'-task.md'], $filesystem);
+    }
+
     private function givenTheSourceBranch(): string
     {
         $this->remote->checkoutNewBranch('feat/big');
@@ -236,10 +263,10 @@ final class MakeBuildCloneCommandTest extends TestCase
     /**
      * @param array<string, string|bool> $options
      */
-    private function whenTheCommandRuns(string $project, string $branch, array $options = []): CommandTester
+    private function whenTheCommandRuns(string $project, string $branch, array $options = [], Filesystem $taskFiles = new Filesystem()): CommandTester
     {
         $application = new Application();
-        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), new Filesystem()));
+        $application->addCommand(new MakeBuildCloneCommand(new MakeBuildClone(new HardenedGit(), new Filesystem(), new Mirrors($this->mirrors)), $taskFiles));
         $tester = new CommandTester($application->find('intakt:build:clone'));
         $tester->execute(['project' => $project, 'branch' => $branch, 'directory' => $this->clone, ...$options]);
 

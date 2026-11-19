@@ -10,7 +10,7 @@ use Intakt\Core\Git\Contract\NetworkGit;
 use Intakt\Core\Git\Contract\NetworkGitFailed;
 use Intakt\Core\Git\Contract\RepositoryAttributesRefused;
 use Intakt\Core\Git\Domain\Mirrors;
-use InvalidArgumentException;
+use Intakt\Core\Git\Domain\ProjectNameRefused;
 use Symfony\Component\Filesystem\Exception\IOException;
 use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Filesystem\Path;
@@ -39,7 +39,7 @@ final readonly class UpdateMirror
     }
 
     /**
-     * @throws InvalidArgumentException
+     * @throws ProjectNameRefused
      * @throws NetworkGitFailed
      * @throws MirrorNotUpdated
      * @throws IOException
