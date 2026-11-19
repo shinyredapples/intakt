@@ -36,7 +36,7 @@ final readonly class WorkflowBlockValue
     {
         $widestBlank = 0;
         // Starts at the header's line number because it counts from one, which makes it the index of the line after the header.
-        for ($index = $header->number;$index < count($lines); ++$index) {
+        for ($index = $header->number; $index < count($lines); ++$index) {
             $lead = $this->lead($lines[$index]);
             if ($this->isBlank($lines[$index])) {
                 $widestBlank = max($widestBlank, $lead);
