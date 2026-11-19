@@ -22,16 +22,25 @@ final readonly class NamesCutAtASpace
         $firstWordsByDirectory = [];
 
         foreach (array_unique($words) as $word) {
-            $cut = strrpos($word, '/');
-            $directory = false === $cut ? '.' : substr($word, 0, $cut);
+            [$directory, $name] = $this->directoryAndNameOf($word);
             $firstWords = $firstWordsByDirectory[$directory] ??= $this->firstWordsOfNamesWithASpaceIn($checkout, $directory);
 
-            if (null === $firstWords || in_array(false === $cut ? $word : substr($word, $cut + 1), $firstWords, true)) {
+            if (null === $firstWords || in_array($name, $firstWords, true)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @return array{string, string}
+     */
+    private function directoryAndNameOf(string $word): array
+    {
+        $cut = strrpos($word, '/');
+
+        return false === $cut ? ['.', $word] : [substr($word, 0, $cut), substr($word, $cut + 1)];
     }
 
     // Null for a directory that cannot be listed, because it may hold such a name.
