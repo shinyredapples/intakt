@@ -10,4 +10,4 @@ Plan task T47. `Plugin/WorkSource` is the contract. No implementation exists yet
 
 ## The `eligibility_label` key
 
-The `watch` section of a project takes the optional `eligibility_label`: the issue label that makes a task eligible (the default family name is `intakt`). `WatchConfiguration` refuses a blank value, including one of only Unicode whitespace such as a no-break space, with the same check as the `repository`, `base` and `task` keys. Test: `tests/Core/Watcher/Infrastructure/WatchConfigurationTest.php`.
+The `watch` section of a project takes the optional `eligibility_label`: the issue label that makes a task eligible; when the key is left out it is unset, and no code reads it yet (the implementation arrives in part 2 of #1602). `WatchConfiguration` refuses a blank value, including one of only Unicode whitespace such as a no-break space, with the same check as the `repository`, `base` and `task` keys. Test: `tests/Core/Watcher/Infrastructure/WatchConfigurationTest.php`.

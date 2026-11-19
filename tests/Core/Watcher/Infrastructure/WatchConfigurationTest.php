@@ -14,7 +14,7 @@ use Symfony\Component\Config\Definition\Processor;
 #[CoversClass(WatchConfiguration::class)]
 final class WatchConfigurationTest extends TestCase
 {
-    public function testAWatchSectionWithEveryKeyIsAccepted(): void
+    public function testAWatchSectionWithOnlyTheRequiredKeysIsAccepted(): void
     {
         $projects = $this->processed(['repository' => '/r', 'base' => 'main', 'task' => 'Review.']);
 
