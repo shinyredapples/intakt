@@ -119,6 +119,7 @@ final class ParkedTasksTest extends KernelTestCase
         $connection->executeStatement('PRAGMA busy_timeout = 0');
         $file = $connection->fetchAssociative('PRAGMA database_list');
         self::assertIsArray($file);
+        self::assertIsString($file['file']);
         $reader = new PDO('sqlite:'.$file['file']);
         $reader->beginTransaction();
         $reader->query('SELECT COUNT(*) FROM '.ParkedTaskRecord::TABLE);
