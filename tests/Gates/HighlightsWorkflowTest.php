@@ -19,6 +19,7 @@ use Symfony\Component\Yaml\Yaml;
 final class HighlightsWorkflowTest extends TestCase
 {
     private const string WORKFLOW = __DIR__.'/../../.github/workflows/highlights.yml';
+    private const string PAGES = 'bin/pages /page --recorded=/workspace/_journey-api';
     private const string MAIN_ONLY = "github.repository == 'shinyredapples/intakt' && github.ref == 'refs/heads/main'";
 
     public function testTheWorkflowRunsOnInputsDailyAndByHand(): void
@@ -39,8 +40,9 @@ final class HighlightsWorkflowTest extends TestCase
     {
         $jobs = $this->workflow()['jobs'];
 
-        // Because jekyll-build-pages reads the Pages settings, the build job may read them; only the publish job may write.
-        self::assertSame(['contents' => 'read', 'pages' => 'read'], $jobs['build']['permissions'] ?? null);
+        // Because jekyll-build-pages reads the Pages settings and bin/journey-record the issues and pull requests, the build
+        // job may read them; only the publish job may write.
+        self::assertSame(['contents' => 'read', 'pages' => 'read', 'issues' => 'read', 'pull-requests' => 'read'], $jobs['build']['permissions'] ?? null);
         self::assertSame(['pages' => 'write', 'id-token' => 'write'], $jobs['publish']['permissions'] ?? null);
     }
 
@@ -80,9 +82,9 @@ final class HighlightsWorkflowTest extends TestCase
         self::assertSame($highlights, $this->assembledPage($highlights));
     }
 
-    public function testTheAssembledPageRunsBinHighlightsBeforeItWritesThePage(): void
+    public function testTheAssembledPageRunsBinPagesOnTheRecordedAnswersBeforeItEscapesThePages(): void
     {
-        self::assertStringStartsWith('bin/highlights && ', $this->pageCommand());
+        self::assertStringStartsWith(self::PAGES.' && ', $this->pageCommand());
     }
 
     public function testThePageStepFailsWhenTheEscapeFails(): void
@@ -105,12 +107,12 @@ final class HighlightsWorkflowTest extends TestCase
     {
         $workspace = sys_get_temp_dir().'/intakt highlights '.bin2hex(random_bytes(6));
         $filesystem = new Filesystem();
-        $filesystem->dumpFile($workspace.'/docs/highlights.md', $highlights);
-        $filesystem->mkdir($workspace.'/page');
+        $filesystem->dumpFile($workspace.'/page/index.md', $highlights);
+        $filesystem->dumpFile($workspace.'/page/journey/index.md', $highlights);
 
         try {
-            $write = substr($this->pageCommand(), strlen('bin/highlights && '));
-            $process = new Process(['sh', '-c', $prelude.str_replace(' /page/index.md', ' '.escapeshellarg($workspace.'/page/index.md'), $write)], $workspace);
+            $write = substr($this->pageCommand(), strlen(self::PAGES.' && '));
+            $process = new Process(['sh', '-c', $prelude.str_replace([' /page/index.md', ' /page/journey/index.md'], [' '.escapeshellarg($workspace.'/page/index.md'), ' '.escapeshellarg($workspace.'/page/journey/index.md')], $write)], $workspace);
             $process->run();
 
             $page = $workspace.'/page/index.md';
