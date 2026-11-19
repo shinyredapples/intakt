@@ -15,9 +15,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
-/**
- * The image points INTAKT_DEMO_RECORDING at this file, so /demo works without a key only while it still reads.
- */
+// The image points INTAKT_DEMO_RECORDING at this file, so /demo works without a key only while it still reads.
 #[CoversClass(RecordingFormat::class)]
 #[UsesClass(Recording::class)]
 #[UsesClass(RecordedLedgerEvent::class)]
@@ -28,7 +26,7 @@ final class ShippedRecordingTest extends TestCase
 
     public function testTheShippedRecordingReadsWithTheCurrentRecordingFormat(): void
     {
-        $recording = self::shipped();
+        $recording = $this->shipped();
 
         self::assertSame('sample-change', $recording->change);
         self::assertNotEmpty($recording->updates);
@@ -36,7 +34,7 @@ final class ShippedRecordingTest extends TestCase
 
     public function testTheShippedRecordingHoldsBothVerdictsAndTheJudgesActList(): void
     {
-        $kinds = array_map(static fn (RecordedLedgerEvent $event): LedgerEventKind => $event->kind, self::shipped()->events);
+        $kinds = array_map(static fn (RecordedLedgerEvent $event): LedgerEventKind => $event->kind, $this->shipped()->events);
 
         self::assertCount(2, array_keys($kinds, LedgerEventKind::VerdictReceived, true));
         self::assertContains(LedgerEventKind::JudgeDone, $kinds);
@@ -46,19 +44,19 @@ final class ShippedRecordingTest extends TestCase
     {
         self::assertMatchesRegularExpression(
             '~^\s+INTAKT_DEMO_RECORDING=/app'.preg_quote(self::SHIPPED, '~').'$~m',
-            self::file('/Dockerfile'),
+            $this->file('/Dockerfile'),
         );
     }
 
     public function testComposeLeavesTheRecordingToEnvLocalSoAnOwnerCanOverrideIt(): void
     {
-        self::assertStringNotContainsString('INTAKT_DEMO_RECORDING', self::file('/compose.yaml'));
+        self::assertStringNotContainsString('INTAKT_DEMO_RECORDING', $this->file('/compose.yaml'));
     }
 
     #[DataProvider('privateText')]
     public function testTheShippedRecordingHoldsNoLocalPathHostOrToken(string $pattern): void
     {
-        self::assertDoesNotMatchRegularExpression($pattern, self::text());
+        self::assertDoesNotMatchRegularExpression($pattern, $this->text());
     }
 
     /**
@@ -73,17 +71,17 @@ final class ShippedRecordingTest extends TestCase
         yield 'a bearer header' => ['~Bearer\s+\S~i'];
     }
 
-    private static function shipped(): Recording
+    private function shipped(): Recording
     {
-        return new RecordingFormat(StoredSerializerFactory::create())->read(self::text());
+        return new RecordingFormat(StoredSerializerFactory::create())->read($this->text());
     }
 
-    private static function text(): string
+    private function text(): string
     {
-        return self::file(self::SHIPPED);
+        return $this->file(self::SHIPPED);
     }
 
-    private static function file(string $path): string
+    private function file(string $path): string
     {
         $text = file_get_contents(dirname(__DIR__, 5).$path);
         self::assertIsString($text);
