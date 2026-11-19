@@ -96,14 +96,15 @@ final class BuildContextTest extends TestCase
                 new Symfony\Component\Filesystem\Filesystem()->remove(dirname($file));
             }
             PHP;
-        $process = new Process([\PHP_BINARY, '-d', 'sys_temp_dir='.sys_get_temp_dir().'///', '-r', $child, '--', dirname(__DIR__, 5).'/vendor/autoload.php']);
+        $process = new Process([PHP_BINARY, '-d', 'sys_temp_dir='.sys_get_temp_dir().'///', '-r', $child, '--', dirname(__DIR__, 5).'/vendor/autoload.php']);
 
         $process->run();
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput().$process->getOutput());
-        $seen = json_decode($process->getOutput(), true, flags: \JSON_THROW_ON_ERROR);
+        $seen = json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
         self::assertIsArray($seen);
-        self::assertStringEndsWith('/', (string) $seen['temporary']);
+        self::assertIsString($seen['temporary']);
+        self::assertStringEndsWith('/', $seen['temporary']);
         self::assertGreaterThan(0, $seen['bytes']);
         self::assertFalse($seen['left']);
     }
