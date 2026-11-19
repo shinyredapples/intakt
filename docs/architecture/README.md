@@ -16,7 +16,7 @@ Code and conventions:
 - [Work intake from GitHub issues](work-intake.md): the work source contract and the `eligibility_label` watch key
 - [Upstream reproductions](upstream-reproductions.md)
 - [The published highlights page](highlights-page.md): where the assembled `docs/highlights.md` is published
-- [Development diagnostics (Mate)](development-diagnostics.md)
+- [Development diagnostics (Mate, profiler)](development-diagnostics.md)
 
 Checks, CI and releases:
 - [Quality gates](quality-gates.md): also the `workflows` gate, zizmor over the GitHub Actions workflows in `.github/`, offline; an inline `# zizmor: ignore[<audit>]` without a reason on the same line fails it
