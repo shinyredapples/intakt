@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Build\Domain;
 use Intakt\Core\Build\Contract\BuildBrief;
 use Intakt\Core\Build\Contract\Rework;
 use Intakt\Core\Build\Domain\BuilderPrompt;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Review\Contract\Evidence;
 use Intakt\Core\Review\Contract\Fence;
 use Intakt\Core\Review\Contract\FencedText;
@@ -89,6 +90,16 @@ final class BuilderPromptTest extends TestCase
 
         self::assertStringContainsString('This build is a rework of a published pull request', $prompt);
         self::assertStringContainsString("The published pull request text to edit:\n\n<<<UNTRUSTED pull request text ", $prompt);
+    }
+
+    public function testAFirstBuildAndAReworkAreToldHowToEndWithAQuestion(): void
+    {
+        foreach ([new BuildBrief($this->plant(1), [], null), $this->rework()] as $brief) {
+            $prompt = $this->promptFor($brief);
+
+            self::assertStringContainsString('write the file '.BuildQuestion::FILE.' in the checkout root instead', $prompt);
+            self::assertStringContainsString('"recommendation" (one of the choices)', $prompt);
+        }
     }
 
     public function testAReworkWithoutFindingsOrCiLogGetsNeitherFence(): void
