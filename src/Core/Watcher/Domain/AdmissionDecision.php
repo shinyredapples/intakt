@@ -12,20 +12,20 @@ final readonly class AdmissionDecision
 {
     public function admissionOf(CiState $ci): HeadAdmission
     {
-        $ci = $this->withoutReplacedCancellations($ci);
+        $ci = $this->withoutReplacedRuns($ci);
 
         // Red wins over pending, because a failure is final while other runs still go.
         return match (true) {
             $ci->has(CiRunState::Failed) => HeadAdmission::Red,
-            $ci->isEmpty(), $ci->has(CiRunState::Unfinished), $ci->has(CiRunState::Cancelled) => HeadAdmission::Pending,
+            $ci->isEmpty(), $ci->has(CiRunState::Queued), $ci->has(CiRunState::Unfinished), $ci->has(CiRunState::Cancelled) => HeadAdmission::Pending,
             default => HeadAdmission::Green,
         };
     }
 
     // Dropped because a newer run of the same origin on the same head replaced it, see docs/design/05-architecture/08-merge.md.
-    private function withoutReplacedCancellations(CiState $ci): CiState
+    private function withoutReplacedRuns(CiState $ci): CiState
     {
-        $kept = array_filter($ci->runs, static fn (CiRun $run): bool => CiRunState::Cancelled !== $run->state
+        $kept = array_filter($ci->runs, static fn (CiRun $run): bool => !in_array($run->state, [CiRunState::Cancelled, CiRunState::Queued], true)
             || !array_any($ci->runs, static fn (CiRun $other): bool => $other->isNewerRunOf($run)));
 
         return new CiState($ci->head, array_values($kept));
