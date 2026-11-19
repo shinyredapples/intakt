@@ -50,4 +50,57 @@ final class MarkdownTextTest extends TestCase
     {
         self::assertSame("before\n\n", MarkdownText::visibleProse("before\n~~~\n## Evidence"));
     }
+
+    public function testAnUnclosedFenceInsideAListItemEndsWithTheItem(): void
+    {
+        self::assertSame("- one\n\n\n\n- two  y", MarkdownText::visibleProse("- one\n\n  ```\n  code\n- two <!-- x --> y"));
+        self::assertSame("1. one\n   text\n\n\n\n\n  after",MarkdownText::visibleProse("1. one\n   text\n\n   ```\n\n   code\n  after"));
+    }
+
+    public function testAClosedFenceInsideAListItemKeepsItsLessIndentedLinesOutside(): void
+    {
+        self::assertSame("- one\n\n- two\n\n", MarkdownText::visibleProse("- one\n  ```\n- two\n```\nrest"));
+    }
+
+    public function testAFenceInsideAnIndentedListItemEndsBelowTheContentOfThatItem(): void
+    {
+        self::assertSame("- one\n - two\n\n\n  three", MarkdownText::visibleProse("- one\n - two\n   ```\n   code\n  three"));
+        self::assertSame("- one\n  text\n\n\n\n  more\n\n", MarkdownText::visibleProse("- one\n  text\n   ```\n  code\n   ```\n  more\n```\nrest"));
+    }
+
+    public function testAnIndentedFenceOutsideAListKeepsItsLessIndentedLines(): void
+    {
+        self::assertSame("text\n\n\n\n\nafter", MarkdownText::visibleProse("text\n\n  ```\ncode\n  ```\nafter"));
+        self::assertSame("1. one\n\n\n\nafter", MarkdownText::visibleProse("1. one\n  ```\ncode\n  ```\nafter"));
+        self::assertSame("- one\n\ntext\n\n\n\nafter", MarkdownText::visibleProse("- one\n\ntext\n  ```\ncode\n  ```\nafter"));
+    }
+
+    public function testACommentMarkerInsideACodeSpanIsVisible(): void
+    {
+        self::assertSame('Output: `<!-- E1 -->` done', MarkdownText::visible('Output: `<!-- E1 -->` done'));
+        self::assertSame('a ``<!-- ` -->`` b', MarkdownText::visibleProse('a ``<!-- ` -->`` b'));
+        self::assertSame('`<!--` and E1', MarkdownText::visible('`<!--` and E1'));
+    }
+
+    public function testABacktickWithoutItsPairOpensNoCodeSpan(): void
+    {
+        self::assertSame('a ` b  c', MarkdownText::visible('a ` b <!-- x --> c'));
+        self::assertSame("a ` b\n\n ` c", MarkdownText::visible("a ` b\n\n<!-- x --> ` c"));
+    }
+
+    public function testABacktickInsideAnHtmlCommentOpensNoCodeSpan(): void
+    {
+        self::assertSame('a  ` E2', MarkdownText::visible('a <!-- ` E1 --> ` E2'));
+    }
+
+    public function testAListItemLineHasTheColumnOfItsContent(): void
+    {
+        self::assertSame([2, 3, 5, 2, 4], array_map(MarkdownText::listItemColumnOf(...), ['- a', '1. a', '  -  a', '-      code', MarkdownText::withSpacesForTabs("-\ta")]));
+        self::assertSame([null, null, null], array_map(MarkdownText::listItemColumnOf(...), ['* * *', 'text', '-a']));
+    }
+
+    public function testTabsInTheIndentRunToTheNextTabStop(): void
+    {
+        self::assertSame(['    a', '    a', "1.  a\tb"], array_map(MarkdownText::withSpacesForTabs(...), ["\ta", "  \ta", "1.\ta\tb"]));
+    }
 }

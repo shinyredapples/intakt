@@ -85,6 +85,28 @@ final class PullRequestTextRuleTest extends TestCase
         self::assertSame([1], PullRequestTextRule::judge("~~~markdown\n```\n~~~\n\n## Evidence\n- E1. Red and green results\n", 'Completed.')->missingItems);
     }
 
+    public function testABodyMissingTheItemAfterAHeadingNestedInAnItemIsRefused(): void
+    {
+        $outcome = PullRequestTextRule::judge("## Evidence\n- E1. first\n\n  ### Details\n\n  More text.\n\n- E2. second", 'E1: done');
+
+        self::assertSame([PullRequestTextVerdict::MissingEvidenceReference, [2]], [$outcome->verdict, $outcome->missingItems]);
+    }
+
+    public function testABodyMissingAnItemWithATabAfterItsMarkerIsRefused(): void
+    {
+        self::assertSame([1], PullRequestTextRule::judge("## Evidence\n-\tE1. output", 'Done')->missingItems);
+    }
+
+    public function testABodyMissingTheItemAfterAnUnclosedFenceInAnItemIsRefused(): void
+    {
+        self::assertSame([2], PullRequestTextRule::judge("## Evidence\n- E1. output\n\n  ```\n  example\n- E2. second result", 'E1: done')->missingItems);
+    }
+
+    public function testAReferenceInsideCommentMarkersInACodeSpanCounts(): void
+    {
+        self::assertSame([], PullRequestTextRule::judge("## Evidence\n- E1. output", 'Output: `<!-- E1 -->`')->missingItems);
+    }
+
     public function testATaskWithoutEvidenceAsksForNoReference(): void
     {
         self::assertTrue(PullRequestTextRule::judge('Fix the typo.', 'Fixed.')->passed());

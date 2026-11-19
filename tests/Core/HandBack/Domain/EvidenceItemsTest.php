@@ -140,6 +140,57 @@ final class EvidenceItemsTest extends TestCase
         self::assertSame(1, EvidenceItems::countIn("<!--\n## Evidence\n- E1. hidden\n- E2. hidden\n-->\n## Evidence\n- E1. shown\n"));
     }
 
+    public function testAnAtxHeadingIndentedIntoAnItemBelongsToThatItem(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n- E1. first\n\n  ### Details\n\n  More text.\n\n- E2. second"));
+    }
+
+    public function testASetextHeadingIndentedIntoAnItemBelongsToThatItem(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n- E1. first\n\n  Details\n  -------\n\n- E2. second"));
+    }
+
+    public function testAHeadingIndentedIntoAnItemUnderAnEvidenceLabelBelongsToThatItem(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("Evidence:\n- E1. first\n\n  ### Details\n\n- E2. second"));
+        self::assertSame(2, EvidenceItems::countIn("Evidence:\n- E1. first\n\n  Details\n  =======\n\n- E2. second"));
+    }
+
+    public function testAHeadingAtTheContentColumnOfAnOrderedItemBelongsToThatItem(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n1. E1. first\n\n   ### Details\n\n2. E2. second"));
+    }
+
+    public function testAHeadingWithoutIndentAfterAnItemEndsTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1. first\n\n## Notes\n- not evidence"));
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1. first\n\nNotes\n-----\n- not evidence"));
+        self::assertSame(1, EvidenceItems::countIn("Evidence:\n- E1. first\n\n## Notes\n- not evidence"));
+    }
+
+    public function testAHeadingIndentedLessThanTheContentOfTheItemEndsTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1. first\n\n ## Notes\n- not evidence"));
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n1. E1. first\n\n  ## Notes\n- not evidence"));
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n1. E1. first\n\n  Notes\n  -----\n- not evidence"));
+    }
+
+    public function testAHeadingAfterAParagraphThatEndedTheListEndsTheSection(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1. first\n\nA paragraph.\n\n  ## Notes\n- not evidence"));
+    }
+
+    public function testAnItemWithATabAfterItsMarkerIsCounted(): void
+    {
+        self::assertSame(1, EvidenceItems::countIn("## Evidence\n-\tE1. output"));
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n1.\tE1. output\n\n\tmore of it\n2.\tE2. second"));
+    }
+
+    public function testAnUnclosedFenceInsideAnItemEndsWithThatItem(): void
+    {
+        self::assertSame(2, EvidenceItems::countIn("## Evidence\n- E1. output\n\n  ```\n  example\n- E2. second result"));
+    }
+
     public function testOnlyTheFirstEvidenceSectionCounts(): void
     {
         self::assertSame(1, EvidenceItems::countIn("## Evidence\n- E1\n\n## Evidence\n- E1\n- E2\n"));
