@@ -96,12 +96,12 @@ flowchart TD
   pr[Pull request, CI green] --> panel[Each reviewer reads it,<br/>on its own]
   panel --> probes[Planned: reviewers may run small tests<br/>in a sealed sandbox]
   probes --> verdicts[Each returns a verdict:<br/>approve, or changes with findings;<br/>blocked only when Intakt holds it back]
-  verdicts --> judge[A quick judge step sorts the findings:<br/>P1 and P2 are always fixed now,<br/>a P3 is fixed now, later, or not at all]
+  verdicts --> judge[A quick judge step sorts the findings:<br/>serious findings it is given stay on the to-fix list,<br/>a small one is fixed now, later, or not at all]
   judge -- something to fix now --> build[Back to the builder]
   judge -- nothing to fix now --> pass[The panel approves]
 ```
 
-- **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: never blocks; a small fix in a file the change already touches is marked "fix now", anything bigger becomes a follow-up task). The judge step cannot set a P1 or P2 aside: when it thinks one is not needed, the finding still goes to the builder, with the judge's reason written beside it. From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
+- **Findings have a severity:** P1 (wrong or unsafe: always blocks), P2 (a real defect: blocks), P3 (a nice-to-have: never blocks; a small fix in a file the change already touches is marked "fix now", a bigger one becomes a follow-up task, or is set aside when the judge finds it not needed). A quick plain check first drops a finding that quotes code the change does not contain; the judge step cannot set a P1 or P2 aside that the check kept: when it thinks one is not needed, the finding still goes to the builder, with the judge's reason written beside it. From the second review round on, a new P1 or P2 only keeps its severity when it is something the change broke or it names a rule or task requirement it breaks; otherwise it is lowered to P3, so reviewers cannot keep moving the goalposts.
 - **A finding keeps its name:** each finding gets a short id (F1, F2, ...). On the next round, every reviewer is shown the findings still open, says which ones are fixed, and a problem that is still there keeps its id, so one problem can be followed from round to round.
 - **All reviewers at once:** the core panel's reviewers read the same version at the same time, and none waits for another to approve first, so the builder gets every finding in one go instead of one extra round per reviewer.
 - **Evidence beats opinion:** a reviewer will be able to write a small test, run it against the change, and attach the result to its finding (planned: today reviewers read the change and run nothing).
