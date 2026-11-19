@@ -77,7 +77,7 @@ final readonly class Verdict
         return clone ($this, ['verdict' => Decision::Changes]);
     }
 
-    // A model can name the id too, so a caller that answers a stop request also checks the ledger for one.
+    // The id alone proves no stop, so a caller that answers a stop request also checks the ledger for one.
     #[Ignore]
     public function isStopped(): bool
     {
