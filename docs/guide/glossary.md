@@ -6,8 +6,8 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 |---|---|---|
 | **Acceptance** | the checkable results that say a task is done | [writing a good task](writing-a-good-task.md) |
 | **Advisory reviewer** | a specialist whose notes become follow-ups but never block | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
-| **Approval** | your OK, from your own account, naming one exact version | [steering](steering-intakt.md#approving) |
 | **AI engineer** (planned, optional) | the AI agent that looks at where model tokens go and how the agents work, and tries better prompts, skills or model choices as measured experiments | [how it works](how-intakt-works.md) |
+| **Approval** | your OK, from your own account, naming one exact version | [steering](steering-intakt.md#approving) |
 | **Approval on the spot** | Intakt approving a change to the rules itself, at once, when no hard limit is touched, a mechanical check proves the change harmless, the Security engineer's security review agrees and its penetration test fails to get around the change; otherwise you are asked (planned) | [safety](why-the-ai-cant-wreck-your-project.md#when-intakt-asks-you-and-why) |
 | **Back-off** | a short wait after a failure before trying again | [engine room](the-engine-room.md#budgets-windows-and-pace) |
 | **Blocking reviewer** | a reviewer that must approve before a merge | [how it works](how-intakt-works.md#which-reviewers-look-at-a-change) |
@@ -54,11 +54,11 @@ The words used across Intakt's guides and dashboard, in plain terms. Each entry 
 | **P1, P2, P3** | finding severities: wrong or unsafe, a real defect, a nice-to-have | [journey](the-journey-of-a-task.md#5-reviewing) |
 | **Pace** | the week's use compared with how much of the week has passed | [costs](accounts-and-costs.md) |
 | **Parked** | waiting for something outside (CI, you), with the bench given back | [engine room](the-engine-room.md#holds-hand-overs-and-caps) |
-| **Penetration tester** | the Security engineer trying to get around a change to the project's rules before it is approved (formerly the attacker) (planned) | [safety](why-the-ai-cant-wreck-your-project.md#when-intakt-asks-you-and-why) |
+| **Penetration tester** (planned) | the Security engineer trying to get around a change to the project's rules before it is approved (formerly the attacker) | [safety](why-the-ai-cant-wreck-your-project.md#when-intakt-asks-you-and-why) |
 | **Plugin** | a swappable connection to a forge, an AI company or a notifier | [writing a plugin](writing-a-plugin.md) |
-| **Product owner** | you, the person, not a model: you decide what gets built and what only a person may (also just the owner) | [steering](steering-intakt.md) |
 | **Priority** | `urgent`, `high`, `normal` or `low`, set as a label | [steering](steering-intakt.md) |
 | **Probe** | a small test a reviewer writes and runs against the change (planned, not built yet) | [containers](containers-and-services.md#can-reviewers-use-them) |
+| **Product owner** | you, the person, not a model: you decide what gets built and what only a person may (also just the owner) | [steering](steering-intakt.md) |
 | **Project memory** | the notebook of what was learned, kept per project | [project memory](project-memory.md) |
 | **Protected files** | the project's rules: the checks, the CI setup, the agents' instructions | [safety](why-the-ai-cant-wreck-your-project.md) |
 | **Pull request (PR)** | a finished change waiting to be merged | |

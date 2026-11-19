@@ -61,7 +61,7 @@ flowchart LR
 | **Waiting on you** | only a person can move it on (see below) |
 | **Backlog** | written, but not ready yet (unclear, waiting on another task) |
 | **Ready** | in the queue, waiting for a free Developer |
-| **Planned** | the Developer wrote a plan that waits for your approval (only when plan approval is on) |
+| **Planned** | the Tech lead wrote a plan that waits for your approval (only when plan approval is on) |
 | **Building** | a Developer is working on it |
 | **Checking** | the checks run on the finished work |
 | **In review** | the Code reviewers are reading it |
