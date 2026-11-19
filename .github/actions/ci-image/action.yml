@@ -13,6 +13,7 @@ runs:
         set -eu
         hash=$(.github/ci/build-image.sh --print-hash)
         echo "key=intakt-ci-image-$hash" >> "$GITHUB_OUTPUT"
+        echo "hash=$hash" >> "$GITHUB_OUTPUT"
         if docker image inspect "intakt-ci:$hash" > /dev/null 2>&1; then echo "present=true" >> "$GITHUB_OUTPUT"; fi
     - id: restore
       if: steps.name.outputs.present != 'true'
@@ -20,6 +21,21 @@ runs:
       with:
         path: ${{ runner.temp }}/intakt-ci-image.tar
         key: ${{ steps.name.outputs.key }}
+    # A build reuses the layers of main's earlier builds from the build action's own cache (scope intakt-ci-image), so
+    # a change to the image's definition rebuilds the changed layers only. Only a run on main writes it. The build takes no
+    # secret or build argument, so no token reaches a cached layer. build-image.sh then finds the image and reuses it.
+    - if: steps.name.outputs.present != 'true' && steps.restore.outputs.cache-hit != 'true'
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+    - if: steps.name.outputs.present != 'true' && steps.restore.outputs.cache-hit != 'true'
+      uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      with:
+        context: .
+        file: .github/ci/Dockerfile
+        tags: intakt-ci:${{ steps.name.outputs.hash }}
+        load: true
+        push: false
+        cache-from: type=gha,scope=intakt-ci-image
+        cache-to: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'type=gha,scope=intakt-ci-image,mode=max,ignore-error=true' || '' }}
     - shell: bash
       run: |
         set -eu
