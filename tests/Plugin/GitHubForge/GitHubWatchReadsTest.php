@@ -278,6 +278,31 @@ final class GitHubWatchReadsTest extends TestCase
         self::assertSame([CiRunState::Succeeded, CiRunState::Queued], $this->statesOfHead());
     }
 
+    public function testAGreenRunOfAnotherWorkflowWithTheSameNameIsNotANewerRunOfAQueuedOne(): void
+    {
+        $this->runs = 'runs_queued_and_green_of_another_workflow_of_the_same_name.json';
+
+        [$queued, $green] = $this->state()->runs;
+
+        self::assertFalse($green->isNewerRunOf($queued));
+    }
+
+    public function testAQueuedRerunIsUnfinishedBecauseItKeepsTheCreationTimeOfItsFirstAttempt(): void
+    {
+        $this->runs = 'runs_green_and_queued_rerun.json';
+
+        self::assertSame([CiRunState::Succeeded, CiRunState::Unfinished], $this->statesOfHead());
+    }
+
+    public function testOfTwoRunsCreatedInTheSameSecondTheHigherRunNumberIsTheNewerRun(): void
+    {
+        $this->runs = 'runs_green_and_queued_in_the_same_second.json';
+
+        [$green, $queued] = $this->state()->runs;
+
+        self::assertTrue($green->isNewerRunOf($queued));
+    }
+
     public function testAFailedWorkflowRunIsFailed(): void
     {
         $this->runs = 'runs_failed.json';
@@ -326,7 +351,7 @@ final class GitHubWatchReadsTest extends TestCase
 
         $run = $this->state()->runs[0];
 
-        self::assertSame('ci|pull_request|https://github.com/acme/widgets/pull/7|2026-11-02T09:00:00+00:00', $run->origin->name.'|'.$run->origin->event.'|'.$run->origin->change?->value.'|'.$run->startedAt->format('c'));
+        self::assertSame('10|pull_request|https://github.com/acme/widgets/pull/7|2026-11-02T09:00:00+00:00|1', $run->origin->name.'|'.$run->origin->event.'|'.$run->origin->change?->value.'|'.$run->startedAt->format('c').'|'.$run->number);
     }
 
     public function testACheckSuiteIsNamedAfterItsAppAndItsEventIsCheckSuite(): void
@@ -431,6 +456,15 @@ final class GitHubWatchReadsTest extends TestCase
         $this->runs = 'runs_no_conclusion.json';
 
         $this->expectException(ForgeReadFailed::class);
+
+        $this->state();
+    }
+
+    public function testAWorkflowRunWithoutItsWorkflowIdRaisesAReadFailure(): void
+    {
+        $this->runs = 'runs_without_workflow_id.json';
+
+        $this->expectExceptionObject(new ForgeReadFailed('GitHub answered without a positive "workflow_id".'));
 
         $this->state();
     }
