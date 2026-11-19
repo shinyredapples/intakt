@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Intakt\Tests\Core\Review\Infrastructure;
 
 use Intakt\Core\Ai\Contract\Provider;
+use Intakt\Core\Review\Infrastructure\ClaudeCodeJobEvents;
+use Intakt\Core\Review\Infrastructure\ReportedUsage;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
 use Intakt\Core\Review\Infrastructure\ReviewJobAnswer;
 use Intakt\Core\Review\Infrastructure\ReviewJobFailure;
@@ -14,6 +16,8 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
 
 #[CoversClass(ReviewJobAnswer::class)]
+#[CoversClass(ClaudeCodeJobEvents::class)]
+#[CoversClass(ReportedUsage::class)]
 #[CoversClass(ReviewJobFailure::class)]
 #[UsesClass(ReviewJob::class)]
 final class ReviewJobAnswerTest extends TestCase

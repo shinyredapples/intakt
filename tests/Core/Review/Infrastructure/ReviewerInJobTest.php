@@ -26,9 +26,11 @@ use Intakt\Core\Review\Contract\ReviewRequest;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Contract\VerdictParser;
 use Intakt\Core\Review\Contract\VerdictUnreadable;
+use Intakt\Core\Review\Infrastructure\ClaudeCodeJobEvents;
 use Intakt\Core\Review\Infrastructure\HeadClones;
 use Intakt\Core\Review\Infrastructure\JobPrompt;
 use Intakt\Core\Review\Infrastructure\OpenFindingIds;
+use Intakt\Core\Review\Infrastructure\ReportedUsage;
 use Intakt\Core\Review\Infrastructure\ReviewerInJob;
 use Intakt\Core\Review\Infrastructure\ReviewerPrompt;
 use Intakt\Core\Review\Infrastructure\ReviewJob;
@@ -57,6 +59,8 @@ use Symfony\Component\Validator\Validation;
 #[CoversClass(OpenFindingIds::class)]
 #[UsesClass(ReviewJob::class)]
 #[UsesClass(ReviewJobAnswer::class)]
+#[UsesClass(ClaudeCodeJobEvents::class)]
+#[UsesClass(ReportedUsage::class)]
 #[UsesClass(ReviewJobImages::class)]
 #[UsesClass(ReviewJobRequest::class)]
 #[UsesClass(ReviewerPrompt::class)]
