@@ -178,7 +178,7 @@ final class StartCheckScriptTest extends TestCase
             self::markTestSkipped('This case needs bash, because only bash reads SHELLOPTS from its environment.');
         }
 
-        // Bash under the name sh, as in an image whose /bin/sh is bash: the host's own /bin/sh may be a shell that ignores SHELLOPTS.
+        // Bash under the name sh, because the host's own /bin/sh may be a shell that ignores SHELLOPTS, unlike an image whose /bin/sh is bash.
         symlink($bash, $this->root.'/sh');
         $environment = [...$this->environment(null, (string) getenv('PATH')), 'SHELLOPTS' => 'allexport'];
 
