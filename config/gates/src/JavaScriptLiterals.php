@@ -25,11 +25,13 @@ final readonly class JavaScriptLiterals
 
     public int $length;
     private string $wordBytes;
+    private string $spaces;
 
     public function __construct(
         public string $source,
     ) {
         $this->length = strlen($source);
+        $this->spaces = '/\G(?:['.preg_quote(self::WHITESPACE, '/').']|'.implode('|', array_map(static fn (string $space): string => preg_quote($space, '/'), [self::NO_BREAK_SPACE, ...self::THREE_BYTE_SPACES])).')*/';
         // Because any byte of a multibyte character may be part of an identifier, except the lead bytes that Unicode spaces and line ends start with, which are checked on their own.
         $this->wordBytes = self::WORD_ASCII.implode('', array_map(chr(...), array_diff(range(0x80, 0xFF), array_map(ord(...), str_split(self::SPACE_LEADS)))));
     }
@@ -91,7 +93,7 @@ final readonly class JavaScriptLiterals
     // Because `a?.5:b` is a conditional with a decimal, `?.` chains only when no digit follows it.
     public function optionalChainingAt(int $offset): bool
     {
-        return '.' === ($this->source[$offset + 1] ?? '') && !ctype_digit($this->source[$offset + 2] ?? '');
+        return 1 === preg_match('/\G\?\.(?![0-9])/', $this->source, offset: $offset);
     }
 
     public function colonFollows(int $offset): bool
@@ -102,13 +104,10 @@ final readonly class JavaScriptLiterals
     // Because the lexer reads these spaces again as tokens, a lookahead over them reads each byte at most twice.
     private function afterSpaces(int $offset): int
     {
-        do {
-            $offset += strspn($this->source, self::WHITESPACE, $offset);
-            $space = $this->multibyteSpaceLengthAt($offset);
-            $offset += $space;
-        } while (0 < $space);
+        $spaces = [];
+        preg_match($this->spaces, $this->source, $spaces, offset: $offset);
 
-        return $offset;
+        return $offset + strlen($spaces[0] ?? '');
     }
 
     public function afterNumber(int $offset): int
