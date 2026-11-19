@@ -748,7 +748,7 @@ final class BuildScriptTest extends TestCase
         chmod($this->bin.'/git', 0o755);
     }
 
-    // The given call of sha256sum prints nothing and exits with the status; every other call is the real tool.
+    // Only the given call fails or prints nothing, because the script hashes once before the session and once after it, and each side has a rule of its own.
     private function givenTheDigestFailsOnItsCall(int $call, int $status = 1): void
     {
         $digest = (string) new ExecutableFinder()->find('sha256sum');
