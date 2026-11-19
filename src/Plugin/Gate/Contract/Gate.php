@@ -17,4 +17,7 @@ interface Gate
      * @return list<string>
      */
     public function registryHosts(): array;
+
+    // Null when the gate names no lock inputs (a project's own command installs what it needs), so the check installs every time.
+    public function dependencyStep(?string $configuredCommand): ?DependencyStep;
 }
