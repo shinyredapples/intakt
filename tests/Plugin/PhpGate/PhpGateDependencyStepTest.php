@@ -292,19 +292,24 @@ final class PhpGateDependencyStepTest extends TestCase
             $run();
         } finally {
             foreach ($saved as $name => [$env, $server, $process]) {
-                if (null === $env) {
-                    unset($_ENV[$name]);
-                } else {
-                    $_ENV[$name] = $env;
-                }
-                if (null === $server) {
-                    unset($_SERVER[$name]);
-                } else {
-                    $_SERVER[$name] = $server;
-                }
+                $this->restore($_ENV, $name, $env);
+                $this->restore($_SERVER, $name, $server);
                 putenv(false === $process ? $name : $name.'='.$process);
             }
         }
+    }
+
+    /**
+     * @param array<array-key, mixed> $variables
+     */
+    private function restore(array &$variables, string $name, mixed $value): void
+    {
+        if (null === $value) {
+            unset($variables[$name]);
+
+            return;
+        }
+        $variables[$name] = $value;
     }
 
     private function runInProject(string $command): Process
