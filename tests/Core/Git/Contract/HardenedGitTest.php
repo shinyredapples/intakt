@@ -346,10 +346,9 @@ final class HardenedGitTest extends TestCase
 
         self::assertSame($decoy."\n", $this->runGit(['git', '--git-dir='.$mirror, '--bare', 'rev-parse', '--show-toplevel'], [], $mirror), 'the setting must beat a plain bare pin, or this test proves nothing');
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('/mirror.git names a work tree in its config (core.worktree), so a bare call refuses it');
+        $refusal = $this->bareRefusal(RuntimeException::class, $mirror);
 
-        new HardenedGit()->callInBareRepository(['status', '--short'], $mirror);
+        self::assertStringEndsWith('/mirror.git names a work tree in its config (core.worktree), so a bare call refuses it', $refusal);
     }
 
     public function testABareCallReadsTheGitDirectoryOfACheckoutWithoutItsWorkTree(): void
@@ -368,10 +367,9 @@ final class HardenedGitTest extends TestCase
     {
         $this->repository->configure('core.worktree', $this->decoy());
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('/.git names a work tree in its config (core.worktree), so a bare call refuses it');
+        $refusal = $this->bareRefusal(RuntimeException::class, $this->repository->path.'/.git');
 
-        new HardenedGit()->callInBareRepository(['rev-parse', 'HEAD'], $this->repository->path.'/.git');
+        self::assertStringEndsWith('/.git names a work tree in its config (core.worktree), so a bare call refuses it', $refusal);
     }
 
     public function testABareCallRefusesAGitDirectoryWhoseConfigNamesItselfAsTheWorkTree(): void
@@ -379,10 +377,7 @@ final class HardenedGitTest extends TestCase
         $gitDirectory = (string) realpath($this->repository->path.'/.git');
         $this->repository->configure('core.worktree', $gitDirectory);
 
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('names a work tree in its config');
-
-        new HardenedGit()->callInBareRepository(['rev-parse', 'HEAD'], $gitDirectory);
+        self::assertStringContainsString('names a work tree in its config', $this->bareRefusal(RuntimeException::class, $gitDirectory));
     }
 
     public function testABareCallRefusesARepositoryWhoseInfoAttributesExist(): void
@@ -390,10 +385,7 @@ final class HardenedGitTest extends TestCase
         $mirror = $this->mirror();
         file_put_contents($mirror.'/info/attributes', "*.txt -diff\n");
 
-        $this->expectException(RepositoryAttributesRefused::class);
-        $this->expectExceptionMessage('/info/attributes exists');
-
-        new HardenedGit()->callInBareRepository(['log', '-1'], $mirror);
+        self::assertStringContainsString('/info/attributes exists', $this->bareRefusal(RepositoryAttributesRefused::class, $mirror));
     }
 
     public function testABareCallOfAMissingRepositoryLeavesTheFailureToTheCall(): void
@@ -404,6 +396,22 @@ final class HardenedGitTest extends TestCase
 
         self::assertSame($missing, $call->directory);
         self::assertContains('--git-dir='.$missing, $call->command);
+    }
+
+    /**
+     * @param class-string<RuntimeException|RepositoryAttributesRefused> $refusal
+     */
+    private function bareRefusal(string $refusal, string $repository): string
+    {
+        try {
+            new HardenedGit()->callInBareRepository(['rev-parse', 'HEAD'], $repository);
+        } catch (RuntimeException|RepositoryAttributesRefused $refused) {
+            self::assertInstanceOf($refusal, $refused);
+
+            return $refused->getMessage();
+        }
+
+        self::fail('The bare call must be refused.');
     }
 
     private function mirror(): string

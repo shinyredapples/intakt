@@ -150,7 +150,7 @@ final readonly class HardenedGit
         }
 
         // Git names the object format and the attributes file, because in a worktree or a submodule the file is not under <directory>/.git; where git cannot, the call itself fails the same way. rev-parse reads no attributes, so SHA-1's empty tree serves before the format is known.
-        $query = $this->query(['--literal-pathspecs'], [], $directory, $directory);
+        $query = $this->query($this->question(['--literal-pathspecs'], []), $directory, $directory);
         $answer = explode("\n", trim($query->getOutput()), 2);
 
         if (!$query->isSuccessful() || 2 !== count($answer)) {
@@ -176,7 +176,7 @@ final readonly class HardenedGit
         }
 
         // --show-cdup prints a line only where git found a work tree, which under --bare only a core.worktree beside a "core.bare = false" of the repository's own config brings back, since that beats --bare.
-        $query = $this->query($options, ['--show-cdup'], $repository, null);
+        $query = $this->query($this->question($options, ['--show-cdup']), $repository, null);
         $answer = explode("\n", rtrim($query->getOutput(), "\n"), 2);
 
         if (!$query->isSuccessful() || 2 !== count($answer)) {
@@ -185,7 +185,7 @@ final readonly class HardenedGit
 
         [$format, $path] = $answer;
 
-        // A line that is empty or holds a slash is a way to a work tree, never an object format; refused as a failed git call, which every caller already handles.
+        // Because a line that is empty or holds a slash is a way to a work tree, never an object format; refused as a failed git call, because every caller already handles one.
         if ('' === $format || str_contains($format, '/')) {
             throw new RuntimeException(sprintf('%s names a work tree in its config (core.worktree), so a bare call refuses it', $repository));
         }
@@ -199,15 +199,21 @@ final readonly class HardenedGit
      * @param list<string> $options
      * @param list<string> $question
      *
+     * @return list<string>
+     */
+    private function question(array $options, array $question): array
+    {
+        return $this->command($options, ['rev-parse', ...$question, '--show-object-format', '--git-path', self::INFO_ATTRIBUTES], self::EMPTY_TREES['sha1']);
+    }
+
+    /**
+     * @param list<string> $command
+     *
      * @throws RuntimeException
      */
-    private function query(array $options, array $question, string $directory, ?string $workTree): Process
+    private function query(array $command, string $directory, ?string $workTree): Process
     {
-        $query = new Process(
-            $this->command($options, ['rev-parse', ...$question, '--show-object-format', '--git-path', self::INFO_ATTRIBUTES], self::EMPTY_TREES['sha1']),
-            $directory,
-            $this->variables($workTree, self::EMPTY_TREES['sha1']),
-        );
+        $query = new Process($command, $directory, $this->variables($workTree, self::EMPTY_TREES['sha1']));
         $query->run();
 
         return $query;
