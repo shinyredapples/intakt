@@ -1,6 +1,6 @@
 # Project memory: what Intakt remembers
 
-Every builder and reviewer starts with a fresh, empty box. So how does the tenth builder know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built: the notebook itself (notes tied to files, looked up within a size limit, read-only for reviewers) exists, a finished review writes the fixed findings into it, and every reviewer is handed the notes for the files it reviews; builders are not handed it yet. This describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
+Every Developer and reviewer starts with a fresh, empty box. So how does the tenth Developer know what the first nine learned? Through the **project memory**: a short notebook Intakt keeps for each project and hands to every job. Intakt is still being built: the notebook itself (notes tied to files, looked up within a size limit, read-only for reviewers) exists, a finished review writes the fixed findings into it, and every reviewer is handed the notes for the files it reviews; Developers are not handed it yet. This describes the decided design ([details](../design/05-architecture/10-shared-project-memory.md)).
 
 ## How it works
 
@@ -14,7 +14,7 @@ flowchart LR
   you([You]) -- "pin, edit, delete" --> notebook
 ```
 
-- **Only Intakt writes it**, and only from things that really happened: a merged change's summary, a review finding that was fixed, a check that failed twice for the same cause. A builder or reviewer can't write to it, so no AI can plant something misleading there.
+- **Only Intakt writes it**, and only from things that really happened: a merged change's summary, a review finding that was fixed, a check that failed twice for the same cause. A Developer or reviewer can't write to it, so no AI can plant something misleading there.
 - **Every job reads it** as a short briefing at the start: what the project is, what is in flight, recent decisions, and the known pitfalls for the files it is about to touch. The briefing has a size limit, so it stays cheap.
 - **You can curate it** on the dashboard: pin what matters, edit what is wrong, delete what is no longer true.
 

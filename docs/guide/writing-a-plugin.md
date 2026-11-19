@@ -47,5 +47,5 @@ flowchart LR
 - **It never decides what may be approved or merged.** That stays in Intakt's core, behind the protected rules.
 - **Secrets stay in the orchestrator.** A plugin reads its credentials from Intakt's configuration; jobs never see them.
 - **It fails clearly.** An error the service reports becomes a typed error Intakt can act on (for example "rate limited, retry after 40 seconds"), never a silent empty result.
-- **Vendor plugins describe their models** (cost class, and what each is good at: building, reviewing, quick triage), so Intakt can choose without code specific to that company.
+- **Vendor plugins describe their models** (cost class, and what each is good at: building, reviewing, quick sorting), so Intakt can choose without code specific to that company.
 - **Notifiers never carry secrets and never approve anything.**

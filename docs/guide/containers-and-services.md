@@ -1,12 +1,12 @@
 # Containers and services: where the work runs
 
-Every builder, checker and reviewer works inside a **container**: a sealed, throwaway box with exactly the tools your project needs. This page explains where those boxes come from, how reviewers test against a real database or another backend, and why the AI agents can't start boxes of their own. Intakt is still being built, so this describes the decided design ([details](../design/05-architecture/12-new-and-existing-projects.md)).
+Every Developer, checker and reviewer works inside a **container**: a sealed, throwaway box with exactly the tools your project needs. This page explains where those boxes come from, how reviewers test against a real database or another backend, and why the AI agents can't start boxes of their own. Intakt is still being built, so this describes the decided design ([details](../design/05-architecture/12-new-and-existing-projects.md)).
 
 ## The picture
 
 ```mermaid
 flowchart TD
-  intakt[Intakt, the orchestrator<br/>the only one that starts containers] --> job[A job container<br/>builder, checker or reviewer]
+  intakt[Intakt, the orchestrator<br/>the only one that starts containers] --> job[A job container<br/>Developer, checker or reviewer]
   intakt --> db[(Database sidecar)]
   intakt --> other[Other backend sidecar]
   job -- private network --> db
@@ -42,7 +42,7 @@ The first part is built: every job has a memory limit of its own, and when that 
 
 Every job has a memory limit, so a test that eats memory without end can't slow down the rest of the machine. Inside the job, each command the AI runs has a limit of its own, so a runaway test is stopped alone: the AI is told which process was stopped and can fix it in the same session. Your language also gets a **memory limit** for the programs a job starts. By default it is 512 MB, or twice what your project's check needed when Intakt first ran it, whichever is larger, so you don't have to set anything. A limit your project already sets (for example in its test settings) wins.
 
-If a whole job still runs out of memory, you see one comment on the task naming the process and the step, and the next try is told about it. If the same task runs out of memory a second time, it goes to the maintainer agent instead of trying again; it only reaches you if the agent can't sort it out. On the dashboard this shows as status on the card, not as something waiting on you, and the project's card shows the limit in use. To raise the limit, set it in the project's settings file in your repository, or in your project's own test settings.
+If a whole job still runs out of memory, you see one comment on the task naming the process and the step, and the next try is told about it. If the same task runs out of memory a second time, it goes to the Maintainer instead of trying again; it only reaches you if the agent can't sort it out. On the dashboard this shows as status on the card, not as something waiting on you, and the project's card shows the limit in use. To raise the limit, set it in the project's settings file in your repository, or in your project's own test settings.
 
 On some machines (some desktop container setups), a command can't get a limit of its own. Setup tells you once; there, a runaway command ends the whole job, and the rest works the same.
 
@@ -77,7 +77,7 @@ Each review gets its own fresh copies, so reviews running at the same time never
 
 ## Why the AI can't start containers itself
 
-Being able to start containers means being able to do almost anything to the machine Intakt runs on. So **no job ever gets that ability**: no builder or reviewer can start, stop or change a container. Only Intakt starts the sidecars your project declares, with memory and CPU limits.
+Being able to start containers means being able to do almost anything to the machine Intakt runs on. So **no job ever gets that ability**: no Developer or reviewer can start, stop or change a container. Only Intakt starts the sidecars your project declares, with memory and CPU limits.
 
 If a reviewer needs something that isn't there (another service, a different database version), the fix is to add it to the project's setup, not to let the reviewer fetch it. That change goes through review like any other, so you decide what your project's tests may run.
 

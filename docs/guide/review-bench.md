@@ -14,7 +14,7 @@ A reviewer that failed for a reason that has nothing to do with it (the AI compa
 
 ## Both commands call your paid models
 
-Each review of a bench change is a real review by your project's review panel: every reviewer reads the change once, and the judge (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
+Each review of a bench change is a real review by your project's Code reviewers: every reviewer reads the change once, and their verdict step (the step that merges the reviewers' findings into one list and sorts the small ones, see the [glossary](glossary.md)) is asked when the reviewers found something. Those calls are billed to your keys or token, like any review. That is why the bench never runs by itself: nothing in Intakt's checks or in CI starts it, only you do. Start Intakt's workers first, as for any review.
 
 ## Two commands
 
@@ -23,15 +23,15 @@ Each review of a bench change is a real review by your project's review panel: e
 | `intakt:bench:review <change> --project=<project>` | one bench change, once | the figures for that change, printed on the screen |
 | `intakt:bench --project=<project>` | all eight changes, one after the other | a report on the screen and one result file |
 
-`intakt:bench:review` is the quick look: it names one change (for example `free-shipping`) and prints, for each reviewer, what it caught and missed, its false alarms, its tokens and time, and the judge's list of what to fix. It writes no file.
+`intakt:bench:review` is the quick look: it names one change (for example `free-shipping`) and prints, for each reviewer, what it caught and missed, its false alarms, its tokens and time, and the verdict step's list of what to fix. It writes no file.
 
-`intakt:bench` is the full run. Add `--repeat=3` to review every change three times, each time from a fresh copy of the code, to see whether the answers vary: the same reviewer can catch a mistake once and miss it the next time. More repeats tell you more and cost more: on the demo panel of two reviewers, `--repeat=3` makes 24 rounds (eight changes, three times each), so 48 reviews by a reviewer and up to 24 calls of the judge.
+`intakt:bench` is the full run. Add `--repeat=3` to review every change three times, each time from a fresh copy of the code, to see whether the answers vary: the same reviewer can catch a mistake once and miss it the next time. More repeats tell you more and cost more: on the demo panel of two reviewers, `--repeat=3` makes 24 rounds (eight changes, three times each), so 48 reviews by a reviewer and up to 24 calls of the verdict step.
 
 ```mermaid
 flowchart TD
   s[You start intakt:bench] --> c[Take the next bench change]
   c --> f[Make a fresh copy of its code]
-  f --> r[The review panel reviews it:<br/>paid model calls]
+  f --> r[The Code reviewers review it:<br/>paid model calls]
   r --> k[Compare the findings with<br/>the planted mistakes]
   k --> d[Delete the copy]
   d -- more changes or repeats --> c
@@ -43,6 +43,6 @@ flowchart TD
 
 The report starts with what went wrong and why: every missed mistake (the reviewer missed it, or the bench's own expectation cannot hold), every false alarm, and every run where a reviewer failed. Then come the figures for each run, whether the repeats of a change agreed, and the totals for each reviewer and model: mistakes found out of those planted, false alarms, and tokens.
 
-The **result file** is one file under `var/bench/` in the install, named after the moment of the run, and the command prints where it is. It holds everything the report is made from: the Intakt version, fingerprints of the review instructions and of the bench changes (so you can tell whether two runs measured the same thing), and for every change and run the decision, the judge's list of what to fix and, per reviewer, its model, what it caught and missed, its false alarms and other findings, any failure, and its tokens and time. With docker compose the file sits inside the container, so copy it out before you remove the container ([how](../user/README.md#the-review-bench)).
+The **result file** is one file under `var/bench/` in the install, named after the moment of the run, and the command prints where it is. It holds everything the report is made from: the Intakt version, fingerprints of the review instructions and of the bench changes (so you can tell whether two runs measured the same thing), and for every change and run the decision, the verdict step's list of what to fix and, per reviewer, its model, what it caught and missed, its false alarms and other findings, any failure, and its tokens and time. With docker compose the file sits inside the container, so copy it out before you remove the container ([how](../user/README.md#the-review-bench)).
 
-Intakt prints no price for a bench run. Multiplying the reported tokens by your AI company's prices estimates only what the reviewers cost: the report counts reviewer tokens, not the judge's, so the judge's calls cost extra. Your AI company's usage page shows the whole bill.
+Intakt prints no price for a bench run. Multiplying the reported tokens by your AI company's prices estimates only what the reviewers cost: the report counts reviewer tokens, not the verdict step's, so the verdict step's calls cost extra. Your AI company's usage page shows the whole bill.
