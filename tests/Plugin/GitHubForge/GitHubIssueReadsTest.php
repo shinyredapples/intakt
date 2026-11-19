@@ -77,10 +77,20 @@ final class GitHubIssueReadsTest extends TestCase
         self::assertSame('Issue #1 on page 1 of the open issues changed in the seconds GitHub served the page, so a close and reopen while the later pages were read cannot be ruled out.', $this->failureOf($api)->getMessage());
     }
 
+    public function testAnEarlierPageWithAnIssueUpdatedExactlyTheClockSlackBeforeItWasServedFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:55Z'), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+
+        self::assertSame('Issue #1 on page 1 of the open issues changed in the seconds GitHub served the page, so a close and reopen while the later pages were read cannot be ruled out.', $this->failureOf($api)->getMessage());
+    }
+
     public function testAnEarlierPageWhoseIssuesWereUpdatedBeforeTheClockSlackIsAccepted(): void
     {
         $api = new RecordedIssueApi();
-        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:55Z'), 2 => $this->page(101, 1)];
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T09:59:54Z'), 2 => $this->page(101, 1)];
         $api->namingNext = [1];
         $api->stable = true;
 
@@ -117,6 +127,25 @@ final class GitHubIssueReadsTest extends TestCase
         $api->served = '2026-11-25T10:00:00Z';
 
         self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAnEarlierPageWithADateWhoseSecondIsOutOfRangeFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 100, '2026-11-25T10:00:00Z'), 2 => $this->page(102, 1)];
+        $api->namingNext = [1];
+        $api->stable = true;
+        $api->served = 'Wed, 25 Nov 2026 10:00:99 GMT';
+
+        self::assertSame('GitHub answered a Date this forge cannot read.', $this->failureOf($api)->getMessage());
+    }
+
+    public function testAListedIssueWhoseUpdateMomentIsOutOfRangeFailsTheListing(): void
+    {
+        $api = new RecordedIssueApi();
+        $api->pages = [1 => $this->page(1, 1, '2026-11-25T09:00:99Z')];
+
+        self::assertSame('GitHub answered a moment this forge cannot read.', $this->failureOf($api)->getMessage());
     }
 
     public function testASinglePageIsNotAskedAgain(): void

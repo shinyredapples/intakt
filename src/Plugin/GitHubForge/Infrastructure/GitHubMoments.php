@@ -20,9 +20,7 @@ final readonly class GitHubMoments
      */
     public function parse(string $text): DateTimeImmutable
     {
-        $moment = DateTimeImmutable::createFromFormat(self::FORMAT, $text, new DateTimeZone('UTC'));
-
-        return false === $moment ? throw new ForgeReadFailed('GitHub answered a moment this forge cannot read.') : $moment->setTimezone(new DateTimeZone('UTC'));
+        return $this->strictly(self::FORMAT, $text) ?? throw new ForgeReadFailed('GitHub answered a moment this forge cannot read.');
     }
 
     /**
@@ -30,8 +28,14 @@ final readonly class GitHubMoments
      */
     public function served(string $date): DateTimeImmutable
     {
-        $moment = DateTimeImmutable::createFromFormat(self::HTTP_DATE, $date, new DateTimeZone('UTC'));
+        return $this->strictly(self::HTTP_DATE, $date) ?? throw new ForgeReadFailed('GitHub answered a Date this forge cannot read.');
+    }
 
-        return false === $moment ? throw new ForgeReadFailed('GitHub answered a Date this forge cannot read.') : $moment->setTimezone(new DateTimeZone('UTC'));
+    // PHP rolls an out-of-range field over (second 99 becomes the next minute) and only warns, which would move a moment GitHub never sent.
+    private function strictly(string $format, string $text): ?DateTimeImmutable
+    {
+        $moment = DateTimeImmutable::createFromFormat($format, $text, new DateTimeZone('UTC'));
+
+        return false === $moment || false !== DateTimeImmutable::getLastErrors() ? null : $moment->setTimezone(new DateTimeZone('UTC'));
     }
 }
