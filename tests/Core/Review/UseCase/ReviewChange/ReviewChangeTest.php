@@ -101,12 +101,6 @@ final class ReviewChangeTest extends KernelTestCase
      */
     private array $parked = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-        $this->tiers = new VerdictPerRole([]);
-    }
-
     public function testATwoReviewerRoundWhereBothApproveIsApproved(): void
     {
         $review = $this->reviewWith(new VerdictPerRole([]));
@@ -509,6 +503,12 @@ final class ReviewChangeTest extends KernelTestCase
         $this->reviewChange(static function (): void {})->start($this->request());
 
         self::assertCount(1, $this->fixture->storedRounds());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
+        $this->tiers = new VerdictPerRole([]);
     }
 
     private function mapping(Tier ...$mapped): Vendor

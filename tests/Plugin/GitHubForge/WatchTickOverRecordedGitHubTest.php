@@ -89,15 +89,6 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
 
     private string $firstHeadRuns = 'runs_in_progress.json';
 
-    protected function setUp(): void
-    {
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        $this->entities = $entities;
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-    }
-
     public function testATickOverTwoRecordedPullRequestsRecordsOnePendingHeadAndQueuesOneRound(): void
     {
         $commands = new RecordingCommandBus();
@@ -123,6 +114,15 @@ final class WatchTickOverRecordedGitHubTest extends KernelTestCase
         $events = $this->recordedEvents();
         self::assertSame(0, preg_match_all('/ head_pending /', $events));
         self::assertSame(1, preg_match_all('/ round_queued \{[^}]*pull\\\\\/7/', $events));
+    }
+
+    protected function setUp(): void
+    {
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        $this->entities = $entities;
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
     }
 
     private function recordedEvents(): string

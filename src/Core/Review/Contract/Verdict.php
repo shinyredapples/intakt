@@ -108,11 +108,6 @@ final readonly class Verdict
         return Decision::Approve !== $this->verdict && [] === $this->findings;
     }
 
-    private static function raisedByIntakt(Finding $finding): self
-    {
-        return new self(Decision::Blocked, [$finding], [], [], VerdictOrigin::Intakt);
-    }
-
     public static function incompleteStream(string $reason, Evidence $evidence): self
     {
         $finding = new Finding(
@@ -201,5 +196,10 @@ final readonly class Verdict
         );
 
         return self::raisedByIntakt($finding);
+    }
+
+    private static function raisedByIntakt(Finding $finding): self
+    {
+        return new self(Decision::Blocked, [$finding], [], [], VerdictOrigin::Intakt);
     }
 }

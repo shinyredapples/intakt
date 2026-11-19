@@ -30,24 +30,6 @@ final class BuildScriptTest extends TestCase
     // False removes the variable, so a value the test run itself was started with never reaches the script.
     private string|false $inherited = false;
 
-    protected function setUp(): void
-    {
-        $this->history = new BuildHistory();
-        $this->output = $this->history->folder.'/output';
-        $this->work = $this->history->folder.'/job';
-        $this->bin = $this->history->folder.'/bin';
-        $this->prompt = $this->history->folder.'/prompt.md';
-        new Filesystem()->mkdir([$this->output, $this->work, $this->bin]);
-        file_put_contents($this->prompt, "Build the task.\n");
-    }
-
-    protected function tearDown(): void
-    {
-        // A scripted CLI may take the output's permissions away, which would stop the removal.
-        new Filesystem()->chmod($this->output, 0o700);
-        $this->history->remove();
-    }
-
     public function testACliThatCommitsAndWritesThePullRequestTextLeavesABundleOfTheBranchAndTheText(): void
     {
         $this->givenTheCli(<<<'SH'
@@ -648,6 +630,24 @@ final class BuildScriptTest extends TestCase
 
         self::assertNotSame(0, $run->getExitCode());
         self::assertFileDoesNotExist($this->history->folder.'/ran');
+    }
+
+    protected function setUp(): void
+    {
+        $this->history = new BuildHistory();
+        $this->output = $this->history->folder.'/output';
+        $this->work = $this->history->folder.'/job';
+        $this->bin = $this->history->folder.'/bin';
+        $this->prompt = $this->history->folder.'/prompt.md';
+        new Filesystem()->mkdir([$this->output, $this->work, $this->bin]);
+        file_put_contents($this->prompt, "Build the task.\n");
+    }
+
+    protected function tearDown(): void
+    {
+        // A scripted CLI may take the output's permissions away, which would stop the removal.
+        new Filesystem()->chmod($this->output, 0o700);
+        $this->history->remove();
     }
 
     private function givenTheCli(string $script): void

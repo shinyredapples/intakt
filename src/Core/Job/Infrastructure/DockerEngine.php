@@ -82,14 +82,6 @@ final readonly class DockerEngine
         return $this->holdsAnExitCode($body);
     }
 
-    // The engine sends the 200 header before the wait ends and reports a wait that failed meanwhile as an Error in the body, so only a plain exit code counts.
-    private function holdsAnExitCode(string $body): bool
-    {
-        $answer = json_decode($body, true);
-
-        return is_array($answer) && is_int($answer['StatusCode'] ?? null) && null === ($answer['Error'] ?? null);
-    }
-
     /**
      * @return list<string>
      */
@@ -197,6 +189,29 @@ final readonly class DockerEngine
         return array_values(array_filter(array_map($this->jobNetworkOf(...), $listed)));
     }
 
+    /**
+     * @return list<JobContainer>
+     */
+    public function jobContainers(): array
+    {
+        $filters = json_encode(['label' => [JobServices::JOB_LABEL]], JSON_THROW_ON_ERROR);
+        $listed = $this->send('GET', 'containers/json', ['query' => ['all' => 'true', 'filters' => $filters]])->accepting(200);
+
+        if (!array_is_list($listed)) {
+            throw DockerEngineFailed::unexpected('containers/json');
+        }
+
+        return array_values(array_filter(array_map($this->jobContainerOf(...), $listed)));
+    }
+
+    // The engine sends the 200 header before the wait ends and reports a wait that failed meanwhile as an Error in the body, so only a plain exit code counts.
+    private function holdsAnExitCode(string $body): bool
+    {
+        $answer = json_decode($body, true);
+
+        return is_array($answer) && is_int($answer['StatusCode'] ?? null) && null === ($answer['Error'] ?? null);
+    }
+
     private function jobNetworkOf(mixed $listed): ?JobNetwork
     {
         $job = is_array($listed) && is_array($listed['Labels'] ?? null) ? ($listed['Labels'][JobServices::JOB_LABEL] ?? null) : null;
@@ -213,21 +228,6 @@ final readonly class DockerEngine
         }
 
         return new JobNetwork($name, new JobId($job));
-    }
-
-    /**
-     * @return list<JobContainer>
-     */
-    public function jobContainers(): array
-    {
-        $filters = json_encode(['label' => [JobServices::JOB_LABEL]], JSON_THROW_ON_ERROR);
-        $listed = $this->send('GET', 'containers/json', ['query' => ['all' => 'true', 'filters' => $filters]])->accepting(200);
-
-        if (!array_is_list($listed)) {
-            throw DockerEngineFailed::unexpected('containers/json');
-        }
-
-        return array_values(array_filter(array_map($this->jobContainerOf(...), $listed)));
     }
 
     private function jobContainerOf(mixed $listed): ?JobContainer

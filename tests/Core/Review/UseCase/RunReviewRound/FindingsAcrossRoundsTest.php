@@ -72,11 +72,6 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testTheFirstRoundTellsNoReviewerOfOpenFindings(): void
     {
         $vendor = $this->round(self::CHANGE, [self::FIRST => $this->changes([], [$this->finding('a')])]);
@@ -345,6 +340,11 @@ final class FindingsAcrossRoundsTest extends KernelTestCase
         $round = new ReviewRound(Uuid::v7(), new ReviewTarget(new ReviewSubject('alpha', __DIR__, 'Add the thing.', 'diff --git a/a b/a'), SampleIdentity::any()), new ChangeRound(self::CHANGE, 2, null));
 
         self::assertSame([], $this->fixture->openFindingsOf($round));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     /**

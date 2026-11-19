@@ -57,11 +57,6 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
     private Ledger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new RoundFixture(self::getContainer())->ledger();
-    }
-
     public function testTheTokensOfACallRecordedTheWayUsageLedgerRecordsItAreCounted(): void
     {
         $this->recordCall('c1', self::ROUND, 'settled');
@@ -349,6 +344,11 @@ final class RoundLedgerReadingTest extends KernelTestCase
     public function testARoundTheJudgeHasNotAnsweredHasNoDroppedFindings(): void
     {
         self::assertSame([], $this->reading()->droppedOf(self::ROUND));
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new RoundFixture(self::getContainer())->ledger();
     }
 
     /**

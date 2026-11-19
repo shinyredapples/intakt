@@ -25,11 +25,6 @@ final class GeneratedDockerfileTest extends TestCase
 {
     private string $bin = '';
 
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->bin);
-    }
-
     public function testTheBaseImageIsTheExactPlatformVersion(): void
     {
         $dockerfile = GeneratedDockerfile::for(PhpProfile::fromComposerJson('{"require": {"php": ">=8.5.12"}, "config": {"platform": {"php": "8.5.12"}}}'));
@@ -158,6 +153,11 @@ final class GeneratedDockerfileTest extends TestCase
 
         self::assertSame(0, $process->getExitCode(), $process->getErrorOutput());
         self::assertStringNotContainsString('installed', $process->getOutput());
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->bin);
     }
 
     private function extensionStepFor(string ...$extensions): string

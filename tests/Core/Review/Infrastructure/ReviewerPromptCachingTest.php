@@ -72,17 +72,6 @@ final class ReviewerPromptCachingTest extends KernelTestCase
      */
     private array $requests = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     public function testRoundTwoReadsTheTokensRoundOneCached(): void
     {
         $platform = $this->reviewWithTwoRounds();
@@ -106,6 +95,17 @@ final class ReviewerPromptCachingTest extends KernelTestCase
             self::assertSame(['type' => 'ephemeral'], array_last($request['tools'])['cache_control'] ?? null);
             self::assertSame(['type' => 'ephemeral'], array_last(array_last($request['messages'])['content'])['cache_control'] ?? null);
         }
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
     }
 
     private function reviewWithTwoRounds(): TraceablePlatform

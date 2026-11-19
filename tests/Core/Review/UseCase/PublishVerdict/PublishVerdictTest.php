@@ -95,13 +95,6 @@ final class PublishVerdictTest extends KernelTestCase
     private ScriptedGitHub $github;
     private LockFactory $locks;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
-        $this->github = new ScriptedGitHub();
-        $this->locks = new LockFactory(new InMemoryStore());
-    }
-
     public function testAnApprovedHeadGetsTheCommentThenASuccessStatus(): void
     {
         $roundId = $this->publishRoundJudgedOn([]);
@@ -498,6 +491,13 @@ final class PublishVerdictTest extends KernelTestCase
         $this->expectExceptionObject(new ForgeWriteFailed('GitHub answered 422 to a write.'));
 
         $this->handler(new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']))(new PublishVerdict($roundId));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer(), new ConfiguredProjectModes(['alpha' => 'reviewer-for-loop']));
+        $this->github = new ScriptedGitHub();
+        $this->locks = new LockFactory(new InMemoryStore());
     }
 
     /**

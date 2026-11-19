@@ -61,19 +61,6 @@ final class StartReviewToolTest extends TestCase
 {
     private TemporaryRepository $repository;
 
-    protected function setUp(): void
-    {
-        $this->repository = new TemporaryRepository();
-        $this->repository->commitFile('README.md', "base\n");
-        $this->repository->checkoutNewBranch('sample');
-        $this->repository->commitFile('src/Feature.php', "<?php\n");
-    }
-
-    protected function tearDown(): void
-    {
-        $this->repository->remove();
-    }
-
     public function testTheToolReviewsTheNamedBranchAndAnswersWithTheActList(): void
     {
         $seen = null;
@@ -148,6 +135,19 @@ final class StartReviewToolTest extends TestCase
         $this->expectException(ToolCallException::class);
 
         $this->tool(self::createStub(ChangeReviews::class))($this->gateway(), $this->review(round: 0));
+    }
+
+    protected function setUp(): void
+    {
+        $this->repository = new TemporaryRepository();
+        $this->repository->commitFile('README.md', "base\n");
+        $this->repository->checkoutNewBranch('sample');
+        $this->repository->commitFile('src/Feature.php', "<?php\n");
+    }
+
+    protected function tearDown(): void
+    {
+        $this->repository->remove();
     }
 
     private function gateway(): ClientGateway

@@ -94,17 +94,6 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
      */
     private array $sent = [];
 
-    protected function setUp(): void
-    {
-        $this->fixture = new ReviewCheckout();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->fixture->remove();
-        parent::tearDown();
-    }
-
     public function testASecondReviewIsSentTheFindingAnEarlierReviewResolvedOnTheSameFile(): void
     {
         [$index, $memory] = $this->memoryInAStore();
@@ -127,6 +116,17 @@ final class ReviewerAgentMemoryTest extends KernelTestCase
 
         self::assertStringEndsWith("\n\nYou review for correctness.", $this->systemSent());
         self::assertStringNotContainsString('Your answer must be changed to fit the given', $this->systemSent());
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new ReviewCheckout();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->fixture->remove();
+        parent::tearDown();
     }
 
     /**

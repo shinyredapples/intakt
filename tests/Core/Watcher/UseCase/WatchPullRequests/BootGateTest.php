@@ -83,19 +83,6 @@ final class BootGateTest extends KernelTestCase
     private bool $trustCheckDown = false;
     private Ledger $ledger;
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
-        self::assertInstanceOf(EntityManagerInterface::class, $entities);
-        EmptyDatabase::in(self::getContainer());
-        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
-        $this->entities = $entities;
-        $this->main = BootOutcome::booted();
-        $this->head = BootOutcome::booted();
-        $this->mainCommit = new CommitId(str_repeat('f', 40));
-    }
-
     public function testAHeadThatFailsToBootWhileMainBootsIsSentBackAsAFailedBoot(): void
     {
         $this->head = BootOutcome::failed('The server did not start.');
@@ -242,6 +229,19 @@ final class BootGateTest extends KernelTestCase
 
         self::assertTrue($this->gate()->admit($this->project(), $this->green())->startsRound());
         self::assertLoggedError('error', 'The boot gate failed, so the review starts without it.');
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
+        $entities = self::getContainer()->get('doctrine.orm.entity_manager');
+        self::assertInstanceOf(EntityManagerInterface::class, $entities);
+        EmptyDatabase::in(self::getContainer());
+        new SchemaTool($entities)->createSchema($entities->getMetadataFactory()->getAllMetadata());
+        $this->entities = $entities;
+        $this->main = BootOutcome::booted();
+        $this->head = BootOutcome::booted();
+        $this->mainCommit = new CommitId(str_repeat('f', 40));
     }
 
     private function gate(): BootGate

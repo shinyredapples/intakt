@@ -104,11 +104,6 @@ final class StatusReadModelTest extends TestCase
     /** @var array<string, ReplayMark> */
     private array $storedMarks = [];
 
-    protected function setUp(): void
-    {
-        $this->ledger = new DashboardLedger();
-    }
-
     public function testTheStatusValidatesAgainstTheDocumentedSchema(): void
     {
         $this->holds = [SharedHold::Drain, SharedHold::Pause];
@@ -540,6 +535,11 @@ final class StatusReadModelTest extends TestCase
         self::assertSame(array_column(BuildStep::cases(), 'value'), $this->schemaAt(...$build, ...['step', 'enum']));
         // The schema is one case behind, because no step is written as asked yet and the published schema names it with the change that writes it.
         self::assertSame(array_column(BuildStepOutcome::cases(), 'value'), [...(array) $this->schemaAt(...$build, ...['outcome', 'enum']), BuildStepOutcome::Asked->value]);
+    }
+
+    protected function setUp(): void
+    {
+        $this->ledger = new DashboardLedger();
     }
 
     private function schemaAt(string ...$path): mixed

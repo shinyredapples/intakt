@@ -28,20 +28,6 @@ final class PhpGateDependencyStepTest extends TestCase
 
     private DependencyStep $step;
 
-    protected function setUp(): void
-    {
-        $this->directory = sys_get_temp_dir().'/intakt-dependency-step-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->directory);
-        $step = new PhpGate()->dependencyStep(null);
-        self::assertNotNull($step);
-        $this->step = $step;
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->directory);
-    }
-
     public function testTheGenerationPointsTheRootPackageMetadataAtTheCheckedHeadNotAtTheHeadThatInstalled(): void
     {
         $this->project(['autoload' => ['classmap' => ['code/']]]);
@@ -255,6 +241,20 @@ final class PhpGateDependencyStepTest extends TestCase
 
         self::assertFileExists($this->directory.'/autoload-event');
         self::assertFileDoesNotExist($this->directory.'/package-event');
+    }
+
+    protected function setUp(): void
+    {
+        $this->directory = sys_get_temp_dir().'/intakt-dependency-step-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->directory);
+        $step = new PhpGate()->dependencyStep(null);
+        self::assertNotNull($step);
+        $this->step = $step;
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->directory);
     }
 
     /**

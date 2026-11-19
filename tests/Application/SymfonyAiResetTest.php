@@ -229,13 +229,6 @@ final class SymfonyAiResetTest extends TestCase
     /** @var list<KernelInterface> */
     private array $kernels = [];
 
-    protected function tearDown(): void
-    {
-        foreach ($this->kernels as $kernel) {
-            $kernel->shutdown();
-        }
-    }
-
     public function testASecondReviewerRunSeesOnlyItsOwnModelToolsAndConversation(): void
     {
         $kernel = $this->bootedKernel(new AiPlatformKernel('test', true));
@@ -314,6 +307,13 @@ final class SymfonyAiResetTest extends TestCase
         $kernel = $this->bootedKernel(new AiPlatformKernel('test', true));
 
         self::assertSame(array_keys(self::MUTABLE_WITHOUT_RESET), AiServiceState::of($kernel)->mutableWithoutReset());
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->kernels as $kernel) {
+            $kernel->shutdown();
+        }
     }
 
     private function review(KernelInterface $kernel, Agent $reviewer, string $task): void

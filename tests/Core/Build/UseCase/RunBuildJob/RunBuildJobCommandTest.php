@@ -81,18 +81,6 @@ final class RunBuildJobCommandTest extends TestCase
 
     private ?JobSpec $ran = null;
 
-    protected function setUp(): void
-    {
-        $this->folder = sys_get_temp_dir().'/intakt-build-command-'.bin2hex(random_bytes(6));
-        new Filesystem()->mkdir($this->folder.'/clone');
-        file_put_contents($this->folder.'/task.md', 'PLANT-task');
-    }
-
-    protected function tearDown(): void
-    {
-        new Filesystem()->remove($this->folder);
-    }
-
     public function testABuiltJobWritesTheBundleAndPrintsThePullRequestText(): void
     {
         $tester = $this->executed(new JobOutput(['handback.bundle' => 'BUNDLE', 'pull-request.md' => "feat: <b>x</b>\n\n## Summary\n"]), []);
@@ -236,6 +224,18 @@ final class RunBuildJobCommandTest extends TestCase
         self::assertSame(Command::FAILURE, $tester->getStatusCode());
         self::assertStringContainsString('missing.md', $this->flat($tester));
         self::assertNull($this->ran);
+    }
+
+    protected function setUp(): void
+    {
+        $this->folder = sys_get_temp_dir().'/intakt-build-command-'.bin2hex(random_bytes(6));
+        new Filesystem()->mkdir($this->folder.'/clone');
+        file_put_contents($this->folder.'/task.md', 'PLANT-task');
+    }
+
+    protected function tearDown(): void
+    {
+        new Filesystem()->remove($this->folder);
     }
 
     /**

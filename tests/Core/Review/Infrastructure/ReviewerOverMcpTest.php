@@ -84,22 +84,6 @@ final class ReviewerOverMcpTest extends KernelTestCase
 
     private ?Kernel $server = null;
 
-    protected function setUp(): void
-    {
-        $kernel = self::bootKernel();
-        self::assertInstanceOf(Kernel::class, $kernel);
-        $this->round = new RoundFixture(self::getContainer())->start(1);
-        $credential = self::getContainer()->get(ReviewCredential::class);
-        self::assertInstanceOf(ReviewCredential::class, $credential);
-        $this->credential = $credential;
-    }
-
-    protected function tearDown(): void
-    {
-        $this->server?->shutdown();
-        parent::tearDown();
-    }
-
     public function testAReviewWithToolsOverMcpReachesTheSameVerdictAsWithTheToolsInProcess(): void
     {
         $inProcess = $this->review(new ReviewerToolboxFactory()->create(...), 'read_file');
@@ -241,6 +225,22 @@ final class ReviewerOverMcpTest extends KernelTestCase
         $this->expectException(LogicException::class);
 
         $client->sendRequest(new Psr18Client()->createRequest('POST', 'http://localhost/mcp/review'));
+    }
+
+    protected function setUp(): void
+    {
+        $kernel = self::bootKernel();
+        self::assertInstanceOf(Kernel::class, $kernel);
+        $this->round = new RoundFixture(self::getContainer())->start(1);
+        $credential = self::getContainer()->get(ReviewCredential::class);
+        self::assertInstanceOf(ReviewCredential::class, $credential);
+        $this->credential = $credential;
+    }
+
+    protected function tearDown(): void
+    {
+        $this->server?->shutdown();
+        parent::tearDown();
     }
 
     // Through the container, so the configured mcp_server entry and its connection are what the test exercises.

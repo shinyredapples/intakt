@@ -94,6 +94,30 @@ final readonly class SymfonyAiVendor implements Vendor
         return $this->accounts->run($answering->provider, fn (): VendorReview => new VendorReview($this->blockedWhenCut($answering, fn (): Verdict => $this->retriedOnce($first, $retry)), $substitute));
     }
 
+    /**
+     * @throws VendorAccountBusy
+     */
+    #[Override]
+    public function judge(string $project, JudgeRequest $request): Judgement
+    {
+        $answering = $this->answering($project, self::JUDGE_TIER);
+
+        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(self::JUDGE_TIER, $answering), $request->round), $request));
+    }
+
+    // Read from the mapping that throws TierNotMapped on a call, so the answer and the call never disagree; it covers only the mapping, not whether a provider is available, so a tier whose provider is disabled still counts even when no substitute answers for it.
+    #[Override]
+    public function mapsAModelTo(string $project, Tier $tier): bool
+    {
+        try {
+            $this->resolver->configured($project, $tier);
+        } catch (TierNotMapped) {
+            return false;
+        }
+
+        return true;
+    }
+
     // Retried once, because a call stopped by the output limit or an answer that is no verdict leaves nothing to judge and the same room could stop it again, a changes verdict without findings is no verdict either, an endpoint that could not be reached is often reached on the next call, and a stream cut before its answer completed may be a streaming fault the provider does not have unstreamed; a second failure fails the reviewer. A stream that a subscription CLI cut is not retried, because its call never streamed, and neither is a cut caused by a provider outage, because the outage has already cooled the account down and retrying would turn a blocked reviewer into a waiting one.
     /**
      * @param Closure(): Verdict                                                                                                                $first
@@ -252,17 +276,6 @@ final readonly class SymfonyAiVendor implements Vendor
         return [ReviewServerAccess::OPTION => $this->servers->forRound($round)];
     }
 
-    /**
-     * @throws VendorAccountBusy
-     */
-    #[Override]
-    public function judge(string $project, JudgeRequest $request): Judgement
-    {
-        $answering = $this->answering($project, self::JUDGE_TIER);
-
-        return $this->accounts->run($answering->provider, fn (): Judgement => $this->judgementOn($answering, $this->usage->reserve($project, new AnsweringTier(self::JUDGE_TIER, $answering), $request->round), $request));
-    }
-
     private function judgementOn(ResolvedModel $answering, UsageReservation $reservation, JudgeRequest $request): Judgement
     {
         $platform = new TierRoutedPlatform($this->tiers, $answering);
@@ -284,19 +297,6 @@ final readonly class SymfonyAiVendor implements Vendor
         $this->usage->settle($reservation, ...$platform->rounds());
 
         return $judgement;
-    }
-
-    // Read from the mapping that throws TierNotMapped on a call, so the answer and the call never disagree; it covers only the mapping, not whether a provider is available, so a tier whose provider is disabled still counts even when no substitute answers for it.
-    #[Override]
-    public function mapsAModelTo(string $project, Tier $tier): bool
-    {
-        try {
-            $this->resolver->configured($project, $tier);
-        } catch (TierNotMapped) {
-            return false;
-        }
-
-        return true;
     }
 
     // Decided here in plain code, because a reviewer that never saw the change can still answer approve; per call, because a subscription CLI reads the change only through the review server this call gave it.

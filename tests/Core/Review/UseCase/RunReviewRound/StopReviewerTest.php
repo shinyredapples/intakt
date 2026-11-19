@@ -63,11 +63,6 @@ final class StopReviewerTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAStopRequestedThirtySecondsBeforeTheRunBeganCancelsItAndTheLedgerRecordsTheStop(): void
     {
         $message = $this->started();
@@ -206,6 +201,11 @@ final class StopReviewerTest extends KernelTestCase
         self::assertStringContainsString('"id":"reviewer-stopped"', (string) $this->fixture->reviewer($message->reviewerId)->verdictJson());
         self::assertSame(['blocked'], $this->payloadValues(LedgerEventKind::VerdictReceived, 'decision'));
         self::assertSame([$message->reviewerId], $this->payloadValues(LedgerEventKind::ReviewerStopped, 'reviewer'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function started(): ReviewWithReviewer

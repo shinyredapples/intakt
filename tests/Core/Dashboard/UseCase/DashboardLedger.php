@@ -159,14 +159,6 @@ final class DashboardLedger implements Ledger
         ]);
     }
 
-    /**
-     * @return array<string, int|string>
-     */
-    private function inDiscount(string $id, string $severity, int $line): array
-    {
-        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
-    }
-
     public function judgeToFixAtLine7OfA(string $round, string $text): void
     {
         $this->add(LedgerEventKind::JudgeDone, [
@@ -311,6 +303,14 @@ final class DashboardLedger implements Ledger
     public function recordBuildStep(array $payload): void
     {
         $this->add(LedgerEventKind::BuildStepEnded, $payload);
+    }
+
+    /**
+     * @return array<string, int|string>
+     */
+    private function inDiscount(string $id, string $severity, int $line): array
+    {
+        return ['id' => $id, 'severity' => $severity, 'text' => 'Text of '.$id.'.', 'file' => 'src/discount.js', 'line' => $line];
     }
 
     /**

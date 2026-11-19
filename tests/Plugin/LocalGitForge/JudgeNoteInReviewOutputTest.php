@@ -67,11 +67,6 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
 
     private RoundFixture $fixture;
 
-    protected function setUp(): void
-    {
-        $this->fixture = new RoundFixture(self::getContainer());
-    }
-
     public function testAJudgeAnswerThatRejectsAP1LeavesItOnTheActListWithTheJudgesNoteInTextAndJson(): void
     {
         $review = $this->reviewWith(new JudgeMarkingByText($this->reviewersReporting(Severity::P1), ['Text of A.' => [Mark::Reject, self::REJECTED]]));
@@ -94,6 +89,11 @@ final class JudgeNoteInReviewOutputTest extends KernelTestCase
 
         self::assertNull($this->judgeNoteAfter($review, 'P1 src/A.php:7: Text of A.'));
         self::assertArrayNotHasKey('judge_note', $this->jsonRow($review, 'Text of A.'));
+    }
+
+    protected function setUp(): void
+    {
+        $this->fixture = new RoundFixture(self::getContainer());
     }
 
     private function judgeNoteAfter(ChangeReview $review, string $finding): ?string

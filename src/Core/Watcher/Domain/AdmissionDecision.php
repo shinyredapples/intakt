@@ -22,15 +22,6 @@ final readonly class AdmissionDecision
         };
     }
 
-    // Dropped because a newer run of the same origin on the same head replaced it, see docs/design/05-architecture/08-merge.md.
-    private function withoutReplacedRuns(CiState $ci): CiState
-    {
-        $kept = array_filter($ci->runs, static fn (CiRun $run): bool => !in_array($run->state, [CiRunState::Cancelled, CiRunState::Queued], true)
-            || !array_any($ci->runs, static fn (CiRun $other): bool => $other->isNewerRunOf($run)));
-
-        return new CiState($ci->head, array_values($kept));
-    }
-
     // Stable sort, so that a running head keeps its place among the running ones.
     /**
      * @param list<HeadDecision> $decisions
@@ -42,5 +33,14 @@ final readonly class AdmissionDecision
         usort($decisions, static fn (HeadDecision $a, HeadDecision $b): int => (HeadAdmission::Pending === $a->admission) <=> (HeadAdmission::Pending === $b->admission));
 
         return $decisions;
+    }
+
+    // Dropped because a newer run of the same origin on the same head replaced it, see docs/design/05-architecture/08-merge.md.
+    private function withoutReplacedRuns(CiState $ci): CiState
+    {
+        $kept = array_filter($ci->runs, static fn (CiRun $run): bool => !in_array($run->state, [CiRunState::Cancelled, CiRunState::Queued], true)
+            || !array_any($ci->runs, static fn (CiRun $other): bool => $other->isNewerRunOf($run)));
+
+        return new CiState($ci->head, array_values($kept));
     }
 }
