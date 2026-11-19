@@ -18,7 +18,7 @@ final class BoardStylesTest extends TestCase
         self::assertMatchesRegularExpression('/flex:\s*1 1 0;\s*min-width:\s*176px/', $rules['.board .col'] ?? '');
     }
 
-    // An absolute .sr-only label of a folded strip escaped the static scroller and widened the page by 359 px at 1440 (#2659).
+    // Asserted, because an absolute .sr-only label of a folded strip escaped the static scroller and widened the page at 1440 (#2659).
     public function testTheBoardScrollerHoldsItsScreenReaderLabelsSoTheyNeverWidenThePage(): void
     {
         $rules = $this->rulesOf($this->sheet());
