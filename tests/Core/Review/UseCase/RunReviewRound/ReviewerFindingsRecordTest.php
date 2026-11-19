@@ -51,6 +51,13 @@ final class ReviewerFindingsRecordTest extends KernelTestCase
         self::assertSame(['F1', 'F2', 'F3'], array_map(static fn (Finding $finding): string => $finding->id, $this->fixture->findingStore()->reportedIn($this->fixture->round($round))));
     }
 
+    public function testTwoReviewersThatReportTheSameOwnIdAreRecordedUnderDifferentLedgerIds(): void
+    {
+        $round = $this->round([self::FIRST => $this->changes($this->finding('a')), self::SECOND => $this->changes($this->finding('a'))]);
+
+        self::assertSame(['role-1' => ['F1'], 'role-2' => ['F2']], $this->recordedOf($round));
+    }
+
     public function testAFindingReportedAgainIsRecordedUnderItsEarlierId(): void
     {
         $this->round([self::FIRST => $this->changes($this->finding('a')), self::SECOND => $this->changes($this->finding('b'))]);
