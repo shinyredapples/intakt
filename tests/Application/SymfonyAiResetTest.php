@@ -406,7 +406,7 @@ final class SymfonyAiResetTest extends TestCase
 
     private function requestFor(ReviewRound $round): ReviewRequest
     {
-        return new ReviewRequest(new Checkout($round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), []), new ReviewerConversation('You review for correctness.', new UuidV7(), $round->id()));
+        return new ReviewRequest(new Checkout($round->checkoutRoot()), new ReviewBrief(new ChangeUnderReview('alpha', 'Add a cart.', 'diff --git a/a b/a'), [], 1), new ReviewerConversation('You review for correctness.', new UuidV7(), $round->id()));
     }
 
     private function toolboxesOf(KernelInterface $kernel): ReviewerMcpToolboxFactory
