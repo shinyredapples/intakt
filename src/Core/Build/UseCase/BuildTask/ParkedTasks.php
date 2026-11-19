@@ -9,7 +9,9 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
+use Doctrine\Persistence\ManagerRegistry;
 use PDO;
+use PDOException;
 use Symfony\Component\Clock\ClockInterface;
 
 final readonly class ParkedTasks
@@ -17,6 +19,7 @@ final readonly class ParkedTasks
     public function __construct(
         private Connection $connection,
         private ClockInterface $clock,
+        private ManagerRegistry $registry,
     ) {
     }
 
@@ -42,17 +45,33 @@ final readonly class ParkedTasks
                 $recordParking();
             });
         } catch (Exception $failure) {
+            $this->forgetWhatTheFailedParkingWrote($outermost);
+
+            throw TaskNotParked::for($request, $failure);
+        }
+    }
+
+    // The cleanup's own failure is not reported, because the parking's failure is the one the run records and a database error may quote the row.
+    private function forgetWhatTheFailedParkingWrote(bool $outermost): void
+    {
+        try {
             if ($outermost) {
                 $this->rollBackWhatTheRefusedCommitLeftOpen();
             }
-
-            throw TaskNotParked::for($request, $failure);
+        } catch (Exception|PDOException) {
+        } finally {
+            // The appended event's record stays managed under a position the rollback freed, so the ledger's next append would collide with it.
+            $this->registry->resetManager();
         }
     }
 
     // SQLite keeps the transaction open when a reader refuses its COMMIT, while DBAL counts it as closed (upstream/dbal-failed-commit-leaves-transaction-open/), so the new row would stay visible on this connection and the ledger's next write would join it.
     private function rollBackWhatTheRefusedCommitLeftOpen(): void
     {
+        if (!$this->connection->isConnected()) {
+            return;
+        }
+
         $native = $this->connection->getNativeConnection();
 
         if ($native instanceof PDO && $native->inTransaction()) {

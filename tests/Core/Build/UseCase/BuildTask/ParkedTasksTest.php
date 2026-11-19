@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Build\Domain\ParkedTaskRecord;
 use Intakt\Core\Build\UseCase\BuildTask\BuildTaskRequest;
@@ -145,7 +146,10 @@ final class ParkedTasksTest extends KernelTestCase
 
     private function parked(): ParkedTasks
     {
-        return new ParkedTasks($this->entities->getConnection(), $this->clock);
+        $registry = self::getContainer()->get('doctrine');
+        self::assertInstanceOf(ManagerRegistry::class, $registry);
+
+        return new ParkedTasks($this->entities->getConnection(), $this->clock, $registry);
     }
 
     /**

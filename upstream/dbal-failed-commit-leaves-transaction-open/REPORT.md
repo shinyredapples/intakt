@@ -17,7 +17,7 @@ DBAL transaction active: false, PDO transaction active: true, rows seen: 1
 
 ## Effect in Intakt
 
-`src/Core/Build/UseCase/BuildTask/ParkedTasks.php` rolls the native PDO transaction back when a parking that opened the outermost transaction fails and PDO still reports it open, so the earlier question stays and the build can record its failure. `tests/Core/Build/UseCase/BuildTask/ParkedTasksOnSqliteTest.php` (`testAParkingWhoseCommitIsRefusedByAReaderLeavesNoTransactionOpenAndKeepsTheEarlierQuestion`) forces the order.
+`src/Core/Build/UseCase/BuildTask/ParkedTasks.php` rolls the native PDO transaction back when a parking that opened the outermost transaction fails and PDO still reports it open, so the earlier question stays and the build can record its failure. Only a PDO driver's uncommitted row is discarded this way: on a driver whose native connection is not a `PDO` (for example `sqlite3`), `ParkedTasks` does not roll it back and the row stays in the open transaction. `tests/Core/Build/UseCase/BuildTask/ParkedTasksOnSqliteTest.php` (`testAParkingWhoseCommitIsRefusedByAReaderLeavesNoTransactionOpenAndKeepsTheEarlierQuestion`) forces the order.
 
 ## Upstream status
 

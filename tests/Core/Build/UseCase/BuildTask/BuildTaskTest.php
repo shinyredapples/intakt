@@ -7,6 +7,7 @@ namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 use Closure;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\ConnectionException;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -1058,7 +1059,7 @@ final class BuildTaskTest extends TestCase
             return 1;
         });
 
-        return new ParkedTasks($connection, new MockClock('2026-11-19T10:00:00+00:00'));
+        return new ParkedTasks($connection, new MockClock('2026-11-19T10:00:00+00:00'), self::createStub(ManagerRegistry::class));
     }
 
     // Because a real transaction rolls back what the work inserted when it throws, and ParkedTasksTest proves that on each engine.

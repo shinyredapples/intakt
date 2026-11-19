@@ -6,6 +6,7 @@ namespace Intakt\Tests\Core\Build\UseCase\BuildTask;
 
 use Closure;
 use Doctrine\DBAL\Connection;
+use Doctrine\Persistence\ManagerRegistry;
 use Intakt\Core\Ai\Contract\Provider;
 use Intakt\Core\Ai\Contract\ResolvedModel;
 use Intakt\Core\Ai\Contract\Tier;
@@ -358,7 +359,7 @@ final class BuildTaskCommandTest extends TestCase
         $connection = self::createStub(Connection::class);
         $connection->method('transactional')->willReturnCallback(static fn (Closure $work): mixed => $work($connection));
 
-        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $ledger, new ParkedTasks($connection, new MockClock()));
+        return new BuildTask($issues, $checkout, $routing, $builds, new HandBackCheck($checkout, $checks, $files), new PrePushCheck($checkJobs, $files), new PushStep($branches, $checkout), $ledger, new ParkedTasks($connection, new MockClock(), self::createStub(ManagerRegistry::class)));
     }
 
     private function listing(ListedIssue $task): IssueReads
