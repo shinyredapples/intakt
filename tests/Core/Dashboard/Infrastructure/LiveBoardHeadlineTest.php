@@ -57,6 +57,30 @@ final class LiveBoardHeadlineTest extends KernelTestCase
         self::assertCount(1, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.firstday'));
     }
 
+    public function testTheBoardPublishedOnceEveryReviewIsJudgedCarriesTheAsleepOctopus(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, 1);
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn($ledger, $live)->publishTheBoard();
+
+        self::assertCount(2, new Crawler($live->events[0]->turboStream)->filter('turbo-stream[target="board-octopus"] #board-octopus.asleep:not([hidden]) img[src*="octopus-asleep-"]'));
+    }
+
+    public function testTheBoardPublishedWhileABuildIsInFlightCarriesNoOctopus(): void
+    {
+        $ledger = new DashboardLedger();
+        $this->judgeRoundsOf($ledger, 1);
+        $ledger->passBuildStep('alpha', 'task-7', 'build_job');
+        $live = new PublishedLiveEvents();
+
+        $this->headlineOn($ledger, $live)->publishTheBoard();
+
+        $stream = new Crawler($live->events[0]->turboStream);
+        self::assertSame([1, 0], [$stream->filter('turbo-stream[target="board-octopus"] span#board-octopus[hidden]')->count(), $stream->filter('img[src*="octopus-"]')->count()]);
+    }
+
     public function testAPushedDoneColumnCarriesAtMostThePageLimitOfCards(): void
     {
         $done = $this->pushedDoneColumnOf(Board::PAGE_LIMIT + 3);

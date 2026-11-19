@@ -103,24 +103,24 @@ Board columns size to the space (`flex: 1 1 0`, min 184 px, Waiting on you 224 p
 
 Amber appears only on: the Waiting on you nav count and column count, needs-you cards and Waiting items (amber tint), their one action button, the needs dot, an expired account login (it is a Waiting item) with its Log in button, the "wait on you" counts on Projects, and the logo. Nothing else.
 
-Named exception: the amber props of the characters (the code reviewer's magnifying glass, the judge's gavel, the tip of the octopus's baton) are part of the drawings, not a signal. They never stand for "needs you", and the characters stay off every amber-tint surface (see Characters).
+Named exception: the amber props of the characters (the code reviewer's magnifying glass, the verdict step's gavel, the tip of the octopus's baton) are part of the drawings, not a signal. They never stand for "needs you", and the characters stay off every amber-tint surface (see Characters).
 
 ## Characters
 
-Each role has one character, drawn in a light and a dark version:
+The Code reviewers and their verdict step each have one character, drawn in a light and a dark version (role names as in [the team](../05-architecture/01-overview.md#the-team); the `Character` values keep their code names until the code is renamed):
 
 | Role | `Character` | Drawing |
 |---|---|---|
-| Code reviewer (every panel reviewer, whatever its lens) | `CodeReviewer` (`code_reviewer`) | Meerkat with a magnifying glass |
-| Judge | `Judge` (`judge`) | Owl with a gavel |
+| Code reviewer (every reviewer setting of the Code reviewers, whatever its lens) | `CodeReviewer` (`code_reviewer`) | Meerkat with a magnifying glass |
+| The Code reviewers' verdict step (formerly the judge) | `Judge` (`judge`) | Owl with a gavel |
 
-The octopus has three poses (`MascotPose`): `waiting`, `conducting`, `bowing`, for empty and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
+The octopus has four poses (`MascotPose`): `waiting`, `conducting`, `bowing`, `asleep`, for empty, idle and approved states. The enum value is the file stem: `assets/images/roles/<value>-{light,dark}-{48,96,192}.webp` for a role and `assets/images/mascot/octopus-<value>-{light,dark}-{96,144,192,288}.webp` for a pose, plus `-72` for `bowing`, which sits at 72 px beside an approved newest round (scaled from `octopus-<value>-{light,dark}.webp`). Every place uses the one partial `templates/dashboard/components/character.html.twig` (`character`, `size`); the components page shows each character and pose in both themes.
 
-Places: a reviewer's row and the judge's row on the review page, the live log and the round heading (24 or 48 px), and an octopus pose on an empty or approved state.
+Places: a reviewer's row and the verdict step's row on the review page, the live log and the round heading (24 or 48 px), and an octopus pose on an empty, idle or approved state.
 
 - **Decoration only.** Every image has `alt=""`, no `role`, a fixed `width` and `height` (no layout shift), a 1x/2x `srcset` (24 px: the 48 and 96 files; 48 px: 96 and 192; an octopus at 96 px: 96 and 192; at 144 px: 144 and 288) and `loading="lazy"`. The text beside it names the actor; no text is removed or shortened for a character.
 - **Theme.** The light and the dark image switch by the nearest `[data-theme]`, like the logo.
-- **Calm.** No animation and no hover effect. One character per row or heading, and one octopus per page (the components page, a catalog for builders, is the exception).
+- **Calm.** No animation and no hover effect. One character per row or heading, and one octopus per page (the components page, a catalog for the people who build pages, is the exception).
 - **Never** on board cards, table rows, chips, amber-tint surfaces or Waiting on you. The outcome chip and the state dot stay the only carriers of outcome and state.
 - **Contrast.** A character's silhouette is at least 3:1 against `--page`, `--raised` and `--tint` in both themes. The dark drawings carry a light halo of their own; the light ones get a 1 px `--muted` ring from the style sheet (5.2:1 or more on those surfaces), because their own edge falls under 3:1.
 
@@ -140,7 +140,7 @@ Rail: Board, Waiting on you, Projects, Team, History, Settings. New pages live u
 | `health.html` | Projects | Sub-tab "Health" (shows the broken count); board's CI banner |
 | `add-account.html` | Team | "Add an account"; search action |
 | Notifications | Settings | Its own group: channels, quiet hours, the fixed rule |
-| `components.html` | none | Link at the bottom of Settings, for builders |
+| `components.html` | none | Link at the bottom of Settings, for the people who build pages |
 
 Sub-tabs (`.subtabs`) are links with `aria-current="page"`, a 2 px green underline on the current one.
 
@@ -173,7 +173,7 @@ Use the plain wording in UI copy. Where the term must stay, mark it with `.term`
 - **Loading**: static skeleton blocks in the shape of the content (cards, lane summary, lead line), with `aria-busy` on the main region. No spinners on whole pages and no pulsing (motion only follows the user). Buttons that wait show their verb in progress ("Saving…", "Approving…").
 - **Errors**: say what failed, the cause in plain words, and what is still true ("Not saved, still 22:00 to 07:00", "Nothing was saved"). Red only for the failed part.
 - **Offline or reconnecting**: a neutral line at the top of the page ("Reconnecting. You are seeing what Intakt knew at 11:12:04; actions wait until it is back. Next try in 5 s.") with Try now, an "Offline" marker in the top bar, action buttons disabled, elapsed times frozen with their timestamp. Content stays at full contrast; never fade the page. After two minutes the line turns red ("Can't reach Intakt").
-- **First day**: no banners, the lead says "Nothing is running yet. Start the first review." and links the setup page, as does the first head action, **Set up Intakt**; the second, **Open the review list**, stays as on every day. Phones show both. A tinted block, "Give Intakt its first task", gives the three steps to the first review, with the waiting octopus above its words (at most 144 px high, 120 px on a phone). It has no link to a repository's issues while Intakt takes in no issues. Each empty column, and the Who is working line while nobody works, says in one line what lands there and when (such as "Reviews appear here while a panel reviews a change"), on the first day and after.
+- **First day**: no banners, the lead says "Nothing is running yet. Start the first review." and links the setup page, as does the first head action, **Set up Intakt**; the second, **Open the review list**, stays as on every day. Phones show both. A tinted block, "Give Intakt its first task", gives the three steps to the first review, with the waiting octopus above its words (at most 144 px high, 120 px on a phone). It has no link to a repository's issues while Intakt takes in no issues. Each empty column, and the Who is working line while nobody works, says in one line what lands there and when (such as "Reviews appear here while the Code reviewers review a change"), on the first day and after.
 
 Examples: `index.html?demo=stress`, `?demo=reconnecting`, `?demo=firstday`, `?demo=loading`.
 

@@ -11,6 +11,7 @@ use Intakt\Core\Ledger\Contract\Ledger;
 use Intakt\Core\Ledger\Contract\LedgerEvent;
 use Intakt\Core\Ledger\Contract\LedgerEventKind;
 use Intakt\Core\Ledger\Contract\LedgerPayloads;
+use Intakt\Core\Review\Contract\Decision;
 use Intakt\Core\Review\Contract\DroppedFinding;
 use Intakt\Core\Review\Contract\JudgeDone;
 use Intakt\Core\Review\Contract\JudgeDoneFinding;
@@ -282,6 +283,27 @@ final class RoundLedgerReadingTest extends KernelTestCase
 
         self::assertSame([], $this->reading()->droppedOf(self::ROUND));
         self::assertSame(['F1', 'F3'], $this->actIdsOf(self::ROUND));
+    }
+
+    public function testAReviewersVoteIsReadAsTheJudgeStepCountedIt(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['votes' => ['reviewer-a' => 'approve']] + $this->judgeDone(self::ROUND));
+
+        self::assertSame(['reviewer-a' => Decision::Approve], $this->reading()->votesOf(self::ROUND));
+    }
+
+    public function testAJudgeDoneRowWrittenBeforeVotesWereCountedReadsAsNoVotes(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, $this->judgeDone(self::ROUND));
+
+        self::assertSame([], $this->reading()->votesOf(self::ROUND));
+    }
+
+    public function testTheVotesOfAnotherRoundAreNotRead(): void
+    {
+        $this->append(LedgerEventKind::JudgeDone, ['votes' => ['reviewer-a' => 'approve']] + $this->judgeDone('another-round'));
+
+        self::assertSame([], $this->reading()->votesOf(self::ROUND));
     }
 
     public function testTheDroppedFindingsOfAnotherRoundAreNotRead(): void
