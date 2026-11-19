@@ -39,6 +39,39 @@ final class VerdictTest extends TestCase
         self::assertSame($evidence, Verdict::incompleteStream('the stream ended early', $evidence)->findings[0]->evidence);
     }
 
+    public function testAnApprovalAndChangesOfOnlyP3FindingsMayCountAsApproval(): void
+    {
+        self::assertSame([true, true], [
+            new Verdict(Decision::Approve, [], [], [])->mayCountAsApproval(),
+            $this->changes(Severity::P3, Severity::P3)->mayCountAsApproval(),
+        ]);
+    }
+
+    public function testChangesWithAP2WithoutFindingsOrOfAFailedReviewNeverCountAsApproval(): void
+    {
+        $failed = new Verdict(Decision::Changes, [new Finding(Verdict::NO_TOOLS, Severity::P3, null, null, null, 'No tools.', FixableBy::Owner, false, null, null)], [], []);
+
+        self::assertSame([false, false, false, false], [
+            $this->changes(Severity::P3, Severity::P2)->mayCountAsApproval(),
+            $this->changes()->mayCountAsApproval(),
+            $failed->mayCountAsApproval(),
+            Verdict::unreadApproval()->mayCountAsApproval(),
+        ]);
+    }
+
+    public function testAReviewersBlockedVerdictOfOnlyP3FindingsMayCountAsApprovalBecauseItIsRecordedAsChanges(): void
+    {
+        $blocked = new Verdict(Decision::Blocked, [new Finding('A', Severity::P3, null, null, null, 'Text.', FixableBy::Builder, false, null, null)], [], []);
+        $withAP2 = new Verdict(Decision::Blocked, [new Finding('A', Severity::P2, null, null, null, 'Text.', FixableBy::Builder, false, null, null)], [], []);
+
+        self::assertSame([true, false], [$blocked->mayCountAsApproval(), $withAP2->mayCountAsApproval()]);
+    }
+
+    private function changes(Severity ...$severities): Verdict
+    {
+        return new Verdict(Decision::Changes, array_map(static fn (Severity $severity): Finding => new Finding('A', $severity, null, null, null, 'Text.', FixableBy::Builder, false, null, null), array_values($severities)), [], []);
+    }
+
     public function testAReviewersBlockedVerdictWithFindingsIsRecordedAsChanges(): void
     {
         $verdict = new Verdict(Decision::Blocked, [$this->finding()], ['F0'], ['a follow-up']);
@@ -99,9 +132,47 @@ final class VerdictTest extends TestCase
         yield 'invalid output' => [Verdict::INVALID_OUTPUT];
     }
 
+    #[DataProvider('failureIds')]
+    public function testAReviewersAnswerNamingAFailureIdClaimsThatId(string $failureId): void
+    {
+        $answer = VerdictDocument::fromTheDesign()
+            ->with('verdict', 'changes')
+            ->with('resolved', [])
+            ->withFinding('id', $failureId);
+        $verdict = StoredSerializerFactory::create()->deserialize($answer->json(), Verdict::class, 'json');
+
+        self::assertSame([$failureId], $verdict->claimedFailureIds());
+    }
+
+    public function testAReviewersAnswerWithOrdinaryIdsClaimsNoFailureId(): void
+    {
+        self::assertSame([], new Verdict(Decision::Changes, [$this->finding()], [], [])->claimedFailureIds());
+    }
+
+    #[DataProvider('failureVerdicts')]
+    public function testAnIntaktFailureVerdictClaimsNoFailureId(Verdict $failure): void
+    {
+        self::assertSame([], $failure->claimedFailureIds());
+    }
+
     public function testAFailureVerdictWithItsFindingsReplacedStaysBlocked(): void
     {
         self::assertSame(Decision::Blocked, Verdict::noTools()->withFindings([$this->finding()])->asRecorded()->verdict);
+    }
+
+    public function testABlockedVerdictIntaktGaveNamesItsFindingAsItsReason(): void
+    {
+        self::assertSame(Verdict::noTools()->findings[0]->text, Verdict::noTools()->blockedReason());
+    }
+
+    public function testAVerdictThatIsNotBlockedHasNoBlockedReason(): void
+    {
+        self::assertNull(new Verdict(Decision::Changes, [$this->finding()], [], [])->blockedReason());
+    }
+
+    public function testABlockedVerdictWithoutAFindingHasNoBlockedReason(): void
+    {
+        self::assertNull(new Verdict(Decision::Blocked, [], [], [])->blockedReason());
     }
 
     public function testAnApprovalAndAChangesVerdictAreRecordedAsGiven(): void
