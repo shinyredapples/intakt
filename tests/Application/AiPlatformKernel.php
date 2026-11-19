@@ -34,6 +34,8 @@ final class AiPlatformKernel extends Kernel
             // Reset as the framework resets its own http_client, so the probe does not report the mock's request count.
             $container->register('probe.http_client', MockHttpClient::class)->setArguments([new Reference(ProviderAnswers::class), 'http://localhost'])->addTag('kernel.reset', ['method' => 'reset']);
             $container->loadFromExtension('ai', ['platform' => ['generic' => ['probe' => ['base_url' => 'http://localhost', 'http_client' => 'probe.http_client']]]]);
+            // Without the profiler, as in prod, because its serializer collector is reset only by a profiler this walk never builds, so it would report the collector's growth as Symfony AI state.
+            $container->loadFromExtension('framework', ['profiler' => false]);
         });
     }
 
