@@ -1,5 +1,5 @@
 name: highlights
-# Publishes the page bin/highlights assembles from docs/highlights.d/ to GitHub Pages; it is never committed.
+# Publishes the site bin/pages assembles, the highlights page and the journey page, to GitHub Pages; it is never committed.
 on:
   push:
     branches: [main]
