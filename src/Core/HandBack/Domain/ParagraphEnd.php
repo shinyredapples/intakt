@@ -71,7 +71,7 @@ final readonly class ParagraphEnd
         return $run >= self::SHORTEST_FENCE_RUN && ('~' === $text[$at] || '`' !== ($text[$rest] ?? "\n"));
     }
 
-    // A setext underline is a line of `=` or `-` only, a thematic break three or more of its character with blanks between them.
+    // One walk serves both, because a setext underline is a line of `=` or `-` only and a thematic break is three or more of its character with blanks between them.
     private static function isRule(string $text, int $at, int $shortest): bool
     {
         $character = $text[$at];

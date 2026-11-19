@@ -73,13 +73,13 @@ final readonly class MarkdownText
         $text = str_replace(["\r\n", "\r"], "\n", $markdown);
         $read = '';
         $offset = 0;
-        $codeSpans = new CodeSpans($text);
+        $codeSpans = CodeSpans::of($text);
 
         while (null !== ($match = self::firstMatch(self::OPENING, $text, $offset))) {
             $start = $match[0][1];
             $part = match (true) {
                 '' !== ($match['fence'][0] ?? '') => FencedBlock::at($text, $start),
-                '' !== ($match['code'][0] ?? '') => $codeSpans->spanOrLiteralAt($start, $offset),
+                '' !== ($match['code'][0] ?? '') => ($codeSpans = $codeSpans->inTheParagraphAt($start))->spanOrLiteralAt($start, $offset),
                 default => self::commentAt($text, $start),
             };
             $read .= substr($text, $offset, $start - $offset).match (true) {

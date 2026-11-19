@@ -32,7 +32,8 @@ final readonly class FencedBlock
 
             $lineEnd = MarkdownText::lineEndAt($text, $line);
 
-            if (self::closingRunAt($text, $line, $character, $column) >= $run) {
+            // A closing line is indented up to three columns from where its container's content starts, so inside a list item the item's content column is added.
+            if (self::closingRunAt($text, $line, $character) >= $run && self::indentColumnsAt($text, $line) <= ($column ?? 0) + self::MOST_INDENT) {
                 break;
             }
         }
@@ -47,17 +48,16 @@ final readonly class FencedBlock
         return null !== $column && !$isBlank && self::indentColumnsAt($text, $line) < $column;
     }
 
-    // A closing line is indented up to three spaces from where its container's content starts, so inside a list item the item's content column is added.
-    private static function closingRunAt(string $text, int $line, string $character, ?int $column): int
+    private static function closingRunAt(string $text, int $line, string $character): int
     {
         $start = $line + strspn($text, self::BLANK, $line);
         $run = strspn($text, $character, $start);
         $next = $text[$start + $run + strspn($text, self::BLANK, $start + $run)] ?? "\n";
 
-        return self::indentColumnsAt($text, $line) <= ($column ?? 0) + self::MOST_INDENT && "\n" === $next ? $run : 0;
+        return "\n" === $next ? $run : 0;
     }
 
-    // A tab in the indent runs to the next tab stop, as in the list item lines the column comes from.
+    // A tab in the indent runs to the next tab stop, because the content column it is compared with was measured that way on the list item's line.
     private static function indentColumnsAt(string $text, int $line): int
     {
         $columns = 0;
@@ -69,7 +69,7 @@ final readonly class FencedBlock
         return $columns;
     }
 
-    // A fence opened right after a list marker belongs to that marker's item, whose content starts where the fence does.
+    // A fence opened right after a list marker is the first content of that marker's item, so the item's content column is where the fence starts.
     private static function columnOfItsListItem(string $text, int $start, int $indent): ?int
     {
         $lineStart = MarkdownText::lineStartAt($text, $start);

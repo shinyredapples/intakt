@@ -4,21 +4,41 @@ declare(strict_types=1);
 
 namespace Intakt\Core\HandBack\Domain;
 
-// The spans of one text are read from left to right by one instance, because what a search learned about a paragraph (where it ends, which backtick runs it holds) answers the next search in it, and without that memory a paragraph of unpaired runs is scanned once per run.
-final class CodeSpans
+// The backtick runs of a paragraph are listed once, when the reader enters it, because searching the paragraph again for every run that has no partner takes quadratic time on a long text of unpaired backticks.
+final readonly class CodeSpans
 {
-    private int $paragraphEnd = 0;
-
-    private bool $scannedToTheParagraphEnd = false;
-
     /**
-     * @var array<int, int>
+     * @param array<int, list<int>> $runsOfLength
      */
-    private array $lastRunOfLength = [];
-
-    public function __construct(
-        private readonly string $text,
+    private function __construct(
+        private string $text,
+        private int $paragraphEnd,
+        private array $runsOfLength,
     ) {
+    }
+
+    public static function of(string $text): self
+    {
+        return new self($text, 0, []);
+    }
+
+    public function inTheParagraphAt(int $start): self
+    {
+        if ($start < $this->paragraphEnd) {
+            return $this;
+        }
+
+        $paragraphEnd = ParagraphEnd::after($this->text, $start);
+        $runsOfLength = [];
+        $position = strpos($this->text, '`', $start);
+
+        while (false !== $position && $position < $paragraphEnd) {
+            $run = strspn($this->text, '`', $position);
+            $runsOfLength[$run][] = $position;
+            $position = strpos($this->text, '`', $position + $run);
+        }
+
+        return new self($this->text, $paragraphEnd, $runsOfLength);
     }
 
     // A code span closes only with a backtick run of the same length in the same paragraph; a run without one, and a backtick escaped with a backslash, is a literal backtick (https://spec.commonmark.org/0.31.2/#backslash-escapes).
@@ -26,9 +46,10 @@ final class CodeSpans
     {
         $escaped = $this->isEscaped($start, $offset) ? 1 : 0;
         $length = strspn($this->text, '`', $start) - $escaped;
-        $close = 0 === $length ? null : $this->closingRunEnd($start + $escaped + $length, $length);
+        $opened = $start + $escaped + $length;
+        $close = $this->firstRunFrom($opened, $length);
 
-        return substr($this->text, $start, ($close ?? $start + $escaped + $length) - $start);
+        return substr($this->text, $start, (null === $close ? $opened : $close + $length) - $start);
     }
 
     // Backslashes before the part read so far may belong to a code span, where they escape nothing.
@@ -39,40 +60,18 @@ final class CodeSpans
         return 1 === (strlen($before) - strlen(rtrim($before, '\\'))) % 2;
     }
 
-    private function closingRunEnd(int $from, int $length): ?int
+    // A binary search, because the positions are in ascending order and a paragraph may hold thousands of runs of one length.
+    private function firstRunFrom(int $from, int $length): ?int
     {
-        $this->enterTheParagraphAt($from);
+        $runs = $this->runsOfLength[$length] ?? [];
+        $low = 0;
+        $high = count($runs);
 
-        if ($this->scannedToTheParagraphEnd && ($this->lastRunOfLength[$length] ?? -1) < $from) {
-            return null;
+        while ($low < $high) {
+            $middle = intdiv($low + $high, 2);
+            [$low, $high] = $runs[$middle] < $from ? [$middle + 1, $high] : [$low, $middle];
         }
 
-        $position = strpos($this->text, '`', $from);
-
-        while (false !== $position && $position < $this->paragraphEnd) {
-            $run = strspn($this->text, '`', $position);
-
-            if ($run === $length) {
-                return $position + $run;
-            }
-
-            $this->lastRunOfLength[$run] = $position;
-            $position = strpos($this->text, '`', $position + $run);
-        }
-
-        $this->scannedToTheParagraphEnd = true;
-
-        return null;
-    }
-
-    private function enterTheParagraphAt(int $from): void
-    {
-        if ($from < $this->paragraphEnd) {
-            return;
-        }
-
-        $this->paragraphEnd = ParagraphEnd::after($this->text, $from);
-        $this->scannedToTheParagraphEnd = false;
-        $this->lastRunOfLength = [];
+        return $runs[$low] ?? null;
     }
 }
