@@ -61,7 +61,6 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 /**
  * @phpstan-import-type ResultDocument from BenchResultFile

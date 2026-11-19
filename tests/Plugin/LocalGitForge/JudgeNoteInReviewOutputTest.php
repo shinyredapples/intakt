@@ -25,7 +25,6 @@ use Intakt\Core\Review\Contract\ReviewerRole;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Contract\Verdict;
 use Intakt\Core\Review\Domain\OnePerPlace;
-use Intakt\Core\Review\UseCase\JudgeRound\FailedJudgings;
 use Intakt\Core\Review\UseCase\ReadVerdicts\StoredVerdicts;
 use Intakt\Core\Review\UseCase\ReviewChange\ReviewChange;
 use Intakt\Core\Review\UseCase\ReviewChange\RoundLedgerReading;
@@ -47,7 +46,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 // A round reviewed and judged through ReviewChange, the use case behind intakt:review, then printed as the command prints it, so the note travels the whole way from the judge's answer.
 #[Group('persistence')]

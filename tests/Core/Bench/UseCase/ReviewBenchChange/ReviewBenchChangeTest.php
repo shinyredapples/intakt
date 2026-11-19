@@ -57,7 +57,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 #[Group('persistence')]
 #[CoversClass(ReviewBenchChange::class)]

@@ -66,7 +66,6 @@ use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Messenger\Handler\HandlersLocator;
 use Symfony\Component\Messenger\MessageBus;
 use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
-use Symfony\Component\Messenger\Transport\Receiver\ListableReceiverInterface;
 
 // Only the vendor is scripted, because the figures the command prints must come from stored rounds and ledger rows, as on an install.
 #[Group('persistence')]
