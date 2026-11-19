@@ -7,14 +7,16 @@ set -u
 set -f
 
 # Kept in an unexported variable and shifted off, so the job's command never sees it and cannot forge a line that carries it.
-mark="${1:-}"
+# Unset first, because a variable the image imports through its environment stays exported, and exec would hand the mark to the job.
+unset intakt_mark
+intakt_mark="${1:-}"
 [ "$#" -gt 0 ] && shift
 output="${INTAKT_JOB_OUTPUT:-/output}"
 failed=''
 
 # Standard error only, because the orchestrator reads the result from the container's log up to the mode line, which the job runs after and cannot rewrite.
 log() {
-    printf 'intakt-start-check %s: %s\n' "$mark" "$1" >&2
+    printf 'intakt-start-check %s: %s\n' "$intakt_mark" "$1" >&2
 }
 
 fail() {

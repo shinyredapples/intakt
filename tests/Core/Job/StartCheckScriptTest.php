@@ -159,6 +159,17 @@ final class StartCheckScriptTest extends TestCase
         self::assertStringNotContainsString(self::MARK, $run->getOutput());
     }
 
+    public function testAJobWhoseImageExportsAVariableOfTheMarksNameStillCannotSeeTheMark(): void
+    {
+        $environment = [...$this->environment(null, (string) getenv('PATH')), 'intakt_mark' => 'from-image-env', 'mark' => 'from-image-env'];
+
+        $run = $this->startCheckWith(['/missing', '--', '/bin/sh', '-c', 'env; printf "%s\n" "${intakt_mark-}" "${mark-}"'], $environment);
+
+        self::assertSame(0, $run->getExitCode());
+        self::assertStringContainsString(self::CHECK.'reduced mode: input', $run->getErrorOutput());
+        self::assertStringNotContainsString(self::MARK, $run->getOutput());
+    }
+
     public function testEveryLineOfTheCheckCarriesTheMark(): void
     {
         $run = $this->whenTheCheckRuns([$this->root.'/input']);

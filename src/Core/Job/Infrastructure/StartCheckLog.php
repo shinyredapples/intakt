@@ -17,11 +17,6 @@ final readonly class StartCheckLog
     private const string FULL_MODE = 'full mode';
     private const string REDUCED_MODE = 'reduced mode: ';
 
-    private function prefixOf(string $mark): string
-    {
-        return sprintf('intakt-start-check %s: ', $mark);
-    }
-
     /**
      * @return list<StartCheckFailure>
      */
@@ -33,6 +28,11 @@ final readonly class StartCheckLog
         $failures = array_values(array_filter(array_map($this->failureOn(...), $before, array_keys($before))));
 
         return array_slice([...$failures, ...$this->modeFailures(null === $modeAt ? null : $lines[$modeAt], $failures)], 0, self::MAX_FAILURES);
+    }
+
+    private function prefixOf(string $mark): string
+    {
+        return sprintf('intakt-start-check %s: ', $mark);
     }
 
     /**
