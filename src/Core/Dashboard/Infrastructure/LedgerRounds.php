@@ -265,7 +265,7 @@ final class LedgerRounds
     {
         return match (true) {
             $row instanceof ReviewerStarted => $outcome->restarted($at, $row->model),
-            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode)->because($row->reason ?? self::unrecordedReasonOf($row->decision)),
+            $row instanceof VerdictReceived => $outcome->answered($row->decision, $row->findings, $row->mode)->because($row->reason ?? $this->unrecordedReasonOf($row->decision)),
             $row instanceof ReviewerFailed => $outcome->failed($this->failures->of($row->failure)),
             $row instanceof ReviewerBlocked => $outcome->blocked($row->reason),
             $row instanceof ReviewerStopped => $outcome->stopped(),
@@ -274,7 +274,7 @@ final class LedgerRounds
     }
 
     // A blocked verdict recorded before reasons were kept still says so, because Blocked must never show without a word on why.
-    private static function unrecordedReasonOf(Decision $decision): ?string
+    private function unrecordedReasonOf(Decision $decision): ?string
     {
         return Decision::Blocked === $decision ? self::UNRECORDED_REASON : null;
     }
