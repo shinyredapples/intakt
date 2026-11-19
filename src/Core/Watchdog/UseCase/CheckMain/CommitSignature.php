@@ -56,21 +56,56 @@ final readonly class CommitSignature
     private function split(string $commitText, string $header): array
     {
         [$headers, $message] = array_pad(explode("\n\n", $commitText, 2), 2, '');
-        // Because git folds a multi-line header value into continuation lines that start with a space.
-        preg_match_all('/^(\S+) (.*(?:\n .*)*)$/m', $headers, $entries, PREG_SET_ORDER);
         $signature = null;
         $kept = [];
 
-        foreach ($entries as [$entry, $name, $value]) {
+        foreach ($this->entries($headers) as [$name, $lines]) {
             // Because git leaves every signature header out of the text it signs, whichever one it reads.
             if (!in_array($name, self::SIGNATURE_HEADERS, true)) {
-                $kept[] = $entry;
+                $kept[] = implode("\n", $lines);
             } elseif ($name === $header) {
-                $signature ??= str_replace("\n ", "\n", $value)."\n";
+                $signature ??= $this->unfolded($name, $lines);
             }
         }
 
         return [$signature, implode("\n", $kept)."\n\n".$message];
+    }
+
+    /**
+     * Read line by line, because a pattern over the whole block runs out of stack on a long folded header and loses the signature.
+     *
+     * @return list<array{string, non-empty-list<string>}>
+     */
+    private function entries(string $headers): array
+    {
+        $entries = [];
+
+        foreach (explode("\n", $headers) as $line) {
+            $last = array_key_last($entries);
+
+            // Because git folds a multi-line header value into continuation lines that start with a space.
+            if (null !== $last && str_starts_with($line, ' ')) {
+                $entries[$last][1][] = $line;
+            } else {
+                $entries[] = [explode(' ', $line, 2)[0], [$line]];
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * @param non-empty-list<string> $lines
+     */
+    private function unfolded(string $name, array $lines): string
+    {
+        $value = [substr($lines[0], strlen($name) + 1)];
+
+        foreach (array_slice($lines, 1) as $continuation) {
+            $value[] = substr($continuation, 1);
+        }
+
+        return implode("\n", $value)."\n";
     }
 
     /**

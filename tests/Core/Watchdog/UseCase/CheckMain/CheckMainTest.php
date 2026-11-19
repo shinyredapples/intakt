@@ -81,6 +81,17 @@ final class CheckMainTest extends TestCase
         self::assertSame([Verdict::OwnerSigned], $this->verdicts($checked));
     }
 
+    public function testACommitSignedByTheOwnersKeyAfterAFoldedHeaderOfTwentyThousandLinesIsClean(): void
+    {
+        $base = $this->scenario->main->commitFile('a.txt', "one\n");
+        $owner = $this->scenario->newKey('owner');
+        $this->scenario->commitSignedByAfterAFoldedHeaderOf(20000, 'owner');
+
+        $checked = $this->scenario->check()->of($this->watching($base, [], [$owner]));
+
+        self::assertSame([Verdict::OwnerSigned], $this->verdicts($checked));
+    }
+
     public function testACommitSignedByAForeignKeyIsAViolation(): void
     {
         $base = $this->scenario->main->commitFile('a.txt', "one\n");

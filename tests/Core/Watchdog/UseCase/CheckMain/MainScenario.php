@@ -66,6 +66,24 @@ final readonly class MainScenario
         return $commit;
     }
 
+    // Written by hand, because git itself never folds a header this long and the classifier must still read the signature after it.
+    public function commitSignedByAfterAFoldedHeaderOf(int $continuationLines, string $keyName): string
+    {
+        $who = 'Test <test@example.invalid> 1700000000 +0000';
+        $headers = 'tree '.$this->git(['rev-parse', 'HEAD^{tree}'])."\nparent ".$this->git(['rev-parse', 'HEAD'])."\nauthor ".$who."\ncommitter ".$who
+            ."\nmergetag object ".$this->git(['rev-parse', 'HEAD'])."\n type commit\n tag release".str_repeat("\n Release notes", $continuationLines);
+        $message = "\n\nSigned merge\n";
+        $sign = new Process(['ssh-keygen', '-q', '-Y', 'sign', '-n', 'git', '-f', $this->keyFile($keyName)], null, null, $headers.$message);
+        $sign->mustRun();
+        $signature = 'gpgsig '.str_replace("\n", "\n ", rtrim($sign->getOutput(), "\n"));
+        $write = new Process(['git', 'hash-object', '-t', 'commit', '-w', '--stdin'], $this->main->path, ['GIT_DIR' => false, 'GIT_WORK_TREE' => false], $headers."\n".$signature.$message);
+        $write->mustRun();
+        $commit = trim($write->getOutput());
+        $this->git(['update-ref', 'refs/heads/main', $commit]);
+
+        return $commit;
+    }
+
     public function forceMainTo(string $commit): void
     {
         $this->git(['update-ref', 'refs/heads/main', $commit]);
