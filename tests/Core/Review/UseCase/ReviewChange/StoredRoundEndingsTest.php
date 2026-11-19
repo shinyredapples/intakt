@@ -78,7 +78,7 @@ final class StoredRoundEndingsTest extends TestCase
     }
 
     /**
-     * @param list<string>   $recorded the rounds whose judging failure the ledger holds
+     * @param list<string>   $recorded
      * @param list<Envelope> $parked
      */
     private function endingsAt(string $now, array $recorded = [], array $parked = []): StoredRoundEndings
@@ -88,7 +88,7 @@ final class StoredRoundEndingsTest extends TestCase
 
         $ledger = self::createStub(Ledger::class);
         $ledger->method('readOfKind')->willReturn(new RecordedEvents(array_map(
-            static fn (string $round): RecordedEvent => new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $round], JSON_THROW_ON_ERROR)), new DateTimeImmutable($now)),
+            static fn (string $round): RecordedEvent => new RecordedEvent(Uuid::v7(), new LedgerEvent(LedgerEventKind::JudgingFailed, json_encode(['round' => $round], JSON_THROW_ON_ERROR)), new DateTimeImmutable('2026-10-28T12:00:00+00:00')),
             $recorded,
         )));
 

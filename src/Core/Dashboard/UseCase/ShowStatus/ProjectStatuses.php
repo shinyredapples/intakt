@@ -182,7 +182,7 @@ final readonly class ProjectStatuses
             $outcomes[$round->project] ??= [];
 
             if (count($outcomes[$round->project]) < self::LAST_OUTCOMES) {
-                $outcomes[$round->project][] = ['change' => $round->change, 'mark' => $round->replayMark()->value, 'round' => $round->round, 'number' => $round->number, 'end' => ($round->ending?->end ?? RoundEnds::Judged)->value, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
+                $outcomes[$round->project][] = ['change' => $round->change, 'mark' => $round->replayMark()->value, 'round' => $round->round, 'number' => $round->number, 'end' => ($round->ending->end ?? RoundEnds::Judged)->value, 'decision' => $round->outcome?->value, 'judged_at' => $round->judgedAt?->format(DATE_ATOM)];
             }
         }
 
