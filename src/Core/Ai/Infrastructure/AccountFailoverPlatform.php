@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Intakt\Core\Ai\Infrastructure;
 
+use Closure;
 use Intakt\Core\Ai\Contract\Account;
 use Intakt\Core\Ai\Contract\AccountCooldowns;
 use Intakt\Core\Ai\Contract\EveryAccountCoolingDown;
@@ -65,7 +66,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
             throw $this->typed($everyAccountFailed, $failures, $routerProvider);
         }
 
-        return $this->typedWhenRead($answer, $failures, $routerProvider, $options);
+        return $this->typedWhenRead($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures, $routerProvider), $options);
     }
 
     #[Override]
@@ -148,8 +149,7 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
         return $this->outOfAccounts($waits, $failures);
     }
 
-    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets.
-    // The wait is the shortest of the waits that just found no account free, never a second read, so it is at least a second (see waits()); the longest window is listed too, which no wait exceeds.
+    // When every account of the provider rejected its key, in this call or in an earlier one it still cools down from, there is nothing to wait for, so a rejection is thrown; never the provider's own, because its message can echo a key and the judging's failure listener logs what it gets. The wait is the shortest of the waits that just found no account free, never a second read, so it is at least a second (see waits()); the longest window is listed too, so min() always has a value.
     /**
      * @param array<string, int> $waits
      */
@@ -177,11 +177,12 @@ final readonly class AccountFailoverPlatform implements PlatformInterface
 
     // A key rejected when the answer is read follows the same rule as one rejected as the call is sent, because an account cooling down from a limit beside it is free again after its wait.
     /**
+     * @param Closure(): Throwable $rejected
      * @param array<string, mixed> $options
      */
-    private function typedWhenRead(DeferredResult $answer, SendFailures $failures, ?string $routerProvider, array $options): DeferredResult
+    private function typedWhenRead(DeferredResult $answer, Closure $rejected, array $options): DeferredResult
     {
-        $converter = new TypedRejectionConverter($answer, fn (): Throwable => $this->rejectedWhenRead($answer, $failures, $routerProvider));
+        $converter = new TypedRejectionConverter($answer, $rejected);
         $typed = new DeferredResult($converter, $answer->getRawResult(), $options);
         $typed->getMetadata()->set($answer->getMetadata()->all());
 

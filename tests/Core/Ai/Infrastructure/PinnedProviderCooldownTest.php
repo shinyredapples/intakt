@@ -71,7 +71,7 @@ final class PinnedProviderCooldownTest extends TestCase
 
     public function testA429WithoutARetryAfterCoolsThePinForTheDefaultMinute(): void
     {
-        $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException(null)), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();
+        $this->accounts($this->answering(static fn (): never => throw new RateLimitExceededException()), $this->answering('second'))->invoke(self::PINNED, 'Review.')->asText();
 
         self::assertSame(60, $this->pins->secondsUntilFree($this->deepinfra(Account::DEFAULT)));
     }
@@ -166,6 +166,9 @@ final class PinnedProviderCooldownTest extends TestCase
         self::assertLessThanOrEqual(120, $out->secondsUntilAnAccountIsFree);
     }
 
+    /**
+     * @param non-empty-string $model
+     */
     #[DataProvider('modelsThatPinNothing')]
     public function testAModelIdOutsideTheRouterShapeCoolsNoPin(string $model, string $tail): void
     {
@@ -177,7 +180,7 @@ final class PinnedProviderCooldownTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{string, string}>
+     * @return iterable<string, array{non-empty-string, string}>
      */
     public static function modelsThatPinNothing(): iterable
     {

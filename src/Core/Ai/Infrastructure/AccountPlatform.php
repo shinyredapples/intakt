@@ -40,7 +40,6 @@ final readonly class AccountPlatform implements PlatformInterface
         private LoggerInterface $logger,
         private SendFailures $failures,
         private PinnedProviderCooldowns $pinnedCooldowns,
-        // The router provider this call's model id pins on this account, null when it pins none.
         private ?PinnedProvider $pinned,
     ) {
     }

@@ -119,7 +119,6 @@ final class AccountLimitedVendorTest extends TestCase
         self::assertSame(45, $out->retryAfterSeconds);
     }
 
-    // The account cooldowns read 0 here while a pinned provider still cools, the order the reviews found; the wait the failover carried decides.
     public function testARateLimitCarryingTheFailoversWaitWaitsThatLongEvenWhenTheAccountCooldownsReadZero(): void
     {
         $limited = new ProviderRateLimited(300, new EveryAccountCoolingDown(Provider::OpenAiCompatible, 42));
