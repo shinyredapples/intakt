@@ -45,8 +45,10 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }, { wi
         const doc = () => document.documentElement.scrollWidth;
         const before = doc();
         board.scrollLeft = board.scrollWidth;
-        return { boardScrolls: board.scrollWidth > board.clientWidth, before, atEdge: doc(), viewport: window.innerWidth };
+        const reached = Math.abs(board.scrollLeft - (board.scrollWidth - board.clientWidth)) <= 1;
+        return { boardScrolls: board.scrollWidth > board.clientWidth, reachedEdge: reached, before, atEdge: doc(), viewport: window.innerWidth };
       });
+      if (overflow.boardScrolls && !overflow.reachedEdge) errors.push(`board did not reach its horizontal edge: ${JSON.stringify(overflow)}`);
       if (overflow.before > overflow.viewport || overflow.atEdge > overflow.viewport) errors.push(`page overflows: ${JSON.stringify(overflow)}`);
       console.log(`board (six projects) ${theme} ${size.width}: ${seen}; overflow ${JSON.stringify(overflow)}`);
       await page.evaluate(() => { document.querySelector('.board').scrollLeft = 0; });
@@ -71,6 +73,10 @@ const SIZES = [{ width: 1440, height: 900 }, { width: 1920, height: 1080 }, { wi
           return `selected "${name}": ${cards.filter((c) => c.offsetParent !== null).length} of ${cards.length} cards shown`;
         });
         console.log(`board (six projects) ${theme} ${size.width} filter ${filterSeen}`);
+        await page.evaluate(() => {
+          const shown = [...document.querySelectorAll('.board article[data-project]')].find((c) => c.offsetParent !== null);
+          if (shown) shown.scrollIntoView({ inline: 'center', block: 'center' });
+        });
         await page.screenshot({ path: path.join(__dirname, `board-six-filtered-${theme}-${size.width}.png`), fullPage: true });
       }
       runs.push({ page: 'board (six projects)', theme, width: size.width, errors, violations, floors });
