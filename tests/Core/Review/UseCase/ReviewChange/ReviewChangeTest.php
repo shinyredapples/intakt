@@ -163,6 +163,21 @@ final class ReviewChangeTest extends KernelTestCase
         self::assertSame(['role-1 reviewer failed, the model endpoint could not be reached'], $review->reasons);
     }
 
+    public function testAReviewerBlockedBecauseNoProviderIsLeftIsNamedBlockedWithItsReason(): void
+    {
+        $review = $this->reviewWith(new OutOfProvidersForRole('Look at part 1.'));
+
+        self::assertSame(Decision::Blocked, $review->decision);
+        self::assertSame(['role-1 reviewer blocked, '.OutOfProvidersForRole::REASON], $review->reasons);
+    }
+
+    public function testAReviewerWithABlockedVerdictIntaktGaveIsNamedBlockedWithItsReason(): void
+    {
+        $review = $this->reviewWith(new VerdictPerRole(['Look at part 1.' => Verdict::noTools()]));
+
+        self::assertSame(['role-1 reviewer blocked, '.Verdict::noTools()->findings[0]->text], $review->reasons);
+    }
+
     public function testAFailedReviewerBesideOneAskingForChangesGivesChangesAndStillNamesTheFailure(): void
     {
         $changes = new Verdict(Decision::Changes, [$this->finding('A', Severity::P1)], [], []);

@@ -18,7 +18,7 @@ framework:
         #pools:
             #my.dedicated.cache: null
         pools:
-            # On this host's filesystem, so every worker sees an account's cooldown; a cleared cache ends the cooldowns, and the next limit starts them again.
+            # On this host's filesystem, so every worker sees an account's or a pinned provider's cooldown; a cleared cache ends the cooldowns, and the next limit starts them again.
             !php/const Intakt\Core\Ai\Contract\AiServices::ACCOUNT_COOLDOWNS:
                 adapter: cache.app
             # On this host's filesystem, so every worker and the scheduler read one installation's latest forge budget; a cleared cache only forgets a reading, and the next answer records it again.
