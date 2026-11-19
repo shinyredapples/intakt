@@ -158,9 +158,9 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         $provider = $this->deepinfra();
         $pool = $this->pool;
         $clock = $this->clock;
-        $delayed = $this->createStub(CacheItemPoolInterface::class);
-        $delayed->method('getItem')->willReturnCallback(static function (string $key) use ($newer, $provider, $pool, $clock): CacheItemInterface {
-            static $once = false;
+        $once = false;
+        $delayed = self::createStub(CacheItemPoolInterface::class);
+        $delayed->method('getItem')->willReturnCallback(static function (string $key) use ($newer, $provider, $pool, $clock, &$once): CacheItemInterface {
             if (!$once) {
                 $once = true;
                 $clock->sleep(1);
@@ -184,7 +184,7 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
         $key = 'pinned-provider-cooldown-'.hash('xxh128', $this->deepinfra()->key());
         $pool = $this->pool;
         $heldBySomeoneElse = null;
-        $watched = $this->createStub(CacheItemPoolInterface::class);
+        $watched = self::createStub(CacheItemPoolInterface::class);
         $watched->method('getItem')->willReturnCallback($pool->getItem(...));
         $watched->method('save')->willReturnCallback(static function (CacheItemInterface $item) use ($locks, $key, $pool, &$heldBySomeoneElse): bool {
             $heldBySomeoneElse = !$locks->createLock($key)->acquire();
@@ -207,7 +207,7 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
     public function testAWindowTheCacheRefusesToSaveIsAnError(): void
     {
         $pool = $this->pool;
-        $refusing = $this->createStub(CacheItemPoolInterface::class);
+        $refusing = self::createStub(CacheItemPoolInterface::class);
         $refusing->method('getItem')->willReturnCallback($pool->getItem(...));
         $refusing->method('save')->willReturn(false);
 
@@ -219,7 +219,7 @@ final class PinnedProviderCooldownWindowsTest extends TestCase
     public function testAWindowTheCacheRefusesToSaveReleasesTheLock(): void
     {
         $pool = $this->pool;
-        $refusing = $this->createStub(CacheItemPoolInterface::class);
+        $refusing = self::createStub(CacheItemPoolInterface::class);
         $refusing->method('getItem')->willReturnCallback($pool->getItem(...));
         $refusing->method('save')->willReturn(false);
 
