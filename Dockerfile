@@ -50,7 +50,8 @@ ENV APP_ENV=prod \
     DATABASE_URL="sqlite:///%kernel.project_dir%/var/data/intakt.db" \
     MERCURE_BOLT_PATH=var/data/mercure.db \
     XDG_CONFIG_HOME=/app/var/data/config \
-    XDG_DATA_HOME=/app/var/data/share
+    XDG_DATA_HOME=/app/var/data/share \
+    INTAKT_DEMO_RECORDING=/app/fixtures/demo/sample-change-review.json
 
 COPY --from=vendor /app /app
 COPY docker/entrypoint.sh /usr/local/bin/intakt-entrypoint

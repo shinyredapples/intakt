@@ -7,6 +7,7 @@ namespace Intakt\Core\Build\UseCase\RunBuildJob;
 use Intakt\Core\Ai\Contract\Tier;
 use Intakt\Core\Ai\Contract\TierResolutionFailure;
 use Intakt\Core\Build\Contract\BuildBrief;
+use Intakt\Core\Build\Domain\BuildQuestion;
 use Intakt\Core\Platform\Contract\ReportableFailure;
 use InvalidArgumentException;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -23,6 +24,16 @@ final readonly class RunBuildJobCommand
     // The end of the log, because that is where a failed session says why.
     private const int LOG_LINES = 40;
 
+    // Listed by hand, because PCRE has no class for the property; the ranges are Unicode's Default_Ignorable_Code_Point from DerivedCoreProperties.txt (Unicode 16.0).
+    /**
+     * @var list<array{int, int}>
+     */
+    public const array DEFAULT_IGNORABLE = [
+        [0x00AD, 0x00AD], [0x034F, 0x034F], [0x061C, 0x061C], [0x115F, 0x1160], [0x17B4, 0x17B5], [0x180B, 0x180F],
+        [0x200B, 0x200F], [0x202A, 0x202E], [0x2060, 0x206F], [0x3164, 0x3164], [0xFE00, 0xFE0F], [0xFEFF, 0xFEFF],
+        [0xFFA0, 0xFFA0], [0xFFF0, 0xFFF8], [0x1BCA0, 0x1BCA3], [0x1D173, 0x1D17A], [0xE0000, 0xE0FFF],
+    ];
+
     public function __construct(
         private RunBuildJob $builds,
         private Filesystem $filesystem,
@@ -37,6 +48,10 @@ final readonly class RunBuildJobCommand
             $io->error($failure->getMessage());
 
             return Command::FAILURE;
+        }
+
+        if ($outcome->question instanceof BuildQuestion) {
+            return $this->asked($io, $outcome->question);
         }
 
         if (!$outcome->built()) {
@@ -67,6 +82,33 @@ final readonly class RunBuildJobCommand
         $io->error('failed: '.$outcome->verdict->reason());
 
         return Command::FAILURE;
+    }
+
+    private function asked(SymfonyStyle $io, BuildQuestion $question): int
+    {
+        $io->writeln('question: '.$this->oneLine($question->question));
+
+        foreach ($question->choices as $choice) {
+            $io->writeln('choice: '.$this->oneLine($choice));
+        }
+
+        $io->writeln('recommendation: '.$this->oneLine($question->recommendation));
+
+        return Command::SUCCESS;
+    }
+
+    // The builder wrote the text, so a line break or control could forge a line and an invisible character hide a difference; each is printed as its code point and a backslash doubled, so two different choices never print the same.
+    private function oneLine(string $text): string
+    {
+        $ignorable = implode('', array_map(static fn (array $range): string => sprintf('\x{%X}-\x{%X}', ...$range), self::DEFAULT_IGNORABLE));
+        $visible = preg_replace_callback(
+            '/[\\\\\p{C}\p{Zl}\p{Zp}'.$ignorable.']|(?! )\p{Zs}/u',
+            static fn (array $found): string => '\\' === $found[0] ? '\\\\' : sprintf('\u{%X}', mb_ord($found[0], 'UTF-8')),
+            $text,
+        );
+
+        // A text the pattern cannot read is no UTF-8, so it is printed byte by byte.
+        return OutputFormatter::escape($visible ?? '\x{'.bin2hex($text).'}');
     }
 
     private function handedBack(SymfonyStyle $io, BuildJobOutcome $outcome, string $path): int
