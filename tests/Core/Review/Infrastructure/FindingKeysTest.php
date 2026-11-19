@@ -11,6 +11,7 @@ use Intakt\Core\Review\Contract\PathNotInCheckout;
 use Intakt\Core\Review\Contract\PathOutsideCheckout;
 use Intakt\Core\Review\Contract\Severity;
 use Intakt\Core\Review\Domain\FindingKey;
+use Intakt\Core\Review\Infrastructure\CheckoutFileNames;
 use Intakt\Core\Review\Infrastructure\FindingKeys;
 use Intakt\Tests\Core\Git\TemporaryRepository;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -19,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 
 #[CoversClass(FindingKeys::class)]
 #[CoversClass(FindingKey::class)]
+#[CoversClass(CheckoutFileNames::class)]
 #[UsesClass(Checkout::class)]
 #[UsesClass(PathNotInCheckout::class)]
 #[UsesClass(PathOutsideCheckout::class)]
@@ -215,6 +217,91 @@ final class FindingKeysTest extends TestCase
         self::assertNotEquals($before, $this->keyOf($this->finding('src/A.php and src/B.php release early.')));
     }
 
+    public function testABackquotedFileOfTheRootWithoutAFileExtensionChangesTheKeyWhenThatFileIsEdited(): void
+    {
+        $this->assertKeyFollowsEditsOf('Makefile', 'See `Makefile` and src/A.php.');
+    }
+
+    public function testAFileFieldWithoutAFileExtensionChangesTheKeyWhenThatFileIsEdited(): void
+    {
+        $this->write('Makefile', "first\n");
+        $finding = $this->findingAt('Makefile', 'The target in src/A.php is out of date.');
+        $before = $this->keyOf($finding);
+
+        $this->write('Makefile', "second\n");
+
+        self::assertNotNull($before);
+        self::assertNotEquals($before, $this->keyOf($finding));
+    }
+
+    public function testTheFileFieldIsTakenAsWrittenWithoutCuttingALineNumber(): void
+    {
+        $this->write('docs/Release.md', "other\n");
+        $this->write('docs/Release.md:12', "first\n");
+        $finding = $this->findingAt('docs/Release.md:12', 'See src/A.php and the cited file.');
+        $before = $this->keyOf($finding);
+
+        $this->write('docs/Release.md:12', "second\n");
+
+        self::assertNotNull($before);
+        self::assertNotEquals($before, $this->keyOf($finding));
+    }
+
+    public function testAFileFieldThatNamesNoRegularFileGetsNoKey(): void
+    {
+        self::assertNull($this->keyOf($this->findingAt('src/A.php:12', 'The lock in src/B.php is released too early.')));
+    }
+
+    public function testAPlainTextPathWithASpaceAfterADirectoryOfTheCheckoutGetsNoKey(): void
+    {
+        $this->write('docs/Release/Index.md', "other\n");
+        $this->write('docs/Release Notes.md', "# Notes\n");
+
+        self::assertNull($this->keyOf($this->finding('See docs/Release Notes.md and src/A.php.')));
+    }
+
+    public function testAPlainTextPathWithASpaceAfterAFileOfTheCheckoutGetsNoKey(): void
+    {
+        $this->write('docs/Release', "other\n");
+        $this->write('docs/Release Notes.md', "# Notes\n");
+
+        self::assertNull($this->keyOf($this->finding('See docs/Release Notes.md and src/A.php.')));
+    }
+
+    public function testABareFileNameWithALineNumberChangesTheKeyWhenTheOneFileWithThatNameIsEdited(): void
+    {
+        $this->assertKeyFollowsEditsOf('src/Deep/C.php', 'src/A.php races with `C.php:12`.');
+    }
+
+    public function testABareFileNameInPlainTextChangesTheKeyWhenTheOneFileWithThatNameIsEdited(): void
+    {
+        $this->assertKeyFollowsEditsOf('src/Deep/C.php', 'src/A.php races with C.php:12.');
+    }
+
+    public function testABareFileNameThatSeveralFilesCarryGetsNoKey(): void
+    {
+        $this->write('src/Deep/B.php', "<?php // deep b\n");
+
+        self::assertNull($this->keyOf($this->finding('src/A.php races with `B.php:12`.')));
+    }
+
+    public function testABareNameWithAFileExtensionThatNoFileCarriesIsNotAFile(): void
+    {
+        self::assertNotNull($this->keyOf($this->finding('On PHP 8.5, e.g. in src/A.php, the lock is released too early.')));
+    }
+
+    public function testABackslashPathChangesTheKeyWhenThatFileIsEdited(): void
+    {
+        $this->assertKeyFollowsEditsOf('src/Deep/C.php', 'src/A.php races with `src\Deep\C.php`.');
+    }
+
+    public function testABackquoteInsideADoubleBackquoteSpanStaysPartOfThePath(): void
+    {
+        $this->write('docs/Release/Index.md', "other\n");
+
+        $this->assertKeyFollowsEditsOf('docs/Release`Notes.md', 'See ``docs/Release`Notes.md`` and src/A.php.');
+    }
+
     public function testReflowedTextKeepsItsKey(): void
     {
         self::assertEquals($this->keyOf($this->finding("Released early\n  in src/A.php.")), $this->keyOf($this->finding('Released early in src/A.php.')));
@@ -263,5 +350,10 @@ final class FindingKeysTest extends TestCase
     private function finding(string $text): Finding
     {
         return new Finding('F1', Severity::P1, null, null, null, $text, FixableBy::Builder, false, null, null);
+    }
+
+    private function findingAt(string $file, string $text): Finding
+    {
+        return new Finding('F1', Severity::P1, $file, null, null, $text, FixableBy::Builder, false, null, null);
     }
 }
