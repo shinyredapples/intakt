@@ -20,13 +20,18 @@ export function copyCommands(page, view) {
             copy(button, view);
         }
     });
-    // A page Turbo keeps for going back must come back saying Copy, with no timer left and no write still pending that could change it.
-    page.addEventListener('turbo:before-cache', () => page.querySelectorAll(COPY_BUTTON).forEach((button) => {
-        clicks.delete(button);
-        if (button.hasAttribute(MESSAGE)) {
-            restore(button, view);
-        }
-    }));
+    // A page Turbo keeps for going back must come back saying Copy, with no timer left and no write still pending that could change it, and with every Why closed as the server rendered it, so Back on a phone does not restore one a wide screen opened.
+    page.addEventListener('turbo:before-cache', () => {
+        page.querySelectorAll(COPY_BUTTON).forEach((button) => {
+            clicks.delete(button);
+            if (button.hasAttribute(MESSAGE)) {
+                restore(button, view);
+            }
+        });
+        page.querySelectorAll(WHY).forEach((why) => {
+            why.open = false;
+        });
+    });
     page.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && view.matchMedia(PHONE).matches) {
             closeWhys(page, event.target);

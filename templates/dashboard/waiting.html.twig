@@ -28,6 +28,10 @@
         {icon: 'clock', text: item.waitingFor(now)},
     ]}, with_context = false) }}
     <p class="conseq">{{ item.consequence }}</p>
+    {# Closed, the phone's form; `copy-command.js` opens it on a wide screen. Before the choices, so Tab reaches it before Copy and the link (D6). #}
+    <details class="why"><summary>Why</summary>
+        <p>{{ item.why }}</p>
+    </details>
     <ul class="act" aria-label="Your choices">
     {% for choice in item.choices %}
         <li>
@@ -38,10 +42,6 @@
     {% endfor %}
         <li><a class="btn secondary sm" href="{{ item.link ?? path(constant('Intakt\\Core\\Dashboard\\Contract\\DashboardRoutes::SHOW_BOARD')) }}">{{ item.linkLabel }}</a></li>
     </ul>
-    {# Closed, the phone's form; `copy-command.js` opens it on a wide screen. #}
-    <details class="why"><summary>Why</summary>
-        <p>{{ item.why }}</p>
-    </details>
 </article>
 {% endfor %}
 </div>

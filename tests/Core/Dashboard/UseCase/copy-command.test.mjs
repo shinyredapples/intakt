@@ -382,6 +382,16 @@ test('on a wide screen a Why a visit puts in again opens too', () => {
     assert.equal(why.open, true);
 });
 
+test('a Why opened on a wide screen goes back closed before Turbo caches the page, so Back on a phone shows it closed', () => {
+    const why = new FakeWhy(false);
+    const { page } = pageWithACommand({ whys: [why] });
+    assert.equal(why.open, true);
+
+    page.dispatch('turbo:before-cache');
+
+    assert.equal(why.open, false);
+});
+
 test('Escape on a phone with every Why closed moves no focus', () => {
     const { page } = pageWithACommand({ phone: true });
     const closed = new FakeWhy(false);

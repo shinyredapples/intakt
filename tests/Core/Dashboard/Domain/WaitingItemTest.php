@@ -47,8 +47,18 @@ final class WaitingItemTest extends TestCase
         $item = WaitingItem::ofOutage($this->outage(), null);
 
         self::assertStringNotContainsString('keep running', $item->consequence.' '.$item->choices[0]->outcome);
-        self::assertStringContainsString('none while its last reading is at its limit', $item->consequence);
-        self::assertStringContainsString('none while its last reading is at its limit', $item->choices[0]->outcome);
+        self::assertStringContainsString('none while its last reading shows the limit reached', $item->consequence);
+        self::assertStringContainsString('none while its last reading shows the limit reached', $item->choices[0]->outcome);
+    }
+
+    // Once the window of that reading resets, the guard admits a first call again although the notice still shows.
+    public function testAnOutageItemSaysTheLimitOfTheLastReadingHoldsOnlyUntilItsWindowResets(): void
+    {
+        $item = WaitingItem::ofOutage($this->outage(), null);
+
+        self::assertStringNotContainsString('none while its last reading is at its limit', $item->consequence.' '.$item->choices[0]->outcome);
+        self::assertStringContainsString('until that window resets', $item->consequence);
+        self::assertStringContainsString('until that window resets', $item->choices[0]->outcome);
     }
 
     public function testTheProbeChoiceSaysItMayNotReachThisAccountsProvider(): void

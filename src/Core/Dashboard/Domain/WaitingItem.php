@@ -43,12 +43,12 @@ final readonly class WaitingItem
 
         return new self(
             'No usage of account '.$account.' has been read since '.$since.' UTC',
-            'Until a reading arrives, the budget guard starts at most one call at a time on this account, and none while its last reading is at its limit, so builds queue.',
+            'Until a reading arrives, the budget guard starts at most one call at a time on this account, and none while its last reading shows the limit reached, until that window resets, so builds queue.',
             'Intakt last read the usage of '.$account.' at '.$since.' UTC. Without a reading it cannot tell how much of the limit is left. It applies to every project, and this item leaves the page when a newer reading of the account arrives.',
             $notice->noticedAt,
             [
                 new WaitingChoice(
-                    outcome: 'Leave it: readings usually return by themselves, and the item leaves when they do. Until then at most one call at a time starts on this account, and none while its last reading is at its limit.',
+                    outcome: 'Leave it: readings usually return by themselves, and the item leaves when they do. Until then at most one call at a time starts on this account, and none while its last reading shows the limit reached, until that window resets.',
                     command: null,
                     recommended: true,
                 ),

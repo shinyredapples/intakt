@@ -68,6 +68,17 @@ final class ListWaitingControllerTest extends DashboardPageTestCase
         self::assertNull($page->filter('.wait-item details.why')->attr('open'));
     }
 
+    // D6's walk opens Why, copies the command and follows the link, so Tab must reach them in that order.
+    public function testTheKeyboardReachesWhyBeforeCopyAndTheStatusLink(): void
+    {
+        $this->noticesAre($this->notice('main', new DateTimeImmutable('2026-11-02T08:00:00+00:00'), new DateTimeImmutable('2026-11-02T11:00:00+00:00')));
+
+        $page = $this->browser->request('GET', '/waiting');
+
+        $controls = $page->filter('.wait-item summary, .wait-item button[data-copy], .wait-item a[href]');
+        self::assertSame(['summary', 'button', 'a'], $controls->each(static fn (Crawler $control): string => $control->nodeName()));
+    }
+
     // The link opens in the same tab, so it leaves no opener to guard.
     public function testTheStatusPageLinkOpensInTheSameTabWithoutRel(): void
     {
