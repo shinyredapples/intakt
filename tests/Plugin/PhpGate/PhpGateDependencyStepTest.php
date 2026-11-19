@@ -166,8 +166,16 @@ final class PhpGateDependencyStepTest extends TestCase
             $this->mustRun($this->step->generate);
         } finally {
             [$env, $server, $process] = $saved;
-            if (null === $env) { unset($_ENV['COMPOSER_SKIP_SCRIPTS']); } else { $_ENV['COMPOSER_SKIP_SCRIPTS'] = $env; }
-            if (null === $server) { unset($_SERVER['COMPOSER_SKIP_SCRIPTS']); } else { $_SERVER['COMPOSER_SKIP_SCRIPTS'] = $server; }
+            if (null === $env) {
+                unset($_ENV['COMPOSER_SKIP_SCRIPTS']);
+            } else {
+                $_ENV['COMPOSER_SKIP_SCRIPTS'] = $env;
+            }
+            if (null === $server) {
+                unset($_SERVER['COMPOSER_SKIP_SCRIPTS']);
+            } else {
+                $_SERVER['COMPOSER_SKIP_SCRIPTS'] = $server;
+            }
             putenv(false === $process ? 'COMPOSER_SKIP_SCRIPTS' : 'COMPOSER_SKIP_SCRIPTS='.$process);
         }
 
